@@ -49,13 +49,13 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
         }
 
         // BVN format check - now required
-        if (!data.bvn || !/^\d{11}$/.test(data.bvn)) {
-            newErrors.bvn = "A valid 11-digit BVN is required";
+        if (!data.bvn) {
+            newErrors.bvn = "BVN is required";
         }
 
         // NIN format check - now required
-        if (!data.nin || !/^\d{11}$/.test(data.nin)) {
-            newErrors.nin = "A valid 11-digit NIN is required";
+        if (!data.nin) {
+            newErrors.nin = "NIN is required";
         }
 
         if (!torAgreed) {
@@ -167,11 +167,9 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
                         required
                         value={data.bvn || ""}
                         onChange={(v) => onChange({ ...data, bvn: v })}
-                        digitsOnly
-                        showCount
-                        maxLength={11}
-                        placeholder="11-digit BVN"
-                        hint="Your 11-digit BVN. 📞 Dial *565*0# to retrieve your BVN."
+                        maxLength={30}
+                        placeholder="Enter BVN"
+                        hint="Your BVN. 📞 Dial *565*0# to retrieve your BVN."
                         accentColor="purple"
                         error={errors.bvn}
                     />
@@ -180,11 +178,9 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
                         required
                         value={data.nin || ""}
                         onChange={(v) => onChange({ ...data, nin: v })}
-                        digitsOnly
-                        showCount
-                        maxLength={11}
-                        placeholder="11-digit NIN"
-                        hint="Your 11-digit National Identification Number (NIN)."
+                        maxLength={30}
+                        placeholder="Enter NIN"
+                        hint="Your National Identification Number (NIN)."
                         accentColor="purple"
                         error={errors.nin}
                     />

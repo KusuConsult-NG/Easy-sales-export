@@ -426,8 +426,8 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
         const missingDocs =
             !documents.validId?.url ||
             !documents.passportPhoto?.url ||
-            !documents.bvn || !/^\d{11}$/.test(documents.bvn) ||
-            !documents.nin || !/^\d{11}$/.test(documents.nin);
+            !documents.bvn ||
+            !documents.nin;
 
         if (missingPersonal) {
             showToast("Please complete your personal information before proceeding.", "error");

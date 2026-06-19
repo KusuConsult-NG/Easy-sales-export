@@ -157,8 +157,8 @@ export const MarketplaceOnboardingSchema = z.object({
 
 export const SellerVerificationSchema = z.object({
     phoneNumber: z.string().min(7, "Phone number is too short").max(20, "Phone number is too long"),
-    nin: z.string().length(11, "NIN must be 11 digits").optional().or(z.literal("")),
-    bvn: z.string().length(11, "BVN must be 11 digits").optional().or(z.literal("")),
+    nin: z.string().optional().or(z.literal("")),
+    bvn: z.string().optional().or(z.literal("")),
     cac: z.string().optional().or(z.literal("")),
     bankAccount: z.object({
         accountNumber: z.string().length(10, "Account number must be 10 digits"),

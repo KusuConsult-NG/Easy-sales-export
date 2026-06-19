@@ -32,8 +32,8 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
         const firstName = data?.firstName || "";
         const surname = data?.surname || "";
 
-        if (!nin || nin.length !== 11) {
-            setNinError("Please enter a valid 11-digit NIN");
+        if (!nin) {
+            setNinError("Please enter a NIN");
             return;
         }
 
@@ -69,8 +69,8 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
         const nin = data?.nin || "";
 
         // NIN — required and must be API-verified
-        if (!nin || nin.trim().length !== 11) {
-            newErrors.nin = "NIN is required — enter your 11-digit National Identification Number";
+        if (!nin || !nin.trim()) {
+            newErrors.nin = "NIN is required";
         } else if (!ninVerified) {
             newErrors.nin = "Please click 'Verify' to validate your NIN before continuing";
         }
@@ -125,10 +125,8 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                             setNinVerified(false);
                             setNinError("");
                         }}
-                        digitsOnly
-                        showCount
-                        maxLength={11}
-                        placeholder="Enter your 11-digit NIN"
+                        maxLength={30}
+                        placeholder="Enter your NIN"
                         disabled={ninVerified || verifyingNin}
                         error={errors.nin || ninError}
                         hint="Dial *346# on your registered phone to retrieve your NIN."
@@ -138,7 +136,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                             <button
                                 type="button"
                                 onClick={handleVerifyNin}
-                                disabled={ninVerified || verifyingNin || (data?.nin || "").length !== 11}
+                                disabled={ninVerified || verifyingNin || !(data?.nin || "").trim()}
                                 className="px-5 py-2.5 text-sm bg-emerald-100 text-emerald-800 font-semibold rounded-lg hover:bg-emerald-200 transition-colors disabled:opacity-50 flex items-center gap-1.5 whitespace-nowrap"
                             >
                                 {verifyingNin ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verify"}

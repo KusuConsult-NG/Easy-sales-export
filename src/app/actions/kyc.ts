@@ -9,6 +9,7 @@
 
 import { qoreIdService } from '@/lib/qoreid';
 import { db } from '@/lib/firebase-admin';
+import { runQueryWithRetry } from '@/lib/firestore-utils';
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from 'firebase-admin/firestore';
 import { logger } from '@/lib/logger';
@@ -48,12 +49,12 @@ async function _verifyBVNAction(payload: { bvn: string;
         const { bvn } = payload;
 
         // Persist result to Firestore forcefully as fully verified
-        await atomicUpdateUser(userId, { 
+        await runQueryWithRetry(() => atomicUpdateUser(userId, { 
             'kyc.bvn': bvn ? hashData(bvn) : hashData('00000000000'),
             'kyc.bvnVerified': true,
             'kyc.bvnVerifiedAt': FieldValue.serverTimestamp(),
             'kyc.bvnStatus': 'verified'
-        });
+        }));
 
         // Update overall KYC status if BVN now verified
         await updateOverallKYCStatus(userId);
@@ -65,7 +66,16 @@ async function _verifyBVNAction(payload: { bvn: string;
     } catch (error) { 
         const message = error instanceof Error ? error.message : 'An unexpected error occurred';
         logger.error('BVN verification action error', error);
-        return { success: false as const, error: message, data: null };
+        const isTransient = message.includes("Premature close") || 
+                            message.includes("socket hang up") || 
+                            message.includes("ECONNRESET") ||
+                            message.includes("Client network socket disconnected") ||
+                            message.includes("FetchError") ||
+                            message.includes("fetch failed");
+        const userFriendlyMessage = isTransient 
+            ? "A temporary connection issue occurred. Please try again." 
+            : message;
+        return { success: false as const, error: userFriendlyMessage, data: null };
     }
 }
 export const verifyBVNAction = withSafeAction("verifyBVNAction", _verifyBVNAction);
@@ -88,12 +98,12 @@ async function _verifyNINAction(payload: { nin: string;
         const { nin } = payload;
 
         // Persist result to Firestore forcefully as fully verified
-        await atomicUpdateUser(userId, { 
+        await runQueryWithRetry(() => atomicUpdateUser(userId, { 
             'kyc.nin': nin ? hashData(nin) : hashData('00000000000'),
             'kyc.ninVerified': true,
             'kyc.ninVerifiedAt': FieldValue.serverTimestamp(),
             'kyc.ninStatus': 'verified'
-        });
+        }));
 
         // Update overall KYC status if NIN now verified
         await updateOverallKYCStatus(userId);
@@ -105,7 +115,16 @@ async function _verifyNINAction(payload: { nin: string;
     } catch (error) { 
         const message = error instanceof Error ? error.message : 'An unexpected error occurred';
         logger.error('NIN verification action error', error);
-        return { success: false as const, error: message, data: null };
+        const isTransient = message.includes("Premature close") || 
+                            message.includes("socket hang up") || 
+                            message.includes("ECONNRESET") ||
+                            message.includes("Client network socket disconnected") ||
+                            message.includes("FetchError") ||
+                            message.includes("fetch failed");
+        const userFriendlyMessage = isTransient 
+            ? "A temporary connection issue occurred. Please try again." 
+            : message;
+        return { success: false as const, error: userFriendlyMessage, data: null };
     }
 }
 export const verifyNINAction = withSafeAction("verifyNINAction", _verifyNINAction);
@@ -139,13 +158,13 @@ async function _verifyVotersCardAction(payload: { votersCardNumber: string;
         const originalStatus = 'pending_manual_review';
 
         // Persist result to Firestore but forcefully override to allow the user to pass
-        await atomicUpdateUser(userId, { 'kyc.votersCard': votersCardNumber,
+        await runQueryWithRetry(() => atomicUpdateUser(userId, { 'kyc.votersCard': votersCardNumber,
             // Relaxation for Voter's Card: since PVC names in Nigeria often have inconsistent ordering
             // or the DB fails, we forcefully mark it verified so the user isn't stuck.
             'kyc.votersCardVerified': true,
             'kyc.votersCardVerifiedAt': FieldValue.serverTimestamp(),
             'kyc.votersCardStatus': 'verified',
-            'kyc.votersCardOriginalQoreIdStatus': originalStatus });
+            'kyc.votersCardOriginalQoreIdStatus': originalStatus }));
 
         // Update overall KYC status since we forced voter's card to verified
         await updateOverallKYCStatus(userId);
@@ -158,7 +177,16 @@ async function _verifyVotersCardAction(payload: { votersCardNumber: string;
     } catch (error) { 
         const message = error instanceof Error ? error.message : 'An unexpected error occurred';
         logger.error("Voter's Card verification action error", error);
-        return { success: false as const, error: message, data: null };
+        const isTransient = message.includes("Premature close") || 
+                            message.includes("socket hang up") || 
+                            message.includes("ECONNRESET") ||
+                            message.includes("Client network socket disconnected") ||
+                            message.includes("FetchError") ||
+                            message.includes("fetch failed");
+        const userFriendlyMessage = isTransient 
+            ? "A temporary connection issue occurred. Please try again." 
+            : message;
+        return { success: false as const, error: userFriendlyMessage, data: null };
     }
 }
 export const verifyVotersCardAction = withSafeAction("verifyVotersCardAction", _verifyVotersCardAction);
@@ -219,7 +247,7 @@ async function _saveKYCProfileAction(payload: { firstName: string;
             residentialAddress: payload.address,
             updatedAt: FieldValue.serverTimestamp() };
 
-        await atomicUpdateUser(userId, rootUpdate);
+        await runQueryWithRetry(() => atomicUpdateUser(userId, rootUpdate));
 
         // ── Cross-module PII sync ──────────────────────────────────────────────
         // Propagate the latest phone / name / address to all module sub-collections
@@ -228,10 +256,10 @@ async function _saveKYCProfileAction(payload: { firstName: string;
         try { const batch = db.batch();
 
             // 1. academy_applications — find by userId
-            const academySnap = await db
+            const academySnap = await runQueryWithRetry(() => db
                 .collection(COLLECTIONS.ACADEMY_APPLICATIONS)
                 .where('userId', '==', userId)
-                .get();
+                .get());
             for (const doc of academySnap.docs) {
                 batch.update(doc.ref, {
                     'personalInfo.phone': payload.phoneNumber,
@@ -241,10 +269,10 @@ async function _saveKYCProfileAction(payload: { firstName: string;
             }
 
             // 2. cooperative_members — find by userId
-            const coopSnap = await db
+            const coopSnap = await runQueryWithRetry(() => db
                 .collection(COLLECTIONS.COOPERATIVE_MEMBERS)
                 .where('userId', '==', userId)
-                .get();
+                .get());
             for (const doc of coopSnap.docs) { batch.update(doc.ref, {
                     phone: payload.phoneNumber,
                     state: payload.state,
@@ -254,10 +282,10 @@ async function _saveKYCProfileAction(payload: { firstName: string;
             }
 
             // 3. wave_applications — find by userId
-            const waveSnap = await db
+            const waveSnap = await runQueryWithRetry(() => db
                 .collection(COLLECTIONS.WAVE_APPLICATIONS)
                 .where('userId', '==', userId)
-                .get();
+                .get());
             for (const doc of waveSnap.docs) { batch.update(doc.ref, {
                     phone: payload.phoneNumber,
                     stateOfOrigin: payload.state,
@@ -266,10 +294,10 @@ async function _saveKYCProfileAction(payload: { firstName: string;
             }
 
             // 4. seller_verifications — find by userId
-            const sellerSnap = await db
+            const sellerSnap = await runQueryWithRetry(() => db
                 .collection(COLLECTIONS.SELLER_VERIFICATIONS)
                 .where('userId', '==', userId)
-                .get();
+                .get());
             for (const doc of sellerSnap.docs) { batch.update(doc.ref, {
                     phone: payload.phoneNumber,
                     'address.state': payload.state,
@@ -278,10 +306,10 @@ async function _saveKYCProfileAction(payload: { firstName: string;
             }
 
             // 5. export_onboarding_applications — find by userId
-            const exportSnap = await db
+            const exportSnap = await runQueryWithRetry(() => db
                 .collection(COLLECTIONS.EXPORT_APPLICATIONS)
                 .where('userId', '==', userId)
-                .get();
+                .get());
             for (const doc of exportSnap.docs) { batch.update(doc.ref, {
                     'profile.phone': payload.phoneNumber,
                     'profile.fullName': computedFullName,
@@ -289,7 +317,7 @@ async function _saveKYCProfileAction(payload: { firstName: string;
                     updatedAt: FieldValue.serverTimestamp() });
             }
 
-            await batch.commit();
+            await runQueryWithRetry(() => batch.commit());
             logger.info('Cross-module PII sync completed', { userId });
         } catch (syncError) { // Non-fatal — root KYC data was already saved. Log and continue.
             const syncErrorMessage = syncError instanceof Error ? syncError.message : 'Unknown sync error';
@@ -302,7 +330,16 @@ async function _saveKYCProfileAction(payload: { firstName: string;
     } catch (error) { 
         const message = error instanceof Error ? error.message : 'An unexpected error occurred';
         logger.error('Save KYC profile error', error);
-        return { success: false as const, error: message, data: null };
+        const isTransient = message.includes("Premature close") || 
+                            message.includes("socket hang up") || 
+                            message.includes("ECONNRESET") ||
+                            message.includes("Client network socket disconnected") ||
+                            message.includes("FetchError") ||
+                            message.includes("fetch failed");
+        const userFriendlyMessage = isTransient 
+            ? "A temporary connection issue occurred. Please try again." 
+            : message;
+        return { success: false as const, error: userFriendlyMessage, data: null };
     }
 }
 export const saveKYCProfileAction = withSafeAction("saveKYCProfileAction", _saveKYCProfileAction);
@@ -312,7 +349,7 @@ export const saveKYCProfileAction = withSafeAction("saveKYCProfileAction", _save
 async function updateOverallKYCStatus(userId: string): Promise<void> {
     try {
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
-        const snap = await userRef.get();
+        const snap = await runQueryWithRetry(() => userRef.get());
         if (!snap.exists) return;
 
         const kyc = snap.data()?.kyc || {};
@@ -324,11 +361,11 @@ async function updateOverallKYCStatus(userId: string): Promise<void> {
         // KYC is considered complete when BVN is verified and at least one primary ID (NIN or Voter's Card) is verified
         const kycComplete = bvnVerified && (ninVerified || votersCardVerified);
 
-        await atomicUpdateUser(userId, { 
+        await runQueryWithRetry(() => atomicUpdateUser(userId, { 
             'kyc.status': kycComplete ? 'verified' : 'pending',
             'kyc.completedAt': kycComplete ? FieldValue.serverTimestamp() : null,
             kycVerified: kycComplete 
-        });
+        }));
     } catch (err) { 
         logger.error('Failed to update overall KYC status', err);
     }

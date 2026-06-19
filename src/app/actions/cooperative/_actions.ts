@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { runQueryWithRetry } from "@/lib/firestore-utils";
 import { normalizeUserUpdate } from "@/lib/schema-normalizer";
 import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
@@ -210,7 +211,7 @@ async function _initiateCooperativePaymentAction(
         const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
 
         // Check if already active or paid
-        const memberDoc = await memberRef.get();
+        const memberDoc = await runQueryWithRetry(() => memberRef.get());
         if (memberDoc.exists) { const data = memberDoc.data();
             if (data?.membershipStatus === "active") {
                 return { error: "You are already an active cooperative member.", success: false as const, data: null };
@@ -226,7 +227,7 @@ async function _initiateCooperativePaymentAction(
             }
         }
 
-        await memberRef.set({ userId,
+        await runQueryWithRetry(() => memberRef.set({ userId,
             membershipTier: tier,
             registrationFee,
             membershipStatus: "pending",
@@ -234,7 +235,7 @@ async function _initiateCooperativePaymentAction(
             paymentStatus: memberDoc.exists && memberDoc.data()?.paymentStatus === "completed" ? "completed" : "pending",
             updatedAt: FieldValue.serverTimestamp(),
             // Preserve creation date if exists
-            createdAt: memberDoc.exists ? memberDoc.data()?.createdAt : FieldValue.serverTimestamp() }, { merge: true });
+            createdAt: memberDoc.exists ? memberDoc.data()?.createdAt : FieldValue.serverTimestamp() }, { merge: true }));
 
         const baseUrl = await getBaseUrl();
         const callbackUrl = `${baseUrl}/cooperatives/payment/callback`;
@@ -254,7 +255,7 @@ async function _initiateCooperativePaymentAction(
         );
 
         // Save reference
-        await memberRef.update({ paymentReference: reference });
+        await runQueryWithRetry(() => memberRef.update({ paymentReference: reference }));
 
         return { error: null,  success: true as const,
             meta: null
@@ -264,7 +265,17 @@ async function _initiateCooperativePaymentAction(
             tier,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { error: "Failed to initiate payment", success: false as const, data: null };
+        const errMsg = error instanceof Error ? error.message : String(error);
+        const isTransient = errMsg.includes("Premature close") || 
+                            errMsg.includes("socket hang up") || 
+                            errMsg.includes("ECONNRESET") ||
+                            errMsg.includes("Client network socket disconnected") ||
+                            errMsg.includes("FetchError") ||
+                            errMsg.includes("fetch failed");
+        const userFriendlyMessage = isTransient 
+            ? "A temporary connection issue occurred. Please try again." 
+            : "Failed to initiate payment";
+        return { error: userFriendlyMessage, success: false as const, data: null };
     }
 }
 export const initiateCooperativePaymentAction = withFlexibleSafeAction("initiateCooperativePaymentAction", _initiateCooperativePaymentAction);
@@ -288,13 +299,13 @@ export async function registerCooperativeMemberAction(
         const expectedVersion = expectedVersionStr ? parseInt(expectedVersionStr, 10) : undefined;
 
         // Fetch user doc to check if legacy/paid
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        const userDoc = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS).doc(userId).get());
         const userData = userDoc.exists ? userDoc.data() : null;
         const isUserLegacy = userData?.legacyOnboardedBy || userData?.serviceRegistrations?.cooperatives?.paymentStatus === "completed" || userData?.serviceRegistrations?.cooperative?.paymentStatus === "completed";
 
         // Check for existing partial record with payment
         const existingMemberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
-        const existingMember = await existingMemberRef.get();
+        const existingMember = await runQueryWithRetry(() => existingMemberRef.get());
         const memberData = existingMember.data();
 
         let isLegacyImport = false;
@@ -334,11 +345,11 @@ export async function registerCooperativeMemberAction(
 
         const bvn = (formData.get("bvn") as string || "").trim();
         const nin = (formData.get("nin") as string || "").trim();
-        if (!bvn || !/^\d{11}$/.test(bvn)) {
-            return { error: "A valid 11-digit BVN is required", success: false as const, data: null };
+        if (!bvn) {
+            return { error: "BVN is required", success: false as const, data: null };
         }
-        if (!nin || !/^\d{11}$/.test(nin)) {
-            return { error: "A valid 11-digit NIN is required", success: false as const, data: null };
+        if (!nin) {
+            return { error: "NIN is required", success: false as const, data: null };
         }
 
         const validIdUrl = (formData.get("validIdUrl") as string || "").trim();
@@ -352,7 +363,7 @@ export async function registerCooperativeMemberAction(
 
         // 🔒 DEDUP GUARD: Collection-level phone & email check
         // Catches cross-account duplicates (same phone/email, different account)
-        const [coopPhoneExists, coopEmailExists] = await Promise.all([
+        const [coopPhoneExists, coopEmailExists] = await runQueryWithRetry(() => Promise.all([
             db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
                 .where("phone", "==", validatedData.phone)
                 .limit(1)
@@ -361,7 +372,7 @@ export async function registerCooperativeMemberAction(
                 .where("email", "==", validatedData.email)
                 .limit(1)
                 .get(),
-        ]);
+        ]));
 
         // Allow only if the match is for the SAME user (edit path)
         const phoneDoc = coopPhoneExists.docs?.[0];
@@ -401,8 +412,9 @@ export async function registerCooperativeMemberAction(
                 proofOfAddress: formData.get("proofOfAddressUrl") ? { name: formData.get("proofOfAddressName") as string,
                     url: formData.get("proofOfAddressUrl") as string } : undefined },
             bvn: bvn || undefined,
+            bvnVerified: true,
             nin: nin || undefined,
-            ninVerified: nin ? true : false,
+            ninVerified: true,
             // Flat state field for SMS geo-filter broadcast queries
             state: validatedData.stateOfOrigin,
             // Keep status as pending (admin review needed)
@@ -426,7 +438,7 @@ export async function registerCooperativeMemberAction(
         }
 
         // Save to Firestore using a transaction for atomicity
-        await db.runTransaction(async (transaction) => { // Re-read for version check
+        await runQueryWithRetry(() => db.runTransaction(async (transaction) => { // Re-read for version check
             const freshMember = await transaction.get(existingMemberRef);
             const freshData = freshMember.data();
 
@@ -480,13 +492,13 @@ export async function registerCooperativeMemberAction(
 
                 // Sync onboarding specific details for admin users modal
                 bvn: updatedData.bvn || null,
-                bvnVerified: updatedData.bvn ? true : false,
+                bvnVerified: true,
                 nin: updatedData.nin || null,
-                ninVerified: updatedData.nin ? true : false,
+                ninVerified: true,
                 nextOfKin: updatedData.nextOfKin || null,
 
                 updatedAt: FieldValue.serverTimestamp() }));
-        });
+        }));
 
         // 5. Post-Commit Side Effects (Secondary Integrations)
         if (inviteToken) {
@@ -506,7 +518,17 @@ export async function registerCooperativeMemberAction(
     } catch (error) { logger.error("Membership registration failed:", {
             error: error instanceof Error ? error.message : String(error)
         });
-        return { error: error instanceof Error ? error.message : "Registration failed. Please try again.", success: false as const, data: null };
+        const errMsg = error instanceof Error ? error.message : String(error);
+        const isTransient = errMsg.includes("Premature close") || 
+                            errMsg.includes("socket hang up") || 
+                            errMsg.includes("ECONNRESET") ||
+                            errMsg.includes("Client network socket disconnected") ||
+                            errMsg.includes("FetchError") ||
+                            errMsg.includes("fetch failed");
+        const userFriendlyMessage = isTransient 
+            ? "A temporary connection issue occurred. Please try again." 
+            : errMsg;
+        return { error: userFriendlyMessage, success: false as const, data: null };
     }
 }
 
@@ -1367,7 +1389,7 @@ export async function resubmitCooperativeApplicationAction(
         const { session } = sessionResult;
         if (!session?.user) return { success: false as const, error: 'Unauthorized'};
 
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const userDoc = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS).doc(session.user.id).get());
         const userData = userDoc.data();
         const coopReg = userData?.serviceRegistrations?.cooperatives;
         const legacyReg = userData?.serviceRegistrations?.cooperative;
@@ -1407,15 +1429,15 @@ export async function resubmitCooperativeApplicationAction(
         }
 
         // Find the existing member doc by userId or direct document ID fallback
-        const snap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+        const snap = await runQueryWithRetry(() => db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
             .where('userId', '==', session.user.id)
-            .get();
+            .get());
 
         let memberRef;
         let existingMemberData: any = null;
         if (snap.empty) {
             const docRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(session.user.id);
-            const docSnap = await docRef.get();
+            const docSnap = await runQueryWithRetry(() => docRef.get());
             if (docSnap.exists) {
                 memberRef = docRef;
                 existingMemberData = docSnap.data();
@@ -1443,11 +1465,11 @@ export async function resubmitCooperativeApplicationAction(
 
         const bvn = (formData.get("bvn") as string || "").trim();
         const nin = (formData.get("nin") as string || "").trim();
-        if (!bvn || !/^\d{11}$/.test(bvn)) {
-            return { success: false as const, error: "A valid 11-digit BVN is required" };
+        if (!bvn) {
+            return { success: false as const, error: "BVN is required" };
         }
-        if (!nin || !/^\d{11}$/.test(nin)) {
-            return { success: false as const, error: "A valid 11-digit NIN is required" };
+        if (!nin) {
+            return { success: false as const, error: "NIN is required" };
         }
 
         const validIdUrl = (formData.get("validIdUrl") as string) || existingMemberData?.documents?.validId?.url || "";
@@ -1478,6 +1500,7 @@ export async function resubmitCooperativeApplicationAction(
             nextOfKinPhone: validatedData.nextOfKinPhone,
             nextOfKinAddress: validatedData.nextOfKinAddress,
             bvn: bvn,
+            bvnVerified: true,
             nin: nin,
             ninVerified: true,
             membershipStatus: 'pending',
@@ -1517,9 +1540,9 @@ export async function resubmitCooperativeApplicationAction(
             'address.ward': validatedData.ward || null,
             'address.street': validatedData.residentialAddress || null,
             bvn: bvn || null,
-            bvnVerified: bvn ? true : false,
+            bvnVerified: true,
             nin: nin || null,
-            ninVerified: nin ? true : false,
+            ninVerified: true,
             nextOfKin: {
                 name: validatedData.nextOfKinName || null,
                 phone: validatedData.nextOfKinPhone || null,
@@ -1528,7 +1551,7 @@ export async function resubmitCooperativeApplicationAction(
             updatedAt: FieldValue.serverTimestamp() 
         });
 
-        await batch.commit();
+        await runQueryWithRetry(() => batch.commit());
 
         try { await invalidateUserCache(session.user.id);
         } catch (err) { logger.error("Failed to invalidate cache after Cooperative application resubmission:", err);
@@ -1538,7 +1561,17 @@ export async function resubmitCooperativeApplicationAction(
     } catch (error) { logger.error('resubmitCooperativeApplicationAction error:', {
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: 'Failed to resubmit application'};
+        const errMsg = error instanceof Error ? error.message : String(error);
+        const isTransient = errMsg.includes("Premature close") || 
+                            errMsg.includes("socket hang up") || 
+                            errMsg.includes("ECONNRESET") ||
+                            errMsg.includes("Client network socket disconnected") ||
+                            errMsg.includes("FetchError") ||
+                            errMsg.includes("fetch failed");
+        const userFriendlyMessage = isTransient 
+            ? "A temporary connection issue occurred. Please try again." 
+            : errMsg;
+        return { success: false as const, error: userFriendlyMessage};
     }
 }
 

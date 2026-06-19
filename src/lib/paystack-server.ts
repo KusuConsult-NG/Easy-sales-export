@@ -58,39 +58,62 @@ export interface PaystackVerifyResponse {
  * @param reference - Payment reference from Paystack
  * @returns Verification response with payment details
  */
+/**
+ * Verify a Paystack payment on the server
+ * @param reference - Payment reference from Paystack
+ * @returns Verification response with payment details
+ */
 export async function verifyPaystackPayment(
     reference: string
 ): Promise<PaystackVerifyResponse> {
-    try {
-        const secretKey = process.env.PAYSTACK_SECRET_KEY;
-        if (!secretKey) throw new Error("Payment service not configured");
+    const maxRetries = 3;
+    let delay = 500;
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            const secretKey = process.env.PAYSTACK_SECRET_KEY;
+            if (!secretKey) throw new Error("Payment service not configured");
 
-        const response = await fetch(
-            `${PAYSTACK_BASE_URL}/transaction/verify/${encodeURIComponent(reference)}`,
-            {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${secretKey}`,
-                    'Content-Type': 'application/json',
-                },
+            const response = await fetch(
+                `${PAYSTACK_BASE_URL}/transaction/verify/${encodeURIComponent(reference)}`,
+                {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${secretKey}`,
+                        'Content-Type': 'application/json',
+                    },
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error(`Paystack API error: ${response.statusText}`);
             }
-        );
 
-        if (!response.ok) {
-            throw new Error(`Paystack API error: ${response.statusText}`);
+            const data: PaystackVerifyResponse = await response.json();
+
+            if (!data.status) {
+                throw new Error(data.message || 'Payment verification failed');
+            }
+
+            return data;
+        } catch (error: any) {
+            const errMsg = error?.message || String(error);
+            const isTransient = errMsg.includes("Premature close") || 
+                                errMsg.includes("socket hang up") || 
+                                errMsg.includes("ECONNRESET") ||
+                                errMsg.includes("Client network socket disconnected") ||
+                                errMsg.includes("FetchError") ||
+                                errMsg.includes("fetch failed");
+            if (isTransient && i < maxRetries - 1) {
+                console.warn(`[Paystack Verify Retry] Transient error: ${errMsg}. Retrying in ${delay}ms... (Attempt ${i + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                delay *= 2; // exponential backoff
+                continue;
+            }
+            console.error('Payment verification error:', error);
+            throw new Error(`Failed to verify payment: ${error.message}`);
         }
-
-        const data: PaystackVerifyResponse = await response.json();
-
-        if (!data.status) {
-            throw new Error(data.message || 'Payment verification failed');
-        }
-
-        return data;
-    } catch (error: any) {
-        console.error('Payment verification error:', error);
-        throw new Error(`Failed to verify payment: ${error.message}`);
     }
+    throw new Error("Failed to verify payment after retries");
 }
 
 /**
@@ -150,42 +173,60 @@ export async function initializePaystackPayment(
     accessCode: string;
     reference: string;
 }> {
-    try {
-        const secretKey = process.env.PAYSTACK_SECRET_KEY;
-        if (!secretKey) throw new Error("Payment service not configured");
+    const maxRetries = 3;
+    let delay = 500;
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            const secretKey = process.env.PAYSTACK_SECRET_KEY;
+            if (!secretKey) throw new Error("Payment service not configured");
 
-        const response = await fetch(`${PAYSTACK_BASE_URL}/transaction/initialize`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${secretKey}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                email,
-                amount,
-                channels,
-                metadata,
-                callback_url: callbackUrl || (metadata.callback_url as string) || `${process.env.NEXT_PUBLIC_APP_URL}/cooperatives/verify-payment`,
-            }),
-        });
+            const response = await fetch(`${PAYSTACK_BASE_URL}/transaction/initialize`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${secretKey}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    email,
+                    amount,
+                    channels,
+                    metadata,
+                    callback_url: callbackUrl || (metadata.callback_url as string) || `${process.env.NEXT_PUBLIC_APP_URL}/cooperatives/verify-payment`,
+                }),
+            });
 
-        if (!response.ok) {
-            throw new Error(`Paystack API error: ${response.statusText}`);
+            if (!response.ok) {
+                throw new Error(`Paystack API error: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+
+            if (!data.status) {
+                throw new Error(data.message || 'Payment initialization failed');
+            }
+
+            return {
+                authorizationUrl: data.data.authorization_url,
+                accessCode: data.data.access_code,
+                reference: data.data.reference,
+            };
+        } catch (error: any) {
+            const errMsg = error?.message || String(error);
+            const isTransient = errMsg.includes("Premature close") || 
+                                errMsg.includes("socket hang up") || 
+                                errMsg.includes("ECONNRESET") ||
+                                errMsg.includes("Client network socket disconnected") ||
+                                errMsg.includes("FetchError") ||
+                                errMsg.includes("fetch failed");
+            if (isTransient && i < maxRetries - 1) {
+                console.warn(`[Paystack Initialize Retry] Transient error: ${errMsg}. Retrying in ${delay}ms... (Attempt ${i + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                delay *= 2; // exponential backoff
+                continue;
+            }
+            console.error('Payment initialization error:', error);
+            throw new Error(`Failed to initialize payment: ${error.message}`);
         }
-
-        const data = await response.json();
-
-        if (!data.status) {
-            throw new Error(data.message || 'Payment initialization failed');
-        }
-
-        return {
-            authorizationUrl: data.data.authorization_url,
-            accessCode: data.data.access_code,
-            reference: data.data.reference,
-        };
-    } catch (error: any) {
-        console.error('Payment initialization error:', error);
-        throw new Error(`Failed to initialize payment: ${error.message}`);
     }
+    throw new Error("Failed to initialize payment after retries");
 }

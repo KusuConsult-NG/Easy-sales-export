@@ -42,8 +42,8 @@ const exportOnboardingSchema = z.object({
         address: z.string().min(5, "Address is required"),
     }),
     kycData: z.object({
-        nin: z.string().length(11, "NIN must be 11 digits").optional().or(z.literal("")),
-        bvn: z.string().length(11, "BVN must be 11 digits").optional().or(z.literal("")),
+        nin: z.string().optional().or(z.literal("")),
+        bvn: z.string().optional().or(z.literal("")),
         cacNumber: z.string().optional().or(z.literal("")),
     }),
     bank: z.object({

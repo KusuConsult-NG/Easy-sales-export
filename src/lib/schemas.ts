@@ -286,8 +286,8 @@ export const LegacyOnboardingSchema = z.object({
     accountName: z.string().optional(),
     bankCode: z.string().optional(),
     // KYC Details
-    nin: z.string().length(11, "NIN must be 11 digits").optional(),
-    bvn: z.string().length(11, "BVN must be 11 digits").optional(),
+    nin: z.string().optional().or(z.literal("")),
+    bvn: z.string().optional().or(z.literal("")),
     // Document uploads (Cloudinary URLs set by admin during legacy onboarding)
     validIdUrl: z.string().url("Valid ID must be a valid URL").optional(),
     passportPhotoUrl: z.string().url("Passport photo must be a valid URL").optional(),

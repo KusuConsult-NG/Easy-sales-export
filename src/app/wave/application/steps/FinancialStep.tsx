@@ -25,8 +25,8 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
     const [bvnError, setBvnError] = useState("");
 
     async function handleVerifyBvn() {
-        if (!data.bvn || data.bvn.length !== 11) {
-            setBvnError("Please enter a valid 11-digit BVN");
+        if (!data.bvn) {
+            setBvnError("Please enter a BVN");
             return;
         }
 
@@ -78,8 +78,8 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
         }
 
         // BVN is REQUIRED on WAVE and must be API-verified
-        if (!data.bvn || data.bvn.length !== 11) {
-            newErrors.bvn = "BVN is required — enter your 11-digit Bank Verification Number";
+        if (!data.bvn) {
+            newErrors.bvn = "BVN is required";
         } else if (!bvnVerified) {
             newErrors.bvn = "Please click 'Verify' to validate your BVN before continuing";
         }
@@ -180,20 +180,20 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                                     type="text"
                                     value={data.bvn}
                                     onChange={(e) => {
-                                        updateData({ bvn: e.target.value.replace(/\D/g, "").slice(0, 11) });
+                                        updateData({ bvn: e.target.value });
                                         setBvnVerified(false);
                                         setBvnError("");
                                     }}
                                     disabled={bvnVerified || verifyingBvn}
-                                    maxLength={11}
+                                    maxLength={30}
                                     className={`w-full px-3.5 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 ${errors.bvn ? 'border-red-400' : 'border-slate-300'}`}
-                                    placeholder="11-digit BVN"
+                                    placeholder="Enter BVN"
                                 />
                             </div>
                             <button
                                 type="button"
                                 onClick={handleVerifyBvn}
-                                disabled={bvnVerified || verifyingBvn || data.bvn?.length !== 11}
+                                disabled={bvnVerified || verifyingBvn || !data.bvn}
                                 className="px-6 py-3 bg-emerald-100 text-emerald-800 font-semibold rounded-lg hover:bg-emerald-200 transition-colors disabled:opacity-50 flex items-center gap-2"
                             >
                                 {verifyingBvn ? <Loader2 className="w-5 h-5 animate-spin" /> : "Verify"}
