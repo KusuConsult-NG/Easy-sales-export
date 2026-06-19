@@ -271,7 +271,12 @@ async function _initiateCooperativePaymentAction(
                             errMsg.includes("ECONNRESET") ||
                             errMsg.includes("Client network socket disconnected") ||
                             errMsg.includes("FetchError") ||
-                            errMsg.includes("fetch failed");
+                            errMsg.includes("fetch failed") ||
+                            errMsg.includes("Connection closed") ||
+                            errMsg.includes("Socket closed") ||
+                            errMsg.includes("UNAVAILABLE") ||
+                            errMsg.includes("stream terminated") ||
+                            errMsg.includes("ERR_STREAM_PREMATURE_CLOSE");
         const userFriendlyMessage = isTransient 
             ? "A temporary connection issue occurred. Please try again." 
             : "Failed to initiate payment";
@@ -524,7 +529,12 @@ export async function registerCooperativeMemberAction(
                             errMsg.includes("ECONNRESET") ||
                             errMsg.includes("Client network socket disconnected") ||
                             errMsg.includes("FetchError") ||
-                            errMsg.includes("fetch failed");
+                            errMsg.includes("fetch failed") ||
+                            errMsg.includes("Connection closed") ||
+                            errMsg.includes("Socket closed") ||
+                            errMsg.includes("UNAVAILABLE") ||
+                            errMsg.includes("stream terminated") ||
+                            errMsg.includes("ERR_STREAM_PREMATURE_CLOSE");
         const userFriendlyMessage = isTransient 
             ? "A temporary connection issue occurred. Please try again." 
             : errMsg;
@@ -1567,7 +1577,12 @@ export async function resubmitCooperativeApplicationAction(
                             errMsg.includes("ECONNRESET") ||
                             errMsg.includes("Client network socket disconnected") ||
                             errMsg.includes("FetchError") ||
-                            errMsg.includes("fetch failed");
+                            errMsg.includes("fetch failed") ||
+                            errMsg.includes("Connection closed") ||
+                            errMsg.includes("Socket closed") ||
+                            errMsg.includes("UNAVAILABLE") ||
+                            errMsg.includes("stream terminated") ||
+                            errMsg.includes("ERR_STREAM_PREMATURE_CLOSE");
         const userFriendlyMessage = isTransient 
             ? "A temporary connection issue occurred. Please try again." 
             : errMsg;
@@ -1755,7 +1770,13 @@ export async function getCooperativeMemberIdCardAction(): Promise<
                 validUntil: validUntil.toISOString(),
                 membershipStatus: d.membershipStatus || "active",
                 paymentStatus: d.paymentStatus || "completed" } };
-    } catch (error) { logger.error("getCooperativeMemberIdCardAction error:", error);
+    } catch (error) {
+        if (error && typeof error === 'object' && 'digest' in error &&
+            typeof (error as any).digest === 'string' &&
+            (error as any).digest.startsWith('NEXT_REDIRECT')) {
+            throw error;
+        }
+        logger.error("getCooperativeMemberIdCardAction error:", error);
         return { success: false as const, error: "Failed to load ID card data. Please try again.", data: null };
     }
 }

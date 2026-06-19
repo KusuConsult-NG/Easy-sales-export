@@ -15,6 +15,7 @@ import Link from "next/link";
 import {
     Zap, Calendar, MapPin, Clock, Users, Plus, Loader2,
     Package, CheckCircle, AlertCircle, ArrowRight, ShoppingBag,
+    Camera, X,
 } from "lucide-react";
 import {
     getActiveVillageMarketEventsAction,
@@ -42,6 +43,8 @@ function AddProductModal({
     const { showToast } = useToast();
     const [loading, setLoading] = useState(false);
     const [customUnit, setCustomUnit] = useState("");
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [form, setForm] = useState({
         title: "",
         description: "",
@@ -54,6 +57,36 @@ function AddProductModal({
     async function handle() {
         if (!form.title || !form.price) return showToast("Title and price are required", "error");
         setLoading(true);
+        
+        let uploadedUrl: string | undefined = undefined;
+        if (selectedFile) {
+            try {
+                const formData = new FormData();
+                formData.append("file", selectedFile);
+                formData.append("folder", "flash-sale-products");
+                formData.append("documentType", "product-image");
+                
+                const uploadRes = await fetch("/api/upload", {
+                    method: "POST",
+                    body: formData
+                });
+                
+                if (!uploadRes.ok) {
+                    throw new Error("Failed to upload image");
+                }
+                
+                const uploadData = await uploadRes.json();
+                if (uploadData.success && uploadData.url) {
+                    uploadedUrl = uploadData.url;
+                } else {
+                    throw new Error(uploadData.error || "Failed to upload image");
+                }
+            } catch (err: any) {
+                setLoading(false);
+                return showToast(err.message || "Failed to upload image", "error");
+            }
+        }
+
         const finalUnit = form.unit === "other units" ? customUnit : form.unit;
         const res = await addFlashSaleProductAction({
             eventId,
@@ -63,6 +96,7 @@ function AddProductModal({
             flashPrice: form.flashPrice ? Number(form.flashPrice) : undefined,
             unit: finalUnit || undefined,
             availableQuantity: form.availableQuantity ? Number(form.availableQuantity) : undefined,
+            imageUrl: uploadedUrl,
         });
         setLoading(false);
         if (res.success) {
@@ -72,6 +106,23 @@ function AddProductModal({
         } else {
             showToast(res.error || "Failed to add product", "error");
         }
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setSelectedFile(file);
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setImagePreview(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const handleClearImage = () => {
+        setSelectedFile(null);
+        setImagePreview(null);
     };
 
     const units = [
@@ -89,7 +140,7 @@ function AddProductModal({
 
     return (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
-            <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center gap-3 mb-5">
                     <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center">
                         <Zap className="w-5 h-5 text-orange-600" />
@@ -102,48 +153,78 @@ function AddProductModal({
                         <label className="block text-sm font-semibold text-slate-700 mb-1.5">Product Title *</label>
                         <input type="text" value={form.title} onChange={(e) => setForm(f => ({ ...f, title: e.target.value }))}
                             placeholder="e.g., Fresh Tomatoes"
-                            className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-transparent" />
+                            className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none" />
                     </div>
                     <div>
                         <label className="block text-sm font-semibold text-slate-700 mb-1.5">Description</label>
                         <textarea value={form.description} onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))}
                             placeholder="Describe your product..."
                             rows={2}
-                            className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none" />
+                            className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none outline-none" />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className="block text-sm font-semibold text-slate-700 mb-1.5">Regular Price (₦) *</label>
                             <input type="number" value={form.price} onChange={(e) => setForm(f => ({ ...f, price: e.target.value }))}
                                 placeholder="5000" min="0"
-                                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-transparent" />
+                                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none" />
                         </div>
                         <div>
                             <label className="block text-sm font-semibold text-slate-700 mb-1.5">Flash Price (₦)</label>
                             <input type="number" value={form.flashPrice} onChange={(e) => setForm(f => ({ ...f, flashPrice: e.target.value }))}
                                 placeholder="3500" min="0"
-                                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-transparent" />
+                                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none" />
                         </div>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className="block text-sm font-semibold text-slate-700 mb-1.5">Unit *</label>
                             <select value={form.unit} onChange={(e) => setForm(f => ({ ...f, unit: e.target.value }))}
-                                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-orange-500 bg-white">
+                                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-orange-500 bg-white outline-none">
                                 {units.map(u => <option key={u} value={u}>{u}</option>)}
                             </select>
                             {form.unit === "other units" && (
                                 <input type="text" value={customUnit} onChange={(e) => setCustomUnit(e.target.value)}
                                     placeholder="Enter custom unit"
-                                    className="mt-2 w-full px-4 py-2.5 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-transparent" />
+                                    className="mt-2 w-full px-4 py-2.5 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none" />
                             )}
                         </div>
                         <div>
                             <label className="block text-sm font-semibold text-slate-700 mb-1.5">Available Qty</label>
                             <input type="number" value={form.availableQuantity} onChange={(e) => setForm(f => ({ ...f, availableQuantity: e.target.value }))}
                                 placeholder="50" min="1"
-                                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-transparent" />
+                                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none" />
                         </div>
+                    </div>
+                    
+                    {/* Image Upload Widget */}
+                    <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Product Image</label>
+                        {imagePreview ? (
+                            <div className="relative h-40 w-full rounded-xl overflow-hidden border border-slate-200 shadow-sm">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                                <button
+                                    type="button"
+                                    onClick={handleClearImage}
+                                    className="absolute top-2 right-2 p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full transition shadow hover:scale-105"
+                                >
+                                    <X className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                        ) : (
+                            <label className="border-2 border-dashed border-slate-300 hover:border-orange-500 rounded-xl p-5 flex flex-col items-center justify-center cursor-pointer transition bg-slate-50 hover:bg-orange-50/10 group">
+                                <Camera className="w-7 h-7 text-slate-400 mb-1.5 group-hover:text-orange-500 transition" />
+                                <span className="text-xs font-semibold text-slate-600 group-hover:text-orange-600 transition">Upload product image</span>
+                                <span className="text-[10px] text-slate-400 mt-0.5">PNG, JPG up to 5MB</span>
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleFileChange}
+                                    className="hidden"
+                                />
+                            </label>
+                        )}
                     </div>
                 </div>
 

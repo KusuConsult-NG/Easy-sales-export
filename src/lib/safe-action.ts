@@ -127,7 +127,12 @@ export function withSafeAction<TArgs extends any[], TReturn>(
                                 errorMessage.includes("ECONNRESET") ||
                                 errorMessage.includes("Client network socket disconnected") ||
                                 errorMessage.includes("FetchError") ||
-                                errorMessage.includes("fetch failed");
+                                errorMessage.includes("fetch failed") ||
+                                errorMessage.includes("Connection closed") ||
+                                errorMessage.includes("Socket closed") ||
+                                errorMessage.includes("UNAVAILABLE") ||
+                                errorMessage.includes("stream terminated") ||
+                                errorMessage.includes("ERR_STREAM_PREMATURE_CLOSE");
             const sanitizedMessage = isTransient 
                 ? "A temporary connection issue occurred. Please try again." 
                 : errorMessage;
@@ -187,7 +192,12 @@ export function withFlexibleSafeAction<TArgs extends any[], TReturn>(
                                 errorMessage.includes("ECONNRESET") ||
                                 errorMessage.includes("Client network socket disconnected") ||
                                 errorMessage.includes("FetchError") ||
-                                errorMessage.includes("fetch failed");
+                                errorMessage.includes("fetch failed") ||
+                                errorMessage.includes("Connection closed") ||
+                                errorMessage.includes("Socket closed") ||
+                                errorMessage.includes("UNAVAILABLE") ||
+                                errorMessage.includes("stream terminated") ||
+                                errorMessage.includes("ERR_STREAM_PREMATURE_CLOSE");
             const sanitizedMessage = isTransient 
                 ? "A temporary connection issue occurred. Please try again." 
                 : errorMessage;

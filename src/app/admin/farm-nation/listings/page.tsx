@@ -69,13 +69,19 @@ export default function FarmNationListingsPage() {
         },
         {
             header: "Category",
-            accessor: (item: any) => (
-                <div className="space-y-1">
-                    <div className="text-sm font-semibold capitalize bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full inline-block">
-                        {item.category || "General"}
+            accessor: (item: any) => {
+                const category = item.category;
+                const displayCategory = Array.isArray(category)
+                    ? category.map(c => typeof c === 'object' && c ? (c.label || JSON.stringify(c)) : String(c).replace(/_/g, " ")).join(", ")
+                    : (typeof category === 'object' && category ? (category.label || JSON.stringify(category)) : String(category || "General").replace(/_/g, " "));
+                return (
+                    <div className="space-y-1">
+                        <div className="text-sm font-semibold capitalize bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full inline-block">
+                            {displayCategory}
+                        </div>
                     </div>
-                </div>
-            ),
+                );
+            },
             hideOnMobile: true
         },
         {
@@ -102,14 +108,17 @@ export default function FarmNationListingsPage() {
         {
             header: "Status",
             accessor: (item: any) => {
-                const status = item.verificationStatus || item.status || "pending";
+                const rawStatus = item.verificationStatus || item.status || "pending";
+                const status = typeof rawStatus === 'object' && rawStatus 
+                    ? (rawStatus.verified ? "verified" : (rawStatus.status || "pending"))
+                    : String(rawStatus || "pending");
                 return (
                     <span className={`px-2 py-1 rounded-full text-xs font-bold capitalize ${
-                        status === "verified" ? "bg-green-100 text-green-700" :
+                        status === "verified" || status === "approved" ? "bg-green-100 text-green-700" :
                         status === "pending" || status === "pending_verification" ? "bg-yellow-100 text-yellow-700" :
                         "bg-red-100 text-red-700"
                     }`}>
-                        {status.replace("_", " ")}
+                        {status.replace(/_/g, " ")}
                     </span>
                 );
             }

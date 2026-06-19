@@ -261,7 +261,12 @@ export async function preValidateLoginAction(credentials: any): Promise<{ succes
                                 errMsg.includes("ECONNRESET") ||
                                 errMsg.includes("Client network socket disconnected") ||
                                 errMsg.includes("FetchError") ||
-                                errMsg.includes("fetch failed");
+                                errMsg.includes("fetch failed") ||
+                                errMsg.includes("Connection closed") ||
+                                errMsg.includes("Socket closed") ||
+                                errMsg.includes("UNAVAILABLE") ||
+                                errMsg.includes("stream terminated") ||
+                                errMsg.includes("ERR_STREAM_PREMATURE_CLOSE");
             if (isTransient) {
                 return { success: false, error: "A temporary connection issue occurred. Please try again." };
             }
@@ -330,7 +335,12 @@ export async function preValidateLoginAction(credentials: any): Promise<{ succes
                             errMsg.includes("ECONNRESET") ||
                             errMsg.includes("Client network socket disconnected") ||
                             errMsg.includes("FetchError") ||
-                            errMsg.includes("fetch failed");
+                            errMsg.includes("fetch failed") ||
+                            errMsg.includes("Connection closed") ||
+                            errMsg.includes("Socket closed") ||
+                            errMsg.includes("UNAVAILABLE") ||
+                            errMsg.includes("stream terminated") ||
+                            errMsg.includes("ERR_STREAM_PREMATURE_CLOSE");
         if (isTransient) {
             return { success: false, error: "A temporary connection issue occurred. Please try again." };
         }

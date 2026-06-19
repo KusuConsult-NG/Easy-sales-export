@@ -307,8 +307,11 @@ export default function VillageMarketEventPage() {
                                             {p.imageUrl ? (
                                                 <Image src={p.imageUrl} alt={p.title} fill sizes="300px" className="object-cover hover:scale-105 transition duration-300" />
                                             ) : (
-                                                <div className="w-full h-full flex items-center justify-center">
-                                                    <Camera className="w-10 h-10 text-slate-300" />
+                                                <div className="w-full h-full bg-linear-to-br from-slate-100 to-slate-200/60 flex flex-col items-center justify-center gap-2 select-none">
+                                                    <div className="w-12 h-12 bg-white/80 rounded-full flex items-center justify-center shadow-xs">
+                                                        <Camera className="w-5 h-5 text-slate-400" />
+                                                    </div>
+                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">No Image</span>
                                                 </div>
                                             )}
                                         </Link>

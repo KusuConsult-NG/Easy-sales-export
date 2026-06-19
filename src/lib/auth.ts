@@ -126,7 +126,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     const { getAdminDb } = await import("@/lib/firebase-admin");
                     const adminDb = getAdminDb();
 
-                    const userDoc = await adminDb.collection(COLLECTIONS.USERS).doc(uid).get();
+                    const userDoc = await runQueryWithRetry(() => adminDb.collection(COLLECTIONS.USERS).doc(uid).get());
 
                     if (!userDoc.exists) {
                         console.error(`${authCtx} No user doc in Firestore for UID: ${uid}`);
@@ -144,9 +144,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     // ── STEP 8.5: Track Active Users ─────────────────────────────
                     try {
                         const { FieldValue } = await import("firebase-admin/firestore");
-                        await adminDb.collection(COLLECTIONS.USERS).doc(uid).update({
+                        await runQueryWithRetry(() => adminDb.collection(COLLECTIONS.USERS).doc(uid).update({
                             lastLoginAt: FieldValue.serverTimestamp()
-                        });
+                        }));
                     } catch (e: any) {
                         logger.error(`${authCtx} Failed to update lastLoginAt: ${e.message}`);
                     }
@@ -223,7 +223,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                                         msg.includes("ECONNRESET") ||
                                         msg.includes("Client network socket disconnected") ||
                                         msg.includes("FetchError") ||
-                                        msg.includes("fetch failed");
+                                        msg.includes("fetch failed") ||
+                                        msg.includes("Connection closed") ||
+                                        msg.includes("Socket closed") ||
+                                        msg.includes("UNAVAILABLE") ||
+                                        msg.includes("stream terminated") ||
+                                        msg.includes("ERR_STREAM_PREMATURE_CLOSE");
                     let userMessage = firebaseErrorMap[code] || firebaseErrorMap[error?.message] || "Authentication failed.";
                     if (isTransient) {
                         userMessage = "A temporary connection issue occurred. Please try again.";
@@ -287,7 +292,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                             try {
                                 const { getAdminDb } = await import("@/lib/firebase-admin");
                                 const db = getAdminDb();
-                                const userSnap = await db.collection(COLLECTIONS.USERS).doc(token.id as string).get();
+                                const userSnap = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS).doc(token.id as string).get());
                                 if (userSnap.exists) {
                                     const userData = userSnap.data()!;
                                     token.roles = userData.roles || [];

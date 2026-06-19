@@ -13,7 +13,7 @@ type LandVerification = {
     userId: string;
     ownerName: string;
     title: string;
-    category: string | string[];
+    category: any;
     state: string;
     lga: string;
     size: number;
@@ -442,10 +442,12 @@ export default function AdminLandVerificationPage() {
                                                 <p className="font-semibold text-slate-900">{verification.title}</p>
                                                 <p className="text-sm text-slate-500">
                                                     {Array.isArray(verification.category)
-                                                        ? verification.category.map(c => String(c).replace(/_/g, " ")).join(", ")
+                                                        ? verification.category.map(c => typeof c === 'object' && c ? (c.label || JSON.stringify(c)) : String(c).replace(/_/g, " ")).join(", ")
                                                         : (typeof verification.category === "string"
                                                             ? verification.category.replace(/_/g, " ")
-                                                            : (verification.category || "—"))}
+                                                            : (typeof verification.category === "object" && verification.category
+                                                                ? (verification.category.label || JSON.stringify(verification.category))
+                                                                : String(verification.category || "—").replace(/_/g, " ")))}
                                                 </p>
                                             </td>
                                             <td className="px-6 py-4">
@@ -582,10 +584,12 @@ export default function AdminLandVerificationPage() {
                                                         <div><p className="text-sm text-slate-600">Title</p><p className="font-semibold text-slate-900">{selectedVerification.title}</p></div>
                                                         <div><p className="text-sm text-slate-600">Category</p><p className="font-semibold text-slate-900 capitalize">
                                                             {Array.isArray(selectedVerification.category)
-                                                                ? selectedVerification.category.map(c => String(c).replace(/_/g, " ")).join(", ")
+                                                                ? selectedVerification.category.map(c => typeof c === 'object' && c ? (c.label || JSON.stringify(c)) : String(c).replace(/_/g, " ")).join(", ")
                                                                 : (typeof selectedVerification.category === "string"
                                                                     ? selectedVerification.category.replace(/_/g, " ")
-                                                                    : (selectedVerification.category || "—"))}
+                                                                    : (typeof selectedVerification.category === "object" && selectedVerification.category
+                                                                        ? (selectedVerification.category.label || JSON.stringify(selectedVerification.category))
+                                                                        : String(selectedVerification.category || "—").replace(/_/g, " ")))}
                                                         </p></div>
                                                         <div><p className="text-sm text-slate-600">Location</p><p className="font-semibold text-slate-900">{selectedVerification.state}, {selectedVerification.lga}</p></div>
                                                         <div><p className="text-sm text-slate-600">Size &amp; Price</p><p className="font-semibold text-slate-900">{selectedVerification.size} {selectedVerification.unit} — ₦{(selectedVerification.totalPrice ?? selectedVerification.price ?? 0).toLocaleString()}</p></div>

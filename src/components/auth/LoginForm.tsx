@@ -90,7 +90,24 @@ export default function LoginForm({ defaultCallbackUrl = "/dashboard" }: { defau
                 // Fall back to generic message only if error string is the opaque NextAuth code.
                 const rawError = result.error;
                 const isOpaqueCode = rawError === "CredentialsSignin" || rawError === "CallbackRouteError";
-                setError(isOpaqueCode ? "Invalid email or password." : rawError);
+                
+                const isTransient = rawError.includes("Premature close") || 
+                                    rawError.includes("socket hang up") || 
+                                    rawError.includes("ECONNRESET") ||
+                                    rawError.includes("Client network socket disconnected") ||
+                                    rawError.includes("FetchError") ||
+                                    rawError.includes("fetch failed") ||
+                                    rawError.includes("Connection closed") ||
+                                    rawError.includes("Socket closed") ||
+                                    rawError.includes("UNAVAILABLE") ||
+                                    rawError.includes("stream terminated") ||
+                                    rawError.includes("ERR_STREAM_PREMATURE_CLOSE");
+                                    
+                if (isTransient) {
+                    setError("A temporary connection issue occurred. Please try again.");
+                } else {
+                    setError(isOpaqueCode ? "Invalid email or password." : rawError);
+                }
                 setIsLoading(false);
                 return;
             }

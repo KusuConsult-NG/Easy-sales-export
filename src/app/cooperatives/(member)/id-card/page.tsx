@@ -465,6 +465,21 @@ export default function CooperativeIdCardPage() {
                     </div>
                 )}
 
+                {/* Generic failure fallback */}
+                {result?.success === false && !["not_member", "payment_required", "pending_approval"].includes(result?.reason || "") && (
+                    <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center max-w-sm mx-auto">
+                        <AlertTriangle className="w-12 h-12 text-red-600 mx-auto mb-3" />
+                        <h2 className="text-lg font-bold text-red-900 mb-1">Failed to Load ID Card</h2>
+                        <p className="text-sm text-red-700 mb-4">{result.error || "An unexpected error occurred. Please try again."}</p>
+                        <button
+                            onClick={fetchData}
+                            className="inline-flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl transition"
+                        >
+                            <RefreshCw className="w-4 h-4 animate-spin-hover" /> Try Again
+                        </button>
+                    </div>
+                )}
+
                 {/* Active member — show card */}
                 {result?.success && result.data && (
                     <div className="space-y-8">

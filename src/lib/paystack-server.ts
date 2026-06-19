@@ -102,7 +102,12 @@ export async function verifyPaystackPayment(
                                 errMsg.includes("ECONNRESET") ||
                                 errMsg.includes("Client network socket disconnected") ||
                                 errMsg.includes("FetchError") ||
-                                errMsg.includes("fetch failed");
+                                errMsg.includes("fetch failed") ||
+                                errMsg.includes("Connection closed") ||
+                                errMsg.includes("Socket closed") ||
+                                errMsg.includes("UNAVAILABLE") ||
+                                errMsg.includes("stream terminated") ||
+                                errMsg.includes("ERR_STREAM_PREMATURE_CLOSE");
             if (isTransient && i < maxRetries - 1) {
                 console.warn(`[Paystack Verify Retry] Transient error: ${errMsg}. Retrying in ${delay}ms... (Attempt ${i + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
@@ -217,7 +222,12 @@ export async function initializePaystackPayment(
                                 errMsg.includes("ECONNRESET") ||
                                 errMsg.includes("Client network socket disconnected") ||
                                 errMsg.includes("FetchError") ||
-                                errMsg.includes("fetch failed");
+                                errMsg.includes("fetch failed") ||
+                                errMsg.includes("Connection closed") ||
+                                errMsg.includes("Socket closed") ||
+                                errMsg.includes("UNAVAILABLE") ||
+                                errMsg.includes("stream terminated") ||
+                                errMsg.includes("ERR_STREAM_PREMATURE_CLOSE");
             if (isTransient && i < maxRetries - 1) {
                 console.warn(`[Paystack Initialize Retry] Transient error: ${errMsg}. Retrying in ${delay}ms... (Attempt ${i + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));

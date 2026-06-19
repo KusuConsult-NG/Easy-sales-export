@@ -1,4 +1,5 @@
 import { getCached, setCache, deleteCache, CacheKeys, CACHE_TTL } from './redis';
+import { runQueryWithRetry } from './firestore-utils';
 import { getAdminDb } from './firebase-admin';
 import { COLLECTIONS } from "@/lib/types/firestore";
 
@@ -46,7 +47,7 @@ export async function getUserProfile(userId: string): Promise<CachedUserProfile 
 
         // Cache miss — fetch from Firestore
         const db = getAdminDb();
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        const userDoc = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS).doc(userId).get());
 
         if (!userDoc.exists) {
             return null;

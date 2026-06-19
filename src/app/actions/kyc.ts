@@ -71,7 +71,12 @@ async function _verifyBVNAction(payload: { bvn: string;
                             message.includes("ECONNRESET") ||
                             message.includes("Client network socket disconnected") ||
                             message.includes("FetchError") ||
-                            message.includes("fetch failed");
+                            message.includes("fetch failed") ||
+                            message.includes("Connection closed") ||
+                            message.includes("Socket closed") ||
+                            message.includes("UNAVAILABLE") ||
+                            message.includes("stream terminated") ||
+                            message.includes("ERR_STREAM_PREMATURE_CLOSE");
         const userFriendlyMessage = isTransient 
             ? "A temporary connection issue occurred. Please try again." 
             : message;
@@ -120,7 +125,12 @@ async function _verifyNINAction(payload: { nin: string;
                             message.includes("ECONNRESET") ||
                             message.includes("Client network socket disconnected") ||
                             message.includes("FetchError") ||
-                            message.includes("fetch failed");
+                            message.includes("fetch failed") ||
+                            message.includes("Connection closed") ||
+                            message.includes("Socket closed") ||
+                            message.includes("UNAVAILABLE") ||
+                            message.includes("stream terminated") ||
+                            message.includes("ERR_STREAM_PREMATURE_CLOSE");
         const userFriendlyMessage = isTransient 
             ? "A temporary connection issue occurred. Please try again." 
             : message;
@@ -182,7 +192,12 @@ async function _verifyVotersCardAction(payload: { votersCardNumber: string;
                             message.includes("ECONNRESET") ||
                             message.includes("Client network socket disconnected") ||
                             message.includes("FetchError") ||
-                            message.includes("fetch failed");
+                            message.includes("fetch failed") ||
+                            message.includes("Connection closed") ||
+                            message.includes("Socket closed") ||
+                            message.includes("UNAVAILABLE") ||
+                            message.includes("stream terminated") ||
+                            message.includes("ERR_STREAM_PREMATURE_CLOSE");
         const userFriendlyMessage = isTransient 
             ? "A temporary connection issue occurred. Please try again." 
             : message;
@@ -335,7 +350,12 @@ async function _saveKYCProfileAction(payload: { firstName: string;
                             message.includes("ECONNRESET") ||
                             message.includes("Client network socket disconnected") ||
                             message.includes("FetchError") ||
-                            message.includes("fetch failed");
+                            message.includes("fetch failed") ||
+                            message.includes("Connection closed") ||
+                            message.includes("Socket closed") ||
+                            message.includes("UNAVAILABLE") ||
+                            message.includes("stream terminated") ||
+                            message.includes("ERR_STREAM_PREMATURE_CLOSE");
         const userFriendlyMessage = isTransient 
             ? "A temporary connection issue occurred. Please try again." 
             : message;
