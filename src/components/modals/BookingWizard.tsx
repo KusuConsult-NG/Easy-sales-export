@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import type { ExportWindow } from "@/app/actions/export-aggregation";
 import { useToast } from "@/contexts/ToastContext";
+import { createBookingAction } from "@/app/actions/export-booking";
 
 interface BookingWizardProps {
     isOpen: boolean;
@@ -122,7 +123,6 @@ export default function BookingWizard({ isOpen, onClose, exportWindow }: Booking
         if (!exportWindow) return;
         setSubmitting(true);
         try {
-            const { createBookingAction } = await import("@/app/actions/export-booking");
             const result = await createBookingAction({
                 exportWindowId: exportWindow.id || "",
                 quantity: volume,

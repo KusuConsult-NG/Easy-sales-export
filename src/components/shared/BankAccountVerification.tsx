@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Building2, CheckCircle, AlertCircle, Loader2, RefreshCw } from "lucide-react";
+import { getBankList } from "@/app/actions/paystack";
 
 interface Bank {
     id: number;
@@ -69,7 +70,6 @@ export default function BankAccountVerification({
         setLoadingBanks(true);
         setBanksError("");
         try {
-            const { getBankList } = await import('@/app/actions/paystack');
             const result = await getBankList();
             if (result.success && result.data?.banks) {
                 setBanks(result.data.banks);

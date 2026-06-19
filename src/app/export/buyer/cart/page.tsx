@@ -10,6 +10,7 @@ import {
     CreditCard, Loader2, Store
 } from "lucide-react";
 import { useExportCart } from "@/contexts/ExportCartContext";
+import { initializeExportOrderPaymentAction } from "@/app/actions/export-payment";
 
 type ShippingTerm = "FOB" | "CIF" | "DDP";
 
@@ -83,8 +84,6 @@ export default function ExportCartPage() {
         setError(null);
 
         try {
-            // Import the payment action
-            const { initializeExportOrderPaymentAction } = await import("@/app/actions/export-payment");
 
             // Prepare cart items for payment
             const cartItemsInput = cart.map(item => ({

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { X, Package, Hash, Loader2, CheckCircle } from "lucide-react";
 import type { ExportWindow } from "@/app/actions/export-aggregation";
 import { useToast } from "@/contexts/ToastContext";
+import { createBookingAction } from "@/app/actions/export-booking";
 
 interface BookingModalProps {
     isOpen: boolean;
@@ -33,7 +34,6 @@ export default function BookingModal({ isOpen, onClose, exportWindow }: BookingM
 
         try {
             // Use real Firestore booking action
-            const { createBookingAction } = await import('@/app/actions/export-booking');
             const result = await createBookingAction({
                 exportWindowId: exportWindow.id || '',
                 quantity,

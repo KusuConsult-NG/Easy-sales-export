@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { initiateCooperativePaymentAction } from "@/app/actions/cooperative";
+import { initiateCooperativePaymentAction, getMembershipAction } from "@/app/actions/cooperative";
 import { Loader2, CreditCard, CheckCircle, ShieldCheck, AlertCircle } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import { COOPERATIVE_CONFIG, CURRENCY_CONFIG } from "@/lib/constants";
@@ -25,7 +25,6 @@ export default function CooperativePaymentPage() {
 
         const checkExisting = async () => {
             try {
-                const { getMembershipAction } = await import("@/app/actions/cooperative");
                 const response = await getMembershipAction();
                 if (response.success && response.data && response.data.membership) {
                     const status = response.data.membership.membershipStatus;

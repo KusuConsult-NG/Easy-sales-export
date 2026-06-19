@@ -21,7 +21,7 @@ import {
     CheckCircle,
     Loader2,
 } from "lucide-react";
-import { submitMultiStepWaveApplicationAction, getWaveApplicationAction, resubmitWaveApplicationAction } from "@/app/actions/wave";
+import { submitMultiStepWaveApplicationAction, getWaveApplicationAction, resubmitWaveApplicationAction, checkWaveStatusAction, checkWaveAccessAction } from "@/app/actions/wave";
 import { useToast } from "@/contexts/ToastContext";
 import { useSessionExpiry } from "@/hooks/useSessionExpiry";
 import { AlertTriangle } from "lucide-react";
@@ -243,7 +243,6 @@ export default function WaveApplicationPage() {
 
     const checkApplicationStatus = async (isEditParam: boolean) => {
         try {
-            const { checkWaveStatusAction } = await import("@/app/actions/wave");
             const statusResult = await checkWaveStatusAction();
             const waveStatus = statusResult.success ? statusResult.data?.status : null;
 
@@ -259,7 +258,6 @@ export default function WaveApplicationPage() {
                 // Otherwise: stay on application page — do NOT auto-redirect.
                 // The user can see their status and choose to navigate to review-pending themselves.
             } else if (waveStatus === "approved") {
-                const { checkWaveAccessAction } = await import("@/app/actions/wave");
                 const hasAccessResult = await checkWaveAccessAction();
                 if (hasAccessResult.success && hasAccessResult.data) {
                     router.replace("/wave/dashboard");

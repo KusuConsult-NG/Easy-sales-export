@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Building2, CheckCircle, Loader2, AlertCircle, RefreshCw } from "lucide-react";
+import { getBankList } from "@/app/actions/paystack";
 
 interface BankAccountVerificationProps {
     onVerified: (accountData: BankAccountData) => void;
@@ -76,7 +77,6 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
         setBanksError("");
 
         try {
-            const { getBankList } = await import('@/app/actions/paystack');
             const result = await getBankList();
 
             if (result.success && result.data?.banks) {

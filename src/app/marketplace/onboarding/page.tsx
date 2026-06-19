@@ -19,6 +19,13 @@ import { useSession } from "next-auth/react";
 import { AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import OnboardingLayout from "@/components/shared/OnboardingLayout";
+import { 
+    checkMarketplaceStatusAction, 
+    getSellerVerificationAction, 
+    checkMarketplaceAccessAction, 
+    resubmitSellerVerificationAction, 
+    submitMarketplaceOnboardingAction 
+} from "@/app/actions/marketplace";
 import StepIndicator from "@/components/shared/StepIndicator";
 import AccountTypeStep from "./steps/AccountTypeStep";
 import BusinessProfileStep from "./steps/BusinessProfileStep";
@@ -94,7 +101,6 @@ export default function MarketplaceOnboarding() {
 
         const checkStatus = async () => {
             try {
-                const { checkMarketplaceStatusAction, getSellerVerificationAction, checkMarketplaceAccessAction } = await import("@/app/actions/marketplace");
                 const result = await checkMarketplaceStatusAction();
                 const marketplaceStatus = (result.success && result.data) ? result.data.status : null;
                 const accountType = (result.success && result.data) ? result.data.accountType : null;
@@ -289,7 +295,6 @@ export default function MarketplaceOnboarding() {
 
         try {
             if (isRevisionMode || isEditMode) {
-                const { resubmitSellerVerificationAction } = await import("@/app/actions/marketplace");
                 const result = await resubmitSellerVerificationAction({
                     businessName: formData.businessName,
                     phone: formData.phone,
@@ -333,7 +338,6 @@ export default function MarketplaceOnboarding() {
 
             if (formData.bankAccount) formDataPayload.append("bankAccount", JSON.stringify(formData.bankAccount));
 
-            const { submitMarketplaceOnboardingAction } = await import("@/app/actions/marketplace");
             const result = await submitMarketplaceOnboardingAction(formDataPayload);
 
             if (result.success) {
