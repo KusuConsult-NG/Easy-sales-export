@@ -12,6 +12,7 @@ import { logger } from '@/lib/logger';
 import { LEGACY_ROLE_MAP, type LegacyRole, type UserRole } from "@/lib/types/roles";
 import { getPrimaryApp } from "@/lib/role-app-mapping";
 import { ZodError } from "zod";
+import { runQueryWithRetry } from "@/lib/firestore-utils";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { rateLimit, getActionClientIp } from '@/lib/rate-limiter';
@@ -94,7 +95,7 @@ export async function getPostLoginRedirect(email: string) { try {
         // Primary path: direct userId lookup — O(1), always correct.
         const session = await auth();
         if (session?.user?.id) {
-            const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+            const userDoc = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS).doc(session.user.id).get());
             if (userDoc.exists) {
                 userData = userDoc.data() as FirestoreUser;
             }
@@ -102,10 +103,10 @@ export async function getPostLoginRedirect(email: string) { try {
 
         // Fallback: email query (covers edge case where session isn't ready post-signIn)
         if (!userData) { logger.warn(`[getPostLoginRedirect] No session post-login — falling back to email query`, { email });
-            const userSnapshot = await db.collection(COLLECTIONS.USERS)
+            const userSnapshot = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS)
                 .where('email', '==', email.toLowerCase())
                 .limit(1)
-                .get();
+                .get());
             if (!userSnapshot.empty) { userData = userSnapshot.docs[0].data() as FirestoreUser;
             }
         }
@@ -248,10 +249,10 @@ export async function preValidateLoginAction(credentials: any): Promise<{ succes
             const errorCode = responseData.error?.message || "auth/internal-error";
             
             // Check if email exists in Firestore to give a precise "Email address not registered" error
-            const emailCheck = await db.collection(COLLECTIONS.USERS)
+            const emailCheck = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS)
                 .where("email", "==", email)
                 .limit(1)
-                .get();
+                .get());
                 
             if (emailCheck.empty) {
                 return {
@@ -287,7 +288,7 @@ export async function preValidateLoginAction(credentials: any): Promise<{ succes
         const uid = responseData.localId;
 
         // 4. Fetch user profile and check status
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(uid).get();
+        const userDoc = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS).doc(uid).get());
 
         if (!userDoc.exists) {
             return { success: false, error: "User profile not found. Please contact support or register again." };
@@ -336,10 +337,10 @@ export async function registerAction(prevState: any, formData: FormData) { const
         // 🔒 DEDUP GUARD: Check phone uniqueness before touching Firebase Auth
         // Prevents multi-account fraud (same phone, different email addresses)
         const normalisedPhone = normalisePhone(validatedData.phone) || validatedData.phone;
-        if (normalisedPhone) { const phoneCheck = await db.collection(COLLECTIONS.USERS)
+        if (normalisedPhone) { const phoneCheck = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS)
                 .where("phone", "==", normalisedPhone)
                 .limit(1)
-                .get();
+                .get());
             if (!phoneCheck.empty) {
                 return { error: "An account with this phone number already exists. Please log in instead.", success: false as const, redirectUrl: ""};
             }
@@ -383,10 +384,10 @@ export async function registerAction(prevState: any, formData: FormData) { const
             profileComplete: false,
         };
 
-        try { await db.collection(COLLECTIONS.USERS).doc(userRecord.uid).set({
+        try { await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS).doc(userRecord.uid).set({
                 ...userProfile,
                 createdAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+                updatedAt: FieldValue.serverTimestamp() }, { merge: true }));
         } catch (firestoreError: any) {
             logger.error("Firestore profile creation failed, rolling back Auth user:", firestoreError);
             // ROLLBACK: Delete the Auth user so they can try again (prevents "Ghost User" state)
