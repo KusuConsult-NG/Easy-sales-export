@@ -19,6 +19,7 @@ import { loginSchema } from "./schemas";
 import { COLLECTIONS, type UserRole } from "./types/firestore";
 import type { User as FirestoreUser } from "./types/firestore";
 import { authConfig } from "./auth.config";
+import { runQueryWithRetry } from "@/lib/firestore-utils";
 
 /**
  * NextAuth v5 Configuration
@@ -69,28 +70,31 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     }
 
                     // ── STEP 4: Firebase authentication (REST API) ───────────
-                    const response = await fetch(
-                        `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseApiKey}`,
-                        {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                                email,
-                                password,
-                                returnSecureToken: true
-                            })
+                    const responseData = await runQueryWithRetry(async () => {
+                        const res = await fetch(
+                            `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseApiKey}`,
+                            {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    email,
+                                    password,
+                                    returnSecureToken: true
+                                })
+                            }
+                        );
+                        const data = await res.json();
+                        if (!res.ok) {
+                            const errorCode = data.error?.message || "auth/internal-error";
+                            console.error(`${authCtx} STEP 4 FAILED: Firebase REST API error: ${errorCode}`);
+                            const error = new Error(errorCode);
+                            (error as any).code = errorCode; // Match catch block structure
+                            (error as any).status = res.status;
+                            (error as any).data = data;
+                            throw error;
                         }
-                    );
-
-                    const responseData = await response.json();
-
-                    if (!response.ok) {
-                        const errorCode = responseData.error?.message || "auth/internal-error";
-                        console.error(`${authCtx} STEP 4 FAILED: Firebase REST API error: ${errorCode}`);
-                        const error = new Error(errorCode);
-                        (error as any).code = errorCode; // Match catch block structure
-                        throw error;
-                    }
+                        return data;
+                    });
 
                     const uid = responseData.localId;
 
@@ -214,8 +218,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
                     // Only fallback to error.message if it's not the exact raw ALL_CAPS string code 
                     // (prevents ugly raw strings in UI if mapping misses something)
+                    const isTransient = msg.includes("Premature close") || 
+                                        msg.includes("socket hang up") || 
+                                        msg.includes("ECONNRESET") ||
+                                        msg.includes("Client network socket disconnected") ||
+                                        msg.includes("FetchError") ||
+                                        msg.includes("fetch failed");
                     let userMessage = firebaseErrorMap[code] || firebaseErrorMap[error?.message] || "Authentication failed.";
-                    if (!firebaseErrorMap[code] && !firebaseErrorMap[error?.message] && error?.message && !/^[A-Z_]+$/.test(error?.message)) {
+                    if (isTransient) {
+                        userMessage = "A temporary connection issue occurred. Please try again.";
+                    } else if (!firebaseErrorMap[code] && !firebaseErrorMap[error?.message] && error?.message && !/^[A-Z_]+$/.test(error?.message)) {
                         userMessage = error.message;
                     }
 

@@ -230,23 +230,43 @@ export async function preValidateLoginAction(credentials: any): Promise<{ succes
         }
 
         // 3. Authenticate with Firebase REST API
-        const response = await fetch(
-            `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseApiKey}`,
-            {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    email,
-                    password,
-                    returnSecureToken: true
-                })
+        let responseData: any;
+        try {
+            responseData = await runQueryWithRetry(async () => {
+                const res = await fetch(
+                    `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseApiKey}`,
+                    {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            email,
+                            password,
+                            returnSecureToken: true
+                        })
+                    }
+                );
+                const data = await res.json();
+                if (!res.ok) {
+                    const err = new Error(data.error?.message || "auth/internal-error");
+                    (err as any).status = res.status;
+                    (err as any).data = data;
+                    throw err;
+                }
+                return data;
+            });
+        } catch (authErr: any) {
+            const errMsg = authErr.message || String(authErr);
+            const isTransient = errMsg.includes("Premature close") || 
+                                errMsg.includes("socket hang up") || 
+                                errMsg.includes("ECONNRESET") ||
+                                errMsg.includes("Client network socket disconnected") ||
+                                errMsg.includes("FetchError") ||
+                                errMsg.includes("fetch failed");
+            if (isTransient) {
+                return { success: false, error: "A temporary connection issue occurred. Please try again." };
             }
-        );
 
-        const responseData = await response.json();
-
-        if (!response.ok) {
-            const errorCode = responseData.error?.message || "auth/internal-error";
+            const errorCode = authErr.message || "auth/internal-error";
             
             // Check if email exists in Firestore to give a precise "Email address not registered" error
             const emailCheck = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS)
@@ -281,7 +301,7 @@ export async function preValidateLoginAction(credentials: any): Promise<{ succes
             
             return { 
                 success: false, 
-                error: firebaseErrorMap[errorCode] || firebaseErrorMap[responseData.error?.message] || "Incorrect password." 
+                error: firebaseErrorMap[errorCode] || firebaseErrorMap[authErr.data?.error?.message] || "Incorrect password." 
             };
         }
 
@@ -304,7 +324,17 @@ export async function preValidateLoginAction(credentials: any): Promise<{ succes
         return { success: true, error: null };
     } catch (e: any) {
         logger.error(`[PreValidate] Exception: ${e.message}`, e);
-        return { success: false, error: `An unexpected error occurred: ${e.message || String(e)}` };
+        const errMsg = e.message || String(e);
+        const isTransient = errMsg.includes("Premature close") || 
+                            errMsg.includes("socket hang up") || 
+                            errMsg.includes("ECONNRESET") ||
+                            errMsg.includes("Client network socket disconnected") ||
+                            errMsg.includes("FetchError") ||
+                            errMsg.includes("fetch failed");
+        if (isTransient) {
+            return { success: false, error: "A temporary connection issue occurred. Please try again." };
+        }
+        return { success: false, error: "An unexpected error occurred. Please try again." };
     }
 }
 
