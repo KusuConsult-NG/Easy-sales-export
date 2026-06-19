@@ -122,9 +122,19 @@ export function withSafeAction<TArgs extends any[], TReturn>(
             });
 
             // Return safe string to client boundaries
+            const isTransient = errorMessage.includes("Premature close") || 
+                                errorMessage.includes("socket hang up") || 
+                                errorMessage.includes("ECONNRESET") ||
+                                errorMessage.includes("Client network socket disconnected") ||
+                                errorMessage.includes("FetchError") ||
+                                errorMessage.includes("fetch failed");
+            const sanitizedMessage = isTransient 
+                ? "A temporary connection issue occurred. Please try again." 
+                : errorMessage;
+
             return {
                 success: false,
-                error: errorMessage,
+                error: sanitizedMessage,
                 data: null as any,
                 meta: null
             };
@@ -172,9 +182,19 @@ export function withFlexibleSafeAction<TArgs extends any[], TReturn>(
             });
 
             // Return safe string to client boundaries
+            const isTransient = errorMessage.includes("Premature close") || 
+                                errorMessage.includes("socket hang up") || 
+                                errorMessage.includes("ECONNRESET") ||
+                                errorMessage.includes("Client network socket disconnected") ||
+                                errorMessage.includes("FetchError") ||
+                                errorMessage.includes("fetch failed");
+            const sanitizedMessage = isTransient 
+                ? "A temporary connection issue occurred. Please try again." 
+                : errorMessage;
+
             return {
                 success: false,
-                error: errorMessage,
+                error: sanitizedMessage,
                 data: null as any,
                 meta: null
             };
