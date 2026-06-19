@@ -4,6 +4,16 @@ export async function register() {
     // due to blocked startup during Sentry/Redis connection establishment.
     
     if (process.env.NEXT_RUNTIME === "nodejs") {
+        try {
+            const dns = require('dns');
+            if (dns && typeof dns.setDefaultResultOrder === 'function') {
+                dns.setDefaultResultOrder('ipv4first');
+                console.log('[DNS Configuration] Prefer IPv4 resolver order configured in instrumentation.');
+            }
+        } catch (e) {
+            console.error('[DNS Configuration] Failed to configure DNS result order in instrumentation:', e);
+        }
+
         // Asynchronously initialize Sentry
         import("./sentry.server.config").catch(err => {
             console.error("❌ Sentry Server initialization failed:", err);

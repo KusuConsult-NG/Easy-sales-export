@@ -95,6 +95,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_OPTIONS="--dns-result-order=ipv4first"
 
 # Create a non-root user for security
 RUN addgroup --system --gid 1001 nodejs \

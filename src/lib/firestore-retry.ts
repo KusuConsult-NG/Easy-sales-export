@@ -5,6 +5,11 @@ if (!(globalThis as any).__FIRESTORE_PROTOTYPE_WRAPPED__) {
     (globalThis as any).__FIRESTORE_PROTOTYPE_WRAPPED__ = true;
 
     try {
+        const dns = require('dns');
+        if (dns && typeof dns.setDefaultResultOrder === 'function') {
+            dns.setDefaultResultOrder('ipv4first');
+            console.log('[DNS Configuration] Prefer IPv4 resolver order configured.');
+        }
         const firestoreModule = require('@google-cloud/firestore');
         const FirestoreClient = firestoreModule.v1.FirestoreClient || firestoreModule.v1;
 

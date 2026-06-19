@@ -10,9 +10,9 @@
   },
   "packageManager": "npm@10.8.2",
   "scripts": {
-    "dev": "next dev",
+    "dev": "NODE_OPTIONS='--dns-result-order=ipv4first' next dev",
     "build": "next build --webpack",
-    "start": "next start",
+    "start": "NODE_OPTIONS='--dns-result-order=ipv4first' next start",
     "lint": "eslint",
     "test": "jest",
     "test:watch": "jest --watch",
