@@ -116,7 +116,7 @@ export const MODULE_NAVIGATION: Record<string, NavigationItem[]> = {
         { name: "Dashboard", href: "/wave/dashboard", icon: LayoutDashboard, featureToggle: "wave_program" },
         { name: "Training", href: "/wave/training", icon: BookOpen, featureToggle: "wave_program" },
         { name: "Resources", href: "/wave/resources", icon: FileText, featureToggle: "wave_program" },
-        { name: "Tracking", href: "/wave/tracking", icon: TrendingUp, featureToggle: "wave_program" },
+        { name: "Wallet", href: "/wave/tracking", icon: Wallet, featureToggle: "wave_program" },
         { name: "Certificates", href: "/wave/certificates", icon: Award, featureToggle: "wave_program" },
     ],
 

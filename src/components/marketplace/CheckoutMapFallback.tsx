@@ -123,34 +123,32 @@ export default function CheckoutMapFallback({ destination, products }: CheckoutM
                 </Marker>
 
                 {/* Product/Source Markers */}
-                {validProducts.map((p) => {
-                    const productCoords: L.LatLngTuple = [p.coords.lat, p.coords.lng];
-                    return (
-                        <div key={p.id}>
-                            <Marker position={productCoords} icon={sourceIcon}>
-                                <Popup>
-                                    <div className="p-1 font-sans">
-                                        <p className="font-bold text-slate-800 text-xs">{p.name}</p>
-                                        {p.locationName && (
-                                            <p className="text-[10px] text-slate-500 mt-0.5">Origin: {p.locationName}</p>
-                                        )}
-                                    </div>
-                                </Popup>
-                            </Marker>
+                {validProducts.map((p) => (
+                    <Marker key={`marker-${p.id}`} position={[p.coords.lat, p.coords.lng]} icon={sourceIcon}>
+                        <Popup>
+                            <div className="p-1 font-sans">
+                                <p className="font-bold text-slate-800 text-xs">{p.name}</p>
+                                {p.locationName && (
+                                    <p className="text-[10px] text-slate-500 mt-0.5">Origin: {p.locationName}</p>
+                                )}
+                            </div>
+                        </Popup>
+                    </Marker>
+                ))}
 
-                            {/* Direct Polyline route link from source to destination */}
-                            <Polyline
-                                positions={[productCoords, centerPoint]}
-                                pathOptions={{
-                                    color: "#059669", // Emerald 600
-                                    weight: 3,
-                                    dashArray: "6, 8",
-                                    opacity: 0.8
-                                }}
-                            />
-                        </div>
-                    );
-                })}
+                {/* Direct Polyline route link from source to destination */}
+                {validProducts.map((p) => (
+                    <Polyline
+                        key={`route-${p.id}`}
+                        positions={[[p.coords.lat, p.coords.lng], centerPoint]}
+                        pathOptions={{
+                            color: "#059669", // Emerald 600
+                            weight: 3,
+                            dashArray: "6, 8",
+                            opacity: 0.8
+                        }}
+                    />
+                ))}
 
                 <MapController bounds={bounds} center={centerPoint} />
             </MapContainer>

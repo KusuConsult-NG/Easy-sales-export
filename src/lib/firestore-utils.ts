@@ -56,6 +56,32 @@ export async function safeUpdate(
     return { id: docId };
 }
 
+/**
+ * Run a Firestore operation with retries on transient connection failures
+ */
+export async function runQueryWithRetry<T>(queryFn: () => Promise<T>, retries = 3, delay = 500): Promise<T> {
+    for (let i = 0; i < retries; i++) {
+        try {
+            return await queryFn();
+        } catch (err: any) {
+            const errMsg = err?.message || String(err);
+            const isTransient = errMsg.includes("Premature close") || 
+                                errMsg.includes("socket hang up") || 
+                                errMsg.includes("ECONNRESET") ||
+                                errMsg.includes("Client network socket disconnected") ||
+                                errMsg.includes("FetchError");
+            if (isTransient && i < retries - 1) {
+                console.warn(`[Firestore Retry] Transient connection failure: ${errMsg}. Retrying in ${delay}ms... (Attempt ${i + 1}/${retries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                delay *= 2; // exponential backoff
+                continue;
+            }
+            throw err;
+        }
+    }
+    return await queryFn();
+}
+
 // ─── Pagination & Safe Query Helpers ──────────────────────────────────────────
 
 import type { CollectionReference, Query } from 'firebase-admin/firestore';

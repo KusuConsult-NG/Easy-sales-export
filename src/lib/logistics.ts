@@ -84,49 +84,6 @@ export class MockLogisticsProvider implements LogisticsProvider {
 
                 return updates;
             }
-
-            // 2. Search in WAVE Shipments
-            const shipmentQuery = await db.collection(COLLECTIONS.WAVE_SHIPMENTS)
-                .where("trackingNumber", "==", trackingNumber)
-                .limit(1)
-                .get();
-
-            if (!shipmentQuery.empty) {
-                const shipmentDoc = shipmentQuery.docs[0];
-                const shipmentData = shipmentDoc.data();
-                const status = shipmentData.status;
-                const createdAt = shipmentData.createdAt?.toDate ? shipmentData.createdAt.toDate() : new Date();
-                const updatedAt = shipmentData.updatedAt?.toDate ? shipmentData.updatedAt.toDate() : new Date();
-
-                const updates: TrackingUpdate[] = [
-                    {
-                        timestamp: createdAt,
-                        location: "WAVE Warehouse",
-                        status: "pending",
-                        note: "Shipment generated and ready for pickup",
-                    }
-                ];
-
-                if (status === "in_transit" || status === "delivered") {
-                    updates.push({
-                        timestamp: new Date(createdAt.getTime() + 24 * 3600000),
-                        location: "Regional Distribution Center",
-                        status: "in_transit",
-                        note: "Shipment is in transit to destination",
-                    });
-                }
-
-                if (status === "delivered") {
-                    updates.push({
-                        timestamp: shipmentData.actualDelivery?.toDate ? shipmentData.actualDelivery.toDate() : updatedAt,
-                        location: shipmentData.destination || "Destination",
-                        status: "delivered",
-                        note: "Shipment delivered to member",
-                    });
-                }
-
-                return updates;
-            }
         } catch (err) {
             logger.error("Failed to fetch tracking details from DB, falling back to mock", err);
         }

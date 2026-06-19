@@ -724,6 +724,7 @@ export default function ProfilePage() {
                                                 <p className="text-sm text-slate-500">Add an extra layer of security to your account</p>
                                             </div>
                                             <button
+                                                type="button"
                                                 onClick={handleMFAToggle}
                                                 disabled={isDisablingMfa}
                                                 className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 ${

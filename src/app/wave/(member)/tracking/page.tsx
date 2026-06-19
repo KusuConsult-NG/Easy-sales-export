@@ -152,10 +152,10 @@ export default function WaveTrackingPage() {
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900 mb-2 flex items-center gap-2">
-                            🌾 Grant & Loan Tracking
+                            🌾 WAVE Wallet (Grants/Loans)
                         </h1>
                         <p className="text-slate-600">
-                            Monitor your WAVE program application, approved funding, and regional disbursements.
+                            Monitor your WAVE program application, approved funding, and wallet transactions.
                         </p>
                     </div>
                     <button
@@ -296,7 +296,7 @@ export default function WaveTrackingPage() {
                             </p>
 
                             <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-4 mb-6 text-center">
-                                <span className="text-[10px] text-emerald-800 font-bold uppercase tracking-wider block mb-1">Available for Disbursement</span>
+                                <span className="text-[10px] text-emerald-800 font-bold uppercase tracking-wider block mb-1">Wallet Balance</span>
                                 <span className="text-3xl font-black text-emerald-800 font-mono">{formatCurrency(earningsBalance)}</span>
                             </div>
                         </div>
@@ -316,10 +316,10 @@ export default function WaveTrackingPage() {
                 <div className="bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
                     <div className="p-6 border-b border-slate-100">
                         <h2 className="text-lg font-bold text-gray-900">
-                            Disbursement History & Status Tracking
+                            Wallet Payout History
                         </h2>
                         <p className="text-xs text-slate-500 mt-1">
-                            Follow the progress of each disbursement transaction individually in real-time.
+                            Follow the progress of each wallet transaction individually in real-time.
                         </p>
                     </div>
 

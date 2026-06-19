@@ -11,6 +11,8 @@ import type { ActionResponse } from "@/lib/safe-action";
 import { ProductSchema } from "@/lib/validations/marketplace";
 import { notifyOrderCancelled } from "@/lib/marketplace-notifications";
 
+import { runQueryWithRetry } from "@/lib/firestore-utils";
+
 // ============================================================================
 // PRODUCT BROWSING
 // ============================================================================
@@ -74,7 +76,7 @@ async function _getProductsAction(filters?: ProductFilters): Promise<ActionRespo
         let snapshot;
         let indexError = false;
         try {
-            snapshot = await query.get();
+            snapshot = await runQueryWithRetry(() => query.get());
         } catch (e: any) {
             const errMsg = e.message ? e.message.toLowerCase() : "";
             if (errMsg.includes("index") || errMsg.includes("failed_precondition") || String(e.code) === "9" || String(e.code) === "failed_precondition" || errMsg.includes("precondition")) {
@@ -91,7 +93,7 @@ async function _getProductsAction(filters?: ProductFilters): Promise<ActionRespo
                         fallbackQuery = fallbackQuery.where("category", "==", mapped[0]);
                     }
                 }
-                snapshot = await fallbackQuery.limit(300).get();
+                snapshot = await runQueryWithRetry(() => fallbackQuery.limit(300).get());
             } else {
                 throw e;
             }

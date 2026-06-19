@@ -12,6 +12,7 @@ import { paystackPayout } from "@/lib/paystack-transfer";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { getLogisticsProvider } from "@/lib/logistics";
+import { runQueryWithRetry } from "@/lib/firestore-utils";
 
 /**
  * Get all orders for a seller
@@ -85,6 +86,15 @@ async function _updateOrderStatusAction(
             }
         }
 
+        // Query associated escrow transactions if the status becomes delivered
+        let escrowDocs: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+        if (newStatus === "delivered") {
+            const escrowQuery = await runQueryWithRetry(() => db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
+                .where("orderId", "==", orderId)
+                .get());
+            escrowDocs = escrowQuery.docs;
+        }
+
         await db.runTransaction(async (transaction) => { const currentOrderDoc = await transaction.get(orderRef);
             if (!currentOrderDoc.exists) throw new Error("Order not found");
             const currentOrder = currentOrderDoc.data() as Order;
@@ -113,7 +123,16 @@ async function _updateOrderStatusAction(
                 estimatedDate.setDate(estimatedDate.getDate() + 7);
                 updateData.estimatedDeliveryDate = estimatedDate;
             }
-            if (newStatus === "delivered") updateData.deliveredAt = FieldValue.serverTimestamp();
+            if (newStatus === "delivered") {
+                updateData.deliveredAt = FieldValue.serverTimestamp();
+                // Synchronize escrow transaction status to "delivered" so the auto-release cron picks it up
+                for (const escrowDoc of escrowDocs) {
+                    transaction.update(escrowDoc.ref, {
+                        status: "delivered",
+                        updatedAt: FieldValue.serverTimestamp()
+                    });
+                }
+            }
 
             if (newStatus === "cancelled" && currentOrder.status !== "cancelled") { const items = currentOrder.items || [];
                 for (const item of items) {

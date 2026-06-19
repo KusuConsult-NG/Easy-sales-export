@@ -7,6 +7,7 @@ import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { CooperativeMembership, CooperativeTransaction } from "@/lib/types/cooperative";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
+import { runQueryWithRetry } from "@/lib/firestore-utils";
 
 /**
  * Optimized dashboard data loader
@@ -23,14 +24,14 @@ export async function getDashboardDataAction() { try {
         const userId = session.user.id;
         logger.info(`[getDashboardData] Loading data for user: ${userId}`);
 
-        let membershipSnapshot = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+        let membershipSnapshot = await runQueryWithRetry(() => db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
             .where('userId', '==', userId)
-            .get();
+            .get());
 
         // FALLBACK: If query by field fails, try direct document ID lookup or email query
         if (membershipSnapshot.empty) {
             const docRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
-            const docSnap = await docRef.get();
+            const docSnap = await runQueryWithRetry(() => docRef.get());
             if (docSnap.exists) {
                 logger.info(`[getDashboardData] Found membership via DocID fallback for user: ${userId}`);
                 // Heal the document by adding the userId field on-the-fly
@@ -44,13 +45,13 @@ export async function getDashboardDataAction() { try {
                 } as any;
             } else {
                 // Fetch email from users collection to query by email
-                const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+                const userDoc = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS).doc(userId).get());
                 const userEmail = userDoc.exists ? userDoc.data()?.email : null;
                 if (userEmail) {
-                    const emailQuery = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                    const emailQuery = await runQueryWithRetry(() => db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
                         .where("email", "==", userEmail.toLowerCase())
                         .limit(1)
-                        .get();
+                        .get());
                     if (!emailQuery.empty) {
                         logger.info(`[getDashboardData] Found membership via Email query fallback for user: ${userId}`);
                         const memberDoc = emailQuery.docs[0];
@@ -69,10 +70,10 @@ export async function getDashboardDataAction() { try {
 
         // Fetch recent 10 transactions
         // Note: Removed .orderBy('date') to bypass missing index error while index is provisioning
-        const transactionsSnapshot = await db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS)
+        const transactionsSnapshot = await runQueryWithRetry(() => db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS)
             .where('userId', '==', userId)
             .limit(50) // Fetch a few more to allow for meaningful sorting
-            .get();
+            .get());
 
         if (membershipSnapshot.empty) {
             logger.warn(`[getDashboardData] No membership found in ${COLLECTIONS.COOPERATIVE_MEMBERS} for user: ${userId}`);
