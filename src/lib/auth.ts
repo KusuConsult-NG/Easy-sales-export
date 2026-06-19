@@ -256,6 +256,28 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             // 2. Node-specific logic
             const { user, trigger } = params;
 
+            // Safe helper to parse Firestore Timestamps, JSON formats, Dates, and Strings
+            const parseDate = (val: any): string | undefined => {
+                if (!val) return undefined;
+                try {
+                    if (typeof val.toDate === "function") {
+                        const d = val.toDate();
+                        return isNaN(d.getTime()) ? undefined : d.toISOString();
+                    }
+                    const secs = typeof val._seconds === "number" ? val._seconds : val.seconds;
+                    const nanos = typeof val._nanoseconds === "number" ? val._nanoseconds : val.nanoseconds;
+                    if (typeof secs === "number") {
+                        const ms = secs * 1000 + (typeof nanos === "number" ? nanos / 1000000 : 0);
+                        const d = new Date(ms);
+                        return isNaN(d.getTime()) ? undefined : d.toISOString();
+                    }
+                    const d = new Date(val);
+                    return isNaN(d.getTime()) ? undefined : d.toISOString();
+                } catch {
+                    return undefined;
+                }
+            };
+
             // Session Refresh / Sync Protocol - ALWAYS synchronize live roles from database/cache
             if (token.id) {
                 const now = Date.now();
@@ -276,13 +298,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                             token.gender = cachedProfile.gender;
                             const cachedCreatedAt = (cachedProfile as any).createdAt;
                             if (cachedCreatedAt) {
-                                if (typeof cachedCreatedAt.toDate === "function") {
-                                    token.createdAt = cachedCreatedAt.toDate().toISOString();
-                                } else if (cachedCreatedAt.seconds) {
-                                    token.createdAt = new Date(cachedCreatedAt.seconds * 1000).toISOString();
-                                } else {
-                                    token.createdAt = new Date(cachedCreatedAt).toISOString();
-                                }
+                                token.createdAt = parseDate(cachedCreatedAt);
                             }
                             token.lastSyncedAt = now;
                         } else {
@@ -304,13 +320,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                                     token.gender = userData.gender;
                                     const fsCreatedAt = userData.createdAt;
                                     if (fsCreatedAt) {
-                                        if (typeof fsCreatedAt.toDate === "function") {
-                                            token.createdAt = fsCreatedAt.toDate().toISOString();
-                                        } else if (fsCreatedAt.seconds) {
-                                            token.createdAt = new Date(fsCreatedAt.seconds * 1000).toISOString();
-                                        } else {
-                                            token.createdAt = new Date(fsCreatedAt).toISOString();
-                                        }
+                                        token.createdAt = parseDate(fsCreatedAt);
                                     }
                                     token.lastSyncedAt = now;
                                 }

@@ -65,13 +65,27 @@ export const authConfig = {
                 token.gender = user.gender;
                 const userCreatedAt = (user as any).createdAt;
                 if (userCreatedAt) {
-                    if (typeof userCreatedAt.toDate === "function") {
-                        token.createdAt = userCreatedAt.toDate().toISOString();
-                    } else if (userCreatedAt.seconds) {
-                        token.createdAt = new Date(userCreatedAt.seconds * 1000).toISOString();
-                    } else {
-                        token.createdAt = new Date(userCreatedAt).toISOString();
-                    }
+                    const parseDate = (val: any): string | undefined => {
+                        if (!val) return undefined;
+                        try {
+                            if (typeof val.toDate === "function") {
+                                const d = val.toDate();
+                                return isNaN(d.getTime()) ? undefined : d.toISOString();
+                            }
+                            const secs = typeof val._seconds === "number" ? val._seconds : val.seconds;
+                            const nanos = typeof val._nanoseconds === "number" ? val._nanoseconds : val.nanoseconds;
+                            if (typeof secs === "number") {
+                                const ms = secs * 1000 + (typeof nanos === "number" ? nanos / 1000000 : 0);
+                                const d = new Date(ms);
+                                return isNaN(d.getTime()) ? undefined : d.toISOString();
+                            }
+                            const d = new Date(val);
+                            return isNaN(d.getTime()) ? undefined : d.toISOString();
+                        } catch {
+                            return undefined;
+                        }
+                    };
+                    token.createdAt = parseDate(userCreatedAt);
                 }
             }
             return token;
