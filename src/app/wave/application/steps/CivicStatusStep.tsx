@@ -9,6 +9,7 @@ import { useState } from "react";
 import { ChevronLeft, ChevronRight, AlertCircle, ShieldCheck, Loader2 } from "lucide-react";
 import type { WaveApplicationData } from "../page";
 import { IdInput } from "@/components/ui/IdInput";
+import { verifyNINAction } from "@/app/actions/kyc";
 
 interface Props {
     data: WaveApplicationData;
@@ -46,7 +47,6 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
         setNinError("");
 
         try {
-            const { verifyNINAction } = await import('@/app/actions/kyc');
             const result = await verifyNINAction({ nin, firstName, lastName: surname });
 
             if (result.success && result.data?.isMatch) {
