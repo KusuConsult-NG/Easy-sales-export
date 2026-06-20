@@ -40,10 +40,10 @@ const authMiddleware = auth((req: any) => {
     ).split(",")[0].trim().replace(/:\d+$/, "").toLowerCase();
 
     // ── 1. Apex → www Redirect (High Priority) ──────────────────────────
-    // Redirect apex domains to www for consistent session handling.
-    if (APEX_DOMAINS.includes(hostname)) {
+    // Redirect only the primary easysalesexport.com apex domain to www for consistent session handling.
+    if (hostname === "easysalesexport.com") {
         const wwwUrl = req.nextUrl.clone();
-        wwwUrl.host = `www.${hostname}`;
+        wwwUrl.host = "www.easysalesexport.com";
         wwwUrl.protocol = "https:";
         wwwUrl.port = "";
         return NextResponse.redirect(wwwUrl, { status: 308 });
@@ -147,23 +147,39 @@ const authMiddleware = auth((req: any) => {
             const isLocalhost = hostname.endsWith("localhost");
             const hasSubdomain = isLocalhost ? hostParts.length > 1 : hostParts.length > 2;
             
+            // Clean the path by removing the redundant rewritePrefix (e.g. /cooperatives/landing -> /landing)
+            let cleanPath = pathname;
+            if (pathname.startsWith(rewritePrefix)) {
+                cleanPath = pathname.substring(rewritePrefix.length);
+                if (!cleanPath.startsWith("/")) {
+                    cleanPath = "/" + cleanPath;
+                }
+            }
+
             if (normalizedHostname.endsWith(".easysalesexport.com")) {
-                hubOrigin = "https://www.easysalesexport.com";
+                const portStr = req.nextUrl.port ? `:${req.nextUrl.port}` : "";
+                hubOrigin = `${req.nextUrl.protocol}//${normalizedHostname}${portStr}`;
             } else if (hasSubdomain) {
                 const apexHost = isLocalhost ? "localhost" : hostParts.slice(1).join(".");
                 const portStr = req.nextUrl.port ? `:${req.nextUrl.port}` : "";
                 hubOrigin = `${req.nextUrl.protocol}//${apexHost}${portStr}`;
             } else {
-                hubOrigin = isLocalhost ? `http://localhost:${req.nextUrl.port || 3000}` : "https://www.easysalesexport.com";
+                const isCustomModuleDomain = DOMAIN_MAP[normalizedHostname] && DOMAIN_MAP[normalizedHostname] !== "";
+                if (isCustomModuleDomain) {
+                    const portStr = req.nextUrl.port ? `:${req.nextUrl.port}` : "";
+                    hubOrigin = `${req.nextUrl.protocol}//${normalizedHostname}${portStr}`;
+                } else {
+                    hubOrigin = isLocalhost ? `http://localhost:${req.nextUrl.port || 3000}` : "https://www.easysalesexport.com";
+                }
             }
             
-            const redirectUrl = new URL(pathname + req.nextUrl.search, hubOrigin);
+            const redirectUrl = new URL(cleanPath + req.nextUrl.search, hubOrigin);
             return NextResponse.redirect(redirectUrl, { status: 301 });
         }
         // Handle landing page redirects for modules with sub-landing pages
         const MODULES_WITH_LANDING_SUBPAGE = new Set(["/wave", "/cooperatives"]);
         if (pathname === "/" && MODULES_WITH_LANDING_SUBPAGE.has(rewritePrefix)) {
-            const landingUrl = new URL(`https://${hostname}${rewritePrefix}/landing`);
+            const landingUrl = new URL("/landing", req.nextUrl.clone()); // Keeps same host
             return NextResponse.redirect(landingUrl, { status: 302 });
         }
 
