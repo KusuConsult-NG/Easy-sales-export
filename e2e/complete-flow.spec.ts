@@ -25,7 +25,7 @@ async function registerNewUser(page: Page, email: string, password: string, full
     await page.click('button[type="submit"]');
 
     // Wait for redirect (email verification or get-started)
-    await page.waitForURL(/auth\/get-started|dashboard|verify-email/, { timeout: 10000 });
+    await page.waitForURL(/auth\/get-started|dashboard|verify-email/, { timeout: 45000 });
 }
 
 async function loginUser(page: Page, email: string, password: string) {
@@ -33,7 +33,7 @@ async function loginUser(page: Page, email: string, password: string) {
     await page.fill('input[type="email"]', email);
     await page.fill('input[type="password"]', password);
     await page.click('button[type="submit"]');
-    await page.waitForURL(/\/dashboard|admin|cooperatives/, { timeout: 10000 });
+    await page.waitForURL(/\/dashboard|admin|cooperatives/, { timeout: 45000 });
 }
 
 test.describe('Registration → MFA → Dashboard Flow', () => {

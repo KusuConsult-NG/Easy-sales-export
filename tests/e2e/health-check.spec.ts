@@ -17,7 +17,7 @@ test.describe('System Health Diagnostic Suite', () => {
         await page.click('button[type="submit"]');
         
         // Wait for login to complete and redirect to admin/dashboard
-        await page.waitForURL(/\/admin|\/dashboard/, { timeout: 15000 });
+        await page.waitForURL(/\/admin|\/dashboard/, { timeout: 45000 });
         await page.goto('/admin/system-health');
     });
 

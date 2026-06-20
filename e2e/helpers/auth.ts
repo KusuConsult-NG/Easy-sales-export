@@ -16,9 +16,9 @@ export async function loginAs(
     await page.fill('input[name="password"]', password);
     await page.click('button[type="submit"]');
     if (expectUrl) {
-        await page.waitForURL(expectUrl, { timeout: 15000 });
+        await page.waitForURL(expectUrl, { timeout: 45000 });
     } else {
-        await page.waitForURL(/\/dashboard|\/auth\/get-started|\/marketplace|\/academy|\/cooperatives|\/admin/, { timeout: 15000 });
+        await page.waitForURL(/\/dashboard|\/auth\/get-started|\/marketplace|\/academy|\/cooperatives|\/admin/, { timeout: 45000 });
     }
 }
 

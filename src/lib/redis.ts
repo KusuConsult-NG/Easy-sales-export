@@ -10,15 +10,15 @@ const redis = (redisUrl && redisToken)
         token: redisToken,
         retry: {
             retries: 3,
-            backoff: (retryCount) => Math.min(500, 50 * Math.pow(2, retryCount))
+            backoff: (retryCount: number) => Math.min(500, 50 * Math.pow(2, retryCount))
         },
-        fetch: (url, init) => {
+        fetch: (url: string | URL | Request, init?: RequestInit) => {
             return fetch(url, {
                 ...init,
                 signal: AbortSignal.timeout(2000)
             });
         }
-      })
+      } as any)
     : {
         // Mock limited interface if missing (prevents crash)
         get: async () => null,

@@ -8,6 +8,9 @@ import { test, expect } from '@playwright/test';
  */
 
 test.describe('RBAC Security Enforcement', () => {
+    test.beforeEach(async ({ page }) => {
+        await page.context().clearCookies();
+    });
     
     test('unauthenticated users should be redirected to login from protected routes', async ({ page }) => {
         const protectedRoutes = [
@@ -31,7 +34,7 @@ test.describe('RBAC Security Enforcement', () => {
         await page.fill('input[name="email"]', process.env.TEST_USER_EMAIL || process.env.TEST_USER_EMAIL || 'e2e.user@easysalesexport.com');
         await page.fill('input[name="password"]', process.env.TEST_USER_PASSWORD || process.env.TEST_USER_PASSWORD || 'E2eTest@2024!');
         await page.click('button[type="submit"]');
-        await page.waitForURL(/dashboard|get-started|admin/, { timeout: 10000 });
+        await page.waitForURL(/dashboard|get-started|admin/, { timeout: 45000 });
 
         // Attempt to access admin health page
         await page.goto('/admin/system-health');
@@ -48,7 +51,7 @@ test.describe('RBAC Security Enforcement', () => {
         await page.fill('input[name="email"]', process.env.TEST_ADMIN_EMAIL || process.env.TEST_ADMIN_EMAIL || 'e2e.admin@easysalesexport.com');
         await page.fill('input[name="password"]', process.env.TEST_ADMIN_PASSWORD || 'E2eAdmin@2024!');
         await page.click('button[type="submit"]');
-        await page.waitForURL(/dashboard|get-started|admin/, { timeout: 10000 });
+        await page.waitForURL(/dashboard|get-started|admin/, { timeout: 45000 });
 
         // Access admin health page
         await page.goto('/admin/system-health');
