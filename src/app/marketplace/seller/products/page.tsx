@@ -51,7 +51,7 @@ export default function SellerProductsPage() {
             });
 
             if (result.success && result.data?.products) {
-                setProducts(prev => isReset ? result.data!.products : [...prev, ...result.data!.products]);
+                setProducts(prev => isReset ? result.data.products : [...prev, ...result.data.products]);
                 setLastId(result.data?.lastId);
                 setHasMore(!!result.data?.hasMore);
             } else if (result.error) {

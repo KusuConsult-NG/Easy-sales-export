@@ -284,11 +284,16 @@ async function _confirmDeliveryAction(orderId: string) { let sessionResult;
         });
 
         if (result.sellerAmount > 0) { try {
+                const bankDetails = result.sellerData;
+                if (!bankDetails?.bankAccountNumber || !bankDetails?.bankCode) {
+                    throw new Error("Seller bank details are missing.");
+                }
                 const res = await paystackPayout(
                     {
-                        accountNumber: result.sellerData!.bankAccountNumber,
-                        bankCode: result.sellerData!.bankCode,
-                        accountName: result.sellerData!.bankAccountName || result.sellerData!.name },
+                        accountNumber: bankDetails.bankAccountNumber,
+                        bankCode: bankDetails.bankCode,
+                        accountName: bankDetails.bankAccountName || (bankDetails as any).name || bankDetails.fullName || "" 
+                    },
                     result.sellerAmount,
                     `Escrow release for order ${orderId}`
                 );

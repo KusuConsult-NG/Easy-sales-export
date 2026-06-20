@@ -229,7 +229,7 @@ export default function WalletPage() {
         const cursor = reset ? undefined : lastId;
         const res = await getWalletTransactionsAction({ limit: 15, startAfter: cursor });
         if (res.success && res.data?.transactions) {
-            setTransactions(prev => reset ? res.data!.transactions : [...prev, ...res.data!.transactions]);
+            setTransactions(prev => reset ? res.data.transactions : [...prev, ...res.data.transactions]);
             setHasMore(!!res.data.hasMore);
             if (res.data.transactions.length > 0)
                 setLastId(res.data.transactions[res.data.transactions.length - 1].id);

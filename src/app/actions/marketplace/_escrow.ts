@@ -351,6 +351,7 @@ async function _releaseEscrowAction(
             // 2. Credit Seller's Wallet
             const walletRef = db.collection(COLLECTIONS.WALLETS).doc(data.sellerId);
             const walletSnap = await tx.get(walletRef);
+            let balanceBefore = 0;
             
             if (!walletSnap.exists) {
                 tx.set(walletRef, {
@@ -361,11 +362,29 @@ async function _releaseEscrowAction(
                     updatedAt: FieldValue.serverTimestamp()
                 });
             } else {
+                balanceBefore = walletSnap.data()?.balance || 0;
                 tx.update(walletRef, {
                     balance: FieldValue.increment(data.amount),
                     updatedAt: FieldValue.serverTimestamp()
                 });
             }
+
+            // Record transaction in seller's wallet_transactions history
+            const sellerTxnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc();
+            tx.set(sellerTxnRef, {
+                id: sellerTxnRef.id,
+                walletId: data.sellerId,
+                userId: data.sellerId,
+                type: "funding",
+                amount: data.amount,
+                balanceBefore,
+                balanceAfter: balanceBefore + data.amount,
+                reference: escrowId,
+                description: `Payout for escrow #${escrowId.substring(0, 8)} (Escrow released)`,
+                status: "completed",
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp()
+            });
 
             // 3. Record in Global Ledger
             const txId = `ESCROW-RELEASE-${escrowId}`;
@@ -596,6 +615,7 @@ async function _resolveDisputeAction(
             const targetId = outcome === "release_seller" ? escrowData.sellerId : escrowData.buyerId;
             const walletRef = db.collection(COLLECTIONS.WALLETS).doc(targetId);
             const walletSnap = await tx.get(walletRef);
+            let balanceBefore = 0;
 
             if (!walletSnap.exists) {
                 tx.set(walletRef, {
@@ -606,11 +626,29 @@ async function _resolveDisputeAction(
                     updatedAt: FieldValue.serverTimestamp()
                 });
             } else {
+                balanceBefore = walletSnap.data()?.balance || 0;
                 tx.update(walletRef, {
                     balance: FieldValue.increment(escrowData.amount),
                     updatedAt: FieldValue.serverTimestamp()
                 });
             }
+
+            // Record transaction in target's wallet_transactions history
+            const targetTxnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc();
+            tx.set(targetTxnRef, {
+                id: targetTxnRef.id,
+                walletId: targetId,
+                userId: targetId,
+                type: outcome === "release_seller" ? "funding" : "refund",
+                amount: escrowData.amount,
+                balanceBefore,
+                balanceAfter: balanceBefore + escrowData.amount,
+                reference: escrowId,
+                description: `Dispute Resolution (${outcome}) for escrow #${escrowId.substring(0, 8)}`,
+                status: "completed",
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp()
+            });
 
             // 4. Record in Global Ledger
             const txId = `DISPUTE-RES-${disputeId}`;

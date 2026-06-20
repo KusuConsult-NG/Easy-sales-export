@@ -134,6 +134,8 @@ export default function PropertyDetailsPage() {
                                             alt={property.title}
                                             fill
                                             className="object-cover"
+                                            priority
+                                            sizes="(max-width: 1024px) 100vw, 66vw"
                                         />
                                     </div>
                                     {property.images.length > 1 && (
@@ -187,7 +189,7 @@ export default function PropertyDetailsPage() {
                                                 : "border-transparent hover:border-green-400"
                                                 }`}
                                         >
-                                            <Image src={img} alt={`Thumbnail ${index + 1}`} fill className="object-cover" />
+                                            <Image src={img} alt={`Thumbnail ${index + 1}`} fill className="object-cover" sizes="(max-width: 768px) 16vw, 120px" />
                                         </button>
                                     ))}
                                 </div>

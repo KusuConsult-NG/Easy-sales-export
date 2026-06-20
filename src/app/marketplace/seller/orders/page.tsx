@@ -47,7 +47,7 @@ export default function SellerOrdersPage() {
             });
 
             if (result.success && result.data?.orders) {
-                setOrders(prev => isReset ? result.data!.orders : [...prev, ...result.data!.orders]);
+                setOrders(prev => isReset ? result.data.orders : [...prev, ...result.data.orders]);
                 setLastId(result.data?.lastId);
                 setHasMore(!!result.data?.hasMore);
             } else if (result.error) {

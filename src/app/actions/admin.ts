@@ -3075,13 +3075,13 @@ async function _savePlatformSettingsAction(
 
         await db.collection(COLLECTIONS.PLATFORM_SETTINGS).doc("general").set({
             ...settings,
-            updatedBy: session!.user.id,
+            updatedBy: session.user.id,
             updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
 
         await createAdminAuditLog({
             action: "config_updated",
-            userId: session!.user.id,
+            userId: session.user.id,
             targetId: "general",
             targetType: "platform_settings",
             metadata: { changes: settings },

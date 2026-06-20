@@ -148,6 +148,7 @@ export default function ExportWindowsPage() {
                                             alt={window.commodity}
                                             fill
                                             className="object-cover"
+                                            sizes="128px"
                                         />
                                     </div>
 

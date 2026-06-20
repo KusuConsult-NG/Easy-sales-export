@@ -232,7 +232,7 @@ export default function LandVerificationPage() {
                                         <div className="grid grid-cols-4 gap-2">
                                             {listing.images.slice(0, 4).map((img, i) => (
                                                 <div key={i} className="aspect-square bg-slate-200 rounded overflow-hidden relative">
-                                                    <Image src={img} alt="" fill className="object-cover" />
+                                                    <Image src={img} alt="" fill className="object-cover" sizes="(max-width: 768px) 25vw, (max-width: 1024px) 20vw, 300px" />
                                                 </div>
                                             ))}
                                         </div>

@@ -58,7 +58,7 @@ export default function MarketplaceProductsPage() {
             });
 
             if (result.success && result.data?.products) {
-                setProducts(prev => isReset ? result.data!.products : [...prev, ...result.data!.products]);
+                setProducts(prev => isReset ? result.data.products : [...prev, ...result.data.products]);
                 setLastId(result.data?.lastId);
                 setHasMore(!!result.data?.hasMore);
             } else if (result.error) {
@@ -188,6 +188,7 @@ export default function MarketplaceProductsPage() {
                                                 alt={product.title}
                                                 fill
                                                 className="object-cover group-hover:scale-[1.03] transition-transform duration-500"
+                                                sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
                                             />
                                         ) : (
                                             <div className="w-full h-full flex items-center justify-center text-slate-300">

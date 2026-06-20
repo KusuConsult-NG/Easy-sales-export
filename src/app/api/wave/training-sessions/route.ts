@@ -84,7 +84,13 @@ export async function GET(request: NextRequest) {
 export async function POST(req: Request) {
     try {
         const session = (await requireSession()).session;
-        const isAdmin = session?.user?.roles?.includes("admin") || session?.user?.roles?.includes("super_admin");
+        if (!session || !session.user) {
+            return NextResponse.json(
+                { success: false, data: null, error: "Unauthorized", meta: { cursor: null, hasMore: false } },
+                { status: 401 }
+            );
+        }
+        const isAdmin = session.user.roles?.includes("admin") || session.user.roles?.includes("super_admin");
         if (!isAdmin) {
             return NextResponse.json(
                 { success: false, data: null, error: "Unauthorized — admin access required", meta: { cursor: null, hasMore: false } },
@@ -111,7 +117,7 @@ export async function POST(req: Request) {
             roomName: roomName || `wave-training-${Date.now()}`,
             isActive: true,
             createdAt: new Date(),
-            createdBy: session!.user.id,
+            createdBy: session.user.id,
         });
 
         return NextResponse.json({

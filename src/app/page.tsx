@@ -262,6 +262,8 @@ export default function HubPage() {
                                 alt="Partner Logo 1"
                                 fill
                                 className="object-contain"
+                                sizes="(max-width: 768px) 224px, 320px"
+                                loading="lazy"
                             />
                         </div>
                         <div className="relative w-56 h-32 md:w-80 md:h-48 transition-transform duration-300 hover:scale-105">
@@ -270,6 +272,8 @@ export default function HubPage() {
                                 alt="Partner Logo 2"
                                 fill
                                 className="object-contain"
+                                sizes="(max-width: 768px) 224px, 320px"
+                                loading="lazy"
                             />
                         </div>
                         <div className="relative w-56 h-32 md:w-80 md:h-48 transition-transform duration-300 hover:scale-105">
@@ -278,6 +282,8 @@ export default function HubPage() {
                                 alt="Partner Logo 3"
                                 fill
                                 className="object-contain"
+                                sizes="(max-width: 768px) 224px, 320px"
+                                loading="lazy"
                             />
                         </div>
                     </div>

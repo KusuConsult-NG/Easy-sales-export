@@ -157,6 +157,8 @@ export default function ProductDetailPage() {
                                 alt={product.title}
                                 fill
                                 className="object-cover"
+                                priority
+                                sizes="(max-width: 1024px) 100vw, 50vw"
                             />
                             <div className="absolute top-6 right-6">
                                 <span className="px-4 py-2 bg-green-600 text-white text-sm font-bold rounded-full shadow-lg">
@@ -368,6 +370,7 @@ export default function ProductDetailPage() {
                                             alt={relatedProduct.title}
                                             fill
                                             className="object-cover group-hover:scale-105 transition-transform duration-300"
+                                            sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 25vw"
                                         />
                                     ) : (
                                         <div className="w-full h-full bg-slate-200 flex items-center justify-center">

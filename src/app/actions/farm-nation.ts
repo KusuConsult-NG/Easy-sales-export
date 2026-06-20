@@ -113,14 +113,15 @@ async function _getPropertiesAction(filters?: {
                 properties = properties.filter((p) => p.state === filters.state);
             }
             if (filters.category && filters.category !== "all") { 
+                const catFilter = filters.category;
                 properties = properties.filter((p) => {
                     if (!p.category) return false;
                     if (Array.isArray(p.category)) {
-                        return p.category.includes(filters.category!);
+                        return p.category.includes(catFilter);
                     }
                     if (typeof p.category === "string") {
                         const cats = p.category.split(",").map(c => c.trim().toLowerCase());
-                        return cats.includes(filters.category!.toLowerCase()) || p.category === filters.category;
+                        return cats.includes(catFilter.toLowerCase()) || p.category === catFilter;
                     }
                     return false;
                 });
@@ -129,16 +130,20 @@ async function _getPropertiesAction(filters?: {
                 properties = properties.filter((p) => p.type === filters.type);
             }
             if (filters.minPrice) { 
-                properties = properties.filter((p) => p.price >= filters.minPrice!);
+                const minPrice = filters.minPrice;
+                properties = properties.filter((p) => p.price >= minPrice);
             }
             if (filters.maxPrice) { 
-                properties = properties.filter((p) => p.price <= filters.maxPrice!);
+                const maxPrice = filters.maxPrice;
+                properties = properties.filter((p) => p.price <= maxPrice);
             }
             if (filters.minSize) { 
-                properties = properties.filter((p) => p.size >= filters.minSize!);
+                const minSize = filters.minSize;
+                properties = properties.filter((p) => p.size >= minSize);
             }
             if (filters.maxSize) { 
-                properties = properties.filter((p) => p.size <= filters.maxSize!);
+                const maxSize = filters.maxSize;
+                properties = properties.filter((p) => p.size <= maxSize);
             }
         }
 

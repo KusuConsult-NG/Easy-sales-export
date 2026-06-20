@@ -42,9 +42,9 @@ async function _verifyBVNAction(payload: { bvn: string;
     lastName: string; }): Promise<KYCVerificationResult> { 
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: 'Not authenticated', data: null };
         const { session } = sessionResult;
-        const userId = session.user!.id;
+        const userId = session?.user?.id;
+        if (!userId) return { success: false as const, error: 'Not authenticated', data: null };
 
         const { bvn } = payload;
 

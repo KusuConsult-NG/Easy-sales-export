@@ -242,6 +242,7 @@ export async function disburseLoan(loanId: string, disbursementNotes?: string) {
             // ── CREDIT USER WALLET ──────
             const walletRef = db.collection(COLLECTIONS.WALLETS).doc(userId);
             const walletDoc = await transaction.get(walletRef);
+            let balanceBefore = 0;
             
             if (!walletDoc.exists) {
                 transaction.set(walletRef, {
@@ -252,11 +253,29 @@ export async function disburseLoan(loanId: string, disbursementNotes?: string) {
                     updatedAt: FieldValue.serverTimestamp()
                 });
             } else {
+                balanceBefore = walletDoc.data()?.balance || 0;
                 transaction.update(walletRef, {
                     balance: FieldValue.increment(amount),
                     updatedAt: FieldValue.serverTimestamp()
                 });
             }
+
+            // ── RECORD IN WALLET TRANSACTIONS ──────
+            const walletTxRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc();
+            transaction.set(walletTxRef, {
+                id: walletTxRef.id,
+                walletId: userId,
+                userId,
+                type: "funding",
+                amount,
+                balanceBefore,
+                balanceAfter: balanceBefore + amount,
+                reference: loanId,
+                description: `Loan Disbursement for Application #${loanId.substring(0, 8)}`,
+                status: "completed",
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp()
+            });
 
             // ── RECORD IN GLOBAL LEDGER ──────
             const txId = `LOAN-DISB-${loanId.substring(0, 8)}`;

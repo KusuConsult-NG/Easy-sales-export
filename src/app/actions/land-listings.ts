@@ -338,24 +338,37 @@ async function _searchLandListingsAction(filters: {
         }
 
         // Client-side filtering for numeric ranges
-        if (filters.minSize) { results = results.filter((l) => l.size >= filters.minSize!); }
-        if (filters.maxSize) { results = results.filter((l) => l.size <= filters.maxSize!); }
-        if (filters.minPrice) { results = results.filter((l) => l.price >= filters.minPrice!); }
-        if (filters.maxPrice) { results = results.filter((l) => l.price <= filters.maxPrice!); }
+        if (filters.minSize) {
+            const minSize = filters.minSize;
+            results = results.filter((l) => l.size >= minSize);
+        }
+        if (filters.maxSize) {
+            const maxSize = filters.maxSize;
+            results = results.filter((l) => l.size <= maxSize);
+        }
+        if (filters.minPrice) {
+            const minPrice = filters.minPrice;
+            results = results.filter((l) => l.price >= minPrice);
+        }
+        if (filters.maxPrice) {
+            const maxPrice = filters.maxPrice;
+            results = results.filter((l) => l.price <= maxPrice);
+        }
         if (filters.soilType) { results = results.filter((l) => l.soilType === filters.soilType); }
         if (filters.waterSource) { results = results.filter((l) => l.waterSource === filters.waterSource); }
         if (filters.type) { results = results.filter((l) => l.type === filters.type); }
 
         // Client-side filtering for category (supports legacy string and new string array)
         if (filters.category) {
+            const categoryFilter = filters.category;
             results = results.filter((l) => {
                 if (!l.category) return false;
                 if (Array.isArray(l.category)) {
-                    return l.category.includes(filters.category!);
+                    return l.category.includes(categoryFilter);
                 }
                 if (typeof l.category === "string") {
                     const cats = l.category.split(",").map(c => c.trim().toLowerCase());
-                    return cats.includes(filters.category!.toLowerCase()) || l.category === filters.category;
+                    return cats.includes(categoryFilter.toLowerCase()) || l.category === categoryFilter;
                 }
                 return false;
             });
@@ -363,7 +376,8 @@ async function _searchLandListingsAction(filters: {
 
         // Crop-Soil Suitability Matrix filtering
         if (filters.cropType) {
-            const suitableSoils = CROP_SOIL_MATRIX[filters.cropType.toLowerCase()] || [];
+            const cropTypeFilter = filters.cropType;
+            const suitableSoils = CROP_SOIL_MATRIX[cropTypeFilter.toLowerCase()] || [];
             if (suitableSoils.length > 0) {
                 results = results.filter((l) => {
                     if (!l.soilType) return false;
@@ -376,7 +390,7 @@ async function _searchLandListingsAction(filters: {
                     const cat = (Array.isArray(l.category) 
                         ? l.category.join(", ") 
                         : l.category)?.toLowerCase() || "";
-                    const searchTerm = filters.cropType!.toLowerCase();
+                    const searchTerm = cropTypeFilter.toLowerCase();
                     return desc.includes(searchTerm) || title.includes(searchTerm) || cat.includes(searchTerm);
                 });
             }

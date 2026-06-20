@@ -141,6 +141,7 @@ export default async function MarketplaceLandingPage() {
                                                 alt={product.title}
                                                 fill
                                                 className="object-cover group-hover:scale-105 transition-transform duration-500"
+                                                sizes="(max-width: 768px) 100vw, 33vw"
                                             />
                                         ) : (
                                             <div className="w-full h-full flex items-center justify-center text-slate-400">

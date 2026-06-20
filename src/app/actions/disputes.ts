@@ -509,6 +509,7 @@ async function _updateDisputeStatusAction(
 
             // Credit the target user's wallet balance atomically using the pre-fetched walletSnap
             const escrowAmount = freshEscrow.amount ?? dispute.refundAmount ?? freshDispute.refundAmount ?? 0;
+            let balanceBefore = 0;
 
             if (!walletSnap.exists) {
                 tx.set(walletRef, {
@@ -519,11 +520,30 @@ async function _updateDisputeStatusAction(
                     updatedAt: FieldValue.serverTimestamp()
                 });
             } else {
+                balanceBefore = walletSnap.data()?.balance || 0;
                 tx.update(walletRef, {
                     balance: FieldValue.increment(escrowAmount),
                     updatedAt: FieldValue.serverTimestamp()
                 });
             }
+
+            // Record transaction in target's wallet_transactions history
+            const targetTxnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc();
+            tx.set(targetTxnRef, {
+                id: targetTxnRef.id,
+                walletId: targetId,
+                userId: targetId,
+                type: resolution === "release_seller" ? "funding" : "refund",
+                amount: escrowAmount,
+                balanceBefore,
+                balanceAfter: balanceBefore + escrowAmount,
+                reference: escrowId,
+                orderId: freshDispute.orderId || undefined,
+                description: `Dispute Resolution (${resolution}) for order #${freshDispute.orderId || disputeId}`,
+                status: "completed",
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp()
+            });
 
             // Write the global ledger record under DISPUTE-RES-${disputeId}
             const txId = `DISPUTE-RES-${disputeId}`;

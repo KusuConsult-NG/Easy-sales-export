@@ -89,7 +89,7 @@ export default function FarmNationOnboardingPage() {
                         if (isEditParam) {
                             const result = await getFarmNationApplicationAction();
                             if (result.success && result.data?.application) {
-                                setFormData((prev: any) => ({ ...prev, ...result.data!.application }));
+                                setFormData((prev: any) => ({ ...prev, ...result.data.application }));
                             }
                             setIsEditMode(true);
                             setIsLoading(false);
@@ -105,7 +105,7 @@ export default function FarmNationOnboardingPage() {
                     } else if (status === "rejected" || status === "revision_required") {
                         const result = await getFarmNationApplicationAction();
                         if (result.success && result.data?.application) {
-                            setFormData((prev: any) => ({ ...prev, ...result.data!.application }));
+                            setFormData((prev: any) => ({ ...prev, ...result.data.application }));
                         }
                         if (result.data?.rejectionReason) setRejectionReason(result.data.rejectionReason);
                         setIsRevisionMode(true);

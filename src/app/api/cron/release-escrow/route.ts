@@ -190,6 +190,7 @@ async function processEscrowTransactions(now: Timestamp) {
             // 2. Credit Seller's Wallet
             const walletRef = db.collection(COLLECTIONS.WALLETS).doc(sellerId);
             const walletSnap = await tx.get(walletRef);
+            let balanceBefore = 0;
             
             if (!walletSnap.exists) {
                 tx.set(walletRef, {
@@ -200,11 +201,29 @@ async function processEscrowTransactions(now: Timestamp) {
                     updatedAt: FieldValue.serverTimestamp()
                 });
             } else {
+                balanceBefore = walletSnap.data()?.balance || 0;
                 tx.update(walletRef, {
                     balance: FieldValue.increment(amount),
                     updatedAt: FieldValue.serverTimestamp()
                 });
             }
+
+            // 3. Record in Wallet Transactions
+            const walletTxRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc();
+            tx.set(walletTxRef, {
+                id: walletTxRef.id,
+                walletId: sellerId,
+                userId: sellerId,
+                type: "funding",
+                amount: amount,
+                balanceBefore,
+                balanceAfter: balanceBefore + amount,
+                reference: escrowId,
+                description: `Payout for order #${data.orderId || escrowId.substring(0, 8)} (Escrow auto-released after 7d)`,
+                status: "completed",
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp()
+            });
 
             // 3. Record in Global Ledger
             const txId = `ESCROW-RELEASE-${escrowId.substring(0, 8)}`;

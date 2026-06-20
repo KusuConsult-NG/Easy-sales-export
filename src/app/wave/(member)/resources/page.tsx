@@ -48,14 +48,15 @@ export default function WaveResourcesPage() {
     useEffect(() => {
         if (sessionStatus === "loading") return;
 
-        if (sessionStatus === "unauthenticated" || !session?.user?.id) {
+        const userId = session?.user?.id;
+        if (sessionStatus === "unauthenticated" || !userId) {
             router.push("/auth/login?callbackUrl=/wave/resources");
             return;
         }
 
         async function checkEligibility() {
             setChecking(true);
-            const eligibility = await checkWaveEligibilityAction(session!.user.id);
+            const eligibility = await checkWaveEligibilityAction(userId as string);
             if (!eligibility.success) {
                 // If status is not active, redirect to wave application/landing page
                 router.push("/wave/application");

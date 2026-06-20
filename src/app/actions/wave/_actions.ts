@@ -1296,21 +1296,20 @@ async function _withdrawEarningsAction(
         };
 
         const sessionResult = await requireSession();
-        const maybeSession = sessionResult.session;
-        if (!maybeSession || !maybeSession?.user?.id) {
+        if (!sessionResult.session?.user?.id) {
             return { 
                 success: false as const, 
                 error: sessionResult.error?.error ?? "Authentication required", 
                 data: null 
             };
         }
-        const session = maybeSession;
+        const session = sessionResult.session!;
+        const userId = session.user.id;
+        const userEmail = session.user.email || "";
 
         if (amount < 5000) {
             return { success: false as const, error: "Minimum withdrawal amount is ₦5,000", data: null };
         }
-
-        const userId = session!.user.id;
 
         // PHASE 1: Balance Calculation (Snapshot)
         // Note: We calculate before the transaction because Firestore queries are not supported inside transactions in Node SDK.
@@ -1340,7 +1339,7 @@ async function _withdrawEarningsAction(
             transaction.set(withdrawalRef, {
                 withdrawalId,
                 userId,
-                userEmail: session!.user.email,
+                userEmail,
                 amount,
                 status: "pending",
                 requestedAt: FieldValue.serverTimestamp(),

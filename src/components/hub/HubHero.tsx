@@ -65,7 +65,7 @@ export default function HubHero() {
                                 fill
                                 className="object-cover object-[center_30%]"
                                 priority={index === 0}
-                                loading={index === 0 ? "eager" : "lazy"}
+                                fetchPriority={index === 0 ? "high" : "low"}
                                 sizes="100vw"
                                 quality={75}
                             />
