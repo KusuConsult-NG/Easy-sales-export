@@ -112,7 +112,7 @@ export function getAdminDb(): Firestore {
         initializeFirebaseAdmin();
         const db = getFirestore();
         try {
-            db.settings({ preferRest: true, ignoreUndefinedProperties: true });
+            db.settings({ preferRest: false, ignoreUndefinedProperties: true });
         } catch (e) {
             console.warn("Firestore settings already applied manually");
         }

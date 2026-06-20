@@ -5,10 +5,15 @@ if (!(globalThis as any).__FIRESTORE_PROTOTYPE_WRAPPED__) {
     (globalThis as any).__FIRESTORE_PROTOTYPE_WRAPPED__ = true;
 
     try {
-        const dns = require('dns');
-        if (dns && typeof dns.setDefaultResultOrder === 'function') {
-            dns.setDefaultResultOrder('ipv4first');
-            console.log('[DNS Configuration] Prefer IPv4 resolver order configured.');
+        // Prefer IPv4 first resolver to bypass Railway container outbound IPv6 connectivity issues
+        try {
+            const dns = require('dns');
+            if (dns && typeof dns.setDefaultResultOrder === 'function') {
+                dns.setDefaultResultOrder('ipv4first');
+                console.log('[DNS Configuration] Prefer IPv4 resolver order configured.');
+            }
+        } catch (dnsErr) {
+            console.error('[DNS Configuration] Failed to configure DNS resolver order:', dnsErr);
         }
         const firestoreModule = require('@google-cloud/firestore');
         const FirestoreClient = firestoreModule.v1.FirestoreClient || firestoreModule.v1;

@@ -77,27 +77,29 @@ const USERS_TO_SEED = [
     }
 ];
 
-async function clearCollection(collectionName: string) {
+async function deleteUserLoansAndApplications(uid: string) {
     try {
-        const snap = await db.collection(collectionName).get();
-        if (snap.empty) return;
-        const batch = db.batch();
-        snap.docs.forEach(doc => {
-            batch.delete(doc.ref);
-        });
-        await batch.commit();
-        console.log(`Cleared collection: ${collectionName} (${snap.size} docs)`);
+        const appsSnap = await db.collection("loan_applications").where("userId", "==", uid).get();
+        for (const doc of appsSnap.docs) {
+            console.log(`Deleting E2E loan application: ${doc.id}`);
+            await doc.ref.delete();
+        }
     } catch (err: any) {
-        console.warn(`Warning clearing collection ${collectionName}:`, err.message);
+        console.warn(`Warning deleting loan applications for ${uid}:`, err.message);
+    }
+    try {
+        const loansSnap = await db.collection("cooperative_loans").where("userId", "==", uid).get();
+        for (const doc of loansSnap.docs) {
+            console.log(`Deleting E2E coop loan: ${doc.id}`);
+            await doc.ref.delete();
+        }
+    } catch (err: any) {
+        console.warn(`Warning deleting coop loans for ${uid}:`, err.message);
     }
 }
 
 async function setupE2EUsers() {
     console.log("Starting provisioning of all 4 E2E users...");
-
-    // Clear loan applications to prevent double-lending check failure on re-runs
-    await clearCollection("loan_applications");
-    await clearCollection("cooperative_loans");
 
     const userUids: Record<string, string> = {};
 
@@ -111,6 +113,7 @@ async function setupE2EUsers() {
         try {
             const existingAuthByEmail = await adminAuth.getUserByEmail(u.email);
             console.log(`Deleting existing Auth user by email: ${u.email} (UID: ${existingAuthByEmail.uid})`);
+            await deleteUserLoansAndApplications(existingAuthByEmail.uid);
             await adminAuth.deleteUser(existingAuthByEmail.uid);
         } catch (err: any) {
             if (err.code !== "auth/user-not-found") {
@@ -136,6 +139,7 @@ async function setupE2EUsers() {
             const emailSnap = await db.collection("users").where("email", "==", u.email).get();
             for (const doc of emailSnap.docs) {
                 console.log(`Deleting conflicting Firestore user document by email (ID: ${doc.id})`);
+                await deleteUserLoansAndApplications(doc.id);
                 await doc.ref.delete();
             }
         } catch (err: any) {
@@ -264,9 +268,45 @@ async function setupE2EUsers() {
         }
     }
 
-    // 9. Seed E2E delivered order for dispute/confirm receipt flow testing
-    const buyerUid = userUids["e2e.buyer@easysalesexport.test"];
+    // 9. Seed E2E products non-destructively
     const sellerUid = userUids["e2e.seller@easysalesexport.test"];
+    if (sellerUid) {
+        console.log("\nSeeding E2E products...");
+        const products = [
+            {
+                id: "sample-product-yam",
+                title: "Premium Nigerian Yams",
+                name: "Premium Nigerian Yams",
+                description: "High-quality yams sourced from sustainable agriculture farms in Benue State.",
+                category: "roots",
+                price: 150000,
+                pricingTiers: [{ type: "retail", price: 150000, minQuantity: 1 }],
+                unit: "per ton",
+                availableQuantity: 50,
+                quantity: 50,
+                minimumOrderQuantity: 1,
+                sellerId: sellerUid,
+                farmerId: sellerUid,
+                sellerName: "E2E Seller",
+                farmerName: "E2E Seller",
+                location: { state: "Benue", lga: "Makurdi", nearestMarket: "Unknown" },
+                images: ["/images/products/yams.jpg"],
+                sellerVerified: true,
+                isVerified: true,
+                status: "active",
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            }
+        ];
+
+        for (const p of products) {
+            await db.collection("products").doc(p.id).set(p);
+            console.log(`✅ Successfully seeded product: ${p.title} (${p.id})`);
+        }
+    }
+
+    // 9.5. Seed E2E delivered order for dispute/confirm receipt flow testing
+    const buyerUid = userUids["e2e.buyer@easysalesexport.test"];
     if (buyerUid && sellerUid) {
         console.log("\nSeeding E2E delivered order for dispute testing...");
         const ordersColl = db.collection("marketplaceOrders");

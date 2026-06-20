@@ -227,7 +227,10 @@ export async function preValidateLoginAction(credentials: any): Promise<{ succes
                     `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseApiKey}`,
                     {
                         method: "POST",
-                        headers: { "Content-Type": "application/json" },
+                        headers: { 
+                            "Content-Type": "application/json",
+                            "Connection": "close"
+                        },
                         body: JSON.stringify({
                             email,
                             password,

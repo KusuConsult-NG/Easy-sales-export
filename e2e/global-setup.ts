@@ -76,7 +76,6 @@ export default async function globalSetup(config: FullConfig) {
     // ── 1.5. Run E2E Cooperative Seeding Script ─────────────────────────────────
     try {
         console.log('Seeding E2E database records...');
-        execSync('npm run seed', { stdio: 'inherit' });
         execSync('node scripts/seed-test-users.js', { stdio: 'inherit' });
         execSync('npx tsx scripts/setup-e2e-coop.ts', { stdio: 'inherit' });
         console.log('✅ E2E Database seeding completed successfully.');
