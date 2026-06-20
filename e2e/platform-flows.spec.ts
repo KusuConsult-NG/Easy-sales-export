@@ -103,7 +103,7 @@ test.describe('Academy Course Enrollment', () => {
         await page.click('text=Mark as Complete');
 
         // Verify progress
-        await expect(page.locator('text=1 of').first()).toBeVisible({ timeout: 10000 });
+        await expect(page.locator('text=1 /').first()).toBeVisible({ timeout: 10000 });
     });
 
     test.skip('User can take quiz and get certificate', async ({ page }) => {

@@ -101,7 +101,12 @@ export default function LoginForm({ defaultCallbackUrl = "/dashboard" }: { defau
                                     rawError.includes("Socket closed") ||
                                     rawError.includes("UNAVAILABLE") ||
                                     rawError.includes("stream terminated") ||
-                                    rawError.includes("ERR_STREAM_PREMATURE_CLOSE");
+                                    rawError.includes("ERR_STREAM_PREMATURE_CLOSE") ||
+                                    rawError.includes("ENOTFOUND") ||
+                                    rawError.includes("getaddrinfo") ||
+                                    rawError.includes("network-error") ||
+                                    rawError.includes("DEADLINE_EXCEEDED") ||
+                                    rawError.includes("deadline exceeded");
                                     
                 if (isTransient) {
                     setError("A temporary connection issue occurred. Please try again.");

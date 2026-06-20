@@ -75,7 +75,12 @@ export async function runQueryWithRetry<T>(queryFn: () => Promise<T>, retries = 
                                 errMsg.includes("Socket closed") ||
                                 errMsg.includes("UNAVAILABLE") ||
                                 errMsg.includes("stream terminated") ||
-                                errMsg.includes("ERR_STREAM_PREMATURE_CLOSE");
+                                errMsg.includes("ERR_STREAM_PREMATURE_CLOSE") ||
+                                errMsg.includes("ENOTFOUND") ||
+                                errMsg.includes("getaddrinfo") ||
+                                errMsg.includes("network-error") ||
+                                errMsg.includes("DEADLINE_EXCEEDED") ||
+                                errMsg.includes("deadline exceeded");
             if (isTransient && i < retries - 1) {
                 console.warn(`[Firestore Retry] Transient connection failure: ${errMsg}. Retrying in ${delay}ms... (Attempt ${i + 1}/${retries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));

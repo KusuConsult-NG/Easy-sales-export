@@ -146,6 +146,7 @@ export async function verifyPaystackPayment(
                         'Authorization': `Bearer ${secretKey}`,
                         'Content-Type': 'application/json',
                     },
+                    signal: AbortSignal.timeout(5000),
                 }
             );
 
@@ -172,7 +173,9 @@ export async function verifyPaystackPayment(
                                 errMsg.includes("Socket closed") ||
                                 errMsg.includes("UNAVAILABLE") ||
                                 errMsg.includes("stream terminated") ||
-                                errMsg.includes("ERR_STREAM_PREMATURE_CLOSE");
+                                errMsg.includes("ERR_STREAM_PREMATURE_CLOSE") ||
+                                errMsg.includes("timeout") ||
+                                errMsg.includes("exceeded");
             if (isTransient && i < maxRetries - 1) {
                 console.warn(`[Paystack Verify Retry] Transient error: ${errMsg}. Retrying in ${delay}ms... (Attempt ${i + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
@@ -263,6 +266,7 @@ export async function initializePaystackPayment(
                     metadata,
                     callback_url: callbackUrl || (metadata.callback_url as string) || `${process.env.NEXT_PUBLIC_APP_URL}/cooperatives/verify-payment`,
                 }),
+                signal: AbortSignal.timeout(5000),
             });
 
             if (!response.ok) {
@@ -292,7 +296,9 @@ export async function initializePaystackPayment(
                                 errMsg.includes("Socket closed") ||
                                 errMsg.includes("UNAVAILABLE") ||
                                 errMsg.includes("stream terminated") ||
-                                errMsg.includes("ERR_STREAM_PREMATURE_CLOSE");
+                                errMsg.includes("ERR_STREAM_PREMATURE_CLOSE") ||
+                                errMsg.includes("timeout") ||
+                                errMsg.includes("exceeded");
             if (isTransient && i < maxRetries - 1) {
                 console.warn(`[Paystack Initialize Retry] Transient error: ${errMsg}. Retrying in ${delay}ms... (Attempt ${i + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));

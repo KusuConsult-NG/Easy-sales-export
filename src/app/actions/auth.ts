@@ -259,7 +259,12 @@ export async function preValidateLoginAction(credentials: any): Promise<{ succes
                                 errMsg.includes("Socket closed") ||
                                 errMsg.includes("UNAVAILABLE") ||
                                 errMsg.includes("stream terminated") ||
-                                errMsg.includes("ERR_STREAM_PREMATURE_CLOSE");
+                                errMsg.includes("ERR_STREAM_PREMATURE_CLOSE") ||
+                                errMsg.includes("ENOTFOUND") ||
+                                errMsg.includes("getaddrinfo") ||
+                                errMsg.includes("network-error") ||
+                                errMsg.includes("DEADLINE_EXCEEDED") ||
+                                errMsg.includes("deadline exceeded");
             if (isTransient) {
                 return { success: false, error: "A temporary connection issue occurred. Please try again." };
             }
@@ -333,7 +338,12 @@ export async function preValidateLoginAction(credentials: any): Promise<{ succes
                             errMsg.includes("Socket closed") ||
                             errMsg.includes("UNAVAILABLE") ||
                             errMsg.includes("stream terminated") ||
-                            errMsg.includes("ERR_STREAM_PREMATURE_CLOSE");
+                            errMsg.includes("ERR_STREAM_PREMATURE_CLOSE") ||
+                            errMsg.includes("ENOTFOUND") ||
+                            errMsg.includes("getaddrinfo") ||
+                            errMsg.includes("network-error") ||
+                            errMsg.includes("DEADLINE_EXCEEDED") ||
+                            errMsg.includes("deadline exceeded");
         if (isTransient) {
             return { success: false, error: "A temporary connection issue occurred. Please try again." };
         }

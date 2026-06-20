@@ -13,7 +13,7 @@ export default function SystemHealthPage() {
         setLoading(true);
         setError(null);
         try {
-            const res = await runSystemHealthDiagnostic(2000);
+            const res = await runSystemHealthDiagnostic(200);
             if (res.success && res.data) {
                 setReport(res.data);
             } else {

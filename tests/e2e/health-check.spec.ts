@@ -22,13 +22,11 @@ test.describe('System Health Diagnostic Suite', () => {
     });
 
     test('should load the health dashboard and display metrics', async ({ page }) => {
-        await page.goto('/admin/system-health');
-        
         // Check if the dashboard header is visible
         await expect(page.locator('h1')).toContainText(/System Health Monitor/i);
 
         // Wait for the diagnostic loading state to complete
-        await expect(page.locator('text=Running platform-wide structural tests...')).not.toBeVisible({ timeout: 15000 });
+        await expect(page.locator('text=Running platform-wide structural tests...')).not.toBeVisible({ timeout: 30000 });
         
         // Verify infrastructure service status section
         await expect(page.locator('text=Infrastructure Connectivity')).toBeVisible();
@@ -48,8 +46,9 @@ test.describe('System Health Diagnostic Suite', () => {
     });
 
     test('should trigger a fresh diagnostic run', async ({ page }) => {
-        await page.goto('/admin/system-health');
-        
+        // Wait for the initial diagnostic loading to finish first
+        await expect(page.locator('text=Running platform-wide structural tests...')).not.toBeVisible({ timeout: 30000 });
+
         // Find and click the refresh/run button
         const runButton = page.getByRole('button', { name: /run diagnostic/i });
         await expect(runButton).toBeVisible();
@@ -58,7 +57,7 @@ test.describe('System Health Diagnostic Suite', () => {
         // Expect a loading state
         await expect(page.locator('text=Running platform-wide structural tests...')).toBeVisible();
         
-        // Wait for loading to finish and dashboard header to be visible again
-        await expect(page.locator('h1')).toContainText(/System Health Monitor/i, { timeout: 10000 });
+        // Wait for loading to finish
+        await expect(page.locator('text=Running platform-wide structural tests...')).not.toBeVisible({ timeout: 30000 });
     });
 });

@@ -5,7 +5,20 @@ const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
 const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
 
 const redis = (redisUrl && redisToken)
-    ? new Redis({ url: redisUrl, token: redisToken })
+    ? new Redis({ 
+        url: redisUrl, 
+        token: redisToken,
+        retry: {
+            retries: 3,
+            backoff: (retryCount) => Math.min(500, 50 * Math.pow(2, retryCount))
+        },
+        fetch: (url, init) => {
+            return fetch(url, {
+                ...init,
+                signal: AbortSignal.timeout(2000)
+            });
+        }
+      })
     : {
         // Mock limited interface if missing (prevents crash)
         get: async () => null,

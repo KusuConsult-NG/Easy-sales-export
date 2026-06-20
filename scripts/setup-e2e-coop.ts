@@ -83,21 +83,59 @@ const USERS_TO_SEED = [
     }
 ];
 
+async function runWithRetry<T>(fn: () => Promise<T>, retries = 5, delay = 1000): Promise<T> {
+    for (let i = 0; i < retries; i++) {
+        try {
+            return await fn();
+        } catch (err: any) {
+            const errMsg = err?.message || String(err);
+            const isTransient = errMsg.includes("Premature close") || 
+                                errMsg.includes("socket hang up") || 
+                                errMsg.includes("ECONNRESET") ||
+                                errMsg.includes("Client network socket disconnected") ||
+                                errMsg.includes("FetchError") ||
+                                errMsg.includes("fetch failed") ||
+                                errMsg.includes("Connection closed") ||
+                                errMsg.includes("Socket closed") ||
+                                errMsg.includes("UNAVAILABLE") ||
+                                errMsg.includes("stream terminated") ||
+                                errMsg.includes("ERR_STREAM_PREMATURE_CLOSE") ||
+                                errMsg.includes("ENOTFOUND") ||
+                                errMsg.includes("getaddrinfo") ||
+                                errMsg.includes("network-error") ||
+                                errMsg.includes("DEADLINE_EXCEEDED") ||
+                                errMsg.includes("deadline exceeded") ||
+                                errMsg.includes("timeout") ||
+                                errMsg.includes("exceeded") ||
+                                (err?.code && String(err.code).includes("timeout"));
+            
+            if (isTransient && i < retries - 1) {
+                console.warn(`[Setup Retry] Transient action failed: ${errMsg}. Retrying in ${delay}ms... (Attempt ${i + 1}/${retries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                delay *= 2;
+                continue;
+            }
+            throw err;
+        }
+    }
+    return await fn();
+}
+
 async function deleteUserLoansAndApplications(uid: string) {
     try {
-        const appsSnap = await db.collection("loan_applications").where("userId", "==", uid).get();
+        const appsSnap = await runWithRetry(() => db.collection("loan_applications").where("userId", "==", uid).get());
         for (const doc of appsSnap.docs) {
             console.log(`Deleting E2E loan application: ${doc.id}`);
-            await doc.ref.delete();
+            await runWithRetry(() => doc.ref.delete());
         }
     } catch (err: any) {
         console.warn(`Warning deleting loan applications for ${uid}:`, err.message);
     }
     try {
-        const loansSnap = await db.collection("cooperative_loans").where("userId", "==", uid).get();
+        const loansSnap = await runWithRetry(() => db.collection("cooperative_loans").where("userId", "==", uid).get());
         for (const doc of loansSnap.docs) {
             console.log(`Deleting E2E coop loan: ${doc.id}`);
-            await doc.ref.delete();
+            await runWithRetry(() => doc.ref.delete());
         }
     } catch (err: any) {
         console.warn(`Warning deleting coop loans for ${uid}:`, err.message);
@@ -117,10 +155,10 @@ async function setupE2EUsers() {
 
         // 1. Delete conflicting Auth users by email
         try {
-            const existingAuthByEmail = await adminAuth.getUserByEmail(u.email);
+            const existingAuthByEmail = await runWithRetry(() => adminAuth.getUserByEmail(u.email));
             console.log(`Deleting existing Auth user by email: ${u.email} (UID: ${existingAuthByEmail.uid})`);
             await deleteUserLoansAndApplications(existingAuthByEmail.uid);
-            await adminAuth.deleteUser(existingAuthByEmail.uid);
+            await runWithRetry(() => adminAuth.deleteUser(existingAuthByEmail.uid));
         } catch (err: any) {
             if (err.code !== "auth/user-not-found") {
                 console.warn(`Warning deleting Auth user by email: ${err.message}`);
@@ -130,9 +168,9 @@ async function setupE2EUsers() {
         // 2. Delete conflicting Auth users by phone number
         for (const p of phoneFormats) {
             try {
-                const existingAuthByPhone = await adminAuth.getUserByPhoneNumber(p);
+                const existingAuthByPhone = await runWithRetry(() => adminAuth.getUserByPhoneNumber(p));
                 console.log(`Deleting existing Auth user by phone: ${p} (UID: ${existingAuthByPhone.uid})`);
-                await adminAuth.deleteUser(existingAuthByPhone.uid);
+                await runWithRetry(() => adminAuth.deleteUser(existingAuthByPhone.uid));
             } catch (err: any) {
                 if (err.code !== "auth/user-not-found") {
                     console.warn(`Warning deleting Auth user by phone ${p}: ${err.message}`);
@@ -142,11 +180,11 @@ async function setupE2EUsers() {
 
         // 3. Delete conflicting Firestore user documents by email
         try {
-            const emailSnap = await db.collection("users").where("email", "==", u.email).get();
+            const emailSnap = await runWithRetry(() => db.collection("users").where("email", "==", u.email).get());
             for (const doc of emailSnap.docs) {
                 console.log(`Deleting conflicting Firestore user document by email (ID: ${doc.id})`);
                 await deleteUserLoansAndApplications(doc.id);
-                await doc.ref.delete();
+                await runWithRetry(() => doc.ref.delete());
             }
         } catch (err: any) {
             console.warn(`Warning deleting Firestore user document by email: ${err.message}`);
@@ -154,10 +192,10 @@ async function setupE2EUsers() {
 
         // Delete conflicting WAVE applications by email
         try {
-            const waveSnap = await db.collection("wave_applications").where("userEmail", "==", u.email).get();
+            const waveSnap = await runWithRetry(() => db.collection("wave_applications").where("userEmail", "==", u.email).get());
             for (const doc of waveSnap.docs) {
                 console.log(`Deleting conflicting WAVE application (ID: ${doc.id})`);
-                await doc.ref.delete();
+                await runWithRetry(() => doc.ref.delete());
             }
         } catch (err: any) {
             console.warn(`Warning deleting conflicting WAVE application: ${err.message}`);
@@ -166,10 +204,10 @@ async function setupE2EUsers() {
         // 4. Delete conflicting Firestore user documents by phone
         for (const p of phoneFormats) {
             try {
-                const phoneSnap = await db.collection("users").where("phone", "==", p).get();
+                const phoneSnap = await runWithRetry(() => db.collection("users").where("phone", "==", p).get());
                 for (const doc of phoneSnap.docs) {
                     console.log(`Deleting conflicting Firestore user document by phone ${p} (ID: ${doc.id})`);
-                    await doc.ref.delete();
+                    await runWithRetry(() => doc.ref.delete());
                 }
             } catch (err: any) {
                 console.warn(`Warning deleting Firestore user document by phone ${p}: ${err.message}`);
@@ -179,13 +217,13 @@ async function setupE2EUsers() {
         // 5. Create fresh Auth user
         let authUser;
         try {
-            authUser = await adminAuth.createUser({
+            authUser = await runWithRetry(() => adminAuth.createUser({
                 email: u.email,
                 emailVerified: true,
                 password: u.password,
                 displayName: u.fullName,
                 phoneNumber: formattedPhone
-            });
+            }));
             console.log(`Successfully created clean Auth user ${u.email} (UID: ${authUser.uid})`);
         } catch (err: any) {
             console.error(`CRITICAL: Failed to create Auth user ${u.email}:`, err);
@@ -215,7 +253,7 @@ async function setupE2EUsers() {
             updatedAt: new Date()
         };
 
-        await userRef.set(userData);
+        await runWithRetry(() => userRef.set(userData));
         console.log(`Successfully created Firestore users document for ${u.email}`);
 
         // 7. If cooperative member, create cooperative_members document
@@ -224,18 +262,18 @@ async function setupE2EUsers() {
 
             // Clean up existing coop member documents by userId, email, or phone
             try {
-                const coopUserIdSnap = await coopMembersColl.where("userId", "==", uid).get();
+                const coopUserIdSnap = await runWithRetry(() => coopMembersColl.where("userId", "==", uid).get());
                 for (const doc of coopUserIdSnap.docs) {
-                    await doc.ref.delete();
+                    await runWithRetry(() => doc.ref.delete());
                 }
-                const coopEmailSnap = await coopMembersColl.where("email", "==", u.email).get();
+                const coopEmailSnap = await runWithRetry(() => coopMembersColl.where("email", "==", u.email).get());
                 for (const doc of coopEmailSnap.docs) {
-                    await doc.ref.delete();
+                    await runWithRetry(() => doc.ref.delete());
                 }
                 for (const p of phoneFormats) {
-                    const coopPhoneSnap = await coopMembersColl.where("phone", "==", p).get();
+                    const coopPhoneSnap = await runWithRetry(() => coopMembersColl.where("phone", "==", p).get());
                     for (const doc of coopPhoneSnap.docs) {
-                        await doc.ref.delete();
+                        await runWithRetry(() => doc.ref.delete());
                     }
                 }
             } catch (err: any) {
@@ -258,7 +296,7 @@ async function setupE2EUsers() {
                 updatedAt: new Date()
             };
 
-            await coopMembersColl.doc(uid).set(coopData);
+            await runWithRetry(() => coopMembersColl.doc(uid).set(coopData));
             console.log(`Successfully created cooperative_members document for ${u.email}`);
         }
 
@@ -306,7 +344,7 @@ async function setupE2EUsers() {
         ];
 
         for (const p of products) {
-            await db.collection("products").doc(p.id).set(p);
+            await runWithRetry(() => db.collection("products").doc(p.id).set(p));
             console.log(`✅ Successfully seeded product: ${p.title} (${p.id})`);
         }
 
@@ -315,10 +353,10 @@ async function setupE2EUsers() {
         const landListingsColl = db.collection("land_listings");
         
         // Clean old E2E land listings
-        const oldLandSnap = await landListingsColl.where("ownerId", "==", sellerUid).get();
+        const oldLandSnap = await runWithRetry(() => landListingsColl.where("ownerId", "==", sellerUid).get());
         for (const doc of oldLandSnap.docs) {
             console.log(`Deleting old E2E land listing: ${doc.id}`);
-            await doc.ref.delete();
+            await runWithRetry(() => doc.ref.delete());
         }
 
         const landListing = {
@@ -347,42 +385,49 @@ async function setupE2EUsers() {
             updatedAt: new Date()
         };
 
-        await landListingsColl.doc(landListing.id).set(landListing);
+        await runWithRetry(() => landListingsColl.doc(landListing.id).set(landListing));
         console.log(`✅ Successfully seeded land listing: ${landListing.title}`);
     }
 
     // 9.5. Seed E2E delivered order for dispute/confirm receipt flow testing
     const buyerUid = userUids["e2e.buyer@easysalesexport.com"];
     if (buyerUid && sellerUid) {
-        console.log("\nSeeding E2E delivered order for dispute testing...");
+        console.log("\nSeeding E2E orders for dispute testing...");
         const ordersColl = db.collection("marketplaceOrders");
         
         // Clean old E2E orders
-        const oldOrdersSnap = await ordersColl.where("buyerId", "==", buyerUid).get();
+        const oldOrdersSnap = await runWithRetry(() => ordersColl.where("buyerId", "==", buyerUid).get());
         for (const doc of oldOrdersSnap.docs) {
-            await doc.ref.delete();
+            await runWithRetry(() => doc.ref.delete());
         }
+        await runWithRetry(() => ordersColl.doc("ORD-E2E-DELIVERED").delete());
+        await runWithRetry(() => ordersColl.doc("ORD-E2E-DISPUTED").delete());
 
         // Clean old E2E disputes
         try {
             const disputesColl = db.collection("disputes");
             // First, delete by buyerId (for general cleanup of the buyer)
-            const oldDisputesSnap = await disputesColl.where("buyerId", "==", buyerUid).get();
+            const oldDisputesSnap = await runWithRetry(() => disputesColl.where("buyerId", "==", buyerUid).get());
             for (const doc of oldDisputesSnap.docs) {
                 console.log(`Deleting old dispute document by buyerId: ${doc.id}`);
-                await doc.ref.delete();
+                await runWithRetry(() => doc.ref.delete());
             }
-            // Second, delete by orderId (ORD-E2E-DELIVERED) since buyerUid changes every setup run
-            const oldDisputesByOrderSnap = await disputesColl.where("orderId", "==", "ORD-E2E-DELIVERED").get();
+            // Second, delete by orderId since buyerUid changes every setup run
+            const oldDisputesByOrderSnap = await runWithRetry(() => disputesColl.where("orderId", "==", "ORD-E2E-DELIVERED").get());
             for (const doc of oldDisputesByOrderSnap.docs) {
-                console.log(`Deleting old dispute document by orderId: ${doc.id}`);
-                await doc.ref.delete();
+                console.log(`Deleting old dispute document by orderId ORD-E2E-DELIVERED: ${doc.id}`);
+                await runWithRetry(() => doc.ref.delete());
+            }
+            const oldDisputesByOrderDisputedSnap = await runWithRetry(() => disputesColl.where("orderId", "==", "ORD-E2E-DISPUTED").get());
+            for (const doc of oldDisputesByOrderDisputedSnap.docs) {
+                console.log(`Deleting old dispute document by orderId ORD-E2E-DISPUTED: ${doc.id}`);
+                await runWithRetry(() => doc.ref.delete());
             }
         } catch (err: any) {
             console.warn(`Warning deleting old disputes: ${err.message}`);
         }
         
-        const productsSnap = await db.collection("products").where("status", "==", "active").limit(1).get();
+        const productsSnap = await runWithRetry(() => db.collection("products").where("status", "==", "active").limit(1).get());
         let productId = "sample-product-yam";
         let productTitle = "Premium Nigerian Yams";
         if (!productsSnap.empty) {
@@ -390,12 +435,57 @@ async function setupE2EUsers() {
             productTitle = productsSnap.docs[0].data().title || productsSnap.docs[0].data().name || "Premium Nigerian Yams";
         }
         
-        const orderId = "ORD-E2E-DELIVERED";
+        const orderIdDelivered = "ORD-E2E-DELIVERED";
+        const orderIdDisputed = "ORD-E2E-DISPUTED";
         const disputeId = "DISPUTE-E2E-DELIVERED";
-        const orderData = {
-            id: orderId,
-            orderId: orderId,
+        
+        // 1. Seed Delivered Order (status: delivered) for buyer dispute filing test
+        const orderDeliveredData = {
+            id: orderIdDelivered,
+            orderId: orderIdDelivered,
             orderNumber: "ORD-E2E-0001",
+            buyerId: buyerUid,
+            sellerId: sellerUid,
+            productIds: [productId],
+            items: [
+                {
+                    productId: productId,
+                    productTitle: productTitle,
+                    quantity: 2,
+                    unitPrice: 150000,
+                    totalPrice: 300000,
+                    tier: "invalid_tier"
+                }
+            ],
+            subtotal: 300000,
+            deliveryFee: 5000,
+            serviceFee: 0,
+            totalAmount: 305000,
+            deliveryAddress: {
+                recipientName: "E2E Buyer",
+                recipientPhone: "+2348099999903",
+                street: "123 E2E Shipping Way",
+                city: "Lagos",
+                state: "Lagos",
+                lga: "Lagos Island"
+            },
+            paymentMethod: "escrow",
+            paymentStatus: "escrow_held",
+            status: "delivered",
+            buyerConfirmed: false,
+            escrowReleased: false,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            _version: 1
+        };
+        await runWithRetry(() => ordersColl.doc(orderIdDelivered).set(orderDeliveredData));
+        console.log(`✅ Seeded delivered order ${orderIdDelivered} for buyer ${buyerUid}`);
+
+        // 2. Seed Disputed Order (status: disputed) for admin resolution test
+        const orderDisputedData = {
+            id: orderIdDisputed,
+            orderId: orderIdDisputed,
+            orderNumber: "ORD-E2E-0002",
             buyerId: buyerUid,
             sellerId: sellerUid,
             productIds: [productId],
@@ -431,26 +521,29 @@ async function setupE2EUsers() {
             updatedAt: new Date(),
             _version: 1
         };
-        
-        await ordersColl.doc(orderId).set(orderData);
-        console.log(`✅ Seeded delivered order ${orderId} for buyer ${buyerUid}`);
+        await runWithRetry(() => ordersColl.doc(orderIdDisputed).set(orderDisputedData));
+        console.log(`✅ Seeded disputed order ${orderIdDisputed} for buyer ${buyerUid}`);
 
-        // Seed E2E escrow transaction
+        // Seed E2E escrow transactions
         const escrowTransactionsColl = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS);
         try {
-            const oldEscrowSnap = await escrowTransactionsColl.where("orderId", "==", orderId).get();
-            for (const doc of oldEscrowSnap.docs) {
-                await doc.ref.delete();
+            const oldEscrowDeliveredSnap = await runWithRetry(() => escrowTransactionsColl.where("orderId", "==", orderIdDelivered).get());
+            for (const doc of oldEscrowDeliveredSnap.docs) {
+                await runWithRetry(() => doc.ref.delete());
+            }
+            const oldEscrowDisputedSnap = await runWithRetry(() => escrowTransactionsColl.where("orderId", "==", orderIdDisputed).get());
+            for (const doc of oldEscrowDisputedSnap.docs) {
+                await runWithRetry(() => doc.ref.delete());
             }
         } catch (err: any) {
             console.warn(`Warning deleting old escrow: ${err.message}`);
         }
 
         const sellerShort = sellerUid.substring(0, 5);
-        const escrowId = `ESC-${orderId}-${sellerShort}`;
-        const escrowData = {
-            id: escrowId,
-            orderId: orderId,
+        const escrowIdDelivered = `ESC-${orderIdDelivered}-${sellerShort}`;
+        const escrowDeliveredData = {
+            id: escrowIdDelivered,
+            orderId: orderIdDelivered,
             buyerId: buyerUid,
             buyerEmail: "e2e.buyer@easysalesexport.com",
             sellerId: sellerUid,
@@ -467,13 +560,36 @@ async function setupE2EUsers() {
             updatedAt: new Date(),
             _version: 0
         };
-        await escrowTransactionsColl.doc(escrowId).set(escrowData);
-        console.log(`✅ Seeded escrow transaction ${escrowId}`);
+        await runWithRetry(() => escrowTransactionsColl.doc(escrowIdDelivered).set(escrowDeliveredData));
+        console.log(`✅ Seeded escrow transaction ${escrowIdDelivered}`);
 
-        // Seed E2E dispute
+        const escrowIdDisputed = `ESC-${orderIdDisputed}-${sellerShort}`;
+        const escrowDisputedData = {
+            id: escrowIdDisputed,
+            orderId: orderIdDisputed,
+            buyerId: buyerUid,
+            buyerEmail: "e2e.buyer@easysalesexport.com",
+            sellerId: sellerUid,
+            sellerEmail: "e2e.seller@easysalesexport.com",
+            participants: [buyerUid, sellerUid],
+            amount: 300000,
+            grossAmount: 300000,
+            platformFee: 15000,
+            netAmount: 285000,
+            productName: productTitle,
+            productDescription: "Prime Agricultural Products",
+            status: "funded",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            _version: 0
+        };
+        await runWithRetry(() => escrowTransactionsColl.doc(escrowIdDisputed).set(escrowDisputedData));
+        console.log(`✅ Seeded escrow transaction ${escrowIdDisputed}`);
+
+        // Seed E2E dispute for ORD-E2E-DISPUTED
         const disputeData = {
             id: disputeId,
-            orderId: orderId,
+            orderId: orderIdDisputed,
             buyerId: buyerUid,
             buyerEmail: "e2e.buyer@easysalesexport.com",
             buyerDetails: {
@@ -499,14 +615,14 @@ async function setupE2EUsers() {
                 {
                     event: "Dispute opened",
                     timestamp: new Date(),
-                    description: "Buyer raised dispute for order ORD-E2E-DELIVERED"
+                    description: "Buyer raised dispute for order ORD-E2E-DISPUTED"
                 }
             ],
             createdAt: new Date(),
             updatedAt: new Date(),
             _version: 0
         };
-        await db.collection("disputes").doc(disputeId).set(disputeData);
+        await runWithRetry(() => db.collection("disputes").doc(disputeId).set(disputeData));
         console.log(`✅ Seeded dispute ${disputeId}`);
     }
 

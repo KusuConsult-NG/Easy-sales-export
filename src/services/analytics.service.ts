@@ -110,6 +110,7 @@ export class AnalyticsService implements AnalyticsServiceContract {
                             "Content-Type": "application/json",
                         },
                         cache: "no-store",
+                        signal: AbortSignal.timeout(3000),
                     });
                     if (!res.ok) throw new Error(`Paystack API returned status ${res.status}`);
                     const json = await res.json();
@@ -312,6 +313,7 @@ export class AnalyticsService implements AnalyticsServiceContract {
                             "Content-Type": "application/json",
                         },
                         cache: "no-store",
+                        signal: AbortSignal.timeout(3000),
                     });
                     if (!res.ok) throw new Error(`Paystack API returned status ${res.status}`);
                     const json = await res.json();
@@ -504,14 +506,17 @@ export class AnalyticsService implements AnalyticsServiceContract {
                     fetch(`https://api.paystack.co/transaction?perPage=1&page=1&status=success`, {
                         headers: { Authorization: `Bearer ${secretKey}`, "Content-Type": "application/json" },
                         cache: "no-store",
+                        signal: AbortSignal.timeout(3000),
                     }),
                     fetch(`https://api.paystack.co/transaction?perPage=1&page=1&status=failed`, {
                         headers: { Authorization: `Bearer ${secretKey}`, "Content-Type": "application/json" },
                         cache: "no-store",
+                        signal: AbortSignal.timeout(3000),
                     }),
                     fetch(`https://api.paystack.co/transaction?perPage=1&page=1&status=abandoned`, {
                         headers: { Authorization: `Bearer ${secretKey}`, "Content-Type": "application/json" },
                         cache: "no-store",
+                        signal: AbortSignal.timeout(3000),
                     }),
                 ]);
 
@@ -544,6 +549,7 @@ export class AnalyticsService implements AnalyticsServiceContract {
                             "Content-Type": "application/json",
                         },
                         cache: "no-store",
+                        signal: AbortSignal.timeout(3000),
                     });
                     if (!res.ok) throw new Error(`Paystack total revenue API error: ${res.status}`);
                     const json = await res.json();

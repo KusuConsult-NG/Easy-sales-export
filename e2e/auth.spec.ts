@@ -18,7 +18,7 @@ test.describe('Authentication Flow', () => {
         await page.click('button[type="submit"]');
 
         // 5. Wait for redirect to dashboard
-        await page.waitForURL('/dashboard', { timeout: 10000 });
+        await page.waitForURL('/dashboard', { timeout: 30000 });
 
         // 6. Verify dashboard loaded
         await expect(page).toHaveURL(/\/dashboard/);

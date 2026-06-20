@@ -24,6 +24,23 @@ if (!getApps().length) {
 const auth = getAuth();
 const db = getFirestore();
 
+async function deleteQueryResultsInBatches(querySnapshot, collName) {
+    const docs = querySnapshot.docs;
+    if (docs.length === 0) return;
+    
+    console.log(`Cleaning up ${docs.length} document(s) in ${collName} in batches...`);
+    const chunkSize = 400;
+    for (let i = 0; i < docs.length; i += chunkSize) {
+        const chunk = docs.slice(i, i + chunkSize);
+        const batch = db.batch();
+        chunk.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+        await batch.commit();
+        console.log(`Deleted chunk ${Math.floor(i / chunkSize) + 1}/${Math.ceil(docs.length / chunkSize)} in ${collName}`);
+    }
+}
+
 const testUsers = [
     {
         email: "waveuser02@gmail.com",
@@ -97,13 +114,18 @@ async function seedTestUsers() {
             for (const coll of collectionsToClean) {
                 try {
                     const snap = await db.collection(coll).where("userId", "==", uid).get();
-                    for (const doc of snap.docs) {
-                        console.log(`Cleaning up old academy enrollment document in ${coll}: ${doc.id}`);
-                        await doc.ref.delete();
-                    }
+                    await deleteQueryResultsInBatches(snap, coll);
                 } catch (e) {
                     console.warn(`Warning cleaning up collection ${coll}:`, e.message);
                 }
+            }
+            // Reset course progress to ensure 'Mark as Complete' is visible
+            try {
+                const progressCoursesSnap = await db.collection(`user_progress/${uid}/courses`).get();
+                await deleteQueryResultsInBatches(progressCoursesSnap, `user_progress/${uid}/courses`);
+                await db.doc(`user_progress/${uid}`).delete();
+            } catch (e) {
+                console.warn(`Warning cleaning up user_progress:`, e.message);
             }
         }
 
