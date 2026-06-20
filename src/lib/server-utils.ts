@@ -1,4 +1,5 @@
 import { headers } from "next/headers";
+import { HUB_MODULES } from "@/config/modules.config";
 
 /**
  * Get the base URL (protocol + host) of the current request.
@@ -26,20 +27,11 @@ export function getModuleDomain(slug: string) {
         return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     }
 
-    switch (slug) {
-        case 'marketplace':
-            return 'https://marketplace.easysalesexport.com';
-        case 'cooperatives':
-            return 'https://cooperatives.easysalesexport.com';
-        case 'academy':
-            return 'https://academy.easysalesexport.com';
-        case 'export':
-            return 'https://export.easysalesexport.com';
-        case 'farm-nation':
-            return 'https://farm-nation.easysalesexport.com';
-        case 'wave':
-            return 'https://wave.easysalesexport.com';
-        default:
-            return 'https://easysalesexport.com';
+    // Look up domain dynamically from master configuration mapping
+    const mod = Object.values(HUB_MODULES).find(m => m.slug === slug);
+    if (mod) {
+        return `https://${mod.domain}`;
     }
+
+    return 'https://easysalesexport.com';
 }

@@ -26,7 +26,7 @@ export const HUB_MODULES: Record<string, ModuleConfig> = {
     WAVE: {
         id: 'mod_wave_001',
         name: 'WAVE Program',
-        domain: 'wave.easysalesexport.com',
+        domain: 'waveprogramme.com',
         slug: 'wave',
         version: '1.0.0',
         features: { hasAcademy: false, hasFinance: false, hasChat: true },
