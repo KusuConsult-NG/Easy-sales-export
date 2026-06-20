@@ -140,30 +140,37 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
     }
 
     async function handleResolve() {
+        console.log("handleResolve clicked. dispute ID:", dispute?.id, "resolution:", resolution, "notes:", adminNotes);
         if (!dispute || !adminNotes.trim()) {
+            console.warn("handleResolve early exit: empty dispute or adminNotes");
             showToast("Please provide admin notes", "error");
             return;
         }
 
         setResolving(true);
         try {
+            console.log("Calling updateDisputeStatusAction...");
             const result = await updateDisputeStatusAction(
                 dispute.id,
                 resolution,
                 adminNotes,
                 resolution === "partial_refund" ? parseFloat(refundAmount) : undefined
             );
+            console.log("updateDisputeStatusAction result:", result);
 
             if (result.success) {
                 showToast("Dispute resolved successfully", "success");
                 router.push("/admin/marketplace/disputes");
             } else {
+                console.error("updateDisputeStatusAction failed with error:", result.error);
                 showToast(result.error || "Failed to resolve dispute", "error");
             }
-        } catch (error) {
+        } catch (error: any) {
+            console.error("handleResolve caught error:", error);
             showToast("Failed to resolve dispute", "error");
         } finally {
             setResolving(false);
+            console.log("handleResolve finished resolving state reset.");
         }
     }
 

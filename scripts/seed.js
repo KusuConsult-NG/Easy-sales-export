@@ -10,7 +10,7 @@
  *   npm run seed:wave         # Seed only WAVE applications
  */
 
-const { seedAll, seedProducts, seedLandListings, seedWaveApplications, seedCooperatives } = require('./seed-database');
+const { seedAll, seedProducts, seedLandListings, seedWaveApplications, seedCooperatives, seedAnnouncements } = require('./seed-database');
 
 const command = process.argv[2];
 
@@ -27,6 +27,9 @@ async function main() {
             break;
         case 'cooperatives':
             await seedCooperatives();
+            break;
+        case 'announcements':
+            await seedAnnouncements();
             break;
         default:
             await seedAll();

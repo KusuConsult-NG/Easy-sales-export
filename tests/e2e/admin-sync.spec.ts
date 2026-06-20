@@ -12,7 +12,7 @@ test.describe('Admin Synchronization', () => {
     test.beforeEach(async ({ page }) => {
         // Authenticate as admin
         await page.goto('/auth/login');
-        await page.fill('input[name="email"]', process.env.TEST_ADMIN_EMAIL || process.env.TEST_ADMIN_EMAIL || 'e2e.admin@easysalesexport.test');
+        await page.fill('input[name="email"]', process.env.TEST_ADMIN_EMAIL || process.env.TEST_ADMIN_EMAIL || 'e2e.admin@easysalesexport.com');
         await page.fill('input[name="password"]', process.env.TEST_ADMIN_PASSWORD || 'E2eAdmin@2024!');
         await page.click('button[type="submit"]');
     });

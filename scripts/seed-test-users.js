@@ -92,6 +92,21 @@ async function seedTestUsers() {
         const userRef = db.collection('users').doc(uid);
         const doc = await userRef.get();
         
+        if (u.module === "academy") {
+            const collectionsToClean = ["enrollments", "academy_enrollments", "course_enrollments"];
+            for (const coll of collectionsToClean) {
+                try {
+                    const snap = await db.collection(coll).where("userId", "==", uid).get();
+                    for (const doc of snap.docs) {
+                        console.log(`Cleaning up old academy enrollment document in ${coll}: ${doc.id}`);
+                        await doc.ref.delete();
+                    }
+                } catch (e) {
+                    console.warn(`Warning cleaning up collection ${coll}:`, e.message);
+                }
+            }
+        }
+
         let serviceRegistrations = {};
         if (doc.exists && doc.data().serviceRegistrations) {
             serviceRegistrations = doc.data().serviceRegistrations;

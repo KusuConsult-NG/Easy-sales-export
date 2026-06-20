@@ -329,7 +329,8 @@ export class AnalyticsService implements AnalyticsServiceContract {
                         }
                     }
                     const totalPages = json.meta?.pageCount ?? 1;
-                    if (page >= totalPages || data.length === 0) break;
+                    // Guard: Cap at 5 pages (500 transactions) to prevent slow API response or timeouts
+                    if (page >= 5 || page >= totalPages || data.length === 0) break;
                     page++;
                 }
                 

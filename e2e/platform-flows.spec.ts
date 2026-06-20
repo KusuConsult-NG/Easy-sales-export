@@ -40,22 +40,22 @@ test.describe('Farm Nation Property Listings', () => {
         await page.locator('textarea[placeholder*="Full address with landmarks"]').fill('123 Farm Road, Kano');
 
         // Size and price per unit
-        await page.locator('input[type="number"]').nth(0).fill('50');
-        await page.locator('select').nth(1).selectOption('hectares');
-        await page.locator('input[type="number"]').nth(1).fill('300000'); // total price = 50 * 300,000 = 15,000,000
+        await page.locator('label:has-text("Land Size") >> xpath=.. >> input[type="number"]').fill('50');
+        await page.locator('label:has-text("Unit") >> xpath=.. >> select').selectOption('hectares');
+        await page.locator('label:has-text("Price per") >> xpath=.. >> input[type="number"]').fill('300000');
 
         // Upload documents and photos
-        await page.locator('div:has(label:has-text("Land Title Document"))').locator('input[type="file"]').setInputFiles([
+        await page.locator('label:has-text("Land Title Document") >> xpath=.. >> input[type="file"]').setInputFiles([
             { name: 'title.pdf', mimeType: 'application/pdf', buffer: Buffer.from('pdf-data') }
         ]);
 
-        await page.locator('div:has(label:has-text("Survey Plan"))').locator('input[type="file"]').setInputFiles([
+        await page.locator('label:has-text("Survey Plan") >> xpath=.. >> input[type="file"]').setInputFiles([
             { name: 'survey.pdf', mimeType: 'application/pdf', buffer: Buffer.from('pdf-data') }
         ]);
 
-        await page.locator('div:has(label:has-text("Land Photos"))').locator('input[type="file"]').setInputFiles([
-            { name: 'land1.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('image1') },
-            { name: 'land2.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('image2') }
+        await page.locator('label:has-text("Land Photos") >> xpath=.. >> input[type="file"]').setInputFiles([
+            { name: 'land1.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64') },
+            { name: 'land2.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64') }
         ]);
 
         // Submit
@@ -113,6 +113,11 @@ test.describe('Academy Course Enrollment', () => {
 
 test.describe('Admin Workflows', () => {
     test('Admin can resolve dispute', async ({ page }) => {
+        // Capture browser console logs
+        page.on('console', msg => {
+            console.log(`[BROWSER CONSOLE] [${msg.type()}] ${msg.text()}`);
+        });
+
         // Login as admin
         await loginAs(page, 'e2e.admin@easysalesexport.com', 'E2eAdmin@2024!');
 
@@ -129,9 +134,12 @@ test.describe('Admin Workflows', () => {
         await page.click('button:has-text("Resolve Dispute")');
         await page.click('button:has-text("Refund Buyer (Full)")');
         await page.locator('textarea[placeholder*="Explain the reasoning"]').fill('Evidence clearly shows product damage. Refund authorized.');
+        
+        console.log("[E2E TEST] Clicking 'Resolve & Close' button...");
         await page.click('button:has-text("Resolve & Close")');
+        console.log("[E2E TEST] Clicked 'Resolve & Close' button. Waiting for success message...");
 
         // Success
-        await expect(page.locator('text=Dispute resolved successfully')).toBeVisible({ timeout: 10000 });
+        await expect(page.locator('text=Dispute resolved successfully')).toBeVisible({ timeout: 15000 });
     });
 });

@@ -65,9 +65,15 @@ const USERS_TO_SEED = [
         lastName: "Seller",
         fullName: "E2E Seller",
         phone: "08099999904",
-        roles: ["seller", "general_user"],
+        roles: ["seller", "general_user", "farmer"],
         serviceRegistrations: {
             marketplace: {
+                status: "approved",
+                paymentStatus: "completed",
+                appliedAt: new Date(),
+                approvedAt: new Date()
+            },
+            farmNation: {
                 status: "approved",
                 paymentStatus: "completed",
                 appliedAt: new Date(),
@@ -303,6 +309,46 @@ async function setupE2EUsers() {
             await db.collection("products").doc(p.id).set(p);
             console.log(`✅ Successfully seeded product: ${p.title} (${p.id})`);
         }
+
+        // Seed E2E land listing for Farm Nation property browsing
+        console.log("\nSeeding E2E land listings...");
+        const landListingsColl = db.collection("land_listings");
+        
+        // Clean old E2E land listings
+        const oldLandSnap = await landListingsColl.where("ownerId", "==", sellerUid).get();
+        for (const doc of oldLandSnap.docs) {
+            console.log(`Deleting old E2E land listing: ${doc.id}`);
+            await doc.ref.delete();
+        }
+
+        const landListing = {
+            id: "sample-land-listing-e2e",
+            ownerId: sellerUid,
+            ownerName: "E2E Seller",
+            ownerEmail: "e2e.seller@easysalesexport.com",
+            title: "Prime Farmland in Kano",
+            description: "Fertile land perfect for farming and livestock",
+            location: {
+                state: "Kano",
+                lga: "Kano Municipal",
+                address: "123 Farm Road, Kano"
+            },
+            size: 50,
+            price: 15000000, // ₦15,000,000 (under 20m)
+            category: "farmland",
+            soilType: "loamy",
+            waterSource: "borehole",
+            images: ["/placeholder-land.jpg"],
+            documents: ["title.pdf"],
+            status: "verified",
+            type: "sale",
+            availableForSale: true,
+            createdAt: new Date(),
+            updatedAt: new Date()
+        };
+
+        await landListingsColl.doc(landListing.id).set(landListing);
+        console.log(`✅ Successfully seeded land listing: ${landListing.title}`);
     }
 
     // 9.5. Seed E2E delivered order for dispute/confirm receipt flow testing
@@ -345,6 +391,7 @@ async function setupE2EUsers() {
         }
         
         const orderId = "ORD-E2E-DELIVERED";
+        const disputeId = "DISPUTE-E2E-DELIVERED";
         const orderData = {
             id: orderId,
             orderId: orderId,
@@ -376,7 +423,8 @@ async function setupE2EUsers() {
             },
             paymentMethod: "escrow",
             paymentStatus: "escrow_held",
-            status: "delivered",
+            status: "disputed",
+            disputeId: disputeId,
             buyerConfirmed: false,
             escrowReleased: false,
             createdAt: new Date(),
@@ -386,6 +434,80 @@ async function setupE2EUsers() {
         
         await ordersColl.doc(orderId).set(orderData);
         console.log(`✅ Seeded delivered order ${orderId} for buyer ${buyerUid}`);
+
+        // Seed E2E escrow transaction
+        const escrowTransactionsColl = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS);
+        try {
+            const oldEscrowSnap = await escrowTransactionsColl.where("orderId", "==", orderId).get();
+            for (const doc of oldEscrowSnap.docs) {
+                await doc.ref.delete();
+            }
+        } catch (err: any) {
+            console.warn(`Warning deleting old escrow: ${err.message}`);
+        }
+
+        const sellerShort = sellerUid.substring(0, 5);
+        const escrowId = `ESC-${orderId}-${sellerShort}`;
+        const escrowData = {
+            id: escrowId,
+            orderId: orderId,
+            buyerId: buyerUid,
+            buyerEmail: "e2e.buyer@easysalesexport.com",
+            sellerId: sellerUid,
+            sellerEmail: "e2e.seller@easysalesexport.com",
+            participants: [buyerUid, sellerUid],
+            amount: 300000,
+            grossAmount: 300000,
+            platformFee: 15000,
+            netAmount: 285000,
+            productName: productTitle,
+            productDescription: "Prime Agricultural Products",
+            status: "funded",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            _version: 0
+        };
+        await escrowTransactionsColl.doc(escrowId).set(escrowData);
+        console.log(`✅ Seeded escrow transaction ${escrowId}`);
+
+        // Seed E2E dispute
+        const disputeData = {
+            id: disputeId,
+            orderId: orderId,
+            buyerId: buyerUid,
+            buyerEmail: "e2e.buyer@easysalesexport.com",
+            buyerDetails: {
+                firstName: "E2E",
+                lastName: "Buyer",
+                email: "e2e.buyer@easysalesexport.com",
+                phoneNumber: "+2348099999903"
+            },
+            sellerId: sellerUid,
+            sellerEmail: "e2e.seller@easysalesexport.com",
+            sellerDetails: {
+                firstName: "E2E",
+                lastName: "Seller",
+                email: "e2e.seller@easysalesexport.com",
+                phoneNumber: "+2348099999904"
+            },
+            reason: "damaged",
+            description: "The premium yams arrived completely damaged and moldy. Ineligible for resale.",
+            evidenceUrls: ["https://res.cloudinary.com/demo/image/upload/sample.jpg"],
+            status: "open",
+            adminNotes: "",
+            timeline: [
+                {
+                    event: "Dispute opened",
+                    timestamp: new Date(),
+                    description: "Buyer raised dispute for order ORD-E2E-DELIVERED"
+                }
+            ],
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            _version: 0
+        };
+        await db.collection("disputes").doc(disputeId).set(disputeData);
+        console.log(`✅ Seeded dispute ${disputeId}`);
     }
 
     console.log("\n✅ E2E user provisioning completed successfully!");

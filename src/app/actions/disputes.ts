@@ -16,6 +16,46 @@ import { invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { smsDisputeResolved } from "@/lib/africastalking";
 import { pushDisputeResolved } from "@/lib/fcm";
 
+function serializeTimestamp(ts: any): string | null {
+    if (!ts) return null;
+    if (typeof ts.toDate === "function") {
+        return ts.toDate().toISOString();
+    }
+    const seconds = ts.seconds ?? ts._seconds;
+    const nanoseconds = ts.nanoseconds ?? ts._nanoseconds;
+    if (typeof seconds === "number") {
+        return new Date(seconds * 1000 + Math.floor((nanoseconds || 0) / 1000000)).toISOString();
+    }
+    if (ts instanceof Date) {
+        return ts.toISOString();
+    }
+    if (typeof ts === "string") {
+        return ts;
+    }
+    if (typeof ts === "number") {
+        return new Date(ts).toISOString();
+    }
+    return null;
+}
+
+function serializeDisputeDoc(docId: string, data: any): any {
+    if (!data) return null;
+    const timeline = Array.isArray(data.timeline)
+        ? data.timeline.map((t: any) => ({
+              ...t,
+              timestamp: serializeTimestamp(t.timestamp)
+          }))
+        : [];
+    return {
+        ...data,
+        id: docId,
+        createdAt: serializeTimestamp(data.createdAt),
+        updatedAt: serializeTimestamp(data.updatedAt),
+        resolvedAt: serializeTimestamp(data.resolvedAt),
+        timeline
+    };
+}
+
 
 /**
  * Create a new dispute for an order
@@ -124,14 +164,7 @@ async function _getBuyerDisputesAction() { let sessionResult;
             .limit(100)
             .get();
 
-        const disputes: Dispute[] = snapshot.docs.map(doc => { const data = doc.data();
-            return {
-                ...data,
-                id: doc.id,
-                createdAt: (data.createdAt as Timestamp)?.toDate ? (data.createdAt as Timestamp).toDate().toISOString() : new Date().toISOString(),
-                updatedAt: (data.updatedAt as Timestamp)?.toDate ? (data.updatedAt as Timestamp).toDate().toISOString() : new Date().toISOString(),
-                resolvedAt: (data.resolvedAt as Timestamp)?.toDate ? (data.resolvedAt as Timestamp).toDate().toISOString() : undefined };
-        }) as any as Dispute[];
+        const disputes: Dispute[] = snapshot.docs.map(doc => serializeDisputeDoc(doc.id, doc.data())) as any[] as Dispute[];
 
         return { error: null, success: true as const, data: disputes };
     } catch (error) { logger.error("Get buyer disputes error:", {
@@ -159,14 +192,7 @@ async function _getSellerDisputesAction() { let sessionResult;
             .limit(100)
             .get();
 
-        const disputes: Dispute[] = snapshot.docs.map(doc => { const data = doc.data();
-            return {
-                ...data,
-                id: doc.id,
-                createdAt: (data.createdAt as Timestamp)?.toDate ? (data.createdAt as Timestamp).toDate().toISOString() : new Date().toISOString(),
-                updatedAt: (data.updatedAt as Timestamp)?.toDate ? (data.updatedAt as Timestamp).toDate().toISOString() : new Date().toISOString(),
-                resolvedAt: (data.resolvedAt as Timestamp)?.toDate ? (data.resolvedAt as Timestamp).toDate().toISOString() : undefined };
-        }) as any as Dispute[];
+        const disputes: Dispute[] = snapshot.docs.map(doc => serializeDisputeDoc(doc.id, doc.data())) as any[] as Dispute[];
 
         return { error: null, success: true as const, data: disputes };
     } catch (error) { logger.error("Get seller disputes error:", {
@@ -219,14 +245,7 @@ async function _getAdminDisputesAction(options: { status?: "open" | "under_revie
         }
 
         const snapshot = await queryRef.limit(fetchLimit).get();
-        let disputes: (Dispute & { buyerDetails?: any; sellerDetails?: any })[] = snapshot.docs.map(doc => { const data = doc.data();
-            return {
-                ...data,
-                id: doc.id,
-                createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate().toISOString() : null,
-                updatedAt: data.updatedAt ? (data.updatedAt as Timestamp).toDate().toISOString() : null,
-                resolvedAt: data.resolvedAt ? (data.resolvedAt as Timestamp).toDate().toISOString() : null };
-        }) as any[];
+        let disputes: (Dispute & { buyerDetails?: any; sellerDetails?: any })[] = snapshot.docs.map(doc => serializeDisputeDoc(doc.id, doc.data())) as any[];
 
         // 2. Batch fetch user profiles for bank details and contact info
         const participantIds = Array.from(new Set(disputes.flatMap((d: any) => [d.buyerId, d.sellerId].filter(Boolean))));
@@ -324,11 +343,7 @@ async function _getDisputeByIdAction(disputeId: string) { let sessionResult;
         if (!isAdminUser && !isBuyer && !isSeller) { return { success: false as const, error: "Not authorized to view this dispute", data: null };
         }
 
-        const disputeData: Dispute & { buyerDetails?: any; sellerDetails?: any } = { ...dispute,
-            id: disputeDoc.id,
-            createdAt: (dispute.createdAt as unknown as Timestamp)?.toDate ? (dispute.createdAt as unknown as Timestamp).toDate() : dispute.createdAt,
-            updatedAt: (dispute.updatedAt as unknown as Timestamp)?.toDate ? (dispute.updatedAt as unknown as Timestamp).toDate() : dispute.updatedAt,
-            resolvedAt: (dispute.resolvedAt as unknown as Timestamp)?.toDate ? (dispute.resolvedAt as unknown as Timestamp).toDate() : dispute.resolvedAt } as any;
+        const disputeData: Dispute & { buyerDetails?: any; sellerDetails?: any } = serializeDisputeDoc(disputeDoc.id, dispute);
 
         // Fetch profiles for detail view
         if (dispute.buyerId) {
@@ -448,6 +463,13 @@ async function _updateDisputeStatusAction(
                 throw new Error(`Escrow is already ${status} and cannot be resolved.`);
             }
 
+            // Read wallet document before performing any transaction writes
+            const targetId = resolution === "release_seller" ? freshDispute.sellerId : freshDispute.buyerId;
+            if (!targetId) throw new Error("Target beneficiary ID not found on dispute");
+
+            const walletRef = db.collection(COLLECTIONS.WALLETS).doc(targetId);
+            const walletSnap = await tx.get(walletRef);
+
             const updateData: Record<string, unknown> = { status: "resolved",
                 resolution,
                 adminId: userId,
@@ -485,12 +507,7 @@ async function _updateDisputeStatusAction(
                 _version: FieldValue.increment(1)
             });
 
-            // Credit the target user's wallet balance atomically
-            const targetId = resolution === "release_seller" ? freshDispute.sellerId : freshDispute.buyerId;
-            if (!targetId) throw new Error("Target beneficiary ID not found on dispute");
-
-            const walletRef = db.collection(COLLECTIONS.WALLETS).doc(targetId);
-            const walletSnap = await tx.get(walletRef);
+            // Credit the target user's wallet balance atomically using the pre-fetched walletSnap
             const escrowAmount = freshEscrow.amount ?? dispute.refundAmount ?? freshDispute.refundAmount ?? 0;
 
             if (!walletSnap.exists) {

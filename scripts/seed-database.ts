@@ -600,7 +600,8 @@ export async function seedAnnouncements() {
     }
     console.log("🌱 Seeding announcements...");
     for (const announcement of sampleAnnouncements) {
-        await db.collection(COLLECTIONS.ANNOUNCEMENTS).add(announcement);
+        const docId = `announcement-${announcement.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+        await db.collection(COLLECTIONS.ANNOUNCEMENTS).doc(docId).set(announcement);
     }
     console.log(`✅ Seeded ${sampleAnnouncements.length} announcements`);
 }
