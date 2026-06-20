@@ -24,7 +24,7 @@ test.describe('Farm Nation Property Listings', () => {
 
     test('Seller can list a new property', async ({ page }) => {
         // Login as seller
-        await loginAs(page, 'e2e.seller@easysalesexport.test', 'E2eSeller@2024!');
+        await loginAs(page, 'e2e.seller@easysalesexport.com', 'E2eSeller@2024!');
 
         // Navigate to list property
         await page.goto('/farm-nation/list-land');
@@ -114,7 +114,7 @@ test.describe('Academy Course Enrollment', () => {
 test.describe('Admin Workflows', () => {
     test('Admin can resolve dispute', async ({ page }) => {
         // Login as admin
-        await loginAs(page, 'e2e.admin@easysalesexport.test', 'E2eAdmin@2024!');
+        await loginAs(page, 'e2e.admin@easysalesexport.com', 'E2eAdmin@2024!');
 
         // Navigate to disputes
         await page.goto('/admin/marketplace/disputes');

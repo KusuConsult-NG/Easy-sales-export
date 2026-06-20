@@ -54,7 +54,7 @@ test.describe('Registration → MFA → Dashboard Flow', () => {
 
     test('should setup and enable MFA', async ({ page }) => {
         // Login with existing account
-        await loginUser(page, process.env.TEST_USER_EMAIL || 'e2e.user@easysalesexport.test', process.env.TEST_USER_PASSWORD || 'E2eTest@2024!');
+        await loginUser(page, process.env.TEST_USER_EMAIL || 'e2e.user@easysalesexport.com', process.env.TEST_USER_PASSWORD || 'E2eTest@2024!');
 
         // Navigate to MFA settings
         await page.goto('/settings/security/mfa');
@@ -80,7 +80,7 @@ test.describe('Registration → MFA → Dashboard Flow', () => {
 
     test('should access MFA-protected routes', async ({ page }) => {
         // Login as admin
-        await loginUser(page, process.env.TEST_ADMIN_EMAIL || 'e2e.admin@easysalesexport.test', process.env.TEST_ADMIN_PASSWORD || 'E2eAdmin@2024!');
+        await loginUser(page, process.env.TEST_ADMIN_EMAIL || 'e2e.admin@easysalesexport.com', process.env.TEST_ADMIN_PASSWORD || 'E2eAdmin@2024!');
 
         // Try to access admin route (MFA protected)
         await page.goto('/admin/cooperatives/loans');
@@ -108,7 +108,7 @@ test.describe('Registration → MFA → Dashboard Flow', () => {
 
 test.describe('Navigation and Basic Functionality', () => {
     test.beforeEach(async ({ page }) => {
-        await loginUser(page, process.env.TEST_USER_EMAIL || 'e2e.user@easysalesexport.test', process.env.TEST_USER_PASSWORD || 'E2eTest@2024!');
+        await loginUser(page, process.env.TEST_USER_EMAIL || 'e2e.user@easysalesexport.com', process.env.TEST_USER_PASSWORD || 'E2eTest@2024!');
     });
 
     test('should navigate to all main pages', async ({ page }) => {

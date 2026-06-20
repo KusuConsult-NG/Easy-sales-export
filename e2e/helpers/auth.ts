@@ -30,6 +30,6 @@ export const USERS = {
     wave:        { email: 'waveuser02@gmail.com',         password: 'WAVE@2026' },
     export:      { email: 'exportwindowuser@gmail.com',   password: 'Exportwindow@2026' },
     // General test users (new, no module approval)
-    user:        { email: 'e2e.user@easysalesexport.test',  password: 'E2eTest@2024!' },
-    admin:       { email: 'e2e.admin@easysalesexport.test', password: 'E2eAdmin@2024!' },
+    user:        { email: 'e2e.user@easysalesexport.com',  password: 'E2eTest@2024!' },
+    admin:       { email: 'e2e.admin@easysalesexport.com', password: 'E2eAdmin@2024!' },
 } as const;

@@ -92,6 +92,7 @@ export const OrderItemSchema = z.object({
 
 export const OrderSchema = z.object({
     id: z.string(),
+    orderId: z.string().optional(),
     orderNumber: z.string().default("ORDER-UNKNOWN"),
     buyerId: z.string(),
     sellerId: z.string(),

@@ -642,6 +642,7 @@ export default function CheckoutPage() {
     useEffect(() => {
         async function fetchFee() {
             if (cart.length === 0) return;
+            console.log("[CheckoutPage] fetchFee called, cart length:", cart.length, "distance:", distance, "weight:", weight, "isWithinCityCenter:", isWithinCityCenter);
             setIsCalculatingFee(true);
             try {
                 const cartItems: CartItem[] = cart.map(item => ({

@@ -818,9 +818,13 @@ export const createBankTransferOrderAction = withSafeAction("createBankTransferO
  * Calculate Delivery Fee (Server-Side)
  */
 async function _calculateDeliveryAction(items: CartItem[], location?: any): Promise<ActionResponse<{ fee: number }>> { 
+    console.log("[Server Actions] _calculateDeliveryAction called with location:", location);
     try {
+        console.log("[Server Actions] Fetching platform fees...");
         const fees = await getPlatformFees();
+        console.log("[Server Actions] Platform fees fetched:", fees);
         const fee = calculateDeliveryFee(items, location, fees);
+        console.log("[Server Actions] Calculated fee:", fee);
         return { error: null, success: true as const, data: { fee } };
     } catch (error: any) { 
         logger.error("Calculate delivery fee error:", error);

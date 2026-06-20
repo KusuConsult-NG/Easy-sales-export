@@ -11,7 +11,7 @@ import { COLLECTIONS } from "../src/lib/types/firestore";
 
 const USERS_TO_SEED = [
     {
-        email: "e2e.user@easysalesexport.test",
+        email: "e2e.user@easysalesexport.com",
         password: "E2eTest@2024!",
         firstName: "E2E",
         lastName: "Testuser",
@@ -32,7 +32,7 @@ const USERS_TO_SEED = [
         }
     },
     {
-        email: "e2e.admin@easysalesexport.test",
+        email: "e2e.admin@easysalesexport.com",
         password: "E2eAdmin@2024!",
         firstName: "E2E",
         lastName: "Admin",
@@ -42,7 +42,7 @@ const USERS_TO_SEED = [
         serviceRegistrations: {}
     },
     {
-        email: "e2e.buyer@easysalesexport.test",
+        email: "e2e.buyer@easysalesexport.com",
         password: "E2eBuyer@2024!",
         firstName: "E2E",
         lastName: "Buyer",
@@ -59,7 +59,7 @@ const USERS_TO_SEED = [
         }
     },
     {
-        email: "e2e.seller@easysalesexport.test",
+        email: "e2e.seller@easysalesexport.com",
         password: "E2eSeller@2024!",
         firstName: "E2E",
         lastName: "Seller",
@@ -269,7 +269,7 @@ async function setupE2EUsers() {
     }
 
     // 9. Seed E2E products non-destructively
-    const sellerUid = userUids["e2e.seller@easysalesexport.test"];
+    const sellerUid = userUids["e2e.seller@easysalesexport.com"];
     if (sellerUid) {
         console.log("\nSeeding E2E products...");
         const products = [
@@ -306,7 +306,7 @@ async function setupE2EUsers() {
     }
 
     // 9.5. Seed E2E delivered order for dispute/confirm receipt flow testing
-    const buyerUid = userUids["e2e.buyer@easysalesexport.test"];
+    const buyerUid = userUids["e2e.buyer@easysalesexport.com"];
     if (buyerUid && sellerUid) {
         console.log("\nSeeding E2E delivered order for dispute testing...");
         const ordersColl = db.collection("marketplaceOrders");
@@ -315,6 +315,25 @@ async function setupE2EUsers() {
         const oldOrdersSnap = await ordersColl.where("buyerId", "==", buyerUid).get();
         for (const doc of oldOrdersSnap.docs) {
             await doc.ref.delete();
+        }
+
+        // Clean old E2E disputes
+        try {
+            const disputesColl = db.collection("disputes");
+            // First, delete by buyerId (for general cleanup of the buyer)
+            const oldDisputesSnap = await disputesColl.where("buyerId", "==", buyerUid).get();
+            for (const doc of oldDisputesSnap.docs) {
+                console.log(`Deleting old dispute document by buyerId: ${doc.id}`);
+                await doc.ref.delete();
+            }
+            // Second, delete by orderId (ORD-E2E-DELIVERED) since buyerUid changes every setup run
+            const oldDisputesByOrderSnap = await disputesColl.where("orderId", "==", "ORD-E2E-DELIVERED").get();
+            for (const doc of oldDisputesByOrderSnap.docs) {
+                console.log(`Deleting old dispute document by orderId: ${doc.id}`);
+                await doc.ref.delete();
+            }
+        } catch (err: any) {
+            console.warn(`Warning deleting old disputes: ${err.message}`);
         }
         
         const productsSnap = await db.collection("products").where("status", "==", "active").limit(1).get();
