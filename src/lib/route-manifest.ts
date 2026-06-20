@@ -64,7 +64,13 @@ export const PROTECTED_PATHS = [
     "/verify-payment",
     // Academy
     "/academy/setup",
-    "/academy/(member)",
+    "/academy/dashboard",
+    "/academy/progress",
+    "/academy/my-courses",
+    "/academy/courses",
+    "/academy/live",
+    "/academy/application",
+    "/academy/payment",
     "/setup",
     // Farm Nation
     "/farm-nation/onboarding",

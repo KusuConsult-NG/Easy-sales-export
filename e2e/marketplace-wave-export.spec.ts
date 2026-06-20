@@ -19,20 +19,20 @@ test.describe('Marketplace Flow', () => {
     });
 
     test('should browse marketplace products', async ({ page }) => {
-        await page.goto('/marketplace');
+        await page.goto('/marketplace/products');
 
         // Page should load
-        await expect(page.locator('h1')).toContainText(/Marketplace|Products/i);
+        await expect(page.locator('h1')).toContainText(/Marketplace|Products|Easy Market/i);
 
         // Products grid or list should be visible
-        const productsContainer = page.locator('[data-testid="products-grid"], .grid, .product-list');
+        const productsContainer = page.locator('[data-testid="products-grid"], .grid, .product-list').first();
         await expect(productsContainer).toBeVisible({ timeout: 5000 });
 
         console.log('✅ Marketplace page loaded with products');
     });
 
     test('should filter products by category', async ({ page }) => {
-        await page.goto('/marketplace');
+        await page.goto('/marketplace/products');
 
         // Look for category buttons/tabs
         const categoryButtons = page.locator('button:has-text("Yam"), button:has-text("Sesame"), button:has-text("Hibiscus")');
@@ -47,7 +47,7 @@ test.describe('Marketplace Flow', () => {
     });
 
     test('should view product details', async ({ page }) => {
-        await page.goto('/marketplace');
+        await page.goto('/marketplace/products');
 
         // Click first product
         const firstProduct = page.locator('.product-card, [data-testid="product-card"]').first();
@@ -65,13 +65,21 @@ test.describe('Marketplace Flow', () => {
     });
 
     test('should proceed to checkout', async ({ page }) => {
-        await page.goto('/marketplace');
+        await page.goto('/marketplace/products');
 
-        // Find and click "Buy Now" or "Checkout" button
-        const buyButton = page.locator('button:has-text("Buy"), button:has-text("Checkout"), button:has-text("Purchase")').first();
+        // Click first product
+        const firstProduct = page.locator('.product-card, [data-testid="product-card"]').first();
 
-        if (await buyButton.count() > 0) {
-            await buyButton.click();
+        if (await firstProduct.count() > 0) {
+            await firstProduct.click();
+
+            // Add to cart
+            const addToCartButton = page.locator('button:has-text("Add to Cart")');
+            await expect(addToCartButton).toBeVisible({ timeout: 5000 });
+            await addToCartButton.click();
+
+            // Go to checkout page (waits for automatic client-side transition to checkout)
+            await expect(page).toHaveURL(/.*checkout/, { timeout: 10000 });
 
             // Should navigate to checkout or show checkout modal
             await expect(
@@ -94,14 +102,14 @@ test.describe('WAVE Application Flow', () => {
         await expect(page.locator('h1')).toContainText(/WAVE|Women.*Agriculture/i);
 
         // Apply button should be visible
-        const applyButton = page.locator('button:has-text("Apply"), a:has-text("Apply")');
+        const applyButton = page.locator('button:has-text("Apply"), a:has-text("Apply")').first();
         await expect(applyButton).toBeVisible({ timeout: 5000 });
 
         console.log('✅ WAVE page loaded');
     });
 
     test('should fill WAVE application form', async ({ page }) => {
-        await page.goto('/wave/apply');
+        await page.goto('/wave/application');
 
         // Fill application form
         const nameInput = page.locator('input[name="fullName"], input[name="name"]');
@@ -109,7 +117,7 @@ test.describe('WAVE Application Flow', () => {
             await nameInput.fill('Jane Farmer');
 
             await page.fill('input[type="email"]', 'jane@example.com');
-            await page.fill('input[name="phone"]', '+2348012345678');
+            await page.fill('input[name="phone"]', '+23480' + Math.floor(1000000 + Math.random() * 9000000));
 
             // Select experience
             const experienceSelect = page.locator('select[name="experience"], select[name="farmingExperience"]');
@@ -153,7 +161,7 @@ test.describe('Export Window Flow', () => {
         await page.goto('/export/windows');
 
         // List or grid should be visible
-        await expect(page.locator('h1, h2')).toContainText(/Export.*Window|Export.*Order/i);
+        await expect(page.locator('h1, h2').first()).toContainText(/Export.*Window|Export.*Order/i);
 
         console.log('✅ Export windows list displayed');
     });

@@ -47,6 +47,8 @@ export async function submitLoanApplication(
                 ...validated,
                 userId: session.user.id,
                 status: LoanStatus.PENDING,
+                guarantorVerified: true, // General loans have no guarantor and are pre-verified
+                appliedAt: FieldValue.serverTimestamp(),
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
                 approvedBy: null,

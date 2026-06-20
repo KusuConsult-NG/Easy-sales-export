@@ -1,3 +1,7 @@
+import dotenv from "dotenv";
+import path from "path";
+dotenv.config({ path: path.resolve(__dirname, "../.env.production.local") });
+
 import { db } from "../src/lib/firebase-admin";
 import * as fs from "fs";
 
@@ -46,7 +50,14 @@ async function healPaystackParity() {
             await db.collection("processedPayments").add(paymentData);
             console.log(`Created processedPayment for ${tx.reference}`);
         } else {
-            console.log(`Payment ${tx.reference} already exists in DB somehow.`);
+            const doc = existingPaymentSnap.docs[0];
+            const data = doc.data();
+            if (data.status !== "completed") {
+                await db.collection("processedPayments").doc(doc.id).update({ status: "completed" });
+                console.log(`Updated status to completed for payment ${tx.reference}`);
+            } else {
+                console.log(`Payment ${tx.reference} already exists in DB with status completed.`);
+            }
         }
 
         // 2. If user exists, update their cooperative membership

@@ -87,6 +87,7 @@ export default function MyCoursesPage() {
                         {inProgressCourses.map((course) => (
                             <div
                                 key={course.courseId}
+                                data-testid="enrolled-course"
                                 className="bg-white rounded-xl overflow-hidden border border-slate-200 hover:shadow-lg transition-shadow"
                             >
                                 {/* Thumbnail */}
@@ -109,7 +110,10 @@ export default function MyCoursesPage() {
                                                 {course.completedLessons}/{course.totalLessons} lessons
                                             </span>
                                         </div>
-                                        <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                                        <div 
+                                            data-testid="progress-bar"
+                                            className="h-2 bg-slate-200 rounded-full overflow-hidden"
+                                        >
                                             <div
                                                 className="h-full bg-blue-600 rounded-full transition-all"
                                                 style={{ width: `${course.progress}%` }}
@@ -148,6 +152,7 @@ export default function MyCoursesPage() {
                         {completedCourses.map((course) => (
                             <div
                                 key={course.courseId}
+                                data-testid="enrolled-course"
                                 className="bg-white rounded-xl overflow-hidden border border-green-200 relative"
                             >
                                 {/* Completed Badge */}

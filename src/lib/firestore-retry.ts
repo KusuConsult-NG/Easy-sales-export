@@ -24,6 +24,8 @@ if (!(globalThis as any).__FIRESTORE_PROTOTYPE_WRAPPED__) {
                    errMsg.includes("Connection closed") ||
                    errMsg.includes("Socket closed") ||
                    errMsg.includes("UNAVAILABLE") ||
+                   errMsg.includes("DEADLINE_EXCEEDED") ||
+                   errMsg.includes("deadline exceeded") ||
                    errMsg.includes("stream terminated") ||
                    errMsg.includes("ERR_STREAM_PREMATURE_CLOSE");
         };

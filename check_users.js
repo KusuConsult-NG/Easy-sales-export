@@ -31,14 +31,35 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 
 async function main() {
-    const email = "hadizasabo38@gmail.com";
-    console.log(`=== SEARCHING FOR SELLER WITH EMAIL: ${email} ===`);
-    const usersSnap = await db.collection("users").where("email", "==", email).get();
-    console.log(`Found ${usersSnap.size} user records:`);
-    usersSnap.docs.forEach(doc => {
-        console.log(`Document ID: ${doc.id}`);
-        console.log(`Data:`, JSON.stringify(doc.data(), null, 2));
-    });
+    const emails = [
+        "e2e.admin@easysalesexport.test",
+        "e2e.user@easysalesexport.test",
+        "e2e.buyer@easysalesexport.test",
+        "e2e.seller@easysalesexport.test"
+    ];
+    for (const email of emails) {
+        console.log(`=== SEARCHING FOR EMAIL: ${email} ===`);
+        const usersSnap = await db.collection("users").where("email", "==", email).get();
+        console.log(`Found ${usersSnap.size} user records in users:`);
+        usersSnap.docs.forEach(doc => {
+            console.log(`Document ID: ${doc.id}`);
+            console.log(`Data:`, JSON.stringify(doc.data(), null, 2));
+        });
+
+        const coopSnap = await db.collection("cooperative_members").where("email", "==", email).get();
+        console.log(`Found ${coopSnap.size} records in cooperative_members:`);
+        coopSnap.docs.forEach(doc => {
+            console.log(`Document ID: ${doc.id}`);
+            console.log(`Data:`, JSON.stringify(doc.data(), null, 2));
+        });
+        
+        try {
+            const authUser = await admin.auth().getUserByEmail(email);
+            console.log(`Auth UID: ${authUser.uid}, Email: ${authUser.email}`);
+        } catch (e) {
+            console.log(`Auth lookup failed for ${email}:`, e.message);
+        }
+    }
 }
 
 main().catch(console.error);

@@ -1422,14 +1422,24 @@ export async function autoEnrollPaidUser(userId: string, userPlan: string) {
 
         if (eligibleCourses.length === 0) return;
 
-        // 3. Ensure enrollment in all eligible courses
-        for (const courseDoc of eligibleCourses) {
+        // 3. Parallel fetch existing records to avoid sequential Firestore calls
+        const [progressSubSnap, progressSnap, enrollmentsSnap] = await Promise.all([
+            db.collection(`user_progress/${userId}/courses`).get(),
+            db.collection(COLLECTIONS.COURSE_PROGRESS).where("userId", "==", userId).get(),
+            db.collection(COLLECTIONS.COURSE_ENROLLMENTS).where("userId", "==", userId).get()
+        ]);
+
+        const existingProgressSubs = new Set(progressSubSnap.docs.map(doc => doc.id));
+        const existingProgresses = new Set(progressSnap.docs.map(doc => doc.id));
+        const existingEnrollments = new Set(enrollmentsSnap.docs.map(doc => doc.data().courseId));
+
+        // 4. Ensure enrollment in all eligible courses in parallel
+        await Promise.all(eligibleCourses.map(async (courseDoc) => {
             const courseId = courseDoc.id;
 
             // Place A: user_progress subcollection
-            const progressSubRef = db.doc(`user_progress/${userId}/courses/${courseId}`);
-            const progressSubDoc = await progressSubRef.get();
-            if (!progressSubDoc.exists) {
+            if (!existingProgressSubs.has(courseId)) {
+                const progressSubRef = db.doc(`user_progress/${userId}/courses/${courseId}`);
                 await progressSubRef.set({
                     userId,
                     courseId,
@@ -1449,9 +1459,9 @@ export async function autoEnrollPaidUser(userId: string, userPlan: string) {
             }
 
             // Place B: course_progress
-            const progressRef = db.collection(COLLECTIONS.COURSE_PROGRESS).doc(`${userId}_${courseId}`);
-            const progressDoc = await progressRef.get();
-            if (!progressDoc.exists) {
+            const progressRefId = `${userId}_${courseId}`;
+            if (!existingProgresses.has(progressRefId)) {
+                const progressRef = db.collection(COLLECTIONS.COURSE_PROGRESS).doc(progressRefId);
                 await progressRef.set({
                     userId,
                     courseId,
@@ -1466,12 +1476,7 @@ export async function autoEnrollPaidUser(userId: string, userPlan: string) {
             }
 
             // Place C: course_enrollments
-            const enrollmentsSnap = await db.collection(COLLECTIONS.COURSE_ENROLLMENTS)
-                .where("userId", "==", userId)
-                .where("courseId", "==", courseId)
-                .get();
-
-            if (enrollmentsSnap.empty) {
+            if (!existingEnrollments.has(courseId)) {
                 await db.collection(COLLECTIONS.COURSE_ENROLLMENTS).add({
                     userId,
                     courseId,
@@ -1481,7 +1486,7 @@ export async function autoEnrollPaidUser(userId: string, userPlan: string) {
                     updatedAt: FieldValue.serverTimestamp()
                 });
             }
-        }
+        }));
     } catch (err) {
         logger.error("[autoEnrollPaidUser] Error during auto-enrollment:", err);
     }

@@ -111,15 +111,15 @@ export async function runSystemHealthDiagnostic(limit: number = 2000): Promise<
         let orphanedApps = 0;
         const desyncedRegs = 0;
         const waveSnap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).limit(50).get();
-        for (const doc of waveSnap.docs) {
+        const userChecks = await Promise.all(waveSnap.docs.map(async (doc) => {
             const userId = doc.data().userId;
             if (!userId) {
-                orphanedApps++;
-            } else {
-                const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-                if (!userDoc.exists) orphanedApps++;
+                return true;
             }
-        }
+            const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+            return !userDoc.exists;
+        }));
+        orphanedApps = userChecks.filter(Boolean).length;
 
         // 6. Feature Toggles
         const featureToggles: Record<string, boolean> = { ...DEFAULT_TOGGLES };

@@ -1,4 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
+import { loginAs, USERS } from './helpers/auth';
 
 /**
  * Cooperative Registration → Contribute → Withdraw Flow
@@ -6,11 +7,7 @@ import { test, expect, Page } from '@playwright/test';
  */
 
 async function loginUser(page: Page) {
-    await page.goto('/login');
-    await page.fill('input[type="email"]', process.env.TEST_USER_EMAIL || 'e2e.user@easysalesexport.test');
-    await page.fill('input[type="password"]', process.env.TEST_USER_PASSWORD || 'E2eTest@2024!');
-    await page.click('button[type="submit"]');
-    await page.waitForURL('/dashboard', { timeout: 10000 });
+    await loginAs(page, USERS.user.email, USERS.user.password);
 }
 
 test.describe('Cooperative Complete Flow', () => {
@@ -22,14 +19,14 @@ test.describe('Cooperative Complete Flow', () => {
         await page.goto('/cooperatives');
 
         // Look for "Join Cooperative" or "Register" button
-        const joinButton = page.locator('button:has-text("Join"), button:has-text("Register"), a:has-text("Join Cooperative")');
+        const joinButton = page.locator('a[href="/cooperatives/onboarding"], a:has-text("Become a Cooperative Member Now"), button:has-text("Join"), button:has-text("Register"), a:has-text("Join Cooperative")').first();
 
         if (await joinButton.count() > 0) {
             await joinButton.click();
 
             // Registration form should appear
             await expect(
-                page.locator('text=/Cooperative.*Registration|Join.*Cooperative/i')
+                page.locator('text=/Cooperative.*Application|Cooperative.*Registration|Join.*Cooperative/i')
             ).toBeVisible({ timeout: 5000 });
 
             // Fill form
@@ -84,7 +81,7 @@ test.describe('Cooperative Complete Flow', () => {
         await page.goto('/cooperatives/withdraw');
 
         // Withdrawal form should be visible
-        await expect(page.locator('h1, h2')).toContainText(/Withdraw|Withdrawal/i);
+        await expect(page.locator('h1, h2').first()).toContainText(/Withdraw|Withdrawal/i);
 
         // Fill withdrawal form
         const amountInput = page.locator('input[name="amount"]');
@@ -123,7 +120,7 @@ test.describe('Loan Application Flow', () => {
         await page.goto('/loans/apply');
 
         // Loan application form should be visible
-        await expect(page.locator('h1')).toContainText(/Loan.*Application|Apply.*Loan/i);
+        await expect(page.locator('h1, h2').first()).toContainText(/Loan.*Application|Apply.*Loan/i);
 
         // Fill loan form
         const amountInput = page.locator('input[name="amount"]');
@@ -164,35 +161,33 @@ test.describe('Loan Application Flow', () => {
 test.describe('Admin Review Flow', () => {
     test('should access admin pages (requires admin role)', async ({ page }) => {
         // Login as admin
-        await page.goto('/login');
-        await page.fill('input[type="email"]', 'admin@example.com');
-        await page.fill('input[type="password"]', 'admin123');
-        await page.click('button[type="submit"]');
+        await loginAs(page, USERS.admin.email, USERS.admin.password);
 
         // Navigate to admin dashboard
         await page.goto('/admin');
 
+        // Wait for the loading state to resolve
+        await expect(page.locator('text=Loading dashboard...')).not.toBeVisible({ timeout: 30000 });
+
         // Admin dashboard should load
-        await expect(page.locator('h1')).toContainText(/Admin|Dashboard/i);
+        await expect(page.locator('h1').first()).toContainText(/Admin|Dashboard|Welcome/i, { timeout: 10000 });
 
         console.log('✅ Admin dashboard accessible');
     });
 
     test('should review loan applications (admin)', async ({ page }) => {
         // Login as admin
-        await page.goto('/login');
-        await page.fill('input[type="email"]', 'admin@example.com');
-        await page.fill('input[type="password"]', 'admin123');
-        await page.click('button[type="submit"]');
+        await loginAs(page, USERS.admin.email, USERS.admin.password);
 
-        await page.goto('/admin/loans');
+        await page.goto('/admin/cooperatives/loans');
 
-        // Pending loans should be visible
-        const pendingLoans = page.locator('.loan-card, [data-testid="loan-application"]');
+        // Pending loans should be visible in a table or list
+        const pendingLoans = page.locator('table, .loan-card, [data-testid="loan-application"]');
 
         if (await pendingLoans.count() > 0) {
-            // Approve/Reject buttons should be visible
-            await expect(page.locator('button:has-text("Approve"), button:has-text("Reject")')).toBeVisible();
+            // Approve/Reject buttons should be visible (icon buttons with title attributes)
+            const approveRejectButtons = page.locator('button[title="Approve Loan"], button[title="Reject Loan"], button:has-text("Approve"), button:has-text("Reject")');
+            await expect(approveRejectButtons.first()).toBeVisible({ timeout: 5000 });
 
             console.log('✅ Loan review interface loaded');
         }

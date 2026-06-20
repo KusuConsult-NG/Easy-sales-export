@@ -74,7 +74,7 @@ export async function POST(req: Request) {
             roles: userRoles,
             isVerified: true,
             verified: true,
-            profileComplete: false,
+            profileComplete: true,
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
         };

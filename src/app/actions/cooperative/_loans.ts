@@ -313,22 +313,73 @@ export async function getAdminLoanApplicationsAction(options: {
         }
 
         let snapshot: FirebaseFirestore.QuerySnapshot;
+        let indexError = false;
         try {
             snapshot = await query.limit(fetchLimit + 1).get();
         } catch (qErr: any) {
-            if (qErr.code === 9 || qErr.message?.includes("FAILED_PRECONDITION")) {
-                return {
-                    success: false as const,
-                    error: "A database index is being provisioned for date filtering. This usually takes a few minutes. Please try again shortly.",
-                    data: null
-                };
+            if (qErr.code === 9 || qErr.message?.includes("FAILED_PRECONDITION") || qErr.message?.toLowerCase().includes("index")) {
+                logger.warn("Admin loans query failed due to missing index. Falling back.", { error: qErr.message });
+                indexError = true;
+                const fallbackQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS);
+                snapshot = await fallbackQuery.limit(5000).get();
+            } else {
+                throw qErr;
             }
-            throw qErr;
         }
-        const hasMore = snapshot.docs.length > fetchLimit;
-        const docs = hasMore ? snapshot.docs.slice(0, fetchLimit) : snapshot.docs;
 
-        const applicationsRaw = serializeDocs(docs) as unknown as any[];
+        let applicationsRaw: any[] = [];
+        let hasMore = false;
+        let nextCursor: string | undefined = undefined;
+
+        if (indexError) {
+            const allApps = serializeDocs(snapshot.docs) as unknown as any[];
+            let filteredApps = allApps;
+            if (options.statusFilter && options.statusFilter !== "all") {
+                filteredApps = filteredApps.filter(app => app.status === options.statusFilter);
+            }
+            if (options.dateFrom) {
+                const fromTime = dateRangeStart(options.dateFrom).getTime();
+                filteredApps = filteredApps.filter(app => {
+                    const applied = app.appliedAt || app.createdAt;
+                    if (!applied) return false;
+                    const appTime = new Date(applied).getTime();
+                    return appTime >= fromTime;
+                });
+            }
+            if (options.dateTo) {
+                const toTime = dateRangeEnd(options.dateTo).getTime();
+                filteredApps = filteredApps.filter(app => {
+                    const applied = app.appliedAt || app.createdAt;
+                    if (!applied) return false;
+                    const appTime = new Date(applied).getTime();
+                    return appTime <= toTime;
+                });
+            }
+            filteredApps.sort((a, b) => {
+                const aApplied = a.appliedAt || a.createdAt;
+                const bApplied = b.appliedAt || b.createdAt;
+                const aTime = aApplied ? new Date(aApplied).getTime() : 0;
+                const bTime = bApplied ? new Date(bApplied).getTime() : 0;
+                return bTime - aTime;
+            });
+
+            let startIndex = 0;
+            if (options.lastDocId) {
+                const idx = filteredApps.findIndex(app => app.id === options.lastDocId);
+                if (idx !== -1) {
+                    startIndex = idx + 1;
+                }
+            }
+            const endIndex = startIndex + fetchLimit;
+            hasMore = filteredApps.length > endIndex;
+            applicationsRaw = filteredApps.slice(startIndex, endIndex);
+            nextCursor = hasMore && applicationsRaw.length > 0 ? applicationsRaw[applicationsRaw.length - 1].id : undefined;
+        } else {
+            hasMore = snapshot.docs.length > fetchLimit;
+            const docs = hasMore ? snapshot.docs.slice(0, fetchLimit) : snapshot.docs;
+            applicationsRaw = serializeDocs(docs) as unknown as any[];
+            nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : undefined;
+        }
         
         // Enrich with user details
         const userIds = [...new Set(applicationsRaw.map(app => app.userId).filter(id => id && typeof id === 'string' && id.trim().length > 0))];
@@ -355,7 +406,7 @@ export async function getAdminLoanApplicationsAction(options: {
             
             const bankName = user.bankDetails?.bankName || app.bankName || user.bankName || user.bankAccount?.bankName || "N/A";
             const accountNumber = user.bankDetails?.accountNumber || app.accountNumber || user.accountNumber || user.bankAccountNumber || user.bankAccount?.accountNumber || "N/A";
-            const accountName = user.bankDetails?.accountName || app.accountName || user.accountName || user.bankAccountName || user.bankAccount?.accountName || user.fullName || (user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : "N/A");
+            const accountName = user.bankDetails?.accountName || app.accountName || user.accountName || user.bankAccountName || user.bankAccount?.accountNumber || user.fullName || (user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : "N/A");
             const bankCode = user.bankDetails?.bankCode || app.bankCode || user.bankCode || user.bankAccount?.bankCode || "N/A";
 
             const bankDetails = {
@@ -365,8 +416,13 @@ export async function getAdminLoanApplicationsAction(options: {
                 bankCode
             };
 
+            const appAppliedAt = app.appliedAt || app.createdAt;
+
             return {
                 ...app,
+                productName: app.productName || (app.purpose ? `General Loan (${app.purpose.charAt(0).toUpperCase() + app.purpose.slice(1).toLowerCase().replace('_', ' ')})` : "General Loan"),
+                interestRate: app.interestRate || 5,
+                appliedAt: appAppliedAt,
                 userName: app.fullName || (user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.fullName || "Unknown"),
                 userEmail: app.userEmail || user.email || "",
                 bankName: bankDetails.bankName,
@@ -394,16 +450,15 @@ export async function getAdminLoanApplicationsAction(options: {
 
         // When search is active, we handle pagination in-memory
         const pageSize = options.search ? (options.limit || 20) : undefined;
-        const offset = options.search && options.lastDocId ? 0 : 0; // cursor-based not used in search mode
         const pagedApplications = pageSize ? finalApplications.slice(0, pageSize) : finalApplications;
-        const searchHasMore = pageSize ? finalApplications.length > pageSize : (hasMore && docs.length > 0);
+        const searchHasMore = pageSize ? finalApplications.length > pageSize : hasMore;
 
-        const nextCursor = !options.search && hasMore && docs.length > 0 ? docs[docs.length - 1].id : undefined;
+        const finalNextCursor = !options.search ? nextCursor : undefined;
 
         return { 
             error: null, success: true as const, 
             data: pagedApplications,
-            lastDocId: nextCursor,
+            lastDocId: finalNextCursor,
             hasMore: searchHasMore
         };
     } catch (error: any) {
@@ -437,8 +492,29 @@ export async function getAdminLoanApplicationsExportAction(options: {
                 .orderBy("appliedAt", "desc");
         }
 
-        const snapshot = await query.limit(5000).get();
-        const loans = serializeDocs(snapshot.docs) as any[];
+        let loans: any[];
+        try {
+            const snapshot = await query.limit(5000).get();
+            loans = serializeDocs(snapshot.docs) as any[];
+        } catch (e: any) {
+            if (e.code === 9 || e.message?.includes("FAILED_PRECONDITION") || e.message?.toLowerCase().includes("index")) {
+                logger.warn("Admin loans export query failed due to missing index. Falling back.", { error: e.message });
+                const fallbackQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS);
+                const snapshot = await fallbackQuery.limit(5000).get();
+                let loansRaw = serializeDocs(snapshot.docs) as any[];
+                if (options.statusFilter && options.statusFilter !== "all") {
+                    loansRaw = loansRaw.filter(loan => loan.status === options.statusFilter);
+                }
+                loansRaw.sort((a, b) => {
+                    const aTime = a.appliedAt ? new Date(a.appliedAt).getTime() : 0;
+                    const bTime = b.appliedAt ? new Date(b.appliedAt).getTime() : 0;
+                    return bTime - aTime;
+                });
+                loans = loansRaw;
+            } else {
+                throw e;
+            }
+        }
 
         const userIds = [...new Set(loans.map(loan => loan.userId).filter(id => id && typeof id === 'string' && id.trim().length > 0))];
         const userMap = new Map<string, any>();

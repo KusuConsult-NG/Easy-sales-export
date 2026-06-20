@@ -64,15 +64,11 @@ export default function CourseCatalogPage() {
     const plan = (userPlan as string || "free").toLowerCase();
     const isPaid = ["elite", "standard", "foundation", "advanced"].includes(plan);
 
-    // Load initial data and handle paid plan redirect
+    // Load initial data
     useEffect(() => {
-        if (isPaid) {
-            router.replace("/academy/my-courses");
-            return;
-        }
         loadData();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isPaid, router]);
+    }, [router]);
 
     async function loadData() {
         setLoading(true);
@@ -163,7 +159,7 @@ export default function CourseCatalogPage() {
         }
     }
 
-    if (loading || isPaid) {
+    if (loading) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh]">
                 <Loader2 className="w-12 h-12 animate-spin text-blue-600 mb-4" />
@@ -344,6 +340,7 @@ export default function CourseCatalogPage() {
                             return (
                                 <div
                                     key={id}
+                                    data-testid="course-card"
                                     className={`bg-white rounded-2xl overflow-hidden border border-slate-200 hover:shadow-xl transition-all duration-300 flex flex-col h-full group ${tConfig.glow}`}
                                 >
                                     {/* Thumbnail Header */}

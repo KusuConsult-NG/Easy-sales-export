@@ -1,6 +1,7 @@
 import { FullConfig } from '@playwright/test';
 import * as https from 'https';
 import * as http from 'http';
+import { execSync } from 'child_process';
 
 /**
  * Playwright Global Setup
@@ -66,68 +67,22 @@ async function waitForServer(url: string, retries = 30): Promise<void> {
     }
 }
 
-async function ensureTestUser(config: {
-    email: string;
-    password: string;
-    firstName: string;
-    lastName: string;
-    phone: string;
-    role?: string;
-}): Promise<void> {
-    // Attempt registration — a 409 (user exists) is OK, we just need the account to be there
-    const res = await httpPost(`${BASE_URL}/api/auth/register`, config);
-    if (res.status === 200 || res.status === 201) {
-        console.log(`✅ Test user created: ${config.email}`);
-    } else if (res.status === 409 || (res.data?.error || '').includes('already')) {
-        console.log(`ℹ️  Test user already exists: ${config.email}`);
-    } else {
-        console.warn(`⚠️  Could not create test user ${config.email}: ${JSON.stringify(res.data)}`);
-        // Non-fatal — the user may exist under a different registration path
-    }
-}
-
 export default async function globalSetup(config: FullConfig) {
     console.log('\n🔧 Playwright Global Setup starting...');
 
     // ── 1. Wait for server ──────────────────────────────────────────────────────
     await waitForServer(BASE_URL);
 
-    // ── 2. Seed test accounts ───────────────────────────────────────────────────
-    // These users are used by e2e specs via process.env.TEST_USER_* variables.
-    // Credentials are intentionally simple — they only exist in test environments.
-
-    await ensureTestUser({
-        email:     process.env.TEST_USER_EMAIL    || 'e2e.user@easysalesexport.test',
-        password:  process.env.TEST_USER_PASSWORD || 'E2eTest@2024!',
-        firstName: 'E2E',
-        lastName:  'Testuser',
-        phone:     '08099999901',
-    });
-
-    await ensureTestUser({
-        email:     process.env.TEST_ADMIN_EMAIL    || 'e2e.admin@easysalesexport.test',
-        password:  process.env.TEST_ADMIN_PASSWORD || 'E2eAdmin@2024!',
-        firstName: 'E2E',
-        lastName:  'Admin',
-        phone:     '08099999902',
-        role:      'admin',
-    });
-
-    await ensureTestUser({
-        email:     process.env.TEST_BUYER_EMAIL    || 'e2e.buyer@easysalesexport.test',
-        password:  process.env.TEST_BUYER_PASSWORD || 'E2eBuyer@2024!',
-        firstName: 'E2E',
-        lastName:  'Buyer',
-        phone:     '08099999903',
-    });
-
-    await ensureTestUser({
-        email:     process.env.TEST_SELLER_EMAIL    || 'e2e.seller@easysalesexport.test',
-        password:  process.env.TEST_SELLER_PASSWORD || 'E2eSeller@2024!',
-        firstName: 'E2E',
-        lastName:  'Seller',
-        phone:     '08099999904',
-    });
+    // ── 1.5. Run E2E Cooperative Seeding Script ─────────────────────────────────
+    try {
+        console.log('Seeding E2E database records...');
+        execSync('npm run seed', { stdio: 'inherit' });
+        execSync('node scripts/seed-test-users.js', { stdio: 'inherit' });
+        execSync('npx tsx scripts/setup-e2e-coop.ts', { stdio: 'inherit' });
+        console.log('✅ E2E Database seeding completed successfully.');
+    } catch (err: any) {
+        console.error('⚠️ Database seeding failed:', err.message || err);
+    }
 
     console.log('✅ Playwright Global Setup complete\n');
 }

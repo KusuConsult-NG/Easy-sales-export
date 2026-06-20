@@ -6,9 +6,6 @@ import { createAuditLog } from '@/lib/audit-log';
 import type { AuditAction, AuditLogEntry } from '@/lib/audit-log';
 import { getAuditLogsAction as coreGetAuditLogsAction } from './audit-log-actions';
 
-// Re-export the canonical AuditLog type from the authoritative source
-import type { AuditLog } from "@/lib/types/shared";
-export type { AuditLog };
 
 /**
  * Audit Logging System
@@ -43,7 +40,7 @@ type GetAuditLogsState =
 export async function logAuditAction(
     action: AuditAction,
     targetId: string,
-    targetType: AuditLog["targetType"],
+    targetType: string,
     details: Record<string, any> = {}
 ): Promise<LogAuditState> { try {
         const sessionResult = await requireSession();

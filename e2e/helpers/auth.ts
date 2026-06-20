@@ -18,8 +18,7 @@ export async function loginAs(
     if (expectUrl) {
         await page.waitForURL(expectUrl, { timeout: 15000 });
     } else {
-        // Wait for any post-login redirect (dashboard, get-started, module)
-        await page.waitForURL(/\/dashboard|\/auth\/get-started|\/marketplace|\/academy|\/cooperatives/, { timeout: 15000 });
+        await page.waitForURL(/\/dashboard|\/auth\/get-started|\/marketplace|\/academy|\/cooperatives|\/admin/, { timeout: 15000 });
     }
 }
 

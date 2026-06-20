@@ -92,23 +92,13 @@ function determinePostRegistrationRedirect(platforms: string[], roles: UserRole[
 export async function getPostLoginRedirect(email: string) { try {
         let userData: FirestoreUser | null = null;
 
-        // Primary path: direct userId lookup — O(1), always correct.
-        const session = await auth();
-        if (session?.user?.id) {
-            const userDoc = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS).doc(session.user.id).get());
-            if (userDoc.exists) {
-                userData = userDoc.data() as FirestoreUser;
-            }
-        }
-
-        // Fallback: email query (covers edge case where session isn't ready post-signIn)
-        if (!userData) { logger.warn(`[getPostLoginRedirect] No session post-login — falling back to email query`, { email });
-            const userSnapshot = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS)
-                .where('email', '==', email.toLowerCase())
-                .limit(1)
-                .get());
-            if (!userSnapshot.empty) { userData = userSnapshot.docs[0].data() as FirestoreUser;
-            }
+        // Direct query by email - robust, fast, avoids NextAuth auth() session deadlock.
+        const userSnapshot = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS)
+            .where('email', '==', email.toLowerCase())
+            .limit(1)
+            .get());
+        if (!userSnapshot.empty) {
+            userData = userSnapshot.docs[0].data() as FirestoreUser;
         }
 
         if (userData) { const userRoles = userData.roles || ['general_user'];
@@ -421,7 +411,7 @@ export async function registerAction(prevState: any, formData: FormData) { const
             roles: userRoles,
             isVerified: true,  // canonical field
             verified: true,    // legacy compat field — keep both so old queries still work
-            profileComplete: false,
+            profileComplete: true,
         };
 
         try { await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS).doc(userRecord.uid).set({

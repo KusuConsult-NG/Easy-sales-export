@@ -7,8 +7,12 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Authentication', () => {
     test.beforeEach(async ({ page }) => {
+        page.on('console', msg => {
+            if (msg.type() === 'error') console.log(`[Browser Error] ${msg.text()}`);
+        });
         // Navigate to login page before each test
-        await page.goto('/cooperatives/login');
+        await page.goto('/auth/login?module=cooperatives');
+        await page.waitForLoadState('networkidle');
     });
 
     test('should display login page correctly', async ({ page }) => {
@@ -24,7 +28,7 @@ test.describe('Authentication', () => {
         await page.click('button[type="submit"]');
 
         // Wait for error message (include "attempts" for rate limit errors)
-        await expect(page.locator('text=/invalid|error|incorrect|failed|attempts/i')).toBeVisible({ timeout: 10000 });
+        await expect(page.locator('text=/invalid|error|incorrect|failed|attempts|registered/i').first()).toBeVisible({ timeout: 10000 });
     });
 
     test('should show error for empty fields', async ({ page }) => {
@@ -37,7 +41,7 @@ test.describe('Authentication', () => {
         await page.click('button[type="submit"]');
 
         // Should see validation errors
-        await expect(page.locator('text=/required|email|password|invalid/i')).toBeVisible();
+        await expect(page.locator('text=/required|email|password|invalid/i').first()).toBeVisible();
     });
 
     test('rate-limit: shows feedback after multiple failed attempts', async ({ page }) => {
@@ -46,8 +50,9 @@ test.describe('Authentication', () => {
             await page.fill('input[name="email"]', 'ratelimit-test@example.com');
             await page.fill('input[name="password"]', `wrongpassword${i}`);
             await page.click('button[type="submit"]');
-            // Brief wait between submissions to avoid request fusion
-            await page.waitForTimeout(300);
+            
+            // Wait for error response before sending the next one to avoid disabled button locking
+            await expect(page.locator('text=/invalid|error|incorrect|failed|attempts|registered/i').first()).toBeVisible({ timeout: 10000 });
         }
         // Should show rate-limit or attempt-count error message
         await expect(

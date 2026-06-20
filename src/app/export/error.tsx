@@ -16,7 +16,9 @@ function isStaleDeploymentError(error: Error & { digest?: string }): boolean {
         msg.includes("was not found on the server") ||
         msg.includes("UnrecognizedAction") ||
         msg.includes("Failed to fetch dynamically imported module") ||
-        msg.includes("Importing a module script failed")
+        msg.includes("Importing a module script failed") ||
+        msg.includes("Failed to find Server Action") ||
+        msg.includes("older or newer deployment")
     );
 }
 

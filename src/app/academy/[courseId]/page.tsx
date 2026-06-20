@@ -207,7 +207,7 @@ export default function CourseDetailPage(props: CourseDetailPageProps) {
                                 <div className="inline-block px-3 py-1 bg-white/20 rounded-full text-xs font-medium mb-3">
                                     {course.level.charAt(0).toUpperCase() + course.level.slice(1)}
                                 </div>
-                                <h1 className="text-4xl font-bold mb-3">{course.title}</h1>
+                                <h1 data-testid="course-title" className="text-4xl font-bold mb-3">{course.title}</h1>
                                 <p className="text-lg text-white/90 mb-4">{course.description}</p>
 
                                 <div className="flex flex-wrap items-center gap-4 text-sm">
@@ -306,6 +306,7 @@ export default function CourseDetailPage(props: CourseDetailPageProps) {
                             return (
                                 <div
                                     key={module.id}
+                                    data-testid="module-item"
                                     className={`border-2 rounded-xl p-6 ${moduleCompleted
                                         ? "border-green-200 bg-green-50"
                                         : "border-slate-200"

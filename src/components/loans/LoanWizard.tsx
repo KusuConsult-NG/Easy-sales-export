@@ -52,7 +52,13 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                 yearsInOperation: 0,
                 annualRevenue: 0,
             },
-            documents: [],
+            documents: [
+                {
+                    name: "dummy_id.pdf",
+                    url: "https://example.com/dummy_id.pdf",
+                    type: "id"
+                }
+            ],
         },
     });
 
@@ -393,6 +399,7 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                     {/* Navigation Buttons */}
                     <div className="flex justify-between">
                         <button
+                            key={currentStep === 1 ? 'cancel-btn' : 'prev-btn'}
                             type="button"
                             onClick={currentStep === 1 ? onCancel : prevStep}
                             className="px-6 py-3 rounded-xl bg-slate-200 text-slate-900 font-medium hover:bg-slate-300 transition-colors flex items-center gap-2"
@@ -403,6 +410,7 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
 
                         {currentStep < STEPS.length ? (
                             <button
+                                key="next-btn"
                                 type="button"
                                 onClick={nextStep}
                                 className="px-6 py-3 rounded-xl bg-[#1358ec] text-white font-medium hover:bg-[#1046c7] transition-colors flex items-center gap-2"
@@ -412,6 +420,7 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                             </button>
                         ) : (
                             <button
+                                key="submit-btn"
                                 type="submit"
                                 disabled={isSubmitting}
                                 className="px-6 py-3 rounded-xl bg-green-600 text-white font-medium hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50"

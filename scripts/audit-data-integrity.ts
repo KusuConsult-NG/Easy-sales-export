@@ -2,8 +2,13 @@
 import * as dotenv from "dotenv";
 import * as path from "path";
 
-// Load environment variables from .env.local
-dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
+import * as fs from "fs";
+
+// Load environment variables
+const envFile = fs.existsSync(path.resolve(process.cwd(), ".env.production.local"))
+    ? ".env.production.local"
+    : ".env.local";
+dotenv.config({ path: path.resolve(process.cwd(), envFile) });
 
 import { db } from "../src/lib/firebase-admin";
 import { COLLECTIONS } from "../src/lib/types/firestore";

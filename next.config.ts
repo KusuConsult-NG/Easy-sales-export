@@ -89,6 +89,16 @@ const nextConfig: NextConfig = {
         destination: '/marketplace/products/:id',
         permanent: true,
       },
+      {
+        source: '/login',
+        destination: '/auth/login',
+        permanent: true,
+      },
+      {
+        source: '/register',
+        destination: '/auth/register',
+        permanent: true,
+      },
     ];
   },
 

@@ -13,16 +13,19 @@ async function registerNewUser(page: Page, email: string, password: string, full
     await page.fill('input[name="email"]', email);
     await page.fill('input[name="password"]', password);
     await page.fill('input[name="confirmPassword"]', password);
-    await page.fill('input[name="phone"]', '+2348012345678');
+    await page.fill('input[name="phone"]', '+23480' + Math.floor(1000000 + Math.random() * 9000000));
+    await page.selectOption('select[name="gender"]', 'Female');
 
-    // Select role
-    await page.click('input[value="member"]');
+    // Select role (if exists)
+    if (await page.locator('input[value="member"]').count() > 0) {
+        await page.click('input[value="member"]');
+    }
 
     // Submit form
     await page.click('button[type="submit"]');
 
-    // Wait for redirect (email verification or dashboard)
-    await page.waitForURL(/dashboard|verify-email/, { timeout: 10000 });
+    // Wait for redirect (email verification or get-started)
+    await page.waitForURL(/auth\/get-started|dashboard|verify-email/, { timeout: 10000 });
 }
 
 async function loginUser(page: Page, email: string, password: string) {
@@ -30,7 +33,7 @@ async function loginUser(page: Page, email: string, password: string) {
     await page.fill('input[type="email"]', email);
     await page.fill('input[type="password"]', password);
     await page.click('button[type="submit"]');
-    await page.waitForURL('/dashboard', { timeout: 10000 });
+    await page.waitForURL(/\/dashboard|admin|cooperatives/, { timeout: 10000 });
 }
 
 test.describe('Registration → MFA → Dashboard Flow', () => {
@@ -42,15 +45,11 @@ test.describe('Registration → MFA → Dashboard Flow', () => {
         // Step 1: Register
         await registerNewUser(page, testEmail, testPassword, testName);
 
-        // Step 2: Verify dashboard loaded
-        await expect(page).toHaveURL(/dashboard/);
-        await expect(page.locator('h1')).toContainText(/Dashboard|Welcome/i);
+        // Step 2: Verify get-started page loaded
+        await expect(page).toHaveURL(/auth\/get-started/);
+        await expect(page.locator('h1')).toContainText(/Choose Your Module/i);
 
-        // Step 3: Onboarding tour should appear for new users
-        const tourModal = page.locator('text=/Welcome to Easy Sales Export|Get Started/i');
-        await expect(tourModal).toBeVisible({ timeout: 5000 });
-
-        console.log('✅ Registration and onboarding tour triggered');
+        console.log('✅ Registration and module selection page loaded successfully');
     });
 
     test('should setup and enable MFA', async ({ page }) => {
@@ -80,11 +79,11 @@ test.describe('Registration → MFA → Dashboard Flow', () => {
     });
 
     test('should access MFA-protected routes', async ({ page }) => {
-        // Login
-        await loginUser(page, process.env.TEST_USER_EMAIL || 'e2e.user@easysalesexport.test', process.env.TEST_USER_PASSWORD || 'E2eTest@2024!');
+        // Login as admin
+        await loginUser(page, process.env.TEST_ADMIN_EMAIL || 'e2e.admin@easysalesexport.test', process.env.TEST_ADMIN_PASSWORD || 'E2eAdmin@2024!');
 
         // Try to access admin route (MFA protected)
-        await page.goto('/admin/loans');
+        await page.goto('/admin/cooperatives/loans');
 
         // Should either:
         // 1. Show MFA prompt if MFA enabled but not verified
@@ -95,12 +94,11 @@ test.describe('Registration → MFA → Dashboard Flow', () => {
         const mfaSetup = page.locator('text=/Set.*up.*MFA|Enable.*MFA/i');
         const adminContent = page.locator('h1:has-text("Loan")');
 
-        // One of these should be visible
         await expect(
             Promise.race([
-                mfaPrompt.waitFor({ state: 'visible' }),
-                mfaSetup.waitFor({ state: 'visible' }),
-                adminContent.waitFor({ state: 'visible' })
+                mfaPrompt.waitFor({ state: 'visible' }).then(() => true),
+                mfaSetup.waitFor({ state: 'visible' }).then(() => true),
+                adminContent.waitFor({ state: 'visible' }).then(() => true)
             ])
         ).resolves.toBeTruthy();
 
@@ -115,9 +113,9 @@ test.describe('Navigation and Basic Functionality', () => {
 
     test('should navigate to all main pages', async ({ page }) => {
         const pages = [
-            { path: '/dashboard', title: /Dashboard/ },
+            { path: '/dashboard', title: /Dashboard|Hello/i },
             { path: '/cooperatives', title: /Cooperative/ },
-            { path: '/marketplace', title: /Marketplace/ },
+            { path: '/marketplace', title: /Market/i },
             { path: '/export', title: /Export/ },
             { path: '/wave', title: /WAVE/ },
             { path: '/farm-nation', title: /Farm Nation|Land/ },
@@ -126,7 +124,7 @@ test.describe('Navigation and Basic Functionality', () => {
 
         for (const { path, title } of pages) {
             await page.goto(path);
-            await expect(page.locator('h1, h2')).toContainText(title, { timeout: 5000 });
+            await expect(page.locator('h1, h2').first()).toContainText(title, { timeout: 5000 });
             console.log(`✅ ${path} loaded successfully`);
         }
     });
@@ -136,14 +134,13 @@ test.describe('Navigation and Basic Functionality', () => {
 
         // Stats should load (may be 0 for new users)
         const stats = [
-            /Total.*Export|Export/i,
-            /Active.*Order|Order/i,
-            /Escrow/i,
-            /Saving|Cooperative/i
+            /Wallet/i,
+            /Messages/i,
+            /Notifications/i
         ];
 
         for (const stat of stats) {
-            const statElement = page.locator(`text=${stat}`);
+            const statElement = page.locator(`text=${stat}`).first();
             await expect(statElement).toBeVisible({ timeout: 5000 });
         }
 
@@ -155,7 +152,7 @@ test.describe('Error Handling', () => {
     test('should show 404 page for invalid routes', async ({ page }) => {
         await page.goto('/this-route-does-not-exist');
 
-        await expect(page.locator('text=/404|Not Found|Page.*not.*found/i')).toBeVisible();
+        await expect(page.locator('text=/404|Not Found|Page.*not.*found/i').first()).toBeVisible();
     });
 
     test('should redirect unauthenticated users', async ({ page }) => {

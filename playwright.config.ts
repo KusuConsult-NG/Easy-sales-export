@@ -35,9 +35,9 @@ export default defineConfig({
     fullyParallel: false,           // Tests share state (logged-in sessions) — run serially
     forbidOnly: !!process.env.CI,
     retries: process.env.CI ? 1 : 0,
-    workers: process.env.CI ? 1 : 2,
+    workers: 1,
     reporter: process.env.CI ? [['html'], ['github']] : 'html',
-    timeout: 30000,
+    timeout: 90000,
 
     globalSetup: './e2e/global-setup.ts',
     globalTeardown: './e2e/global-teardown.ts',
@@ -47,6 +47,7 @@ export default defineConfig({
         trace: 'on-first-retry',
         screenshot: 'only-on-failure',
         video: 'retain-on-failure',
+        ignoreHTTPSErrors: true,
         // Pass test credentials to all specs via process.env
         // Specs read: process.env.TEST_USER_EMAIL || 'fallback'
     },

@@ -51,50 +51,71 @@ const COLLECTIONS = {
 // ========================
 const sampleProducts = [
     {
+        title: "Premium Nigerian Yams",
         name: "Premium Nigerian Yams",
-        description: "High-quality yams sourced from sustainable farms in Benue State.",
-        category: "yam",
+        description: "High-quality yams sourced from sustainable agriculture farms in Benue State.",
+        category: "roots",
         price: 150000,
+        pricingTiers: [{ type: "retail", price: 150000, minQuantity: 1 }],
         unit: "per ton",
+        availableQuantity: 50,
         quantity: 50,
+        minimumOrderQuantity: 1,
+        sellerId: "sample-farmer-1",
         farmerId: "sample-farmer-1",
+        sellerName: "Adewale Farms",
         farmerName: "Adewale Farms",
-        location: { state: "Benue", lga: "Makurdi" },
+        location: { state: "Benue", lga: "Makurdi", nearestMarket: "Unknown" },
         images: ["/images/products/yams.jpg"],
+        sellerVerified: true,
         isVerified: true,
-        status: "available",
+        status: "active",
         createdAt: new Date(),
         updatedAt: new Date(),
     },
     {
+        title: "Organic Sesame Seeds",
         name: "Organic Sesame Seeds",
-        description: "Premium white sesame seeds, organically grown and processed to international standards.",
-        category: "sesame",
+        description: "Premium white sesame seeds, organically grown in agriculture and processed to international standards.",
+        category: "grains",
         price: 520000,
+        pricingTiers: [{ type: "retail", price: 520000, minQuantity: 1 }],
         unit: "per ton",
+        availableQuantity: 25,
         quantity: 25,
+        minimumOrderQuantity: 1,
+        sellerId: "sample-farmer-2",
         farmerId: "sample-farmer-2",
+        sellerName: "Kano Agro Ventures",
         farmerName: "Kano Agro Ventures",
-        location: { state: "Kano", lga: "Kano Municipal" },
+        location: { state: "Kano", lga: "Kano Municipal", nearestMarket: "Unknown" },
         images: ["/images/products/sesame.jpg"],
+        sellerVerified: true,
         isVerified: true,
-        status: "available",
+        status: "active",
         createdAt: new Date(),
         updatedAt: new Date(),
     },
     {
+        title: "Dried Hibiscus Flowers",
         name: "Dried Hibiscus Flowers",
         description: "Premium Zobo (hibiscus sabdariffa) flowers, sun-dried and ready for export.",
-        category: "hibiscus",
+        category: "spices",
         price: 380000,
+        pricingTiers: [{ type: "retail", price: 380000, minQuantity: 1 }],
         unit: "per ton",
+        availableQuantity: 40,
         quantity: 40,
+        minimumOrderQuantity: 1,
+        sellerId: "sample-farmer-3",
         farmerId: "sample-farmer-3",
+        sellerName: "Kaduna Botanicals",
         farmerName: "Kaduna Botanicals",
-        location: { state: "Kaduna", lga: "Zaria" },
+        location: { state: "Kaduna", lga: "Zaria", nearestMarket: "Unknown" },
         images: ["/images/products/hibiscus.jpg"],
+        sellerVerified: true,
         isVerified: true,
-        status: "available",
+        status: "active",
         createdAt: new Date(),
         updatedAt: new Date(),
     },
@@ -379,6 +400,23 @@ const sampleCourses = [
         thumbnail: "/images/courses/export-fundamentals.jpg",
         createdAt: new Date(),
         updatedAt: new Date(),
+        modules: [
+            {
+                id: "export-mod-1",
+                title: "Introduction to Agricultural Export",
+                description: "Basic concepts and definitions of export trade.",
+                order: 1,
+                lessons: [
+                    {
+                        id: "export-les-1",
+                        title: "Overview of Export Opportunities",
+                        content: "This lesson covers the basics of export opportunities.",
+                        duration: "15 mins",
+                        order: 1
+                    }
+                ]
+            }
+        ]
     },
     {
         title: "Phytosanitary Compliance & Standards",
@@ -395,6 +433,23 @@ const sampleCourses = [
         thumbnail: "/images/courses/compliance.jpg",
         createdAt: new Date(),
         updatedAt: new Date(),
+        modules: [
+            {
+                id: "compliance-mod-1",
+                title: "NAFDAC & SPS Standards",
+                description: "Understanding SPS requirements and certificates.",
+                order: 1,
+                lessons: [
+                    {
+                        id: "compliance-les-1",
+                        title: "Introduction to Phytosanitary Rules",
+                        content: "Learn how to comply with global phytosanitary rules.",
+                        duration: "20 mins",
+                        order: 1
+                    }
+                ]
+            }
+        ]
     },
     {
         title: "Advanced Agro-Export Market Analysis",
@@ -411,6 +466,23 @@ const sampleCourses = [
         thumbnail: "/images/courses/market-analysis.jpg",
         createdAt: new Date(),
         updatedAt: new Date(),
+        modules: [
+            {
+                id: "analysis-mod-1",
+                title: "Global Commodity Markets",
+                description: "Deep dive into commodity pricing and hedging.",
+                order: 1,
+                lessons: [
+                    {
+                        id: "analysis-les-1",
+                        title: "Understanding Futures Contracts",
+                        content: "Introduction to hedging using futures contracts.",
+                        duration: "30 mins",
+                        order: 1
+                    }
+                ]
+            }
+        ]
     },
 ];
 
@@ -443,6 +515,11 @@ const sampleNotifications = [
 // ========================
 
 export async function seedProducts() {
+    console.log("🌱 Cleaning up products...");
+    const productsSnap = await db.collection(COLLECTIONS.PRODUCTS).get();
+    for (const doc of productsSnap.docs) {
+        await doc.ref.delete();
+    }
     console.log("🌱 Seeding marketplace products...");
     for (const product of sampleProducts) {
         await db.collection(COLLECTIONS.PRODUCTS).add(product);
@@ -451,6 +528,11 @@ export async function seedProducts() {
 }
 
 export async function seedLandListings() {
+    console.log("🌱 Cleaning up land listings...");
+    const landSnap = await db.collection("land_listings").get();
+    for (const doc of landSnap.docs) {
+        await doc.ref.delete();
+    }
     console.log("🌱 Seeding land listings...");
     for (const property of sampleProperties) {
         await db.collection("land_listings").add(property);
@@ -459,6 +541,11 @@ export async function seedLandListings() {
 }
 
 export async function seedWaveApplications() {
+    console.log("🌱 Cleaning up WAVE applications...");
+    const waveSnap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).get();
+    for (const doc of waveSnap.docs) {
+        await doc.ref.delete();
+    }
     console.log("🌱 Seeding WAVE applications...");
     for (const application of sampleWaveApplications) {
         await db.collection(COLLECTIONS.WAVE_APPLICATIONS).add(application);
@@ -467,6 +554,11 @@ export async function seedWaveApplications() {
 }
 
 export async function seedCooperatives() {
+    console.log("🌱 Cleaning up cooperatives...");
+    const coopSnap = await db.collection(COLLECTIONS.COOPERATIVES).get();
+    for (const doc of coopSnap.docs) {
+        await doc.ref.delete();
+    }
     console.log("🌱 Seeding cooperatives...");
     for (const coop of sampleCooperatives) {
         await db.collection(COLLECTIONS.COOPERATIVES).add(coop);
@@ -475,6 +567,11 @@ export async function seedCooperatives() {
 }
 
 export async function seedExportWindows() {
+    console.log("🌱 Cleaning up export windows...");
+    const winSnap = await db.collection(COLLECTIONS.EXPORT_WINDOWS).get();
+    for (const doc of winSnap.docs) {
+        await doc.ref.delete();
+    }
     console.log("🌱 Seeding export windows...");
     for (const win of sampleExportWindows) {
         await db.collection(COLLECTIONS.EXPORT_WINDOWS).add(win);
@@ -483,6 +580,11 @@ export async function seedExportWindows() {
 }
 
 export async function seedDisputes() {
+    console.log("🌱 Cleaning up disputes...");
+    const disputeSnap = await db.collection(COLLECTIONS.DISPUTES).get();
+    for (const doc of disputeSnap.docs) {
+        await doc.ref.delete();
+    }
     console.log("🌱 Seeding disputes...");
     for (const dispute of sampleDisputes) {
         await db.collection(COLLECTIONS.DISPUTES).add(dispute);
@@ -491,6 +593,11 @@ export async function seedDisputes() {
 }
 
 export async function seedAnnouncements() {
+    console.log("🌱 Cleaning up announcements...");
+    const announcementSnap = await db.collection(COLLECTIONS.ANNOUNCEMENTS).get();
+    for (const doc of announcementSnap.docs) {
+        await doc.ref.delete();
+    }
     console.log("🌱 Seeding announcements...");
     for (const announcement of sampleAnnouncements) {
         await db.collection(COLLECTIONS.ANNOUNCEMENTS).add(announcement);
@@ -499,11 +606,19 @@ export async function seedAnnouncements() {
 }
 
 export async function seedCourses() {
+    console.log("🌱 Cleaning up academy courses...");
+    const coursesSnap = await db.collection(COLLECTIONS.ACADEMY_COURSES).get();
+    for (const doc of coursesSnap.docs) {
+        await doc.ref.delete();
+    }
+    const coursesSnap2 = await db.collection(COLLECTIONS.COURSES).get();
+    for (const doc of coursesSnap2.docs) {
+        await doc.ref.delete();
+    }
     console.log("🌱 Seeding academy courses...");
     for (const course of sampleCourses) {
         await db.collection(COLLECTIONS.ACADEMY_COURSES).add(course);
     }
-    // Also seed to COURSES collection for cross-compatibility
     for (const course of sampleCourses) {
         await db.collection(COLLECTIONS.COURSES).add(course);
     }
@@ -511,6 +626,11 @@ export async function seedCourses() {
 }
 
 export async function seedNotifications() {
+    console.log("🌱 Cleaning up notifications...");
+    const notifSnap = await db.collection(COLLECTIONS.NOTIFICATIONS).get();
+    for (const doc of notifSnap.docs) {
+        await doc.ref.delete();
+    }
     console.log("🌱 Seeding sample notifications...");
     for (const notif of sampleNotifications) {
         await db.collection(COLLECTIONS.NOTIFICATIONS).add(notif);

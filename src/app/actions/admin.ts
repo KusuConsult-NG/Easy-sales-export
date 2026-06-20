@@ -1652,7 +1652,7 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
 
         // In-memory Location filtering (State and LGA) — resolves the bug where direct Firestore
         // where("address.state") equality checks silently excluded users with state stored in other properties
-        if (options.state && options.state !== "all") {
+        if (options.state && options.state !== "all" && typeof options.state === 'string') {
             const cleanStateFilter = options.state.toLowerCase().replace(/\s*state$/i, "").trim();
             filteredUsers = filteredUsers.filter(u => {
                 const cleanUserState = typeof u.state === 'string' 
@@ -1661,7 +1661,7 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
                 return cleanUserState && cleanUserState.includes(cleanStateFilter);
             });
         }
-        if (options.lga && options.lga !== "all") {
+        if (options.lga && options.lga !== "all" && typeof options.lga === 'string') {
             const cleanLgaFilter = options.lga.toLowerCase().trim();
             filteredUsers = filteredUsers.filter(u => {
                 const cleanUserLga = typeof u.lga === 'string' ? u.lga.toLowerCase().trim() : "";

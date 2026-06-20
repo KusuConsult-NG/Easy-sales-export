@@ -9,7 +9,7 @@ test.describe('Academy', () => {
     test('should display academy page', async ({ page }) => {
         await page.goto('/academy');
 
-        await expect(page.locator('h1')).toContainText(/academy|courses/i);
+        await expect(page.locator('h1')).toContainText(/Position|Agro|Export|Opportunities/i);
     });
 
     test('should display course listings', async ({ page }) => {

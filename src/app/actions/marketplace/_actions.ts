@@ -538,7 +538,8 @@ async function _submitMarketplaceOnboardingAction(
             logger.warn("Failed to parse bankAccount JSON, using defaults", { userId }); 
         }
 
-        if (!bankAccount?.bankName || !bankAccount?.accountNumber || !bankAccount?.accountName) {
+        const isSeller = accountType === "seller" || accountType === "both";
+        if (isSeller && (!bankAccount?.bankName || !bankAccount?.accountNumber || !bankAccount?.accountName)) {
             return { success: false as const, error: "Bank account details (Bank Name, Account Number, Account Name) are required.", data: null };
         }
 
@@ -571,11 +572,13 @@ async function _submitMarketplaceOnboardingAction(
 
         // Save to Firestore using a transaction for atomicity
         await db.runTransaction(async (transaction) => {
-            transaction.set(verificationRef, verificationData);
-
             const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
             const accountType = formData.get("accountType") as string;
             const isBuyerOnly = accountType === "buyer";
+
+            if (!isBuyerOnly) {
+                transaction.set(verificationRef, verificationData);
+            }
 
             const userUpdate: Record<string, unknown> = {
                 phone: formData.get("phone") as string,

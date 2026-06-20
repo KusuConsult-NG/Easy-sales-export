@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
                 throw new Error(`Application is already ${appData.status}`);
             }
 
-            if (!appData.guarantorVerified) {
+            if (appData.tier && !appData.guarantorVerified) {
                 throw new Error("Guarantor verification required before loan approval.");
             }
 

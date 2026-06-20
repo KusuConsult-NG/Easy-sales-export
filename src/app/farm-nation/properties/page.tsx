@@ -257,10 +257,11 @@ function PropertiesContent() {
                     </div>
                 ) : (
                     <>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div data-testid="property-grid" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {properties.map((property) => (
                                 <div
                                     key={property.id}
+                                    data-testid="property-card"
                                     className="bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-all hover:-translate-y-1 group"
                                 >
                                     {/* Property Image */}

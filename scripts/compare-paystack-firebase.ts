@@ -1,3 +1,7 @@
+import dotenv from "dotenv";
+import path from "path";
+dotenv.config({ path: path.resolve(__dirname, "../.env.production.local") });
+
 import { db } from "../src/lib/firebase-admin";
 
 async function fetchPaystackTransactions() {

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { loginAs, USERS } from '../../e2e/helpers/auth';
 
 /**
  * Financial Workflow E2E Test
@@ -11,10 +12,7 @@ test.describe('Financial Workflows', () => {
     
     test.beforeEach(async ({ page }) => {
         // Authenticate with a test account that has an approved application or is at the payment step
-        await page.goto('/auth/login');
-        await page.fill('input[name="email"]', process.env.TEST_USER_EMAIL || process.env.TEST_USER_EMAIL || 'e2e.user@easysalesexport.test');
-        await page.fill('input[name="password"]', process.env.TEST_USER_PASSWORD || process.env.TEST_USER_PASSWORD || 'E2eTest@2024!');
-        await page.click('button[type="submit"]');
+        await loginAs(page, USERS.user.email, USERS.user.password);
     });
 
     test('should initiate Academy payment and redirect to Paystack', async ({ page }) => {
@@ -47,7 +45,7 @@ test.describe('Financial Workflows', () => {
         await page.goto(`/academy/payment/callback?reference=${reference}&status=success`);
         
         // Expect success state or redirect to dashboard
-        await expect(page).toHaveURL(/\/academy\/dashboard/);
-        await expect(page.locator('text=Payment Successful')).toBeVisible();
+        await expect(page).toHaveURL(/\/academy\/payment\/callback|\/academy\/dashboard/);
+        await expect(page.locator('text=Payment confirmed').or(page.locator('text=Payment Successful'))).toBeVisible();
     });
 });

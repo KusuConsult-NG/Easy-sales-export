@@ -120,78 +120,19 @@ export const authConfig = {
             if (pathname.startsWith("/api/")) return true;
 
             // Uses route-manifest.ts — single source of truth for all route classification
-            if (isPublicPath(pathname)) return true;
-
-            if (isProtectedPath(pathname) && !isLoggedIn) {
-                logger.debug("[Auth] authorized callback returning false for path", { pathname });
-                return false; // NextAuth redirects to signIn page
-            }
-
-            // ── Platform-Wide Payment Gating ─────────────────────────────
-            if (isLoggedIn) {
-                const serviceRegs = auth.user.serviceRegistrations || {};
-                
-                // Identify which module is being accessed based on URL prefix
-                const moduleMatch = pathname.match(/^\/(wave|cooperatives|academy|marketplace|farm-nation|export)/);
-                if (moduleMatch) {
-                    const rawSlug = moduleMatch[1]; // e.g. "farm-nation" (URL slug, used for redirect URLs)
-                    // Map URL slugs to serviceRegistrations keys (camelCase Firestore keys)
-                    const slugToKey: Record<string, string> = {
-                        'farm-nation': 'farmNation',
-                        'cooperatives': 'cooperatives',
-                        'marketplace': 'marketplace',
-                        'academy': 'academy',
-                        'wave': 'wave',
-                        'export': 'export',
-                    };
-                    const moduleId = slugToKey[rawSlug] ?? rawSlug;
-                    const reg = serviceRegs[moduleId] || 
-                                (moduleId === 'farmNation' ? serviceRegs['farm_nation'] : null) ||
-                                (moduleId === 'cooperatives' ? serviceRegs['cooperative'] : null);
-                    
-                    // If they are deep in a module but haven't completed payment, redirect them to the module's onboarding/payment page
-                    // Exceptions: allow access to onboarding/payment/verify-payment paths themselves to avoid loops
-                    const isPaymentFlow = pathname.includes("/onboarding") || 
-                                        pathname.includes("/payment") || 
-                                        pathname.includes("/verify") ||
-                                        pathname.includes("/setup") ||
-                                        pathname.includes("/application");
-
-                    const modulesRequiringPayment = ['cooperatives', 'academy'];
-                    
-                    // ── SCOPED MEMBERSHIP GUARD ─────────────────────────────────
-                    // If accessing via a module-specific domain, ensure membership is active
-                    const currentModule = Object.values(HUB_MODULES).find(m => m.slug === rawSlug || m.slug === moduleId);
-                    
-                    if (currentModule && !isPaymentFlow) {
-                        const status = reg?.status || "pending";
-                        const isApproved = status === "approved" || status === "active" || status === "paid";
-                        
-                        // If not approved and not on a public/onboarding path, redirect to onboarding
-                        // Use rawSlug so the URL is valid (e.g. /farm-nation/onboarding not /farmNation/onboarding)
-                        if (!isApproved) {
-                            let redirectPath = `/${rawSlug}/onboarding`;
-                            if (rawSlug === "wave") {
-                                redirectPath = status === "pending" || status === "under_review" || status === "pending_review"
-                                    ? "/wave/application/review-pending"
-                                    : "/wave/application";
-                            } else if (rawSlug === "academy") {
-                                redirectPath = "/academy/setup";
-                            }
-                            const redirectUrl = new URL(redirectPath, nextUrl.origin);
-                            return Response.redirect(redirectUrl);
-                        }
-                    }
-
-                    if (modulesRequiringPayment.includes(moduleId) && reg && reg.status === "approved" && reg.paymentStatus !== "completed" && !isPaymentFlow) {
-                        // Redirect to the module's primary onboarding/payment entry point
-                        // Use rawSlug for valid URL (e.g. /farm-nation/onboarding)
-                        const redirectUrl = new URL(`/${rawSlug}/onboarding`, nextUrl.origin);
-                        if (moduleId === 'academy') redirectUrl.pathname = '/academy/setup';
-                        return Response.redirect(redirectUrl);
-                    }
+            if (isProtectedPath(pathname)) {
+                if (!isLoggedIn) {
+                    logger.debug("[Auth] authorized callback returning false for path", { pathname });
+                    return false; // NextAuth redirects to signIn page
                 }
+            } else if (isPublicPath(pathname)) {
+                return true;
             }
+
+            // ── Platform-Wide Payment & Membership Gating ────────────────
+            // Bypassed at the Middleware level to prevent Stale JWT Redirect Loops.
+            // Active checks are delegated to layout-level server components (e.g., checkModuleAccess)
+            // which query Firestore directly and are fully stale-JWT-safe.
 
             // All other routes: allow (individual layouts handle their own auth)
             return true;

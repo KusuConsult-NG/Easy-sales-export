@@ -173,7 +173,7 @@ export default function CooperativeDashboardPage() {
 
             {/* Financial Summary */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div className="bg-white rounded-2xl p-6 shadow-lg">
+                <div className="bg-white rounded-2xl p-6 shadow-lg" data-testid="stat-card">
                     <div className="flex items-center gap-3 mb-3">
                         <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
                             <Wallet className="w-6 h-6 text-green-600" />
@@ -185,7 +185,7 @@ export default function CooperativeDashboardPage() {
                     </p>
                 </div>
 
-                <div className="bg-white rounded-2xl p-6 shadow-lg">
+                <div className="bg-white rounded-2xl p-6 shadow-lg" data-testid="stat-card">
                     <div className="flex items-center gap-3 mb-3">
                         <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
                             <CreditCard className="w-6 h-6 text-purple-600" />
@@ -197,7 +197,7 @@ export default function CooperativeDashboardPage() {
                     </p>
                 </div>
 
-                <div className="bg-white rounded-2xl p-6 shadow-lg">
+                <div className="bg-white rounded-2xl p-6 shadow-lg" data-testid="stat-card">
                     <div className="flex items-center gap-3 mb-3">
                         <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
                             <TrendingUp className="w-6 h-6 text-blue-600" />
@@ -209,7 +209,7 @@ export default function CooperativeDashboardPage() {
                     </p>
                 </div>
 
-                <div className="bg-white rounded-2xl p-6 shadow-lg">
+                <div className="bg-white rounded-2xl p-6 shadow-lg" data-testid="stat-card">
                     <div className="flex items-center gap-3 mb-3">
                         <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
                             <Award className="w-6 h-6 text-orange-600" />

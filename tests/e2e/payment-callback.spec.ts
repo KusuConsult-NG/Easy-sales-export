@@ -77,6 +77,7 @@ test.describe('Payment callback flow', () => {
     });
 
     test('Unauthenticated user hitting callback page is redirected to login', async ({ page }) => {
+        await page.context().clearCookies();
         await page.goto(`/academy/payment/callback?reference=${MOCK_REFERENCE}`);
         await page.waitForLoadState('networkidle');
         // Should redirect to login, not crash
