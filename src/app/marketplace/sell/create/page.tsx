@@ -452,11 +452,11 @@ export default function CreateProductPage() {
                                         Retail Price (₦) *
                                     </label>
                                     <input
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,]*"
                                         name="retailPrice"
                                         required
-                                        min="0"
-                                        step="0.01"
                                         placeholder="1000"
                                         className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
                                     />
@@ -506,11 +506,11 @@ export default function CreateProductPage() {
                                 {enableBulkPricing && (
                                     <div className="grid grid-cols-2 gap-4 mt-3">
                                         <input
-                                            type="number"
+                                            type="text"
+                                            inputMode="decimal"
+                                            pattern="[0-9.,]*"
                                             name="bulkPrice"
                                             placeholder="Bulk Price (₦)"
-                                            min="0"
-                                            step="0.01"
                                             className="px-4 py-2 rounded-xl border border-gray-300 bg-white text-gray-900"
                                         />
                                         <input
@@ -541,11 +541,11 @@ export default function CreateProductPage() {
                                 {enableExportPricing && (
                                     <div className="grid grid-cols-2 gap-4 mt-3">
                                         <input
-                                            type="number"
+                                            type="text"
+                                            inputMode="decimal"
+                                            pattern="[0-9.,]*"
                                             name="exportPrice"
                                             placeholder="Export Price (₦)"
-                                            min="0"
-                                            step="0.01"
                                             className="px-4 py-2 rounded-xl border border-gray-300 bg-white text-gray-900"
                                         />
                                         <input

@@ -7,6 +7,8 @@ import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 
+import { parseCurrencyStringToFloat } from "@/lib/utils";
+
 /**
  * API Route: Create Land Listing
  */
@@ -40,10 +42,10 @@ export async function POST(request: NextRequest) {
         const state = formData.get("state") as string;
         const lga = formData.get("lga") as string;
         const address = formData.get("address") as string;
-        const size = Number(formData.get("size"));
+        const size = parseCurrencyStringToFloat(formData.get("size") as string);
         const unit = formData.get("unit") as string;
-        const pricePerUnit = Number(formData.get("pricePerUnit"));
-        const totalPrice = Number(formData.get("totalPrice"));
+        const pricePerUnit = parseCurrencyStringToFloat(formData.get("pricePerUnit") as string);
+        const totalPrice = parseCurrencyStringToFloat(formData.get("totalPrice") as string);
         const latitude = formData.get("latitude") as string;
         const longitude = formData.get("longitude") as string;
         const availableForSale = formData.get("availableForSale") === "true";

@@ -8,6 +8,8 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 import { uploadFileToStorage } from "@/lib/storage-admin";
 
+import { parseCurrencyStringToFloat } from "@/lib/utils";
+
 /**
  * API Route: Create Product Listing
  * Used by /marketplace/products/add page
@@ -44,9 +46,9 @@ export async function POST(request: NextRequest) {
         const unit = formData.get("unit") as string;
         const minOrder = Number(formData.get("minOrder"));
         const stockQuantity = Number(formData.get("stockQuantity"));
-        const retailPrice = Number(formData.get("retailPrice"));
-        const bulkPrice = Number(formData.get("bulkPrice")) || 0;
-        const exportPrice = Number(formData.get("exportPrice")) || 0;
+        const retailPrice = parseCurrencyStringToFloat(formData.get("retailPrice") as string);
+        const bulkPrice = parseCurrencyStringToFloat(formData.get("bulkPrice") as string) || 0;
+        const exportPrice = parseCurrencyStringToFloat(formData.get("exportPrice") as string) || 0;
 
         let certifications: string[] = [];
         try {

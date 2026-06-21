@@ -8,7 +8,7 @@ import {
     ArrowLeft, AlertCircle, CheckCircle, Calculator, Users
 } from "lucide-react";
 import Link from "next/link";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, parseCurrencyStringToFloat } from "@/lib/utils";
 import { COOPERATIVE_CONFIG, CURRENCY_CONFIG } from "@/lib/constants";
 import OnboardingGuide from "@/components/onboarding/OnboardingGuide";
 import { useToast } from "@/contexts/ToastContext";
@@ -35,7 +35,7 @@ export default function FixedSavingsPage() {
     const [membershipStatus, setMembershipStatus] = useState<"approved" | "pending" | "not_member" | null>(null);
 
     // Calculator state
-    const [amount, setAmount] = useState(50000);
+    const [amount, setAmount] = useState("50000");
     const [duration, setDuration] = useState(12);
     const [interestRate] = useState(14); // 14% annual interest for fixed savings
 
@@ -81,11 +81,13 @@ export default function FixedSavingsPage() {
         return (principal * rate * (months / 12)) / 100;
     };
 
-    const projectedProfit = calculateProfit(amount, duration, interestRate);
-    const totalReturn = amount + projectedProfit;
+    const amountNum = parseCurrencyStringToFloat(amount) || 0;
+    const projectedProfit = calculateProfit(amountNum, duration, interestRate);
+    const totalReturn = amountNum + projectedProfit;
 
     async function handleCreatePlan() {
-        if (amount < 50000) {
+        const targetAmount = parseCurrencyStringToFloat(amount);
+        if (targetAmount < 50000) {
             showToast("Minimum amount is ₦50,000", "error");
             return;
         }
@@ -95,7 +97,7 @@ export default function FixedSavingsPage() {
             return;
         }
 
-        if (!confirm(`Create a ${duration}-month fixed savings plan of ${formatCurrency(amount)}?`)) {
+        if (!confirm(`Create a ${duration}-month fixed savings plan of ${formatCurrency(targetAmount)}?`)) {
             return;
         }
 
@@ -104,7 +106,7 @@ export default function FixedSavingsPage() {
             const response = await fetch("/api/cooperative/create-fixed-savings", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ amount, durationMonths: duration }),
+                body: JSON.stringify({ amount: targetAmount, durationMonths: duration }),
             });
 
             const data = await response.json();
@@ -290,11 +292,11 @@ export default function FixedSavingsPage() {
                                     <div className="relative">
                                         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">₦</span>
                                         <input
-                                            type="number"
+                                            type="text"
+                                            inputMode="decimal"
+                                            pattern="[0-9.,]*"
                                             value={amount}
-                                            onChange={(e) => setAmount(Number(e.target.value))}
-                                            min={50000}
-                                            step={10000}
+                                            onChange={(e) => setAmount(e.target.value)}
                                             className="w-full pl-8 pr-4 py-4 bg-white border border-slate-200 rounded-xl text-slate-900 text-lg font-bold focus:outline-none focus:ring-2 focus:ring-green-500"
                                         />
                                     </div>
@@ -385,7 +387,7 @@ export default function FixedSavingsPage() {
 
                                 <button
                                     onClick={handleCreatePlan}
-                                    disabled={isCreating || amount < 50000}
+                                    disabled={isCreating || amountNum < 50000}
                                     className="w-full mt-6 px-6 py-4 bg-linear-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                 >
                                     {isCreating ? (

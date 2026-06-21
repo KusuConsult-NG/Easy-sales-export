@@ -22,6 +22,7 @@ import Image from "next/image";
 import { useToast } from "@/contexts/ToastContext";
 import { useStorage } from "@/hooks/use-storage";
 import type { Product } from "@/lib/types/marketplace";
+import { parseCurrencyStringToFloat } from "@/lib/utils";
 
 const productCategories = [
     { value: "poultry", label: "Poultry" },
@@ -121,7 +122,7 @@ export default function EditProductPage() {
 
     const titleOptions = getTitleOptions(category);
     const hasCategoryTitles = titleOptions.length > 0;
-    const [retailPrice, setRetailPrice] = useState<number>(0);
+    const [retailPrice, setRetailPrice] = useState<string>("");
     const [availableQuantity, setAvailableQuantity] = useState<number>(0);
     const [minimumOrderQuantity, setMinimumOrderQuantity] = useState<number>(1);
     
@@ -185,7 +186,7 @@ export default function EditProductPage() {
 
                     // Pricing Tiers
                     const retailTier = prod.pricingTiers?.find(t => t.type === "retail");
-                    if (retailTier) setRetailPrice(retailTier.price);
+                    if (retailTier) setRetailPrice(retailTier.price.toString());
 
                     const bulkTier = prod.pricingTiers?.find(t => t.type === "bulk");
                     if (bulkTier) {
@@ -276,19 +277,19 @@ export default function EditProductPage() {
             submitFormData.append("description", description);
             submitFormData.append("category", category);
             submitFormData.append("unit", finalUnit);
-            submitFormData.append("retailPrice", retailPrice.toString());
+            submitFormData.append("retailPrice", parseCurrencyStringToFloat(retailPrice).toString());
             submitFormData.append("availableQuantity", availableQuantity.toString());
             submitFormData.append("minimumOrderQuantity", minimumOrderQuantity.toString());
             
             submitFormData.append("bulkAvailable", enableBulkPricing ? "true" : "false");
             if (enableBulkPricing && bulkPrice) {
-                submitFormData.append("bulkPrice", bulkPrice);
+                submitFormData.append("bulkPrice", parseCurrencyStringToFloat(bulkPrice).toString());
                 submitFormData.append("bulkMinQuantity", bulkMinQuantity.toString());
             }
 
             submitFormData.append("exportReady", enableExportPricing ? "true" : "false");
             if (enableExportPricing && exportPrice) {
-                submitFormData.append("exportPrice", exportPrice);
+                submitFormData.append("exportPrice", parseCurrencyStringToFloat(exportPrice).toString());
                 submitFormData.append("exportMinQuantity", exportMinQuantity.toString());
             }
 
@@ -576,12 +577,12 @@ export default function EditProductPage() {
                                         Retail Price (₦) *
                                     </label>
                                     <input
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,]*"
                                         required
-                                        min="0"
-                                        step="0.01"
                                         value={retailPrice}
-                                        onChange={(e) => setRetailPrice(parseFloat(e.target.value) || 0)}
+                                        onChange={(e) => setRetailPrice(e.target.value)}
                                         placeholder="1000"
                                         className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-violet-500 focus:border-transparent outline-none transition"
                                     />
@@ -634,12 +635,12 @@ export default function EditProductPage() {
                                         <div>
                                             <label className="block text-xs font-semibold text-slate-600 mb-1">Bulk Price (₦)</label>
                                             <input
-                                                type="number"
+                                                type="text"
+                                                inputMode="decimal"
+                                                pattern="[0-9.,]*"
                                                 value={bulkPrice}
                                                 onChange={(e) => setBulkPrice(e.target.value)}
                                                 placeholder="Bulk Price (₦)"
-                                                min="0"
-                                                step="0.01"
                                                 className="w-full px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-900"
                                             />
                                         </div>
@@ -676,12 +677,12 @@ export default function EditProductPage() {
                                         <div>
                                             <label className="block text-xs font-semibold text-slate-600 mb-1">Export Price (₦)</label>
                                             <input
-                                                type="number"
+                                                type="text"
+                                                inputMode="decimal"
+                                                pattern="[0-9.,]*"
                                                 value={exportPrice}
                                                 onChange={(e) => setExportPrice(e.target.value)}
                                                 placeholder="Export Price (₦)"
-                                                min="0"
-                                                step="0.01"
                                                 className="w-full px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-900"
                                             />
                                         </div>

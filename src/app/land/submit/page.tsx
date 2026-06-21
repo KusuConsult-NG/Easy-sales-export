@@ -332,13 +332,13 @@ export default function SubmitLandListingPage() {
                                         Size (Hectares) *
                                     </label>
                                     <input
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,]*"
                                         name="size"
                                         value={formData.size}
                                         onChange={handleInputChange}
                                         placeholder="e.g., 10"
-                                        min="0"
-                                        step="0.01"
                                         className="w-full px-4 py-3 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-green-600 outline-none"
                                     />
                                 </div>
@@ -348,13 +348,13 @@ export default function SubmitLandListingPage() {
                                         Price (₦) *
                                     </label>
                                     <input
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,]*"
                                         name="price"
                                         value={formData.price}
                                         onChange={handleInputChange}
                                         placeholder="e.g., 5000000"
-                                        min="0"
-                                        step="1000"
                                         className="w-full px-4 py-3 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-green-600 outline-none"
                                     />
                                 </div>

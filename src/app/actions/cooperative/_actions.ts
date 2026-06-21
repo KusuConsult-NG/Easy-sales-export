@@ -736,7 +736,7 @@ async function _submitWithdrawalAction(
         }
 
         const userId = session.user.id;
-        const amount = Number(formData.get("amount"));
+        const amount = parseCurrencyStringToFloat(formData.get("amount") as string);
         const reason = formData.get("reason") as string;
         const bankAccountStr = formData.get("bankAccount") as string;
         let bankAccount = null;
@@ -1224,7 +1224,7 @@ async function _createFixedSavingsAction(
 
         const userId = session.user.id;
 
-        const rawData = { amount: Number(formData.get("amount")),
+        const rawData = { amount: parseCurrencyStringToFloat(formData.get("amount") as string),
             durationMonths: Number(formData.get("durationMonths")) };
 
         const validationResult = fixedSavingsSchema.safeParse(rawData);

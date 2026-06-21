@@ -24,6 +24,7 @@ import {
 } from "@/app/actions/village-market";
 import type { VillageMarketEvent } from "@/lib/types/marketplace";
 import { useToast } from "@/contexts/ToastContext";
+import { parseCurrencyStringToFloat } from "@/lib/utils";
 
 const fmtDate = (val: any) => {
     if (!val) return "—";
@@ -92,8 +93,8 @@ function AddProductModal({
             eventId,
             title: form.title,
             description: form.description || undefined,
-            price: Number(form.price),
-            flashPrice: form.flashPrice ? Number(form.flashPrice) : undefined,
+            price: parseCurrencyStringToFloat(form.price),
+            flashPrice: form.flashPrice ? parseCurrencyStringToFloat(form.flashPrice) : undefined,
             unit: finalUnit || undefined,
             availableQuantity: form.availableQuantity ? Number(form.availableQuantity) : undefined,
             imageUrl: uploadedUrl,
@@ -165,14 +166,14 @@ function AddProductModal({
                     <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className="block text-sm font-semibold text-slate-700 mb-1.5">Regular Price (₦) *</label>
-                            <input type="number" value={form.price} onChange={(e) => setForm(f => ({ ...f, price: e.target.value }))}
-                                placeholder="5000" min="0"
+                            <input type="text" inputMode="decimal" pattern="[0-9.,]*" value={form.price} onChange={(e) => setForm(f => ({ ...f, price: e.target.value }))}
+                                placeholder="5000"
                                 className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none" />
                         </div>
                         <div>
                             <label className="block text-sm font-semibold text-slate-700 mb-1.5">Flash Price (₦)</label>
-                            <input type="number" value={form.flashPrice} onChange={(e) => setForm(f => ({ ...f, flashPrice: e.target.value }))}
-                                placeholder="3500" min="0"
+                            <input type="text" inputMode="decimal" pattern="[0-9.,]*" value={form.flashPrice} onChange={(e) => setForm(f => ({ ...f, flashPrice: e.target.value }))}
+                                placeholder="3500"
                                 className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none" />
                         </div>
                     </div>

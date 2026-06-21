@@ -70,9 +70,9 @@ export default function AddProductPage() {
         unit: "kg",
         minOrder: 1,
         stockQuantity: 0,
-        retailPrice: 0,
-        bulkPrice: 0,
-        exportPrice: 0,
+        retailPrice: "",
+        bulkPrice: "",
+        exportPrice: "",
         certifications: [] as string[],
         escrowAvailable: true,
         state: "Lagos",
@@ -415,13 +415,13 @@ export default function AddProductPage() {
                                         Retail Price (₦ per {formData.unit}) *
                                     </label>
                                     <input
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,]*"
                                         value={formData.retailPrice}
-                                        onChange={(e) => setFormData({ ...formData, retailPrice: Number(e.target.value) })}
+                                        onChange={(e) => setFormData({ ...formData, retailPrice: e.target.value })}
                                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         placeholder="0"
-                                        min="0"
-                                        step="100"
                                         required
                                     />
                                 </div>
@@ -431,13 +431,13 @@ export default function AddProductPage() {
                                         Bulk Price (₦ per {formData.unit})
                                     </label>
                                     <input
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,]*"
                                         value={formData.bulkPrice}
-                                        onChange={(e) => setFormData({ ...formData, bulkPrice: Number(e.target.value) })}
+                                        onChange={(e) => setFormData({ ...formData, bulkPrice: e.target.value })}
                                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         placeholder="Optional"
-                                        min="0"
-                                        step="100"
                                     />
                                 </div>
 
@@ -446,13 +446,13 @@ export default function AddProductPage() {
                                         Export Price (₦ per {formData.unit})
                                     </label>
                                     <input
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,]*"
                                         value={formData.exportPrice}
-                                        onChange={(e) => setFormData({ ...formData, exportPrice: Number(e.target.value) })}
+                                        onChange={(e) => setFormData({ ...formData, exportPrice: e.target.value })}
                                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         placeholder="Optional"
-                                        min="0"
-                                        step="100"
                                     />
                                 </div>
                             </div>
