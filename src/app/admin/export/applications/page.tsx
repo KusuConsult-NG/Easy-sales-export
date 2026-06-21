@@ -127,7 +127,8 @@ export default function AdminExportApplicationsPage() {
         onNextPage,
         onPrevPage,
         pageIndex,
-        refresh: fetchData
+        refresh: fetchData,
+        meta
     } = useAdminData<StandardPendingForm<ExportApplication>>({
         fetchAction: async (opts) => getStandardExportApplicationsAction({
             ...opts,
@@ -172,6 +173,9 @@ export default function AdminExportApplicationsPage() {
             }
         }).catch(console.error);
     }, [applications]);
+
+    const isFiltered = !!(search || dateRange.from || dateRange.to);
+    const displayStats = isFiltered && meta?.stats ? meta.stats : stats;
 
     async function handleApprove(app: StandardPendingForm<ExportApplication>) {
         if (!confirm(`Approve application for ${app.user.name}?`)) return;
@@ -312,10 +316,10 @@ export default function AdminExportApplicationsPage() {
             {/* Stats Row */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
                 {[
-                    { label: "Pending Review", value: stats.pending, color: "text-yellow-600" },
-                    { label: "Approved", value: stats.approved, color: "text-green-600" },
-                    { label: "Rejected", value: stats.rejected, color: "text-red-600" },
-                    { label: "Resubmitted", value: stats.resubmitted, color: "text-orange-600" },
+                    { label: "Pending Review", value: displayStats.pending, color: "text-yellow-600" },
+                    { label: "Approved", value: displayStats.approved, color: "text-green-600" },
+                    { label: "Rejected", value: displayStats.rejected, color: "text-red-600" },
+                    { label: "Resubmitted", value: displayStats.resubmitted, color: "text-orange-600" },
                 ].map((s) => (
                     <div key={s.label} className="bg-white rounded-xl border border-slate-200 p-4">
                         <p className="text-xs text-slate-500 uppercase tracking-wide mb-1">{s.label}</p>

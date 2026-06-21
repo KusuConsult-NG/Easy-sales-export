@@ -54,8 +54,8 @@ export function initializeFirebaseAdmin(): App {
     }
 
     if (isEmulator) {
-        process.env.FIREBASE_PROJECT_ID = 'demo-test';
-        process.env.FIREBASE_CLIENT_EMAIL = 'firebase-adminsdk-fbsvc@demo-test.iam.gserviceaccount.com';
+        process.env.FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'demo-test';
+        process.env.FIREBASE_CLIENT_EMAIL = process.env.FIREBASE_CLIENT_EMAIL || `firebase-adminsdk-fbsvc@${process.env.FIREBASE_PROJECT_ID}.iam.gserviceaccount.com`;
     }
 
     // Remove surrounding quotes if present

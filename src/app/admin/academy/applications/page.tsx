@@ -402,6 +402,7 @@ export default function AdminAcademyApplicationsPage() {
         pageIndex,
         search,
         setSearch,
+        meta,
     } = useAdminData<AcademyApplication>({
         fetchAction: async (opts) => {
             try {
@@ -413,6 +414,8 @@ export default function AdminAcademyApplicationsPage() {
                     sortOrder: sortOrder,
                     dateFrom: dateRange.from || undefined,
                     dateTo: dateRange.to || undefined,
+                    paymentStatus: paymentFilter,
+                    registry: registryFilter,
                 });
 
                 if (!result.success) {
@@ -451,7 +454,7 @@ export default function AdminAcademyApplicationsPage() {
                         lga: d.lga,
                         residentialAddress: d.residentialAddress,
                         isLegacy: stdApp.isLegacy,
-                        _raw: d, // keep full merged object for the detail modal
+                        _raw: d,
                     } as AcademyApplication;
                 });
 
@@ -460,6 +463,7 @@ export default function AdminAcademyApplicationsPage() {
                     data: apps,
                     lastDocId: result.lastDocId,
                     hasMore: result.hasMore,
+                    meta: result.meta,
                     error: null
                 };
             } catch (err: any) {
@@ -473,7 +477,7 @@ export default function AdminAcademyApplicationsPage() {
             }
         },
         limit: 50,
-        dependencies: [statusFilter, sortOrder, dateRange]
+        dependencies: [statusFilter, sortOrder, dateRange, paymentFilter, registryFilter]
     });
 
     async function handleApprove(id: string) {
@@ -530,17 +534,7 @@ export default function AdminAcademyApplicationsPage() {
         setProcessingId(null);
     }
 
-    const filtered = applications.filter(a => {
-        let matchesPayment = true;
-        if (paymentFilter === "completed") matchesPayment = a.paymentStatus === "completed" || a.paymentStatus === "paid";
-        else if (paymentFilter === "pending") matchesPayment = a.paymentStatus !== "completed" && a.paymentStatus !== "paid";
-
-        let matchesRegistry = true;
-        if (registryFilter === "legacy") matchesRegistry = !!a.isLegacy;
-        else if (registryFilter === "regular") matchesRegistry = !a.isLegacy;
-
-        return matchesPayment && matchesRegistry;
-    });
+    const filtered = applications;
 
     const sortedFiltered = [...filtered].sort((a, b) => {
         if (sortBy === "date-desc") {
@@ -572,15 +566,17 @@ export default function AdminAcademyApplicationsPage() {
         return 0;
     });
 
-    const counts = stats ? {
-        pending: stats.pending,
-        under_review: stats.under_review,
-        approved: stats.approved,
-        rejected: stats.rejected
+    const isFiltered = !!(search || dateRange.from || dateRange.to || paymentFilter !== "all" || registryFilter !== "all");
+    const displayStats = isFiltered && meta?.stats ? meta.stats : stats;
+
+    const counts = displayStats ? {
+        pending: displayStats.pending,
+        under_review: displayStats.under_review,
+        approved: displayStats.approved,
+        rejected: displayStats.rejected
     } : { pending: 0, under_review: 0, approved: 0, rejected: 0 };
     
-    // If stats are not yet loaded, fallback to computing from the fetched data
-    if (!stats) {
+    if (!displayStats) {
         applications.forEach(a => { counts[a.status] = (counts[a.status] ?? 0) + 1; });
     }
 
@@ -696,7 +692,7 @@ export default function AdminAcademyApplicationsPage() {
             <div className="mb-8 flex items-center justify-between flex-wrap gap-4">
                 <div>
                     <h1 className="text-3xl font-bold text-slate-900 mb-1">Academy Applications</h1>
-                    <p className="text-slate-600">Live — {stats ? stats.totalApplications.toLocaleString() : applications.length} total applications</p>
+                    <p className="text-slate-600">Live — {displayStats ? displayStats.totalApplications.toLocaleString() : applications.length} total applications</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                     {filtered.length > 0 && (

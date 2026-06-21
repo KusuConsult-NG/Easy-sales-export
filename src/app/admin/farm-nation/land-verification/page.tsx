@@ -65,7 +65,8 @@ export default function AdminLandVerificationPage() {
         onNextPage,
         onPrevPage,
         pageIndex,
-        refresh: loadVerifications
+        refresh: loadVerifications,
+        meta
     } = useAdminData<LandVerification>({
         fetchAction: getAdminLandVerificationsAction,
         limit: 50
@@ -137,7 +138,7 @@ export default function AdminLandVerificationPage() {
                 setServerStats(result.data.stats);
             }
         }).catch(() => {});
-    }, []);
+    }, [verifications]);
 
     const filteredVerifications = verifications;
 
@@ -344,7 +345,7 @@ export default function AdminLandVerificationPage() {
     };
 
     // Use server-side stats when available; fall back to local page counts while loading
-    const stats = serverStats ?? {
+    const stats = meta?.stats || serverStats || {
         total:    verifications.length,
         pending:  verifications.filter(v => v.verificationStatus === "pending").length,
         verified: verifications.filter(v => v.verificationStatus === "verified").length,

@@ -128,6 +128,15 @@ const loginLimiter = new Ratelimit({
 export async function consumeLoginAttempt(
     email: string
 ): Promise<{ allowed: boolean; remainingAttempts?: number; error?: string }> {
+    const isEmulator = !!(
+        process.env.FIREBASE_AUTH_EMULATOR_HOST ||
+        process.env.FIRESTORE_EMULATOR_HOST ||
+        process.env.NODE_ENV === 'test'
+    );
+    if (isEmulator && !email.toLowerCase().includes('ratelimit-test')) {
+        return { allowed: true, remainingAttempts: 999 };
+    }
+
     const key = `login_${email.toLowerCase()}`;
 
     try {

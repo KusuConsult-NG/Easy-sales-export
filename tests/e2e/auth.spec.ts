@@ -12,7 +12,7 @@ test.describe('Authentication', () => {
         });
         // Navigate to login page before each test
         await page.goto('/auth/login?module=cooperatives');
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('load');
     });
 
     test('should display login page correctly', async ({ page }) => {

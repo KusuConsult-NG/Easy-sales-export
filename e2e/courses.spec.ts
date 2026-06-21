@@ -11,7 +11,7 @@ test.describe('Course Enrollment Flow', () => {
         await page.goto('/academy/courses');
 
         // Wait for the loading state to resolve
-        await expect(page.locator('text=Loading...')).not.toBeVisible({ timeout: 20000 });
+        await expect(page.locator('text=Loading...').first()).not.toBeVisible({ timeout: 20000 });
 
         // 2. Verify courses are listed
         await expect(page.locator('h1')).toContainText(/Academy|Courses|Learn How to Position|Master/i);

@@ -4,7 +4,13 @@ import { Redis } from '@upstash/redis';
 const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
 const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
 
-const redis = (redisUrl && redisToken)
+const isEmulator = !!(
+    process.env.FIREBASE_AUTH_EMULATOR_HOST ||
+    process.env.FIRESTORE_EMULATOR_HOST ||
+    process.env.NODE_ENV === 'test'
+);
+
+const redis = (redisUrl && redisToken && !isEmulator)
     ? new Redis({ 
         url: redisUrl, 
         token: redisToken,

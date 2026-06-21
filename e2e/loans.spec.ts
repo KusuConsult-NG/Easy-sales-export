@@ -3,6 +3,8 @@ import { loginAs, USERS } from './helpers/auth';
 
 test.describe('Loan Application Flow', () => {
     test.beforeEach(async ({ page }) => {
+        page.on('console', msg => console.log('BROWSER LOG:', msg.type(), msg.text()));
+        page.on('pageerror', err => console.log('BROWSER ERROR:', err.message));
         await loginAs(page, USERS.user.email, USERS.user.password);
     });
 
@@ -67,6 +69,7 @@ test.describe('Loan Application Flow', () => {
 
         // Try to submit with invalid amount (0)
         await page.fill('input[name="amount"]', '0');
+        await expect(page.locator('input[name="amount"]')).toHaveValue('0');
         await page.click('text=Next');
 
         // Should see validation error

@@ -1330,9 +1330,21 @@ export async function getStandardCooperativeMembersAction(
         search?: string;
         dateFrom?: string; // YYYY-MM-DD
         dateTo?: string;   // YYYY-MM-DD
+        state?: string;
+        lga?: string;
+        registry?: "all" | "legacy" | "regular";
     } = {}
 ): Promise<PaginatedAdminResponse<any>> {
-    const { status: statusFilter = "all", paymentStatus: paymentFilter = "all", cursorId, limit: limitCount = 50, search } = options;
+    const {
+        status: statusFilter = "all",
+        paymentStatus: paymentFilter = "all",
+        cursorId,
+        limit: limitCount = 50,
+        search,
+        state,
+        lga,
+        registry
+    } = options;
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return paginatedErr('Not authenticated');
@@ -1350,7 +1362,7 @@ export async function getStandardCooperativeMembersAction(
             cursorSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(cursorId).get();
         }
 
-        const useMemoryPagination = !!search || !!options.dateFrom || !!options.dateTo;
+        const useMemoryPagination = !!search || !!options.dateFrom || !!options.dateTo || !!state || !!lga || (registry && registry !== "all");
         const fetchLimit = useMemoryPagination ? 5000 : limitCount;
 
         const adminScope = await getAdminScope(session.user.id, liveRoles);
@@ -1359,58 +1371,14 @@ export async function getStandardCooperativeMembersAction(
         let hasMoreRaw = false;
         let nextCursor: string | undefined = undefined;
 
-        if (search) {
-            const { searchUserIdsByQuery } = await import("@/lib/admin-search-helper");
-            const matchingUserIds = await searchUserIdsByQuery(search);
-            if (matchingUserIds.length === 0) {
-                return paginatedOk([], undefined);
-            }
+        let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
 
-            const querySnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                .where("userId", "in", matchingUserIds)
-                .get();
+        if (adminScope) {
+            q = q.where("cooperativeId", "==", adminScope);
+        }
 
-            applications = serializeDocs(querySnap.docs);
-            if (adminScope) {
-                applications = applications.filter(app => app.cooperativeId === adminScope);
-            }
-            if (statusFilter && statusFilter !== "all") {
-                if (statusFilter === "approved" || statusFilter === "active") {
-                    applications = applications.filter(app => app.membershipStatus === "approved" || app.membershipStatus === "active");
-                } else {
-                    applications = applications.filter(app => app.membershipStatus === statusFilter);
-                }
-            }
-            if (paymentFilter && paymentFilter !== "all") {
-                if (paymentFilter === "completed") {
-                    applications = applications.filter(app => app.paymentStatus === "completed");
-                } else {
-                    applications = applications.filter(app => app.paymentStatus !== "completed");
-                }
-            }
-            if (options.dateFrom) {
-                const from = new Date(options.dateFrom);
-                from.setHours(0, 0, 0, 0);
-                applications = applications.filter(app => {
-                    const d = app.createdAt?.seconds ? new Date(app.createdAt.seconds * 1000) : new Date(app.createdAt);
-                    return d >= from;
-                });
-            }
-            if (options.dateTo) {
-                const to = new Date(options.dateTo);
-                to.setHours(23, 59, 59, 999);
-                applications = applications.filter(app => {
-                    const d = app.createdAt?.seconds ? new Date(app.createdAt.seconds * 1000) : new Date(app.createdAt);
-                    return d <= to;
-                });
-            }
-        } else {
-            let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
-
-            if (adminScope) {
-                q = q.where("cooperativeId", "==", adminScope);
-            }
-
+        // Only apply status and payment filters in Firestore query if not using memory pagination
+        if (!useMemoryPagination) {
             if (statusFilter && statusFilter !== "all") {
                 if (statusFilter === "approved" || statusFilter === "active") {
                     q = q.where("membershipStatus", "in", ["approved", "active"]);
@@ -1428,34 +1396,135 @@ export async function getStandardCooperativeMembersAction(
                     q = q.where("paymentStatus", "==", paymentFilter);
                 }
             }
-
-            if (options.dateFrom) {
-                const fromTs = dateRangeStart(options.dateFrom);
-                q = q.where("createdAt", ">=", fromTs);
-            }
-            if (options.dateTo) {
-                const toTs = dateRangeEnd(options.dateTo);
-                q = q.where("createdAt", "<=", toTs);
-            }
-
-            q = q.orderBy("createdAt", "desc");
-
-            if (cursorSnap && cursorSnap.exists && !useMemoryPagination) {
-                q = q.startAfter(cursorSnap);
-            }
-            q = q.limit(fetchLimit + 1);
-
-            const snapshot = await q.get();
-            applications = serializeDocs(snapshot.docs);
-            hasMoreRaw = applications.length > fetchLimit;
-            if (!useMemoryPagination) {
-                applications = applications.slice(0, fetchLimit);
-            }
-            nextCursor = applications.length > 0 ? applications[applications.length - 1].id as string : undefined;
         }
 
+        if (options.dateFrom) {
+            const fromTs = dateRangeStart(options.dateFrom);
+            q = q.where("createdAt", ">=", fromTs);
+        }
+        if (options.dateTo) {
+            const toTs = dateRangeEnd(options.dateTo);
+            q = q.where("createdAt", "<=", toTs);
+        }
 
-        const userIds = [...new Set(applications.map(app => app.userId).filter(Boolean))];
+        q = q.orderBy("createdAt", "desc");
+
+        if (cursorSnap && cursorSnap.exists && !useMemoryPagination) {
+            q = q.startAfter(cursorSnap);
+        }
+        q = q.limit(fetchLimit + 1);
+
+        const snapshot = await q.get();
+        applications = serializeDocs(snapshot.docs);
+        hasMoreRaw = applications.length > fetchLimit;
+        if (!useMemoryPagination) {
+            applications = applications.slice(0, fetchLimit);
+        }
+        nextCursor = applications.length > 0 ? applications[applications.length - 1].id as string : undefined;
+
+        // Perform in-memory filtering for cohort if useMemoryPagination is true
+        let stats: any = null;
+        if (useMemoryPagination) {
+            // Apply search filter if active
+            if (search) {
+                const { searchUserIdsByQuery } = await import("@/lib/admin-search-helper");
+                const matchingUserIds = await searchUserIdsByQuery(search);
+                const matchingUserIdsSet = new Set(matchingUserIds);
+                const s = search.toLowerCase().trim();
+                applications = applications.filter(app => {
+                    const shortId = `ese-coop-${app.id.slice(-4).toLowerCase()}`;
+                    const docSearchString = [
+                        app.id,
+                        shortId,
+                        app.firstName,
+                        app.lastName,
+                        app.phone,
+                        app.email
+                    ].filter(Boolean).map(String).join(" ").toLowerCase();
+                    return docSearchString.includes(s) || matchingUserIdsSet.has(app.userId);
+                });
+            }
+
+            // Apply registry filter if active
+            if (registry === "legacy") {
+                applications = applications.filter(app => app.isLegacy === true);
+            } else if (registry === "regular") {
+                applications = applications.filter(app => app.isLegacy !== true);
+            }
+
+            // Apply state filter if active
+            if (state) {
+                const cleanState = state.toLowerCase().replace(/\s*state$/i, "").trim();
+                applications = applications.filter(app => {
+                    const stateOfOrigin = app.stateOfOrigin || "";
+                    const cleanStateOfOrigin = typeof stateOfOrigin === 'string'
+                        ? stateOfOrigin.toLowerCase().replace(/\s*state$/i, "").trim()
+                        : "";
+                    return cleanStateOfOrigin.includes(cleanState);
+                });
+            }
+
+            // Apply LGA filter if active
+            if (lga) {
+                const cleanLga = lga.toLowerCase().trim();
+                applications = applications.filter(app => {
+                    const appLga = app.lga || "";
+                    return typeof appLga === 'string' && appLga.toLowerCase().includes(cleanLga);
+                });
+            }
+
+            // Calculate stats on the cohort before applying status/payment filters
+            const pendingCount = applications.filter(app => app.membershipStatus === "pending").length;
+            const approvedCount = applications.filter(app => app.membershipStatus === "approved" || app.membershipStatus === "active").length;
+            const paidCount = applications.filter(app => app.paymentStatus === "completed").length;
+            const unpaidCount = applications.filter(app => app.paymentStatus !== "completed").length;
+            stats = {
+                pendingMembers: pendingCount,
+                activeMembers: approvedCount,
+                paidMembers: paidCount,
+                unpaidMembers: unpaidCount,
+                totalMembers: applications.length
+            };
+
+            // Now apply status and payment filters to get the final list for display
+            if (statusFilter && statusFilter !== "all") {
+                if (statusFilter === "approved" || statusFilter === "active") {
+                    applications = applications.filter(app => app.membershipStatus === "approved" || app.membershipStatus === "active");
+                } else {
+                    applications = applications.filter(app => app.membershipStatus === statusFilter);
+                }
+            }
+
+            if (paymentFilter && paymentFilter !== "all") {
+                if (paymentFilter === "completed") {
+                    applications = applications.filter(app => app.paymentStatus === "completed");
+                } else if (paymentFilter === "unpaid" || paymentFilter === "pending") {
+                    applications = applications.filter(app => app.paymentStatus === "pending" || app.paymentStatus === "unpaid" || app.paymentStatus === "failed");
+                } else {
+                    applications = applications.filter(app => app.paymentStatus === paymentFilter);
+                }
+            }
+        }
+
+        let page = 0;
+        const pageOption = (options as any).page;
+        if (pageOption !== undefined) {
+            page = Number(pageOption);
+        } else if (cursorId && /^\d+$/.test(cursorId)) {
+            page = Number(cursorId);
+        }
+
+        const offset = page * limitCount;
+        const paged = useMemoryPagination ? applications.slice(offset, offset + limitCount) : applications;
+        const _hasMore = useMemoryPagination 
+            ? (offset + limitCount < applications.length)
+            : hasMoreRaw;
+
+        const _nextCursor = useMemoryPagination 
+            ? (_hasMore ? String(page + 1) : undefined)
+            : (_hasMore ? nextCursor : undefined);
+
+        const userIds = [...new Set(paged.map(app => app.userId).filter(Boolean))];
         const userMap = new Map<string, any>();
         const userPromises = [];
         for (let i = 0; i < userIds.length; i += 30) {
@@ -1467,20 +1536,15 @@ export async function getStandardCooperativeMembersAction(
         const userSnapsArray = await Promise.all(userPromises);
         userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, d.data())));
 
-        let standardForms = applications.map((app: any) => {
+        let standardForms = paged.map((app: any) => {
             const uData = (userMap.get(app.userId as string) || {}) as any;
             const localName = app.firstName ? `${app.firstName} ${app.lastName || ''}`.trim() : (app.fullName || null);
-            // Fix: check firstName FIRST to avoid "undefined undefined" for legacy users
             const userName = uData.firstName
                 ? `${uData.firstName} ${uData.lastName || ''}`.trim()
                 : (uData.fullName || uData.name || uData.displayName || localName || "");
 
-            // Merge USERS data into app.data as fallback for fields that were never filled via onboarding.
-            // Legacy members who only paid (never submitted the form) will have blank phone/gender/dob etc.
-            // on the cooperative_members doc — so we surface it from the USERS profile instead.
             const mergedData = {
                 ...app,
-                // Personal details — prefer cooperative_members doc, fall back to users profile
                 phone:               app.phone               || uData.phone              || uData.phoneNumber || null,
                 gender:              app.gender              || uData.gender             || null,
                 dateOfBirth:         app.dateOfBirth         || uData.dateOfBirth        || uData.dob        || null,
@@ -1489,13 +1553,9 @@ export async function getStandardCooperativeMembersAction(
                 lga:                 app.lga                 || uData.lga                || (typeof uData.address === 'object' ? uData.address?.lga   : null) || null,
                 ward:                app.ward                || uData.ward               || (typeof uData.address === 'object' ? uData.address?.ward  : null) || null,
                 residentialAddress:  app.residentialAddress  || (typeof uData.address === 'object' ? uData.address?.street : uData.address) || null,
-                // Name fields
                 firstName:           app.firstName           || uData.firstName          || null,
                 lastName:            app.lastName            || uData.lastName           || null,
                 email:               app.email               || uData.email              || uData.userEmail  || null,
-                // nextOfKin: remap stored field names to what the admin modal reads
-                // Firestore stores: { fullName, phone, residentialAddress }
-                // Admin modal reads: { name, phone, address }
                 nextOfKin: app.nextOfKin ? {
                     ...app.nextOfKin,
                     name:    app.nextOfKin.fullName    || app.nextOfKin.name    || null,
@@ -1503,7 +1563,6 @@ export async function getStandardCooperativeMembersAction(
                 } : null,
             };
 
-            // Canonical bankDetails injection
             const bankDetails = uData.bankDetails || {
                 bankName: app.bankName || uData.bankName || uData.bankAccount?.bankName || "",
                 accountNumber: app.accountNumber || uData.bankAccountNumber || uData.bankAccount?.accountNumber || "",
@@ -1533,62 +1592,7 @@ export async function getStandardCooperativeMembersAction(
             };
         });
 
-        if (search) {
-            const s = search.toLowerCase().trim();
-            standardForms = standardForms.filter((f: any) => {
-                const shortId = `ese-coop-${f.id.slice(-4).toLowerCase()}`;
-                const searchString = [
-                    f.id,
-                    f.user?.id,
-                    shortId,
-                    f.user?.name,
-                    f.user?.email,
-                    f.user?.phone,
-                    f.data?.firstName,
-                    f.data?.lastName,
-                    f.data?.phone
-                ].filter(Boolean).map(String).join(" ").toLowerCase();
-                return searchString.includes(s);
-            });
-        }
-
-        // ALWAYS apply date filters in memory as a definitive backstop.
-        if (options.dateFrom) {
-            const from = new Date(options.dateFrom);
-            from.setHours(0, 0, 0, 0);
-            standardForms = standardForms.filter((f: any) => {
-                const d = f.data?.createdAt?.seconds ? new Date(f.data.createdAt.seconds * 1000) : new Date(f.data?.createdAt);
-                return d >= from;
-            });
-        }
-        if (options.dateTo) {
-            const to = new Date(options.dateTo);
-            to.setHours(23, 59, 59, 999);
-            standardForms = standardForms.filter((f: any) => {
-                const d = f.data?.createdAt?.seconds ? new Date(f.data.createdAt.seconds * 1000) : new Date(f.data?.createdAt);
-                return d <= to;
-            });
-        }
-
-        let page = 0;
-        const pageOption = (options as any).page;
-        if (pageOption !== undefined) {
-            page = Number(pageOption);
-        } else if (cursorId && /^\d+$/.test(cursorId)) {
-            page = Number(cursorId);
-        }
-
-        const offset = page * limitCount;
-        const paged = useMemoryPagination ? standardForms.slice(offset, offset + limitCount) : standardForms;
-        const _hasMore = useMemoryPagination 
-            ? (offset + limitCount < standardForms.length)
-            : hasMoreRaw;
-
-        const _nextCursor = useMemoryPagination 
-            ? (_hasMore ? String(page + 1) : undefined)
-            : (_hasMore ? nextCursor : undefined);
-
-        return paginatedOk(paged, _nextCursor);
+        return paginatedOk(standardForms, _nextCursor, stats ? { stats } : undefined);
     } catch (error) {
         logger.error(`getStandardCooperativeMembersAction error:`, error);
         return paginatedErr("Failed to load cooperative members");

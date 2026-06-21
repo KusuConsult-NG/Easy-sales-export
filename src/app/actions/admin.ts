@@ -2327,26 +2327,31 @@ async function _getStandardExportApplicationsAction(options: {
         const fetchLimit = useMemoryPagination ? 5000 : (options.limit || 50);
 
         let q: any = db.collection(COLLECTIONS.EXPORT_APPLICATIONS);
-        if (options.status && options.status !== "all") {
-            if (options.status === "pending") {
-                q = q.where("status", "in", ["pending", "pending_review"]);
-            } else {
-                q = q.where("status", "==", options.status);
+        
+        // Skip status filter if using memory pagination
+        if (!useMemoryPagination) {
+            if (options.status && options.status !== "all") {
+                if (options.status === "pending") {
+                    q = q.where("status", "in", ["pending", "pending_review"]);
+                } else {
+                    q = q.where("status", "==", options.status);
+                }
             }
         }
-        // Server-side date range filter
-        if (options.dateFrom) {
+        
+        // Server-side date range filter (if not using memory pagination)
+        if (options.dateFrom && !useMemoryPagination) {
             const fromTs = dateRangeStart(options.dateFrom);
             q = q.where("createdAt", ">=", fromTs);
         }
-        if (options.dateTo) {
+        if (options.dateTo && !useMemoryPagination) {
             const toTs = dateRangeEnd(options.dateTo);
             q = q.where("createdAt", "<=", toTs);
         }
 
         q = q.orderBy("createdAt", "desc").limit(fetchLimit + 1);
 
-        if (options.lastDocId) {
+        if (options.lastDocId && !useMemoryPagination) {
             const lastDoc = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS).doc(options.lastDocId).get();
             if (lastDoc.exists) {
                 q = q.startAfter(lastDoc);
@@ -2361,7 +2366,88 @@ async function _getStandardExportApplicationsAction(options: {
         }
         const nextCursor = applications.length > 0 ? applications[applications.length - 1].id as string : undefined;
 
-        const userIds = [...new Set(applications.map((app: any) => app.userId).filter(Boolean))];
+        // Perform in-memory filtering & cohort calculations
+        let stats: any = null;
+        if (useMemoryPagination) {
+            // Apply in-memory search
+            if (options.search) {
+                const s = options.search.toLowerCase().trim();
+                const { searchUserIdsByQuery } = await import("@/lib/admin-search-helper");
+                const matchingUserIds = await searchUserIdsByQuery(options.search);
+                const matchingUserIdsSet = new Set(matchingUserIds);
+                applications = applications.filter((app: any) => {
+                    const profile = (app.profile || {}) as any;
+                    const kyc = (app.kyc?.kycData || {}) as any;
+                    const searchString = [
+                        app.id,
+                        app.userId,
+                        app.userEmail,
+                        profile.fullName,
+                        profile.phone,
+                        kyc.firstName,
+                        kyc.lastName,
+                        kyc.phone
+                    ].filter(Boolean).map(String).join(" ").toLowerCase();
+                    return searchString.includes(s) || matchingUserIdsSet.has(app.userId as string);
+                });
+            }
+
+            // Apply date filters in memory
+            if (options.dateFrom) {
+                const from = new Date(options.dateFrom);
+                from.setHours(0, 0, 0, 0);
+                applications = applications.filter((app: any) => {
+                    const d = app.createdAt?.seconds ? new Date(app.createdAt.seconds * 1000) : new Date(app.createdAt as any);
+                    return d >= from;
+                });
+            }
+            if (options.dateTo) {
+                const to = new Date(options.dateTo);
+                to.setHours(23, 59, 59, 999);
+                applications = applications.filter((app: any) => {
+                    const d = app.createdAt?.seconds ? new Date(app.createdAt.seconds * 1000) : new Date(app.createdAt as any);
+                    return d <= to;
+                });
+            }
+
+            // Compute cohort counts before status filtering
+            const pending = applications.filter((app: any) => app.status === "pending" || app.status === "pending_review").length;
+            const approved = applications.filter((app: any) => app.status === "approved").length;
+            const rejected = applications.filter((app: any) => app.status === "rejected").length;
+            const resubmitted = applications.filter((app: any) => app.resubmittedAt !== undefined && app.resubmittedAt !== null).length;
+            stats = { pending, approved, rejected, resubmitted };
+
+            // Apply status filter
+            if (options.status && options.status !== "all") {
+                if (options.status === "pending") {
+                    applications = applications.filter((app: any) => app.status === "pending" || app.status === "pending_review");
+                } else {
+                    applications = applications.filter((app: any) => app.status === options.status);
+                }
+            }
+        }
+
+        const limit = options.limit || 50;
+        let page = 0;
+        const pageOption = (options as any).page;
+        if (pageOption !== undefined) {
+            page = Number(pageOption);
+        } else if (options.lastDocId && /^\d+$/.test(options.lastDocId)) {
+            page = Number(options.lastDocId);
+        }
+
+        const offset = page * limit;
+        const paged = useMemoryPagination ? applications.slice(offset, offset + limit) : applications;
+        const _hasMore = useMemoryPagination 
+            ? (offset + limit < applications.length)
+            : hasMore;
+
+        const _nextCursor = useMemoryPagination 
+            ? (_hasMore ? String(page + 1) : undefined)
+            : nextCursor;
+
+        // Hydrate User Data only for the sliced page
+        const userIds = [...new Set(paged.map((app: any) => app.userId).filter(Boolean))];
         const userMap = new Map<string, any>();
         const userPromises = [];
         for (let i = 0; i < userIds.length; i += 30) {
@@ -2373,18 +2459,16 @@ async function _getStandardExportApplicationsAction(options: {
         const userSnapsArray = await Promise.all(userPromises);
         userSnapsArray.forEach(snap => snap.docs.forEach((d: any) => userMap.set(d.id, serializeValue(d.data()))));
 
-        const standardForms = applications.map((app: any) => {
+        const standardForms = paged.map((app: any) => {
             const uData = (userMap.get(app.userId as string) || {}) as any;
             const kyc = (app.kyc || {}) as any;
             const profile = (app.profile || {}) as any;
             const kycName = kyc?.kycData?.firstName ? `${kyc.kycData.firstName} ${kyc.kycData.lastName || ''}`.trim() : null;
             const userName = uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (profile?.fullName || kycName || "Unknown User");
-            // Normalize status to map perfectly to UI rules
+            
             let status = app.status || "pending";
             if (status === "pending_review") status = "pending";
 
-            // Merge USERS profile + profile sub-object as fallbacks so admin modal
-            // shows all personal fields regardless of which path data came through
             const mergedData = {
                 ...app,
                 phone:              app.phone              || profile?.phone              || uData.phone       || uData.phoneNumber || uData.kyc?.phoneNumber || uData.kyc?.phone || null,
@@ -2398,7 +2482,7 @@ async function _getStandardExportApplicationsAction(options: {
                 lastName:           profile?.lastName       || app.lastName               || uData.lastName    || null,
                 email:              app.userEmail           || app.email                  || uData.email        || null,
             };
-            // Canonical bankDetails injection
+
             const bankDetails = uData.bankDetails || {
                 bankName: app.bankName || uData.bankName || uData.bankAccount?.bankName || "",
                 accountNumber: app.accountNumber || uData.bankAccountNumber || uData.bankAccount?.accountNumber || "",
@@ -2427,69 +2511,15 @@ async function _getStandardExportApplicationsAction(options: {
             };
         });
 
-        // Client-side search application if specified
-        let finalForms = standardForms;
-        if (options.search) {
-            const s = options.search.toLowerCase().trim();
-            finalForms = finalForms.filter((f: any) => {
-                const searchString = [
-                    f.user?.name,
-                    f.user?.email,
-                    f.user?.phone,
-                    f.data?.fullName,
-                    f.data?.businessName,
-                    f.data?.firstName,
-                    f.data?.lastName
-                ].filter(Boolean).join(" ").toLowerCase();
-                return searchString.includes(s);
-            });
-        }
-
-        // ALWAYS apply date filters in memory as a definitive backstop.
-        if (options.dateFrom) {
-            const from = new Date(options.dateFrom);
-            from.setHours(0, 0, 0, 0);
-            finalForms = finalForms.filter((f: any) => {
-                const d = f.data?.createdAt?.seconds ? new Date(f.data.createdAt.seconds * 1000) : new Date(f.data?.createdAt);
-                return d >= from;
-            });
-        }
-        if (options.dateTo) {
-            const to = new Date(options.dateTo);
-            to.setHours(23, 59, 59, 999);
-            finalForms = finalForms.filter((f: any) => {
-                const d = f.data?.createdAt?.seconds ? new Date(f.data.createdAt.seconds * 1000) : new Date(f.data?.createdAt);
-                return d <= to;
-            });
-        }
-
-        const limit = options.limit || 50;
-        let page = 0;
-        const pageOption = (options as any).page;
-        if (pageOption !== undefined) {
-            page = Number(pageOption);
-        } else if (options.lastDocId && /^\d+$/.test(options.lastDocId)) {
-            page = Number(options.lastDocId);
-        }
-
-        const offset = page * limit;
-        const paged = useMemoryPagination ? finalForms.slice(offset, offset + limit) : finalForms;
-        const _hasMore = useMemoryPagination 
-            ? (offset + limit < finalForms.length)
-            : hasMore;
-
-        const _nextCursor = useMemoryPagination 
-            ? (_hasMore ? String(page + 1) : undefined)
-            : nextCursor;
-
         return { 
             error: null, success: true as const, 
-            data: paged,
+            data: standardForms,
             lastDocId: _nextCursor,
             hasMore: _hasMore,
             meta: {
-                totalFetched: applications.length,
-                hasMore: _hasMore
+                totalFetched: useMemoryPagination ? applications.length : standardForms.length,
+                hasMore: _hasMore,
+                stats
             }
         };
     } catch (error) {
@@ -2497,6 +2527,7 @@ async function _getStandardExportApplicationsAction(options: {
         return { success: false as const, error: "Failed to fetch normalized applications", data: null };
     }
 }
+
 
 async function _rejectExportApplicationAction(
 

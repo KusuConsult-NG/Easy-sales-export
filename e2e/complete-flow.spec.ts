@@ -26,6 +26,7 @@ async function registerNewUser(page: Page, email: string, password: string, full
 
     // Wait for redirect (email verification or get-started)
     await page.waitForURL(/auth\/get-started|dashboard|verify-email/, { timeout: 45000 });
+    await expect(page.locator('h1, h2, [data-testid="stat-card"], main').first()).toBeVisible({ timeout: 15000 });
 }
 
 async function loginUser(page: Page, email: string, password: string) {
@@ -34,6 +35,7 @@ async function loginUser(page: Page, email: string, password: string) {
     await page.fill('input[type="password"]', password);
     await page.click('button[type="submit"]');
     await page.waitForURL(/\/dashboard|admin|cooperatives/, { timeout: 45000 });
+    await expect(page.locator('h1, h2, [data-testid="stat-card"], main').first()).toBeVisible({ timeout: 15000 });
 }
 
 test.describe('Registration → MFA → Dashboard Flow', () => {
@@ -92,7 +94,7 @@ test.describe('Registration → MFA → Dashboard Flow', () => {
 
         const mfaPrompt = page.locator('text=/Enter.*Code|MFA.*Required/i');
         const mfaSetup = page.locator('text=/Set.*up.*MFA|Enable.*MFA/i');
-        const adminContent = page.locator('h1:has-text("Loan")');
+        const adminContent = page.locator('h1:has-text("Loan")').first();
 
         await expect(
             Promise.race([

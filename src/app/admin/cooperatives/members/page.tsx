@@ -69,7 +69,8 @@ export default function CooperativeMembersPage() {
         onNextPage,
         onPrevPage,
         pageIndex,
-        refresh: loadApplications
+        refresh: loadApplications,
+        meta
     } = useAdminData<StandardPendingForm<MembershipApplication>>({
         fetchAction: async (opts) => {
             return getStandardCooperativeMembersAction({
@@ -80,10 +81,13 @@ export default function CooperativeMembersPage() {
                 search: opts.search ? opts.search.trim() : undefined,
                 dateFrom: dateRange.from || undefined,
                 dateTo: dateRange.to || undefined,
+                state: stateFilter || undefined,
+                lga: lgaFilter || undefined,
+                registry: registryFilter || undefined,
             });
         },
         limit: 50,
-        dependencies: [dateRange]
+        dependencies: [dateRange, stateFilter, lgaFilter, registryFilter]
     });
 
     const statusFilter = (filters.status as any) || "all";
@@ -115,34 +119,6 @@ export default function CooperativeMembersPage() {
     // Local filter on top of fetched items
     let filteredApplications = applications;
 
-
-    // paymentStatus is now filtered server-side — no client-side override needed.
-    // State/LGA filters remain client-side (no Firestore index for them).
-    if (stateFilter) {
-        const cleanStateFilter = stateFilter.toLowerCase().replace(/\s*state$/i, "").trim();
-        filteredApplications = filteredApplications.filter(a => {
-            const stateOfOrigin = a.data.stateOfOrigin || "";
-            const userState = a.user?.state || "";
-            
-            const cleanStateOfOrigin = typeof stateOfOrigin === 'string' 
-                ? stateOfOrigin.toLowerCase().replace(/\s*state$/i, "").trim() 
-                : "";
-            const cleanUserState = typeof userState === 'string' 
-                ? userState.toLowerCase().replace(/\s*state$/i, "").trim() 
-                : "";
-                
-            return (cleanStateOfOrigin && cleanStateOfOrigin.includes(cleanStateFilter)) || 
-                   (cleanUserState && cleanUserState.includes(cleanStateFilter));
-        });
-    }
-    if (lgaFilter) {
-        filteredApplications = filteredApplications.filter(a => a.data.lga?.toLowerCase().includes(lgaFilter.toLowerCase()));
-    }
-    if (registryFilter === "legacy") {
-        filteredApplications = filteredApplications.filter(a => a.data?.isLegacy === true);
-    } else if (registryFilter === "regular") {
-        filteredApplications = filteredApplications.filter(a => a.data?.isLegacy !== true);
-    }
     // Sort applications
     filteredApplications = [...filteredApplications].sort((a, b) => {
         if (sortBy === "date-desc") {
@@ -177,26 +153,19 @@ export default function CooperativeMembersPage() {
         }
         return 0;
     });
-    // Date filtering is now handled server-side via dateRange state
 
-    // Load Global Stats (only when no date range is active)
+    // Load Global Stats
     useEffect(() => {
-        if (!dateRange.from && !dateRange.to) {
-            getCooperativeStatsAction().then(res => {
-                if (res.success && res.data?.stats) {
-                    setStats(res.data.stats);
-                }
-            });
-        }
-    }, [dateRange]);
+        getCooperativeStatsAction().then(res => {
+            if (res.success && res.data?.stats) {
+                setStats(res.data.stats);
+            }
+        });
+    }, []);
 
-    // When a date range is active, derive stats from the filtered data
-    const isDateFiltered = !!(dateRange.from || dateRange.to);
-    const displayStats = isDateFiltered ? null : stats;
-    const filteredPending = filteredApplications.filter(a => a.status === "pending" || a.data?.membershipStatus === "pending").length;
-    const filteredApproved = filteredApplications.filter(a => a.status === "approved" || a.status === "active" || a.data?.membershipStatus === "approved" || (a.data?.membershipStatus as string) === "active").length;
-    const filteredPaid = filteredApplications.filter(a => a.data?.paymentStatus === "completed").length;
-    const filteredUnpaid = filteredApplications.filter(a => a.data?.paymentStatus !== "completed").length;
+    // Check if any cohort filter is active
+    const isFiltered = !!(searchQuery || dateRange.from || dateRange.to || stateFilter || lgaFilter || registryFilter !== "all");
+    const displayStats = isFiltered && meta?.stats ? meta.stats : stats;
 
     async function handleApprove(applicationId: string) {
         if (!confirm("Are you sure you want to approve this membership application?")) {
@@ -530,9 +499,14 @@ export default function CooperativeMembersPage() {
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                {isDateFiltered && (
-                    <div className="col-span-full bg-blue-50 border border-blue-200 rounded-xl px-4 py-2 text-sm text-blue-700 font-medium">
-                        📅 Showing stats for filtered date range: {dateRange.from || "—"} → {dateRange.to || "—"}
+                {isFiltered && (
+                    <div className="col-span-full bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5 text-xs text-blue-700 font-medium flex flex-wrap gap-x-4 gap-y-1">
+                        <span>ℹ️ Showing stats matching active cohort filters:</span>
+                        {searchQuery && <span>🔍 Search: "{searchQuery}"</span>}
+                        {(dateRange.from || dateRange.to) && <span>📅 Dates: {dateRange.from || "—"} → {dateRange.to || "—"}</span>}
+                        {stateFilter && <span>📍 State: {stateFilter}</span>}
+                        {lgaFilter && <span>📍 LGA: {lgaFilter}</span>}
+                        {registryFilter !== "all" && <span>🗂️ Registry: {registryFilter}</span>}
                     </div>
                 )}
                 <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6">
@@ -540,9 +514,7 @@ export default function CooperativeMembersPage() {
                         <div>
                             <p className="text-sm text-yellow-600 mb-1">Pending</p>
                             <p className="text-3xl font-bold text-yellow-700">
-                                {isDateFiltered ? (
-                                    filteredPending
-                                ) : displayStats ? (
+                                {displayStats ? (
                                     displayStats.pendingMembers
                                 ) : (
                                     <span className="inline-block w-16 h-8 bg-yellow-200/50 animate-pulse rounded-lg mt-1" />
@@ -558,9 +530,7 @@ export default function CooperativeMembersPage() {
                         <div>
                             <p className="text-sm text-green-600 mb-1">Approved</p>
                             <p className="text-3xl font-bold text-green-700">
-                                {isDateFiltered ? (
-                                    filteredApproved
-                                ) : displayStats ? (
+                                {displayStats ? (
                                     displayStats.activeMembers
                                 ) : (
                                     <span className="inline-block w-16 h-8 bg-green-200/50 animate-pulse rounded-lg mt-1" />
@@ -576,17 +546,13 @@ export default function CooperativeMembersPage() {
                         <div>
                             <p className="text-sm text-slate-600 mb-1">Total Paid Members</p>
                             <p className="text-3xl font-bold text-slate-900">
-                                {isDateFiltered ? (
-                                    filteredPaid
-                                ) : displayStats ? (
+                                {displayStats ? (
                                     displayStats.paidMembers
                                 ) : (
                                     <span className="inline-block w-16 h-8 bg-slate-200/50 animate-pulse rounded-lg mt-1" />
                                 )}
                             </p>
-                            {isDateFiltered ? (
-                                <p className="text-xs text-slate-500 mt-1">Out of {filteredApplications.length} applications</p>
-                            ) : displayStats ? (
+                            {displayStats ? (
                                 <p className="text-xs text-slate-500 mt-1">Out of {displayStats.totalMembers} applications</p>
                             ) : (
                                 <span className="inline-block w-28 h-4 bg-slate-200/40 animate-pulse rounded mt-1.5" />
@@ -601,9 +567,7 @@ export default function CooperativeMembersPage() {
                         <div>
                             <p className="text-sm text-red-600 mb-1">Unpaid Members</p>
                             <p className="text-3xl font-bold text-red-700">
-                                {isDateFiltered ? (
-                                    filteredUnpaid
-                                ) : (displayStats && displayStats.unpaidMembers !== undefined) ? (
+                                {displayStats ? (
                                     displayStats.unpaidMembers
                                 ) : (
                                     <span className="inline-block w-16 h-8 bg-red-200/50 animate-pulse rounded-lg mt-1" />

@@ -71,8 +71,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
                     // ── STEP 4: Firebase authentication (REST API) ───────────
                     const responseData = await runQueryWithRetry(async () => {
+                        const authEmulatorHost = process.env.FIREBASE_AUTH_EMULATOR_HOST;
+                        const signInUrl = authEmulatorHost
+                            ? `http://${authEmulatorHost}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseApiKey}`
+                            : `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseApiKey}`;
                         const res = await fetch(
-                            `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseApiKey}`,
+                            signInUrl,
                             {
                                 method: "POST",
                                 headers: { 

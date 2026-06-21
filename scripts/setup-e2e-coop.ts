@@ -626,7 +626,135 @@ async function setupE2EUsers() {
         console.log(`✅ Seeded dispute ${disputeId}`);
     }
 
+    await seedE2ECourses();
+
     console.log("\n✅ E2E user provisioning completed successfully!");
+}
+
+async function seedE2ECourses() {
+    console.log("🌱 Seeding E2E academy courses...");
+    const coursesRef = db.collection("academy_courses");
+    const coursesRef2 = db.collection("courses");
+
+    const snap1 = await coursesRef.get();
+    for (const doc of snap1.docs) {
+        await doc.ref.delete();
+    }
+    const snap2 = await coursesRef2.get();
+    for (const doc of snap2.docs) {
+        await doc.ref.delete();
+    }
+
+    const courses = [
+        {
+            title: "Export Business Fundamentals",
+            description: "Learn the basics of agricultural export — from produce selection and grading to logistics, documentation, and market entry strategies.",
+            instructor: "Dr. Aminu Yusuf",
+            duration: "4 weeks",
+            level: "beginner",
+            price: 15000,
+            currency: "NGN",
+            category: "export",
+            enrolledCount: 0,
+            rating: 4.8,
+            status: "open",
+            tier: "foundation",
+            thumbnail: "/images/courses/export-fundamentals.jpg",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            modules: [
+                {
+                    id: "export-mod-1",
+                    title: "Introduction to Agricultural Export",
+                    description: "Basic concepts and definitions of export trade.",
+                    order: 1,
+                    lessons: [
+                        {
+                            id: "export-les-1",
+                            title: "Overview of Export Opportunities",
+                            content: "This lesson covers the basics of export opportunities.",
+                            duration: "15 mins",
+                            order: 1
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            title: "Phytosanitary Compliance & Standards",
+            description: "Master the regulatory requirements for agricultural exports including NAFDAC certification, EU SPS regulations, and NExIM documentation.",
+            instructor: "Mrs. Blessing Okonkwo",
+            duration: "3 weeks",
+            level: "intermediate",
+            price: 22000,
+            currency: "NGN",
+            category: "compliance",
+            enrolledCount: 0,
+            rating: 4.6,
+            status: "open",
+            tier: "standard",
+            thumbnail: "/images/courses/compliance.jpg",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            modules: [
+                {
+                    id: "compliance-mod-1",
+                    title: "NAFDAC & SPS Standards",
+                    description: "Understanding SPS requirements and certificates.",
+                    order: 1,
+                    lessons: [
+                        {
+                            id: "compliance-les-1",
+                            title: "Introduction to Phytosanitary Rules",
+                            content: "Learn how to comply with global phytosanitary rules.",
+                            duration: "20 mins",
+                            order: 1
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            title: "Advanced Agro-Export Market Analysis",
+            description: "Deep-dive into global commodity markets, price discovery, futures contracts, buyer-seller negotiation strategies, and hedging techniques.",
+            instructor: "Prof. Kabiru Salisu",
+            duration: "6 weeks",
+            level: "advanced",
+            price: 35000,
+            currency: "NGN",
+            category: "business",
+            enrolledCount: 0,
+            rating: 4.9,
+            status: "open",
+            tier: "elite",
+            thumbnail: "/images/courses/market-analysis.jpg",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            modules: [
+                {
+                    id: "analysis-mod-1",
+                    title: "Global Commodity Markets",
+                    description: "Deep dive into commodity pricing and hedging.",
+                    order: 1,
+                    lessons: [
+                        {
+                            id: "analysis-les-1",
+                            title: "Understanding Futures Contracts",
+                            content: "Introduction to hedging using futures contracts.",
+                            duration: "30 mins",
+                            order: 1
+                        }
+                    ]
+                }
+            ]
+        }
+    ];
+
+    for (const course of courses) {
+        await coursesRef.add(course);
+        await coursesRef2.add(course);
+    }
+    console.log("✅ Seeded E2E academy courses successfully.");
 }
 
 setupE2EUsers().then(() => process.exit(0)).catch((err) => {

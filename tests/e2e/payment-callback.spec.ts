@@ -46,7 +46,7 @@ test.describe('Payment callback flow', () => {
         await mockPaystackVerify(page, 'success');
 
         await page.goto(`/academy/payment/callback?reference=${MOCK_REFERENCE}`);
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('load');
 
         // Should end up in the academy area (not stay on callback page forever)
         // Allow up to 20s for payment verification + redirect
@@ -66,7 +66,7 @@ test.describe('Payment callback flow', () => {
 
         await mockPaystackVerify(page, 'failed');
         await page.goto('/academy/payment/callback?reference=INVALID_REF');
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('load');
 
         // No JavaScript runtime errors should occur
         const criticalErrors = errors.filter(e =>
@@ -79,7 +79,7 @@ test.describe('Payment callback flow', () => {
     test('Unauthenticated user hitting callback page is redirected to login', async ({ page }) => {
         await page.context().clearCookies();
         await page.goto(`/academy/payment/callback?reference=${MOCK_REFERENCE}`);
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('load');
         // Should redirect to login, not crash
         await expect(page).toHaveURL(/\/auth\/login|\/auth\/get-started|\/login/, { timeout: 10000 });
     });

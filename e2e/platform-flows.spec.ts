@@ -77,7 +77,7 @@ test.describe('Academy Course Enrollment', () => {
         await page.goto('/academy/courses');
 
         // Wait for the loading state to resolve
-        await expect(page.locator('text=Loading...')).not.toBeVisible({ timeout: 20000 });
+        await expect(page.locator('text=Loading...').first()).not.toBeVisible({ timeout: 20000 });
 
         // Click on first course link
         const courseCards = page.locator('[data-testid="course-card"]');

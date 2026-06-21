@@ -1,4 +1,4 @@
-import { Page } from '@playwright/test';
+import { Page, expect } from '@playwright/test';
 
 /**
  * loginAs — Performs a full login flow and waits for redirect.
@@ -11,7 +11,7 @@ export async function loginAs(
     { expectUrl }: { expectUrl?: RegExp | string } = {}
 ): Promise<void> {
     await page.goto('/auth/login');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
     await page.fill('input[name="email"]', email);
     await page.fill('input[name="password"]', password);
     await page.click('button[type="submit"]');
@@ -20,6 +20,7 @@ export async function loginAs(
     } else {
         await page.waitForURL(/\/dashboard|\/auth\/get-started|\/marketplace|\/academy|\/cooperatives|\/admin/, { timeout: 45000 });
     }
+    await expect(page.locator('h1, h2, [data-testid="stat-card"], main').first()).toBeVisible({ timeout: 15000 });
 }
 
 /** Pre-approved module users (seeded with serviceRegistrations.status = 'approved') */

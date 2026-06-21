@@ -223,8 +223,12 @@ export async function preValidateLoginAction(credentials: any): Promise<{ succes
         let responseData: any;
         try {
             responseData = await runQueryWithRetry(async () => {
+                const authEmulatorHost = process.env.FIREBASE_AUTH_EMULATOR_HOST;
+                const signInUrl = authEmulatorHost
+                    ? `http://${authEmulatorHost}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseApiKey}`
+                    : `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseApiKey}`;
                 const res = await fetch(
-                    `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseApiKey}`,
+                    signInUrl,
                     {
                         method: "POST",
                         headers: { 
@@ -562,7 +566,11 @@ export async function changePasswordAction(
         }
 
         // Verify current password via REST API
-        const verifyRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${process.env.NEXT_PUBLIC_FIREBASE_API_KEY}`, { method: 'POST',
+        const authEmulatorHost = process.env.FIREBASE_AUTH_EMULATOR_HOST;
+        const signInUrl = authEmulatorHost
+            ? `http://${authEmulatorHost}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${process.env.NEXT_PUBLIC_FIREBASE_API_KEY}`
+            : `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${process.env.NEXT_PUBLIC_FIREBASE_API_KEY}`;
+        const verifyRes = await fetch(signInUrl, { method: 'POST',
             body: JSON.stringify({
                 email: session.user.email,
                 password: currentPassword,

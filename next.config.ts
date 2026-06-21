@@ -144,14 +144,14 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "img-src 'self' data: https: blob:",
               "font-src 'self' data: https://fonts.gstatic.com",
-              "connect-src 'self' https://*.firebaseio.com https://firebaseinstallations.googleapis.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.paystack.co https://api.cloudinary.com wss://*.firebaseio.com https://firebasestorage.googleapis.com https://storage.googleapis.com https://*.jit.si wss://*.jit.si https://maps.googleapis.com https://maps.google.com",
+              `connect-src 'self' ${process.env.NODE_ENV === 'development' ? "http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*" : ""} https://*.firebaseio.com https://firebaseinstallations.googleapis.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.paystack.co https://api.cloudinary.com wss://*.firebaseio.com https://firebasestorage.googleapis.com https://storage.googleapis.com https://*.jit.si wss://*.jit.si https://maps.googleapis.com https://maps.google.com`,
               "frame-src 'self' https://js.paystack.co https://checkout.paystack.com https://www.youtube.com https://youtube.com https://firebasestorage.googleapis.com https://docs.google.com https://*.jit.si",
               "media-src 'self' https://firebasestorage.googleapis.com https://storage.googleapis.com blob:",
               "object-src 'none'",
               "base-uri 'self'",
               "form-action 'self'",
               "frame-ancestors 'none'",
-              "upgrade-insecure-requests"
+              ...(process.env.NODE_ENV === 'development' ? [] : ["upgrade-insecure-requests"])
             ].join('; ')
           }
         ]

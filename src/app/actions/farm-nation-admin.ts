@@ -482,11 +482,12 @@ async function _getAdminLandVerificationsAction(options: {
             return { success: false, error: "Unauthorized: Permission required", data: null };
         }
 
-        const fetchLimit = options.search ? 5000 : (options.limit || 50);
+        const useMemoryPagination = !!options.search;
+        const fetchLimit = useMemoryPagination ? 5000 : (options.limit || 50);
         const orderDirection = options.sortOrder || "desc";
         let queryRef: FirebaseFirestore.Query = db.collection(COLLECTIONS.LAND_LISTINGS).orderBy("createdAt", orderDirection);
 
-        if (options.status && options.status !== "all") {
+        if (options.status && options.status !== "all" && !useMemoryPagination) {
             const mappedStatus = options.status === "pending" ? "pending_verification" : options.status;
             if (mappedStatus === "pending_verification") {
                 queryRef = db.collection(COLLECTIONS.LAND_LISTINGS)
@@ -499,7 +500,7 @@ async function _getAdminLandVerificationsAction(options: {
             }
         }
 
-        if (options.lastDocId) {
+        if (options.lastDocId && !useMemoryPagination) {
             const lastDoc = await db.collection(COLLECTIONS.LAND_LISTINGS).doc(options.lastDocId).get();
             if (lastDoc.exists) {
                 queryRef = queryRef.startAfter(lastDoc);
@@ -516,7 +517,7 @@ async function _getAdminLandVerificationsAction(options: {
                 indexError = true;
                 
                 let fallbackQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.LAND_LISTINGS);
-                if (options.status && options.status !== "all") {
+                if (options.status && options.status !== "all" && !useMemoryPagination) {
                     const mappedStatus = options.status === "pending" ? "pending_verification" : options.status;
                     if (mappedStatus === "pending_verification") {
                         fallbackQuery = fallbackQuery.where("status", "in", ["pending_verification", "inspection_scheduled"]);
@@ -525,7 +526,7 @@ async function _getAdminLandVerificationsAction(options: {
                     }
                 }
                 
-                if (options.lastDocId) {
+                if (options.lastDocId && !useMemoryPagination) {
                     const lastDoc = await db.collection(COLLECTIONS.LAND_LISTINGS).doc(options.lastDocId).get();
                     if (lastDoc.exists) {
                         fallbackQuery = fallbackQuery.startAfter(lastDoc);
@@ -544,11 +545,9 @@ async function _getAdminLandVerificationsAction(options: {
             else if (doc.status === "rejected") mappedVerificationStatus = "rejected";
             else if (doc.status === "pending_verification" || doc.status === "inspection_scheduled") mappedVerificationStatus = "pending";
             
-            // Normalize documents to the { landTitle, surveyPlan, taxClearance } object structure
             let docsObj = { landTitle: "", surveyPlan: "", taxClearance: "" };
             if (doc.documents) {
                 if (Array.isArray(doc.documents)) {
-                    // Try to identify by matching the filename keywords first
                     const landTitle = doc.documents.find((url: string) => url && (url.includes("_title_") || url.includes("title"))) || doc.documents[0] || "";
                     const surveyPlan = doc.documents.find((url: string) => url && (url.includes("_survey_") || url.includes("survey"))) || doc.documents[1] || "";
                     const taxClearance = doc.documents.find((url: string) => url && (url.includes("_tax_") || url.includes("tax"))) || doc.documents[2] || undefined;
@@ -581,8 +580,73 @@ async function _getAdminLandVerificationsAction(options: {
             });
         }
 
-        // HYDRATION: Batch-resolve owner bank details
-        const ownerIds = [...new Set(rawVerifications.map((v: any) => v.ownerId).filter(Boolean))];
+        let filteredVerifications = rawVerifications;
+        if (options.search) {
+            const q = options.search.toLowerCase().trim();
+            filteredVerifications = filteredVerifications.filter((v: any) => {
+                const searchString = [
+                    v.ownerName, v.name, v.state, v.lga, v.size, v.pricePerUnit
+                ].filter(Boolean).map(String).join(" ").toLowerCase();
+                return searchString.includes(q);
+            });
+        }
+
+        // Calculate dynamic cohort stats
+        let stats: any = null;
+        if (useMemoryPagination) {
+            const total = filteredVerifications.length;
+            const pending = filteredVerifications.filter((v: any) => v.verificationStatus === "pending").length;
+            const verified = filteredVerifications.filter((v: any) => v.verificationStatus === "verified").length;
+            const rejected = filteredVerifications.filter((v: any) => v.verificationStatus === "rejected").length;
+            stats = { total, pending, verified, rejected };
+
+            // Apply status filter in memory
+            if (options.status && options.status !== "all") {
+                const mappedStatus = options.status === "pending" ? "pending_verification" : options.status;
+                filteredVerifications = filteredVerifications.filter((v: any) => {
+                    if (mappedStatus === "pending_verification") {
+                        return v.status === "pending_verification" || v.status === "inspection_scheduled";
+                    }
+                    return v.status === mappedStatus;
+                });
+            }
+        } else {
+            const [totalSnap, pendingSnap1, pendingSnap2, verifiedSnap, rejectedSnap] = await Promise.all([
+                db.collection(COLLECTIONS.LAND_LISTINGS).count().get(),
+                db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "pending_verification").count().get(),
+                db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "inspection_scheduled").count().get(),
+                db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "verified").count().get(),
+                db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "rejected").count().get(),
+            ]);
+            stats = {
+                total: totalSnap.data().count,
+                pending: pendingSnap1.data().count + pendingSnap2.data().count,
+                verified: verifiedSnap.data().count,
+                rejected: rejectedSnap.data().count
+            };
+        }
+
+        const limit = options.limit || 50;
+        let page = 0;
+        const pageOption = (options as any).page;
+        if (pageOption !== undefined) {
+            page = Number(pageOption);
+        } else if (options.lastDocId && /^\d+$/.test(options.lastDocId)) {
+            page = Number(options.lastDocId);
+        }
+
+        const offset = page * limit;
+        const paged = useMemoryPagination ? filteredVerifications.slice(offset, offset + limit) : filteredVerifications;
+        const _hasMore = useMemoryPagination 
+            ? (offset + limit < filteredVerifications.length)
+            : (snapshot.docs.length === fetchLimit);
+
+        const _nextCursor = useMemoryPagination 
+            ? (_hasMore ? String(page + 1) : undefined)
+            : (snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined);
+
+        // HYDRATION: Batch-resolve owner bank details for active page slice only
+        const ownerIds = [...new Set(paged.map((v: any) => v.ownerId).filter(Boolean))];
         const ownerMap: Record<string, any> = {};
 
         if (ownerIds.length > 0) {
@@ -617,7 +681,7 @@ async function _getAdminLandVerificationsAction(options: {
             });
         }
 
-        let verifications = rawVerifications.map((v: any) => ({
+        const verifications = paged.map((v: any) => ({
             ...v,
             owner: ownerMap[v.ownerId] || null,
             bankDetails: ownerMap[v.ownerId]?.bankDetails || {
@@ -628,25 +692,14 @@ async function _getAdminLandVerificationsAction(options: {
             }
         }));
 
-        if (options.search) {
-            const q = options.search.toLowerCase().trim();
-            verifications = verifications.filter((v: any) => {
-                const searchString = [
-                    v.ownerName, v.name, v.state, v.lga, v.size, v.pricePerUnit
-                ].filter(Boolean).map(String).join(" ").toLowerCase();
-                return searchString.includes(q);
-            });
-        }
-
-        const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
-
         return { 
             success: true, 
             error: null, 
             data: verifications, 
             meta: {
-                lastDocId: nextCursor, 
-                hasMore: !!nextCursor
+                lastDocId: _nextCursor || null, 
+                hasMore: _hasMore,
+                stats
             }
         };
     } catch (error: any) {
@@ -656,6 +709,7 @@ async function _getAdminLandVerificationsAction(options: {
         return { success: false, error: "Failed to fetch verifications", data: null };
     }
 }
+
 export const getAdminLandVerificationsAction = withFlexibleSafeAction("getAdminLandVerificationsAction", _getAdminLandVerificationsAction);
 
 /**

@@ -19,9 +19,8 @@ import { execSync } from 'child_process';
 
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
 
-async function httpPost(url: string, body: object): Promise<{ status: number; data: any }> {
+async function httpGet(url: string): Promise<{ status: number; data: any }> {
     return new Promise((resolve, reject) => {
-        const payload = JSON.stringify(body);
         const lib = url.startsWith('https') ? https : http;
         const urlObj = new URL(url);
 
@@ -29,11 +28,8 @@ async function httpPost(url: string, body: object): Promise<{ status: number; da
             hostname: urlObj.hostname,
             port: urlObj.port || (url.startsWith('https') ? 443 : 80),
             path: urlObj.pathname + urlObj.search,
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Content-Length': Buffer.byteLength(payload),
-            },
+            method: 'GET',
+            timeout: 5000,
         }, (res) => {
             let raw = '';
             res.on('data', chunk => raw += chunk);
@@ -46,8 +42,12 @@ async function httpPost(url: string, body: object): Promise<{ status: number; da
             });
         });
 
+        req.on('timeout', () => {
+            req.destroy();
+            reject(new Error('Request timeout'));
+        });
+
         req.on('error', reject);
-        req.write(payload);
         req.end();
     });
 }
@@ -55,7 +55,7 @@ async function httpPost(url: string, body: object): Promise<{ status: number; da
 async function waitForServer(url: string, retries = 30): Promise<void> {
     for (let i = 0; i < retries; i++) {
         try {
-            await httpPost(`${url}/api/health`, {});
+            await httpGet(`${url}/api/health`);
             console.log(`✅ Server is reachable at ${url}`);
             return;
         } catch {

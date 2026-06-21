@@ -137,10 +137,14 @@ async function seedTestUsers() {
         // Approve the specific module
         serviceRegistrations[u.module] = {
             status: "approved",
+            paymentStatus: "completed",
             approvedAt: new Date().toISOString(),
             appliedAt: new Date().toISOString(),
             notes: "Test user auto-approved"
         };
+        if (u.module === "academy") {
+            serviceRegistrations[u.module].plan = "elite";
+        }
 
         const payload = {
             uid: uid,

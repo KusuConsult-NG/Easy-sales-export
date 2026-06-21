@@ -30,14 +30,21 @@ test.describe('RBAC Security Enforcement', () => {
     test('non-admin users should NOT access admin dashboard', async ({ page }) => {
         // Authenticate as a regular user
         await page.goto('/auth/login');
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('load');
         await page.fill('input[name="email"]', process.env.TEST_USER_EMAIL || process.env.TEST_USER_EMAIL || 'e2e.user@easysalesexport.com');
         await page.fill('input[name="password"]', process.env.TEST_USER_PASSWORD || process.env.TEST_USER_PASSWORD || 'E2eTest@2024!');
         await page.click('button[type="submit"]');
         await page.waitForURL(/dashboard|get-started|admin/, { timeout: 45000 });
+        await expect(page.locator('h1, h2, [data-testid="stat-card"], main').first()).toBeVisible({ timeout: 15000 });
 
         // Attempt to access admin health page
-        await page.goto('/admin/system-health');
+        try {
+            await page.goto('/admin/system-health');
+        } catch (err: any) {
+            if (!err.message.includes('net::ERR_ABORTED')) {
+                throw err;
+            }
+        }
         
         // Should be redirected back to their respective module or hub
         // Based on getPostLoginRedirect logic, it might go to /auth/get-started or /
@@ -47,11 +54,12 @@ test.describe('RBAC Security Enforcement', () => {
     test('admin users SHOULD access admin dashboard', async ({ page }) => {
         // Authenticate as admin
         await page.goto('/auth/login');
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('load');
         await page.fill('input[name="email"]', process.env.TEST_ADMIN_EMAIL || process.env.TEST_ADMIN_EMAIL || 'e2e.admin@easysalesexport.com');
         await page.fill('input[name="password"]', process.env.TEST_ADMIN_PASSWORD || 'E2eAdmin@2024!');
         await page.click('button[type="submit"]');
         await page.waitForURL(/dashboard|get-started|admin/, { timeout: 45000 });
+        await expect(page.locator('h1, h2, [data-testid="stat-card"], main').first()).toBeVisible({ timeout: 15000 });
 
         // Access admin health page
         await page.goto('/admin/system-health');

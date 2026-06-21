@@ -75,7 +75,7 @@ test.describe('Cooperative Complete Flow', () => {
 
         if (await historySection.count() > 0) {
             await historySection.click();
-            await expect(page.locator('text=/Transaction.*History|Statement|Recent.*Contribution/i')).toBeVisible({ timeout: 8000 });
+            await expect(page.locator('text=/Transaction.*History|Statement|Recent.*Contribution/i').first()).toBeVisible({ timeout: 8000 });
             console.log('✅ Contribution history visible');
         }
     });
@@ -170,7 +170,7 @@ test.describe('Admin Review Flow', () => {
         await page.goto('/admin');
 
         // Wait for the loading state to resolve
-        await expect(page.locator('text=Loading dashboard...')).not.toBeVisible({ timeout: 30000 });
+        await expect(page.locator('text=Loading dashboard...').first()).not.toBeVisible({ timeout: 30000 });
 
         // Admin dashboard should load
         await expect(page.locator('h1').first()).toContainText(/Admin|Dashboard|Welcome/i, { timeout: 10000 });

@@ -10,6 +10,7 @@ import { test, expect } from '@playwright/test';
 test.describe('System Health Diagnostic Suite', () => {
     
     test.beforeEach(async ({ page }) => {
+        await page.context().clearCookies();
         // Authenticate as admin
         await page.goto('/auth/login');
         await page.fill('input[name="email"]', process.env.TEST_ADMIN_EMAIL || 'e2e.admin@easysalesexport.com');
@@ -18,6 +19,7 @@ test.describe('System Health Diagnostic Suite', () => {
         
         // Wait for login to complete and redirect to admin/dashboard
         await page.waitForURL(/\/admin|\/dashboard/, { timeout: 45000 });
+        await expect(page.locator('h1, h2, [data-testid="stat-card"], main').first()).toBeVisible({ timeout: 15000 });
         await page.goto('/admin/system-health');
     });
 
@@ -26,7 +28,7 @@ test.describe('System Health Diagnostic Suite', () => {
         await expect(page.locator('h1')).toContainText(/System Health Monitor/i);
 
         // Wait for the diagnostic loading state to complete
-        await expect(page.locator('text=Running platform-wide structural tests...')).not.toBeVisible({ timeout: 30000 });
+        await expect(page.locator('text=Running platform-wide structural tests...').first()).not.toBeVisible({ timeout: 30000 });
         
         // Verify infrastructure service status section
         await expect(page.locator('text=Infrastructure Connectivity')).toBeVisible();
@@ -47,7 +49,7 @@ test.describe('System Health Diagnostic Suite', () => {
 
     test('should trigger a fresh diagnostic run', async ({ page }) => {
         // Wait for the initial diagnostic loading to finish first
-        await expect(page.locator('text=Running platform-wide structural tests...')).not.toBeVisible({ timeout: 30000 });
+        await expect(page.locator('text=Running platform-wide structural tests...').first()).not.toBeVisible({ timeout: 30000 });
 
         // Find and click the refresh/run button
         const runButton = page.getByRole('button', { name: /run diagnostic/i });
@@ -55,9 +57,9 @@ test.describe('System Health Diagnostic Suite', () => {
         await runButton.click();
         
         // Expect a loading state
-        await expect(page.locator('text=Running platform-wide structural tests...')).toBeVisible();
+        await expect(page.locator('text=Running platform-wide structural tests...').first()).toBeVisible();
         
         // Wait for loading to finish
-        await expect(page.locator('text=Running platform-wide structural tests...')).not.toBeVisible({ timeout: 30000 });
+        await expect(page.locator('text=Running platform-wide structural tests...').first()).not.toBeVisible({ timeout: 30000 });
     });
 });

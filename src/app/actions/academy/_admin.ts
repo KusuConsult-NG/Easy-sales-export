@@ -802,6 +802,8 @@ async function _getStandardAcademyApplicationsAction(options: {
     sortOrder?: "asc" | "desc";
     dateFrom?: string; // YYYY-MM-DD
     dateTo?: string;   // YYYY-MM-DD
+    paymentStatus?: "completed" | "pending" | "all";
+    registry?: "legacy" | "regular" | "all";
 } = {}): Promise<ActionResponse<any>> {
     try {
         const sessionResult = await requireSession();
@@ -813,7 +815,8 @@ async function _getStandardAcademyApplicationsAction(options: {
             return { success: false, error: "Unauthorized", data: null };
         }
 
-        const fetchLimit = options.search ? 5000 : (options.limit || 50);
+        const useMemoryPagination = !!options.search || !!options.dateFrom || !!options.dateTo || (options.paymentStatus && options.paymentStatus !== "all") || (options.registry && options.registry !== "all");
+        const fetchLimit = useMemoryPagination ? 5000 : (options.limit || 50);
         const orderDirection = options.sortOrder || "desc";
         
         let snapshot: any = null;
@@ -830,7 +833,14 @@ async function _getStandardAcademyApplicationsAction(options: {
                     meta: {
                         totalFetched: 0,
                         hasMore: false,
-                        lastDocId: null
+                        lastDocId: null,
+                        stats: {
+                            totalApplications: 0,
+                            pending: 0,
+                            under_review: 0,
+                            approved: 0,
+                            rejected: 0
+                        }
                     }
                 };
             }
@@ -840,9 +850,42 @@ async function _getStandardAcademyApplicationsAction(options: {
                 .get();
 
             applications = serializeDocs(querySnap.docs);
-            if (options.status && options.status !== "all") {
-                applications = applications.filter(app => app.status === options.status);
+        } else {
+            let q: any = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).orderBy("submittedAt", orderDirection);
+
+            if (!useMemoryPagination) {
+                if (options.status && options.status !== "all") {
+                    q = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+                        .where("status", "==", options.status)
+                        .orderBy("submittedAt", orderDirection);
+                }
             }
+
+            if (options.dateFrom) {
+                const fromTs = dateRangeStart(options.dateFrom);
+                q = q.where("submittedAt", ">=", fromTs);
+            }
+            if (options.dateTo) {
+                const toTs = dateRangeEnd(options.dateTo);
+                q = q.where("submittedAt", "<=", toTs);
+            }
+
+            if (options.lastDocId && !useMemoryPagination) {
+                const lastDoc = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(options.lastDocId).get();
+                if (lastDoc.exists) {
+                    q = q.startAfter(lastDoc);
+                }
+            }
+            q = q.limit(fetchLimit);
+
+            snapshot = await q.get();
+            applications = serializeDocs(snapshot.docs);
+        }
+
+        // Perform cohort filtering & stats calculations in memory
+        let stats: any = null;
+        if (useMemoryPagination) {
+            // Apply date filters in memory if they were not applied in Firestore query
             if (options.dateFrom) {
                 const from = new Date(options.dateFrom);
                 from.setHours(0, 0, 0, 0);
@@ -859,38 +902,86 @@ async function _getStandardAcademyApplicationsAction(options: {
                     return d <= to;
                 });
             }
-        } else {
-            let q: any = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).orderBy("submittedAt", orderDirection);
 
+            // Apply registry type filter
+            if (options.registry && options.registry !== "all") {
+                applications = applications.filter(app => {
+                    const isLegacy = !!(app._isLegacy || app.isLegacy);
+                    return options.registry === "legacy" ? isLegacy : !isLegacy;
+                });
+            }
+
+            // Apply payment status filter
+            if (options.paymentStatus && options.paymentStatus !== "all") {
+                applications = applications.filter(app => {
+                    const isPaid = app.paymentStatus === "completed" || app.paymentStatus === "paid";
+                    return options.paymentStatus === "completed" ? isPaid : !isPaid;
+                });
+            }
+
+            // Apply in-memory search
+            if (options.search) {
+                const s = options.search.toLowerCase().trim();
+                const { searchUserIdsByQuery } = await import("@/lib/admin-search-helper");
+                const matchingUserIds = await searchUserIdsByQuery(options.search);
+                const matchingUserIdsSet = new Set(matchingUserIds);
+                applications = applications.filter(app => {
+                    const pi = app.personalInfo || {};
+                    const searchString = [
+                        app.id,
+                        app.userId,
+                        pi.fullName,
+                        pi.firstName,
+                        pi.lastName,
+                        pi.email,
+                        pi.phone,
+                        app.paymentStatus,
+                        app.plan
+                    ].filter(Boolean).map(String).join(" ").toLowerCase();
+                    return searchString.includes(s) || matchingUserIdsSet.has(app.userId);
+                });
+            }
+
+            // Calculate stats counts before status filter is applied
+            const pending = applications.filter(app => app.status === "pending").length;
+            const under_review = applications.filter(app => app.status === "under_review").length;
+            const approved = applications.filter(app => app.status === "approved").length;
+            const rejected = applications.filter(app => app.status === "rejected").length;
+            stats = {
+                totalApplications: pending + under_review + approved + rejected,
+                pending,
+                under_review,
+                approved,
+                rejected
+            };
+
+            // Apply status filter
             if (options.status && options.status !== "all") {
-                q = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
-                    .where("status", "==", options.status)
-                    .orderBy("submittedAt", orderDirection);
+                applications = applications.filter(app => app.status === options.status);
             }
-
-            if (options.dateFrom) {
-                const fromTs = dateRangeStart(options.dateFrom);
-                q = q.where("submittedAt", ">=", fromTs);
-            }
-            if (options.dateTo) {
-                const toTs = dateRangeEnd(options.dateTo);
-                q = q.where("submittedAt", "<=", toTs);
-            }
-
-            if (options.lastDocId) {
-                const lastDoc = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(options.lastDocId).get();
-                if (lastDoc.exists) {
-                    q = q.startAfter(lastDoc);
-                }
-            }
-            q = q.limit(fetchLimit);
-
-            snapshot = await q.get();
-            applications = serializeDocs(snapshot.docs);
         }
 
-        // 2. Hydrate User Data (Standard Hydration Pattern)
-        const userIds = [...new Set(applications.map(app => app.userId).filter(Boolean))];
+        const limit = options.limit || 50;
+        let page = 0;
+        const pageOption = (options as any).page;
+        if (pageOption !== undefined) {
+            page = Number(pageOption);
+        } else if (options.lastDocId && /^\d+$/.test(options.lastDocId)) {
+            page = Number(options.lastDocId);
+        }
+
+        const offset = page * limit;
+        const paged = useMemoryPagination ? applications.slice(offset, offset + limit) : applications;
+        const _hasMore = useMemoryPagination 
+            ? (offset + limit < applications.length)
+            : (snapshot.docs.length === fetchLimit);
+
+        const _nextCursor = useMemoryPagination 
+            ? (_hasMore ? String(page + 1) : undefined)
+            : (snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined);
+
+        // 2. Hydrate User Data for active page slice only
+        const userIds = [...new Set(paged.map(app => app.userId).filter(Boolean))];
         const userMap = new Map<string, any>();
         const userPromises = [];
         
@@ -905,11 +996,10 @@ async function _getStandardAcademyApplicationsAction(options: {
         userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, serializeValue(d.data()))));
 
         // 3. Normalize and Merge Data
-        const standardForms = applications.map((app: any) => {
+        const standardForms = paged.map((app: any) => {
             const uData = (userMap.get(app.userId as string) || {}) as any;
             const pi = (app.personalInfo || {}) as any;
             
-            // Priority: USERS doc > personalInfo object > fallback
             const userName = uData.firstName
                 ? `${uData.firstName} ${uData.lastName || ''}`.trim()
                 : (uData.name || uData.fullName || pi.fullName || (pi.firstName ? `${pi.firstName} ${pi.lastName || ''}`.trim() : "Unknown User"));
@@ -917,7 +1007,6 @@ async function _getStandardAcademyApplicationsAction(options: {
             const mergedData = {
                 ...uData,
                 ...app,
-                // Flatten fields for UI consistency
                 phone: app.phone || pi.phone || uData.phone || uData.phoneNumber || uData.kyc?.phoneNumber || uData.kyc?.phone || null,
                 email: app.email || pi.email || uData.email || null,
                 gender: app.gender || pi.gender || uData.gender || null,
@@ -929,7 +1018,6 @@ async function _getStandardAcademyApplicationsAction(options: {
                 fullName: userName
             };
 
-            // Canonical bankDetails injection
             const bankDetails = uData.bankDetails || {
                 bankName: uData.bankName || "N/A",
                 accountNumber: uData.bankAccountNumber || "N/A",
@@ -958,46 +1046,6 @@ async function _getStandardAcademyApplicationsAction(options: {
             };
         });
 
-        // 4. Client-side Search
-        let finalForms = standardForms;
-        if (options.search) {
-            const s = options.search.toLowerCase().trim();
-            finalForms = standardForms.filter((f: any) => {
-                const searchString = [
-                    f.id,
-                    f.userId,
-                    f.user?.name,
-                    f.user?.email,
-                    f.user?.phone,
-                    f.data?.firstName,
-                    f.data?.lastName,
-                    f.data?.fullName,
-                    f.data?.stateOfOrigin,
-                    f.data?.phone
-                ].filter(Boolean).map(String).join(" ").toLowerCase();
-                return searchString.includes(s);
-            });
-        }
-
-        const limit = options.limit || 50;
-        let page = 0;
-        const pageOption = (options as any).page;
-        if (pageOption !== undefined) {
-            page = Number(pageOption);
-        } else if (options.lastDocId && /^\d+$/.test(options.lastDocId)) {
-            page = Number(options.lastDocId);
-        }
-
-        const offset = page * limit;
-        const paged = options.search ? finalForms.slice(offset, offset + limit) : finalForms;
-        const _hasMore = options.search 
-            ? (offset + limit < finalForms.length)
-            : (snapshot.docs.length === fetchLimit);
-
-        const _nextCursor = options.search 
-            ? (_hasMore ? String(page + 1) : undefined)
-            : (snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined);
-
         await createAdminAuditLog({
             action: "data_access",
             userId: session.user.id,
@@ -1010,11 +1058,12 @@ async function _getStandardAcademyApplicationsAction(options: {
         return { 
             success: true,
             error: null, 
-            data: paged,
+            data: standardForms,
             meta: {
-                totalFetched: finalForms.length,
+                totalFetched: useMemoryPagination ? applications.length : standardForms.length,
                 hasMore: _hasMore,
-                lastDocId: _nextCursor || null
+                lastDocId: _nextCursor || null,
+                stats
             }
         };
     } catch (error: any) {
@@ -1034,6 +1083,8 @@ async function _getStandardAcademyApplicationsAction(options: {
         return { success: false, error: "Failed to fetch applications", data: null };
     }
 }
+
+
 export const getStandardAcademyApplicationsAction = withFlexibleSafeAction("getStandardAcademyApplicationsAction", _getStandardAcademyApplicationsAction);
 
 /**

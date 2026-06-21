@@ -11,6 +11,7 @@ async function loginUser(page: Page) {
     await page.fill('input[type="password"]', process.env.TEST_USER_PASSWORD || 'E2eTest@2024!');
     await page.click('button[type="submit"]');
     await page.waitForURL('/dashboard', { timeout: 45000 });
+    await expect(page.locator('h1, h2, [data-testid="stat-card"], main').first()).toBeVisible({ timeout: 15000 });
 }
 
 test.describe('Marketplace Flow', () => {
