@@ -474,36 +474,44 @@ export async function processCooperativeRegistration(reference: string, amount: 
 
         const paymentTimestamp = paidAt ? Timestamp.fromDate(paidAt) : FieldValue.serverTimestamp();
 
+        // Check if onboarding was already submitted
+        const memberDoc = await transaction.get(memberRef);
+        const onboardingCompleted = memberDoc.exists && memberDoc.data()?.onboardingCompleted === true;
+
         transaction.set(memberRef, {
             userId,
             paymentStatus: "completed",
             paymentReference: reference,
             membershipTier: normalisedTier,
-            membershipStatus: "pending", // awaiting admin approval
+            membershipStatus: onboardingCompleted ? "active" : "pending",
             paymentVerifiedAt: paymentTimestamp,
             createdAt: paymentTimestamp,
             updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
 
-        // FIX: Use set(merge:true) instead of update() so this never throws for
-        // new users whose USERS doc doesn't yet have a serviceRegistrations field.
-        // update() throws NOT_FOUND if the nested path doesn't exist, causing the
-        // entire webhook transaction to fail and leaving the user in payment limbo.
-        // DISEASE 2 FIX: normalizeUserDoc mirrors cooperatives→cooperative so both keys
-        // are always in sync regardless of which code path reads the user doc.
-        transaction.set(userRef, normalizeUserDoc({
+        const userUpdatePayload: any = {
             serviceRegistrations: {
                 cooperatives: {
                     paymentStatus: "completed",
                     paymentReference: reference,
                     paymentAmount: amount,
                     membershipTier: normalisedTier,
-                    status: "legacy_pending_onboarding",
+                    status: onboardingCompleted ? "active" : "legacy_pending_onboarding",
                     paidAt: paymentTimestamp,
                 }
             },
             updatedAt: FieldValue.serverTimestamp(),
-        }), { merge: true });
+        };
+
+        if (onboardingCompleted) {
+            userUpdatePayload.roles = FieldValue.arrayUnion("cooperative_member");
+            userUpdatePayload.isVerified = true;
+            userUpdatePayload.serviceRegistrations.cooperatives.activatedAt = paymentTimestamp;
+        }
+
+        // FIX: Use set(merge:true) instead of update() so this never throws for
+        // new users whose USERS doc doesn't yet have a serviceRegistrations field.
+        transaction.set(userRef, normalizeUserDoc(userUpdatePayload), { merge: true });
 
         // Create transaction fee record
         transaction.set(transactionRef, {
@@ -592,6 +600,14 @@ export async function processAcademyRegistration(reference: string, amount: numb
         throw new Error("Insufficient payment amount");
     }
 
+    const appQuery = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+        .where("userId", "==", userId)
+        .limit(1)
+        .get();
+
+    const hasApp = !appQuery.empty;
+    const appDoc = hasApp ? appQuery.docs[0] : null;
+
     const result = await db.runTransaction(async (transaction) => {
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
         const processedSnap = await transaction.get(processedRef);
@@ -605,8 +621,20 @@ export async function processAcademyRegistration(reference: string, amount: numb
 
         const paymentTimestamp = paidAt ? Timestamp.fromDate(paidAt) : FieldValue.serverTimestamp();
 
-        // DISEASE 2 FIX: normalizeUserDoc ensures academy key is canonical.
-        transaction.set(userRef, normalizeUserDoc({
+        if (appDoc) {
+            transaction.update(appDoc.ref, {
+                status: "approved",
+                paymentStatus: "completed",
+                paymentAmount: amount,
+                plan: planToStore,
+                paymentVerifiedAt: paymentTimestamp,
+                reviewedAt: paymentTimestamp,
+                reviewedBy: "paystack_auto_approval",
+                _version: FieldValue.increment(1)
+            });
+        }
+
+        const userUpdatePayload: any = {
             serviceRegistrations: {
                 academy: {
                     paymentStatus: "completed",
@@ -614,10 +642,21 @@ export async function processAcademyRegistration(reference: string, amount: numb
                     paymentAmount: amount,
                     plan: planToStore,
                     paidAt: paymentTimestamp,
+                    status: appDoc ? "approved" : "pending",
                 }
             },
             updatedAt: FieldValue.serverTimestamp(),
-        }), { merge: true });
+        };
+
+        if (appDoc) {
+            userUpdatePayload.serviceRegistrations.academy.approvedAt = paymentTimestamp;
+            userUpdatePayload.serviceRegistrations.academy.applicationId = appDoc.id;
+            userUpdatePayload.roles = FieldValue.arrayUnion("academy_participant");
+            userUpdatePayload.isVerified = true;
+        }
+
+        // DISEASE 2 FIX: normalizeUserDoc ensures academy key is canonical.
+        transaction.set(userRef, normalizeUserDoc(userUpdatePayload), { merge: true });
 
         transaction.set(processedRef, {
             reference,
@@ -660,6 +699,10 @@ export async function processAcademyRegistration(reference: string, amount: numb
 
     try {
         await invalidateUserCache(userId);
+        if (hasApp) {
+            const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
+            await invalidateServiceCache(userId, 'academy');
+        }
     } catch (err) {
         logger.error(`[Paystack Webhook] Cache clear error for ${userId}:`, err);
     }

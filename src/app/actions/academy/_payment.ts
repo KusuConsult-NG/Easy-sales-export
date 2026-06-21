@@ -386,6 +386,7 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<ActionRes
         }
 
         // 🔒 ATOMIC TRANSACTION: Update user and record ledger entries
+        let hasApp = false;
         await db.runTransaction(async (transaction) => {
             // ── READS FIRST ───────────────────────────────────────────
             const tProcessedDoc = await transaction.get(processedRef);
@@ -402,14 +403,28 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<ActionRes
 
             // ── WRITES SECOND ──────────────────────────────────────────
             // Update user registration status
-            transaction.update(db.collection(COLLECTIONS.USERS).doc(session.user.id), {
+            hasApp = !appSnap.empty;
+            const appDoc = hasApp ? appSnap.docs[0] : null;
+
+            const userUpdate: any = {
                 "serviceRegistrations.academy.paymentStatus": "completed",
                 "serviceRegistrations.academy.paymentReference": reference,
                 "serviceRegistrations.academy.paymentAmount": paidAmount,
                 "serviceRegistrations.academy.plan": metadata.plan || "registration",
                 "serviceRegistrations.academy.paidAt": FieldValue.serverTimestamp(),
+                "serviceRegistrations.academy.status": hasApp ? "approved" : "pending",
                 "updatedAt": FieldValue.serverTimestamp(),
-            });
+            };
+
+            if (hasApp && appDoc) {
+                userUpdate["serviceRegistrations.academy.approvedAt"] = FieldValue.serverTimestamp();
+                userUpdate["serviceRegistrations.academy.applicationId"] = appDoc.id;
+                userUpdate["roles"] = FieldValue.arrayUnion("academy_participant");
+                userUpdate["isVerified"] = true;
+            }
+
+            // Update user registration status
+            transaction.update(db.collection(COLLECTIONS.USERS).doc(session.user.id), userUpdate);
 
             // Mark payment as processed
             transaction.set(processedRef, {
@@ -423,13 +438,15 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<ActionRes
             });
 
             // Update matching application if it exists
-            if (!appSnap.empty) {
-                const appRef = appSnap.docs[0].ref;
-                transaction.update(appRef, {
+            if (hasApp && appDoc) {
+                transaction.update(appDoc.ref, {
+                    status: "approved",
                     paymentStatus: "completed",
                     paymentAmount: paidAmount,
                     plan: metadata.plan || "foundation",
                     paymentVerifiedAt: FieldValue.serverTimestamp(),
+                    reviewedAt: FieldValue.serverTimestamp(),
+                    reviewedBy: "paystack_auto_approval",
                 });
             }
 
@@ -448,6 +465,18 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<ActionRes
                 description: "Academy registration fee"
             });
         });
+
+        // Invalidate cache if auto-approved
+        try {
+            const { invalidateUserCache } = await import('@/lib/cache-invalidation');
+            await invalidateUserCache(session.user.id);
+            if (hasApp) {
+                const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
+                await invalidateServiceCache(session.user.id, 'academy');
+            }
+        } catch (cacheErr) {
+            logger.error('[verifyAcademyPaymentAction] Cache clear error:', cacheErr);
+        }
 
         return { success: true, error: null, data: null };
     } catch (error) {

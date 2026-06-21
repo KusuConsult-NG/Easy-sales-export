@@ -499,15 +499,13 @@ async function getCollectionBroadcastList(collectionName: string, filters?: Broa
             let status = d[statusField] || d.membershipStatus || d.status || "pending";
             if (status === "under_review" || status === "submitted" || status === "pending_review") status = "pending";
 
-            // Enforce payment condition for Academy
-            if (collectionName === COLLECTIONS.ACADEMY_APPLICATIONS) {
-                if (status !== "approved" && !["completed", "paid", "successful"].includes(d.paymentStatus)) {
-                    continue;
-                }
-            }
-
             // Must not count "not_started" users as enrolled
             if (status === "not_started") continue;
+
+            const isPaid = ["completed", "paid", "successful"].includes(d.paymentStatus);
+            if (!isPaid) {
+                moduleStats.unpaid++;
+            }
 
             moduleStats.total++;
             if (status === "approved" || status === "active" || status === "paid" || status === "completed") moduleStats.approved++;
@@ -515,13 +513,33 @@ async function getCollectionBroadcastList(collectionName: string, filters?: Broa
             else if (status === "rejected") moduleStats.rejected++;
             else if (status === "suspended") moduleStats.suspended++;
 
-            // Apply status filter if set
-            if (statusFilter === "not_approved") {
-                if (status === "approved" || status === "active" || status === "paid" || status === "completed") continue;
-            } else if (statusFilter === "approved") {
-                if (status !== "approved" && status !== "active" && status !== "paid" && status !== "completed") continue;
-            } else if (statusFilter && status !== statusFilter) {
-                continue;
+            // Apply status & payment filters
+            if (collectionName === COLLECTIONS.ACADEMY_APPLICATIONS) {
+                if (statusFilter === "unpaid") {
+                    if (isPaid) continue;
+                } else if (statusFilter === "all" || !statusFilter) {
+                    // Include everyone
+                } else {
+                    // For other specific filters, skip unpaid unless already approved
+                    if (status !== "approved" && !isPaid) {
+                        continue;
+                    }
+                    if (statusFilter === "not_approved") {
+                        if (status === "approved" || status === "active" || status === "paid" || status === "completed") continue;
+                    } else if (statusFilter === "approved") {
+                        if (status !== "approved" && status !== "active" && status !== "paid" && status !== "completed") continue;
+                    } else if (statusFilter && status !== statusFilter) {
+                        continue;
+                    }
+                }
+            } else {
+                if (statusFilter === "not_approved") {
+                    if (status === "approved" || status === "active" || status === "paid" || status === "completed") continue;
+                } else if (statusFilter === "approved") {
+                    if (status !== "approved" && status !== "active" && status !== "paid" && status !== "completed") continue;
+                } else if (statusFilter && status !== statusFilter) {
+                    continue;
+                }
             }
 
             userEntries.push({ userId, status });

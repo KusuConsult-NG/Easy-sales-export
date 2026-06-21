@@ -71,6 +71,7 @@ const MODULE_STATUS_OPTIONS: Record<string, { value: string; label: string }[]> 
         { value: "pending", label: "Pending" },
         { value: "rejected", label: "Rejected" },
         { value: "under_review", label: "Under Review" },
+        { value: "unpaid", label: "Unpaid" },
     ],
     farm_nation_users: [
         { value: "all", label: "All Statuses" },

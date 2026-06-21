@@ -190,6 +190,33 @@ export function normalizeUserDoc(doc: AnyObject): AnyObject {
     return result;
 }
 
+function isPlainObject(val: any): boolean {
+    if (val === null || typeof val !== 'object') return false;
+    const proto = Object.getPrototypeOf(val);
+    return proto === null || proto === Object.prototype;
+}
+
 function deepClone<T>(obj: T): T {
-    return JSON.parse(JSON.stringify(obj));
+    if (obj === null || typeof obj !== 'object') {
+        return obj;
+    }
+
+    if (obj instanceof Date) {
+        return new Date(obj.getTime()) as any;
+    }
+
+    if (Array.isArray(obj)) {
+        return obj.map(item => deepClone(item)) as any;
+    }
+
+    // Preserve non-plain objects like FieldValue, Timestamp, etc.
+    if (!isPlainObject(obj)) {
+        return obj;
+    }
+
+    const clonedObj: any = Object.create(Object.getPrototypeOf(obj));
+    for (const key of Object.keys(obj)) {
+        clonedObj[key] = deepClone((obj as any)[key]);
+    }
+    return clonedObj;
 }

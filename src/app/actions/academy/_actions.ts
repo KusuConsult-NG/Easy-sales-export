@@ -1118,6 +1118,7 @@ async function _submitAcademyApplicationAction(
         const userRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
 
         let finalApplicationId: string = "";
+        let isPaid = false;
 
         await db.runTransaction(async (t) => {
             // Check for existing application status on the user
@@ -1162,24 +1163,25 @@ async function _submitAcademyApplicationAction(
             finalApplicationId = applicationId;
             const appRef = collectionsContext.doc(applicationId);
 
+            isPaid = ["completed", "paid", "successful"].includes(existingPaymentStatus);
+
             // Save to Firestore
             t.set(appRef, {
                 ...applicationData,
                 userId: session.user.id,
                 applicationId,
-                status: "pending",
+                status: isPaid ? "approved" : "pending",
                 paymentStatus: existingPaymentStatus,
                 paymentAmount: existingPaymentAmount,
                 plan: "registration",
                 submittedAt: FieldValue.serverTimestamp(),
-                reviewedAt: null,
-                reviewedBy: null,
+                reviewedAt: isPaid ? FieldValue.serverTimestamp() : null,
+                reviewedBy: isPaid ? "system_auto_approval" : null,
                 notes: "",
             });
 
-            // CRITICAL: Update user.serviceRegistrations to link application with auth
-            t.update(userRef, {
-                "serviceRegistrations.academy.status": "pending",
+            const userUpdate: any = {
+                "serviceRegistrations.academy.status": isPaid ? "approved" : "pending",
                 "serviceRegistrations.academy.applicationId": applicationId,
                 "serviceRegistrations.academy.submittedAt": FieldValue.serverTimestamp(),
                 "serviceRegistrations.academy.paymentStatus": existingPaymentStatus,
@@ -1196,7 +1198,16 @@ async function _submitAcademyApplicationAction(
                 stateOfOrigin: applicationData.personalInfo.state,
                 lga: applicationData.personalInfo.lga,
                 updatedAt: FieldValue.serverTimestamp(),
-            });
+            };
+
+            if (isPaid) {
+                userUpdate["serviceRegistrations.academy.approvedAt"] = FieldValue.serverTimestamp();
+                userUpdate["roles"] = FieldValue.arrayUnion("academy_participant");
+                userUpdate["isVerified"] = true;
+            }
+
+            // CRITICAL: Update user.serviceRegistrations to link application with auth
+            t.update(userRef, userUpdate);
         });
 
         // Create audit log outside transaction
@@ -1210,6 +1221,10 @@ async function _submitAcademyApplicationAction(
 
         try {
             await invalidateUserCache(session.user.id);
+            if (isPaid) {
+                const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
+                await invalidateServiceCache(session.user.id, 'academy');
+            }
         } catch (err) {
             logger.error("Failed to invalidate cache after Academy application:", err);
         }

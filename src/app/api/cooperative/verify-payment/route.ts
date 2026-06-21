@@ -8,6 +8,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 import { rateLimit, getClientIp, createRateLimitResponse } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
+import { normalizeUserDoc } from "@/lib/schema-normalizer";
 
 // Rate limiter for payment verification (prevent fraud/double-verification)
 const paymentVerifyLimiter = rateLimit(rateLimitConfig.payment);
@@ -153,12 +154,13 @@ export async function POST(request: NextRequest) {
 
             const tMembershipDoc = await transaction.get(membershipRef);
             const existing = tMembershipDoc.exists ? (tMembershipDoc.data() ?? {}) : {};
+            const onboardingCompleted = existing.onboardingCompleted === true;
 
             // Upsert the membership doc (create if missing, merge if exists)
             transaction.set(membershipRef, {
                 userId,
                 membershipTier:    existing.membershipTier    || "Member",
-                membershipStatus:  existing.membershipStatus  || "pending",
+                membershipStatus:  onboardingCompleted ? "active" : "pending",
                 paymentStatus:     "completed",
                 paymentReference:  reference,
                 paymentVerifiedAt: FieldValue.serverTimestamp(),
@@ -180,18 +182,26 @@ export async function POST(request: NextRequest) {
 
             // Sync user doc for middleware gating
             const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
-            transaction.set(userRef, {
+            const userUpdatePayload: any = {
                 serviceRegistrations: {
                     cooperatives: {
                         paymentStatus:    "completed",
                         paymentReference: reference,
                         paymentAmount:    paidAmount,
-                        status:           "pending",
+                        status:           onboardingCompleted ? "active" : "legacy_pending_onboarding",
                         paidAt:           FieldValue.serverTimestamp(),
                     }
                 },
                 updatedAt: FieldValue.serverTimestamp(),
-            }, { merge: true });
+            };
+
+            if (onboardingCompleted) {
+                userUpdatePayload.roles = FieldValue.arrayUnion("cooperative_member");
+                userUpdatePayload.isVerified = true;
+                userUpdatePayload.serviceRegistrations.cooperatives.activatedAt = FieldValue.serverTimestamp();
+            }
+
+            transaction.set(userRef, normalizeUserDoc(userUpdatePayload), { merge: true });
 
             // Global ledger
             transaction.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(reference), {
