@@ -139,6 +139,15 @@ const authMiddleware = auth((req: any) => {
         }
     }
 
+    // Redirect `/landing` to `/` on domains that don't support a separate sub-landing page
+    if (pathname === "/landing") {
+        const hasSublanding = rewritePrefix === "/wave" || rewritePrefix === "/cooperatives";
+        if (!hasSublanding) {
+            const homeUrl = new URL("/", req.nextUrl.clone());
+            return NextResponse.redirect(homeUrl, { status: 302 });
+        }
+    }
+
     if (rewritePrefix && !pathname.startsWith("/api") && !pathname.startsWith("/_next") && !pathname.startsWith("/__session")) {
         // Redirect requests with redundant module prefix on subdomains/dedicated domains to the clean apex domain
         if (rewritePrefix !== "/" && (pathname === rewritePrefix || pathname.startsWith(rewritePrefix + "/"))) {
