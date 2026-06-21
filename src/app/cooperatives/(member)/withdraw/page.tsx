@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, Wallet, AlertCircle, TrendingDown, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 import { submitWithdrawalRequestAction } from '@/app/actions/cooperative';
+import { parseCurrencyStringToFloat } from '@/lib/utils';
 
 export default function WithdrawPage() {
     const router = useRouter();
@@ -17,7 +18,7 @@ export default function WithdrawPage() {
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
 
-    const amountNum = parseFloat(amount) || 0;
+    const amountNum = parseCurrencyStringToFloat(amount) || 0;
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();

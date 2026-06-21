@@ -6,6 +6,7 @@ import { Users, DollarSign, Loader2, AlertCircle, CheckCircle } from "lucide-rea
 import Modal from "@/components/ui/Modal";
 import LoadingButton from "@/components/ui/LoadingButton";
 import { useToast } from "@/contexts/ToastContext";
+import { parseCurrencyStringToFloat } from "@/lib/utils";
 
 type JoinCooperativeState =
     | { error: string; success: false; data?: null; }
@@ -39,8 +40,8 @@ async function joinCooperativeWrapper(
         }
 
         const cooperativeId = formData.get("cooperativeId") as string;
-        const initialContribution = parseFloat(formData.get("initialContribution") as string) || 0;
-        const monthlyTarget = parseFloat(formData.get("monthlyTarget") as string);
+        const initialContribution = parseCurrencyStringToFloat(formData.get("initialContribution") as string) || 0;
+        const monthlyTarget = parseCurrencyStringToFloat(formData.get("monthlyTarget") as string);
 
         if (!monthlyTarget || monthlyTarget < 1000) {
             return { error: "Monthly target must be at least ₦1,000", success: false };

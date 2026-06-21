@@ -13,6 +13,7 @@ import Image from "next/image";
 import { useStorage } from "@/hooks/use-storage";
 import { submitLandListingAction } from "@/app/actions/land-listings";
 import { useToast } from "@/contexts/ToastContext";
+import { parseCurrencyStringToFloat } from "@/lib/utils";
 
 type LandCategory = "farmland" | "ranch" | "forest" | "mixed" | "orchard" | "aquaculture";
 
@@ -30,9 +31,9 @@ export default function ListLandPage() {
         state: "",
         lga: "",
         address: "",
-        size: 0,
+        size: "" as string | number,
         unit: "acres" as "acres" | "hectares",
-        pricePerUnit: 0,
+        pricePerUnit: "" as string | number,
         latitude: "",
         longitude: "",
         listingTypes: ["sale"] as ("sale" | "rent" | "lease")[],
@@ -184,8 +185,8 @@ export default function ListLandPage() {
                     lga: formData.lga,
                     address: formData.address,
                 },
-                size: formData.size,
-                price: formData.size * formData.pricePerUnit,
+                size: parseCurrencyStringToFloat(String(formData.size)),
+                price: parseCurrencyStringToFloat(String(formData.size)) * parseCurrencyStringToFloat(String(formData.pricePerUnit)),
                 category: formData.category, // Added category
                 imageUrls,
                 documentUrls,
@@ -416,7 +417,7 @@ export default function ListLandPage() {
                                     <input
                                         type="number"
                                         value={formData.size}
-                                        onChange={(e) => setFormData({ ...formData, size: Number(e.target.value) })}
+                                        onChange={(e) => setFormData({ ...formData, size: e.target.value })}
                                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         placeholder="0"
                                         min="0"
@@ -447,7 +448,7 @@ export default function ListLandPage() {
                                     <input
                                         type="number"
                                         value={formData.pricePerUnit}
-                                        onChange={(e) => setFormData({ ...formData, pricePerUnit: Number(e.target.value) })}
+                                        onChange={(e) => setFormData({ ...formData, pricePerUnit: e.target.value })}
                                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         placeholder="0"
                                         min="0"
@@ -457,11 +458,11 @@ export default function ListLandPage() {
                                 </div>
                             </div>
 
-                            {formData.size > 0 && formData.pricePerUnit > 0 && (
+                            {Number(formData.size) > 0 && Number(formData.pricePerUnit) > 0 && (
                                 <div className="mt-4 p-4 bg-green-50 rounded-lg">
                                     <p className="text-sm text-green-900">
                                         <span className="font-semibold">Total Price: </span>
-                                        ₦{(formData.size * formData.pricePerUnit).toLocaleString()}
+                                        ₦{(Number(formData.size) * Number(formData.pricePerUnit)).toLocaleString()}
                                     </p>
                                 </div>
                             )}

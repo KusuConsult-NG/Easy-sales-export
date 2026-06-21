@@ -135,3 +135,18 @@ export function toSafeDate(date: any): Date {
         return new Date();
     }
 }
+
+/**
+ * Safely parses a string that might contain currency symbols (e.g. ₦, $, €),
+ * commas, or other formatting characters, into a clean float.
+ */
+export function parseCurrencyStringToFloat(val: string | null | undefined): number {
+    if (val === null || val === undefined) return 0;
+    const cleanStr = String(val)
+        .replace(/[₦$€,]/g, "") // remove common currency symbols and commas
+        .replace(/\s+/g, "")    // remove whitespace
+        .trim();
+    if (cleanStr === "") return 0;
+    return parseFloat(cleanStr);
+}
+

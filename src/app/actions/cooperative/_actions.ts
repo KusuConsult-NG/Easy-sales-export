@@ -32,6 +32,7 @@ import type { CooperativeMembership,
     GetTransactionsState } from "@/lib/types/cooperative";
 import { serializeDoc, serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { revalidatePath } from "next/cache";
+import { parseCurrencyStringToFloat } from "@/lib/utils";
 
 /**
  * Server Actions for Cooperative Management
@@ -1112,7 +1113,7 @@ async function _applyForLoanAction(
         const userId = session.user.id;
 
         // DISEASE 6 FIX: parseFormData binding
-        const amountNum = parseFloat(formData.get("amount") as string);
+        const amountNum = parseCurrencyStringToFloat(formData.get("amount") as string);
         const loanFd = new FormData();
         for (const [k, v] of formData.entries()) loanFd.append(k, v);
         loanFd.set("amount", isNaN(amountNum) ? "0" : String(amountNum));

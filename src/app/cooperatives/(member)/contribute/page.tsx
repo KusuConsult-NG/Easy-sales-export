@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { initializeContributionPaymentAction } from '@/app/actions/cooperative';
 import { COOPERATIVE_TIERS } from '@/lib/cooperative-tiers';
 import { useToast } from '@/contexts/ToastContext';
+import { parseCurrencyStringToFloat } from '@/lib/utils';
 import LoadingButton from '@/components/ui/LoadingButton';
 
 export default function ContributePage() {
@@ -16,7 +17,7 @@ export default function ContributePage() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const amountNum = parseFloat(amount) || 0;
+    const amountNum = parseCurrencyStringToFloat(amount) || 0;
 
     // Calculate which tier this contribution would reach
     const getTierPreview = (contributionAmount: number) => {

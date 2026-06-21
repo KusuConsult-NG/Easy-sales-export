@@ -8,6 +8,7 @@ import Link from "next/link";
 import { updateLandListing } from "@/app/actions/land-actions";
 import { getPropertyByIdAction } from "@/app/actions/land-listings";
 import { useToast } from "@/contexts/ToastContext";
+import { parseCurrencyStringToFloat } from "@/lib/utils";
 
 interface EditPropertyPageProps {
     params: Promise<{ id: string }>;
@@ -27,8 +28,8 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
         state: "",
         lga: "",
         address: "",
-        price: 0,
-        size: 0,
+        price: "" as string | number,
+        size: "" as string | number,
         category: [] as string[],
         features: [] as string[],
         listingTypes: [] as ("sale" | "rent" | "lease")[],
@@ -74,8 +75,8 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
                         state: location.state || "",
                         lga: location.lga || (location as any).city || "",
                         address: location.address || "",
-                        price: prop.price || 0,
-                        size: prop.size || 0,
+                        price: prop.price ?? "",
+                        size: prop.size ?? "",
                         category: Array.isArray(prop.category)
                             ? prop.category
                             : (prop.category ? [prop.category] : ["farmland"]),
@@ -142,8 +143,8 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
                     lat: 0, // Preserve original lat/lng if updating dynamically later via Maps
                     lng: 0,
                 },
-                price: formData.price,
-                size: formData.size,
+                price: parseCurrencyStringToFloat(String(formData.price)),
+                size: parseCurrencyStringToFloat(String(formData.size)),
                 category: formData.category,
                 features: formData.features,
                 availableForSale: formData.listingTypes.includes("sale"),
@@ -319,7 +320,7 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
                                     <input
                                         type="number"
                                         value={formData.size}
-                                        onChange={(e) => setFormData({ ...formData, size: Number(e.target.value) })}
+                                        onChange={(e) => setFormData({ ...formData, size: e.target.value })}
                                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         min="0"
                                         step="0.1"
@@ -334,7 +335,7 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
                                     <input
                                         type="number"
                                         value={formData.price}
-                                        onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
+                                        onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         min="0"
                                         step="1000"

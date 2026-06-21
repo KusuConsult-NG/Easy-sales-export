@@ -10,6 +10,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { z } from "zod";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { revalidatePath } from "next/cache";
+import { parseCurrencyStringToFloat } from "@/lib/utils";
 import { serializeDoc, serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 
 /**
@@ -112,7 +113,7 @@ export async function createExportWindowAction(
         // Extract and validate form data
         const exportData = { commodity: (formData.get("commodity") as string | null)?.trim() ?? "",
             quantity: (formData.get("quantity") as string | null)?.trim() ?? "",
-            amount: (() => { const raw = formData.get("amount") as string | null; const n = raw ? parseFloat(raw) : NaN; return isNaN(n) ? -1 : n; })(),
+            amount: (() => { const raw = formData.get("amount") as string | null; const n = raw ? parseCurrencyStringToFloat(raw) : NaN; return isNaN(n) ? -1 : n; })(),
             deliveryDate: (formData.get("deliveryDate") as string | null)?.trim() || undefined,
             destination: (formData.get("destination") as string | null)?.trim() || undefined };
 

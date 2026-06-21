@@ -11,6 +11,7 @@ import { waveApplicationSchema,
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { ZodError } from "zod";
 import { revalidatePath } from "next/cache";
+import { parseCurrencyStringToFloat } from "@/lib/utils";
 
 /**
  * Server Actions for Platform Forms
@@ -178,7 +179,7 @@ export async function submitWithdrawalAction(
 
         // Extract and validate form data
         const rawAmount = formData.get("amount") as string | null;
-        const parsedAmount = rawAmount ? parseFloat(rawAmount) : NaN;
+        const parsedAmount = rawAmount ? parseCurrencyStringToFloat(rawAmount) : NaN;
         if (isNaN(parsedAmount) || parsedAmount <= 0) {
             return { error: "Invalid amount", success: false as const };
         }

@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { MapPin, Upload, FileText, CheckCircle, Loader2, ArrowRight, ArrowLeft } from "lucide-react";
 import { submitLandListingAction } from "@/app/actions/land-listings";
 import { useStorage } from "@/hooks/use-storage";
+import { parseCurrencyStringToFloat } from "@/lib/utils";
 
 const NIGERIAN_STATES = [
     "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno",
@@ -133,8 +134,8 @@ export default function SubmitLandListingPage() {
                     lga: formData.lga,
                     address: formData.address,
                 },
-                size: parseFloat(formData.size),
-                price: parseFloat(formData.price),
+                size: parseCurrencyStringToFloat(formData.size),
+                price: parseCurrencyStringToFloat(formData.price),
                 soilType: formData.soilType,
                 waterSource: formData.waterSource,
                 availableForSale: formData.type === "sale",

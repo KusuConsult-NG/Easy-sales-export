@@ -27,6 +27,7 @@ import { ProductSchema,
     SellerVerificationSchema } from "@/lib/validations/marketplace";
 import { withSafeAction, ActionResponse } from "@/lib/safe-action";
 import { parseFormData } from "@/lib/form-validation";
+import { parseCurrencyStringToFloat } from "@/lib/utils";
 
 // ============================================
 // Check Marketplace Application Status Action
@@ -725,9 +726,9 @@ async function _createProductAction(prevState: unknown, formData: FormData): Pro
             logger.warn("Failed to parse certifications JSON, using defaults", { userId }); 
         }
 
-        const retailPrice = parseFloat(formData.get("retailPrice") as string || "0");
-        const bulkPrice = formData.get("bulkPrice") ? parseFloat(formData.get("bulkPrice") as string) : undefined;
-        const exportPrice = formData.get("exportPrice") ? parseFloat(formData.get("exportPrice") as string) : undefined;
+        const retailPrice = parseCurrencyStringToFloat(formData.get("retailPrice") as string || "0");
+        const bulkPrice = formData.get("bulkPrice") ? parseCurrencyStringToFloat(formData.get("bulkPrice") as string) : undefined;
+        const exportPrice = formData.get("exportPrice") ? parseCurrencyStringToFloat(formData.get("exportPrice") as string) : undefined;
         const bulkAvailable = formData.get("bulkAvailable") === "true";
         const exportReady = formData.get("exportReady") === "true";
         const bulkMinQuantity = formData.get("bulkMinQuantity") ? parseInt(formData.get("bulkMinQuantity") as string) : undefined;
@@ -923,9 +924,9 @@ async function _updateProductAction(prevState: unknown, formData: FormData): Pro
             logger.warn("Failed to parse certifications JSON, using defaults", { userId }); 
         }
 
-        const retailPrice = parseFloat(formData.get("retailPrice") as string || "0");
-        const bulkPrice = formData.get("bulkPrice") ? parseFloat(formData.get("bulkPrice") as string) : undefined;
-        const exportPrice = formData.get("exportPrice") ? parseFloat(formData.get("exportPrice") as string) : undefined;
+        const retailPrice = parseCurrencyStringToFloat(formData.get("retailPrice") as string || "0");
+        const bulkPrice = formData.get("bulkPrice") ? parseCurrencyStringToFloat(formData.get("bulkPrice") as string) : undefined;
+        const exportPrice = formData.get("exportPrice") ? parseCurrencyStringToFloat(formData.get("exportPrice") as string) : undefined;
         const bulkAvailable = formData.get("bulkAvailable") === "true";
         const exportReady = formData.get("exportReady") === "true";
         const bulkMinQuantity = formData.get("bulkMinQuantity") ? parseInt(formData.get("bulkMinQuantity") as string) : undefined;

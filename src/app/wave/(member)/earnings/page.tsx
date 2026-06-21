@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { calculateEarningsAction, withdrawEarningsAction } from "@/app/actions/wave";
 import type { MemberEarnings } from "@/app/actions/wave";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, parseCurrencyStringToFloat } from "@/lib/utils";
 import { useToast } from "@/contexts/ToastContext";
 
 export default function WaveEarningsPage() {
@@ -52,7 +52,7 @@ export default function WaveEarningsPage() {
     };
 
     async function handleWithdraw() {
-        const amount = parseFloat(withdrawalAmount);
+        const amount = parseCurrencyStringToFloat(withdrawalAmount);
         if (isNaN(amount) || amount < 5000) {
             showToast("Minimum withdrawal is ₦5,000", "error");
             return;
@@ -294,7 +294,7 @@ export default function WaveEarningsPage() {
                                 </button>
                                 <button
                                     onClick={handleWithdraw}
-                                    disabled={!withdrawalAmount || parseFloat(withdrawalAmount) < 5000 || parseFloat(withdrawalAmount) > earnings.paidAmount}
+                                    disabled={!withdrawalAmount || parseCurrencyStringToFloat(withdrawalAmount) < 5000 || parseCurrencyStringToFloat(withdrawalAmount) > earnings.paidAmount}
                                     className="flex-1 px-4 py-3 bg-emerald-700 text-white font-semibold rounded-xl hover:bg-emerald-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     Confirm Withdrawal
