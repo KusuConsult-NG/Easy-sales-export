@@ -77,11 +77,11 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
             newErrors.accountNumber = "Valid 10-digit account number required";
         }
 
-        // BVN is REQUIRED on WAVE and must be API-verified
-        if (!data.bvn) {
-            newErrors.bvn = "BVN is required";
-        } else if (!bvnVerified) {
-            newErrors.bvn = "Please click 'Verify' to validate your BVN before continuing";
+        // BVN is optional on WAVE but must be verified if provided
+        if (data.bvn && data.bvn.trim()) {
+            if (!bvnVerified) {
+                newErrors.bvn = "Please click 'Verify' to validate your BVN before continuing";
+            }
         }
 
         if (data.isMemberOfCooperative && !data.cooperativeName?.trim()) {
@@ -120,7 +120,7 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                 <div className="flex items-start gap-3">
                     <AlertCircle className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
                     <p className="text-sm text-amber-700">
-                        <strong>Bank account details and BVN are required</strong> for financial verification and programme disbursement. Your data is securely encrypted.
+                        <strong>Bank account details are required</strong> for financial verification and programme disbursement. BVN is optional but recommended. Your data is securely encrypted.
                     </p>
                 </div>
             </div>
@@ -172,7 +172,7 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                     {/* BVN — REQUIRED on WAVE (collected, not API-verified) */}
                     <div>
                         <label className="block text-sm font-semibold text-slate-900 mb-2">
-                            Bank Verification Number (BVN) <span className="text-red-500">*</span>
+                            Bank Verification Number (BVN) <span className="text-slate-400 font-normal text-xs">(Optional)</span>
                         </label>
                         <div className="flex gap-2">
                             <div className="relative flex-1">
@@ -185,7 +185,7 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                                         setBvnError("");
                                     }}
                                     disabled={bvnVerified || verifyingBvn}
-                                    maxLength={30}
+                                    maxLength={11}
                                     className={`w-full px-3.5 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 ${errors.bvn ? 'border-red-400' : 'border-slate-300'}`}
                                     placeholder="Enter BVN"
                                 />

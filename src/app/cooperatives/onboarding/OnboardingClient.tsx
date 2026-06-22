@@ -440,7 +440,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
             return { success: false, error: null };
         }
         if (missingDocs) {
-            showToast("Please complete your document uploads and verify your BVN/NIN before proceeding.", "error");
+            showToast("Please complete your document uploads before proceeding.", "error");
             setCurrentStep(3);
             window.scrollTo({ top: 0, behavior: "smooth" });
             return { success: false, error: null };

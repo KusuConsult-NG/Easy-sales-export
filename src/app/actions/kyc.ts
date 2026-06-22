@@ -339,6 +339,8 @@ async function _saveKYCProfileAction(payload: { firstName: string;
             logger.warn('Cross-module PII sync partial failure', { userId, error: syncErrorMessage });
         }
 
+        await updateOverallKYCStatus(userId);
+
         await invalidateUserCache(userId);
 
         return { success: true, error: null, data: null };

@@ -498,9 +498,9 @@ export async function registerCooperativeMemberAction(
 
                 // Sync onboarding specific details for admin users modal
                 bvn: updatedData.bvn || null,
-                bvnVerified: true,
+                bvnVerified: updatedData.bvnVerified,
                 nin: updatedData.nin || null,
-                ninVerified: true,
+                ninVerified: updatedData.ninVerified,
                 nextOfKin: updatedData.nextOfKin || null,
 
                 updatedAt: FieldValue.serverTimestamp() }));
