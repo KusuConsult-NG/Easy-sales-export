@@ -351,11 +351,11 @@ export async function registerCooperativeMemberAction(
 
         const bvn = (formData.get("bvn") as string || "").trim();
         const nin = (formData.get("nin") as string || "").trim();
-        if (!bvn) {
-            return { error: "BVN is required", success: false as const, data: null };
+        if (bvn && bvn.length !== 11) {
+            return { error: "BVN must be exactly 11 digits", success: false as const, data: null };
         }
-        if (!nin) {
-            return { error: "NIN is required", success: false as const, data: null };
+        if (nin && nin.length !== 11) {
+            return { error: "NIN must be exactly 11 digits", success: false as const, data: null };
         }
 
         const validIdUrl = (formData.get("validIdUrl") as string || "").trim();
@@ -417,10 +417,10 @@ export async function registerCooperativeMemberAction(
                     url: formData.get("passportPhotoUrl") as string } : undefined,
                 proofOfAddress: formData.get("proofOfAddressUrl") ? { name: formData.get("proofOfAddressName") as string,
                     url: formData.get("proofOfAddressUrl") as string } : undefined },
-            bvn: bvn || undefined,
-            bvnVerified: true,
-            nin: nin || undefined,
-            ninVerified: true,
+            bvn: bvn || null,
+            bvnVerified: bvn ? true : false,
+            nin: nin || null,
+            ninVerified: nin ? true : false,
             // Flat state field for SMS geo-filter broadcast queries
             state: validatedData.stateOfOrigin,
             // Keep status as pending (admin review needed)
@@ -1476,11 +1476,11 @@ export async function resubmitCooperativeApplicationAction(
 
         const bvn = (formData.get("bvn") as string || "").trim();
         const nin = (formData.get("nin") as string || "").trim();
-        if (!bvn) {
-            return { success: false as const, error: "BVN is required" };
+        if (bvn && bvn.length !== 11) {
+            return { success: false as const, error: "BVN must be exactly 11 digits" };
         }
-        if (!nin) {
-            return { success: false as const, error: "NIN is required" };
+        if (nin && nin.length !== 11) {
+            return { success: false as const, error: "NIN must be exactly 11 digits" };
         }
 
         const validIdUrl = (formData.get("validIdUrl") as string) || existingMemberData?.documents?.validId?.url || "";
@@ -1510,10 +1510,10 @@ export async function resubmitCooperativeApplicationAction(
             nextOfKinName: validatedData.nextOfKinName,
             nextOfKinPhone: validatedData.nextOfKinPhone,
             nextOfKinAddress: validatedData.nextOfKinAddress,
-            bvn: bvn,
-            bvnVerified: true,
-            nin: nin,
-            ninVerified: true,
+            bvn: bvn || null,
+            bvnVerified: bvn ? true : false,
+            nin: nin || null,
+            ninVerified: nin ? true : false,
             membershipStatus: 'pending',
             revisionNote: null,
             resubmittedAt: FieldValue.serverTimestamp(),
@@ -1551,9 +1551,9 @@ export async function resubmitCooperativeApplicationAction(
             'address.ward': validatedData.ward || null,
             'address.street': validatedData.residentialAddress || null,
             bvn: bvn || null,
-            bvnVerified: true,
+            bvnVerified: bvn ? true : false,
             nin: nin || null,
-            ninVerified: true,
+            ninVerified: nin ? true : false,
             nextOfKin: {
                 name: validatedData.nextOfKinName || null,
                 phone: validatedData.nextOfKinPhone || null,

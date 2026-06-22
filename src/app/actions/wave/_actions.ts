@@ -77,7 +77,7 @@ const waveApplicationSchema = z.object({ // SECTION A: Personal Identification
     nextOfKinRelationship: z.string().min(2, "Relationship is required"),
 
     // SECTION B: National Identity & Civic Status
-    nin: z.string().min(11, "Valid NIN is required"),
+    nin: z.string().optional().or(z.literal("")),
     votersCardNumber: z.string().optional().or(z.literal("")),
     pollingUnit: z.string().optional(),
     ward: z.string().optional(),
@@ -103,7 +103,7 @@ const waveApplicationSchema = z.object({ // SECTION A: Personal Identification
     hasBankAccount: z.boolean().optional(),
     bankName: z.string().min(2, "Bank name is required"),
     accountNumber: z.string().min(10, "Valid 10-digit account number required"),
-    bvn: z.string().min(11, "BVN is required (11 digits)"),
+    bvn: z.string().optional().or(z.literal("")),
     isMemberOfCooperative: z.boolean(),
     cooperativeName: z.string().optional(),
     willingToJoinCooperative: z.boolean(),
@@ -344,7 +344,8 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
 
         const applicantEmail = (session.user.email || validatedData.email || '').toLowerCase().trim();
         const applicantPhone = validatedData.phone.replace(/\s+/g, '').trim();
-        const applicantNin = validatedData.nin.trim();
+        const applicantNin = validatedData.nin ? validatedData.nin.trim() : "";
+        const applicantBvn = validatedData.bvn ? validatedData.bvn.trim() : "";
 
         const [userDoc, phoneSnap, ninSnap] = await Promise.all([
             db.collection(COLLECTIONS.USERS).doc(session.user.id).get(),
@@ -352,10 +353,10 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
                 .where("phone", "==", applicantPhone)
                 .limit(1)
                 .get(),
-            db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+            applicantNin ? db.collection(COLLECTIONS.WAVE_APPLICATIONS)
                 .where("nin", "==", hashData(applicantNin))
                 .limit(1)
-                .get(),
+                .get() : Promise.resolve(null),
         ]);
 
         let emailSnap = null;
@@ -409,7 +410,7 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
         const phoneErr = checkDuplicate(phoneSnap, 'phone number');
         if (phoneErr) return { success: false as const, error: phoneErr, data: null };
 
-        const ninErr = checkDuplicate(ninSnap, 'NIN');
+        const ninErr = applicantNin ? checkDuplicate(ninSnap, 'NIN') : null;
         if (ninErr) return { success: false as const, error: ninErr, data: null };
 
         let applicationId = userDoc.data()?.serviceRegistrations?.wave?.applicationId;
@@ -420,8 +421,8 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
         await db.runTransaction(async (transaction) => {
             transaction.set(db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId), {
                 ...validatedData,
-                bvn: hashData(validatedData.bvn.trim()),
-                nin: hashData(validatedData.nin.trim()),
+                bvn: applicantBvn ? hashData(applicantBvn) : null,
+                nin: applicantNin ? hashData(applicantNin) : null,
                 age: calculatedAge,
                 userId: session.user.id,
                 userEmail: session.user.email || validatedData.email,
@@ -451,10 +452,12 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
                 lga: validatedData.lgaOfOrigin,
                 residentialAddress: validatedData.residentialAddress,
                 // Populate KYC
-                bvn: hashData(validatedData.bvn.trim()),
-                nin: hashData(applicantNin),
-                "kyc.bvn": hashData(validatedData.bvn.trim()),
-                "kyc.nin": hashData(applicantNin),
+                bvn: applicantBvn ? hashData(applicantBvn) : null,
+                nin: applicantNin ? hashData(applicantNin) : null,
+                "kyc.bvn": applicantBvn ? hashData(applicantBvn) : null,
+                "kyc.nin": applicantNin ? hashData(applicantNin) : null,
+                "kyc.bvnVerified": applicantBvn ? true : false,
+                "kyc.ninVerified": applicantNin ? true : false,
                 // Next of Kin
                 nextOfKinName: validatedData.nextOfKinName,
                 nextOfKinPhone: validatedData.nextOfKinPhone,
@@ -1609,7 +1612,8 @@ async function _resubmitWaveApplicationAction(
 
         const validatedData = validation.data;
         const applicantPhone = validatedData.phone.replace(/\s+/g, '').trim();
-        const applicantNin = validatedData.nin.trim();
+        const applicantNin = validatedData.nin ? validatedData.nin.trim() : "";
+        const applicantBvn = validatedData.bvn ? validatedData.bvn.trim() : "";
 
         await db.runTransaction(async (transaction) => {
             const appRef = db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId);
@@ -1617,8 +1621,8 @@ async function _resubmitWaveApplicationAction(
 
             transaction.update(appRef, {
                 ...validatedData,
-                bvn: hashData(validatedData.bvn.trim()),
-                nin: hashData(validatedData.nin.trim()),
+                bvn: applicantBvn ? hashData(applicantBvn) : null,
+                nin: applicantNin ? hashData(applicantNin) : null,
                 status: 'pending',
                 revisionNote: null,
                 resubmittedAt: FieldValue.serverTimestamp(),
@@ -1641,10 +1645,12 @@ async function _resubmitWaveApplicationAction(
                 lga: validatedData.lgaOfOrigin,
                 residentialAddress: validatedData.residentialAddress,
                 // Populate KYC
-                bvn: hashData(validatedData.bvn.trim()),
-                nin: hashData(applicantNin),
-                "kyc.bvn": hashData(validatedData.bvn.trim()),
-                "kyc.nin": hashData(applicantNin),
+                bvn: applicantBvn ? hashData(applicantBvn) : null,
+                nin: applicantNin ? hashData(applicantNin) : null,
+                "kyc.bvn": applicantBvn ? hashData(applicantBvn) : null,
+                "kyc.nin": applicantNin ? hashData(applicantNin) : null,
+                "kyc.bvnVerified": applicantBvn ? true : false,
+                "kyc.ninVerified": applicantNin ? true : false,
                 // Next of Kin
                 nextOfKinName: validatedData.nextOfKinName,
                 nextOfKinPhone: validatedData.nextOfKinPhone,

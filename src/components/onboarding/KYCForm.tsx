@@ -369,7 +369,7 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
             <div>
                 <IdInput
                     label="NIN (National Identity Number)"
-                    required
+                    optional
                     labelRight={<VerifyBadge state={ninState} />}
                     value={formData.nin || ''}
                     onChange={(v) => handleChange('nin', v)}
@@ -430,7 +430,7 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                 <div>
                     <IdInput
                         label="BVN (Bank Verification Number)"
-                        required
+                        optional
                         labelRight={<VerifyBadge state={bvnState} />}
                         value={formData.bvn || ''}
                         onChange={(v) => handleChange('bvn', v)}

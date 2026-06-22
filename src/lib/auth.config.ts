@@ -35,7 +35,6 @@ export const authConfig = {
                 sameSite: "lax",
                 path: "/",
                 secure: process.env.NODE_ENV === "production",
-                domain: (process.env.NODE_ENV === "production" && (process.env.NEXTAUTH_URL?.includes("easysalesexport.com") || process.env.AUTH_URL?.includes("easysalesexport.com"))) ? ".easysalesexport.com" : undefined,
             }
         },
         csrfToken: {

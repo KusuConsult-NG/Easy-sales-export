@@ -362,7 +362,14 @@ async function _toggleUserKycVerificationAction(
         // Also update overall kyc.status when BVN or NIN changes
         if (field === 'bvn' || field === 'nin') {
             const snap = await userRef.get();
-            const otherVerified = snap.data()?.kyc?.[field === 'bvn' ? 'ninVerified' : 'bvnVerified'] ?? false;
+            const userData = snap.data();
+            const otherField = field === 'bvn' ? 'nin' : 'bvn';
+            const otherVerifiedField = field === 'bvn' ? 'ninVerified' : 'bvnVerified';
+            
+            const otherVal = userData?.kyc?.[otherField];
+            const hasOther = otherVal && otherVal !== '' && otherVal !== crypto.createHash('sha256').update('00000000000').digest('hex');
+            const otherVerified = !hasOther || (userData?.kyc?.[otherVerifiedField] ?? false);
+
             updatePayload['kyc.status'] = (newVerificationStatus && otherVerified) ? 'verified' : 'pending';
             updatePayload['kycVerified'] = newVerificationStatus && otherVerified;
         }

@@ -1,3 +1,7 @@
+import * as path from "path";
+import * as dotenv from "dotenv";
+dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
+
 import { getAdminAuth, getAdminDb } from "../src/lib/firebase-admin";
 import { COLLECTIONS } from "../src/lib/types/firestore";
 

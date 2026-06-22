@@ -378,8 +378,23 @@ async function updateOverallKYCStatus(userId: string): Promise<void> {
         const ninVerified = kyc.ninVerified === true;
         const votersCardVerified = kyc.votersCardVerified === true;
 
-        // KYC is considered complete when BVN is verified and at least one primary ID (NIN or Voter's Card) is verified
-        const kycComplete = bvnVerified && (ninVerified || votersCardVerified);
+        // If BVN is provided, it must be verified. Otherwise (if absent or empty or equal to fake/fallback hash), it counts as complete/ignored.
+        const bvnVal = kyc.bvn;
+        const hasBvn = bvnVal && bvnVal !== hashData('00000000000') && bvnVal !== '';
+        const bvnOk = !hasBvn || bvnVerified;
+
+        // If NIN is provided, it must be verified.
+        const ninVal = kyc.nin;
+        const hasNin = ninVal && ninVal !== hashData('00000000000') && ninVal !== '';
+        const ninOk = !hasNin || ninVerified;
+
+        // If Voter's Card is provided, it must be verified.
+        const votersCardVal = kyc.votersCard;
+        const hasVotersCard = votersCardVal && votersCardVal !== '';
+        const votersCardOk = !hasVotersCard || votersCardVerified;
+
+        // Overall KYC is complete if all provided IDs are verified.
+        const kycComplete = bvnOk && ninOk && votersCardOk;
 
         await runQueryWithRetry(() => atomicUpdateUser(userId, { 
             'kyc.status': kycComplete ? 'verified' : 'pending',

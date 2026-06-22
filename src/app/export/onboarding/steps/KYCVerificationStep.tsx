@@ -48,13 +48,14 @@ export function KYCVerificationStep({
             return;
         }
 
-        // Require NIN verification only
-        if (!kycData.ninVerified) {
+        // Require NIN verification only if NIN is entered
+        if (kycData.nin && kycData.nin.trim() !== '' && !kycData.ninVerified) {
             showToast('Please verify your NIN before continuing', 'error');
             return;
         }
 
-        if (!kycData.bvnVerified) {
+        // Require BVN verification only if BVN is entered
+        if (kycData.bvn && kycData.bvn.trim() !== '' && !kycData.bvnVerified) {
             showToast('Please verify your BVN before continuing', 'error');
             return;
         }

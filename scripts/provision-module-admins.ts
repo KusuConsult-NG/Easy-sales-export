@@ -43,7 +43,7 @@ const MODULE_ADMINS: ModuleAdminConfig[] = [
   },
   {
     email: "easysalescooperative@gmail.com",
-    password: "CoopAdmin2026",
+    password: "coopAdmin2026",
     displayName: "Cooperative Admin",
     roles: ["cooperative_admin", "admin"],
     expectedRedirect: "/admin/cooperatives",
@@ -86,39 +86,84 @@ async function provision(cfg: ModuleAdminConfig): Promise<void> {
   console.log(`   roles      : ${roles.join(", ")}`);
   console.log(`   expected   : ${expectedRedirect}`);
 
+  // ── 0. Firestore pre-check: see if document already exists to get its UID ──
+  let existingFirestoreUid: string | null = null;
+  try {
+    const snap = await db.collection("users").where("email", "==", email).limit(1).get();
+    if (!snap.empty) {
+      existingFirestoreUid = snap.docs[0].id;
+      console.log(`   Firestore  : Found existing document with UID: ${existingFirestoreUid}`);
+    }
+  } catch (err: any) {
+    console.warn(`   Firestore  : Error during pre-check: ${err.message}`);
+  }
+
   // ── 1. Firebase Auth: create or update ───────────────────────────────────
   let uid: string;
+  let authUser;
+
   try {
-    const existing = await adminAuth.getUserByEmail(email);
-    uid = existing.uid;
+    authUser = await adminAuth.getUserByEmail(email);
+    uid = authUser.uid;
     await adminAuth.updateUser(uid, {
       password,
       displayName,
       emailVerified: true,
       disabled: false,
     });
-    console.log(`   Auth       : ✅ exists (UID: ${uid}) — password reset`);
+    console.log(`   Auth       : ✅ exists by email (UID: ${uid}) — updated`);
   } catch (e: any) {
     if (e.code === "auth/user-not-found") {
-      const created = await adminAuth.createUser({
-        email,
-        password,
-        displayName,
-        emailVerified: true,
-      });
-      uid = created.uid;
-      console.log(`   Auth       : 🆕 created (UID: ${uid})`);
+      console.log(`   Auth       : Email not found. Checking if UID exists in Auth...`);
+      if (existingFirestoreUid) {
+        try {
+          await adminAuth.updateUser(existingFirestoreUid, {
+            email,
+            password,
+            displayName,
+            emailVerified: true,
+            disabled: false,
+          });
+          authUser = await adminAuth.getUser(existingFirestoreUid);
+          uid = authUser.uid;
+          console.log(`   Auth       : ✅ exists by UID (UID: ${uid}) — updated with email/password`);
+        } catch (uidErr: any) {
+          if (uidErr.code === "auth/user-not-found") {
+            console.log(`   Auth       : UID not found either. Creating new user...`);
+            const created = await adminAuth.createUser({
+              uid: existingFirestoreUid,
+              email,
+              password,
+              displayName,
+              emailVerified: true,
+            });
+            uid = created.uid;
+            console.log(`   Auth       : 🆕 created (UID: ${uid})`);
+          } else {
+            console.error(`   Auth       : ❌ FAILED by UID — ${uidErr.message}`);
+            return;
+          }
+        }
+      } else {
+        // No existing Firestore UID. Let Firebase generate one.
+        const created = await adminAuth.createUser({
+          email,
+          password,
+          displayName,
+          emailVerified: true,
+        });
+        uid = created.uid;
+        console.log(`   Auth       : 🆕 created with new UID (UID: ${uid})`);
+      }
     } else {
-      console.error(`   Auth       : ❌ FAILED — ${e.message}`);
+      console.error(`   Auth       : ❌ FAILED by Email — ${e.message}`);
       return;
     }
   }
 
   // ── 2. Firebase Custom Claims ─────────────────────────────────────────────
-  // These are read by Firebase client SDK and can also serve as a secondary
-  // source of truth. The primary roles source for this app is Firestore.
   try {
-    await adminAuth.setCustomUserClaims(uid, { admin: true, roles });
+    await adminAuth.setCustomUserClaims(uid, { admin: true, roles, role: roles[0] });
     console.log(`   Claims     : ✅ set — { admin: true, roles: [${roles.join(", ")}] }`);
   } catch (e: any) {
     console.error(`   Claims     : ❌ FAILED — ${e.message}`);
@@ -144,6 +189,8 @@ async function provision(cfg: ModuleAdminConfig): Promise<void> {
       status: "active",
       emailVerified: true,
       verified: true,
+      isVerified: true,
+      profileComplete: true,
       updatedAt: FieldValue.serverTimestamp(),
     };
 
@@ -151,16 +198,30 @@ async function provision(cfg: ModuleAdminConfig): Promise<void> {
       await ref.set({ ...payload, createdAt: FieldValue.serverTimestamp() });
       console.log(`   Firestore  : ✅ document created`);
     } else {
-      await ref.update(payload);
+      await ref.update({
+        ...payload,
+        _version: FieldValue.increment(1)
+      });
       console.log(`   Firestore  : ✅ document updated (roles synced)`);
     }
+
+    // Also update the admin_roles collection for audit
+    const adminRoleRef = db.collection("admin_roles").doc(uid);
+    await adminRoleRef.set({
+      uid: uid,
+      email: email,
+      role: roles[0],
+      roles: roles,
+      grantedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    console.log(`   admin_roles: ✅ document upserted`);
+
   } catch (e: any) {
     console.error(`   Firestore  : ❌ FAILED — ${e.message}`);
   }
 
   // ── 4. Redis cache invalidation ───────────────────────────────────────────
-  // Without this, the JWT callback reads stale cached roles and the admin
-  // still appears as a "general_user" until cache TTL expires (hours later).
   try {
     const { redis, CacheKeys } = await import("../src/lib/redis");
     await Promise.all([

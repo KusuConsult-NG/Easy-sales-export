@@ -68,11 +68,11 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
         const newErrors: Record<string, string> = {};
         const nin = data?.nin || "";
 
-        // NIN — required and must be API-verified
-        if (!nin || !nin.trim()) {
-            newErrors.nin = "NIN is required";
-        } else if (!ninVerified) {
-            newErrors.nin = "Please click 'Verify' to validate your NIN before continuing";
+        // NIN — optional but must be verified if provided
+        if (nin && nin.trim()) {
+            if (!ninVerified) {
+                newErrors.nin = "Please click 'Verify' to validate your NIN before continuing";
+            }
         }
 
         // Voter's Card Number — no longer enforced
@@ -109,13 +109,13 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                 <div className="flex items-start gap-3">
                     <ShieldCheck className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
                     <p className="text-sm text-amber-700">
-                        <strong>NIN is required</strong> for identity and eligibility verification. Voter&apos;s Card details are supported but not enforced. All data is securely encrypted.
+                        <strong>NIN is optional</strong> but recommended for identity and eligibility verification. Voter&apos;s Card details are supported but not enforced. All data is securely encrypted.
                     </p>
                 </div>
             </div>
 
             <div className="space-y-6">
-                {/* NIN — REQUIRED and API-Verified */}
+                {/* NIN — Optional and API-Verified */}
                 <div>
                     <IdInput
                         label="National Identification Number (NIN) 🔒"
@@ -125,12 +125,12 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                             setNinVerified(false);
                             setNinError("");
                         }}
-                        maxLength={30}
+                        maxLength={11}
                         placeholder="Enter your NIN"
                         disabled={ninVerified || verifyingNin}
                         error={errors.nin || ninError}
                         hint="Dial *346# on your registered phone to retrieve your NIN."
-                        required
+                        optional
                         accentColor="emerald"
                         suffix={
                             <button

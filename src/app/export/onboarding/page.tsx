@@ -218,13 +218,22 @@ export default function ExportOnboardingPage() {
                     address: z.string().trim().min(5, "Address is required."),
                     city: z.string().trim().min(2, "City is required."),
                     state: z.string().trim().min(2, "State is required."),
-                    ninVerified: z.boolean().refine(val => val === true, {
-                        message: "Identity (NIN) must be verified."
-                    }),
-                    bvnVerified: z.boolean().refine(val => val === true, {
-                        message: "BVN must be verified."
-                    }),
-                }, { message: "Identity verification details are required." })
+                    nin: z.string().optional(),
+                    bvn: z.string().optional(),
+                    ninVerified: z.boolean().optional(),
+                    bvnVerified: z.boolean().optional(),
+                }, { message: "Identity verification details are required." }).refine(data => {
+                    if (data.nin && data.nin.trim() !== '' && !data.ninVerified) {
+                        return false;
+                    }
+                    if (data.bvn && data.bvn.trim() !== '' && !data.bvnVerified) {
+                        return false;
+                    }
+                    return true;
+                }, {
+                    message: "Identity / BVN verification is required if details are entered.",
+                    path: ["ninVerified"]
+                })
             }, { message: "KYC verification details are required." }),
             bank: z.object({
                 bankName: z.string().trim().min(1, "Bank name is required."),

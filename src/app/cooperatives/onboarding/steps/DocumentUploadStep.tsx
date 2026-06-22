@@ -48,14 +48,14 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
             newErrors.passportPhoto = "Passport photo is required";
         }
 
-        // BVN format check - now required
-        if (!data.bvn) {
-            newErrors.bvn = "BVN is required";
+        // BVN format check if entered
+        if (data.bvn && data.bvn.trim() !== "" && data.bvn.trim().length !== 11) {
+            newErrors.bvn = "BVN must be exactly 11 digits";
         }
 
-        // NIN format check - now required
-        if (!data.nin) {
-            newErrors.nin = "NIN is required";
+        // NIN format check if entered
+        if (data.nin && data.nin.trim() !== "" && data.nin.trim().length !== 11) {
+            newErrors.nin = "NIN must be exactly 11 digits";
         }
 
         if (!torAgreed) {
@@ -164,10 +164,10 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
                 <div className="pt-4 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-6">
                     <IdInput
                         label="Bank Verification Number (BVN)"
-                        required
+                        optional
                         value={data.bvn || ""}
                         onChange={(v) => onChange({ ...data, bvn: v })}
-                        maxLength={30}
+                        maxLength={11}
                         placeholder="Enter BVN"
                         hint="Your BVN. 📞 Dial *565*0# to retrieve your BVN."
                         accentColor="purple"
@@ -175,10 +175,10 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
                     />
                     <IdInput
                         label="National Identification Number (NIN)"
-                        required
+                        optional
                         value={data.nin || ""}
                         onChange={(v) => onChange({ ...data, nin: v })}
-                        maxLength={30}
+                        maxLength={11}
                         placeholder="Enter NIN"
                         hint="Your National Identification Number (NIN)."
                         accentColor="purple"
