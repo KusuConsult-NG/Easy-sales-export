@@ -131,9 +131,9 @@ export function extractCanonicalUser(uData: any, appData: any = null) {
 
     // 2. ADDRESS (SSOT Priority)
     const address = {
-        street: profile?.address?.street || uData?.address?.street || uData?.residentialAddress || appData?.residentialAddress || appData?.address?.street || appData?.address || "",
-        state:  profile?.address?.state  || uData?.address?.state  || uData?.stateOfOrigin      || appData?.stateOfOrigin      || appData?.address?.state  || appData?.state   || "",
-        lga:    profile?.address?.lga    || uData?.address?.lga    || uData?.lga                || appData?.lgaOfOrigin        || appData?.lga             || appData?.address?.lga || "",
+        street: profile?.address?.street || uData?.address?.street || uData?.residentialAddress || uData?.street || appData?.residentialAddress || appData?.address?.street || appData?.address || "",
+        state:  profile?.address?.state  || uData?.address?.state  || uData?.state || uData?.stateOfOrigin || appData?.state || appData?.stateOfOrigin || appData?.stateOfResidence || appData?.residentialState || appData?.address?.state || "",
+        lga:    profile?.address?.lga    || uData?.address?.lga    || uData?.lga   || appData?.lga   || appData?.lgaOfOrigin   || appData?.lgaOfResidence   || appData?.residentialLga   || appData?.address?.lga   || "",
     };
 
     // 3. IDENTITY

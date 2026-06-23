@@ -146,8 +146,8 @@ export default function FarmNationApplicationsPage() {
                 return [
                     a.user.name || "",
                     a.user.email || "",
-                    a.user.phone || a.data.phone || a.data.farmNation?.profile?.phone || "",
-                    a.data.farmNation?.profile?.state ? `${a.data.farmNation.profile.state}${a.data.farmNation.profile.lga ? `, ${a.data.farmNation.profile.lga}` : ""}` : "",
+                    a.user.phone || a.data.phone || "",
+                    a.user.state && a.user.state !== "Unknown" ? `${a.user.state}${a.user.lga && a.user.lga !== "Unknown" ? `, ${a.user.lga}` : ""}` : (a.data.stateOfOrigin ? `${a.data.stateOfOrigin}${a.data.lga ? `, ${a.data.lga}` : ""}` : ""),
                     a.status,
                     dateStr
                 ];
@@ -250,9 +250,9 @@ export default function FarmNationApplicationsPage() {
             header: "Location",
             accessor: (item: StandardPendingForm<SellerProfile>) => (
                 <div className="text-sm text-slate-600">
-                    {item.data.farmNation?.profile?.state
-                        ? `${item.data.farmNation.profile.state}${item.data.farmNation.profile.lga ? `, ${item.data.farmNation.profile.lga}` : ""}`
-                        : "—"}
+                    {item.user.state && item.user.state !== "Unknown"
+                        ? `${item.user.state}${item.user.lga && item.user.lga !== "Unknown" ? `, ${item.user.lga}` : ""}`
+                        : ((item.data as any).stateOfOrigin ? `${(item.data as any).stateOfOrigin}${(item.data as any).lga ? `, ${(item.data as any).lga}` : ""}` : "—")}
                 </div>
             ),
             hideOnMobile: true
@@ -432,21 +432,23 @@ export default function FarmNationApplicationsPage() {
                                 <div>
                                     <span className="text-slate-500 block text-xs mb-0.5">Phone</span>
                                     <p className="font-medium text-slate-900">
-                                        {selectedSeller.data.farmNation?.profile?.phone || selectedSeller.data.phone || "—"}
+                                        {selectedSeller.user.phone || selectedSeller.data.phone || "—"}
                                     </p>
                                 </div>
                                 <div>
                                     <span className="text-slate-500 block text-xs mb-0.5">Location</span>
                                     <p className="font-medium text-slate-900">
-                                        {selectedSeller.data.farmNation?.profile?.state
-                                            ? `${selectedSeller.data.farmNation.profile.state}, ${selectedSeller.data.farmNation.profile.lga || ""}`
-                                            : "—"}
+                                        {selectedSeller.user.state && selectedSeller.user.state !== "Unknown"
+                                            ? `${selectedSeller.user.state}, ${selectedSeller.user.lga || ""}`
+                                            : ((selectedSeller.data as any).stateOfOrigin ? `${(selectedSeller.data as any).stateOfOrigin}, ${(selectedSeller.data as any).lga || ""}` : "—")}
                                     </p>
                                 </div>
-                                {selectedSeller.data.farmNation?.profile?.address && (
+                                {(selectedSeller.user.address && selectedSeller.user.address !== "Unknown" || (selectedSeller.data as any).residentialAddress) && (
                                     <div className="col-span-2">
                                         <span className="text-slate-500 block text-xs mb-0.5">Address</span>
-                                        <p className="font-medium text-slate-900">{selectedSeller.data.farmNation.profile.address}</p>
+                                        <p className="font-medium text-slate-900">
+                                            {selectedSeller.user.address && selectedSeller.user.address !== "Unknown" ? selectedSeller.user.address : (selectedSeller.data as any).residentialAddress}
+                                        </p>
                                     </div>
                                 )}
                             </div>

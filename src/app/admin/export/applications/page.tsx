@@ -255,8 +255,8 @@ export default function AdminExportApplicationsPage() {
             const exportData = result.data;
 
             const rows = exportData.map((a) => {
-                const phone = a.user.phone || a.data.phone || a.data.profile?.phone || a.data.kyc?.kycData?.phone || "";
-                const state = a.data.kyc?.kycData?.state || "";
+                const phone = a.user.phone || a.data.phone || a.data.profile?.phone || "";
+                const state = a.user.state && a.user.state !== "Unknown" ? a.user.state : (a.data.stateOfOrigin || "");
                 return [
                     a.user.name,
                     a.user.email || "",

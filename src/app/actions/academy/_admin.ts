@@ -1012,8 +1012,8 @@ async function _getStandardAcademyApplicationsAction(options: {
                 gender: app.gender || pi.gender || uData.gender || null,
                 dateOfBirth: app.dateOfBirth || pi.dateOfBirth || uData.dob || null,
                 occupation: app.occupation || pi.occupation || uData.occupation || null,
-                stateOfOrigin: app.stateOfOrigin || pi.stateOfOrigin || (typeof uData.address === 'object' ? uData.address?.state : uData.stateOfOrigin) || null,
-                lga: app.lga || pi.lga || (typeof uData.address === 'object' ? uData.address?.lga : uData.lga) || null,
+                stateOfOrigin: app.stateOfOrigin || pi.stateOfOrigin || uData.state || uData.stateOfOrigin || (typeof uData.address === 'object' ? uData.address?.state : uData.stateOfOrigin) || uData.verificationProfile?.address?.state || null,
+                lga: app.lga || pi.lga || uData.lga || (typeof uData.address === 'object' ? uData.address?.lga : uData.lga) || null,
                 residentialAddress: app.residentialAddress || pi.residentialAddress || (typeof uData.address === 'object' ? uData.address?.street : uData.address) || null,
                 fullName: userName
             };

@@ -269,12 +269,12 @@ async function _getStandardFarmNationRegistrantsAction(options: {
         // 3. Normalize and Merge Data for the Admin Table
         let finalApplications = applications.map((app: any) => {
             const uData = (userMap.get(app.userId) || {}) as any;
-            const profile = (app.profile || {}) as any;
+            const profile = (app.profile || app.personalInfo || {}) as any;
             
             // Reconstruct the userName
             const userName = profile.firstName 
                 ? `${profile.firstName} ${profile.lastName || ''}`.trim() 
-                : (uData.fullName || uData.name || "Unknown");
+                : (profile.fullName || uData.fullName || uData.name || "Unknown");
 
             // Canonical bankDetails injection
             const bankDetails = uData.bankDetails || {
@@ -288,11 +288,11 @@ async function _getStandardFarmNationRegistrantsAction(options: {
                 ...uData,
                 ...app,
                 // Flatten profile fields to top-level for UI consistency
-                phone: app.phone || profile.phone || uData.phone || uData.phoneNumber || uData.kyc?.phoneNumber || uData.kyc?.phone || null,
+                phone: app.phone || profile.phone || profile.phoneNumber || uData.phone || uData.phoneNumber || uData.kyc?.phoneNumber || uData.kyc?.phone || null,
                 email: app.email || profile.email || uData.email || null,
-                stateOfOrigin: profile.state || uData.stateOfOrigin || null,
-                lga: profile.lga || uData.lga || null,
-                residentialAddress: profile.address || uData.residentialAddress || null,
+                stateOfOrigin: profile.state || uData.state || uData.stateOfOrigin || (typeof uData.address === 'object' ? uData.address?.state : uData.stateOfOrigin) || null,
+                lga: profile.lga || uData.lga || (typeof uData.address === 'object' ? uData.address?.lga : uData.lga) || null,
+                residentialAddress: profile.address || profile.residentialAddress || uData.residentialAddress || (typeof uData.address === 'object' ? uData.address?.street : uData.address) || null,
                 firstName: profile.firstName || uData.firstName || null,
                 lastName: profile.lastName || uData.lastName || null,
                 fullName: userName
