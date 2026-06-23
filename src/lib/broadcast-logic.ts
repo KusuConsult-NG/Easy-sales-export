@@ -945,15 +945,23 @@ async function getCleanBroadcastListInternal(filters?: BroadcastFilters) {
             const addEmail = (rawEmail: string | undefined | null, name: string, state: string | undefined | null, uid: string, lastActiveRaw: any) => {
                 if (!rawEmail) return;
                 const email = rawEmail.toLowerCase().trim();
-                if (email && !emailMap.has(email)) {
-                    emailMap.set(email, {
-                        uid,
-                        email,
-                        name,
-                        state: state || 'Unknown',
-                        onboardingCompleted: false,
-                        lastActive: lastActiveRaw?.toDate ? lastActiveRaw.toDate() : (lastActiveRaw ? new Date(lastActiveRaw) : new Date())
-                    });
+                if (email) {
+                    const cleanState = state || 'Unknown';
+                    if (!emailMap.has(email)) {
+                        emailMap.set(email, {
+                            uid,
+                            email,
+                            name,
+                            state: cleanState,
+                            onboardingCompleted: false,
+                            lastActive: lastActiveRaw?.toDate ? lastActiveRaw.toDate() : (lastActiveRaw ? new Date(lastActiveRaw) : new Date())
+                        });
+                    } else {
+                        const existing = emailMap.get(email);
+                        if (existing && existing.state === 'Unknown' && cleanState !== 'Unknown') {
+                            existing.state = cleanState;
+                        }
+                    }
                 }
             };
 
