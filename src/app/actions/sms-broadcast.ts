@@ -94,6 +94,100 @@ async function resolveUsers(db: FirebaseFirestore.Firestore, userIds: string[]) 
     return map;
 }
 
+async function resolvePhoneStates(
+    db: FirebaseFirestore.Firestore,
+    normalizedPhones: Set<string>
+): Promise<Map<string, string>> {
+    const phoneStateMap = new Map<string, string>();
+    const addMap = (rawPhone: string | undefined | null, state: string | undefined | null) => {
+        if (!state) return;
+        const phone = normalisePhone(rawPhone);
+        if (phone && normalizedPhones.has(phone)) {
+            phoneStateMap.set(phone, state);
+        }
+    };
+
+    // 1. Primary: users
+    const usersStream = db.collection(COLLECTIONS.USERS)
+        .select("phone", "phoneNumber", "kyc", "stateOfOrigin", "state", "address")
+        .get();
+    for (const d of (await usersStream).docs) {
+        const u: any = d.data();
+        const state = u.stateOfOrigin || u.state || (u.address && u.address.state);
+        addMap(u.phone, state);
+        addMap(u.phoneNumber, state);
+        addMap(u.kyc?.phoneNumber, state);
+    }
+
+    // 2. Cooperative members
+    const cmStream = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+        .select("phone", "phoneNumber", "state", "address")
+        .get();
+    for (const d of (await cmStream).docs) {
+        const m: any = d.data();
+        const state = m.state || (m.address && m.address.state);
+        addMap(m.phone, state);
+        addMap(m.phoneNumber, state);
+    }
+
+    // 3. WAVE applications
+    const waveStream = db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+        .select("phone", "alternativePhone", "phoneNumber", "state", "residentialState")
+        .get();
+    for (const d of (await waveStream).docs) {
+        const a: any = d.data();
+        const state = a.state || a.residentialState;
+        addMap(a.phone, state);
+        addMap(a.alternativePhone, state);
+        addMap(a.phoneNumber, state);
+    }
+
+    // 4. Academy applications
+    const academyStream = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+        .select("personalInfo", "state", "phone", "phoneNumber")
+        .get();
+    for (const d of (await academyStream).docs) {
+        const a: any = d.data();
+        const state = (a.personalInfo && a.personalInfo.state) || a.state;
+        addMap((a.personalInfo && a.personalInfo.phone), state);
+        addMap(a.phone, state);
+        addMap(a.phoneNumber, state);
+    }
+
+    // 5. WAVE briefing registrations
+    const briefStream = db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS)
+        .select("phone", "phoneNumber", "state")
+        .get();
+    for (const d of (await briefStream).docs) {
+        const r: any = d.data();
+        addMap(r.phone, r.state);
+        addMap(r.phoneNumber, r.state);
+    }
+
+    // 6. Farm Nation applications
+    const fnStream = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
+        .select("profile")
+        .get();
+    for (const d of (await fnStream).docs) {
+        const a: any = d.data();
+        addMap(a.profile?.phone, a.profile?.state);
+    }
+
+    // 7. Export applications
+    const exportStream = db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
+        .select("profile", "companyInfo", "state", "phone", "phoneNumber")
+        .get();
+    for (const d of (await exportStream).docs) {
+        const a: any = d.data();
+        const state = (a.profile && a.profile.state) || (a.companyInfo && a.companyInfo.state) || a.state;
+        addMap((a.profile && a.profile.phone), state);
+        addMap(a.phone, state);
+        addMap(a.phoneNumber, state);
+    }
+
+    return phoneStateMap;
+}
+
 /** Collect recipient phone numbers based on audience filter */
 async function collectSmsRecipients(
     filters: SmsFilters
@@ -572,10 +666,29 @@ async function collectSmsRecipients(
             }
             break;
         }
-        case "custom": { if (filters.customRecipients && Array.isArray(filters.customRecipients)) {
-                filters.customRecipients.forEach(phone => {
-                    add(phone, "Custom User");
-                });
+        case "custom": {
+            if (filters.customRecipients && Array.isArray(filters.customRecipients)) {
+                if (filters.state) {
+                    const normalizedPhones = new Set(
+                        filters.customRecipients.map(p => normalisePhone(p)).filter(Boolean) as string[]
+                    );
+                    if (normalizedPhones.size > 0) {
+                        const phoneStateMap = await resolvePhoneStates(db, normalizedPhones);
+                        filters.customRecipients.forEach(phone => {
+                            const normalized = normalisePhone(phone);
+                            if (normalized) {
+                                const state = phoneStateMap.get(normalized);
+                                if (isStateMatch(state, filters.state)) {
+                                    add(phone, "Custom User");
+                                }
+                            }
+                        });
+                    }
+                } else {
+                    filters.customRecipients.forEach(phone => {
+                        add(phone, "Custom User");
+                    });
+                }
             }
             break;
         }
