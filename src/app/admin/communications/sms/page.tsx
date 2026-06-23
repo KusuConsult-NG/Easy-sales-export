@@ -30,6 +30,12 @@ const AUDIENCES: { value: SmsAudience; label: string; description: string }[] = 
     { value: "farm_nation_users", label: "Farm Nation Users", description: "All Farm Nation inquiries" },
     { value: "unpaid_applicants", label: "Unpaid Applicants", description: "Users who applied but have not completed their required payment" },
     { value: "abandoned_failed_transactions", label: "Abandoned / Failed Transactions", description: "Users with failed or aborted payments" },
+    { value: "active_users", label: "Active Users", description: "Users active/approved in at least one service module" },
+    { value: "pending_users", label: "Pending Users", description: "Users with pending applications but no active modules" },
+    { value: "stalled_users", label: "Stalled Users", description: "Users who started profile/KYC/bank setup but haven't submitted any applications" },
+    { value: "ghost_users", label: "Ghost Users", description: "Registered users with zero activity on the platform" },
+    { value: "active_last_30_days", label: "Active Last 30 Days", description: "Users who logged in or updated their profile in the last 30 days" },
+    { value: "fully_verified_sellers", label: "Fully Verified Sellers", description: "Approved sellers who also have a verified KYC profile" },
     { value: "custom", label: "Custom Recipients", description: "Upload a CSV or manually enter numbers" },
 ];
 

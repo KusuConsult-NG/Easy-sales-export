@@ -20,6 +20,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { requireAdmin } from "@/lib/require-admin";
 import { ActionResponse } from "@/lib/safe-action";
 import { logger } from "@/lib/logger";
+import { categorizeUser } from "@/lib/broadcast-logic";
 
 function isStateMatch(dbState: any, filterState: string | undefined): boolean { if (!filterState) return true;
     if (!dbState || typeof dbState !== 'string') return false;
@@ -43,6 +44,12 @@ export type SmsAudience =
     | "farm_nation_users"
     | "unpaid_applicants"
     | "abandoned_failed_transactions"
+    | "active_users"
+    | "pending_users"
+    | "stalled_users"
+    | "ghost_users"
+    | "active_last_30_days"
+    | "fully_verified_sellers"
     | "custom";
 
 export interface SmsFilters { audience: SmsAudience;
@@ -500,6 +507,68 @@ async function collectSmsRecipients(
                 const r: any = d.data();
                 if (filters.state && !isStateMatch(r.state, filters.state)) continue;
                 add(r.phone || r.phoneNumber, r.name || `${r.firstName || ""} ${r.surname || ""}`.trim() || "Registrant");
+            }
+            break;
+        }
+        case "active_users":
+        case "pending_users":
+        case "stalled_users":
+        case "ghost_users": {
+            const stream = db.collection(COLLECTIONS.USERS)
+                .select("phone", "phoneNumber", "kyc", "fullName", "name", "stateOfOrigin", "state", "address", "serviceRegistrations", "verificationProfile", "bankDetails")
+                .stream();
+            for await (const chunk of stream) {
+                const d: any = chunk;
+                const u: any = d.data();
+                const segment = categorizeUser(u);
+                if (segment !== filters.audience) continue;
+
+                const userState = u.stateOfOrigin || u.state || (u.address && u.address.state) || (u.verificationProfile?.address?.state);
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
+
+                add(u.phone || u.phoneNumber || (u.kyc && u.kyc.phoneNumber), u.fullName || u.name || "User");
+            }
+            break;
+        }
+        case "active_last_30_days": {
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            const stream = db.collection(COLLECTIONS.USERS)
+                .select("phone", "phoneNumber", "kyc", "fullName", "name", "stateOfOrigin", "state", "address", "updatedAt", "lastLoginAt", "createdAt")
+                .stream();
+            for await (const chunk of stream) {
+                const d: any = chunk;
+                const u: any = d.data();
+                const lastActiveRaw = u.updatedAt || u.lastLoginAt || u.createdAt;
+                if (!lastActiveRaw) continue;
+                const lastActive = lastActiveRaw.toDate ? lastActiveRaw.toDate() : new Date(lastActiveRaw);
+                if (isNaN(lastActive.getTime()) || lastActive < thirtyDaysAgo) continue;
+
+                const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
+
+                add(u.phone || u.phoneNumber || (u.kyc && u.kyc.phoneNumber), u.fullName || u.name || "User");
+            }
+            break;
+        }
+        case "fully_verified_sellers": {
+            const q = db.collection(COLLECTIONS.SELLER_VERIFICATIONS).where("status", "==", "approved");
+            const sellerStream = q.select("userId", "address").get();
+            const userIds: string[] = [];
+            for (const d of (await sellerStream).docs) {
+                const v: any = d.data();
+                if (filters.state && (!(v.address) || !isStateMatch(v.address.state, filters.state))) continue;
+                if (v.userId) userIds.push(v.userId);
+            }
+            const uMap = await resolveUsers(db, userIds);
+            for (const userId of userIds) {
+                const u = uMap.get(userId);
+                if (u) {
+                    const kycStatus = u.kyc?.status || u.kycStatus;
+                    if (kycStatus === "verified" || kycStatus === "approved") {
+                        add(u.phone || u.phoneNumber || (u.kyc && u.kyc.phoneNumber), u.fullName || u.name || "Seller");
+                    }
+                }
             }
             break;
         }
