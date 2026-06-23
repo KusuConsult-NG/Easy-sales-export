@@ -57,11 +57,76 @@ export async function POST(request: NextRequest) {
         }
 
         const applicationsSnapshot = await query.get();
-        const applications = applicationsSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            createdAt: doc.data().createdAt?.toDate?.()?.toISOString?.() ?? doc.data().createdAt ?? new Date().toISOString(),
-        }));
+        
+        // Fetch linked user documents
+        const userIds = [...new Set(applicationsSnapshot.docs.map(doc => doc.data().userId).filter(Boolean))];
+        const userFallbackMap = new Map<string, any>();
+        
+        for (let i = 0; i < userIds.length; i += 100) {
+            const batch = (userIds as string[]).slice(i, i + 100);
+            const refs = batch.map(id => db.collection(COLLECTIONS.USERS).doc(id));
+            try {
+                const userDocs = await db.getAll(...refs);
+                userDocs.forEach(doc => {
+                    if (doc.exists) {
+                        userFallbackMap.set(doc.id, doc.data());
+                    }
+                });
+            } catch (err) {
+                logger.error("Failed to fetch batch user fallbacks for WAVE", err);
+            }
+        }
+
+        const PLACEHOLDER_NAMES = new Set(["user", "unknown", "unknown user", "n/a", ""]);
+        const isPlaceholder = (v: any) => !v || PLACEHOLDER_NAMES.has(String(v).toLowerCase().trim());
+
+        const applications = applicationsSnapshot.docs.map(doc => {
+            const appData = doc.data();
+            const userId = appData.userId;
+            const fallbackUser = userFallbackMap.get(userId) || {};
+            
+            // Resolve phone
+            let phone = appData.phone || appData.phoneNumber || fallbackUser.phone || fallbackUser.phoneNumber || fallbackUser.kyc?.phoneNumber || fallbackUser.kyc?.phone || "";
+            if (isPlaceholder(phone) && fallbackUser.serviceRegistrations) {
+                for (const reg of Object.values(fallbackUser.serviceRegistrations) as any[]) {
+                    const profile = reg?.profile || reg;
+                    const pPhone = profile?.phone || profile?.phoneNumber || reg?.personalInfo?.phone || "";
+                    if (pPhone && !isPlaceholder(pPhone)) {
+                        phone = pPhone;
+                        break;
+                    }
+                }
+            }
+            if (isPlaceholder(phone)) phone = "";
+
+            // Resolve state
+            let state = appData.state || appData.residentialState || fallbackUser.state || fallbackUser.stateOfOrigin || fallbackUser.address?.state || fallbackUser.verificationProfile?.address?.state || "";
+            if (isPlaceholder(state) && fallbackUser.serviceRegistrations) {
+                for (const reg of Object.values(fallbackUser.serviceRegistrations) as any[]) {
+                    const profile = reg?.profile || reg;
+                    const pState = profile?.state || profile?.stateOfOrigin || profile?.address?.state || reg?.companyInfo?.state || reg?.personalInfo?.state || "";
+                    if (pState && !isPlaceholder(pState)) {
+                        state = pState;
+                        break;
+                    }
+                }
+            }
+            if (isPlaceholder(state)) state = "";
+
+            // Resolve name
+            let fullName = appData.fullName || [appData.firstName, appData.surname || appData.lastName].filter(Boolean).join(" ") || fallbackUser.fullName || [fallbackUser.firstName, fallbackUser.lastName].filter(Boolean).join(" ") || "";
+            if (isPlaceholder(fullName)) fullName = "";
+
+            return {
+                id: doc.id,
+                ...appData,
+                fullName,
+                phone,
+                state,
+                email: appData.email || fallbackUser.email || "",
+                createdAt: appData.createdAt?.toDate?.()?.toISOString?.() ?? appData.createdAt ?? new Date().toISOString(),
+            };
+        });
 
         if (format === "csv") {
             return generateCSV(applications, timeframe);

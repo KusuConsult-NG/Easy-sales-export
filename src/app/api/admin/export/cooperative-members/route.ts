@@ -27,8 +27,6 @@ export async function GET(request: NextRequest) {
 
         let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
 
-        if (state) query = query.where("stateOfOrigin", "==", state);
-        if (lga) query = query.where("lga", "==", lga);
         if (fromDate) {
             query = query.where("createdAt", ">=", new Date(fromDate));
         }
@@ -83,9 +81,57 @@ export async function GET(request: NextRequest) {
 
             const fullName = `${derivedFirstName} ${derivedLastName}`.trim();
             const email = data.email || fallbackUser.email || "";
-            const phone = data.phone || fallbackUser.phone || fallbackUser.phoneNumber || data.phoneNumber || data.kyc?.phoneNumber || "";
-            const state = data.stateOfOrigin || fallbackUser.address?.state || "";
-            const lga = data.lga || fallbackUser.address?.lga || "";
+
+            const PLACEHOLDER_NAMES = new Set(["user", "unknown", "unknown user", "n/a", ""]);
+            const isPlaceholder = (v: any) => !v || PLACEHOLDER_NAMES.has(String(v).toLowerCase().trim());
+
+            let phone = data.phone || data.phoneNumber || fallbackUser.phone || fallbackUser.phoneNumber || fallbackUser.kyc?.phoneNumber || fallbackUser.kyc?.phone || "";
+            if (isPlaceholder(phone) && fallbackUser.serviceRegistrations) {
+                for (const reg of Object.values(fallbackUser.serviceRegistrations) as any[]) {
+                    const profile = reg?.profile || reg;
+                    const pPhone = profile?.phone || profile?.phoneNumber || reg?.personalInfo?.phone || "";
+                    if (pPhone && !isPlaceholder(pPhone)) {
+                        phone = pPhone;
+                        break;
+                    }
+                }
+            }
+            if (isPlaceholder(phone)) phone = "";
+
+            let cleanState = data.state || data.stateOfOrigin || fallbackUser.state || fallbackUser.stateOfOrigin || fallbackUser.address?.state || fallbackUser.verificationProfile?.address?.state || "";
+            if (isPlaceholder(cleanState) && fallbackUser.serviceRegistrations) {
+                for (const reg of Object.values(fallbackUser.serviceRegistrations) as any[]) {
+                    const profile = reg?.profile || reg;
+                    const pState = profile?.state || profile?.stateOfOrigin || profile?.address?.state || reg?.companyInfo?.state || reg?.personalInfo?.state || "";
+                    if (pState && !isPlaceholder(pState)) {
+                        cleanState = pState;
+                        break;
+                    }
+                }
+            }
+            if (isPlaceholder(cleanState)) cleanState = "";
+
+            let cleanLga = data.lga || fallbackUser.lga || fallbackUser.address?.lga || "";
+            if (isPlaceholder(cleanLga) && fallbackUser.serviceRegistrations) {
+                for (const reg of Object.values(fallbackUser.serviceRegistrations) as any[]) {
+                    const profile = reg?.profile || reg;
+                    const pLga = profile?.lga || profile?.address?.lga || reg?.personalInfo?.lga || "";
+                    if (pLga && !isPlaceholder(pLga)) {
+                        cleanLga = pLga;
+                        break;
+                    }
+                }
+            }
+            if (isPlaceholder(cleanLga)) cleanLga = "";
+
+            // In-memory state and lga filters
+            if (state && cleanState.toLowerCase().trim() !== state.toLowerCase().trim()) {
+                return;
+            }
+            if (lga && cleanLga.toLowerCase().trim() !== lga.toLowerCase().trim()) {
+                return;
+            }
+
             const createdAt = data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : "";
             
             const cols = [
@@ -97,12 +143,11 @@ export async function GET(request: NextRequest) {
                 (data.registrationFee || 0).toString(),
                 data.paymentStatus || "pending",
                 data.membershipStatus || "pending",
-                state,
-                lga,
+                cleanState,
+                cleanLga,
                 data.occupation || "",
                 createdAt
             ];
-            
             
             if (search) {
                 if (!fullName.toLowerCase().includes(search) && 

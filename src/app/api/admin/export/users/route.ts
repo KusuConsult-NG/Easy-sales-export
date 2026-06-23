@@ -44,13 +44,40 @@ export async function GET(request: NextRequest) {
             if (isPlaceholder(phone) && data.serviceRegistrations) {
                 for (const reg of Object.values(data.serviceRegistrations) as any[]) {
                     const profile = reg?.profile || reg;
-                    if (profile && profile.phone && !isPlaceholder(profile.phone)) {
-                        phone = profile.phone;
+                    const pPhone = profile?.phone || profile?.phoneNumber || reg?.personalInfo?.phone || "";
+                    if (pPhone && !isPlaceholder(pPhone)) {
+                        phone = pPhone;
                         break;
                     }
                 }
             }
             if (isPlaceholder(phone)) phone = "";
+
+            let state = data.state || data.stateOfOrigin || data.address?.state || data.verificationProfile?.address?.state || "";
+            if (isPlaceholder(state) && data.serviceRegistrations) {
+                for (const reg of Object.values(data.serviceRegistrations) as any[]) {
+                    const profile = reg?.profile || reg;
+                    const pState = profile?.state || profile?.stateOfOrigin || profile?.address?.state || reg?.companyInfo?.state || reg?.personalInfo?.state || "";
+                    if (pState && !isPlaceholder(pState)) {
+                        state = pState;
+                        break;
+                    }
+                }
+            }
+            if (isPlaceholder(state)) state = "";
+
+            let lga = data.address?.lga || data.lga || "";
+            if (isPlaceholder(lga) && data.serviceRegistrations) {
+                for (const reg of Object.values(data.serviceRegistrations) as any[]) {
+                    const profile = reg?.profile || reg;
+                    const pLga = profile?.lga || profile?.address?.lga || reg?.personalInfo?.lga || "";
+                    if (pLga && !isPlaceholder(pLga)) {
+                        lga = pLga;
+                        break;
+                    }
+                }
+            }
+            if (isPlaceholder(lga)) lga = "";
             
             const cols = [
                 doc.id,
@@ -68,8 +95,8 @@ export async function GET(request: NextRequest) {
                 data.cacNumber ? "Provided" : "No",
                 data.cacVerified ? "Yes" : "No",
                 data.kyc?.status || data.kycStatus || "pending",
-                data.address?.state || data.stateOfOrigin || "",
-                data.address?.lga || data.lga || "",
+                state,
+                lga,
                 createdAt
             ];
             
