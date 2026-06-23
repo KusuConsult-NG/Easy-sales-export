@@ -941,6 +941,96 @@ async function getCleanBroadcastListInternal(filters?: BroadcastFilters) {
 
         logger.info(`[BroadcastLogic] Clean Sweep complete. Scanned: ${totalScanned}, Matched: ${matchedAudienceCount}, Unique: ${emailMap.size}`);
 
+        if (filters?.audience === "all" || filters?.audience === "all_except_approved_coop") {
+            const addEmail = (rawEmail: string | undefined | null, name: string, state: string | undefined | null, uid: string, lastActiveRaw: any) => {
+                if (!rawEmail) return;
+                const email = rawEmail.toLowerCase().trim();
+                if (email && !emailMap.has(email)) {
+                    emailMap.set(email, {
+                        uid,
+                        email,
+                        name,
+                        state: state || 'Unknown',
+                        onboardingCompleted: false,
+                        lastActive: lastActiveRaw?.toDate ? lastActiveRaw.toDate() : (lastActiveRaw ? new Date(lastActiveRaw) : new Date())
+                    });
+                }
+            };
+
+            // 2. Supplement: cooperative_members
+            const cmStream = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).select("userId", "state", "address", "firstName", "lastName", "email", "userEmail").get();
+            for (const d of cmStream.docs) {
+                const m: any = d.data();
+                const uid = m.userId || d.id;
+                if (excludeIds.has(uid)) continue;
+                const userState = m.state || (m.address && m.address.state);
+                const email = m.email || m.userEmail;
+                if (email) {
+                    const name = [m.firstName, m.lastName].filter(Boolean).join(" ") || "Member";
+                    addEmail(email, name, userState, uid, m.createdAt || m.appliedAt);
+                }
+            }
+
+            // 3. Supplement: wave_applications
+            const waveStream = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).select("userId", "state", "residentialState", "firstName", "surname", "lastName", "email").get();
+            for (const d of waveStream.docs) {
+                const a: any = d.data();
+                const uid = a.userId || d.id;
+                if (excludeIds.has(uid)) continue;
+                const userState = a.state || a.residentialState;
+                if (a.email) {
+                    const name = [a.firstName, a.surname || a.lastName].filter(Boolean).join(" ") || "Applicant";
+                    addEmail(a.email, name, userState, uid, a.createdAt || a.appliedAt);
+                }
+            }
+
+            // 4. Supplement: academy_applications
+            const academyStream = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).select("userId", "personalInfo", "state", "email").get();
+            for (const d of academyStream.docs) {
+                const a: any = d.data();
+                const uid = a.userId || d.id;
+                if (excludeIds.has(uid)) continue;
+                const userState = (a.personalInfo && a.personalInfo.state) || a.state;
+                const email = a.personalInfo?.email || a.email;
+                if (email) {
+                    const name = (a.personalInfo && a.personalInfo.fullName) || [a.personalInfo && a.personalInfo.firstName, a.personalInfo && a.personalInfo.lastName].filter(Boolean).join(" ") || "Academy User";
+                    addEmail(email, name, userState, uid, a.createdAt || a.appliedAt);
+                }
+            }
+
+            // 5. Supplement: wave_briefing_registrations
+            const briefStream = await db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS).select("userId", "state", "name", "firstName", "surname", "email").get();
+            for (const d of briefStream.docs) {
+                const r: any = d.data();
+                const uid = r.userId || d.id;
+                if (excludeIds.has(uid)) continue;
+                if (r.email) {
+                    const name = r.name || [r.firstName, r.surname].filter(Boolean).join(" ") || "Registrant";
+                    addEmail(r.email, name, r.state, uid, r.createdAt || r.timestamp);
+                }
+            }
+
+            // 6. Supplement: farm_nation_applications
+            const fnStream = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS).select("profile").get();
+            for (const d of fnStream.docs) {
+                const a: any = d.data();
+                if (a.profile?.email) {
+                    addEmail(a.profile.email, a.profile.fullName || [a.profile.firstName, a.profile.lastName].filter(Boolean).join(" ") || "Farm Nation User", a.profile.state, d.id, a.createdAt || a.timestamp);
+                }
+            }
+
+            // 7. Supplement: export_onboarding_applications
+            const exportStream = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS).select("profile", "companyInfo", "state", "email").get();
+            for (const d of exportStream.docs) {
+                const a: any = d.data();
+                const userState = (a.profile && a.profile.state) || (a.companyInfo && a.companyInfo.state) || a.state;
+                const email = a.profile?.email || a.email;
+                if (email) {
+                    addEmail(email, (a.profile && a.profile.fullName) || "Export User", userState, d.id, a.createdAt || a.appliedAt);
+                }
+            }
+        }
+
         const uniqueList = Array.from(emailMap.values());
 
         return {
