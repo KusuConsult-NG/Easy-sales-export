@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useState } from "react";
+import { ReactNode, useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { SessionProvider, useSession } from "next-auth/react";
 import { ToastProvider } from "@/contexts/ToastContext";
@@ -151,6 +151,38 @@ function LayoutContent({ children }: ClientLayoutProps) {
 }
 
 export function ClientLayout({ children }: ClientLayoutProps) {
+    // Listen for deployment skew / Server Action hash mismatch errors globally
+    useEffect(() => {
+        const handleActionMismatch = (message: string) => {
+            if (
+                message.includes("Failed to execute Server Action") ||
+                message.includes("could not be found") ||
+                message.includes("Action ID")
+            ) {
+                window.location.reload();
+            }
+        };
+
+        const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+            const reason = event.reason;
+            const message = reason?.message || (typeof reason === "string" ? reason : "");
+            handleActionMismatch(message);
+        };
+
+        const handleError = (event: ErrorEvent) => {
+            const message = event.message || "";
+            handleActionMismatch(message);
+        };
+
+        window.addEventListener("unhandledrejection", handleUnhandledRejection);
+        window.addEventListener("error", handleError);
+
+        return () => {
+            window.removeEventListener("unhandledrejection", handleUnhandledRejection);
+            window.removeEventListener("error", handleError);
+        };
+    }, []);
+
     return (
         <SessionProvider>
             <FirebaseAuthProvider>

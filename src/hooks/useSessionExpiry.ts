@@ -59,11 +59,25 @@ export function useSessionExpiry() {
 
     const run = useCallback(
         async <T>(promise: Promise<T>): Promise<T> => {
-            const result = await promise;
-            if (isSessionExpiredResult(result)) {
-                handleExpiry();
+            try {
+                const result = await promise;
+                if (isSessionExpiredResult(result)) {
+                    handleExpiry();
+                }
+                return result;
+            } catch (error: any) {
+                if (typeof window !== "undefined") {
+                    const message = error?.message || "";
+                    if (
+                        message.includes("Failed to execute Server Action") ||
+                        message.includes("could not be found") ||
+                        message.includes("Action ID")
+                    ) {
+                        window.location.reload();
+                    }
+                }
+                throw error;
             }
-            return result;
         },
         [handleExpiry]
     );
