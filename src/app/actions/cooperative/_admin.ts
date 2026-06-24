@@ -392,7 +392,7 @@ export const getAllMembersAction = withFlexibleSafeAction("getAllMembersAction",
 
 async function _updateMemberStatusAction(
     memberId: string,
-    status: "active" | "suspended"
+    status: "active" | "approved" | "suspended"
 ): Promise<{ error: string | null, success: boolean; meta?: any; data?: any;  }> {
     let sessionResult;
     try {
@@ -446,12 +446,11 @@ async function _updateMemberStatusAction(
             const mDoc = await transaction.get(mRef);
             if (!mDoc.exists) throw new Error("Member not found");
 
-            let userDoc = null;
-            let userRef = null;
-            if (status === "active") {
-                userRef = db.collection(COLLECTIONS.USERS).doc(targetUserId);
-                userDoc = await transaction.get(userRef);
-            }
+            // Always fetch the user doc — we need to sync it for BOTH "approved" and "active"
+            // BUG FIX: Previously only fetched when status === "active", meaning "approved"
+            // never synced to serviceRegistrations → user saw "pending" while admin saw "approved"
+            const userRef = db.collection(COLLECTIONS.USERS).doc(targetUserId);
+            const userDoc = await transaction.get(userRef);
 
             transaction.update(mRef, {
                 membershipStatus: status,
@@ -462,7 +461,7 @@ async function _updateMemberStatusAction(
 
             let notificationInfo: { email: string; fullName: string } | null = null;
 
-            if (status === "active" && userRef) {
+            if (status === "active" || status === "approved") {
                 const userData = userDoc?.data();
                 if (!userDoc || !userDoc.exists) {
                     transaction.set(userRef, {
@@ -481,17 +480,25 @@ async function _updateMemberStatusAction(
                     };
                 }
 
-                transaction.update(userRef, normalizeUserUpdate({
+                // Sync approval/active status to USERS doc so the user-facing status check
+                // (checkCooperativeStatusAction) reads the correct value from serviceRegistrations.
+                // Without this, user sees "pending" while admin dashboard shows "approved".
+                const userDocUpdate: Record<string, any> = {
                     isVerified: true,
                     roles: FieldValue.arrayUnion("cooperative_member"),
-                    "serviceRegistrations.cooperatives.status": "active",
-                    "serviceRegistrations.cooperatives.activatedAt": FieldValue.serverTimestamp(),
+                    "serviceRegistrations.cooperatives.status": status,
+                    "serviceRegistrations.cooperatives.approvedAt": FieldValue.serverTimestamp(),
                     updatedAt: FieldValue.serverTimestamp(),
                     _version: FieldValue.increment(1),
-                }));
+                };
+                if (status === "active") {
+                    userDocUpdate["serviceRegistrations.cooperatives.activatedAt"] = FieldValue.serverTimestamp();
+                }
+                transaction.update(userRef, normalizeUserUpdate(userDocUpdate));
             }
             return { notificationInfo, targetUserId };
         });
+
 
         // 4. Invalidate Caches (Kill the "State vs. Truth" bug)
         try {
