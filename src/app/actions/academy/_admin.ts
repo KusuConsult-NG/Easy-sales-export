@@ -800,6 +800,7 @@ async function _getStandardAcademyApplicationsAction(options: {
     status?: "pending" | "approved" | "rejected" | "under_review" | "all";
     lastDocId?: string;
     sortOrder?: "asc" | "desc";
+    sortBy?: "createdAt" | "gender";
     dateFrom?: string; // YYYY-MM-DD
     dateTo?: string;   // YYYY-MM-DD
     paymentStatus?: "completed" | "pending" | "all";
@@ -815,7 +816,7 @@ async function _getStandardAcademyApplicationsAction(options: {
             return { success: false, error: "Unauthorized", data: null };
         }
 
-        const useMemoryPagination = !!options.search || !!options.dateFrom || !!options.dateTo || (options.paymentStatus && options.paymentStatus !== "all") || (options.registry && options.registry !== "all");
+        const useMemoryPagination = !!options.search || !!options.dateFrom || !!options.dateTo || (options.paymentStatus && options.paymentStatus !== "all") || (options.registry && options.registry !== "all") || options.sortBy === "gender";
         const fetchLimit = useMemoryPagination ? 5000 : (options.limit || 50);
         const orderDirection = options.sortOrder || "desc";
         
@@ -981,70 +982,149 @@ async function _getStandardAcademyApplicationsAction(options: {
             : (snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined);
 
         // 2. Hydrate User Data for active page slice only
-        const userIds = [...new Set(paged.map(app => app.userId).filter(Boolean))];
-        const userMap = new Map<string, any>();
-        const userPromises = [];
-        
-        for (let i = 0; i < userIds.length; i += 30) {
-            const chunk = userIds.slice(i, i + 30);
-            if (chunk.length > 0) {
-                userPromises.push(db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get());
+        let standardForms: any[] = [];
+        if (options.sortBy === "gender") {
+            const userIds = [...new Set(applications.map(app => app.userId).filter(Boolean))];
+            const userMap = new Map<string, any>();
+            const userPromises = [];
+            for (let i = 0; i < userIds.length; i += 30) {
+                const chunk = userIds.slice(i, i + 30);
+                if (chunk.length > 0) {
+                    userPromises.push(db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get());
+                }
             }
+            const userSnapsArray = await Promise.all(userPromises);
+            userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, serializeValue(d.data()))));
+
+            const mapped = applications.map((app: any) => {
+                const uData = (userMap.get(app.userId as string) || {}) as any;
+                const pi = (app.personalInfo || {}) as any;
+                
+                const userName = uData.firstName
+                    ? `${uData.firstName} ${uData.lastName || ''}`.trim()
+                    : (uData.name || uData.fullName || pi.fullName || (pi.firstName ? `${pi.firstName} ${pi.lastName || ''}`.trim() : "Unknown User"));
+
+                const mergedData = {
+                    ...uData,
+                    ...app,
+                    phone: app.phone || pi.phone || uData.phone || uData.phoneNumber || uData.kyc?.phoneNumber || uData.kyc?.phone || null,
+                    email: app.email || pi.email || uData.email || null,
+                    gender: app.gender || pi.gender || uData.gender || null,
+                    dateOfBirth: app.dateOfBirth || pi.dateOfBirth || uData.dob || null,
+                    occupation: app.occupation || pi.occupation || uData.occupation || null,
+                    stateOfOrigin: app.stateOfOrigin || pi.stateOfOrigin || uData.state || uData.stateOfOrigin || (typeof uData.address === 'object' ? uData.address?.state : uData.stateOfOrigin) || uData.verificationProfile?.address?.state || null,
+                    lga: app.lga || pi.lga || uData.lga || (typeof uData.address === 'object' ? uData.address?.lga : uData.lga) || null,
+                    residentialAddress: app.residentialAddress || pi.residentialAddress || (typeof uData.address === 'object' ? uData.address?.street : uData.address) || null,
+                    fullName: userName
+                };
+
+                const bankDetails = uData.bankDetails || {
+                    bankName: uData.bankName || "N/A",
+                    accountNumber: uData.bankAccountNumber || "N/A",
+                    accountName: uData.bankAccountName || "N/A",
+                    bankCode: uData.bankCode || "N/A"
+                };
+
+                return {
+                    id: app.id,
+                    userId: app.userId,
+                    user: {
+                        id: app.userId,
+                        name: userName,
+                        email: mergedData.email || "Unknown",
+                        phone: mergedData.phone || "Unknown",
+                        dob: mergedData.dateOfBirth || "Unknown",
+                        address: mergedData.residentialAddress || "Unknown",
+                        state: mergedData.stateOfOrigin || "Unknown",
+                        lga: mergedData.lga || "Unknown",
+                        gender: mergedData.gender || "Unknown",
+                        bankDetails
+                    },
+                    status: app.status || "pending",
+                    data: mergedData,
+                    submittedAt: app.submittedAt,
+                    isLegacy: !!(app._isLegacy || uData.legacyOnboardedBy || uData.isLegacy || app.isLegacy)
+                };
+            });
+
+            // Sort by gender in-memory
+            const order = options.sortOrder || "desc";
+            mapped.sort((a, b) => {
+                const ga = (a.user?.gender || "").toLowerCase();
+                const gb = (b.user?.gender || "").toLowerCase();
+                if (ga === gb) {
+                    const aTime = a.submittedAt?.seconds ? a.submittedAt.seconds * 1000 : new Date(a.submittedAt || 0).getTime();
+                    const bTime = b.submittedAt?.seconds ? b.submittedAt.seconds * 1000 : new Date(b.submittedAt || 0).getTime();
+                    return bTime - aTime;
+                }
+                return order === "asc" ? ga.localeCompare(gb) : gb.localeCompare(ga);
+            });
+
+            standardForms = mapped.slice(offset, offset + limit);
+        } else {
+            const userIds = [...new Set(paged.map(app => app.userId).filter(Boolean))];
+            const userMap = new Map<string, any>();
+            const userPromises = [];
+            for (let i = 0; i < userIds.length; i += 30) {
+                const chunk = userIds.slice(i, i + 30);
+                if (chunk.length > 0) {
+                    userPromises.push(db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get());
+                }
+            }
+            const userSnapsArray = await Promise.all(userPromises);
+            userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, serializeValue(d.data()))));
+
+            standardForms = paged.map((app: any) => {
+                const uData = (userMap.get(app.userId as string) || {}) as any;
+                const pi = (app.personalInfo || {}) as any;
+                
+                const userName = uData.firstName
+                    ? `${uData.firstName} ${uData.lastName || ''}`.trim()
+                    : (uData.name || uData.fullName || pi.fullName || (pi.firstName ? `${pi.firstName} ${pi.lastName || ''}`.trim() : "Unknown User"));
+
+                const mergedData = {
+                    ...uData,
+                    ...app,
+                    phone: app.phone || pi.phone || uData.phone || uData.phoneNumber || uData.kyc?.phoneNumber || uData.kyc?.phone || null,
+                    email: app.email || pi.email || uData.email || null,
+                    gender: app.gender || pi.gender || uData.gender || null,
+                    dateOfBirth: app.dateOfBirth || pi.dateOfBirth || uData.dob || null,
+                    occupation: app.occupation || pi.occupation || uData.occupation || null,
+                    stateOfOrigin: app.stateOfOrigin || pi.stateOfOrigin || uData.state || uData.stateOfOrigin || (typeof uData.address === 'object' ? uData.address?.state : uData.stateOfOrigin) || uData.verificationProfile?.address?.state || null,
+                    lga: app.lga || pi.lga || uData.lga || (typeof uData.address === 'object' ? uData.address?.lga : uData.lga) || null,
+                    residentialAddress: app.residentialAddress || pi.residentialAddress || (typeof uData.address === 'object' ? uData.address?.street : uData.address) || null,
+                    fullName: userName
+                };
+
+                const bankDetails = uData.bankDetails || {
+                    bankName: uData.bankName || "N/A",
+                    accountNumber: uData.bankAccountNumber || "N/A",
+                    accountName: uData.bankAccountName || "N/A",
+                    bankCode: uData.bankCode || "N/A"
+                };
+
+                return {
+                    id: app.id,
+                    userId: app.userId,
+                    user: {
+                        id: app.userId,
+                        name: userName,
+                        email: mergedData.email || "Unknown",
+                        phone: mergedData.phone || "Unknown",
+                        dob: mergedData.dateOfBirth || "Unknown",
+                        address: mergedData.residentialAddress || "Unknown",
+                        state: mergedData.stateOfOrigin || "Unknown",
+                        lga: mergedData.lga || "Unknown",
+                        gender: mergedData.gender || "Unknown",
+                        bankDetails
+                    },
+                    status: app.status || "pending",
+                    data: mergedData,
+                    submittedAt: app.submittedAt,
+                    isLegacy: !!(app._isLegacy || uData.legacyOnboardedBy || uData.isLegacy || app.isLegacy)
+                };
+            });
         }
-        
-        const userSnapsArray = await Promise.all(userPromises);
-        userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, serializeValue(d.data()))));
-
-        // 3. Normalize and Merge Data
-        const standardForms = paged.map((app: any) => {
-            const uData = (userMap.get(app.userId as string) || {}) as any;
-            const pi = (app.personalInfo || {}) as any;
-            
-            const userName = uData.firstName
-                ? `${uData.firstName} ${uData.lastName || ''}`.trim()
-                : (uData.name || uData.fullName || pi.fullName || (pi.firstName ? `${pi.firstName} ${pi.lastName || ''}`.trim() : "Unknown User"));
-
-            const mergedData = {
-                ...uData,
-                ...app,
-                phone: app.phone || pi.phone || uData.phone || uData.phoneNumber || uData.kyc?.phoneNumber || uData.kyc?.phone || null,
-                email: app.email || pi.email || uData.email || null,
-                gender: app.gender || pi.gender || uData.gender || null,
-                dateOfBirth: app.dateOfBirth || pi.dateOfBirth || uData.dob || null,
-                occupation: app.occupation || pi.occupation || uData.occupation || null,
-                stateOfOrigin: app.stateOfOrigin || pi.stateOfOrigin || uData.state || uData.stateOfOrigin || (typeof uData.address === 'object' ? uData.address?.state : uData.stateOfOrigin) || uData.verificationProfile?.address?.state || null,
-                lga: app.lga || pi.lga || uData.lga || (typeof uData.address === 'object' ? uData.address?.lga : uData.lga) || null,
-                residentialAddress: app.residentialAddress || pi.residentialAddress || (typeof uData.address === 'object' ? uData.address?.street : uData.address) || null,
-                fullName: userName
-            };
-
-            const bankDetails = uData.bankDetails || {
-                bankName: uData.bankName || "N/A",
-                accountNumber: uData.bankAccountNumber || "N/A",
-                accountName: uData.bankAccountName || "N/A",
-                bankCode: uData.bankCode || "N/A"
-            };
-
-            return {
-                id: app.id,
-                userId: app.userId,
-                user: {
-                    id: app.userId,
-                    name: userName,
-                    email: mergedData.email || "Unknown",
-                    phone: mergedData.phone || "Unknown",
-                    dob: mergedData.dateOfBirth || "Unknown",
-                    address: mergedData.residentialAddress || "Unknown",
-                    state: mergedData.stateOfOrigin || "Unknown",
-                    lga: mergedData.lga || "Unknown",
-                    bankDetails
-                },
-                status: app.status || "pending",
-                data: mergedData,
-                submittedAt: app.submittedAt,
-                isLegacy: !!(app._isLegacy || uData.legacyOnboardedBy || uData.isLegacy || app.isLegacy)
-            };
-        });
 
         await createAdminAuditLog({
             action: "data_access",

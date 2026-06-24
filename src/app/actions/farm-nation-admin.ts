@@ -158,6 +158,7 @@ async function _getStandardFarmNationRegistrantsAction(options: {
     status?: "pending" | "approved" | "rejected" | "under_review" | "all";
     lastDocId?: string;
     sortOrder?: "asc" | "desc";
+    sortBy?: "createdAt" | "gender";
     dateFrom?: string;
     dateTo?: string; 
 } = {}): Promise<ActionResponse<any>> {
@@ -170,7 +171,7 @@ async function _getStandardFarmNationRegistrantsAction(options: {
             return { success: false, error: "Unauthorized", data: null };
         }
 
-        const useMemoryPagination = !!options.search || !!options.dateFrom || !!options.dateTo;
+        const useMemoryPagination = options.sortBy === "gender" || !!options.search || !!options.dateFrom || !!options.dateTo;
         const fetchLimit = useMemoryPagination ? 5000 : (options.limit || 50);
         const applicationsSortDirection = options.sortOrder || "desc";
 
@@ -310,6 +311,7 @@ async function _getStandardFarmNationRegistrantsAction(options: {
                     address: mergedData.residentialAddress || "Unknown",
                     state: mergedData.stateOfOrigin || "Unknown",
                     lga: mergedData.lga || "Unknown",
+                    gender: mergedData.gender || "Unknown",
                     bankDetails
                 },
                 status: app.status,
@@ -317,6 +319,19 @@ async function _getStandardFarmNationRegistrantsAction(options: {
                 submittedAt: app.submittedAt
             };
         });
+
+        // Sort by Gender in-memory if requested
+        if (options.sortBy === "gender") {
+            finalApplications.sort((a: any, b: any) => {
+                const ga = (a.user?.gender || a.data?.gender || "").toLowerCase();
+                const gb = (b.user?.gender || b.data?.gender || "").toLowerCase();
+                if (applicationsSortDirection === "asc") {
+                    return ga.localeCompare(gb);
+                } else {
+                    return gb.localeCompare(ga);
+                }
+            });
+        }
 
         // 4. Client-side Search (if requested)
         if (options.search) {

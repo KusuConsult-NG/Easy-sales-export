@@ -268,12 +268,30 @@ export default function AdminWaveApplicationsPage() {
                     </select>
                     <div className="w-px h-6 bg-slate-200"></div>
                     <select
+                        value={filters.sortBy || "createdAt"}
+                        onChange={(e) => updateFilter("sortBy", e.target.value)}
+                        className="px-3 py-1.5 rounded-lg text-slate-900 outline-none hover:bg-slate-50 cursor-pointer"
+                    >
+                        <option value="createdAt">Sort by Date</option>
+                        <option value="gender">Sort by Gender</option>
+                    </select>
+                    <div className="w-px h-6 bg-slate-200"></div>
+                    <select
                         value={filters.sortOrder || "desc"}
                         onChange={(e) => updateFilter("sortOrder", e.target.value)}
                         className="px-3 py-1.5 rounded-lg text-slate-900 outline-none hover:bg-slate-50 cursor-pointer"
                     >
-                        <option value="desc">Newest First</option>
-                        <option value="asc">Oldest First</option>
+                        {filters.sortBy === "gender" ? (
+                            <>
+                                <option value="asc">Gender (M-F)</option>
+                                <option value="desc">Gender (F-M)</option>
+                            </>
+                        ) : (
+                            <>
+                                <option value="desc">Newest First</option>
+                                <option value="asc">Oldest First</option>
+                            </>
+                        )}
                     </select>
                 </div>
                 
@@ -345,7 +363,7 @@ export default function AdminWaveApplicationsPage() {
                                 {statusFilter !== "all"
                                     ? `No ${statusFilter} applications`
                                     : "No applications have been submitted yet"}
-                            </p>
+                             </p>
                         </div>
                     ) : (
                         applications.map((app) => (
@@ -362,9 +380,14 @@ export default function AdminWaveApplicationsPage() {
                                             <h3 className="text-lg font-bold text-slate-900">
                                                 {app.user.name}
                                             </h3>
-                                            <p className="text-sm text-slate-500">
-                                                {app.user.email} • {app.data.phone || '—'}
-                                            </p>
+                                            <div className="flex items-center gap-2 flex-wrap text-sm text-slate-500">
+                                                <span>{app.user.email} • {app.data.phone || '—'}</span>
+                                                {app.user.gender && (
+                                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 capitalize">
+                                                        {app.user.gender}
+                                                    </span>
+                                                )}
+                                            </div>
                                             {app.data.stateOfResidence && (
                                                 <p className="text-sm text-slate-600 mt-1">
                                                     State: <span className="font-semibold">{app.data.stateOfResidence}</span>

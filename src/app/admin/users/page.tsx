@@ -209,7 +209,7 @@ export default function AdminUsersPage() {
 
     const hasActiveFilters = !!(filters.state || filters.lga || filters.fromDate || filters.toDate ||
         (filters.role && filters.role !== "all") || (filters.status && filters.status !== "all") ||
-        (filters.sortOrder && filters.sortOrder !== "desc") || (filters.modules && filters.modules !== "all"));
+        (filters.sortOrder && filters.sortOrder !== "desc") || (filters.sortBy && filters.sortBy !== "createdAt") || (filters.modules && filters.modules !== "all"));
 
     const clearFilters = () => {
         updateFilter("state", "all");
@@ -219,6 +219,7 @@ export default function AdminUsersPage() {
         updateFilter("role", "all");
         updateFilter("status", "all");
         updateFilter("sortOrder", "desc");
+        updateFilter("sortBy", "createdAt");
         updateFilter("modules", "all");
         setTempFromDate("");
         setTempToDate("");
@@ -379,6 +380,15 @@ export default function AdminUsersPage() {
                         </span>
                     )}
                 </div>
+            ),
+            hideOnMobile: true
+        },
+        {
+            header: "Gender",
+            accessor: (user: User) => (
+                <span className="text-sm text-slate-700 capitalize">
+                    {user.gender || "—"}
+                </span>
             ),
             hideOnMobile: true
         },
@@ -634,14 +644,24 @@ export default function AdminUsersPage() {
                                 <option value="unverified">Unverified</option>
                             </select>
 
+                            {/* Sort By Field */}
+                            <select
+                                value={filters.sortBy || "createdAt"}
+                                onChange={(e) => updateFilter("sortBy", e.target.value)}
+                                className="px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm"
+                            >
+                                <option value="createdAt">Sort by Date Joined</option>
+                                <option value="gender">Sort by Gender</option>
+                            </select>
+
                             {/* Quick: Sort Date */}
                             <select
                                 value={filters.sortOrder || "desc"}
                                 onChange={(e) => updateFilter("sortOrder", e.target.value)}
                                 className="px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm"
                             >
-                                <option value="desc">Newest First</option>
-                                <option value="asc">Oldest First</option>
+                                <option value="desc">Newest First/Z-A</option>
+                                <option value="asc">Oldest First/A-Z</option>
                             </select>
 
                             {hasActiveFilters && (

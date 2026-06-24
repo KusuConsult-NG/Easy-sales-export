@@ -54,7 +54,7 @@ export default function CooperativeMembersPage() {
     const [lgaFilter, setLgaFilter] = useState("");
     const [dateRange, setDateRange] = useState<DateRange>({ from: "", to: "" });
     const [registryFilter, setRegistryFilter] = useState<"all" | "legacy" | "regular">("all");
-    const [sortBy, setSortBy] = useState<"date-desc" | "date-asc" | "name-asc" | "name-desc" | "legacy-first" | "regular-first">("date-desc");
+    const [sortBy, setSortBy] = useState<"date-desc" | "date-asc" | "name-asc" | "name-desc" | "legacy-first" | "regular-first" | "gender-asc" | "gender-desc">("date-desc");
 
     const {
         data: applications,
@@ -73,6 +73,12 @@ export default function CooperativeMembersPage() {
         meta
     } = useAdminData<StandardPendingForm<MembershipApplication>>({
         fetchAction: async (opts) => {
+            const mappedSortBy = sortBy.startsWith("gender")
+                ? "gender"
+                : "createdAt";
+            const mappedSortOrder = sortBy.endsWith("-asc") || sortBy === "gender-asc"
+                ? "asc"
+                : "desc";
             return getStandardCooperativeMembersAction({
                 status: (opts.status as any) || "all",
                 paymentStatus: (opts.payment as any) || "all",
@@ -84,10 +90,12 @@ export default function CooperativeMembersPage() {
                 state: stateFilter || undefined,
                 lga: lgaFilter || undefined,
                 registry: registryFilter || undefined,
+                sortBy: mappedSortBy,
+                sortOrder: mappedSortOrder,
             });
         },
         limit: 50,
-        dependencies: [dateRange, stateFilter, lgaFilter, registryFilter]
+        dependencies: [dateRange, stateFilter, lgaFilter, registryFilter, sortBy]
     });
 
     const statusFilter = (filters.status as any) || "all";
@@ -150,6 +158,16 @@ export default function CooperativeMembersPage() {
             const la = a.data?.isLegacy ? 1 : 0;
             const lb = b.data?.isLegacy ? 1 : 0;
             return la - lb;
+        }
+        if (sortBy === "gender-asc") {
+            const ga = a.user?.gender || a.data?.gender || "";
+            const gb = b.user?.gender || b.data?.gender || "";
+            return ga.localeCompare(gb);
+        }
+        if (sortBy === "gender-desc") {
+            const ga = a.user?.gender || a.data?.gender || "";
+            const gb = b.user?.gender || b.data?.gender || "";
+            return gb.localeCompare(ga);
         }
         return 0;
     });
@@ -428,6 +446,8 @@ export default function CooperativeMembersPage() {
                             <option value="date-asc">Oldest First</option>
                             <option value="name-asc">Name (A-Z)</option>
                             <option value="name-desc">Name (Z-A)</option>
+                            <option value="gender-asc">Gender (A-Z)</option>
+                            <option value="gender-desc">Gender (Z-A)</option>
                             <option value="legacy-first">Legacy First</option>
                             <option value="regular-first">Regular First</option>
                         </select>
@@ -609,6 +629,11 @@ export default function CooperativeMembersPage() {
                                                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
                                                     {`ESE-COOP-${app.id.slice(-4).toUpperCase()}`}
                                                 </span>
+                                                {app.user.gender && (
+                                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 capitalize">
+                                                        {app.user.gender}
+                                                    </span>
+                                                )}
                                             </p>
                                             <p className="text-xs text-slate-500 mt-0.5">{app.user.email || "—"}</p>
                                         </div>
@@ -686,6 +711,11 @@ export default function CooperativeMembersPage() {
                                                             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
                                                                 {`ESE-COOP-${app.id.slice(-4).toUpperCase()}`}
                                                             </span>
+                                                            {app.user.gender && (
+                                                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 capitalize">
+                                                                    {app.user.gender}
+                                                                </span>
+                                                            )}
                                                         </div>
                                                         <div className="text-sm text-slate-500">{app.user.email}</div>
                                                     </div>

@@ -913,6 +913,7 @@ async function _getStandardWaveApplicationsAction(options: {
     status?: "pending" | "under_review" | "approved" | "rejected" | "all";
     lastDocId?: string;
     sortOrder?: "asc" | "desc";
+    sortBy?: "createdAt" | "gender";
     dateFrom?: string; // YYYY-MM-DD
     dateTo?: string;   // YYYY-MM-DD
 } = {}): Promise<
@@ -930,7 +931,7 @@ async function _getStandardWaveApplicationsAction(options: {
             return { success: false as const, error: "Unauthorized" };
         }
 
-        const useMemoryPagination = !!options.search || !!options.dateFrom || !!options.dateTo;
+        const useMemoryPagination = !!options.search || !!options.dateFrom || !!options.dateTo || options.sortBy === "gender";
         const fetchLimit = useMemoryPagination ? 5000 : (options.limit || 50);
         const orderDirection = options.sortOrder || "desc";
 
@@ -1047,7 +1048,7 @@ async function _getStandardWaveApplicationsAction(options: {
         const userSnapsArray = await Promise.all(userPromises);
         userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, d.data())));
 
-        const standardForms = applications.map((app: any) => {
+        let finalForms = applications.map((app: any) => {
             const uData = userMap.get(app.userId as string) || {};
             const canonical = extractCanonicalUser(uData, app);
 
@@ -1062,6 +1063,7 @@ async function _getStandardWaveApplicationsAction(options: {
                     address: canonical.address.street,
                     state: canonical.address.state,
                     lga: canonical.address.lga,
+                    gender: app.gender || uData.gender || canonical.gender || "",
                     bankDetails: canonical.bankDetails
                 },
                 status: app.status || "pending",
@@ -1073,10 +1075,9 @@ async function _getStandardWaveApplicationsAction(options: {
             };
         });
 
-        let finalForms = standardForms;
         if (options.search) {
             const s = options.search.toLowerCase().trim();
-            finalForms = standardForms.filter((f: any) => {
+            finalForms = finalForms.filter((f: any) => {
                 const searchString = [
                     f.id,
                     f.user?.id,
@@ -1108,6 +1109,20 @@ async function _getStandardWaveApplicationsAction(options: {
             finalForms = finalForms.filter((f: any) => {
                 const d = f.data?.createdAt?.seconds ? new Date(f.data.createdAt.seconds * 1000) : new Date(f.data?.createdAt);
                 return d <= to;
+            });
+        }
+
+        if (options.sortBy === "gender") {
+            const order = options.sortOrder || "desc";
+            finalForms.sort((a, b) => {
+                const ga = (a.user?.gender || "").toLowerCase();
+                const gb = (b.user?.gender || "").toLowerCase();
+                if (ga === gb) {
+                    const aTime = a.data?.createdAt?.seconds ? a.data.createdAt.seconds * 1000 : new Date(a.data?.createdAt || 0).getTime();
+                    const bTime = b.data?.createdAt?.seconds ? b.data.createdAt.seconds * 1000 : new Date(b.data?.createdAt || 0).getTime();
+                    return bTime - aTime;
+                }
+                return order === "asc" ? ga.localeCompare(gb) : gb.localeCompare(ga);
             });
         }
 

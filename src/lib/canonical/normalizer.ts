@@ -144,6 +144,7 @@ export function extractCanonicalUser(uData: any, appData: any = null) {
         email: uData?.email || appData?.email || appData?.userEmail || "",
         phone: uData?.phone || uData?.phoneNumber || uData?.kyc?.phoneNumber || uData?.kyc?.phone || appData?.phone || appData?.phoneNumber || appData?.kyc?.phoneNumber || appData?.kyc?.phone || "",
         dateOfBirth: uData?.dateOfBirth || appData?.dateOfBirth || "",
+        gender: uData?.gender || appData?.gender || appData?.personalInfo?.gender || appData?.profile?.gender || profile?.gender || "",
         bankDetails,
         address,
         nin: profile?.nin || uData?.nin || appData?.nin || "",

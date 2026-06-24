@@ -7,6 +7,7 @@ export interface StandardPendingUser {
     address?: string;
     state?: string;
     lga?: string;
+    gender?: string;
 }
 
 export interface StandardPendingForm<T = any> {

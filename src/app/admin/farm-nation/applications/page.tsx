@@ -91,6 +91,7 @@ export default function FarmNationApplicationsPage() {
                 limit: params.limit || 20,
                 lastDocId: params.lastDocId,
                 sortOrder: params.sortOrder as "asc" | "desc",
+                sortBy: params.sortBy as "createdAt" | "gender",
                 dateFrom: dateRange.from || undefined,
                 dateTo: dateRange.to || undefined,
             });
@@ -247,6 +248,15 @@ export default function FarmNationApplicationsPage() {
             hideOnMobile: true
         },
         {
+            header: "Gender",
+            accessor: (item: StandardPendingForm<SellerProfile>) => (
+                <span className="text-sm text-slate-700 capitalize">
+                    {item.user.gender || (item.data as any).gender || "—"}
+                </span>
+            ),
+            hideOnMobile: true
+        },
+        {
             header: "Location",
             accessor: (item: StandardPendingForm<SellerProfile>) => (
                 <div className="text-sm text-slate-600">
@@ -394,12 +404,29 @@ export default function FarmNationApplicationsPage() {
                             <option value="revision_required">Revision Required</option>
                         </select>
                         <select
+                            value={filters.sortBy || "createdAt"}
+                            onChange={(e) => updateFilter("sortBy", e.target.value)}
+                            className="px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm"
+                        >
+                            <option value="createdAt">Sort by Date</option>
+                            <option value="gender">Sort by Gender</option>
+                        </select>
+                        <select
                             value={filters.sortOrder || "desc"}
                             onChange={(e) => updateFilter("sortOrder", e.target.value)}
                             className="px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm"
                         >
-                            <option value="desc">Newest First</option>
-                            <option value="asc">Oldest First</option>
+                            {filters.sortBy === "gender" ? (
+                                <>
+                                    <option value="asc">Gender (A-Z)</option>
+                                    <option value="desc">Gender (Z-A)</option>
+                                </>
+                            ) : (
+                                <>
+                                    <option value="desc">Newest First</option>
+                                    <option value="asc">Oldest First</option>
+                                </>
+                            )}
                         </select>
                         <DateRangeFilter
                             value={dateRange}

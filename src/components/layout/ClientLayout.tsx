@@ -153,13 +153,26 @@ function LayoutContent({ children }: ClientLayoutProps) {
 export function ClientLayout({ children }: ClientLayoutProps) {
     // Listen for deployment skew / Server Action hash mismatch errors globally
     useEffect(() => {
-        const handleActionMismatch = (message: string) => {
-            if (
-                message.includes("Failed to execute Server Action") ||
-                message.includes("could not be found") ||
-                message.includes("Action ID")
-            ) {
+        // Throttle: only allow one auto-reload per 10 seconds to prevent infinite loops.
+        // If the reload itself triggers the same error, we will not loop.
+        const RELOAD_COOLDOWN_MS = 10_000;
+        const safeReload = () => {
+            const lastReload = parseInt(sessionStorage.getItem("_last_skew_reload") || "0", 10);
+            const now = Date.now();
+            if (now - lastReload > RELOAD_COOLDOWN_MS) {
+                sessionStorage.setItem("_last_skew_reload", String(now));
                 window.location.reload();
+            } else {
+                console.warn("[ClientLayout] Reload throttled — skipping to prevent infinite loop.");
+            }
+        };
+
+        const handleActionMismatch = (message: string) => {
+            const isActionMismatch = 
+                (message.includes("Failed to execute Server Action") || message.includes("Action ID")) && 
+                message.includes("could not be found");
+            if (isActionMismatch) {
+                safeReload();
             }
         };
 

@@ -361,6 +361,31 @@ export default function AdminExportApplicationsPage() {
                         onChange={setDateRange}
                         label="Filter by date"
                     />
+                    <select
+                        value={filters.sortBy || "createdAt"}
+                        onChange={(e) => updateFilter("sortBy", e.target.value)}
+                        className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
+                    >
+                        <option value="createdAt">Sort by Date</option>
+                        <option value="gender">Sort by Gender</option>
+                    </select>
+                    <select
+                        value={filters.sortOrder || "desc"}
+                        onChange={(e) => updateFilter("sortOrder", e.target.value)}
+                        className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
+                    >
+                        {filters.sortBy === "gender" ? (
+                            <>
+                                <option value="asc">Gender (M-F)</option>
+                                <option value="desc">Gender (F-M)</option>
+                            </>
+                        ) : (
+                            <>
+                                <option value="desc">Newest First</option>
+                                <option value="asc">Oldest First</option>
+                            </>
+                        )}
+                    </select>
                 </div>
             </div>
 
@@ -402,7 +427,14 @@ export default function AdminExportApplicationsPage() {
                                 <tr key={standardApp.id} className="hover:bg-slate-50 transition">
                                     <td className="px-6 py-4">
                                         <div className="font-semibold text-slate-900 text-sm">{standardApp.user.name}</div>
-                                        <div className="text-xs text-slate-500">{standardApp.user.email}</div>
+                                        <div className="flex items-center gap-2 mt-0.5">
+                                            <span className="text-xs text-slate-500">{standardApp.user.email}</span>
+                                            {standardApp.user.gender && (
+                                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 capitalize">
+                                                    {standardApp.user.gender}
+                                                </span>
+                                            )}
+                                        </div>
                                         {app.resubmittedAt && (
                                             <div className="flex items-center gap-1 mt-1">
                                                 <RefreshCw className="w-3 h-3 text-orange-500" />

@@ -1330,6 +1330,7 @@ interface GetUsersOptions {
     toDate?: string;    // ISO date string – createdAt <= toDate
     sortOrder?: "asc" | "desc"; // Sort direction
     modules?: string;   // 'all' | 'multi' | specific module slug ('academy', 'marketplace', etc.)
+    sortBy?: "createdAt" | "gender"; // Sort field
 }
 
 async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionResponse<any[]>> {
@@ -1588,7 +1589,7 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
                 // Pass the full serviceRegistrations map so the admin UI can render
                 // per-module status badges and detect multi-module enrolments.
                 serviceRegistrations: data.serviceRegistrations || {},
-                gender: data.gender,
+                gender: data.gender || data.kyc?.gender || data.kyc?.kycData?.gender || Object.values(data.serviceRegistrations || {}).map((reg: any) => reg?.profile?.gender || reg?.gender).find(Boolean) || "",
                 identityDocument: data.identityDocument || "",
             };
         });
@@ -1721,12 +1722,28 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
             filteredUsers = filteredUsers.filter(u => new Date(u.createdAt) <= to);
         }
 
-        // Sort in-memory by createdAt
-        filteredUsers.sort((a, b) => {
-            const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-            const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-            return options.sortOrder === "asc" ? aTime - bTime : bTime - aTime;
-        });
+        // Sort in-memory
+        if (options.sortBy === "gender") {
+            filteredUsers.sort((a, b) => {
+                const aGender = String(a.gender || "").toLowerCase().trim();
+                const bGender = String(b.gender || "").toLowerCase().trim();
+                if (aGender === bGender) {
+                    // secondary sort by createdAt desc
+                    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                    return bTime - aTime;
+                }
+                return options.sortOrder === "asc"
+                    ? aGender.localeCompare(bGender)
+                    : bGender.localeCompare(aGender);
+            });
+        } else {
+            filteredUsers.sort((a, b) => {
+                const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                return options.sortOrder === "asc" ? aTime - bTime : bTime - aTime;
+            });
+        }
 
         // Page-offset slice: each page returns exactly pageSize items
         const offset = page * pageSize;
@@ -2319,6 +2336,8 @@ async function _getStandardExportApplicationsAction(options: {
     lastDocId?: string;
     dateFrom?: string; // YYYY-MM-DD
     dateTo?: string;   // YYYY-MM-DD
+    sortBy?: "createdAt" | "gender";
+    sortOrder?: "asc" | "desc";
 } = {}): Promise<ActionResponse<any[]>> {
     try {
         const sessionResult = await requireSession();
@@ -2330,7 +2349,7 @@ async function _getStandardExportApplicationsAction(options: {
             return { success: false as const, error: "Unauthorized", data: null };
         }
 
-        const useMemoryPagination = !!options.search || !!options.dateFrom || !!options.dateTo;
+        const useMemoryPagination = options.sortBy === "gender" || !!options.search || !!options.dateFrom || !!options.dateTo;
         const fetchLimit = useMemoryPagination ? 5000 : (options.limit || 50);
 
         let q: any = db.collection(COLLECTIONS.EXPORT_APPLICATIONS);
@@ -2453,70 +2472,148 @@ async function _getStandardExportApplicationsAction(options: {
             ? (_hasMore ? String(page + 1) : undefined)
             : nextCursor;
 
-        // Hydrate User Data only for the sliced page
-        const userIds = [...new Set(paged.map((app: any) => app.userId).filter(Boolean))];
-        const userMap = new Map<string, any>();
-        const userPromises = [];
-        for (let i = 0; i < userIds.length; i += 30) {
-            const chunk = userIds.slice(i, i + 30);
-            if (chunk.length > 0) {
-                userPromises.push(db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get());
-            }
-        }
-        const userSnapsArray = await Promise.all(userPromises);
-        userSnapsArray.forEach(snap => snap.docs.forEach((d: any) => userMap.set(d.id, serializeValue(d.data()))));
-
-        const standardForms = paged.map((app: any) => {
-            const uData = (userMap.get(app.userId as string) || {}) as any;
-            const kyc = (app.kyc || {}) as any;
-            const profile = (app.profile || {}) as any;
-            const kycName = kyc?.kycData?.firstName ? `${kyc.kycData.firstName} ${kyc.kycData.lastName || ''}`.trim() : null;
-            const userName = uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (profile?.fullName || kycName || "Unknown User");
-            
-            let status = app.status || "pending";
-            if (status === "pending_review") status = "pending";
-
-            const mergedData = {
-                ...app,
-                phone:              app.phone              || profile?.phone              || uData.phone       || uData.phoneNumber || uData.kyc?.phoneNumber || uData.kyc?.phone || null,
-                gender:             app.gender             || profile?.gender             || uData.gender      || null,
-                dateOfBirth:        app.dateOfBirth        || profile?.dateOfBirth        || uData.dob         || null,
-                occupation:         app.occupation         || profile?.occupation         || uData.occupation  || null,
-                stateOfOrigin:      app.stateOfOrigin      || app.state || profile?.state || profile?.stateOfOrigin || app.companyInfo?.state || (typeof uData.address === 'object' ? uData.address?.state : uData.state) || uData.stateOfOrigin || uData.state || null,
-                lga:                app.lga                || profile?.lga                || app.companyInfo?.lga   || (typeof uData.address === 'object' ? uData.address?.lga   : uData.lga)   || uData.lga || null,
-                residentialAddress: app.residentialAddress || profile?.residentialAddress || (typeof uData.address === 'object' ? uData.address?.street : uData.address)        || null,
-                firstName:          profile?.firstName      || app.firstName              || uData.firstName   || null,
-                lastName:           profile?.lastName       || app.lastName               || uData.lastName    || null,
-                email:              app.userEmail           || app.email                  || uData.email        || null,
-            };
-
-            const bankDetails = uData.bankDetails || {
-                bankName: app.bankName || uData.bankName || uData.bankAccount?.bankName || "",
-                accountNumber: app.accountNumber || uData.bankAccountNumber || uData.bankAccount?.accountNumber || "",
-                accountName: app.accountName || uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : ""),
-                bankCode: app.bankCode || uData.bankCode || uData.bankAccount?.bankCode || ""
-            };
-
-            return {
-                id: app.id,
-                user: {
-                    id: app.userId,
-                    name: userName,
-                    email: mergedData.email || "Unknown",
-                    phone: mergedData.phone || "Unknown",
-                    dob: mergedData.dateOfBirth || "Unknown",
-                    address: mergedData.residentialAddress || "Unknown",
-                    state: mergedData.stateOfOrigin || "Unknown",
-                    lga: mergedData.lga || "Unknown",
-                    bankDetails
-                },
-                status: status,
-                data: {
-                    ...mergedData,
-                    bankDetails
+        let standardForms: any[] = [];
+        if (options.sortBy === "gender") {
+            const userIds = [...new Set(applications.map((app: any) => app.userId).filter(Boolean))];
+            const userMap = new Map<string, any>();
+            const userPromises = [];
+            for (let i = 0; i < userIds.length; i += 30) {
+                const chunk = userIds.slice(i, i + 30);
+                if (chunk.length > 0) {
+                    userPromises.push(db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get());
                 }
-            };
-        });
+            }
+            const userSnapsArray = await Promise.all(userPromises);
+            userSnapsArray.forEach(snap => snap.docs.forEach((d: any) => userMap.set(d.id, serializeValue(d.data()))));
+
+            const mapped = applications.map((app: any) => {
+                const uData = (userMap.get(app.userId as string) || {}) as any;
+                const kyc = (app.kyc || {}) as any;
+                const profile = (app.profile || {}) as any;
+                const kycName = kyc?.kycData?.firstName ? `${kyc.kycData.firstName} ${kyc.kycData.lastName || ''}`.trim() : null;
+                const userName = uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (profile?.fullName || kycName || "Unknown User");
+                
+                let status = app.status || "pending";
+                if (status === "pending_review") status = "pending";
+
+                const mergedData = {
+                    ...app,
+                    phone:              app.phone              || profile?.phone              || uData.phone       || uData.phoneNumber || uData.kyc?.phoneNumber || uData.kyc?.phone || null,
+                    gender:             app.gender             || profile?.gender             || uData.gender      || null,
+                    dateOfBirth:        app.dateOfBirth        || profile?.dateOfBirth        || uData.dob         || null,
+                    occupation:         app.occupation         || profile?.occupation         || uData.occupation  || null,
+                    stateOfOrigin:      app.stateOfOrigin      || app.state || profile?.state || profile?.stateOfOrigin || app.companyInfo?.state || (typeof uData.address === 'object' ? uData.address?.state : uData.state) || uData.stateOfOrigin || uData.state || null,
+                    lga:                app.lga                || profile?.lga                || app.companyInfo?.lga   || (typeof uData.address === 'object' ? uData.address?.lga   : uData.lga)   || uData.lga || null,
+                    residentialAddress: app.residentialAddress || profile?.residentialAddress || (typeof uData.address === 'object' ? uData.address?.street : uData.address)        || null,
+                    firstName:          profile?.firstName      || app.firstName              || uData.firstName   || null,
+                    lastName:           profile?.lastName       || app.lastName               || uData.lastName    || null,
+                    email:              app.userEmail           || app.email                  || uData.email        || null,
+                };
+
+                const bankDetails = uData.bankDetails || {
+                    bankName: app.bankName || uData.bankName || uData.bankAccount?.bankName || "",
+                    accountNumber: app.accountNumber || uData.bankAccountNumber || uData.bankAccount?.accountNumber || "",
+                    accountName: app.accountName || uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : ""),
+                    bankCode: app.bankCode || uData.bankCode || uData.bankAccount?.bankCode || ""
+                };
+
+                return {
+                    id: app.id,
+                    user: {
+                        id: app.userId,
+                        name: userName,
+                        email: mergedData.email || "Unknown",
+                        phone: mergedData.phone || "Unknown",
+                        dob: mergedData.dateOfBirth || "Unknown",
+                        address: mergedData.residentialAddress || "Unknown",
+                        state: mergedData.stateOfOrigin || "Unknown",
+                        lga: mergedData.lga || "Unknown",
+                        gender: mergedData.gender || "Unknown",
+                        bankDetails
+                    },
+                    status: status,
+                    data: {
+                        ...mergedData,
+                        bankDetails
+                    }
+                };
+            });
+
+            // Sort by gender
+            const order = options.sortOrder || "desc";
+            mapped.sort((a, b) => {
+                const ga = (a.user?.gender || "").toLowerCase();
+                const gb = (b.user?.gender || "").toLowerCase();
+                return order === "asc" ? ga.localeCompare(gb) : gb.localeCompare(ga);
+            });
+
+            standardForms = mapped.slice(offset, offset + limit);
+        } else {
+            const userIds = [...new Set(paged.map((app: any) => app.userId).filter(Boolean))];
+            const userMap = new Map<string, any>();
+            const userPromises = [];
+            for (let i = 0; i < userIds.length; i += 30) {
+                const chunk = userIds.slice(i, i + 30);
+                if (chunk.length > 0) {
+                    userPromises.push(db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get());
+                }
+            }
+            const userSnapsArray = await Promise.all(userPromises);
+            userSnapsArray.forEach(snap => snap.docs.forEach((d: any) => userMap.set(d.id, serializeValue(d.data()))));
+
+            standardForms = paged.map((app: any) => {
+                const uData = (userMap.get(app.userId as string) || {}) as any;
+                const kyc = (app.kyc || {}) as any;
+                const profile = (app.profile || {}) as any;
+                const kycName = kyc?.kycData?.firstName ? `${kyc.kycData.firstName} ${kyc.kycData.lastName || ''}`.trim() : null;
+                const userName = uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (profile?.fullName || kycName || "Unknown User");
+                
+                let status = app.status || "pending";
+                if (status === "pending_review") status = "pending";
+
+                const mergedData = {
+                    ...app,
+                    phone:              app.phone              || profile?.phone              || uData.phone       || uData.phoneNumber || uData.kyc?.phoneNumber || uData.kyc?.phone || null,
+                    gender:             app.gender             || profile?.gender             || uData.gender      || null,
+                    dateOfBirth:        app.dateOfBirth        || profile?.dateOfBirth        || uData.dob         || null,
+                    occupation:         app.occupation         || profile?.occupation         || uData.occupation  || null,
+                    stateOfOrigin:      app.stateOfOrigin      || app.state || profile?.state || profile?.stateOfOrigin || app.companyInfo?.state || (typeof uData.address === 'object' ? uData.address?.state : uData.state) || uData.stateOfOrigin || uData.state || null,
+                    lga:                app.lga                || profile?.lga                || app.companyInfo?.lga   || (typeof uData.address === 'object' ? uData.address?.lga   : uData.lga)   || uData.lga || null,
+                    residentialAddress: app.residentialAddress || profile?.residentialAddress || (typeof uData.address === 'object' ? uData.address?.street : uData.address)        || null,
+                    firstName:          profile?.firstName      || app.firstName              || uData.firstName   || null,
+                    lastName:           profile?.lastName       || app.lastName               || uData.lastName    || null,
+                    email:              app.userEmail           || app.email                  || uData.email        || null,
+                };
+
+                const bankDetails = uData.bankDetails || {
+                    bankName: app.bankName || uData.bankName || uData.bankAccount?.bankName || "",
+                    accountNumber: app.accountNumber || uData.bankAccountNumber || uData.bankAccount?.accountNumber || "",
+                    accountName: app.accountName || uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : ""),
+                    bankCode: app.bankCode || uData.bankCode || uData.bankAccount?.bankCode || ""
+                };
+
+                return {
+                    id: app.id,
+                    user: {
+                        id: app.userId,
+                        name: userName,
+                        email: mergedData.email || "Unknown",
+                        phone: mergedData.phone || "Unknown",
+                        dob: mergedData.dateOfBirth || "Unknown",
+                        address: mergedData.residentialAddress || "Unknown",
+                        state: mergedData.stateOfOrigin || "Unknown",
+                        lga: mergedData.lga || "Unknown",
+                        gender: mergedData.gender || "Unknown",
+                        bankDetails
+                    },
+                    status: status,
+                    data: {
+                        ...mergedData,
+                        bankDetails
+                    }
+                };
+            });
+        }
 
         return { 
             error: null, success: true as const, 
@@ -2687,6 +2784,8 @@ async function _getAcademyApplicationsAction(options: {
     search?: string;
     statusFilter?: "pending" | "under_review" | "approved" | "rejected" | "all";
     lastDocId?: string;
+    sortBy?: "createdAt" | "gender";
+    sortOrder?: "asc" | "desc";
     dateFrom?: string;
     dateTo?: string;
 } = {}): Promise<ActionResponse<any[]>> {
@@ -2702,7 +2801,7 @@ async function _getAcademyApplicationsAction(options: {
             }
         }
 
-        const useMemoryPagination = !!options.search || !!options.dateFrom || !!options.dateTo;
+        const useMemoryPagination = !!options.search || !!options.dateFrom || !!options.dateTo || options.sortBy === "gender";
         const fetchLimit = useMemoryPagination ? 5000 : (options.limit || 50);
 
         let q: any = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS);
@@ -2718,7 +2817,8 @@ async function _getAcademyApplicationsAction(options: {
             q = q.where("createdAt", "<=", dateRangeEnd(options.dateTo));
         }
 
-        q = q.orderBy("createdAt", "desc").limit(fetchLimit + 1);
+        const orderDirection = options.sortOrder || "desc";
+        q = q.orderBy("createdAt", orderDirection).limit(fetchLimit + 1);
 
         if (options.lastDocId && !useMemoryPagination) {
             const lastDoc = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(options.lastDocId).get();
@@ -2764,6 +2864,7 @@ async function _getAcademyApplicationsAction(options: {
             };
 
             const userName = uData.name || uData.fullName || app.personalInfo?.fullName || "Unknown Student";
+            const gender = app.gender || app.personalInfo?.gender || uData.gender || app.profile?.gender || "";
 
             return {
                 id: app.id,
@@ -2773,6 +2874,7 @@ async function _getAcademyApplicationsAction(options: {
                     name: userName,
                     email: uData.email || app.personalInfo?.email || "Unknown",
                     phone: uData.phone || app.personalInfo?.phone || "Unknown",
+                    gender,
                     bankDetails
                 },
                 // Serialize timestamps
@@ -2789,10 +2891,25 @@ async function _getAcademyApplicationsAction(options: {
             };
         });
 
-        // Sort in memory by submittedAt descending
-        applications.sort((a, b) =>
-            new Date(b.submittedAt as string).getTime() - new Date(a.submittedAt as string).getTime()
-        );
+        // Sort in memory
+        if (options.sortBy === "gender") {
+            const order = options.sortOrder || "desc";
+            applications.sort((a, b) => {
+                const ga = (a.user?.gender || "").toLowerCase();
+                const gb = (b.user?.gender || "").toLowerCase();
+                if (ga === gb) {
+                    return new Date(b.submittedAt as string).getTime() - new Date(a.submittedAt as string).getTime();
+                }
+                return order === "asc" ? ga.localeCompare(gb) : gb.localeCompare(ga);
+            });
+        } else {
+            const order = options.sortOrder || "desc";
+            applications.sort((a, b) => {
+                const t1 = new Date(a.submittedAt as string).getTime();
+                const t2 = new Date(b.submittedAt as string).getTime();
+                return order === "asc" ? t1 - t2 : t2 - t1;
+            });
+        }
 
         // ALWAYS apply date filters in memory as a definitive backstop.
         if (options.dateFrom) {

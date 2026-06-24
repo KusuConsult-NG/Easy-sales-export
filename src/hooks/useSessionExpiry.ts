@@ -68,12 +68,17 @@ export function useSessionExpiry() {
             } catch (error: any) {
                 if (typeof window !== "undefined") {
                     const message = error?.message || "";
-                    if (
-                        message.includes("Failed to execute Server Action") ||
-                        message.includes("could not be found") ||
-                        message.includes("Action ID")
-                    ) {
-                        window.location.reload();
+                    const isActionMismatch = 
+                        (message.includes("Failed to execute Server Action") || message.includes("Action ID")) && 
+                        message.includes("could not be found");
+                    if (isActionMismatch) {
+                        // Throttle reloads to prevent infinite loops
+                        const lastReload = parseInt(sessionStorage.getItem("_last_skew_reload") || "0", 10);
+                        const now = Date.now();
+                        if (now - lastReload > 10_000) {
+                            sessionStorage.setItem("_last_skew_reload", String(now));
+                            window.location.reload();
+                        }
                     }
                 }
                 throw error;

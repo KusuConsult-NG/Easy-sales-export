@@ -375,7 +375,7 @@ export default function AdminAcademyApplicationsPage() {
     const [paymentFilter, setPaymentFilter] = useState<"all" | "completed" | "pending">("all");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
     const [registryFilter, setRegistryFilter] = useState<"all" | "legacy" | "regular">("all");
-    const [sortBy, setSortBy] = useState<"date-desc" | "date-asc" | "name-asc" | "name-desc" | "legacy-first" | "regular-first">("date-desc");
+    const [sortBy, setSortBy] = useState<"date-desc" | "date-asc" | "name-asc" | "name-desc" | "legacy-first" | "regular-first" | "gender-asc" | "gender-desc">("date-desc");
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
     const [selectedApp, setSelectedApp] = useState<AcademyApplication | null>(null);
@@ -562,6 +562,16 @@ export default function AdminAcademyApplicationsPage() {
             const la = a.isLegacy ? 1 : 0;
             const lb = b.isLegacy ? 1 : 0;
             return la - lb;
+        }
+        if (sortBy === "gender-asc") {
+            const ga = a.gender || "";
+            const gb = b.gender || "";
+            return ga.localeCompare(gb);
+        }
+        if (sortBy === "gender-desc") {
+            const ga = a.gender || "";
+            const gb = b.gender || "";
+            return gb.localeCompare(ga);
         }
         return 0;
     });
@@ -804,6 +814,8 @@ export default function AdminAcademyApplicationsPage() {
                         <option value="date-asc">Oldest First</option>
                         <option value="name-asc">Name (A-Z)</option>
                         <option value="name-desc">Name (Z-A)</option>
+                        <option value="gender-asc">Gender (A-Z)</option>
+                        <option value="gender-desc">Gender (Z-A)</option>
                         <option value="legacy-first">Legacy First</option>
                         <option value="regular-first">Regular First</option>
                     </select>
@@ -853,6 +865,11 @@ export default function AdminAcademyApplicationsPage() {
                                                 </span>
                                             )}
                                             {planBadge(app.plan)}
+                                            {app.gender && (
+                                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 capitalize">
+                                                    {app.gender}
+                                                </span>
+                                            )}
                                             <span className={`px-2 py-0.5 rounded-full text-xs font-bold capitalize ${statusColor(app.status)}`}>
                                                 {app.status.replace("_", " ")}
                                             </span>

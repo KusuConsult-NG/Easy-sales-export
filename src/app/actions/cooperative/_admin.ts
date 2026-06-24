@@ -1333,6 +1333,8 @@ export async function getStandardCooperativeMembersAction(
         state?: string;
         lga?: string;
         registry?: "all" | "legacy" | "regular";
+        sortBy?: "createdAt" | "gender";
+        sortOrder?: "asc" | "desc";
     } = {}
 ): Promise<PaginatedAdminResponse<any>> {
     const {
@@ -1362,7 +1364,7 @@ export async function getStandardCooperativeMembersAction(
             cursorSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(cursorId).get();
         }
 
-        const useMemoryPagination = !!search || !!options.dateFrom || !!options.dateTo || !!state || !!lga || (registry && registry !== "all");
+        const useMemoryPagination = !!search || !!options.dateFrom || !!options.dateTo || !!state || !!lga || (registry && registry !== "all") || options.sortBy === "gender";
         const fetchLimit = useMemoryPagination ? 5000 : limitCount;
 
         const adminScope = await getAdminScope(session.user.id, liveRoles);
@@ -1407,7 +1409,8 @@ export async function getStandardCooperativeMembersAction(
             q = q.where("createdAt", "<=", toTs);
         }
 
-        q = q.orderBy("createdAt", "desc");
+        const orderDirection = options.sortOrder || "desc";
+        q = q.orderBy("createdAt", orderDirection);
 
         if (cursorSnap && cursorSnap.exists && !useMemoryPagination) {
             q = q.startAfter(cursorSnap);
@@ -1524,73 +1527,151 @@ export async function getStandardCooperativeMembersAction(
             ? (_hasMore ? String(page + 1) : undefined)
             : (_hasMore ? nextCursor : undefined);
 
-        const userIds = [...new Set(paged.map(app => app.userId).filter(Boolean))];
-        const userMap = new Map<string, any>();
-        const userPromises = [];
-        for (let i = 0; i < userIds.length; i += 30) {
-            const chunk = userIds.slice(i, i + 30);
-            if (chunk.length > 0) {
-                userPromises.push(db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get());
-            }
-        }
-        const userSnapsArray = await Promise.all(userPromises);
-        userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, d.data())));
-
-        let standardForms = paged.map((app: any) => {
-            const uData = (userMap.get(app.userId as string) || {}) as any;
-            const localName = app.firstName ? `${app.firstName} ${app.lastName || ''}`.trim() : (app.fullName || null);
-            const userName = uData.firstName
-                ? `${uData.firstName} ${uData.lastName || ''}`.trim()
-                : (uData.fullName || uData.name || uData.displayName || localName || "");
-
-            const mergedData = {
-                ...app,
-                phone:               app.phone               || uData.phone              || uData.phoneNumber || null,
-                gender:              app.gender              || uData.gender             || null,
-                dateOfBirth:         app.dateOfBirth         || uData.dateOfBirth        || uData.dob        || null,
-                occupation:          app.occupation          || uData.occupation         || null,
-                stateOfOrigin:       app.stateOfOrigin       || uData.stateOfOrigin      || (typeof uData.address === 'object' ? uData.address?.state : null) || null,
-                lga:                 app.lga                 || uData.lga                || (typeof uData.address === 'object' ? uData.address?.lga   : null) || null,
-                ward:                app.ward                || uData.ward               || (typeof uData.address === 'object' ? uData.address?.ward  : null) || null,
-                residentialAddress:  app.residentialAddress  || (typeof uData.address === 'object' ? uData.address?.street : uData.address) || null,
-                firstName:           app.firstName           || uData.firstName          || null,
-                lastName:            app.lastName            || uData.lastName           || null,
-                email:               app.email               || uData.email              || uData.userEmail  || null,
-                nextOfKin: app.nextOfKin ? {
-                    ...app.nextOfKin,
-                    name:    app.nextOfKin.fullName    || app.nextOfKin.name    || null,
-                    address: app.nextOfKin.residentialAddress || app.nextOfKin.address || null,
-                } : null,
-            };
-
-            const bankDetails = uData.bankDetails || {
-                bankName: app.bankName || uData.bankName || uData.bankAccount?.bankName || "",
-                accountNumber: app.accountNumber || uData.bankAccountNumber || uData.bankAccount?.accountNumber || "",
-                accountName: app.accountName || uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : ""),
-                bankCode: app.bankCode || uData.bankCode || uData.bankAccount?.bankCode || ""
-            };
-
-            return {
-                id: app.id,
-                user: {
-                    id: app.userId,
-                    name: userName,
-                    email: mergedData.email || "",
-                    phone: mergedData.phone || "",
-                    dob: mergedData.dateOfBirth || "",
-                    address: mergedData.residentialAddress || "",
-                    state: mergedData.stateOfOrigin || "",
-                    lga: mergedData.lga || "",
-                    ward: mergedData.ward || "",
-                    bankDetails
-                },
-                status: app.membershipStatus || "pending",
-                data: {
-                    ...mergedData,
-                    bankDetails
+        let standardForms: any[] = [];
+        if (options.sortBy === "gender") {
+            const userIds = [...new Set(applications.map(app => app.userId).filter(Boolean))];
+            const userMap = new Map<string, any>();
+            const userPromises = [];
+            for (let i = 0; i < userIds.length; i += 30) {
+                const chunk = userIds.slice(i, i + 30);
+                if (chunk.length > 0) {
+                    userPromises.push(db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get());
                 }
-            };
-        });
+            }
+            const userSnapsArray = await Promise.all(userPromises);
+            userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, d.data())));
+
+            const mapped = applications.map((app: any) => {
+                const uData = (userMap.get(app.userId as string) || {}) as any;
+                const localName = app.firstName ? `${app.firstName} ${app.lastName || ''}`.trim() : (app.fullName || null);
+                const userName = uData.firstName
+                    ? `${uData.firstName} ${uData.lastName || ''}`.trim()
+                    : (uData.fullName || uData.name || uData.displayName || localName || "");
+
+                const mergedData = {
+                    ...app,
+                    phone:               app.phone               || uData.phone              || uData.phoneNumber || null,
+                    gender:              app.gender              || uData.gender             || null,
+                    dateOfBirth:         app.dateOfBirth         || uData.dateOfBirth        || uData.dob        || null,
+                    occupation:          app.occupation          || uData.occupation         || null,
+                    stateOfOrigin:       app.stateOfOrigin       || uData.stateOfOrigin      || (typeof uData.address === 'object' ? uData.address?.state : null) || null,
+                    lga:                 app.lga                 || uData.lga                || (typeof uData.address === 'object' ? uData.address?.lga   : null) || null,
+                    ward:                app.ward                || uData.ward               || (typeof uData.address === 'object' ? uData.address?.ward  : null) || null,
+                    residentialAddress:  app.residentialAddress  || (typeof uData.address === 'object' ? uData.address?.street : uData.address) || null,
+                    firstName:           app.firstName           || uData.firstName          || null,
+                    lastName:            app.lastName            || uData.lastName           || null,
+                    email:               app.email               || uData.email              || uData.userEmail  || null,
+                };
+
+                const bankDetails = uData.bankDetails || {
+                    bankName: app.bankName || uData.bankName || uData.bankAccount?.bankName || "",
+                    accountNumber: app.accountNumber || uData.bankAccountNumber || uData.bankAccount?.accountNumber || "",
+                    accountName: app.accountName || uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : ""),
+                    bankCode: app.bankCode || uData.bankCode || uData.bankAccount?.bankCode || ""
+                };
+
+                return {
+                    id: app.id,
+                    user: {
+                        id: app.userId,
+                        name: userName,
+                        email: mergedData.email || "",
+                        phone: mergedData.phone || "",
+                        dob: mergedData.dateOfBirth || "",
+                        address: mergedData.residentialAddress || "",
+                        state: mergedData.stateOfOrigin || "",
+                        lga: mergedData.lga || "",
+                        ward: mergedData.ward || "",
+                        gender: mergedData.gender || "",
+                        bankDetails
+                    },
+                    status: app.membershipStatus || "pending",
+                    data: {
+                        ...mergedData,
+                        bankDetails
+                    }
+                };
+            });
+
+            // Sort by gender in-memory
+            const order = options.sortOrder || "desc";
+            mapped.sort((a, b) => {
+                const ga = (a.user?.gender || "").toLowerCase();
+                const gb = (b.user?.gender || "").toLowerCase();
+                if (ga === gb) {
+                    const aTime = a.data?.createdAt?.seconds ? a.data.createdAt.seconds * 1000 : new Date(a.data?.createdAt || 0).getTime();
+                    const bTime = b.data?.createdAt?.seconds ? b.data.createdAt.seconds * 1000 : new Date(b.data?.createdAt || 0).getTime();
+                    return bTime - aTime;
+                }
+                return order === "asc" ? ga.localeCompare(gb) : gb.localeCompare(ga);
+            });
+
+            standardForms = mapped.slice(offset, offset + limitCount);
+        } else {
+            const userIds = [...new Set(paged.map(app => app.userId).filter(Boolean))];
+            const userMap = new Map<string, any>();
+            const userPromises = [];
+            for (let i = 0; i < userIds.length; i += 30) {
+                const chunk = userIds.slice(i, i + 30);
+                if (chunk.length > 0) {
+                    userPromises.push(db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get());
+                }
+            }
+            const userSnapsArray = await Promise.all(userPromises);
+            userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, d.data())));
+
+            standardForms = paged.map((app: any) => {
+                const uData = (userMap.get(app.userId as string) || {}) as any;
+                const localName = app.firstName ? `${app.firstName} ${app.lastName || ''}`.trim() : (app.fullName || null);
+                const userName = uData.firstName
+                    ? `${uData.firstName} ${uData.lastName || ''}`.trim()
+                    : (uData.fullName || uData.name || uData.displayName || localName || "");
+
+                const mergedData = {
+                    ...app,
+                    phone:               app.phone               || uData.phone              || uData.phoneNumber || null,
+                    gender:              app.gender              || uData.gender             || null,
+                    dateOfBirth:         app.dateOfBirth         || uData.dateOfBirth        || uData.dob        || null,
+                    occupation:          app.occupation          || uData.occupation         || null,
+                    stateOfOrigin:       app.stateOfOrigin       || uData.stateOfOrigin      || (typeof uData.address === 'object' ? uData.address?.state : null) || null,
+                    lga:                 app.lga                 || uData.lga                || (typeof uData.address === 'object' ? uData.address?.lga   : null) || null,
+                    ward:                app.ward                || uData.ward               || (typeof uData.address === 'object' ? uData.address?.ward  : null) || null,
+                    residentialAddress:  app.residentialAddress  || (typeof uData.address === 'object' ? uData.address?.street : uData.address) || null,
+                    firstName:           app.firstName           || uData.firstName          || null,
+                    lastName:            app.lastName            || uData.lastName           || null,
+                    email:               app.email               || uData.email              || uData.userEmail  || null,
+                };
+
+                const bankDetails = uData.bankDetails || {
+                    bankName: app.bankName || uData.bankName || uData.bankAccount?.bankName || "",
+                    accountNumber: app.accountNumber || uData.bankAccountNumber || uData.bankAccount?.accountNumber || "",
+                    accountName: app.accountName || uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : ""),
+                    bankCode: app.bankCode || uData.bankCode || uData.bankAccount?.bankCode || ""
+                };
+
+                return {
+                    id: app.id,
+                    user: {
+                        id: app.userId,
+                        name: userName,
+                        email: mergedData.email || "",
+                        phone: mergedData.phone || "",
+                        dob: mergedData.dateOfBirth || "",
+                        address: mergedData.residentialAddress || "",
+                        state: mergedData.stateOfOrigin || "",
+                        lga: mergedData.lga || "",
+                        ward: mergedData.ward || "",
+                        gender: mergedData.gender || "",
+                        bankDetails
+                    },
+                    status: app.membershipStatus || "pending",
+                    data: {
+                        ...mergedData,
+                        bankDetails
+                    }
+                };
+            });
+        }
 
         return paginatedOk(standardForms, _nextCursor, stats ? { stats } : undefined);
     } catch (error) {
