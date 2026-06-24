@@ -51,7 +51,11 @@ export async function GET(request: NextRequest) {
                     }
                 }
             }
-            if (isPlaceholder(phone)) phone = "";
+            if (isPlaceholder(phone)) {
+                phone = "";
+            } else {
+                phone = `'${phone}`;
+            }
 
             let state = data.state || data.stateOfOrigin || data.address?.state || data.verificationProfile?.address?.state || "";
             if (isPlaceholder(state) && data.serviceRegistrations) {

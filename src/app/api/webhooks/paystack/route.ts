@@ -7,7 +7,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { generateAndSendWhatsAppInvite } from "@/lib/whatsapp-invites";
 
-import { processMarketplaceOrder, processExportInvestment, processCooperativeRegistration, processAcademyRegistration } from "@/infrastructure/payments/service";
+import { processMarketplaceOrder, processExportInvestment, processCooperativeRegistration, processAcademyRegistration, processCooperativeContribution } from "@/infrastructure/payments/service";
 
 // Force dynamic since we read headers
 export const dynamic = 'force-dynamic';
@@ -70,6 +70,8 @@ export async function POST(req: NextRequest) {
                 } else if (type === "academy_registration") {
                     const plan = metadata.plan;
                     await processAcademyRegistration(reference, amountPaidv, userId, plan, paidAtDate);
+                } else if (type === "contribution") {
+                    await processCooperativeContribution(reference, amountPaidv, userId, paidAtDate);
                 } else if (type === "wallet_funding") {
                     const { confirmWalletFundingAction } = await import("@/app/actions/wallet");
                     const res = await confirmWalletFundingAction(reference, paidAtDate);

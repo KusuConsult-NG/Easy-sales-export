@@ -838,3 +838,94 @@ export async function processWaveRegistration(reference: string, amount: number,
     await invalidateUserCache(userId);
     logger.info(`[Paystack Webhook] Processed WAVE Registration for ${userId}`);
 }
+
+/**
+ * Handle Cooperative Savings / Contribution Fulfillment
+ */
+export async function processCooperativeContribution(reference: string, amount: number, userId: string, paidAt?: Date) {
+    const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
+
+    const result = await db.runTransaction(async (transaction) => {
+        const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
+        const processedSnap = await transaction.get(processedRef);
+
+        if (processedSnap.exists) {
+            logger.info(`[Paystack Fulfillment] Cooperative Contribution ${reference} already processed.`);
+            return { alreadyProcessed: true };
+        }
+
+        const memberDoc = await transaction.get(memberRef);
+        if (!memberDoc.exists) {
+            throw new Error(`Cooperative member record not found for user: ${userId}`);
+        }
+
+        const memberData = memberDoc.data() || {};
+        const currentTotal = memberData.totalContributions || 0;
+        const newTotal = currentTotal + amount;
+        const newTier = "Member";
+        const cooperativeId = memberData.cooperativeId || "default";
+
+        const paymentTimestamp = paidAt ? Timestamp.fromDate(paidAt) : FieldValue.serverTimestamp();
+
+        // 1. Update membership atomically
+        transaction.update(memberRef, {
+            totalContributions: newTotal,
+            tier: newTier,
+            lastContributionAt: paymentTimestamp,
+            updatedAt: FieldValue.serverTimestamp()
+        });
+
+        // 2. Mark payment as processed
+        transaction.set(processedRef, {
+            reference,
+            type: "contribution",
+            userId,
+            amount,
+            processedAt: paymentTimestamp,
+            status: "completed",
+            source: "webhook"
+        });
+
+        // 3. Write to Unified Ledger
+        transaction.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(reference), {
+            id: reference,
+            userId,
+            type: "contribution",
+            module: "cooperative",
+            amount,
+            currency: "NGN",
+            status: "completed",
+            date: paymentTimestamp,
+            reference,
+            description: "Cooperative savings contribution"
+        });
+
+        // 4. Cooperative Ledger write
+        const coopTxRef = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc();
+        transaction.set(coopTxRef, {
+            userId,
+            cooperativeId,
+            type: "contribution",
+            amount,
+            date: paymentTimestamp,
+            status: "completed",
+            description: "Cooperative Contribution",
+            reference
+        });
+
+        return { success: true };
+    });
+
+    if (result && result.alreadyProcessed) {
+        return;
+    }
+
+    try {
+        await invalidateUserCache(userId);
+    } catch (err) {
+        logger.error(`[Paystack Webhook] Cache clear error for cooperative contribution user ${userId}:`, err);
+    }
+
+    logger.info(`[Paystack Webhook] Processed Cooperative Contribution of ${amount} for ${userId}`);
+}
+

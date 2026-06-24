@@ -96,7 +96,11 @@ export async function GET(request: NextRequest) {
                     }
                 }
             }
-            if (isPlaceholder(phone)) phone = "";
+            if (isPlaceholder(phone)) {
+                phone = "";
+            } else {
+                phone = `'${phone}`;
+            }
 
             let cleanState = data.state || data.stateOfOrigin || fallbackUser.state || fallbackUser.stateOfOrigin || fallbackUser.address?.state || fallbackUser.verificationProfile?.address?.state || "";
             if (isPlaceholder(cleanState) && fallbackUser.serviceRegistrations) {
