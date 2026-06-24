@@ -22,6 +22,7 @@ import { smsWithdrawalApproved, smsWithdrawalRejected } from "@/lib/africastalki
 import { pushWithdrawalDecision } from "@/lib/fcm";
 import { isAdmin } from "@/lib/admin-permissions";
 import { ActionResponse } from "@/lib/safe-action";
+import { getFeatureToggle } from "./feature-toggles";
 
 const MIN_WITHDRAWAL = 5000;   // ₦5,000 minimum withdrawal (NGN)
 const WALLET_COLLECTION = COLLECTIONS.WALLETS;
@@ -135,6 +136,11 @@ export async function getWalletAction(): Promise<ActionResponse<Wallet & {
 
 export async function fundWalletViaPaystackAction(amountNGN: number): Promise<ActionResponse<{ authorizationUrl: string; reference: string }>> {
     try {
+        const depositsEnabled = await getFeatureToggle("wallet_deposits");
+        if (!depositsEnabled) {
+            return { success: false as const, error: "Wallet deposits are currently disabled", data: null };
+        }
+
         if (typeof amountNGN !== 'number' || !Number.isFinite(amountNGN) || amountNGN < 100) {
             return { success: false as const, error: "Minimum wallet funding amount is ₦100" , data: null };
         }
@@ -401,6 +407,10 @@ export async function withdrawFromWalletAction(
     bankDetails: { accountNumber: string; bankCode: string; accountName: string; bankName: string }
 ): Promise<ActionResponse<{ withdrawalId: string }>> {
     try {
+        const withdrawalsEnabled = await getFeatureToggle("wallet_withdrawals");
+        if (!withdrawalsEnabled) {
+            return { success: false as const, error: "Wallet withdrawals are currently disabled", data: null };
+        }
 
         if (typeof amountNGN !== 'number' || !Number.isFinite(amountNGN)) {
             return { success: false as const, error: "Invalid withdrawal amount", data: null };

@@ -45,8 +45,8 @@ export const DEFAULT_TOGGLES: Record<string, boolean> = {
     ml_credit_scoring: false,
 
     // Wallet features (disabled for production rollout)
-    wallet_deposits: true,
-    wallet_withdrawals: true,
+    wallet_deposits: false,
+    wallet_withdrawals: false,
 };
 
 /**
