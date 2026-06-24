@@ -982,10 +982,6 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
             return 'approved';
         }
 
-        if (userData?.legacyOnboardedBy && !registrationStatus) {
-            return "approved";
-        }
-
         // ── FALLBACK: cooperative_members doc query by userId or docId ─────────
         let memberDocData: any = null;
         let memberRef: any = null;
@@ -1056,9 +1052,17 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
             if (memberDocData.paymentStatus === 'completed' && !memberDocData.onboardingCompleted) {
                 return 'legacy_pending_onboarding';
             }
+            const isLegacy = memberDocData.isLegacy === true || !!userData?.legacyOnboardedBy;
+            const isApprovedOrActive = derivedStatus === 'active' || derivedStatus === 'approved';
+
             // If the user has submitted the form (onboardingCompleted=true)
             // but has NOT completed the payment yet, return payment_required.
-            if (memberDocData.onboardingCompleted && memberDocData.paymentStatus !== 'completed' && session.user.email !== "zeredogo@gmail.com") {
+            if (memberDocData.onboardingCompleted && 
+                memberDocData.paymentStatus !== 'completed' && 
+                !isLegacy && 
+                !isApprovedOrActive && 
+                session.user.email !== "zeredogo@gmail.com"
+            ) {
                 return 'payment_required';
             }
 
@@ -1725,13 +1729,61 @@ export async function getCooperativeMemberIdCardAction(): Promise<
 
         // Standard gating bypass for premium subscription plan holders
         if (!isPremiumSubscriber) {
-            // Gate 1: Paystack payment must be verified
-            if (d.paymentStatus !== "completed") { 
+            const isLegacy = d.isLegacy === true || !!userData?.legacyOnboardedBy;
+            const isApprovedOrActive = d.membershipStatus === "active" || d.membershipStatus === "approved" || d.status === "approved";
+
+            // Gate 1: Paystack payment must be verified.
+            // AUTHORITATIVE FALLBACK: If the member doc shows paymentStatus !== "completed"
+            // (can happen due to race conditions, webhook failures, or cold-start DB errors),
+            // double-check the processed_payments collection — the source of truth for all
+            // Paystack-confirmed transactions. If a completed registration payment exists,
+            // honour it and heal the member doc so subsequent requests are fast.
+            let effectivePaymentCompleted = d.paymentStatus === "completed";
+
+            if (!effectivePaymentCompleted && !isLegacy && !isApprovedOrActive) {
+                try {
+                    const authPayment = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+                        .where("userId", "==", userId)
+                        .where("type", "==", "cooperative_membership_registration")
+                        .where("status", "==", "completed")
+                        .limit(1)
+                        .get();
+
+                    if (!authPayment.empty) {
+                        effectivePaymentCompleted = true;
+                        // Heal the member doc so this fallback is never needed again for this user
+                        try {
+                            const healRef = sortedDocs.length > 0
+                                ? db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(sortedDocs[0].id)
+                                : db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
+                            await healRef.set(
+                                { paymentStatus: "completed", updatedAt: FieldValue.serverTimestamp() },
+                                { merge: true }
+                            );
+                            // Also heal the USERS doc for middleware gating
+                            await db.collection(COLLECTIONS.USERS).doc(userId).set({
+                                serviceRegistrations: {
+                                    cooperatives: { paymentStatus: "completed" }
+                                }
+                            }, { merge: true });
+                            logger.info(`[getCooperativeMemberIdCardAction] Healed stale paymentStatus for user ${userId} from processed_payments`);
+                        } catch (healErr: any) {
+                            logger.warn(`[getCooperativeMemberIdCardAction] Heal write failed (non-fatal):`, healErr);
+                        }
+                        // Update in-memory doc so Gate 2 evaluation below is accurate
+                        d = { ...d, paymentStatus: "completed" };
+                    }
+                } catch (lookupErr: any) {
+                    logger.warn(`[getCooperativeMemberIdCardAction] processed_payments fallback failed (non-fatal):`, lookupErr);
+                }
+            }
+
+            if (!effectivePaymentCompleted && !isLegacy && !isApprovedOrActive) {
                 return { success: false as const, error: "Your membership fee payment has not been verified. Please complete payment to access your ID card.", reason: "payment_required"};
             }
 
             // Gate 2: Admin must have approved
-            if (d.membershipStatus !== "active" && d.membershipStatus !== "approved" && d.status !== "approved") {
+            if (!isApprovedOrActive) {
                 return {
                     success: false as const,
                     error: "Your membership is pending admin approval. Your ID card will be available once approved.",
