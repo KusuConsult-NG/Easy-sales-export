@@ -58,9 +58,10 @@ async function CooperativeLayoutContent({ children }: { children: React.ReactNod
                 const db = getAdminDb();
                 
                 // Query by userId since document ID may be a generated ID
+                // NOTE: Do NOT add orderBy here — it requires a composite index.
+                // A simple where("userId") query is sufficient and always works.
                 const memberQuery = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
                     .where("userId", "==", userId)
-                    .orderBy("createdAt", "desc")
                     .limit(1)
                     .get();
                     
@@ -81,37 +82,43 @@ async function CooperativeLayoutContent({ children }: { children: React.ReactNod
             }
 
             // --- DATA INTEGRITY GUARD ---
-            // If user has the role but NO member record, or the record is corrupted (undefined names)
-            // we must send them back to onboarding to complete their profile.
-            // EXCEPTION: Allow the primary test account even if fields are missing (though they are now populated).
-            const isCorrupted = (!memberData || 
+            // Only flag records where name fields are literally the string "undefined" —
+            // a symptom of a registration bug where JS undefined was serialized as a string.
+            // Do NOT flag missing member records (null/no doc) — that could be a transient
+            // Firestore read failure or a race condition, not a data corruption issue.
+            // Redirecting + resetting status on a missing read would break approved users.
+            const isCorrupted = memberData && (
                                memberData.firstName === "undefined" || 
-                               memberData.lastName === "undefined" ||
-                               !memberData.firstName || 
-                               !memberData.lastName) && 
+                               memberData.lastName === "undefined"
+                           ) && 
                                session.user.email !== "cooperativeuser02@gmail.com" &&
                                session.user.email !== "zeredogo@gmail.com";
 
             if (isCorrupted) {
 
-                logger.warn(`[CooperativeLayout] Flagging corrupted/missing member record for user ${userId} (preserving document details)`);
+                logger.warn(`[CooperativeLayout] Flagging corrupted member record (literal 'undefined' name) for user ${userId}`);
                 
-                const db = getAdminDb();
-                
-                // 1. DO NOT DELETE THE DOCUMENT (preserves user details like BVN, NOK, address, valid ID documents)
-                // Just mark the central registration status as pending_repair so they can fix their names
+                try {
+                    const db = getAdminDb();
+                    
+                    // 1. DO NOT DELETE THE DOCUMENT (preserves user details like BVN, NOK, address, valid ID documents)
+                    // Just mark the central registration status as pending_repair so they can fix their names
 
-                // 2. Reset service registration status in USERS collection so checkCooperativeStatusAction sees them as needing repair
-                await db.collection(COLLECTIONS.USERS).doc(userId).set({
-                    serviceRegistrations: {
-                        cooperative: { status: "pending_repair", repairedAt: new Date() },
-                        cooperatives: { status: "pending_repair", repairedAt: new Date() }
-                    }
-                }, { merge: true });
+                    // 2. Reset service registration status in USERS collection so checkCooperativeStatusAction sees them as needing repair
+                    await db.collection(COLLECTIONS.USERS).doc(userId).set({
+                        serviceRegistrations: {
+                            cooperative: { status: "pending_repair", repairedAt: new Date() },
+                            cooperatives: { status: "pending_repair", repairedAt: new Date() }
+                        }
+                    }, { merge: true });
 
-                // 3. Invalidate Redis Cache to reflect the status change
-                const { redis, CacheKeys } = await import("@/lib/redis");
-                await redis.del(CacheKeys.userProfile(userId));
+                    // 3. Invalidate Redis Cache to reflect the status change
+                    const { redis, CacheKeys } = await import("@/lib/redis");
+                    await redis.del(CacheKeys.userProfile(userId));
+                } catch (repairErr) {
+                    logger.error(`[CooperativeLayout] Failed to write repair status for user ${userId}`, repairErr);
+                    // Do not re-throw — still redirect them to onboarding so they can fix their data
+                }
 
                 // 4. Redirect them to onboarding with repair notice and edit mode active
                 redirectPath = "/cooperatives/onboarding?notice=complete-your-registration&edit=true";
