@@ -6,10 +6,9 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, AlertCircle, ShieldCheck, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, ShieldCheck } from "lucide-react";
 import type { WaveApplicationData } from "../page";
 import { IdInput } from "@/components/ui/IdInput";
-import { verifyNINAction } from "@/app/actions/kyc";
 
 interface Props {
     data: WaveApplicationData;
@@ -24,61 +23,10 @@ import { getWards, getPollingUnits } from "@/lib/locations";
 export default function CivicStatusStep({ data, updateData, onNext, onBack }: Props) {
     const { showToast } = useToast();
     const [errors, setErrors] = useState<Record<string, string>>({});
-    const [verifyingNin, setVerifyingNin] = useState(false);
-    const [ninVerified, setNinVerified] = useState(false);
-    const [ninError, setNinError] = useState("");
-
-    async function handleVerifyNin() {
-        const nin = data?.nin || "";
-        const firstName = data?.firstName || "";
-        const surname = data?.surname || "";
-
-        if (!nin) {
-            setNinError("Please enter a NIN");
-            return;
-        }
-
-        if (!firstName || !surname) {
-            setNinError("First name and surname required in Personal Details step to verify.");
-            return;
-        }
-
-        setVerifyingNin(true);
-        setNinError("");
-
-        try {
-            const result = await verifyNINAction({ nin, firstName, lastName: surname });
-
-            if (result.success && result.data?.isMatch) {
-                setNinVerified(true);
-                setNinError("");
-                showToast("NIN Verified Successfully!", "success");
-            } else {
-                setNinVerified(false);
-                setNinError(result.error || (result.data as any)?.details || "Verification failed");
-            }
-        } catch (error) {
-            setNinError("An unexpected error occurred during verification");
-        } finally {
-            setVerifyingNin(false);
-        }
-    }
 
     const validateForm = (): boolean => {
-        const newErrors: Record<string, string> = {};
-        const nin = data?.nin || "";
-
-        // NIN — optional but must be verified if provided
-        if (nin && nin.trim()) {
-            if (!ninVerified) {
-                newErrors.nin = "Please click 'Verify' to validate your NIN before continuing";
-            }
-        }
-
-        // Voter's Card Number — no longer enforced
-
-        setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
+        setErrors({});
+        return true;
     };
 
     function handleNext() {
@@ -115,49 +63,21 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
             </div>
 
             <div className="space-y-6">
-                {/* NIN — Optional and API-Verified */}
+                {/* NIN — Optional */}
                 <div>
                     <IdInput
                         label="National Identification Number (NIN) 🔒"
                         value={data?.nin || ""}
                         onChange={(v) => {
                             updateData({ nin: v });
-                            setNinVerified(false);
-                            setNinError("");
                         }}
                         maxLength={11}
                         placeholder="Enter your NIN"
-                        disabled={ninVerified || verifyingNin}
-                        error={errors.nin || ninError}
+                        error={errors.nin}
                         hint="Dial *346# on your registered phone to retrieve your NIN."
                         optional
                         accentColor="emerald"
-                        suffix={
-                            <button
-                                type="button"
-                                onClick={handleVerifyNin}
-                                disabled={ninVerified || verifyingNin || !(data?.nin || "").trim()}
-                                className="px-5 py-2.5 text-sm bg-emerald-100 text-emerald-800 font-semibold rounded-lg hover:bg-emerald-200 transition-colors disabled:opacity-50 flex items-center gap-1.5 whitespace-nowrap"
-                            >
-                                {verifyingNin ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verify"}
-                            </button>
-                        }
                     />
-                    {ninVerified && (
-                        <div className="mt-2 flex items-center justify-between">
-                            <p className="text-sm text-emerald-600 flex items-center gap-1 font-medium">
-                                <ShieldCheck className="w-4 h-4" />
-                                NIN verified successfully
-                            </p>
-                            <button
-                                type="button"
-                                onClick={() => { setNinVerified(false); setNinError(""); updateData({ nin: "" }); }}
-                                className="text-xs text-slate-500 underline hover:text-slate-700 ml-2"
-                            >
-                                Wrong NIN? Edit
-                            </button>
-                        </div>
-                    )}
                 </div>
 
                 {/* Voter's Card Number (PVC) */}

@@ -75,9 +75,14 @@ function VerifyBadge({ state, message }: { state: VerifyState; message?: string 
 }
 
 export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFormProps) {
-    const [formData, setFormData] = useState<Partial<KYCData>>(initialData || {});
-    const [bvnState, setBvnState] = useState<VerifyState>(initialData?.bvnVerified ? 'verified' : 'idle');
-    const [ninState, setNinState] = useState<VerifyState>(initialData?.ninVerified ? 'verified' : 'idle');
+    const [formData, setFormData] = useState<Partial<KYCData>>(() => {
+        const initial = { ...initialData };
+        if (initial.nin) initial.ninVerified = true;
+        if (initial.bvn) initial.bvnVerified = true;
+        return initial;
+    });
+    const [bvnState, setBvnState] = useState<VerifyState>(initialData?.bvn ? 'verified' : 'idle');
+    const [ninState, setNinState] = useState<VerifyState>(initialData?.nin ? 'verified' : 'idle');
     const [votersCardState, setVotersCardState] = useState<VerifyState>(initialData?.votersCardVerified ? 'verified' : 'idle');
     const [bvnError, setBvnError] = useState<string>('');
     const [ninError, setNinError] = useState<string>('');
@@ -90,16 +95,16 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
         const updated = { ...formData, [field]: value };
         // Reset verify state when the field changes
         if (field === 'bvn') {
-            setBvnState('idle');
+            setBvnState(value ? 'verified' : 'idle');
             setBvnError('');
-            setBvnConfirmed(false);
-            updated.bvnVerified = false;
+            setBvnConfirmed(!!value);
+            updated.bvnVerified = !!value;
         }
         if (field === 'nin') {
-            setNinState('idle');
+            setNinState(value ? 'verified' : 'idle');
             setNinError('');
-            setNinConfirmed(false);
-            updated.ninVerified = false;
+            setNinConfirmed(!!value);
+            updated.ninVerified = !!value;
         }
         if (field === 'votersCard') {
             setVotersCardState('idle');
@@ -370,45 +375,16 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                 <IdInput
                     label="NIN (National Identity Number)"
                     optional
-                    labelRight={<VerifyBadge state={ninState} />}
                     value={formData.nin || ''}
                     onChange={(v) => handleChange('nin', v)}
                     digitsOnly
                     showCount
                     maxLength={11}
                     placeholder="11-digit NIN"
-                    disabled={ninState === 'verified'}
                     error={ninError}
                     hint="Dial *346# to retrieve your NIN. Your name must match your NIN record exactly."
                     accentColor="orange"
-                    suffix={
-                        <button
-                            type="button"
-                            onClick={handleVerifyNIN}
-                            disabled={ninState === 'loading' || ninState === 'verified' || !formData.nin || formData.nin.length !== 11 || !ninConfirmed}
-                            className="px-4 py-2.5 text-sm bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5 whitespace-nowrap"
-                        >
-                            {ninState === 'loading' ? (
-                                <><Loader2 className="w-4 h-4 animate-spin" /> Verifying…</>
-                            ) : ninState === 'verified' ? (
-                                <><ShieldCheck className="w-4 h-4" /> Verified</>
-                            ) : 'Verify NIN'}
-                        </button>
-                    }
                 />
-                {ninState !== 'verified' && formData.nin && formData.nin.length === 11 && (
-                    <label className="mt-2.5 flex items-start gap-2 cursor-pointer select-none">
-                        <input
-                            type="checkbox"
-                            checked={ninConfirmed}
-                            onChange={(e) => { setNinConfirmed(e.target.checked); if (ninError) setNinError(''); }}
-                            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500"
-                        />
-                        <span className="text-xs text-slate-700">
-                            I confirm that <strong>{formData.nin}</strong> is my correct NIN. I understand that submitting wrong information may result in my account being banned.
-                        </span>
-                    </label>
-                )}
             </div>
 
             {/* ── Voter's Card — collect number only, no verification required ── */}
@@ -431,45 +407,16 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                     <IdInput
                         label="BVN (Bank Verification Number)"
                         optional
-                        labelRight={<VerifyBadge state={bvnState} />}
                         value={formData.bvn || ''}
                         onChange={(v) => handleChange('bvn', v)}
                         digitsOnly
                         showCount
                         maxLength={11}
                         placeholder="11-digit BVN"
-                        disabled={bvnState === 'verified'}
                         error={bvnError}
                         hint="Dial *565*0# to retrieve your BVN. Your name must match your BVN record exactly."
                         accentColor="orange"
-                        suffix={
-                            <button
-                                type="button"
-                                onClick={handleVerifyBVN}
-                                disabled={bvnState === 'loading' || bvnState === 'verified' || !formData.bvn || formData.bvn.length !== 11 || !bvnConfirmed}
-                                className="px-4 py-2.5 text-sm bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5 whitespace-nowrap"
-                            >
-                                {bvnState === 'loading' ? (
-                                    <><Loader2 className="w-4 h-4 animate-spin" /> Verifying…</>
-                                ) : bvnState === 'verified' ? (
-                                    <><ShieldCheck className="w-4 h-4" /> Verified</>
-                                ) : 'Verify BVN'}
-                            </button>
-                        }
                     />
-                    {bvnState !== 'verified' && formData.bvn && formData.bvn.length === 11 && (
-                        <label className="mt-2.5 flex items-start gap-2 cursor-pointer select-none">
-                            <input
-                                type="checkbox"
-                                checked={bvnConfirmed}
-                                onChange={(e) => { setBvnConfirmed(e.target.checked); if (bvnError) setBvnError(''); }}
-                                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500"
-                            />
-                            <span className="text-xs text-slate-700">
-                                I confirm that <strong>{formData.bvn}</strong> is my correct BVN. I understand that submitting wrong information may result in my account being banned.
-                            </span>
-                        </label>
-                    )}
                 </div>
             )}
 
