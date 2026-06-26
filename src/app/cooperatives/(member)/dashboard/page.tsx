@@ -43,13 +43,14 @@ export default function CooperativeDashboardPage() {
     const { status: membershipStatus } = useMembershipStatus(userId, "cooperative", sessionData?.user?.email || undefined);
 
     useEffect(() => {
-        if (membershipStatus === "approved" || membershipStatus === "active") {
+        // Always attempt to load data when the user is confirmed authenticated.
+        // The server action (getDashboardDataAction) has its own multi-fallback
+        // queries — don't pre-block it here based on a client-side hook that may
+        // lag behind Firestore or have a stale session status.
+        if (userId) {
             loadData();
-        } else if (membershipStatus !== "loading") {
-            setMembership(null);
-            setLoading(false);
         }
-    }, [membershipStatus]);
+    }, [userId]);
 
     async function loadData() {
         try {
@@ -94,29 +95,50 @@ export default function CooperativeDashboardPage() {
     }
 
     if (!membership) {
+        // Differentiate: if we have a real error message it's a fetch failure.
+        // If error is null it means the server action returned no membership doc
+        // (user registered but data not yet visible) — show pending state, not error.
+        const isPending = !error || error.toLowerCase().includes("no cooperative membership");
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
-                <h1 className="text-2xl font-bold text-slate-900">
-                    Account Access Issue
-                </h1>
-                <p className="text-slate-600 text-center max-w-md">
-                    We couldn't load your cooperative profile. This usually happens if your registration is still being processed or there was a system error.
-                </p>
-                
-                <div className="flex flex-col items-center gap-4">
-                    <Link
-                        href="/cooperatives/onboarding"
-                        className="px-6 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition-all"
-                    >
-                        Complete Registration
-                    </Link>
-                    <button 
-                        onClick={() => window.location.reload()}
-                        className="text-sm text-purple-600 hover:underline"
-                    >
-                        Retry Loading
-                    </button>
-                </div>
+                {isPending ? (
+                    <>
+                        <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center">
+                            <Clock className="w-8 h-8 text-purple-600" />
+                        </div>
+                        <h1 className="text-2xl font-bold text-slate-900">Membership Pending Approval</h1>
+                        <p className="text-slate-600 text-center max-w-md">
+                            Your registration has been received and is currently being reviewed by our admin team. You will be notified once approved.
+                        </p>
+                        <button
+                            onClick={() => window.location.reload()}
+                            className="px-6 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition-all"
+                        >
+                            Refresh Status
+                        </button>
+                    </>
+                ) : (
+                    <>
+                        <h1 className="text-2xl font-bold text-slate-900">Account Access Issue</h1>
+                        <p className="text-slate-600 text-center max-w-md">
+                            We couldn&apos;t load your cooperative profile. This usually happens if your registration is still being processed or there was a system error.
+                        </p>
+                        <div className="flex flex-col items-center gap-4">
+                            <Link
+                                href="/cooperatives/onboarding"
+                                className="px-6 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition-all"
+                            >
+                                Complete Registration
+                            </Link>
+                            <button
+                                onClick={() => window.location.reload()}
+                                className="text-sm text-purple-600 hover:underline"
+                            >
+                                Retry Loading
+                            </button>
+                        </div>
+                    </>
+                )}
             </div>
         );
     }

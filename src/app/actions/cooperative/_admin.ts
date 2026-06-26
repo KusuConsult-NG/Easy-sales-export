@@ -309,16 +309,10 @@ async function _getAllMembersAction(options?: {
 
         const allMembersRaw = serializeDocs(snapshot.docs);
 
-        // Filter: Show members who are active/approved OR have completed payment.
-        // "approved" is the legacy status written by the approve-member API route before
-        // the May 2026 fix that standardised it to "active". Both must be accepted to
-        // avoid hiding the 166 members the admin already approved.
-        const membersRaw = allMembersRaw.filter((m: any) =>
-            m.membershipStatus === "active"   ||
-            m.membershipStatus === "approved" ||
-            m.paymentStatus    === "completed" ||
-            m.registrationStatus === "completed"
-        );
+        // Show ALL members who have a cooperative_members document (including pending/submitted).
+        // Previously this filter hid users whose membershipStatus was still "pending" after
+        // submitting the form — making them invisible to admins who tried to approve them.
+        const membersRaw = allMembersRaw;
 
         // --- HYDRATION START ---
         const memberUserIds = [...new Set(membersRaw.map(m => m.userId || m.id).filter(Boolean))];
