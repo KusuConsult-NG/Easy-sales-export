@@ -389,6 +389,18 @@ export async function registerCooperativeMemberAction(
         if (!coopEmailExists.empty && emailDoc?.id !== userId) { return { error: "A cooperative member with this email address already exists.", success: false as const, data: null };
         }
 
+        // Determine if payment is already completed (user paid before or during onboarding)
+        const alreadyPaid = 
+            memberData?.paymentStatus === "completed" ||
+            userData?.serviceRegistrations?.cooperatives?.paymentStatus === "completed" ||
+            userData?.serviceRegistrations?.cooperative?.paymentStatus === "completed";
+
+        // Auto-activate when payment is confirmed — no admin approval required.
+        // Legacy imports and invite-token members are also auto-approved.
+        // Only users who have NOT yet paid remain "pending" (awaiting payment).
+        const autoActivate = isLegacyImport || alreadyPaid;
+        const resolvedStatus = autoActivate ? "active" : "pending";
+
         // Update membership record with profile data
         const updatedData = { 
             userId: userId,
@@ -398,7 +410,7 @@ export async function registerCooperativeMemberAction(
             fullName: [validatedData.firstName, validatedData.otherName, validatedData.lastName]
                 .filter(Boolean).join(" ").trim(),
             dateOfBirth: validatedData.dateOfBirth,
-            gender: validatedData.gender, // Make sure this matches schema
+            gender: validatedData.gender,
             email: validatedData.email,
             phone: validatedData.phone,
             stateOfOrigin: validatedData.stateOfOrigin,
@@ -421,14 +433,10 @@ export async function registerCooperativeMemberAction(
             bvnVerified: bvn ? true : false,
             nin: nin || null,
             ninVerified: nin ? true : false,
-            // Flat state field for SMS geo-filter broadcast queries
             state: validatedData.stateOfOrigin,
-            // Keep status as pending (admin review needed)
-            membershipStatus: isLegacyImport ? "approved" : "pending",
-            // Flag to distinguish "form submitted" from "payment initiated"
+            membershipStatus: resolvedStatus,
             onboardingCompleted: true,
             updatedAt: FieldValue.serverTimestamp(),
-            // Increment version logic will be handled inside the transaction
         };
 
         // If from an invite, mark them as paid and from an invite source
@@ -438,7 +446,7 @@ export async function registerCooperativeMemberAction(
                 createdAt: existingMember.exists ? memberData?.createdAt : FieldValue.serverTimestamp() });
         } else {
             Object.assign(updatedData, {
-                paymentStatus: (memberData?.paymentStatus === "completed" || userData?.serviceRegistrations?.cooperatives?.paymentStatus === "completed" || userData?.serviceRegistrations?.cooperative?.paymentStatus === "completed") ? "completed" : "pending",
+                paymentStatus: alreadyPaid ? "completed" : "pending",
                 createdAt: existingMember.exists ? memberData?.createdAt : FieldValue.serverTimestamp()
             });
         }
@@ -470,11 +478,14 @@ export async function registerCooperativeMemberAction(
 
             // 3. Update user service registration and sync profile data
             transaction.update(db.collection(COLLECTIONS.USERS).doc(userId), normalizeUserUpdate({ 
-                "serviceRegistrations.cooperatives.status": isLegacyImport ? "approved" : "pending",
+                "serviceRegistrations.cooperatives.status": resolvedStatus,
                 "serviceRegistrations.cooperatives.membershipTier": validatedData.membershipTier,
                 "serviceRegistrations.cooperatives.onboardingCompletedAt": FieldValue.serverTimestamp(),
-                ...(isLegacyImport ? {
-                    roles: FieldValue.arrayUnion("cooperative_member")
+                // Auto-grant role immediately when payment is confirmed
+                ...(autoActivate ? {
+                    roles: FieldValue.arrayUnion("cooperative_member"),
+                    isVerified: true,
+                    "serviceRegistrations.cooperatives.activatedAt": FieldValue.serverTimestamp(),
                 } : {}),
 
                 // Sync KYC name fields for Admin Communication Hub & admin portal
@@ -1066,9 +1077,27 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
                 return 'payment_required';
             }
 
-            // LOOP FIX: If the user has submitted the form (onboardingCompleted=true)
-            // but is still awaiting admin approval, return a distinct sentinel value.
+            // Only block with 'pending_review' if the member genuinely hasn't paid yet.
+            // If they have a completed payment but status is somehow still 'pending' (race
+            // condition between form submit and webhook), auto-heal them to 'active' here.
             if (memberDocData.onboardingCompleted && (derivedStatus === 'pending' || derivedStatus === 'under_review')) {
+                if (memberDocData.paymentStatus === 'completed') {
+                    // Payment confirmed — heal immediately, no admin needed
+                    await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberRef.id).update({
+                        membershipStatus: 'active',
+                        updatedAt: FieldValue.serverTimestamp(),
+                    });
+                    await db.collection(COLLECTIONS.USERS).doc(session.user.id).update(
+                        normalizeUserUpdate({
+                            'serviceRegistrations.cooperatives.status': 'active',
+                            'serviceRegistrations.cooperatives.activatedAt': FieldValue.serverTimestamp(),
+                            roles: FieldValue.arrayUnion('cooperative_member'),
+                            isVerified: true,
+                            updatedAt: FieldValue.serverTimestamp(),
+                        })
+                    );
+                    return 'active';
+                }
                 return 'pending_review';
             }
 
