@@ -16,6 +16,15 @@ import { toast } from 'sonner';
 export default function CooperativeLandingPage() {
     const { status: sessionStatus } = useSession();
     const router = useRouter();
+
+    const isDedicatedCoop = typeof window !== "undefined" && (
+        window.location.hostname.replace(/^www\./, "").toLowerCase() === "easysalescooperative.com" ||
+        window.location.hostname.replace(/^www\./, "").toLowerCase().endsWith(".easysalescooperative.com")
+    );
+    const prefix = isDedicatedCoop ? "" : "/cooperatives";
+    const hubUrl = isDedicatedCoop ? "https://www.easysalesexport.com/dashboard" : "/dashboard";
+    const mainHomeUrl = isDedicatedCoop ? "https://www.easysalesexport.com" : "/";
+
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [activeSection, setActiveSection] = useState('home');
     const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
@@ -215,14 +224,14 @@ export default function CooperativeLandingPage() {
                     <div className="flex items-center justify-between h-16">
                         <div className="flex items-center gap-4">
                             <Link
-                                href={sessionStatus === 'authenticated' ? "/dashboard" : "/"}
+                                href={sessionStatus === 'authenticated' ? hubUrl : mainHomeUrl}
                                 className="p-2 hover:bg-slate-100 rounded-full transition-colors hidden lg:block"
                                 title={sessionStatus === 'authenticated' ? "Back to Dashboard" : "Back to Hub"}
                             >
                                 <Home className="w-5 h-5 text-slate-600 hover:text-purple-600" />
                             </Link>
                             {/* Logo */}
-                            <Link href="/cooperatives/landing" className="flex items-center gap-2">
+                            <Link href={`${prefix}/landing`} className="flex items-center gap-2">
                                 <Users className="w-8 h-8 text-purple-600" />
                                 <span className="text-xl font-bold text-slate-900">Easy Sales Cooperative</span>
                             </Link>
@@ -247,7 +256,7 @@ export default function CooperativeLandingPage() {
                         {/* Desktop CTAs */}
                         <div className="hidden lg:flex items-center gap-4">
                             <Link
-                                href="/auth/register?callbackUrl=/cooperatives/onboarding"
+                                href={`/auth/register?callbackUrl=${prefix || "/"}/onboarding`}
                                 className="inline-flex items-center justify-center gap-2 bg-purple-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-purple-700 transition shadow-lg shadow-purple-200"
                             >
                                 Become a Member
@@ -278,7 +287,7 @@ export default function CooperativeLandingPage() {
                             ))}
                             <div className="mt-4 px-4">
                                 <Link
-                                    href="/auth/register?callbackUrl=/cooperatives/onboarding"
+                                    href={`/auth/register?callbackUrl=${prefix || "/"}/onboarding`}
                                     className="block w-full text-center bg-linear-to-r from-purple-600 to-indigo-600 text-white py-3 rounded-lg font-semibold"
                                 >
                                     Become a Member
@@ -308,7 +317,7 @@ export default function CooperativeLandingPage() {
                     </h2>
 
                     <Link
-                        href="/cooperatives/onboarding"
+                        href={`${prefix}/onboarding`}
                         className="inline-flex items-center gap-3 bg-linear-to-r from-purple-600 to-indigo-600 text-white px-10 py-5 rounded-xl text-lg font-bold shadow-2xl hover:shadow-purple-500/50 transition-all hover:scale-105"
                     >
                         <span>Become a Cooperative Member Now</span>
@@ -366,7 +375,7 @@ export default function CooperativeLandingPage() {
                     {/* CTA */}
                     <div className="text-center">
                         <Link
-                            href="/cooperatives/onboarding"
+                            href={`${prefix}/onboarding`}
                             className="inline-flex items-center gap-2 bg-linear-to-r from-purple-600 to-purple-600 text-white px-8 py-4 rounded-xl text-lg font-bold shadow-xl hover:shadow-2xl transition"
                         >
                             Position Yourself for WAVE, Investment & Market Access
@@ -575,7 +584,7 @@ export default function CooperativeLandingPage() {
                             </p>
                         </div>
                         <Link
-                            href="/cooperatives/onboarding"
+                            href={`${prefix}/onboarding`}
                             className="inline-flex items-center gap-3 bg-linear-to-r from-purple-600 to-indigo-600 text-white px-12 py-5 rounded-xl text-xl font-bold shadow-2xl hover:shadow-purple-500/50 transition-all hover:scale-105"
                         >
                             <span>Become a Cooperative Member Now</span>

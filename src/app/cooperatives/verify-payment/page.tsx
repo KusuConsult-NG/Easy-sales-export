@@ -15,6 +15,12 @@ function VerifyPaymentContent() {
     const reference = searchParams.get('reference');
     const cooperativeId = searchParams.get('cooperativeId');
 
+    const isDedicatedCoop = typeof window !== "undefined" && (
+        window.location.hostname.replace(/^www\./, "").toLowerCase() === "easysalescooperative.com" ||
+        window.location.hostname.replace(/^www\./, "").toLowerCase().endsWith(".easysalescooperative.com")
+    );
+    const prefix = isDedicatedCoop ? "" : "/cooperatives";
+
     const [status, setStatus] = useState<'loading' | 'success' | 'error'>(reference ? 'loading' : 'error');
     const [message, setMessage] = useState<string>(reference ? '' : 'Missing payment reference');
 
@@ -36,7 +42,11 @@ function VerifyPaymentContent() {
 
                 if (cooperativeId) {
                     setTimeout(() => {
-                        router.push(`/cooperatives/${cooperativeId}`);
+                        router.push(`${prefix}/${cooperativeId}`);
+                    }, 3000);
+                } else {
+                    setTimeout(() => {
+                        router.push(prefix || "/");
                     }, 3000);
                 }
             } else {
@@ -47,7 +57,7 @@ function VerifyPaymentContent() {
             setStatus('error');
             setMessage(error.message || 'An error occurred');
         }
-    }, [reference, cooperativeId, router]);
+    }, [reference, cooperativeId, router, prefix]);
 
     useEffect(() => {
          
@@ -84,7 +94,7 @@ function VerifyPaymentContent() {
                         {message}
                     </p>
                     <Link
-                        href="/cooperatives"
+                        href={prefix || "/"}
                         className="inline-flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
                     >
                         Back to Cooperatives
@@ -119,7 +129,7 @@ function VerifyPaymentContent() {
                 </div>
 
                 <Link
-                    href={cooperativeId ? `/cooperatives/${cooperativeId}` : '/cooperatives'}
+                    href={cooperativeId ? `${prefix}/${cooperativeId}` : (prefix || "/")}
                     className="inline-flex items-center gap-2 bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-8 py-3 rounded-lg font-semibold transition-all shadow-lg hover:shadow-xl"
                 >
                     View Cooperative

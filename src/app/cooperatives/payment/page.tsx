@@ -15,11 +15,17 @@ export default function CooperativePaymentPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [checking, setChecking] = useState(true);
 
+    const isDedicatedCoop = typeof window !== "undefined" && (
+        window.location.hostname.replace(/^www\./, "").toLowerCase() === "easysalescooperative.com" ||
+        window.location.hostname.replace(/^www\./, "").toLowerCase().endsWith(".easysalescooperative.com")
+    );
+    const prefix = isDedicatedCoop ? "" : "/cooperatives";
+
     // Check if user already paid or has membership
     useEffect(() => {
         if (sessionStatus === "loading") return;
         if (sessionStatus === "unauthenticated") {
-            router.replace("/auth/login?callbackUrl=/cooperatives/payment");
+            router.replace(`/auth/login?callbackUrl=${prefix || "/"}/payment`);
             return;
         }
 
@@ -32,7 +38,7 @@ export default function CooperativePaymentPage() {
                     
                     if (status === "approved" || status === "active") {
                         showToast("You are already a cooperative member!", "info");
-                        router.replace("/cooperatives/dashboard");
+                        router.replace(`${prefix}/dashboard`);
                         return;
                     }
 
@@ -43,13 +49,13 @@ export default function CooperativePaymentPage() {
                     // to the admin-review waiting page — not the onboarding form.
                     if (paymentStatus === "completed") {
                         showToast("Payment already completed. Please proceed to onboarding.", "info");
-                        router.replace("/cooperatives/onboarding");
+                        router.replace(`${prefix}/onboarding`);
                         return;
                     }
                     
                     if (status === "pending") {
                         showToast("Your application is being reviewed.", "info");
-                        router.replace("/cooperatives/onboarding/pending");
+                        router.replace(`${prefix}/onboarding/pending`);
                         return;
                     }
                 }
@@ -59,7 +65,7 @@ export default function CooperativePaymentPage() {
             setChecking(false);
         };
         checkExisting();
-    }, [sessionStatus, router, showToast]);
+    }, [sessionStatus, router, showToast, prefix]);
 
     async function handlePayment() {
         setIsSubmitting(true);
@@ -69,7 +75,12 @@ export default function CooperativePaymentPage() {
             if (result.success && result.data?.redirectTo) {
                 // Already paid — redirect to onboarding form
                 showToast("Payment already completed. Redirecting to onboarding...", "info");
-                router.replace(result.data.redirectTo);
+                let targetUrl = result.data.redirectTo;
+                if (isDedicatedCoop && targetUrl.startsWith("/cooperatives")) {
+                    targetUrl = targetUrl.substring("/cooperatives".length);
+                    if (!targetUrl.startsWith("/")) targetUrl = "/" + targetUrl;
+                }
+                router.replace(targetUrl);
                 return;
             }
             if (result.success && result.data?.paymentUrl) {

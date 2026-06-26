@@ -3,6 +3,7 @@ import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { redirect } from "next/navigation";
 import { logger } from "@/lib/logger";
+import { headers } from "next/headers";
 import OnboardingClient from "./OnboardingClient";
 
 /**
@@ -20,12 +21,18 @@ export default async function CooperativeOnboardingPage(
     const searchParams = props.searchParams ? await props.searchParams : {};
     const token = typeof searchParams.token === 'string' ? searchParams.token : undefined;
 
+    const headersList = await headers();
+    const host = headersList.get("host") || "";
+    const isDedicatedCoop = host.replace(/^www\./, "").toLowerCase() === "easysalescooperative.com" || 
+                            host.replace(/^www\./, "").toLowerCase().endsWith(".easysalescooperative.com");
+    const prefix = isDedicatedCoop ? "" : "/cooperatives";
+
     const sessionResult = await requireHubRegistration();
 
     if (!sessionResult.session) {
         const callbackUrl = token 
-            ? `/cooperatives/onboarding?token=${token}` 
-            : "/cooperatives/onboarding";
+            ? `${prefix}/onboarding?token=${token}` 
+            : `${prefix}/onboarding`;
         redirect(`/auth/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
     }
 

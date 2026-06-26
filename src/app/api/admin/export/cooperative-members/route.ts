@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
         }
         
         const headersLine = [
-            "ID", "Name", "Email", "Phone", "Tier", "Registration Fee (NGN)",
+            "ID", "Name", "Email", "Phone", "Gender", "Tier", "Registration Fee (NGN)",
             "Payment Status", "Membership Status", "State", "LGA",
             "Occupation", "Date Applied"
         ].map(h => `"${h}"`).join(",");
@@ -143,6 +143,7 @@ export async function GET(request: NextRequest) {
                 fullName,
                 email,
                 phone,
+                data.gender || fallbackUser.gender || "",
                 data.membershipTier || "Member",
                 (data.registrationFee || 0).toString(),
                 data.paymentStatus || "pending",

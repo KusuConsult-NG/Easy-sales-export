@@ -198,12 +198,13 @@ export default function AdminWaveApplicationsPage() {
 
             const headers = [
                 "Application ID", "Surname", "First Name", "Email", "Phone",
-                "State", "LGA", "NIN", "BVN", "Voter Card",
+                "Gender", "State", "LGA", "NIN", "BVN", "Voter Card",
                 "Bank Name", "Account Number", "Status", "Applied Date"
             ];
             const rows = exportData.map((app: any) => [
                 app.id, app.data.surname || "", app.data.firstName || "",
                 app.user.email || "", app.user.phone || app.data.phone || "",
+                app.user.gender || "",
                 app.data.stateOfResidence || "", app.data.lgaOfResidence || "",
                 app.data.nin || "", app.data.bvn || "", app.data.votersCardNumber || "",
                 app.data.bankName || "", app.data.accountNumber || "",

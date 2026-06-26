@@ -133,6 +133,7 @@ export default function AdminWaveMembersPage() {
                     firstName: data.firstName,
                     email: item.user.email,
                     phone: item.user.phone,
+                    gender: item.user.gender || "",
                     stateOfResidence: item.user.state,
                     lgaOfResidence: item.user.lga,
                     bankName: data.bankName,
@@ -144,7 +145,7 @@ export default function AdminWaveMembersPage() {
             });
 
             const headers = [
-                "Full Name", "Email", "Phone", "State", "LGA",
+                "Full Name", "Email", "Phone", "Gender", "State", "LGA",
                 "Bank Name", "Account Number", "Farm Size",
                 "NIN", "BVN", "Enrolled Date", "Application ID"
             ];
@@ -153,6 +154,7 @@ export default function AdminWaveMembersPage() {
                 getDisplayName(m as WaveMember),
                 m.email || "",
                 m.phone || "",
+                m.gender || "",
                 m.stateOfResidence || "",
                 m.lgaOfResidence || "",
                 m.bankName || "",

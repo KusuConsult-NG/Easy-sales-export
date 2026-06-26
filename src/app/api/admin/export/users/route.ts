@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
         const snapshot = await db.collection(COLLECTIONS.USERS).get();
         
         const headersLine = [
-            "ID", "Name", "Email", "Phone", "Roles", "Verified",
+            "ID", "Name", "Email", "Phone", "Gender", "Roles", "Verified",
             "BVN", "BVN Verified", "NIN", "NIN Verified",
             "TIN", "TIN Verified", "CAC", "CAC Verified",
             "KYC Status", "State", "LGA", "Date Joined"
@@ -88,6 +88,7 @@ export async function GET(request: NextRequest) {
                 derivedName,
                 data.email || "",
                 phone,
+                data.gender || data.kyc?.gender || "",
                 (data.roles || []).join(";"),
                 (data.isVerified ?? data.verified ?? false) ? "Yes" : "No",
                 (data.kyc?.bvn || data.bvn) ? "Provided" : "No",

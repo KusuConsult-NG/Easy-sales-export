@@ -649,7 +649,7 @@ export default function AdminAcademyApplicationsPage() {
             });
 
             const headers = [
-                "Application ID", "Full Name", "Email", "Phone",
+                "Application ID", "Full Name", "Email", "Phone", "Gender",
                 "Registry Type", "Status", "Payment Status", "Amount Paid", "Plan",
                 "State", "LGA", "Submitted At"
             ];
@@ -658,6 +658,7 @@ export default function AdminAcademyApplicationsPage() {
                 app.personalInfo.fullName || "",
                 app.personalInfo.email || "",
                 app.personalInfo.phone || "",
+                app.personalInfo.gender || app.gender || "",
                 app.isLegacy ? "Legacy" : "Regular",
                 app.status,
                 app.paymentStatus || "unpaid",

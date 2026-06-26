@@ -21,12 +21,18 @@ function PendingPaymentContent() {
     const amount = parseInt(searchParams.get("amount") || COOPERATIVE_CONFIG.registrationFee.toString(), 10);
     const tier = "Member";
 
+    const isDedicatedCoop = typeof window !== "undefined" && (
+        window.location.hostname.replace(/^www\./, "").toLowerCase() === "easysalescooperative.com" ||
+        window.location.hostname.replace(/^www\./, "").toLowerCase().endsWith(".easysalescooperative.com")
+    );
+    const prefix = isDedicatedCoop ? "" : "/cooperatives";
+
     return (
         <div className="min-h-screen bg-slate-50 py-12 px-4">
             <div className="max-w-3xl mx-auto">
                 {/* Header */}
                 <Link
-                    href="/cooperatives"
+                    href={prefix || "/"}
                     className="inline-flex items-center gap-2 text-slate-600 hover:text-purple-600 mb-8"
                 >
                     <ArrowLeft className="w-4 h-4" />

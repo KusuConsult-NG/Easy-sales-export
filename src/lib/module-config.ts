@@ -83,12 +83,28 @@ export const MODULE_CONFIGS: Record<string, ModuleConfig> = {
 };
 
 /**
- * Helper to get the active module configuration based on the current path
+ * Helper to get the active module configuration based on the current path and domain
  */
-export function getModuleConfig(pathname: string | null): ModuleConfig {
+export function getModuleConfig(pathname: string | null, hostname?: string): ModuleConfig {
     if (!pathname) return DEFAULT_MODULE;
 
-    // Find the matching module config
+    // 1. Check hostname if provided (server-side detection)
+    if (hostname) {
+        const cleanedHost = hostname.replace(/^www\./, "").toLowerCase();
+        if (cleanedHost === "easysalescooperative.com" || cleanedHost.endsWith(".easysalescooperative.com")) {
+            return MODULE_CONFIGS.cooperatives;
+        }
+    }
+
+    // 2. Check window.location if in browser (client-side detection)
+    if (typeof window !== "undefined") {
+        const cleanedHost = window.location.hostname.replace(/^www\./, "").toLowerCase();
+        if (cleanedHost === "easysalescooperative.com" || cleanedHost.endsWith(".easysalescooperative.com")) {
+            return MODULE_CONFIGS.cooperatives;
+        }
+    }
+
+    // 3. Find the matching module config based on pathname prefix
     const moduleKey = Object.keys(MODULE_CONFIGS).find(key =>
         pathname.startsWith(`/${key}`)
     );

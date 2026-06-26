@@ -33,6 +33,13 @@ import { useSession } from "next-auth/react";
 export default function CooperativeDashboardPage() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
+
+    const isDedicatedCoop = typeof window !== "undefined" && (
+        window.location.hostname.replace(/^www\./, "").toLowerCase() === "easysalescooperative.com" ||
+        window.location.hostname.replace(/^www\./, "").toLowerCase().endsWith(".easysalescooperative.com")
+    );
+    const prefix = isDedicatedCoop ? "" : "/cooperatives";
+    const hubUrl = isDedicatedCoop ? "https://www.easysalesexport.com/dashboard" : "/dashboard";
     const [error, setError] = useState<string | null>(null);
     const [membership, setMembership] = useState<CooperativeMembership | null>(null);
     const [transactions, setTransactions] = useState<CooperativeTransaction[]>([]);
@@ -123,7 +130,7 @@ export default function CooperativeDashboardPage() {
                         </p>
                         <div className="flex flex-col items-center gap-4">
                             <Link
-                                href="/cooperatives/onboarding"
+                                href={`${prefix}/onboarding`}
                                 className="px-6 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition-all"
                             >
                                 Complete Registration
@@ -156,7 +163,7 @@ export default function CooperativeDashboardPage() {
             {/* Back to Hub Link */}
             <div className="-mb-4">
                 <Link
-                    href="/dashboard"
+                    href={hubUrl}
                     className="inline-flex items-center gap-1.5 text-sm font-semibold text-purple-600 hover:text-purple-700 transition"
                 >
                     <ChevronLeft className="w-4 h-4" />
@@ -250,7 +257,7 @@ export default function CooperativeDashboardPage() {
                     </h2>
                     <div className="space-y-3">
                         <Link
-                            href="/cooperatives/contribute"
+                            href={`${prefix}/contribute`}
                             className="flex items-center justify-between p-4 bg-white rounded-xl shadow-lg hover:shadow-xl transition-all group"
                         >
                             <div className="flex items-center gap-3">
@@ -263,7 +270,7 @@ export default function CooperativeDashboardPage() {
                         </Link>
 
                         <Link
-                            href="/cooperatives/loans"
+                            href={`${prefix}/loans`}
                             className="flex items-center justify-between p-4 bg-white rounded-xl shadow-lg hover:shadow-xl transition-all group"
                         >
                             <div className="flex items-center gap-3">
@@ -276,7 +283,7 @@ export default function CooperativeDashboardPage() {
                         </Link>
 
                         <Link
-                            href="/cooperatives/withdrawals"
+                            href={`${prefix}/withdrawals`}
                             className="flex items-center justify-between p-4 bg-white rounded-xl shadow-lg hover:shadow-xl transition-all group"
                         >
                             <div className="flex items-center gap-3">
@@ -289,7 +296,7 @@ export default function CooperativeDashboardPage() {
                         </Link>
 
                         <Link
-                            href="/cooperatives/history"
+                            href={`${prefix}/history`}
                             className="flex items-center justify-between p-4 bg-white rounded-xl shadow-lg hover:shadow-xl transition-all group"
                         >
                             <div className="flex items-center gap-3">
@@ -302,7 +309,7 @@ export default function CooperativeDashboardPage() {
                         </Link>
 
                         <Link
-                            href="/cooperatives/id-card"
+                            href={`${prefix}/id-card`}
                             className="flex items-center justify-between p-4 bg-linear-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl shadow-lg hover:shadow-xl transition-all group"
                         >
                             <div className="flex items-center gap-3">
@@ -326,7 +333,7 @@ export default function CooperativeDashboardPage() {
                             Recent Activity
                         </h2>
                         <Link
-                            href="/cooperatives/history"
+                            href={`${prefix}/history`}
                             className="text-purple-600 hover:text-purple-700 font-semibold text-sm"
                         >
                             View All

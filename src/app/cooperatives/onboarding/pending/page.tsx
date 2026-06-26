@@ -18,6 +18,13 @@ export default function CooperativePendingPage() {
     const { data: session } = useSession();
     const router = useRouter();
 
+    const isDedicatedCoop = typeof window !== "undefined" && (
+        window.location.hostname.replace(/^www\./, "").toLowerCase() === "easysalescooperative.com" ||
+        window.location.hostname.replace(/^www\./, "").toLowerCase().endsWith(".easysalescooperative.com")
+    );
+    const prefix = isDedicatedCoop ? "" : "/cooperatives";
+    const hubUrl = isDedicatedCoop ? "https://www.easysalesexport.com/dashboard" : "/dashboard";
+
     const { status: applicationStatus } = usePendingApplicationStatus({
         collectionName: COLLECTIONS.COOPERATIVE_MEMBERS,
         userId: session?.user?.id,
@@ -26,11 +33,11 @@ export default function CooperativePendingPage() {
 
     useEffect(() => {
         if (applicationStatus === "approved" || applicationStatus === "active") {
-            router.replace("/cooperatives/dashboard");
+            router.replace(`${prefix}/dashboard`);
         } else if (applicationStatus === "rejected" || applicationStatus === "revision_required") {
-            router.replace("/cooperatives/onboarding");
+            router.replace(`${prefix}/onboarding`);
         }
-    }, [applicationStatus, router]);
+    }, [applicationStatus, router, prefix]);
 
 
 
@@ -61,7 +68,7 @@ export default function CooperativePendingPage() {
 
                             {applicationStatus === "pending" && (
                                 <Link
-                                    href="/cooperatives/onboarding?edit=true"
+                                    href={`${prefix}/onboarding?edit=true`}
                                     className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 border border-white/40 rounded-full text-sm font-semibold text-white backdrop-blur-sm transition-all shadow-md"
                                 >
                                     <FileText className="w-4 h-4" />
@@ -138,13 +145,13 @@ export default function CooperativePendingPage() {
                         {/* CTA */}
                         <div className="flex flex-col gap-3">
                             <Link
-                                href="/dashboard"
+                                href={hubUrl}
                                 className="w-full inline-flex items-center justify-center px-6 py-4 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-base transition-all shadow-lg shadow-purple-200"
                             >
                                 Go to Dashboard
                             </Link>
                             <Link
-                                href="/cooperatives"
+                                href={prefix || "/"}
                                 className="w-full inline-flex items-center justify-center px-6 py-3 text-slate-500 hover:text-slate-700 text-sm transition-colors"
                             >
                                 Back to Cooperatives

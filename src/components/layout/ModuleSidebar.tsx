@@ -161,6 +161,13 @@ const GLOBAL_NAV: NavItem[] = [
 // HELPERS
 // ---------------------------------------------------------------------------
 function detectModuleKey(pathname: string): string {
+    if (typeof window !== "undefined") {
+        const hostname = window.location.hostname.replace(/^www\./, "").toLowerCase();
+        if (hostname === "easysalescooperative.com" || hostname.endsWith(".easysalescooperative.com")) {
+            return "cooperatives";
+        }
+    }
+
     if (pathname.startsWith("/academy"))      return "academy";
     if (pathname.startsWith("/wave"))         return "wave";
     if (pathname.startsWith("/cooperatives")) return "cooperatives";
@@ -170,7 +177,6 @@ function detectModuleKey(pathname: string): string {
     if (pathname.startsWith("/escrow"))       return "escrow";
     if (pathname.startsWith("/admin"))        return "admin";
     return "dashboard";
-
 }
 
 function getModuleNav(moduleKey: string): NavItem[] {
@@ -312,6 +318,19 @@ export function ModuleSidebar({ isMobileOpen = false, onMobileClose }: ModuleSid
     const theme        = buildTheme(moduleConfig.theme);
     const ModuleIcon   = moduleConfig.icon;
 
+    const isDedicatedCoop = typeof window !== "undefined" && (() => {
+        const hostname = window.location.hostname.replace(/^www\./, "").toLowerCase();
+        return hostname === "easysalescooperative.com" || hostname.endsWith(".easysalescooperative.com");
+    })();
+
+    const getRelativeUrl = useCallback((href: string) => {
+        if (isDedicatedCoop && href.startsWith("/cooperatives")) {
+            const relative = href.substring("/cooperatives".length);
+            return relative.startsWith("/") ? relative : "/" + relative;
+        }
+        return href;
+    }, [isDedicatedCoop]);
+
     // ── Nav items ────────────────────────────────────────────────────────
     const rawNav  = getModuleNav(moduleKey);
     const navItems = rawNav.filter(item => {
@@ -379,8 +398,9 @@ export function ModuleSidebar({ isMobileOpen = false, onMobileClose }: ModuleSid
 
     // ── Active path helper ────────────────────────────────────────────────
     const isActive = (href: string, exact?: boolean) => {
-        if (exact) return pathname === href;
-        return pathname === href || pathname?.startsWith(href + "/");
+        const targetHref = getRelativeUrl(href);
+        if (exact) return pathname === targetHref;
+        return pathname === targetHref || pathname?.startsWith(targetHref + "/");
     };
 
     // ── Theme-aware nav item classes ──────────────────────────────────────
@@ -409,7 +429,7 @@ export function ModuleSidebar({ isMobileOpen = false, onMobileClose }: ModuleSid
                     {!collapsed && (
                         <div className="flex items-center justify-between mb-1">
                             <Link
-                                href={moduleConfig.pathPrefix || "/dashboard"}
+                                href={getRelativeUrl(moduleConfig.pathPrefix || "/dashboard")}
                                 className="flex items-center gap-3 hover:opacity-80 transition-opacity group"
                             >
                                 <div className={cn(
@@ -439,7 +459,7 @@ export function ModuleSidebar({ isMobileOpen = false, onMobileClose }: ModuleSid
 
                     {collapsed && (
                         <div className="flex flex-col items-center gap-3">
-                            <Link href={moduleConfig.pathPrefix || "/dashboard"} className="w-10 h-10 rounded-xl flex items-center justify-center border shadow-sm bg-white hover:scale-105 transition-all">
+                            <Link href={getRelativeUrl(moduleConfig.pathPrefix || "/dashboard")} className="w-10 h-10 rounded-xl flex items-center justify-center border shadow-sm bg-white hover:scale-105 transition-all">
                                 <ModuleIcon className={cn("w-5 h-5", theme.activeText)} />
                             </Link>
                         </div>
@@ -487,7 +507,7 @@ export function ModuleSidebar({ isMobileOpen = false, onMobileClose }: ModuleSid
                                             </p>
                                         )}
                                         <div className="relative group/tip">
-                                            <Link href={item.href} className={itemBase(active, collapsed)}>
+                                            <Link href={getRelativeUrl(item.href)} className={itemBase(active, collapsed)}>
                                                 <Icon className={cn("w-4 h-4 shrink-0", active ? theme.activeText : "text-slate-400 group-hover:text-slate-600")} />
                                                 {!collapsed && (
                                                     <>
@@ -552,7 +572,7 @@ export function ModuleSidebar({ isMobileOpen = false, onMobileClose }: ModuleSid
                         <div className="pt-3 border-t border-dashed border-slate-200">
                             <div className="relative group/tip">
                                 <Link
-                                    href="/dashboard"
+                                    href={isDedicatedCoop ? "https://www.easysalesexport.com/dashboard" : "/dashboard"}
                                     className={cn(
                                         "flex items-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-all group",
                                         collapsed ? "justify-center w-10 h-10 mx-auto" : "gap-3 px-4 py-2.5"

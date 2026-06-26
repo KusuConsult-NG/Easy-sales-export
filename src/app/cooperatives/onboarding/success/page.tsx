@@ -16,6 +16,13 @@ function CooperativeSuccessContent() {
     const membershipId = searchParams.get("ref") || "COOP-2026-PENDING";
     const tier = "Member";
 
+    const isDedicatedCoop = typeof window !== "undefined" && (
+        window.location.hostname.replace(/^www\./, "").toLowerCase() === "easysalescooperative.com" ||
+        window.location.hostname.replace(/^www\./, "").toLowerCase().endsWith(".easysalescooperative.com")
+    );
+    const prefix = isDedicatedCoop ? "" : "/cooperatives";
+    const hubUrl = isDedicatedCoop ? "https://www.easysalesexport.com/dashboard" : "/dashboard";
+
     return (
         <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
             <div className="max-w-2xl w-full">
@@ -63,10 +70,10 @@ function CooperativeSuccessContent() {
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <Link
-                            href="/cooperatives/my-savings"
+                            href={`${prefix}/my-savings`}
                             className="flex items-center gap-3 p-4 bg-white rounded-xl hover:shadow-md transition-all"
                         >
-                            <div className="w-10 h-10 bg-purple-100 roundedfull flex items-center justify-center">
+                            <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
                                 <Wallet className="w-5 h-5 text-purple-600" />
                             </div>
                             <div>
@@ -76,7 +83,7 @@ function CooperativeSuccessContent() {
                         </Link>
 
                         <Link
-                            href="/cooperatives/loans"
+                            href={`${prefix}/loans`}
                             className="flex items-center gap-3 p-4 bg-white rounded-xl hover:shadow-md transition-all"
                         >
                             <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
@@ -89,7 +96,7 @@ function CooperativeSuccessContent() {
                         </Link>
 
                         <Link
-                            href="/cooperatives/directory"
+                            href={`${prefix}/directory`}
                             className="flex items-center gap-3 p-4 bg-white rounded-xl hover:shadow-md transition-all"
                         >
                             <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
@@ -102,7 +109,7 @@ function CooperativeSuccessContent() {
                         </Link>
 
                         <Link
-                            href="/dashboard"
+                            href={hubUrl}
                             className="flex items-center gap-3 p-4 bg-white rounded-xl hover:shadow-md transition-all"
                         >
                             <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
@@ -119,7 +126,7 @@ function CooperativeSuccessContent() {
                 {/* CTA */}
                 <div className="text-center">
                     <Link
-                        href="/cooperatives/my-savings"
+                        href={`${prefix}/my-savings`}
                         className="inline-flex items-center gap-3 px-8 py-4 bg-purple-600 text-white rounded-xl font-bold text-lg hover:bg-purple-700 shadow-lg hover:shadow-purple-500/50 transition-all"
                     >
                         Go to Dashboard

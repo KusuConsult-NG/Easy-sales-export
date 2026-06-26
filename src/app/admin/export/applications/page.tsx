@@ -261,6 +261,7 @@ export default function AdminExportApplicationsPage() {
                     a.user.name,
                     a.user.email || "",
                     phone,
+                    a.user.gender || (a.data as any).gender || "",
                     state,
                     a.status,
                     formatDate(a.data.createdAt),
@@ -268,7 +269,7 @@ export default function AdminExportApplicationsPage() {
                     a.data.bank?.accountNumber || "",
                 ];
             });
-            const header = ["Name", "Email", "Phone", "Location", "Status", "Submitted", "Bank", "Account No"];
+            const header = ["Name", "Email", "Phone", "Gender", "Location", "Status", "Submitted", "Bank", "Account No"];
             const csv = [header, ...rows].map((r) => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
             const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
             const a = document.createElement("a");

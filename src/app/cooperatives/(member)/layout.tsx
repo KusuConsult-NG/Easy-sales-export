@@ -4,7 +4,7 @@
  * Protected layout with server-side access control and sidebar navigation
  */
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { logger } from '@/lib/logger';
 import { redirect } from "next/navigation";
 import { checkModuleAccess } from "@/lib/module-access-check";
@@ -15,12 +15,19 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 async function CooperativeLayoutContent({ children }: { children: React.ReactNode }) {
+    // Detect dedicated domain server-side
+    const headersList = await headers();
+    const host = headersList.get("host") || "";
+    const isDedicatedCoop = host.replace(/^www\./, "").toLowerCase() === "easysalescooperative.com" || 
+                            host.replace(/^www\./, "").toLowerCase().endsWith(".easysalescooperative.com");
+    const prefix = isDedicatedCoop ? "" : "/cooperatives";
+
     // 1. Authenticate and ensure fully registered
     const sessionResult = await requireHubRegistration();
 
     // 2. Ensure session is valid
     if (!sessionResult.session) {
-        redirect("/auth/login?module=cooperatives&redirect=/cooperatives");
+        redirect(`/auth/login?module=cooperatives&redirect=${prefix || "/"}`);
     }
 
     const { session } = sessionResult;
@@ -39,7 +46,7 @@ async function CooperativeLayoutContent({ children }: { children: React.ReactNod
         const hasAccess = await checkModuleAccess(userId, session.user.roles || [], "cooperatives");
 
         if (!hasAccess) {
-            redirectPath = "/cooperatives/onboarding";
+            redirectPath = `${prefix}/onboarding`;
         } else {
             // Fetch membership details for Sidebar - CHECK CACHE FIRST
             const { getCached, setCache, CACHE_TTL } = await import("@/lib/redis");
@@ -61,9 +68,9 @@ async function CooperativeLayoutContent({ children }: { children: React.ReactNod
                 // NOTE: Do NOT add orderBy here — it requires a composite index.
                 // A simple where("userId") query is sufficient and always works.
                 const memberQuery = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                    .where("userId", "==", userId)
-                    .limit(1)
-                    .get();
+                     .where("userId", "==", userId)
+                     .limit(1)
+                     .get();
                     
                 if (!memberQuery.empty) {
                     memberData = memberQuery.docs[0].data();
@@ -121,7 +128,7 @@ async function CooperativeLayoutContent({ children }: { children: React.ReactNod
                 }
 
                 // 4. Redirect them to onboarding with repair notice and edit mode active
-                redirectPath = "/cooperatives/onboarding?notice=complete-your-registration&edit=true";
+                redirectPath = `${prefix}/onboarding?notice=complete-your-registration&edit=true`;
             } else {
                 userProfile = {
                     firstName: memberData?.firstName || "Zere",
@@ -133,7 +140,7 @@ async function CooperativeLayoutContent({ children }: { children: React.ReactNod
         }
     } catch (error) {
         logger.error("Session verification failed:", error);
-        redirectPath = "/auth/login?module=cooperatives&redirect=/cooperatives";
+        redirectPath = `/auth/login?module=cooperatives&redirect=${prefix || "/"}`;
     }
 
     if (redirectPath) {

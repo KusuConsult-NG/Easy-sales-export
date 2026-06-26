@@ -148,12 +148,13 @@ export default function FarmNationApplicationsPage() {
                     a.user.name || "",
                     a.user.email || "",
                     a.user.phone || a.data.phone || "",
+                    a.user.gender || a.data.gender || "",
                     a.user.state && a.user.state !== "Unknown" ? `${a.user.state}${a.user.lga && a.user.lga !== "Unknown" ? `, ${a.user.lga}` : ""}` : (a.data.stateOfOrigin ? `${a.data.stateOfOrigin}${a.data.lga ? `, ${a.data.lga}` : ""}` : ""),
                     a.status,
                     dateStr
                 ];
             });
-            const header = ["Name", "Email", "Phone", "Location", "Status", "Submitted Date"];
+            const header = ["Name", "Email", "Phone", "Gender", "Location", "Status", "Submitted Date"];
             const csv = [header, ...rows].map((r) => r.map((c: any) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
             const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
             const a = document.createElement("a");
