@@ -65,6 +65,7 @@ export async function POST(request: NextRequest) {
                 success: true,
                 message: "Payment already verified. Please continue your application.",
                 alreadyVerified: true,
+                onboardingCompleted: membershipDoc.data()?.onboardingCompleted === true,
             });
         }
 
@@ -101,6 +102,7 @@ export async function POST(request: NextRequest) {
                 success: true,
                 message: "Payment verified successfully. Please continue your application.",
                 alreadyVerified: true,
+                onboardingCompleted: membershipDoc.exists && membershipDoc.data()?.onboardingCompleted === true,
             });
         }
 
@@ -141,6 +143,8 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        let onboardingCompleted = false;
+
         // ── ATOMIC TRANSACTION: upsert membership + mark processed ───────────────
         // IMPORTANT: Uses set(merge:true) so this succeeds even when the membership
         // doc was never created by initiateCooperativePaymentAction.
@@ -154,7 +158,7 @@ export async function POST(request: NextRequest) {
 
             const tMembershipDoc = await transaction.get(membershipRef);
             const existing = tMembershipDoc.exists ? (tMembershipDoc.data() ?? {}) : {};
-            const onboardingCompleted = existing.onboardingCompleted === true;
+            onboardingCompleted = existing.onboardingCompleted === true;
 
             // Upsert the membership doc (create if missing, merge if exists)
             transaction.set(membershipRef, {
@@ -235,6 +239,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
             success: true,
             message: "Payment verified successfully. Please continue your application.",
+            onboardingCompleted,
         });
 
     } catch (error) {

@@ -28,7 +28,6 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { getDashboardDataAction } from "@/app/actions/cooperative";
 import type { CooperativeMembership, CooperativeTransaction } from "@/lib/types/cooperative";
 import { useRouter } from "next/navigation";
-import { useMembershipStatus } from "@/hooks/useMembershipStatus";
 import { useSession } from "next-auth/react";
 
 export default function CooperativeDashboardPage() {
@@ -40,7 +39,6 @@ export default function CooperativeDashboardPage() {
 
     const { data: sessionData } = useSession();
     const userId = (sessionData?.user as any)?.id;
-    const { status: membershipStatus } = useMembershipStatus(userId, "cooperative", sessionData?.user?.email || undefined);
 
     useEffect(() => {
         // Always attempt to load data when the user is confirmed authenticated.

@@ -22,6 +22,8 @@ import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { UserRole } from "@/lib/types/roles";
 import { logger } from "@/lib/logger";
+import { FieldValue } from "firebase-admin/firestore";
+import { normalizeUserUpdate } from "@/lib/schema-normalizer";
 
 /** Maps the AppIdentifier to the Firestore serviceRegistrations key */
 const APP_TO_REG_KEY: Partial<Record<AppIdentifier, string>> = {
@@ -223,12 +225,38 @@ export async function checkModuleAccess(
 
             if (memberDocData) {
                 const status = memberDocData.membershipStatus || memberDocData.status;
-                if (status === "active" || status === "approved") {
+                const isApprovedOrActive = status === "active" || status === "approved";
+                const isHealable = !isApprovedOrActive && memberDocData.onboardingCompleted === true && memberDocData.paymentStatus === "completed";
+
+                if (isApprovedOrActive || isHealable) {
                     logger.info(
-                        `[ModuleAccess] Layer 2.6 — Direct query confirmed '${app}' access (uid: ${userId}, status: ${status}).`
+                        `[ModuleAccess] Layer 2.6 — Direct query confirmed '${app}' access (uid: ${userId}, status: ${status}, isHealable: ${isHealable}).`
                     );
-                    // Heal the membership document with the userId if missing
-                    if (!memberDocData.userId && memberRef) {
+                    
+                    if (isHealable && memberRef) {
+                        try {
+                            // Update membership status to active
+                            await memberRef.update({
+                                membershipStatus: "active",
+                                updatedAt: FieldValue.serverTimestamp()
+                            });
+                            
+                            // Update user status and roles
+                            await db.collection(COLLECTIONS.USERS).doc(userId).update(
+                                normalizeUserUpdate({
+                                    "serviceRegistrations.cooperatives.status": "active",
+                                    "serviceRegistrations.cooperatives.activatedAt": FieldValue.serverTimestamp(),
+                                    roles: FieldValue.arrayUnion("cooperative_member"),
+                                    isVerified: true,
+                                    updatedAt: FieldValue.serverTimestamp()
+                                })
+                            );
+                            logger.info(`[ModuleAccess] Healed membership status to 'active' for user ${userId}`);
+                        } catch (healErr) {
+                            logger.error(`[ModuleAccess] Failed to heal membership status for user ${userId}`, healErr);
+                        }
+                    } else if (!memberDocData.userId && memberRef) {
+                        // Heal the membership document with the userId if missing
                         await memberRef.update({ userId });
                         logger.info(`[ModuleAccess] Healed membership ${memberRef.id} with userId ${userId}`);
                     }

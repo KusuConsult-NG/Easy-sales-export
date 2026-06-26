@@ -1418,7 +1418,16 @@ export async function getStandardCooperativeMembersAction(
         }
         q = q.limit(fetchLimit + 1);
 
-        const snapshot = await q.get();
+        let snapshot;
+        try {
+            snapshot = await q.get();
+        } catch (error: any) {
+            if (error.code === 9 || error.message?.includes("FAILED_PRECONDITION")) {
+                logger.error("Firestore Index Missing for Standard Cooperative Members:", error.message);
+                return paginatedErr("Administrative index is currently being provisioned. Please try again in 5 minutes.");
+            }
+            throw error;
+        }
         applications = serializeDocs(snapshot.docs);
         hasMoreRaw = applications.length > fetchLimit;
         if (!useMemoryPagination) {

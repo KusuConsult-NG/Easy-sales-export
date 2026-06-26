@@ -530,11 +530,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                     !window.location.hostname.includes('easysalesexport.com') &&
                     !window.location.hostname.includes('localhost') &&
                     !window.location.hostname.includes('railway.app');
-                if (isLegacyImport) {
-                    router.replace(isDed ? '/dashboard' : '/cooperatives/dashboard');
-                } else {
-                    router.replace(isDed ? '/onboarding/pending' : '/cooperatives/onboarding/pending');
-                }
+                router.replace(isDed ? '/dashboard' : '/cooperatives/dashboard');
                 return;
             }
             if (result.success && result.data?.paymentUrl) {
@@ -573,11 +569,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                     !window.location.hostname.includes('easysalesexport.com') &&
                     !window.location.hostname.includes('localhost') &&
                     !window.location.hostname.includes('railway.app');
-                if (isLegacyImport) {
-                    router.replace(isDed ? '/dashboard' : '/cooperatives/dashboard');
-                } else {
-                    router.replace(isDed ? '/onboarding/pending' : '/cooperatives/onboarding/pending');
-                }
+                router.replace(isDed ? '/dashboard' : '/cooperatives/dashboard');
             } else {
                 if (result.error) {
                     showToast(result.error, "error");
