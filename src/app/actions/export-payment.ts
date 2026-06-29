@@ -219,15 +219,14 @@ export async function verifyExportOrderPaymentAction(reference: string) { try {
         });
 
         // Notify Admins
-        try { const { sendEmailNotification } = await import("@/lib/email-notifications");
-            const sysConfig = await db.collection(COLLECTIONS.SYSTEM_SETTINGS).doc("general").get();
-            const adminEmail = sysConfig.data()?.adminEmail || "admin@easysalesexport.com";
-            
-            await sendEmailNotification({
-                to: adminEmail,
-                subject: "New Export Order Received",
-                message: `<p>A new international export order (${orderData.orderId}) has been fully paid and is awaiting processing. Shipping Term: ${orderData.buyerDetails.shippingTerm}. Port: ${orderData.buyerDetails.portOfDestination}.</p>`,
-                metadata: { type: "export_admin_notification" }
+        try {
+            const { notifyAdmins } = await import("@/lib/admin-notifications");
+            await notifyAdmins({
+                type: "export",
+                title: "New Export Order Received",
+                message: `Export order ${orderData.orderId} has been fully paid. Term: ${orderData.buyerDetails.shippingTerm}. Port: ${orderData.buyerDetails.portOfDestination}.`,
+                link: `/admin/export/orders/${orderData.orderId}`,
+                linkText: "View Order"
             });
         } catch (e: any) { logger.warn("Failed to send export order admin notification", { error: e?.message || String(e) });
         }

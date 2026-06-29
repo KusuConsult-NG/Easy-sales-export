@@ -529,28 +529,16 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
                 });
             }
 
-            await resend.emails.send({
-                from: 'RH-WAVE 774 System <noreply@easysalesexport.com>',
-                to: adminEmail,
-                subject: `New WAVE Application: ${applicantName} — ${applicationId}`,
-                html: `
-                    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
-                        <h2 style="color:#166534;">New WAVE Application Received</h2>
-                        <table style="width:100%;border-collapse:collapse;">
-                            <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;"><strong>Name</strong></td><td style="padding:8px;border-bottom:1px solid #e5e7eb;">${applicantName}</td></tr>
-                            <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;"><strong>Application ID</strong></td><td style="padding:8px;border-bottom:1px solid #e5e7eb;">${applicationId}</td></tr>
-                            <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;"><strong>Email</strong></td><td style="padding:8px;border-bottom:1px solid #e5e7eb;">${applicantEmail || 'N/A'}</td></tr>
-                            <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;"><strong>Phone</strong></td><td style="padding:8px;border-bottom:1px solid #e5e7eb;">${validatedData.phone}</td></tr>
-                            <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;"><strong>State</strong></td><td style="padding:8px;border-bottom:1px solid #e5e7eb;">${validatedData.stateOfResidence}</td></tr>
-                            <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;"><strong>LGA</strong></td><td style="padding:8px;border-bottom:1px solid #e5e7eb;">${validatedData.lgaOfResidence}</td></tr>
-                            <tr><td style="padding:8px;"><strong>Submitted</strong></td><td style="padding:8px;">${new Date().toLocaleString('en-NG')}</td></tr>
-                        </table>
-                        <p style="margin-top:16px;"><a href="https://easysalesexport.com/admin/wave" style="background:#166534;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;">Review in Admin Panel</a></p>
-                    </div>
-                `
+            const { notifyAdmins } = await import("@/lib/admin-notifications");
+            await notifyAdmins({
+                type: "wave",
+                title: "New WAVE Application",
+                message: `New WAVE application submitted by ${applicantName} (ID: ${applicationId}, State: ${validatedData.stateOfResidence}).`,
+                link: "/admin/wave",
+                linkText: "Review Application"
             });
         } catch (emailError) {
-            logger.error("WAVE application email notification failed (non-blocking):", emailError);
+            logger.error("WAVE application admin notification failed (non-blocking):", emailError);
         }
 
         try {
