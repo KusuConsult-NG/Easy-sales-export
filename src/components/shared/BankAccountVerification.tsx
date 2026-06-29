@@ -40,17 +40,22 @@ export default function BankAccountVerification({
     const [banks, setBanks] = useState<Bank[]>([]);
     const [loadingBanks, setLoadingBanks] = useState(false);
     const [banksError, setBanksError] = useState("");
+    const [isInitialized, setIsInitialized] = useState(false);
 
     useEffect(() => {
-        if (initialData) {
-            setBankName(initialData.bankName);
-            setAccountNumber(initialData.accountNumber);
-            if (initialData.accountName) {
-                setResolvedName(initialData.accountName);
-                setVerificationStatus("success");
+        if (initialData && !isInitialized) {
+            const hasData = initialData.bankName || initialData.accountNumber || initialData.accountName;
+            if (hasData) {
+                setBankName(initialData.bankName);
+                setAccountNumber(initialData.accountNumber);
+                if (initialData.accountName) {
+                    setResolvedName(initialData.accountName);
+                    setVerificationStatus("success");
+                }
+                setIsInitialized(true);
             }
         }
-    }, [initialData]);
+    }, [initialData, isInitialized]);
 
     useEffect(() => {
         loadBanks();
@@ -109,6 +114,18 @@ export default function BankAccountVerification({
             setIsVerifying(false);
         }
     };
+
+    function handleEdit() {
+        setVerificationStatus("idle");
+        setResolvedName("");
+        
+        onVerify?.(false, "");
+        onVerified?.({
+            bankName,
+            accountNumber,
+            accountName: ""
+        });
+    }
 
     return (
         <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
@@ -221,7 +238,7 @@ export default function BankAccountVerification({
                                         Account Verified
                                     </p>
                                     <button 
-                                        onClick={() => setVerificationStatus("idle")}
+                                        onClick={handleEdit}
                                         className="text-xs text-slate-500 hover:text-green-600 underline"
                                     >
                                         Edit

@@ -259,6 +259,48 @@ function IdCardFace({ data }: { data: MemberIdCardData }) {
     );
 }
 
+function IdCardBack({ data }: { data: MemberIdCardData }) {
+    return (
+        <div
+            style={{ 
+                fontFamily: "'Arial', sans-serif", 
+                width: "338px", 
+                height: "213px",
+                background: "linear-gradient(to bottom right, #1e293b, #0f172a)"
+            }}
+            className="relative overflow-hidden rounded-2xl shadow-2xl select-none text-white flex flex-col justify-between"
+        >
+            {/* Magnetic stripe */}
+            <div className="w-full h-8 bg-black mt-4" />
+
+            {/* Signature box placeholder */}
+            <div className="px-5 mt-2 flex items-center justify-between">
+                <div className="w-[180px] h-8 bg-white/10 rounded border border-white/20 flex items-center pl-2">
+                    <span className="text-[8px] italic text-white/40">Authorized Signature</span>
+                </div>
+                <div className="flex flex-col items-end">
+                    <span className="text-[8px] font-black tracking-wider uppercase text-purple-300">EASY SALES COOP</span>
+                </div>
+            </div>
+
+            {/* Terms and Conditions */}
+            <div className="px-5 text-center my-auto">
+                <p className="text-[8px] text-white/80 font-bold mb-1 uppercase tracking-wider">Terms of Use</p>
+                <p className="text-[7px] text-white/60 leading-relaxed max-w-[280px] mx-auto">
+                    This card is the property of Easy Sales Export Ltd. If found, please return to info@easysalesexport.com or the nearest authority.
+                </p>
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 py-2 border-t border-white/10 flex items-center justify-between text-[8px] text-white/50">
+                <span>Issued: {fmtShort(data.joinedAt)}</span>
+                <span>Valid: {fmtShort(data.validUntil)}</span>
+                <span className="font-bold">RC: 763845</span>
+            </div>
+        </div>
+    );
+}
+
 
 // ── Gate States ───────────────────────────────────────────────────────────────
 
@@ -415,7 +457,7 @@ export default function CooperativeIdCardPage() {
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
-            a.download = `ESE-CoopID-${result.data.memberNumber || "card"}.png`;
+            a.download = `ESE-CoopID-${result.data.memberNumber || "card"}.pdf`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -529,22 +571,16 @@ export default function CooperativeIdCardPage() {
                         )}
 
                         {/* Card preview */}
-                        <div className="flex flex-col items-center gap-6">
-                            <div ref={cardRef}>
-                                <IdCardFace data={result.data} />
-                            </div>
-
-                            {/* Card back info */}
-                            <div className="w-full max-w-[340px] bg-slate-800 rounded-2xl px-5 py-4 text-white text-xs space-y-2">
-                                <div className="h-8 bg-black rounded" />
-                                <p className="text-slate-400 text-center leading-relaxed mt-2">
-                                    This card is the property of Easy Sales Export Ltd. If found, please return to{" "}
-                                    <span className="text-purple-300">info@easysalesexport.com</span>
-                                </p>
-                                <div className="flex justify-between pt-1 border-t border-white/10 text-slate-500">
-                                    <span>Issued: {fmtShort(result.data.joinedAt)}</span>
-                                    <span>Valid: {fmtShort(result.data.validUntil)}</span>
+                        <div className="flex flex-col md:flex-row items-center justify-center gap-6">
+                            <div>
+                                <p className="text-xs text-slate-400 mb-2 text-center font-semibold">Front Side</p>
+                                <div ref={cardRef}>
+                                    <IdCardFace data={result.data} />
                                 </div>
+                            </div>
+                            <div>
+                                <p className="text-xs text-slate-400 mb-2 text-center font-semibold">Back Side</p>
+                                <IdCardBack data={result.data} />
                             </div>
                         </div>
 

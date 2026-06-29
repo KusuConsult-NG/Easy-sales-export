@@ -40,6 +40,7 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
     const [banks, setBanks] = useState<Bank[]>([]);
     const [loadingBanks, setLoadingBanks] = useState(true);
     const [banksError, setBanksError] = useState("");
+    const [isInitialized, setIsInitialized] = useState(false);
 
     // Load bank list on mount
     useEffect(() => {
@@ -48,15 +49,19 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
 
     // Sync initialData changes
     useEffect(() => {
-        if (initialData) {
-            if (initialData.bankName) setBankName(initialData.bankName);
-            if (initialData.accountNumber) setAccountNumber(initialData.accountNumber);
-            if (initialData.accountName) setAccountName(initialData.accountName);
-            if (initialData.verified !== undefined) setVerified(initialData.verified);
-            if (initialData.bvn) setBvn(initialData.bvn);
-            if (initialData.bvnVerified !== undefined) setBvnVerified(initialData.bvnVerified);
+        if (initialData && !isInitialized) {
+            const hasData = initialData.bankName || initialData.accountNumber || initialData.accountName || initialData.verified;
+            if (hasData) {
+                if (initialData.bankName) setBankName(initialData.bankName);
+                if (initialData.accountNumber) setAccountNumber(initialData.accountNumber);
+                if (initialData.accountName) setAccountName(initialData.accountName);
+                if (initialData.verified !== undefined) setVerified(initialData.verified);
+                if (initialData.bvn) setBvn(initialData.bvn);
+                if (initialData.bvnVerified !== undefined) setBvnVerified(initialData.bvnVerified);
+                setIsInitialized(true);
+            }
         }
-    }, [initialData]);
+    }, [initialData, isInitialized]);
 
     // Auto-propagate changes to parent
     useEffect(() => {
@@ -134,6 +139,21 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
         setError("");
         setVerified(false);
         setAccountName("");
+    };
+
+    function handleEditAccount() {
+        setVerified(false);
+        setAccountName("");
+        setError("");
+        
+        onVerified({
+            bankName,
+            accountNumber,
+            accountName: "",
+            verified: false,
+            bvn: bvn || undefined,
+            bvnVerified: bvnVerified || undefined
+        });
     };
 
     async function handleVerifyBvn() {
@@ -360,14 +380,7 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
                         </div>
                     </div>
                     <button
-                        onClick={() => {
-                            // Only reset bank fields — preserve BVN verification
-                            setVerified(false);
-                            setAccountName("");
-                            setError("");
-                            // Note: bvnVerified is intentionally NOT reset here.
-                            // The user only needs to re-verify the bank, not BVN.
-                        }}
+                        onClick={handleEditAccount}
                         className="text-xs text-slate-500 underline hover:text-slate-700 hover:no-underline shrink-0"
                         title="Change bank details only"
                     >

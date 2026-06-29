@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from "next/server";
 import sharp from "sharp";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from "@/lib/logger";
+import { jsPDF } from "jspdf";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 // CR80 card: 86mm × 54mm at 264 dpi → 893×561px. Round to 900×567 for clean scaling.
@@ -183,6 +184,51 @@ function buildSVG(opts: {
 </svg>`;
 }
 
+function buildBackSVG(opts: {
+    joinedAt: string;
+    validUntil: string;
+}): string {
+    const { joinedAt, validUntil } = opts;
+
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  <defs>
+    <linearGradient id="backBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="${W}" height="${H}" rx="18" fill="url(#backBg)"/>
+
+  <!-- Decorative circles -->
+  <circle cx="80" cy="500" r="120" fill="white" opacity="0.02"/>
+  <circle cx="820" cy="80" r="100" fill="white" opacity="0.02"/>
+
+  <!-- Magnetic Stripe -->
+  <rect x="0" y="50" width="${W}" height="90" fill="#000000"/>
+
+  <!-- Signature box placeholder -->
+  <rect x="${PAD}" y="165" width="480" height="80" fill="rgba(255,255,255,0.08)" rx="6"/>
+  <text x="${PAD + 20}" y="212" font-family="Arial, Helvetica, sans-serif" font-size="20" font-style="italic" fill="rgba(255,255,255,0.3)">Authorized Signature</text>
+  
+  <text x="560" y="212" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="bold" fill="#c4b5fd">EASY SALES COOPERATIVE</text>
+
+  <!-- Terms and Conditions -->
+  <text x="${W / 2}" y="320" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="bold" fill="#e2e8f0" text-anchor="middle">TERMS OF USE</text>
+  <text x="${W / 2}" y="365" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#94a3b8" text-anchor="middle">This card is the property of Easy Sales Export Ltd.</text>
+  <text x="${W / 2}" y="395" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#94a3b8" text-anchor="middle">If found, please return to info@easysalesexport.com or the nearest authority.</text>
+
+  <!-- Divider -->
+  <line x1="${PAD}" y1="${H - FOOTER_H}" x2="${W - PAD}" y2="${H - FOOTER_H}" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>
+
+  <!-- Footer Dates -->
+  <text x="${PAD}" y="${H - FOOTER_H + 42}" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#64748b">Issued: ${fmtDate(joinedAt)}</text>
+  <text x="${W / 2}" y="${H - FOOTER_H + 42}" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#64748b" text-anchor="middle">Valid Until: ${fmtDate(validUntil)}</text>
+  <text x="${W - PAD}" y="${H - FOOTER_H + 42}" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#64748b" text-anchor="end">RC: 763845</text>
+</svg>`;
+}
+
 // ── Route ────────────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
     try {
@@ -264,14 +310,38 @@ export async function POST(req: NextRequest) {
                 .png();
         }
 
-        const pngBuffer = await sharpPipeline.toBuffer();
+        const frontPngBuffer = await sharpPipeline.toBuffer();
 
-        const safeFileName = `ESE-CoopID-${(memberNumber || "card").replace(/[^a-zA-Z0-9-]/g, "")}.png`;
+        // 2. Build Back side PNG
+        const backSvg = buildBackSVG({ joinedAt, validUntil });
+        const backPngBuffer = await sharp(Buffer.from(backSvg))
+            .withMetadata({ density: 267 })
+            .png()
+            .toBuffer();
 
-        return new NextResponse(new Uint8Array(pngBuffer), {
+        // 3. Create 2-page PDF
+        const doc = new jsPDF({
+            orientation: "landscape",
+            unit: "mm",
+            format: [86, 54] // Standard CR80 Card Size
+        });
+
+        // Page 1: Front
+        doc.addImage(frontPngBuffer, "PNG", 0, 0, 86, 54);
+
+        // Page 2: Back
+        doc.addPage([86, 54], "landscape");
+        doc.addImage(backPngBuffer, "PNG", 0, 0, 86, 54);
+
+        const pdfArrayBuffer = doc.output("arraybuffer");
+        const pdfBuffer = Buffer.from(pdfArrayBuffer);
+
+        const safeFileName = `ESE-CoopID-${(memberNumber || "card").replace(/[^a-zA-Z0-9-]/g, "")}.pdf`;
+
+        return new NextResponse(new Uint8Array(pdfBuffer), {
             status: 200,
             headers: {
-                "Content-Type": "image/png",
+                "Content-Type": "application/pdf",
                 "Content-Disposition": `attachment; filename="${safeFileName}"`,
                 "Cache-Control": "no-store",
             },
