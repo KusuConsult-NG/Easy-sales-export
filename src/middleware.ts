@@ -25,6 +25,9 @@ DOMAIN_MAP["easysalesexport.com"] = "";
 DOMAIN_MAP["farmnation.ng"] = "/farm-nation";
 DOMAIN_MAP["farmnation.easysalesexport.com"] = "/farm-nation";
 DOMAIN_MAP["farm-nation.easysalesexport.com"] = "/farm-nation";
+// Explicit aliases for Academy and Export custom domains (www variants)
+DOMAIN_MAP["www.easysalesacademy.com"] = "/academy";
+DOMAIN_MAP["www.easysalesexportng.com"] = "/export";
 
 const APEX_DOMAINS: string[] = Object.values(HUB_MODULES)
     .map(m => m.domain)

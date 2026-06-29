@@ -7,6 +7,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 
 const BASE_URL = 'https://easysalesexport.com'
 const ACADEMY_URL = 'https://easysalesacademy.com'
+const EXPORT_URL = 'https://easysalesexportng.com'
 const FARM_NATION_URL = 'https://farmnation.ng'
 const MARKETPLACE_URL = 'https://marketplace.easysalesexport.com'
 const WAVE_URL = 'https://wave.ng'
@@ -22,8 +23,9 @@ const STATIC_ROUTES: MetadataRoute.Sitemap = [
     { url: `${BASE_URL}/farm-nation`, lastModified: new Date('2026-02-01'), changeFrequency: 'weekly', priority: 0.9 },
     { url: `${BASE_URL}/academy`, lastModified: new Date('2026-02-01'), changeFrequency: 'weekly', priority: 0.9 },
     { url: `${BASE_URL}/export`, lastModified: new Date('2026-02-01'), changeFrequency: 'weekly', priority: 0.8 },
-    // Sub-domain canonical pages
+    // Custom domain canonical pages
     { url: `${ACADEMY_URL}`, lastModified: new Date('2026-02-01'), changeFrequency: 'monthly', priority: 0.9 },
+    { url: `${EXPORT_URL}`, lastModified: new Date('2026-02-01'), changeFrequency: 'monthly', priority: 0.9 },
     { url: `${FARM_NATION_URL}`, lastModified: new Date('2026-02-01'), changeFrequency: 'monthly', priority: 0.9 },
     { url: `${MARKETPLACE_URL}`, lastModified: new Date('2026-02-01'), changeFrequency: 'weekly', priority: 0.9 },
     { url: `${WAVE_URL}`, lastModified: new Date('2026-02-01'), changeFrequency: 'monthly', priority: 0.8 },

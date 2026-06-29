@@ -5,12 +5,12 @@
  */
 
 export const EXTERNAL_DOMAINS = {
-    marketplace: process.env.NEXT_PUBLIC_MARKETPLACE_URL || 'https://marketplace.easysales.com',
-    cooperatives: process.env.NEXT_PUBLIC_COOPERATIVES_URL || 'https://cooperatives.easysales.com',
-    academy: process.env.NEXT_PUBLIC_ACADEMY_URL || 'https://academy.easysales.com',
-    wave: process.env.NEXT_PUBLIC_WAVE_URL || 'https://wave.easysales.com',
-    export: process.env.NEXT_PUBLIC_EXPORT_URL || 'https://export.easysales.com',
-    farmNation: process.env.NEXT_PUBLIC_FARM_NATION_URL || 'https://farmnation.easysales.com',
+    marketplace: process.env.NEXT_PUBLIC_MARKETPLACE_URL || 'https://marketplace.easysalesexport.com',
+    cooperatives: process.env.NEXT_PUBLIC_COOPERATIVES_URL || 'https://easysalescooperative.com',
+    academy: process.env.NEXT_PUBLIC_ACADEMY_URL || 'https://easysalesacademy.com',
+    wave: process.env.NEXT_PUBLIC_WAVE_URL || 'https://waveprogramme.com',
+    export: process.env.NEXT_PUBLIC_EXPORT_URL || 'https://easysalesexportng.com',
+    farmNation: process.env.NEXT_PUBLIC_FARM_NATION_URL || 'https://farmnation.ng',
 } as const;
 
 export type ExternalDomain = keyof typeof EXTERNAL_DOMAINS;

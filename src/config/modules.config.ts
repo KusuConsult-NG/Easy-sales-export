@@ -44,7 +44,7 @@ export const HUB_MODULES: Record<string, ModuleConfig> = {
     ACADEMY: {
         id: 'mod_academy_001',
         name: 'Academy LMS',
-        domain: 'academy.easysalesexport.com',
+        domain: 'easysalesacademy.com',
         slug: 'academy',
         version: '1.0.0',
         features: { hasAcademy: true, hasFinance: false, hasChat: true },
@@ -71,7 +71,7 @@ export const HUB_MODULES: Record<string, ModuleConfig> = {
     EXPORT: {
         id: 'mod_export_001',
         name: 'Export Hub',
-        domain: 'export.easysalesexport.com',
+        domain: 'easysalesexportng.com',
         slug: 'export',
         version: '1.0.0',
         features: { hasAcademy: false, hasFinance: true, hasChat: false },

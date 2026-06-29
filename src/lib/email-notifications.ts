@@ -50,6 +50,10 @@ export function getBaseUrl(): string {
                     'www.easysalesmarket.com',
                     'farmnation.ng',
                     'www.farmnation.ng',
+                    'easysalesacademy.com',
+                    'www.easysalesacademy.com',
+                    'easysalesexportng.com',
+                    'www.easysalesexportng.com',
                 ];
                 if (knownModuleDomains.includes(hostname)) {
                     parsed.hostname = 'www.easysalesexport.com';

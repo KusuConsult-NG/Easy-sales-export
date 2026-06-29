@@ -459,7 +459,7 @@ export async function registerAction(prevState: any, formData: FormData) { const
                 const headersList = await headers();
                 const host = headersList.get("x-forwarded-host") || headersList.get("host") || "";
                 const normalizedHost = host.replace(/^www\./, "");
-                if (normalizedHost.includes("easysalesexportacademy.com")) redirectUrl = "/academy/setup";
+                if (normalizedHost.includes("easysalesacademy.com")) redirectUrl = "/academy/setup";
                 else if (normalizedHost.includes("farmnation.ng")) redirectUrl = "/farm-nation/onboarding";
                 else if (normalizedHost.includes("marketplace.easysalesexport.com")) redirectUrl = "/marketplace/onboarding";
                 else if (normalizedHost.includes("waveprogramme.com")) redirectUrl = "/wave/application";
