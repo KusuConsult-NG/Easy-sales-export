@@ -42,6 +42,21 @@ const authMiddleware = auth((req: any) => {
         ""
     ).split(",")[0].trim().replace(/:\d+$/, "").toLowerCase();
 
+    // ── SHUTDOWN LOCK ──────────────────────────────────────────────────
+    // Allow only the landing page of easysalesexport.com (both apex and www)
+    const isMainHub = hostname === "easysalesexport.com" || hostname === "www.easysalesexport.com";
+    const isLandingPage = pathname === "/";
+    const isStaticAsset = pathname.startsWith("/_next") || 
+                          pathname.startsWith("/images") || 
+                          pathname.startsWith("/favicon.ico") ||
+                          pathname.startsWith("/grid.svg");
+
+    if (!(isMainHub && isLandingPage) && !isStaticAsset) {
+        // Redirect everything else to the landing page of the main hub
+        const targetUrl = new URL("/", "https://www.easysalesexport.com");
+        return NextResponse.redirect(targetUrl, { status: 307 }); // Temporary redirect
+    }
+
     // ── 1. Apex → www Redirect (High Priority) ──────────────────────────
     // Redirect only the primary easysalesexport.com apex domain to www for consistent session handling.
     if (hostname === "easysalesexport.com") {
