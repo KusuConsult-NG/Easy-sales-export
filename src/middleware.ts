@@ -46,7 +46,7 @@ const authMiddleware = auth((req: any) => {
     if (isProtectedPath(pathname)) {
         if (pathname.startsWith("/api/")) {
             return NextResponse.json(
-                { success: false, error: "Access denied. Backend access is suspended." },
+                { success: false, error: "Contact hosting service for support." },
                 { status: 403 }
             );
         }
@@ -250,7 +250,7 @@ const authMiddleware = auth((req: any) => {
             </div>
             
             <h1>Access Suspended</h1>
-            <p>Access to the platform backend (including all administration panels, cooperative dashboards, and program modules) has been temporarily disabled by the hosting service.</p>
+            <p>Contact hosting service for support.</p>
             
             <a href="https://www.easysalesexport.com" class="btn">
                 Return to Homepage
