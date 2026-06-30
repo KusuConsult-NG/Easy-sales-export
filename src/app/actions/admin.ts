@@ -1331,7 +1331,7 @@ interface GetUsersOptions {
     sortOrder?: "asc" | "desc"; // Sort direction
     modules?: string;   // 'all' | 'multi' | specific module slug ('academy', 'marketplace', etc.)
     sortBy?: "createdAt" | "gender"; // Sort field
-    gender?: "male" | "female" | "other" | "all"; // Filter by gender
+    gender?: "male" | "female" | "all"; // Filter by gender
 }
 
 async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionResponse<any[]>> {
@@ -1701,7 +1701,7 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
             }
         }
 
-        // In-memory Gender filter — allows filtering to show only male/female/other users
+        // In-memory Gender filter — allows filtering to show only male/female users
         if (options.gender && options.gender !== "all") {
             const genderFilter = options.gender.toLowerCase();
             filteredUsers = filteredUsers.filter(u => {
