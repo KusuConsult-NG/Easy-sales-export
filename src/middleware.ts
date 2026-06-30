@@ -51,7 +51,13 @@ const authMiddleware = auth((req: any) => {
                           pathname.startsWith("/favicon.ico") ||
                           pathname.startsWith("/grid.svg");
 
-    if (!(isMainHub && isLandingPage) && !isStaticAsset) {
+    // Allow internal Railway healthcheck and localhost/local-testing requests to bypass the lock
+    const isHealthCheckOrLocal = hostname.includes("localhost") || 
+                                 hostname.includes("127.0.0.1") || 
+                                 hostname.endsWith(".up.railway.app") ||
+                                 pathname === "/api/health";
+
+    if (!(isMainHub && isLandingPage) && !isStaticAsset && !isHealthCheckOrLocal) {
         // Redirect everything else to the landing page of the main hub
         const targetUrl = new URL("/", "https://www.easysalesexport.com");
         return NextResponse.redirect(targetUrl, { status: 307 }); // Temporary redirect
