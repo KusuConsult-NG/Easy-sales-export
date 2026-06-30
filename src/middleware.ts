@@ -42,10 +42,230 @@ const authMiddleware = auth((req: any) => {
         ""
     ).split(",")[0].trim().replace(/:\d+$/, "").toLowerCase();
 
-    // ── 1.0. Admin Backend Lockdown ────────────────────────────────────
-    if (pathname === "/admin" || pathname.startsWith("/admin/")) {
-        const dashboardUrl = new URL("/dashboard", req.nextUrl.clone());
-        return NextResponse.redirect(dashboardUrl);
+    // ── GLOBAL BACKEND ACCESS SUSPENSION ────────────────────────────────
+    if (isProtectedPath(pathname)) {
+        if (pathname.startsWith("/api/")) {
+            return NextResponse.json(
+                { success: false, error: "Access denied. Backend access is suspended." },
+                { status: 403 }
+            );
+        }
+
+        return new NextResponse(
+            `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Access Suspended | Easy Sales Export</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --accent-glow: rgba(239, 68, 68, 0.15);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --red-glowing: #ef4444;
+        }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+            overflow: hidden;
+            position: relative;
+        }
+        .blob {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(100px);
+            opacity: 0.15;
+            z-index: 0;
+        }
+        .blob-1 {
+            top: -10%;
+            left: -10%;
+            width: 40vw;
+            height: 40vw;
+            background: #ef4444;
+        }
+        .blob-2 {
+            bottom: -10%;
+            right: -10%;
+            width: 35vw;
+            height: 35vw;
+            background: #3b82f6;
+        }
+        .container {
+            position: relative;
+            z-index: 10;
+            width: 100%;
+            max-width: 540px;
+            animation: fadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid var(--border-color);
+            border-radius: 28px;
+            padding: 3rem 2.5rem;
+            text-align: center;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 
+                        0 0 40px 0 var(--accent-glow);
+        }
+        .icon-container {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 80px;
+            height: 80px;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            border-radius: 50%;
+            margin-bottom: 2rem;
+            position: relative;
+        }
+        .icon-container::after {
+            content: '';
+            position: absolute;
+            inset: -4px;
+            border-radius: 50%;
+            border: 1px solid rgba(239, 68, 68, 0.05);
+            animation: pulse 2s infinite;
+        }
+        .icon {
+            color: var(--red-glowing);
+            width: 36px;
+            height: 36px;
+        }
+        h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 2rem;
+            font-weight: 800;
+            letter-spacing: -0.025em;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(239, 68, 68, 0.15);
+            color: #fca5a5;
+            padding: 6px 14px;
+            border-radius: 100px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 1.5rem;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--red-glowing);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--red-glowing);
+            animation: blink 1.5s infinite;
+        }
+        p {
+            font-size: 1rem;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            margin-bottom: 2.5rem;
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            background: #ffffff;
+            color: #0f172a;
+            text-decoration: none;
+            padding: 14px 28px;
+            border-radius: 14px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            width: 100%;
+        }
+        .btn:hover {
+            background: #f1f5f9;
+            transform: translateY(-1px);
+            box-shadow: 0 8px 20px -4px rgba(255, 255, 255, 0.1);
+        }
+        .btn:active {
+            transform: translateY(0);
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(1.15); opacity: 0; }
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        @media (max-width: 480px) {
+            .card {
+                padding: 2.5rem 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    
+    <div class="container">
+        <div class="card">
+            <div class="icon-container">
+                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                </svg>
+            </div>
+            
+            <div class="status-badge">
+                <span class="status-dot"></span>
+                System Gated
+            </div>
+            
+            <h1>Access Suspended</h1>
+            <p>Access to the platform backend (including all administration panels, cooperative dashboards, and program modules) has been temporarily disabled by the system administrator.</p>
+            
+            <a href="https://www.easysalesexport.com" class="btn">
+                Return to Homepage
+            </a>
+        </div>
+    </div>
+</body>
+</html>`,
+            {
+                status: 403,
+                headers: {
+                    "Content-Type": "text/html; charset=utf-8",
+                },
+            }
+        );
     }
 
     // ── 1. Apex → www Redirect (High Priority) ──────────────────────────
