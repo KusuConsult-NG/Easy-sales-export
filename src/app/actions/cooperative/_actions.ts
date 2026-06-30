@@ -1990,9 +1990,9 @@ export async function updateMemberProfileDetailsAction(
 
         const userId = session.user.id;
 
-        // Clean & Validate Gender
-        const normalizedGender = gender.trim().charAt(0).toUpperCase() + gender.trim().slice(1).toLowerCase();
-        if (normalizedGender !== "Male" && normalizedGender !== "Female") {
+        // Clean & Validate Gender — normalize to lowercase to match platform-wide standard
+        const normalizedGender = gender.trim().toLowerCase();
+        if (normalizedGender !== "male" && normalizedGender !== "female") {
             return { success: false as const, error: "Invalid gender selection. Please choose Male or Female.", data: null };
         }
 

@@ -31,7 +31,7 @@ export function normalizeAggressive(
 
     const email = cleanVal(uData.email) || cleanVal(wData?.userEmail) || cleanVal(sData?.email) || "";
     const phone = cleanVal(uData.phone) || cleanVal(sData?.phone) || cleanVal(wData?.phone) || cleanVal(uData.phoneNumber) || cleanVal(uData.kyc?.phoneNumber) || cleanVal(uData.kyc?.phone) || cleanVal(sData?.phoneNumber) || cleanVal(sData?.kyc?.phoneNumber) || cleanVal(sData?.kyc?.phone) || cleanVal(wData?.phoneNumber) || cleanVal(wData?.kyc?.phoneNumber) || cleanVal(wData?.kyc?.phone) || "";
-    const gender = cleanVal(uData.gender) || cleanVal(wData?.gender) || "other";
+    const gender = cleanVal(uData.gender) || cleanVal(wData?.gender) || "";
     const dob = cleanVal(uData.dateOfBirth) || cleanVal(wData?.dateOfBirth) || cleanVal(cData?.personalInfo?.dateOfBirth) || "";
 
     // 2. Resolve Bank Details (Aggressive fallback)

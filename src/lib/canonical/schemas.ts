@@ -13,7 +13,7 @@ export interface CanonicalIdentity {
     firstName?: string;
     lastName?: string;
     phone?: string;
-    gender?: "male" | "female" | "other";
+    gender?: "male" | "female";
     dateOfBirth?: string;
     roles: string[];
     isVerified: boolean;
