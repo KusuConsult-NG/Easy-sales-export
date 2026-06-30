@@ -66,6 +66,9 @@ jest.mock('@/lib/firebase-admin', () => {
                 limit: () => queryObj,
                 startAfter: () => queryObj,
                 get: () => global.mockFirestoreGet(name),
+                count: () => ({
+                    get: () => global.mockFirestoreGet(name + "_count")
+                })
             };
             return queryObj;
         },

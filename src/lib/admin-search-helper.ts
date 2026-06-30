@@ -37,27 +37,51 @@ export async function searchUserIdsByQuery(searchQuery: string): Promise<string[
 
         if (userIds.size >= 30) return Array.from(userIds).slice(0, 30);
 
-        // 3. Name prefix matches (try capitalized first letters since name fields are capitalized in Firestore)
+        // 3. Name prefix matches (multi-casing variations in parallel)
         const capitalizedQ = searchQuery.trim()
-            .split(' ')
+            .split(/\s+/)
             .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
             .join(' ');
+        const uppercaseQ = searchQuery.trim().toUpperCase();
+        const rawQ = searchQuery.trim();
 
-        const nameSnap = await db.collection(COLLECTIONS.USERS)
-            .where("fullName", ">=", capitalizedQ)
-            .where("fullName", "<=", capitalizedQ + "\uf8ff")
-            .limit(30)
-            .get();
-        nameSnap.docs.forEach(doc => userIds.add(doc.id));
+        // Collect all distinct query values
+        const searchVariations = Array.from(new Set([
+            capitalizedQ,
+            q,
+            uppercaseQ,
+            rawQ
+        ])).filter(Boolean);
 
-        if (userIds.size >= 30) return Array.from(userIds).slice(0, 30);
+        const namePromises: Promise<FirebaseFirestore.QuerySnapshot>[] = [];
+        for (const val of searchVariations) {
+            namePromises.push(
+                db.collection(COLLECTIONS.USERS)
+                    .where("fullName", ">=", val)
+                    .where("fullName", "<=", val + "\uf8ff")
+                    .limit(30)
+                    .get()
+            );
+            namePromises.push(
+                db.collection(COLLECTIONS.USERS)
+                    .where("firstName", ">=", val)
+                    .where("firstName", "<=", val + "\uf8ff")
+                    .limit(30)
+                    .get()
+            );
+            namePromises.push(
+                db.collection(COLLECTIONS.USERS)
+                    .where("lastName", ">=", val)
+                    .where("lastName", "<=", val + "\uf8ff")
+                    .limit(30)
+                    .get()
+            );
+        }
 
-        const firstNameSnap = await db.collection(COLLECTIONS.USERS)
-            .where("firstName", ">=", capitalizedQ)
-            .where("firstName", "<=", capitalizedQ + "\uf8ff")
-            .limit(30)
-            .get();
-        firstNameSnap.docs.forEach(doc => userIds.add(doc.id));
+        const nameSnaps = await Promise.all(namePromises);
+        nameSnaps.forEach(snap => {
+            snap.docs.forEach(doc => userIds.add(doc.id));
+        });
     } catch (err) {
         console.error("[searchUserIdsByQuery] Error fetching users:", err);
     }

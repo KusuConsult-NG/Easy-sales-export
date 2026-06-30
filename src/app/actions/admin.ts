@@ -1356,19 +1356,25 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
         let hasUnindexedFilter = false;
 
         // Apply filters
-        // If we have search (email/phone), we apply an equality filter.
+        let matchingUserIds: string[] = [];
         if (options.search) {
-            const search = options.search.trim();
-            // Email exact match
-            if (search.includes("@")) {
-                query = query.where("email", "==", search.toLowerCase());
+            const { searchUserIdsByQuery } = await import("@/lib/admin-search-helper");
+            matchingUserIds = await searchUserIdsByQuery(options.search);
+            
+            if (matchingUserIds.length === 0) {
+                return {
+                    error: null,
+                    success: true as const,
+                    data: [],
+                    lastDocId: String(page + 1),
+                    hasMore: false,
+                    meta: {
+                        totalCount: 0
+                    }
+                };
             }
-            // Phone exact match
-            else if (/^[\d+]+$/.test(search) && search.length > 5) {
-                query = query.where("phone", "==", search);
-                hasUnindexedFilter = true; // No composite index for phone + createdAt desc
-            }
-            // Name searches are handled client-side below
+            query = query.where(FieldPath.documentId(), "in", matchingUserIds);
+            hasUnindexedFilter = true;
         }
 
         // Basic filtering (Role/Status/State/LGA) - Only apply if NOT doing a direct search
@@ -1413,18 +1419,11 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
         // EXACT DATABASE COUNT (Satisfies Data Consistency Audit)
         // ---------------------------------------------------------
         let countQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.USERS);
-        if (!options.search) {
+        if (options.search) {
+            countQuery = countQuery.where(FieldPath.documentId(), "in", matchingUserIds);
+        } else {
             if (options.role && options.role !== "all") {
                 countQuery = countQuery.where("roles", "array-contains", options.role);
-            }
-        }
-        // For search (email/phone), count directly against the filter
-        if (options.search) {
-            const search = options.search.trim();
-            if (search.includes("@")) {
-                countQuery = countQuery.where("email", "==", search.toLowerCase());
-            } else if (/^[\d+]+$/.test(search) && search.length > 5) {
-                countQuery = countQuery.where("phone", "==", search);
             }
         }
 
@@ -1435,7 +1434,7 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
         // We page in-memory after sort.
         // If searching or applying an unindexed filter, fetch a larger batch (5000) to ensure high search/filter coverage.
         // If doing standard navigation, scale limit based on the requested page to reduce expensive reads by 97%+
-        const FETCH_LIMIT = (options.search || hasUnindexedFilter || options.fromDate || options.toDate || (options.role && options.role !== "all"))
+        const FETCH_LIMIT = (options.search || hasUnindexedFilter || options.fromDate || options.toDate || (options.role && options.role !== "all") || options.sortBy === "gender")
             ? 2000
             : Math.min(2000, (page + 1) * pageSize + 100);
         query = query.limit(FETCH_LIMIT);
