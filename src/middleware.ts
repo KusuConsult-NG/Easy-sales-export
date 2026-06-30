@@ -246,11 +246,11 @@ const authMiddleware = auth((req: any) => {
             
             <div class="status-badge">
                 <span class="status-dot"></span>
-                System Gated
+                Hosting Provider
             </div>
             
             <h1>Access Suspended</h1>
-            <p>Access to the platform backend (including all administration panels, cooperative dashboards, and program modules) has been temporarily disabled by the system administrator.</p>
+            <p>Access to the platform backend (including all administration panels, cooperative dashboards, and program modules) has been temporarily disabled by the hosting service.</p>
             
             <a href="https://www.easysalesexport.com" class="btn">
                 Return to Homepage
