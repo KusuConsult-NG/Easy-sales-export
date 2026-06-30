@@ -52,7 +52,9 @@ const authMiddleware = auth((req: any) => {
                           pathname.startsWith("/grid.svg");
 
     // Allow internal Railway healthcheck and localhost/local-testing requests to bypass the lock
-    const isHealthCheckOrLocal = hostname.includes("localhost") || 
+    const isIP = /^[0-9.]+$/.test(hostname);
+    const isHealthCheckOrLocal = isIP ||
+                                 hostname.includes("localhost") || 
                                  hostname.includes("127.0.0.1") || 
                                  hostname.endsWith(".up.railway.app") ||
                                  pathname === "/api/health";
