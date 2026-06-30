@@ -209,7 +209,8 @@ export default function AdminUsersPage() {
 
     const hasActiveFilters = !!(filters.state || filters.lga || filters.fromDate || filters.toDate ||
         (filters.role && filters.role !== "all") || (filters.status && filters.status !== "all") ||
-        (filters.sortOrder && filters.sortOrder !== "desc") || (filters.sortBy && filters.sortBy !== "createdAt") || (filters.modules && filters.modules !== "all"));
+        (filters.sortOrder && filters.sortOrder !== "desc") || (filters.sortBy && filters.sortBy !== "createdAt") ||
+        (filters.modules && filters.modules !== "all") || (filters.gender && filters.gender !== "all"));
 
     const clearFilters = () => {
         updateFilter("state", "all");
@@ -221,6 +222,7 @@ export default function AdminUsersPage() {
         updateFilter("sortOrder", "desc");
         updateFilter("sortBy", "createdAt");
         updateFilter("modules", "all");
+        updateFilter("gender", "all");
         setTempFromDate("");
         setTempToDate("");
     };
@@ -558,6 +560,7 @@ export default function AdminUsersPage() {
                 error={error}
                 searchTerm={search}
                 onSearch={setSearch}
+                searchPlaceholder="Search by name, email or phone..."
                 hasMore={hasMore}
                 onNextPage={onNextPage}
                 onPrevPage={onPrevPage}
@@ -652,6 +655,18 @@ export default function AdminUsersPage() {
                             >
                                 <option value="createdAt">Sort by Date Joined</option>
                                 <option value="gender">Sort by Gender</option>
+                            </select>
+
+                            {/* Quick: Gender Filter */}
+                            <select
+                                value={filters.gender || "all"}
+                                onChange={(e) => updateFilter("gender", e.target.value)}
+                                className="px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm"
+                            >
+                                <option value="all">All Genders</option>
+                                <option value="female">Female</option>
+                                <option value="male">Male</option>
+                                <option value="other">Other</option>
                             </select>
 
                             {/* Quick: Sort Date */}

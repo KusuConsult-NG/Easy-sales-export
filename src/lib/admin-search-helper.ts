@@ -20,20 +20,25 @@ export async function searchUserIdsByQuery(searchQuery: string): Promise<string[
 
         if (userIds.size >= 30) return Array.from(userIds).slice(0, 30);
 
-        // 2. Exact phone matches
-        const phoneSnap = await db.collection(COLLECTIONS.USERS)
-            .where("phone", "==", searchQuery.trim())
-            .limit(30)
-            .get();
-        phoneSnap.docs.forEach(doc => userIds.add(doc.id));
-
-        if (userIds.size >= 30) return Array.from(userIds).slice(0, 30);
-
-        const phoneNumberSnap = await db.collection(COLLECTIONS.USERS)
-            .where("phoneNumber", "==", searchQuery.trim())
-            .limit(30)
-            .get();
-        phoneNumberSnap.docs.forEach(doc => userIds.add(doc.id));
+        // 2. Phone matches — exact AND prefix (so "0803" finds "08035678901")
+        const rawPhone = searchQuery.trim();
+        const phonePromises: Promise<FirebaseFirestore.QuerySnapshot>[] = [
+            // Exact match on both field names
+            db.collection(COLLECTIONS.USERS).where("phone", "==", rawPhone).limit(30).get(),
+            db.collection(COLLECTIONS.USERS).where("phoneNumber", "==", rawPhone).limit(30).get(),
+            // Prefix range on phone field
+            db.collection(COLLECTIONS.USERS)
+                .where("phone", ">=", rawPhone)
+                .where("phone", "<=", rawPhone + "\uf8ff")
+                .limit(30).get(),
+            // Prefix range on phoneNumber field
+            db.collection(COLLECTIONS.USERS)
+                .where("phoneNumber", ">=", rawPhone)
+                .where("phoneNumber", "<=", rawPhone + "\uf8ff")
+                .limit(30).get(),
+        ];
+        const phoneSnaps = await Promise.all(phonePromises);
+        phoneSnaps.forEach(snap => snap.docs.forEach(doc => userIds.add(doc.id)));
 
         if (userIds.size >= 30) return Array.from(userIds).slice(0, 30);
 

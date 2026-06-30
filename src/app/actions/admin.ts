@@ -1331,6 +1331,7 @@ interface GetUsersOptions {
     sortOrder?: "asc" | "desc"; // Sort direction
     modules?: string;   // 'all' | 'multi' | specific module slug ('academy', 'marketplace', etc.)
     sortBy?: "createdAt" | "gender"; // Sort field
+    gender?: "male" | "female" | "other" | "all"; // Filter by gender
 }
 
 async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionResponse<any[]>> {
@@ -1434,7 +1435,7 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
         // We page in-memory after sort.
         // If searching or applying an unindexed filter, fetch a larger batch (5000) to ensure high search/filter coverage.
         // If doing standard navigation, scale limit based on the requested page to reduce expensive reads by 97%+
-        const FETCH_LIMIT = (options.search || hasUnindexedFilter || options.fromDate || options.toDate || (options.role && options.role !== "all") || options.sortBy === "gender")
+        const FETCH_LIMIT = (options.search || hasUnindexedFilter || options.fromDate || options.toDate || (options.role && options.role !== "all") || options.sortBy === "gender" || (options.gender && options.gender !== "all"))
             ? 2000
             : Math.min(2000, (page + 1) * pageSize + 100);
         query = query.limit(FETCH_LIMIT);
@@ -1698,6 +1699,15 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
             } else {
                 filteredUsers = filteredUsers.filter(u => (u.activeModules as string[]).includes(options.modules as string));
             }
+        }
+
+        // In-memory Gender filter — allows filtering to show only male/female/other users
+        if (options.gender && options.gender !== "all") {
+            const genderFilter = options.gender.toLowerCase();
+            filteredUsers = filteredUsers.filter(u => {
+                const g = String(u.gender || "").toLowerCase().trim();
+                return g === genderFilter;
+            });
         }
 
         // In-memory status filter — using the defensive chain already computed in mapping:
