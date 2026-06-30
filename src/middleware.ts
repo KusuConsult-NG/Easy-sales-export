@@ -42,6 +42,12 @@ const authMiddleware = auth((req: any) => {
         ""
     ).split(",")[0].trim().replace(/:\d+$/, "").toLowerCase();
 
+    // ── 1.0. Admin Backend Lockdown ────────────────────────────────────
+    if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+        const dashboardUrl = new URL("/dashboard", req.nextUrl.clone());
+        return NextResponse.redirect(dashboardUrl);
+    }
+
     // ── 1. Apex → www Redirect (High Priority) ──────────────────────────
     // Redirect only the primary easysalesexport.com apex domain to www for consistent session handling.
     if (hostname === "easysalesexport.com") {
