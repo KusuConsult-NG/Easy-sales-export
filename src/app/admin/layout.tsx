@@ -9,7 +9,25 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 async function AdminLayoutContent({ children }: { children: React.ReactNode }) {
-    redirect("/dashboard");
+    const sessionResult = await requireSession();
+
+    // Verify authentication
+    if (!sessionResult.session) {
+        const errorMessage = sessionResult.error?.error || "Authentication required";
+        redirect(`/auth/login?error=${encodeURIComponent(errorMessage)}`);
+    }
+
+    const headerList = await headers();
+    const pathname = headerList.get("x-invoke-path") || "/admin";
+    
+    // Strict Role Check - Allow 'admin', 'super_admin' and module admins using synchronized live roles
+    const roles = sessionResult.session?.user?.roles || [];
+    const { isAdmin } = await import("@/lib/admin-permissions");
+    const hasAdminAccess = isAdmin(roles);
+
+    if (!hasAdminAccess) {
+        redirect("/dashboard");
+    }
 
     return (
         <div className="flex min-h-screen bg-slate-50">
