@@ -346,8 +346,9 @@ export function canAccessAdminRoute(
     const isModuleAdmin = isWaveAdmin || isCoopAdmin || isMktAdmin || isExportAdmin || isFarmAdmin || isAcadAdmin;
 
     // Strict Silo Isolation: If a user has a module admin role, they are locked to that silo,
-    // EVEN IF they are also granted super_admin or admin rights.
-    if (isModuleAdmin) {
+    // UNLESS they are also granted super_admin or admin rights (global admin roles).
+    const isGlobalAdmin = userRoles?.includes("admin") || userRoles?.includes("super_admin");
+    if (isModuleAdmin && !isGlobalAdmin) {
         // Module admins have access to their own silos, user management, support, and settings
         // NOTE: They are explicitly BLOCKED from the base /admin and /admin/dashboard to remove them from sidebar
         if (route.startsWith("/admin/users")) return true;

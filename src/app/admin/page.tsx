@@ -21,9 +21,9 @@ export default async function AdminDashboard() {
     const isAcadAdmin = roles.includes("academy_admin");
 
     const isModuleAdmin = isWaveAdmin || isCoopAdmin || isMktAdmin || isExportAdmin || isFarmAdmin || isAcadAdmin;
-    const isSuperAdmin = roles.includes("super_admin");
+    const isGlobalAdmin = roles.includes("super_admin") || roles.includes("admin");
 
-    if (isModuleAdmin && !isSuperAdmin) {
+    if (isModuleAdmin && !isGlobalAdmin) {
         // They are a module admin, redirect them to their specific silo
         if (isWaveAdmin) redirect("/admin/wave");
         if (isCoopAdmin) redirect("/admin/cooperatives");
@@ -33,9 +33,6 @@ export default async function AdminDashboard() {
         if (isAcadAdmin) redirect("/admin/academy");
     }
 
-    // Check if the user has a global admin role that is allowed to see the main dashboard
-    const isGlobalAdmin = roles.includes("super_admin") || roles.includes("admin");
-    
     if (!isGlobalAdmin) {
         // If they have some other role or none, kick them back
         redirect("/dashboard");

@@ -3187,7 +3187,9 @@ async function _markAcademyApplicationUnderReviewAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
-        if (!session?.user || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
+        const roles = session.user.roles || [];
+        const hasAcademyAccess = roles.some(r => r === "admin" || r === "super_admin" || r === "academy_admin");
+        if (!session?.user || !hasAcademyAccess) {
             return { error: "Unauthorized", success: false as const };
         }
 

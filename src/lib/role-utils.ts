@@ -32,7 +32,10 @@ export function hasAllRoles(userRoles: UserRole[], requiredRoles: UserRole[]): b
  * Check if user is an administrator (admin or super_admin)
  */
 export function isAdmin(userRoles: UserRole[]): boolean {
-    return hasAnyRole(userRoles, ["admin", "super_admin"]);
+    return hasAnyRole(userRoles, [
+        "admin", "super_admin", "wave_admin", "cooperative_admin", 
+        "marketplace_admin", "export_admin", "farm_nation_admin", "academy_admin"
+    ]);
 }
 
 /**

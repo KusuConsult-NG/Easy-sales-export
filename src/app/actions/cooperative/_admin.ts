@@ -39,8 +39,8 @@ import { extractCanonicalUser } from "@/lib/canonical/normalizer";
  * Returns `cooperativeId` if scoped, or `null` if global (Platform Admin/Super Admin).
  */
 async function getAdminScope(userId: string, userRoles: string[]): Promise<string | null> {
-    // Super Admins see everything
-    if (userRoles.includes("super_admin")) return null;
+    // Super Admins and Platform Admins see everything
+    if (userRoles.includes("super_admin") || userRoles.includes("admin")) return null;
 
     // Check if admin is restricted to a cooperative
     // We assume admins with a 'cooperativeId' in their profile are scoped.

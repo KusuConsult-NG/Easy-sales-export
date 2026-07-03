@@ -9,6 +9,7 @@ import { getStorage } from "firebase-admin/storage";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { serializeDocs } from "@/lib/firestore-serialize";
+import { isAdmin } from "@/lib/admin-permissions";
 
 export interface WaveResource { id?: string;
     title: string;
@@ -46,7 +47,7 @@ export async function uploadResourceAction(formData: FormData): Promise<
         const userDoc = await userRef.get();
         const userData = userDoc.data();
         const userRoles: string[] = userData?.roles || (userData?.role ? [userData.role] : []);
-        if (!userDoc.exists || !userData || (!userRoles.includes("admin") && !userRoles.includes("super_admin"))) { return { success: false as const, error: "Admin access required", data: null };
+        if (!userDoc.exists || !userData || !isAdmin(userRoles)) { return { success: false as const, error: "Admin access required", data: null };
         }
 
         const file = formData.get("file") as File;
@@ -208,7 +209,7 @@ export async function deleteResourceAction(resourceId: string): Promise<
         const userDoc = await userRef.get();
         const userData = userDoc.data();
         const userRoles: string[] = userData?.roles || (userData?.role ? [userData.role] : []);
-        if (!userDoc.exists || !userData || (!userRoles.includes("admin") && !userRoles.includes("super_admin"))) { return { success: false as const, error: "Admin access required", data: null };
+        if (!userDoc.exists || !userData || !isAdmin(userRoles)) { return { success: false as const, error: "Admin access required", data: null };
         }
 
         const resourceRef = db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId);
@@ -254,7 +255,7 @@ export async function updateResourceAction(
         const userDoc = await userRef.get();
         const userData = userDoc.data();
         const userRoles: string[] = userData?.roles || (userData?.role ? [userData.role] : []);
-        if (!userDoc.exists || !userData || (!userRoles.includes("admin") && !userRoles.includes("super_admin"))) { return { success: false as const, error: "Admin access required", data: null };
+        if (!userDoc.exists || !userData || !isAdmin(userRoles)) { return { success: false as const, error: "Admin access required", data: null };
         }
 
         const resourceRef = db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId);

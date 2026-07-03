@@ -11,6 +11,7 @@ import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { serializeDocs, serializeDoc } from "@/lib/firestore-serialize";
 import { withSafeAction, type ActionResponse } from "@/lib/safe-action";
+import { isAdmin } from "@/lib/admin-permissions";
 
 export interface LoanApplication {
     id?: string;
@@ -220,9 +221,9 @@ export async function submitLoanApplicationAction(formData: {
 export async function getUserLoanApplicationsAction(userId: string): Promise<LoanApplication[]> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return [];
-    const { session } = sessionResult;
-        if (!session?.user?.id || (session.user.id !== userId && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")))) {
+        if (!sessionResult.session) return [];
+        const { session } = sessionResult;
+        if (!session?.user?.id || (session.user.id !== userId && !isAdmin(session.user.roles))) {
             return [];
         }
 
@@ -232,7 +233,7 @@ export async function getUserLoanApplicationsAction(userId: string): Promise<Loa
 
         return serializeDocs<LoanApplication>(snapshot.docs);
     } catch (error) {
-        logger.error("Failed to fetch loan applications:", error);
+        logger.error("Failed to fetch user applications:", error);
         return [];
     }
 }
@@ -243,9 +244,9 @@ export async function getUserLoanApplicationsAction(userId: string): Promise<Loa
 export async function getPendingLoanApplicationsAction(): Promise<LoanApplication[]> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return [];
-    const { session } = sessionResult;
-        if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
+        if (!sessionResult.session) return [];
+        const { session } = sessionResult;
+        if (!session?.user?.id || !isAdmin(session.user.roles)) {
             return [];
         }
 
@@ -480,7 +481,7 @@ export async function getAdminLoanApplicationsExportAction(options: {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
         const { session } = sessionResult;
-        if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
+        if (!session?.user?.id || !isAdmin(session.user.roles)) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
 
@@ -582,7 +583,7 @@ export async function getAdminLoanStatsAction(): Promise<
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" , stats: null };
         const { session } = sessionResult;
 
-        if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
+        if (!session?.user?.id || !isAdmin(session.user.roles)) {
             return { success: false as const, error: "Unauthorized" , stats: null };
         }
 
@@ -624,7 +625,7 @@ export async function approveLoanAction(
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
-        if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
+        if (!session?.user?.id || !isAdmin(session.user.roles)) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
 
@@ -753,7 +754,7 @@ export async function rejectLoanAction(
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
-        if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
+        if (!session?.user?.id || !isAdmin(session.user.roles)) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
 
@@ -807,7 +808,7 @@ export async function disburseLoanAction(
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
-        if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
+        if (!session?.user?.id || !isAdmin(session.user.roles)) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
 
@@ -910,7 +911,7 @@ async function _getRepaymentScheduleAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
         const { session } = sessionResult;
-        if (!session?.user?.id || (session.user.id !== loanData.userId && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")))) {
+        if (!session?.user?.id || (session.user.id !== loanData.userId && !isAdmin(session.user.roles))) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
 
@@ -1186,7 +1187,7 @@ export async function getRepaymentHistoryAction(
         const loanDoc = await db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(loanId).get();
         if (loanDoc.exists) {
             const loanData = loanDoc.data();
-            if (loanData && loanData.userId !== session.user.id && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
+            if (loanData && loanData.userId !== session.user.id && !isAdmin(session.user.roles)) {
                 return { success: false as const, error: "Unauthorized" , data: null };
             }
         }

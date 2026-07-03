@@ -906,7 +906,7 @@ export async function getEscrowTransactionByIdAction(escrowId: string): Promise<
 
         const data = escrowDoc.data() as EscrowTransaction;
         const userId = session.user.id;
-        const isAdmin = session.user.roles?.includes("admin") || session.user.roles?.includes("super_admin");
+        const isAdmin = session.user.roles?.includes("admin") || session.user.roles?.includes("super_admin") || session.user.roles?.includes("marketplace_admin");
 
         if (!isAdmin && data.buyerId !== userId && data.sellerId !== userId) { return { success: false as const, error: "Not authorized to view this escrow", data: null };
         }
@@ -943,7 +943,7 @@ export async function getEscrowTransactionByOrderIdAction(orderId: string): Prom
         const escrowDoc = escrowQuery.docs[0];
         const data = escrowDoc.data() as EscrowTransaction;
         const userId = session.user.id;
-        const isAdminUser = session.user.roles?.includes("admin") || session.user.roles?.includes("super_admin");
+        const isAdminUser = session.user.roles?.includes("admin") || session.user.roles?.includes("super_admin") || session.user.roles?.includes("marketplace_admin");
 
         if (!isAdminUser && data.buyerId !== userId && data.sellerId !== userId) {
             return { success: false as const, error: "Not authorized to view this escrow", data: null };

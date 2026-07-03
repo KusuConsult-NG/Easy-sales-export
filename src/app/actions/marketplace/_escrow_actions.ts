@@ -13,6 +13,7 @@ import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { serializeValue, serializeDocs } from "@/lib/firestore-serialize";
 import { smsEscrowReleased } from "@/lib/africastalking";
 import { pushEscrowReleased } from "@/lib/fcm";
+import { isAdmin } from "@/lib/admin-permissions";
 
 // Validation schemas
 const escrowAmountSchema = z.number().min(100).max(100000000); // ₦100 to ₦100M
@@ -73,7 +74,7 @@ async function _getAllEscrowTransactionsAdmin(options: { status?: EscrowStatus;
         // Live role re-validation
         const callerDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const callerRoles: string[] = callerDoc.data()?.roles ?? [];
-        if (!callerRoles.includes("admin") && !callerRoles.includes("super_admin")) { return { success: false as const, error: "Admin access required", data: null };
+        if (!isAdmin(callerRoles)) { return { success: false as const, error: "Admin access required", data: null };
         }
 
         const fetchLimit = options.search ? 5000 : (options.limit || 50);
@@ -228,11 +229,9 @@ async function _updateEscrowStatus(
                 throw new Error(`Invalid status transition from ${currentStatus} to ${status}`);
             }
 
-            // Guard admin-only transitions
             if (
                 (currentStatus === "disputed" || status === "completed") &&
-                !session.user.roles?.includes("admin") &&
-                !session.user.roles?.includes("super_admin")
+                !isAdmin(session.user.roles)
             ) { throw new Error("Admin access required to perform this transition");
             }
 
@@ -347,7 +346,7 @@ async function _releaseEscrowFunds(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
         const { session } = sessionResult;
 
-        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) { return { success: false as const, error: "Admin access required"};
+        if (!isAdmin(session.user.roles)) { return { success: false as const, error: "Admin access required"};
         }
 
         const userId = session.user.id;
@@ -517,7 +516,7 @@ async function _refundEscrowToBuyer(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
         const { session } = sessionResult;
 
-        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) { return { success: false as const, error: "Admin access required"};
+        if (!isAdmin(session.user.roles)) { return { success: false as const, error: "Admin access required"};
         }
 
         const userId = session.user.id;

@@ -42,7 +42,9 @@ async function _updateExportStatusAction(
 
         // Verify ownership (unless admin)
         const exportData = exportDoc.data()!;
-        if (exportData.userId !== session.user.id && !session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) { return { error: "Unauthorized to update this export", success: false as const, data: null, meta: null };
+        const roles = session.user.roles || [];
+        const hasExportAccess = roles.some(r => r === "admin" || r === "super_admin" || r === "export_admin");
+        if (exportData.userId !== session.user.id && !hasExportAccess) { return { error: "Unauthorized to update this export", success: false as const, data: null, meta: null };
         }
 
         // Update status
