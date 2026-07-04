@@ -51,7 +51,7 @@ export async function sendBulkEmailAction(prevState: ActionResponse<unknown>, fo
         const resend = new Resend(process.env.RESEND_API_KEY);
 
         // Batch sending to avoid hitting limits
-        const fromAddress = process.env.RESEND_FROM_EMAIL || 'noreply@easysalesexport.com';
+        const fromAddress = process.env.EMAIL_FROM || process.env.RESEND_FROM_EMAIL || 'Easy Sales Export <info@easysalesexport.com>';
 
         const CHUNK_SIZE = 100;
         let successfulSends = 0;

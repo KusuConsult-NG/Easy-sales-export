@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 // Lazy factory — RESEND_API_KEY is a runtime secret, not available during Docker build
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
-const FROM_EMAIL = "Easy Sales Export <noreply@easysalesexport.com>";
+const FROM_EMAIL = process.env.EMAIL_FROM || "Easy Sales Export <info@easysalesexport.com>";
 const MAX_BATCH = 200;
 
 // ─── Payment type → readable name + recovery URL ────────────────────────────

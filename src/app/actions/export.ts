@@ -1201,7 +1201,7 @@ export async function requestExportRevisionAction(
             const name = userDoc.data()?.fullName || userDoc.data()?.displayName || 'Applicant';
             if (email) {
                 await resend.emails.send({
-                    from: 'Easy Sales Export <noreply@easysalesexport.com>',
+                    from: process.env.EMAIL_FROM || 'Easy Sales Export <info@easysalesexport.com>',
                     to: email,
                     subject: '⚠️ Action Required: Update Your Export Application',
                     html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
@@ -1269,7 +1269,7 @@ export async function approveExportApplicationAction(
             const name = userDoc.data()?.fullName || userDoc.data()?.displayName || 'Investor';
             if (email) {
                 await resend.emails.send({
-                    from: 'Easy Sales Export <noreply@easysalesexport.com>',
+                    from: process.env.EMAIL_FROM || 'Easy Sales Export <info@easysalesexport.com>',
                     to: email,
                     subject: '✅ Your Export Application Has Been Approved!',
                     html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">

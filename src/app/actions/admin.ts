@@ -705,7 +705,7 @@ async function _verifyLandListing(
                 } else {
                     try {
                         const { error } = await resend.emails.send({
-                            from: "Easy Sales Export <noreply@easysalesexport.com>",
+                            from: process.env.EMAIL_FROM || "Easy Sales Export <info@easysalesexport.com>",
                             to: listingData.ownerEmail,
                             subject: emailSubject,
                             html: emailContent,
@@ -1105,7 +1105,7 @@ async function _approveLoanApplication(
                 const { Resend } = await import("resend");
                 const resend = new Resend(process.env.RESEND_API_KEY);
                 await resend.emails.send({
-                    from: "Easy Sales Export <noreply@easysalesexport.com>",
+                    from: process.env.EMAIL_FROM || "Easy Sales Export <info@easysalesexport.com>",
                     to: loanData.userEmail,
                     subject: "Loan Application Approved!",
                     html: `
@@ -1218,7 +1218,7 @@ async function _rejectLoanApplication(
                 const { Resend } = await import("resend");
                 const resend = new Resend(process.env.RESEND_API_KEY);
                 await resend.emails.send({
-                    from: "Easy Sales Export <noreply@easysalesexport.com>",
+                    from: process.env.EMAIL_FROM || "Easy Sales Export <info@easysalesexport.com>",
                     to: loanData.userEmail,
                     subject: "Loan Application Update",
                     html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
@@ -1947,7 +1947,7 @@ async function _approveSellerVerificationAction(
                     const resend = new Resend(process.env.RESEND_API_KEY);
 
                     const { error } = await resend.emails.send({
-                        from: "Easy Sales Export <noreply@easysalesexport.com>",
+                        from: process.env.EMAIL_FROM || "Easy Sales Export <info@easysalesexport.com>",
                         to: userEmail,
                         subject: "Seller Account Approved!",
                         html: `
@@ -2107,7 +2107,7 @@ async function _approveExportOnboardingAction(
                 const resend = new Resend(process.env.RESEND_API_KEY);
 
                 const { error } = await resend.emails.send({
-                    from: "Easy Sales Export <noreply@easysalesexport.com>",
+                    from: process.env.EMAIL_FROM || "Easy Sales Export <info@easysalesexport.com>",
                     to: appData.userEmail,
                     subject: "Export Account Approved!",
                     html: `
@@ -2232,7 +2232,7 @@ async function _requestExportApplicationRevisionAction(
                 const { Resend } = await import("resend");
                 const resend = new Resend(process.env.RESEND_API_KEY);
                 await resend.emails.send({
-                    from: "Easy Sales Export <noreply@easysalesexport.com>",
+                    from: process.env.EMAIL_FROM || "Easy Sales Export <info@easysalesexport.com>",
                     to: appData.userEmail,
                     subject: "Action Required: Correction Needed on Your Export Application",
                     html: `
@@ -2729,7 +2729,7 @@ async function _rejectExportApplicationAction(
                 const resend = new Resend(process.env.RESEND_API_KEY);
 
                 const { error } = await resend.emails.send({
-                    from: "Easy Sales Export <noreply@easysalesexport.com>",
+                    from: process.env.EMAIL_FROM || "Easy Sales Export <info@easysalesexport.com>",
                     to: appData.userEmail,
                     subject: "Export Application Update",
                     html: `
@@ -3041,7 +3041,7 @@ async function _approveAcademyApplicationAction(
                 const { Resend } = await import("resend");
                 const resend = new Resend(process.env.RESEND_API_KEY);
                 const { error } = await resend.emails.send({
-                    from: "Easy Sales Export Academy <noreply@easysalesexport.com>",
+                    from: process.env.EMAIL_FROM || "Easy Sales Export Academy <info@easysalesexport.com>",
                     to: userEmail,
                     subject: "🎓 Academy Application Approved!",
                     html: `
@@ -3807,7 +3807,7 @@ async function _toggleVerifiedBadgeAction(
                 const { Resend } = await import("resend");
                 const resend = new Resend(process.env.RESEND_API_KEY);
                 const { error } = await resend.emails.send({
-                    from: "Easy Sales Export <noreply@easysalesexport.com>",
+                    from: process.env.EMAIL_FROM || "Easy Sales Export <info@easysalesexport.com>",
                     to: data.email,
                     subject: "🏅 You've earned a Verified Badge!",
                     html: `
@@ -4039,7 +4039,7 @@ async function _inviteLegacyMemberAction(
                 const resend = new Resend(process.env.RESEND_API_KEY);
 
                 const { error: emailError } = await resend.emails.send({
-                    from: "Easy Sales Cooperative <noreply@easysalesexport.com>",
+                    from: process.env.EMAIL_FROM || "Easy Sales Cooperative <info@easysalesexport.com>",
                     to: email,
                     subject: "You're Invited to the Cooperative!",
                     html: `

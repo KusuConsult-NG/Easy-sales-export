@@ -86,7 +86,7 @@ export async function sendEmailNotification(data: EmailData): Promise<{ success:
         const { Resend } = await import('resend');
         const resend = new Resend(process.env.RESEND_API_KEY);
 
-        const senderEmail = process.env.EMAIL_FROM || 'Easy Sales Export <noreply@easysalesexport.com>';
+        const senderEmail = process.env.EMAIL_FROM || 'Easy Sales Export <info@easysalesexport.com>';
 
         // Send email via Resend
         const result = await resend.emails.send({
@@ -147,7 +147,7 @@ export async function sendBatchEmailNotifications(emails: EmailData[]): Promise<
 
         const { Resend } = await import('resend');
         const resend = new Resend(process.env.RESEND_API_KEY);
-        const senderEmail = process.env.EMAIL_FROM || 'Easy Sales Export <noreply@easysalesexport.com>';
+        const senderEmail = process.env.EMAIL_FROM || 'Easy Sales Export <info@easysalesexport.com>';
 
         const payload = emails.map(data => ({
             from: senderEmail,

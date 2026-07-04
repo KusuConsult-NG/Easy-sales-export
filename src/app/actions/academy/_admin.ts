@@ -112,7 +112,7 @@ async function _approveAcademyApplicationAction(
                 const resend = new Resend(process.env.RESEND_API_KEY);
 
                 const { data, error } = await resend.emails.send({
-                    from: "Easy Sales Export Academy <noreply@easysalesexport.com>",
+                    from: process.env.EMAIL_FROM || "Easy Sales Export Academy <info@easysalesexport.com>",
                     to: appData.personalInfo.email,
                     subject: "Welcome to Academy - Application Approved!",
                     html: `
@@ -236,7 +236,7 @@ async function _rejectAcademyApplicationAction(
                 const resend = new Resend(process.env.RESEND_API_KEY);
 
                 const { data, error } = await resend.emails.send({
-                    from: "Easy Sales Export Academy <noreply@easysalesexport.com>",
+                    from: process.env.EMAIL_FROM || "Easy Sales Export Academy <info@easysalesexport.com>",
                     to: appData.personalInfo.email,
                     subject: "Academy Application Update",
                     html: `

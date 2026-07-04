@@ -518,7 +518,7 @@ async function _updateMemberStatusAction(
             try {
                 const resend = new Resend(process.env.RESEND_API_KEY);
                 const { error } = await resend.emails.send({
-                    from: 'Easy Sales Export <noreply@easysalesexport.com>',
+                    from: process.env.EMAIL_FROM || 'Easy Sales Export <info@easysalesexport.com>',
                     to: notificationInfo.email,
                     subject: '✅ Your Cooperative Membership Has Been Approved!',
                     html: `
@@ -1289,7 +1289,7 @@ export async function requestCooperativeRevisionAction(
             if (notificationData?.email) {
                 const resend = new Resend(process.env.RESEND_API_KEY);
                 const { error } = await resend.emails.send({
-                    from: 'Easy Sales Export <noreply@easysalesexport.com>',
+                    from: process.env.EMAIL_FROM || 'Easy Sales Export <info@easysalesexport.com>',
                     to: notificationData.email,
                     subject: '⚠️ Action Required: Update Your Cooperative Application',
                     html: `

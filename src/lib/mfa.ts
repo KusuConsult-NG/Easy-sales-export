@@ -59,8 +59,9 @@ export async function sendMFACode(email: string, userId: string): Promise<{ succ
         });
 
         // Send email via Resend
+        const senderEmail = process.env.EMAIL_FROM || 'Easy Sales Export <info@easysalesexport.com>';
         const { error } = await getResend().emails.send({
-            from: 'Easy Sales Export <noreply@easysalesexport.com>',
+            from: senderEmail,
             to: email,
             subject: 'Your Verification Code',
             html: `

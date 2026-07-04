@@ -505,7 +505,7 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
 
             if (applicantEmail) {
                 await resend.emails.send({
-                    from: 'RH-WAVE 774 <noreply@easysalesexport.com>',
+                    from: process.env.EMAIL_FROM || 'RH-WAVE 774 <info@easysalesexport.com>',
                     to: applicantEmail,
                     subject: 'Your WAVE Application Has Been Received — RH-WAVE 774',
                     html: `

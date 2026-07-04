@@ -88,8 +88,9 @@ export async function sendResetEmailAction(
 
         // Send email via Resend (using platform's verified domain)
 
+        const senderEmail = process.env.EMAIL_FROM || 'Easy Sales Export <info@easysalesexport.com>';
         const { error } = await resend.emails.send({
-            from: 'Easy Sales Export <noreply@easysalesexport.com>',
+            from: senderEmail,
             to: email,
             subject: 'Reset Your Password - Easy Sales Export',
             html: `

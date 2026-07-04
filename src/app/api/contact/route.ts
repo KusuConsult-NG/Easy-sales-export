@@ -42,9 +42,9 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Send email to admin
+        const senderEmail = process.env.EMAIL_FROM || "Easy Sales Export Contact Form <info@easysalesexport.com>";
         const { data, error } = await resend.emails.send({
-            from: "Easy Sales Export Contact Form <noreply@easysalesexport.com>",
+            from: senderEmail,
             to: COMPANY_INFO.contact.general.email,
             replyTo: email,
             subject: `[Contact Form] ${subject}`,
