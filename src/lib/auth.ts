@@ -112,80 +112,33 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         logger.error(`[Auth:Fallback] Redis resetLoginAttempts failed. Error: ${err.message}`);
                     }
 
-                    // ── STEP 6: Fetch user profile (cache-first) ─────────────
+                    // ── STEP 6: Fetch user profile (Supabase first, fallback to Firestore) ──
                     const { getUserProfile } = await import("@/lib/user-cache");
-                    const cachedProfile = await getUserProfile(uid);
+                    const profile = await getUserProfile(uid);
 
-                    if (cachedProfile) {
-                        return {
-                            id: cachedProfile.id,
-                            email: cachedProfile.email,
-                            name: cachedProfile.displayName,
-                            image: cachedProfile.photoURL || null,
-                            roles: (cachedProfile.roles || []) as UserRole[],
-                            verified: true,
-                            serviceRegistrations: cachedProfile.serviceRegistrations || {},
-                            gender: cachedProfile.gender as "male" | "female" | undefined,
-                        };
-                    }
-
-                    // ── STEP 7: Cache miss → fetch from Firestore ───────────
-                    const { getAdminDb } = await import("@/lib/firebase-admin");
-                    const adminDb = getAdminDb();
-
-                    const userDoc = await runQueryWithRetry(() => adminDb.collection(COLLECTIONS.USERS).doc(uid).get());
-
-                    if (!userDoc.exists) {
-                        console.error(`${authCtx} No user doc in Firestore for UID: ${uid}`);
+                    if (!profile) {
+                        console.error(`${authCtx} No user profile found in database for UID: ${uid}`);
                         throw new Error("User profile not found in database");
                     }
 
-                    const userData = userDoc.data() as FirestoreUser;
-
-                    // ── STEP 8: Ban/suspend check ─────────────────────────────
-                    if ((userData as any).isBanned === true || (userData as any).status === 'banned' || (userData as any).suspended === true) {
+                    // ── STEP 7: Ban/suspend check ─────────────────────────────
+                    if (profile.isBanned === true || profile.status === 'banned' || profile.suspended === true) {
                         logger.warn(`${authCtx} blocked — banned/suspended user: ${email}`);
                         throw new Error("Your account has been suspended. Please contact support.");
                     }
-
-                    // ── STEP 8.5: Track Active Users ─────────────────────────────
-                    try {
-                        const { FieldValue } = await import("firebase-admin/firestore");
-                        await runQueryWithRetry(() => adminDb.collection(COLLECTIONS.USERS).doc(uid).update({
-                            lastLoginAt: FieldValue.serverTimestamp()
-                        }));
-                    } catch (e: any) {
-                        logger.error(`${authCtx} Failed to update lastLoginAt: ${e.message}`);
-                    }
-
-                    // ── STEP 9: Update profile cache ──────────────────────────
-                    const { setCache, CacheKeys, CACHE_TTL } = await import("@/lib/redis");
-                    await setCache(
-                        CacheKeys.userProfile(uid),
-                        {
-                            ...userData,
-                            id: uid,
-                            displayName: userData.fullName, // Keep for backward compatibility
-                            photoURL: null,
-                            roles: userData.roles || [],
-                            serviceRegistrations: (userData as any).serviceRegistrations || {},
-                            lastLoginAt: new Date().toISOString()
-                        },
-                        CACHE_TTL.USER_PROFILE
-                    );
 
                     logger.info(`${authCtx} authorize success for ${email}`);
                     // Return user object for NextAuth session
                     return {
                         id: uid,
-                        email: userData.email,
-                        name: userData.fullName,
-                        image: null,
-                        roles: (userData.roles || []) as UserRole[],
-                        verified: userData.verified ?? true,
-                        serviceRegistrations: userData.serviceRegistrations || {},
-                        gender: userData.gender as "male" | "female" | undefined,
-                        createdAt: userData.createdAt,
+                        email: profile.email,
+                        name: profile.displayName,
+                        image: profile.photoURL || null,
+                        roles: (profile.roles || []) as UserRole[],
+                        verified: profile.verified ?? true,
+                        serviceRegistrations: profile.serviceRegistrations || {},
+                        gender: profile.gender as "male" | "female" | undefined,
+                        createdAt: profile.createdAt,
                     };
                 } catch (error: any) {
                     // ── CRITICAL: Log the REAL error BEFORE mapping it ────────
@@ -308,32 +261,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                                 token.createdAt = parseDate(cachedCreatedAt);
                             }
                             token.lastSyncedAt = now;
-                        } else {
-                            // Cache miss (invalidated by admin approval) and getUserProfile returned null.
-                            // Fall back to a direct Firestore read so the token is never stale
-                            // after an admin grants a new role or approves a service registration.
-                            try {
-                                const { getAdminDb } = await import("@/lib/firebase-admin");
-                                const db = getAdminDb();
-                                const userSnap = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS).doc(token.id as string).get());
-                                if (userSnap.exists) {
-                                    const userData = userSnap.data()!;
-                                    token.roles = userData.roles || [];
-                                    token.verified = userData.verified ?? true;
-                                    token.onboardingCompleted = userData.onboardingCompleted;
-                                    token.sellerVerificationStatus = userData.sellerVerificationStatus;
-                                    token.serviceRegistrations = userData.serviceRegistrations || {};
-                                    token.isBanned = userData.isBanned || userData.status === "banned" || userData.suspended || false;
-                                    token.gender = userData.gender;
-                                    const fsCreatedAt = userData.createdAt;
-                                    if (fsCreatedAt) {
-                                        token.createdAt = parseDate(fsCreatedAt);
-                                    }
-                                    token.lastSyncedAt = now;
-                                }
-                            } catch (fsErr) {
-                                console.error("[NextAuth JWT] Firestore fallback failed after cache miss", fsErr);
-                            }
                         }
                     } catch (e) {
                         console.error("[NextAuth JWT] Failed to sync session from database", e);

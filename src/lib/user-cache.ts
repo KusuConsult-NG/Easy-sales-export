@@ -45,27 +45,45 @@ export async function getUserProfile(userId: string): Promise<CachedUserProfile 
             return cached;
         }
 
-        // Cache miss — fetch from Firestore
-        const db = getAdminDb();
-        const userDoc = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS).doc(userId).get());
+        // Cache miss — fetch from Supabase
+        const { supabaseAdmin } = await import("./supabase");
+        const { data: dbRow, error } = await supabaseAdmin
+            .from("users")
+            .select("*")
+            .eq("id", userId)
+            .single();
 
-        if (!userDoc.exists) {
-            return null;
+        let userData: any = null;
+
+        if (error || !dbRow) {
+            // Fallback: Try Firestore as a safe guard if not found in Supabase
+            try {
+                const db = getAdminDb();
+                const userDoc = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS).doc(userId).get());
+                if (!userDoc.exists) {
+                    return null;
+                }
+                userData = userDoc.data()!;
+            } catch (fsErr) {
+                console.error('[getUserProfile] Firestore fallback failed:', fsErr);
+                return null;
+            }
+        } else {
+            userData = dbRow.raw_data || {};
         }
 
-        const userData = userDoc.data()!;
         // NOTE: registerAction writes 'fullName' to Firestore, not 'displayName'.
         // We read both to handle legacy documents that may have used 'displayName'.
         const resolvedName = userData.fullName || userData.displayName || '';
         const profile: CachedUserProfile = {
             id: userId,
-            email: userData.email,
+            email: dbRow?.email || userData.email,
             displayName: resolvedName,
             photoURL: userData.photoURL,
-            roles: userData.roles || [],
+            roles: dbRow?.roles || userData.roles || [],
             serviceRegistrations: userData.serviceRegistrations,
-            createdAt: userData.createdAt,
-            updatedAt: userData.updatedAt,
+            createdAt: dbRow?.created_at || userData.createdAt,
+            updatedAt: dbRow?.updated_at || userData.updatedAt,
             profileComplete: userData.profileComplete,
             onboardingCompleted: userData.onboardingCompleted,
             requiresPasswordChange: userData.requiresPasswordChange,
