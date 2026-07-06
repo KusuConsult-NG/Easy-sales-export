@@ -48,6 +48,7 @@
     "@paystack/inline-js": "^2.22.2",
     "@react-pdf/renderer": "^4.3.2",
     "@sentry/nextjs": "^10.38.0",
+    "@supabase/supabase-js": "^2.109.0",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.36.2",
     "@zxing/library": "^0.21.3",
