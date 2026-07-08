@@ -531,7 +531,7 @@ export async function registerCooperativeMemberAction(
 
         return { error: null, success: true as const,
             meta: null
-        , data: { message: "Action successful" } };
+        , data: { message: "Action successful", version: (updatedData as any)._version } };
     } catch (error) { logger.error("Membership registration failed:", {
             error: error instanceof Error ? error.message : String(error)
         });

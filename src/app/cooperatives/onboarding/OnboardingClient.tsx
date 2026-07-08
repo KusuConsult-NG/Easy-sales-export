@@ -495,6 +495,10 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
             ? await resubmitCooperativeApplicationAction(formData)
             : await registerCooperativeMemberAction(formData);
 
+        if (result.success && result.data && (result.data as any).version !== undefined) {
+            setVersion((result.data as any).version);
+        }
+
         return result;
     }
 

@@ -210,30 +210,38 @@ if (!(globalThis as any).__FIRESTORE_SYNC_WRAPPED__) {
     };
 
     // Wrap set
-    DocumentReference.prototype.set = async function(data: any, options?: any) {
-        const result = await (originalSet as any).call(this, data, options);
-        await syncToSupabase(this.path, data, "set");
+    DocumentReference.prototype.set = function(data: any, options?: any) {
+        const result = (originalSet as any).call(this, data, options);
+        syncToSupabase(this.path, data, "set").catch(err => {
+            console.error(`[DB Sync] Uncaught error syncing set for ${this.path}:`, err);
+        });
         return result;
     };
 
     // Wrap update
-    DocumentReference.prototype.update = async function(data: any, precondition?: any) {
-        const result = await (originalUpdate as any).call(this, data, precondition);
-        await syncToSupabase(this.path, data, "update");
+    DocumentReference.prototype.update = function(data: any, precondition?: any) {
+        const result = (originalUpdate as any).call(this, data, precondition);
+        syncToSupabase(this.path, data, "update").catch(err => {
+            console.error(`[DB Sync] Uncaught error syncing update for ${this.path}:`, err);
+        });
         return result;
     };
 
     // Wrap create
-    DocumentReference.prototype.create = async function(data: any) {
-        const result = await (originalCreate as any).call(this, data);
-        await syncToSupabase(this.path, data, "create");
+    DocumentReference.prototype.create = function(data: any) {
+        const result = (originalCreate as any).call(this, data);
+        syncToSupabase(this.path, data, "create").catch(err => {
+            console.error(`[DB Sync] Uncaught error syncing create for ${this.path}:`, err);
+        });
         return result;
     };
 
     // Wrap delete
-    DocumentReference.prototype.delete = async function(precondition?: any) {
-        const result = await (originalDelete as any).call(this, precondition);
-        await syncToSupabase(this.path, null, "delete");
+    DocumentReference.prototype.delete = function(precondition?: any) {
+        const result = (originalDelete as any).call(this, precondition);
+        syncToSupabase(this.path, null, "delete").catch(err => {
+            console.error(`[DB Sync] Uncaught error syncing delete for ${this.path}:`, err);
+        });
         return result;
     };
 
