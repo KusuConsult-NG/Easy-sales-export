@@ -329,7 +329,7 @@ export async function registerCooperativeMemberAction(
             }
             isLegacyImport = true;
         } else { // Legacy check
-            if (memberData?.onboardingCompleted) { return { error: "You have already completed onboarding. Profile updates require admin approval.", success: false as const, data: null };
+            if (memberData?.onboardingCompleted && memberData?.paymentStatus === "completed") { return { error: "You have already completed onboarding. Profile updates require admin approval.", success: false as const, data: null };
             }
             isLegacyImport = Boolean(memberData?._importSource) || isUserLegacy;
         }
