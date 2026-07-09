@@ -86,13 +86,22 @@ async function verifyMFAHandler(request: NextRequest) {
         }
 
         // Set MFA verified cookie (30 minutes)
+        const hostname = (
+            request.headers.get("x-forwarded-host") ||
+            request.headers.get("host") ||
+            ""
+        ).split(",")[0].trim().replace(/:\d+$/, "").toLowerCase();
+        const hostParts = hostname.replace(/^www\./, "").split(".");
+        const isLocal = hostname.includes("localhost") || hostname.includes("127.0.0.1");
+        const domain = (!isLocal && hostParts.length >= 2) ? `.${hostParts.slice(-2).join(".")}` : undefined;
+
         const response = NextResponse.json({ success: true });
         response.cookies.set("mfa_verified", "true", {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
             sameSite: "lax",
             maxAge: 30 * 60,
-            domain: process.env.NODE_ENV === "production" ? ".easysalesexport.com" : undefined,
+            domain,
             path: "/",
         });
 

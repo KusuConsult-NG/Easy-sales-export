@@ -230,11 +230,21 @@ export default async function proxy(req: any, event: any) {
     if (hasSessionCookie && res && res.status >= 300 && res.status <= 399) {
         const location = res.headers.get("location");
         if (location && (location.includes("/auth/login") || location.includes("/login"))) {
-            const domain = ".easysalesexport.com";
+            const hostname = (
+                req.headers.get("x-forwarded-host") ||
+                req.headers.get("host") ||
+                ""
+            ).split(",")[0].trim().replace(/:\d+$/, "").toLowerCase();
+            const hostParts = hostname.replace(/^www\./, "").split(".");
+            const isLocal = hostname.includes("localhost") || hostname.includes("127.0.0.1");
+            const domain = (!isLocal && hostParts.length >= 2) ? `.${hostParts.slice(-2).join(".")}` : undefined;
+            
             const tokenNames = ['authjs.session-token', '__Secure-authjs.session-token', 'next-auth.session-token', '__Secure-next-auth.session-token'];
             
             tokenNames.forEach(name => {
-                (res as any).cookies.set(name, "", { domain, maxAge: 0, path: "/", secure: true });
+                if (domain) {
+                    (res as any).cookies.set(name, "", { domain, maxAge: 0, path: "/", secure: true });
+                }
                 (res as any).cookies.set(name, "", { maxAge: 0, path: "/", secure: true });
             });
         }

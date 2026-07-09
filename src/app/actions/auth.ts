@@ -506,18 +506,26 @@ export async function registerAction(prevState: any, formData: FormData) { const
 export async function logoutAction() { 
     try {
         const cookieStore = await cookies();
-        const domain = ".easysalesexport.com";
+        
+        const { headers } = await import("next/headers");
+        const headersList = await headers();
+        const hostname = (headersList.get("host") || "").split(",")[0].trim().replace(/:\d+$/, "").toLowerCase();
+        const hostParts = hostname.replace(/^www\./, "").split(".");
+        const isLocal = hostname.includes("localhost") || hostname.includes("127.0.0.1");
+        const domain = (!isLocal && hostParts.length >= 2) ? `.${hostParts.slice(-2).join(".")}` : undefined;
         
         // Explicitly clear the token from the ROOT domain so all modules lose it
         // We clear both standard and secure token names used in auth.config.ts
         const tokenNames = ['authjs.session-token', '__Secure-authjs.session-token', 'next-auth.session-token', '__Secure-next-auth.session-token'];
         
         for (const name of tokenNames) {
-            cookieStore.set(name, "", {
-                domain,
-                expires: new Date(0),
-                path: "/",
-            });
+            if (domain) {
+                cookieStore.set(name, "", {
+                    domain,
+                    expires: new Date(0),
+                    path: "/",
+                });
+            }
             // Also clear without explicit domain to be sure
             cookieStore.set(name, "", {
                 expires: new Date(0),
