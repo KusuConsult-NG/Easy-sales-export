@@ -12,11 +12,11 @@
 
 "use server";
 
-import { getAdminDb } from "@/lib/firebase-admin";
+import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { sendSMS } from "@/lib/africastalking";
 import { normalisePhone } from "@/lib/phone";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/firestore-compat";
 import { requireAdmin } from "@/lib/require-admin";
 import { ActionResponse } from "@/lib/safe-action";
 import { logger } from "@/lib/logger";
@@ -75,7 +75,7 @@ export type SmsBroadcastResult = ActionResponse<{
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 
-async function resolveUsers(db: FirebaseFirestore.Firestore, userIds: string[]) {
+async function resolveUsers(db: any, userIds: string[]) {
     const compact = Array.from(new Set(userIds.filter(id => id && typeof id === 'string' && id.trim().length > 0)));
     const map = new Map<string, any>();
     for (let i = 0; i < compact.length; i += 100) {
@@ -95,7 +95,7 @@ async function resolveUsers(db: FirebaseFirestore.Firestore, userIds: string[]) 
 }
 
 async function resolvePhoneStates(
-    db: FirebaseFirestore.Firestore,
+    db: any,
     normalizedPhones: Set<string>
 ): Promise<Map<string, string>> {
     const phoneStateMap = new Map<string, string>();
@@ -301,7 +301,7 @@ async function collectSmsRecipients(
         }
         case "sellers":
         case "wholesale_sellers":
-        case "retail_sellers": { let q: FirebaseFirestore.Query = db
+        case "retail_sellers": { let q: import("@/lib/supabase-db").SupabaseQuery = db
                 .collection(COLLECTIONS.SELLER_VERIFICATIONS);
             if (filters.sellerStatus && filters.sellerStatus !== "all") {
                 q = q.where("status", "==", filters.sellerStatus);

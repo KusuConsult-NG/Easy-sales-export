@@ -1,10 +1,11 @@
 "use server";
 
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { runQueryWithRetry } from "@/lib/firestore-utils";
 import { normalizeUserUpdate } from "@/lib/schema-normalizer";
 import { logger } from '@/lib/logger';
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/firestore-compat";
+import { Timestamp } from "@/lib/firestore-compat";
 import { auth } from "@/lib/auth";
 import { getBaseUrl } from "@/lib/server-utils";
 import { initializePaystackPayment, nairaToKobo } from "@/lib/paystack-server";

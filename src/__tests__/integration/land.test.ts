@@ -8,7 +8,7 @@ import {
     cleanupTestData,
     TEST_LAND_LISTING,
 } from './setup';
-import { getAdminDb } from '@/lib/firebase-admin';
+import { getAdminDb } from "@/lib/supabase-db";
 
 describe('Land Listing Integration Tests', () => {
     beforeEach(async () => {

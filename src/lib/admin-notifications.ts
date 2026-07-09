@@ -1,4 +1,4 @@
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { createBulkNotifications } from "@/infrastructure/notifications/service";
 import { sendPushToMany } from "@/lib/fcm";

@@ -169,3 +169,35 @@ CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_processed_payments_reference ON processed_payments(reference);
 CREATE INDEX IF NOT EXISTS idx_marketplace_orders_user_id ON marketplace_orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_doc_collections_name ON document_collections(collection_name);
+
+-- ==========================================
+-- Phase 2 Migration Indexes (2026-07)
+-- Required by supabase-db.ts adapter
+-- ==========================================
+
+-- Composite PK index for document_collections generic table (critical for .doc(id).get())
+CREATE INDEX IF NOT EXISTS idx_doc_collections_id_name ON document_collections(id, collection_name);
+
+-- GIN index on raw_data for fast JSONB field queries across all dedicated tables
+CREATE INDEX IF NOT EXISTS idx_users_raw_data ON users USING GIN (raw_data);
+CREATE INDEX IF NOT EXISTS idx_coop_members_raw_data ON cooperative_members USING GIN (raw_data);
+CREATE INDEX IF NOT EXISTS idx_coop_loans_raw_data ON cooperative_loans USING GIN (raw_data);
+CREATE INDEX IF NOT EXISTS idx_transactions_raw_data ON transactions USING GIN (raw_data);
+CREATE INDEX IF NOT EXISTS idx_processed_payments_raw_data ON processed_payments USING GIN (raw_data);
+CREATE INDEX IF NOT EXISTS idx_marketplace_orders_raw_data ON marketplace_orders USING GIN (raw_data);
+CREATE INDEX IF NOT EXISTS idx_wallets_raw_data ON wallets USING GIN (raw_data);
+CREATE INDEX IF NOT EXISTS idx_academy_apps_raw_data ON academy_applications USING GIN (raw_data);
+CREATE INDEX IF NOT EXISTS idx_doc_collections_raw_data ON document_collections USING GIN (raw_data);
+
+-- Timestamp ordering indexes (for createdAt DESC queries on document_collections)
+CREATE INDEX IF NOT EXISTS idx_doc_collections_created_at ON document_collections(collection_name, created_at DESC);
+
+-- Cooperative member status (common filter: where membershipStatus == 'active')
+CREATE INDEX IF NOT EXISTS idx_coop_members_status ON cooperative_members(status);
+
+-- Academy applications status (common filter)
+CREATE INDEX IF NOT EXISTS idx_academy_apps_status ON academy_applications(status);
+CREATE INDEX IF NOT EXISTS idx_academy_apps_user_id ON academy_applications(user_id);
+
+-- Marketplace orders status
+CREATE INDEX IF NOT EXISTS idx_marketplace_orders_status ON marketplace_orders(status);

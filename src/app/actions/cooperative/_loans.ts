@@ -1,10 +1,11 @@
 "use server";
 import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
 
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/firestore-compat";
+import { Timestamp } from "@/lib/firestore-compat";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { calculateRepaymentSchedule, isEligibleForLoan, getTierInterestRate } from "@/lib/cooperative-tiers";
 import { auth } from "@/lib/auth";
@@ -289,7 +290,7 @@ export async function getAdminLoanApplicationsAction(options: {
 
         // Build query: ALL where() clauses must come BEFORE orderBy() in Firestore.
         // Doing it the other way causes FAILED_PRECONDITION (composite index error).
-        let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.LOAN_APPLICATIONS);
+        let query: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS);
 
         if (options.statusFilter && options.statusFilter !== "all") {
             query = query.where("status", "==", options.statusFilter);
@@ -313,7 +314,7 @@ export async function getAdminLoanApplicationsAction(options: {
             }
         }
 
-        let snapshot: FirebaseFirestore.QuerySnapshot;
+        let snapshot: any;
         let indexError = false;
         try {
             snapshot = await query.limit(fetchLimit + 1).get();

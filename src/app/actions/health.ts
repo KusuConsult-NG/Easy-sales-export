@@ -1,7 +1,7 @@
 "use server";
 
 import { requireSession } from "@/lib/session-guard";
-import { db, getAdminDb } from "@/lib/firebase-admin";
+import { supabaseDb as db, getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS, User } from "@/lib/types/firestore";
 import { isAdmin } from "@/lib/admin-permissions";
 import { getRedisClientStatus } from "@/lib/redis";

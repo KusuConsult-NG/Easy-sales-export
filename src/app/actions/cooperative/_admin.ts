@@ -10,10 +10,11 @@ import { userMetricsService } from "@/services";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { normalizeUserUpdate } from "@/lib/schema-normalizer";
 import { isAdmin } from "@/lib/admin-permissions";
-import { FieldValue, FieldPath } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/firestore-compat";
+import { FieldPath } from "@/lib/firestore-compat";
 import { logAuditAction } from "@/lib/audit-log";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { ActionResponse, withFlexibleSafeAction } from "@/lib/safe-action";
@@ -121,7 +122,7 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
         } = metricsData;
 
 
-        let txnQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS);
+        let txnQuery: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS);
         if (adminScope) {
             txnQuery = txnQuery.where("cooperativeId", "==", adminScope);
         }
@@ -170,7 +171,7 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
             }
         }
 
-        let loansQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_LOANS).select("memberId", "amount", "status");
+        let loansQuery: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.COOPERATIVE_LOANS).select("memberId", "amount", "status");
         if (adminScope) {
             loansQuery = loansQuery.where("cooperativeId", "==", adminScope);
         }
@@ -275,7 +276,7 @@ async function _getAllMembersAction(options?: {
 
         const adminScope = await getAdminScope(session.user.id, roles);
 
-        let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
+        let q: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
 
         if (adminScope) {
             q = q.where("cooperativeId", "==", adminScope);
@@ -457,16 +458,6 @@ async function _updateMemberStatusAction(
 
             if (status === "active" || status === "approved") {
                 const userData = userDoc?.data();
-                if (!userDoc || !userDoc.exists) {
-                    transaction.set(userRef, {
-                        uid: targetUserId,
-                        email: memberData?.email || "",
-                        fullName: `${memberData?.firstName || ''} ${memberData?.lastName || ''}`.trim() || "Cooperative Member",
-                        createdAt: FieldValue.serverTimestamp(),
-                        roles: ["cooperative_member"],
-                        isVerified: true,
-                    });
-                }
                 if (userData?.email || memberData?.email) {
                     notificationInfo = {
                         email: userData?.email || memberData.email,
@@ -474,9 +465,6 @@ async function _updateMemberStatusAction(
                     };
                 }
 
-                // Sync approval/active status to USERS doc so the user-facing status check
-                // (checkCooperativeStatusAction) reads the correct value from serviceRegistrations.
-                // Without this, user sees "pending" while admin dashboard shows "approved".
                 const userDocUpdate: Record<string, any> = {
                     isVerified: true,
                     roles: FieldValue.arrayUnion("cooperative_member"),
@@ -488,7 +476,30 @@ async function _updateMemberStatusAction(
                 if (status === "active") {
                     userDocUpdate["serviceRegistrations.cooperatives.activatedAt"] = FieldValue.serverTimestamp();
                 }
-                transaction.update(userRef, normalizeUserUpdate(userDocUpdate));
+
+                if (!userDoc || !userDoc.exists) {
+                    // Combine initial set and update payload
+                    const initialData = {
+                        uid: targetUserId,
+                        email: memberData?.email || "",
+                        fullName: `${memberData?.firstName || ''} ${memberData?.lastName || ''}`.trim() || "Cooperative Member",
+                        createdAt: FieldValue.serverTimestamp(),
+                        roles: ["cooperative_member"],
+                        isVerified: true,
+                        serviceRegistrations: {
+                            cooperatives: {
+                                status,
+                                approvedAt: FieldValue.serverTimestamp(),
+                                ...(status === "active" ? { activatedAt: FieldValue.serverTimestamp() } : {})
+                            }
+                        },
+                        updatedAt: FieldValue.serverTimestamp(),
+                        _version: 1
+                    };
+                    transaction.set(userRef, initialData);
+                } else {
+                    transaction.update(userRef, normalizeUserUpdate(userDocUpdate));
+                }
             }
             return { notificationInfo, targetUserId };
         });
@@ -595,7 +606,7 @@ async function _getAllTransactionsAction(options?: {
 
         const adminScope = await getAdminScope(session.user.id, roles);
 
-        let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS);
+        let q: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS);
 
         if (adminScope) {
             q = q.where("cooperativeId", "==", adminScope);
@@ -790,7 +801,7 @@ export async function getContributionReportsAction(options?: {
         // to avoid cross-collection count drift.
 
         // Get all completed cooperative transactions for amount/trend reporting
-        let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS)
+        let q: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS)
             .where("status", "==", "completed");
 
         if (adminScope) {
@@ -915,7 +926,7 @@ export async function getRecentActivityAction(): Promise<ActionResponse<any>> {
         const adminScope = await getAdminScope(session.user.id, roles);
 
         // Build query: where() MUST precede orderBy()
-        let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS);
+        let q: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS);
 
         if (adminScope) {
             q = q.where("cooperativeId", "==", adminScope);
@@ -1374,7 +1385,7 @@ export async function getStandardCooperativeMembersAction(
         let hasMoreRaw = false;
         let nextCursor: string | undefined = undefined;
 
-        let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
+        let q: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
 
         if (adminScope) {
             q = q.where("cooperativeId", "==", adminScope);

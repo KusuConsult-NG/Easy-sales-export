@@ -1,6 +1,7 @@
 "use server";
 
-import { db, adminAuth } from "@/lib/firebase-admin";
+import { adminAuth } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from "@/lib/logger";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { db, adminAuth } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
+import { adminAuth } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
+import { FieldValue } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
 export async function POST(req: Request) {

@@ -1,11 +1,11 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { auth } from "firebase-admin";
 import { logger } from "@/lib/logger";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { Timestamp } from "firebase-admin/firestore";
+import { Timestamp } from "@/lib/firestore-compat";
 import { purgeChatbotDataOlderThan } from "@/lib/chatbot-db";
 
 // The maximum number of documents to delete in one invocation (Firestore limit is 500 per batch)

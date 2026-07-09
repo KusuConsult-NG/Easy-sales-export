@@ -1,4 +1,4 @@
-import { getAdminDb } from "@/lib/firebase-admin";
+import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import type { CommunicationsServiceContract } from "@easy-sales/services";
@@ -24,7 +24,7 @@ export class CommunicationsService implements CommunicationsServiceContract {
 
         try {
             if (audience === "cooperative") {
-                let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
+                let query: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
                 if (status) {
                     // Map common statuses to cooperative fields
                     if (status === "approved" || status === "active") {
@@ -43,7 +43,7 @@ export class CommunicationsService implements CommunicationsServiceContract {
                 });
                 logger.info(`[CommsService] cooperative targeting: ${emails.length} emails found`);
             } else if (audience === "wave") {
-                let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.WAVE_APPLICATIONS);
+                let query: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.WAVE_APPLICATIONS);
                 if (status) {
                     query = query.where("status", "==", status);
                 }
@@ -55,7 +55,7 @@ export class CommunicationsService implements CommunicationsServiceContract {
                 });
                 logger.info(`[CommsService] wave targeting: ${emails.length} emails found`);
             } else if (audience === "academy") {
-                let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS);
+                let query: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS);
                 if (status) {
                     query = query.where("status", "==", status);
                 }
@@ -68,7 +68,7 @@ export class CommunicationsService implements CommunicationsServiceContract {
                 logger.info(`[CommsService] academy targeting: ${emails.length} emails found`);
             } else {
                 // Query root users collection
-                let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.USERS);
+                let query: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.USERS);
                 
                 switch (audience) {
                     case "active":

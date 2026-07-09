@@ -1,4 +1,5 @@
-import { Transaction, DocumentReference, FieldValue } from "firebase-admin/firestore";
+import { Transaction, DocumentReference } from "@/lib/supabase-db";
+import { FieldValue } from "@/lib/firestore-compat";
 
 /**
  * Perform a versioned update to a document within a transaction.

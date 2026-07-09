@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from "@/lib/logger";
@@ -86,7 +86,7 @@ export async function getBriefingRegistrationsAction(
         const pageSize = searchQuery ? 5000 : Math.min(Math.max(limit, 1), 5000);
 
         // --- Build Firestore query with server-side filters ---
-        let query: FirebaseFirestore.Query = db
+        let query: import("@/lib/supabase-db").SupabaseQuery = db
             .collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS);
 
         if (filterState) { query = query.where("state", "==", filterState);
@@ -105,7 +105,7 @@ export async function getBriefingRegistrationsAction(
         }
 
         // Build count query with same filters
-        let countQuery: FirebaseFirestore.Query = db
+        let countQuery: import("@/lib/supabase-db").SupabaseQuery = db
             .collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS);
         if (filterState) countQuery = countQuery.where("state", "==", filterState);
         if (filterRole) countQuery = countQuery.where("role", "==", filterRole);
@@ -124,7 +124,7 @@ export async function getBriefingRegistrationsAction(
             if (e.message && String(e.message).toLowerCase().includes("index")) {
                 logger.warn("Missing composite index, falling back to in-memory filter...");
                 try {
-                    const fallbackQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS);
+                    const fallbackQuery: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS);
                     
                     const allDocsSnap = await fallbackQuery.get();
                     let allDocs = allDocsSnap.docs;

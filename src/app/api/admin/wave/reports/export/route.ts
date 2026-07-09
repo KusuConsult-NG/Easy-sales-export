@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isAdmin } from "@/lib/admin-permissions";
 
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Fetch WAVE applications (Admin SDK)
-        let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.WAVE_APPLICATIONS);
+        let query: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.WAVE_APPLICATIONS);
 
         if (dateFilter) {
             query = query.where("createdAt", ">=", dateFilter);

@@ -5,11 +5,12 @@
  * and cooperative broadcast threads with strict module context and RBAC guards.
  */
 
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import type { Conversation, Message, UserSearchResult } from "@/lib/types/messages";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/firestore-compat";
+import { Timestamp } from "@/lib/firestore-compat";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { requireSession } from "@/lib/session-guard";
 

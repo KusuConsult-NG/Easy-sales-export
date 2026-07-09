@@ -1,5 +1,5 @@
 import { db } from "./firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/firestore-compat";
 
 /**
  * Optimistic Locking Helper
@@ -8,9 +8,9 @@ import { FieldValue } from "firebase-admin/firestore";
  * the version the client last saw.
  */
 export async function withOptimisticLock<T>(
-    docRef: FirebaseFirestore.DocumentReference,
+    docRef: any,
     clientVersion: number | undefined,
-    updateFn: (transaction: FirebaseFirestore.Transaction, currentData: T) => void
+    updateFn: (transaction: any, currentData: T) => void
 ) {
     return await db.runTransaction(async (transaction) => {
         const doc = await transaction.get(docRef);

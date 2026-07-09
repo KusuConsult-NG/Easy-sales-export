@@ -1,9 +1,11 @@
 "use server";
 
 import { z } from "zod";
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { FieldValue, Timestamp, GeoPoint } from "firebase-admin/firestore";
+import { GeoPoint } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/firestore-compat";
+import { Timestamp } from "@/lib/firestore-compat";
 import { 
     landListingSchema,
     landListingUpdateSchema,

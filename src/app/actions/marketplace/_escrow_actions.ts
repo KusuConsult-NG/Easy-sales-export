@@ -2,11 +2,12 @@
 
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { z } from "zod";
 import type { EscrowStatus, EscrowTransaction } from "@/types/escrow";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/firestore-compat";
+import { Timestamp } from "@/lib/firestore-compat";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { createNotificationAction } from "@/app/actions/notifications";
 import { withFlexibleSafeAction } from "@/lib/safe-action";

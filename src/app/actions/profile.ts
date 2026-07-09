@@ -7,14 +7,15 @@
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
-import { db, adminAuth } from "@/lib/firebase-admin";
+import { adminAuth } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { z } from "zod";
 import { strictEmailSchema, strictPhoneSchema } from "@/lib/schemas";
 import { withSafeAction } from "@/lib/safe-action";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { versionedUpdate } from "@/lib/optimistic-locking";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/firestore-compat";
 import { serializeDoc } from "@/lib/firestore-serialize";
 
 // Validation schemas

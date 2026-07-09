@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
@@ -28,8 +28,8 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ found: false, error: "Missing type or query" }, { status: 400 });
         }
 
-        let userDoc: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot | null = null;
-        let memberDoc: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+        let userDoc: any | any | null = null;
+        let memberDoc: any | null = null;
 
         if (type === "email") {
             // Look by email in users collection

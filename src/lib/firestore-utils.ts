@@ -1,5 +1,5 @@
-import { getAdminDb } from "./firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
+import { supabaseDb as db } from "./supabase-db";
+import { FieldValue } from "@/lib/firestore-compat";
 
 /**
  * Atomic Write Wrapper (Safe Write)
@@ -16,7 +16,6 @@ export async function safeWrite(
     data: any, 
     customId?: string
 ) {
-    const db = getAdminDb();
     const collectionRef = db.collection(collection);
     
     const payload = {
@@ -45,7 +44,6 @@ export async function safeUpdate(
     docId: string,
     data: any
 ) {
-    const db = getAdminDb();
     const docRef = db.collection(collection).doc(docId);
 
     await docRef.update({
@@ -95,7 +93,7 @@ export async function runQueryWithRetry<T>(queryFn: () => Promise<T>, retries = 
 
 // ─── Pagination & Safe Query Helpers ──────────────────────────────────────────
 
-import type { CollectionReference, Query } from 'firebase-admin/firestore';
+import type { CollectionReference, Query } from '@/lib/supabase-db';
 
 /**
  * Applies cursor-based pagination to any Firestore query.
@@ -113,7 +111,7 @@ export async function paginatedQuery(
     limit: number,
     lastDocId?: string
 ): Promise<{
-    docs: FirebaseFirestore.QueryDocumentSnapshot[];
+    docs: import("@/lib/supabase-db").SupabaseQueryDocumentSnapshot[];
     hasMore: boolean;
     nextCursor: string | null;
 }> {
@@ -144,7 +142,7 @@ export function withSafeLimit<T extends Query>(query: T, limit = 500): T {
 
 // ─── safeCollection — Proxy-based auto-limit wrapper ──────────────────────────
 
-import type { Firestore } from 'firebase-admin/firestore';
+// safeCollection helper
 
 /**
  * safeCollection — A Firestore collection() wrapper that enforces a default
@@ -164,7 +162,7 @@ import type { Firestore } from 'firebase-admin/firestore';
  * before executing the query.
  */
 export function safeCollection(
-    db: Firestore,
+    db: any,
     collectionPath: string,
     options: { limit?: number } = {}
 ) {
@@ -178,7 +176,7 @@ export function safeCollection(
 }
 
 function createSafeQuery(
-    query: FirebaseFirestore.Query | FirebaseFirestore.CollectionReference,
+    query: import("@/lib/supabase-db").SupabaseQuery | any,
     defaultLimit: number
 ): any {
     let hasLimit = false;

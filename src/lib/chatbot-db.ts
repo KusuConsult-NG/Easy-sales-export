@@ -7,8 +7,9 @@
  * Phase 13 — AI Chatbot Persistence
  */
 
-import { getAdminDb } from "@/lib/firebase-admin";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { getAdminDb } from "@/lib/supabase-db";
+import { FieldValue } from "@/lib/firestore-compat";
+import { Timestamp } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { ChatbotModule } from "@/lib/chatbot-knowledge";
 import { logger } from "@/lib/logger";

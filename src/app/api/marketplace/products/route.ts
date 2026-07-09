@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
         const limit = Math.min(Math.max(rawLimit, 1), 50);
 
         // Base query — always filter active + in-stock
-        let baseQuery: FirebaseFirestore.Query = db
+        let baseQuery: import("@/lib/supabase-db").SupabaseQuery = db
             .collection(COLLECTIONS.PRODUCTS)
             .where("status", "==", "active")
             .where("inStock", "==", true);

@@ -69,7 +69,7 @@ export async function cleanupTestData() {
             if (snapshot.empty) continue;
             
             const batch = adminDb.batch();
-            snapshot.docs.forEach(docSnapshot => {
+            snapshot.docs.forEach((docSnapshot: any) => {
                 batch.delete(docSnapshot.ref);
             });
             await batch.commit();

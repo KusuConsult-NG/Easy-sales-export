@@ -6,9 +6,10 @@
 
 import { ActionResponse } from "@/lib/safe-action";
 
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from '@/lib/logger';
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/firestore-compat";
+import { Timestamp } from "@/lib/firestore-compat";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
@@ -650,7 +651,7 @@ async function _getWaveResourcesAction(
 
         const pageSize = Math.min(Math.max(limit, 1), 50);
 
-        let queryRef: FirebaseFirestore.Query = db.collection(COLLECTIONS.WAVE_RESOURCES)
+        let queryRef: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.WAVE_RESOURCES)
             .orderBy("createdAt", "desc")
             .limit(pageSize + 1);
 
@@ -701,7 +702,7 @@ async function _getWaveTrainingEventsAction(
 
         const pageSize = Math.min(Math.max(limit, 1), 50);
 
-        let queryRef: FirebaseFirestore.Query = db.collection(COLLECTIONS.WAVE_TRAINING_EVENTS);
+        let queryRef: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.WAVE_TRAINING_EVENTS);
 
         if (!includeAllStatuses) {
             queryRef = queryRef.where("status", "in", ["upcoming", "ongoing"]);

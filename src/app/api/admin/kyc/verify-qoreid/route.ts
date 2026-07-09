@@ -3,8 +3,8 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
-import { db } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
+import { supabaseDb as db } from "@/lib/supabase-db";
+import { FieldValue } from "@/lib/firestore-compat";
 import { isAdmin } from "@/lib/admin-permissions";
 import { qoreIdService } from "@/lib/qoreid";
 

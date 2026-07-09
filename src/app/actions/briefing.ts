@@ -1,8 +1,8 @@
 "use server";
 
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/firestore-compat";
 import { logger } from "@/lib/logger";
 import { sendBriefingConfirmationEmail } from "@/lib/email-notifications";
 import { generateAndSendWhatsAppInvite } from "@/lib/whatsapp-invites";

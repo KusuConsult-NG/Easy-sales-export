@@ -1,9 +1,8 @@
-import './firestore-retry';
-import './db-sync';
 import { initializeApp, getApps, cert, App } from 'firebase-admin/app';
-import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import { getAuth, Auth } from 'firebase-admin/auth';
 import { getStorage } from 'firebase-admin/storage';
+// NOTE: Firestore (db) is now handled by supabase-db.ts — do NOT import db from here.
+// Only Auth and Storage remain on Firebase.
 
 /**
  * CRITICAL: Lazy initialization pattern
@@ -15,7 +14,6 @@ import { getStorage } from 'firebase-admin/storage';
 // Define global interface for Next.js hot-reload persistence
 declare global {
     var __FIREBASE_ADMIN_APP__: App | undefined;
-    var __FIRESTORE_INSTANCE__: Firestore | undefined;
     var __FIREBASE_AUTH_INSTANCE__: Auth | undefined;
     var __FIREBASE_STORAGE_INSTANCE__: ReturnType<typeof getStorage> | undefined;
 }
@@ -104,32 +102,16 @@ export function initializeFirebaseAdmin(): App {
     return globalThis.__FIREBASE_ADMIN_APP__;
 }
 
-/**
- * Get Firestore instance (lazy initialization)
- * This function should ONLY be called inside API routes or server actions
- */
-export function getAdminDb(): Firestore {
-    if (!globalThis.__FIRESTORE_INSTANCE__) {
-        initializeFirebaseAdmin();
-        const db = getFirestore();
-        try {
-            db.settings({ preferRest: false, ignoreUndefinedProperties: true });
-        } catch (e) {
-            console.warn("Firestore settings already applied manually");
-        }
-        globalThis.__FIRESTORE_INSTANCE__ = db;
-    }
-    return globalThis.__FIRESTORE_INSTANCE__;
+// Firestore (db) has been removed from firebase-admin.ts.
+// All data reads and writes now use supabase-db.ts.
+// Compatibility shims are provided below for tests and old files.
+import { supabaseDb } from './supabase-db';
+
+export function getAdminDb(): any {
+    return supabaseDb;
 }
 
-// Legacy export for backward compatibility
-// WARNING: This getter will initialize Firebase on first access
-export const db = new Proxy({} as Firestore, {
-    get(_target, prop) {
-        const instance = getAdminDb();
-        return instance[prop as keyof Firestore];
-    }
-});
+export const db: any = supabaseDb;
 
 
 /**

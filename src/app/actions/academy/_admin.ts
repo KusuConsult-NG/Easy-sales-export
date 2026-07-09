@@ -2,10 +2,11 @@
 import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
 import { userMetricsService } from "@/services";
 
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
-import { FieldValue, FieldPath } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/firestore-compat";
+import { FieldPath } from "@/lib/firestore-compat";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { createAdminAuditLog } from "@/lib/audit-log";
@@ -436,7 +437,7 @@ async function _getAcademyEnrollmentsAction(options?: {
             return { success: false, error: "Unauthorized", data: null };
         }
 
-        let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.ACADEMY_ENROLLMENTS);
+        let q: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.ACADEMY_ENROLLMENTS);
         const fetchLimit = options?.search ? 5000 : (options?.limit || 50);
         q = q.orderBy("enrolledAt", "desc").limit(fetchLimit);
 
@@ -553,7 +554,7 @@ async function _getAcademyCoursesAction(options?: {
             return { success: false, error: "Unauthorized", data: null };
         }
 
-        let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.ACADEMY_COURSES);
+        let q: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.ACADEMY_COURSES);
         const fetchLimit = options?.search ? 5000 : (options?.limit || 50);
         q = q.orderBy("createdAt", "desc").limit(fetchLimit);
 

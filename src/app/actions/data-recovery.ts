@@ -1,11 +1,11 @@
 "use server";
 
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { isAdmin } from "@/lib/admin-permissions";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/firestore-compat";
 
 interface RecoveryStats {
     totalUsersProcessed: number;

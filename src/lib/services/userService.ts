@@ -1,4 +1,4 @@
-import { getAdminDb } from "@/lib/firebase-admin";
+import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS, type User } from "@/lib/types/firestore";
 import { invalidateUserCache } from "@/lib/user-cache";
 import { normalizeUserUpdate } from "@/lib/schema-normalizer";

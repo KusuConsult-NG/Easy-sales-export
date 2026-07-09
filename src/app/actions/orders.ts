@@ -3,8 +3,8 @@
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
-import { db } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
+import { supabaseDb as db } from "@/lib/supabase-db";
+import { FieldValue } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Order, Product } from "@/lib/types/marketplace";
 
@@ -121,8 +121,8 @@ async function _createOrderAction(
                     status: "pending_payment",
                     buyerConfirmed: false,
                     _version: 0,
-                    createdAt: FieldValue.serverTimestamp(),
-                    updatedAt: FieldValue.serverTimestamp() };
+                    createdAt: FieldValue.serverTimestamp() as any,
+                    updatedAt: FieldValue.serverTimestamp() as any };
 
                 transaction.set(orderRef, orderData);
             }

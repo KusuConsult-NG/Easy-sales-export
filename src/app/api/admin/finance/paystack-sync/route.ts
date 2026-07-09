@@ -3,8 +3,8 @@ export const maxDuration = 60; // Vercel Hobby max; upgrade to 300 on Pro if nee
 
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/session-guard";
-import { db } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
+import { supabaseDb as db } from "@/lib/supabase-db";
+import { FieldValue } from "@/lib/firestore-compat";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";

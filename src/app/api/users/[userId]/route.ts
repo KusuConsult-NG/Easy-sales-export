@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
-import { db } from '@/lib/firebase-admin';
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
 // Force dynamic execution - don't try to statically generate this route

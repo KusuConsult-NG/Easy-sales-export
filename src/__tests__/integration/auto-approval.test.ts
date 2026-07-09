@@ -52,7 +52,7 @@ describe('Auto-Approval & Broadcast Integration Tests', () => {
         const acadSnap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
             .where('userId', 'in', [testUser1.uid, testUser2.uid])
             .get();
-        acadSnap.docs.forEach(doc => batch.delete(doc.ref));
+        acadSnap.docs.forEach((doc: any) => batch.delete(doc.ref));
 
         // Delete processedPayments docs we might create
         batch.delete(db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc('ref-coop-123'));

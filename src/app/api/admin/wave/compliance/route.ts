@@ -3,10 +3,10 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isAdmin } from "@/lib/admin-permissions";
-import { AggregateField } from "firebase-admin/firestore";
+import { AggregateField } from "@/lib/firestore-compat";
 
 /**
  * API Route: Get WAVE Compliance Data (Admin)
@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
                 break;
         }
 
-        let baseQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.WAVE_APPLICATIONS);
+        let baseQuery: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.WAVE_APPLICATIONS);
         if (dateFilter) {
             baseQuery = baseQuery.where("createdAt", ">=", dateFilter);
         }

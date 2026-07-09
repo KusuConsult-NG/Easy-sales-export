@@ -1,9 +1,9 @@
 "use server";
 
 import { requireSession } from "@/lib/session-guard";
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { Timestamp } from "firebase-admin/firestore";
+import { Timestamp } from "@/lib/firestore-compat";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { logger } from "@/lib/logger";

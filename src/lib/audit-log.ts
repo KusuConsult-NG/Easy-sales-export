@@ -1,5 +1,6 @@
-import { getAdminDb } from '@/lib/firebase-admin';
-import { FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { getAdminDb } from "@/lib/supabase-db";
+import { FieldValue } from "@/lib/firestore-compat";
+import { Timestamp } from "@/lib/firestore-compat";
 import { logger } from './logger';
 
 /**
@@ -239,7 +240,7 @@ export async function getAuditLogs(options: {
         const cutoffDate = new Date();
         cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
 
-        let q: FirebaseFirestore.Query = db.collection(AUDIT_LOGS_COLLECTION)
+        let q: import("@/lib/supabase-db").SupabaseQuery = db.collection(AUDIT_LOGS_COLLECTION)
             .where('timestamp', '>=', Timestamp.fromDate(options.startDate || cutoffDate))
             .orderBy('timestamp', 'desc');
 

@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import { getAdminDb } from "@/lib/firebase-admin";
+import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**

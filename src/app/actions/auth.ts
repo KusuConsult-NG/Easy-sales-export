@@ -1,8 +1,9 @@
 "use server";
 
 import { auth, signIn, signOut } from "@/lib/auth";
-import { db, adminAuth } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
+import { adminAuth } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
+import { FieldValue } from "@/lib/firestore-compat";
 import { registerSchema, loginSchema } from "@/lib/schemas";
 import { redirect } from "next/navigation";
 import { AuthError } from "next-auth";

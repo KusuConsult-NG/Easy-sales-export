@@ -13,8 +13,8 @@
 
 "use server";
 
-import { db } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
+import { supabaseDb as db } from "@/lib/supabase-db";
+import { FieldValue } from "@/lib/firestore-compat";
 import { logger } from "@/lib/logger";
 import { COLLECTIONS } from "@/lib/types/firestore";
 

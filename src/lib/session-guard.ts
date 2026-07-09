@@ -12,7 +12,7 @@ import "server-only";
 import { auth } from "@/lib/auth";
 import type { Session } from "next-auth";
 import { SESSION_EXPIRED_CODE, type SessionExpiredResult } from "@/lib/session-expiry-code";
-import { getAdminDb } from "@/lib/firebase-admin";
+import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { isAdmin as _isAdmin } from "@/lib/role-utils";

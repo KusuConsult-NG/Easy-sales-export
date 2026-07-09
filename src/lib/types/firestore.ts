@@ -597,13 +597,13 @@ export interface ChatbotSession {
     userId: string;
     userEmail: string;
     module: ChatbotModule;
-    startedAt: FirebaseFirestore.Timestamp;
-    lastMessageAt: FirebaseFirestore.Timestamp;
+    startedAt: any;
+    lastMessageAt: any;
     messageCount: number;
     escalated: boolean;           // true if user triggered support escalation
     resolved: boolean;            // admin marks resolved
     resolvedBy: string | null;    // admin userId
-    resolvedAt: FirebaseFirestore.Timestamp | null;
+    resolvedAt: any | null;
     tags: string[];               // e.g. ["payment_issue", "registration"]
 }
 
@@ -614,7 +614,7 @@ export interface ChatbotMessage {
     role: "user" | "assistant";
     content: string;
     module: ChatbotModule;
-    timestamp: FirebaseFirestore.Timestamp;
+    timestamp: any;
     isEscalation: boolean;        // true if this message triggered escalation
 }
 

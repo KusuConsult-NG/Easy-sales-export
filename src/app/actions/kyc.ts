@@ -8,10 +8,10 @@
  */
 
 import { qoreIdService } from '@/lib/qoreid';
-import { db } from '@/lib/firebase-admin';
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { runQueryWithRetry } from '@/lib/firestore-utils';
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue } from "@/lib/firestore-compat";
 import { logger } from '@/lib/logger';
 import { requireSession } from '@/lib/session-guard';
 import { withSafeAction, type ActionResponse } from '@/lib/safe-action';

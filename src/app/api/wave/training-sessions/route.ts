@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/session-guard";
-import { getAdminDb } from "@/lib/firebase-admin";
+import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
 
         const db = getAdminDb();
 
-        let query: FirebaseFirestore.Query = db
+        let query: import("@/lib/supabase-db").SupabaseQuery = db
             .collection(COLLECTIONS.WAVE_TRAINING_SESSIONS)
             .orderBy("scheduledAt", "asc")
             .limit(limit + 1); // Fetch one extra to determine hasMore

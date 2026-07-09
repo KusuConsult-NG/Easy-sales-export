@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/session-guard";
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
@@ -68,7 +68,7 @@ async function deletePasswordResetsHandler(_req: NextRequest) {
             .get();
 
         // Deduplicate (a token can be both used AND expired)
-        const toDelete = new Map<string, FirebaseFirestore.DocumentReference>();
+        const toDelete = new Map<string, any>();
         for (const doc of [...expiredSnap.docs, ...usedSnap.docs]) {
             toDelete.set(doc.id, doc.ref);
         }

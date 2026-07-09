@@ -2,7 +2,7 @@
 
 import { requireSession } from "@/lib/session-guard";
 import { requireAdmin } from "@/lib/require-admin";
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { AggregateField } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";

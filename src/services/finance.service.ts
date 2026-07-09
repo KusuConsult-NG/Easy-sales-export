@@ -1,4 +1,4 @@
-import { getAdminDb } from "@/lib/firebase-admin";
+import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { FinanceServiceContract, RevenueMetrics } from "@easy-sales/services";
 
@@ -42,7 +42,7 @@ export class FinanceService implements FinanceServiceContract {
         // NOTE: processedPayments only ever writes status="completed".
         // "success" was a Paystack API status that was historically confused with our internal status.
         // Using COLLECTIONS constant to prevent hardcoded string drift.
-        let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).where("status", "==", "completed");
+        let query: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).where("status", "==", "completed");
         
         if (module) {
             query = query.where("module", "==", module);

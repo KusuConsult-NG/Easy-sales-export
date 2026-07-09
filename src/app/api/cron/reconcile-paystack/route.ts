@@ -1,8 +1,8 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/firebase-admin";
-import { Timestamp } from "firebase-admin/firestore";
+import { supabaseDb as db } from "@/lib/supabase-db";
+import { Timestamp } from "@/lib/firestore-compat";
 
 /**
  * Automated Paystack ↔ Firebase Reconciliation

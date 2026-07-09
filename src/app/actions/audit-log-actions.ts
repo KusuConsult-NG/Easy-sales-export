@@ -5,7 +5,7 @@ import { ActionResponse } from "@/lib/safe-action";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import type { AuditLogEntry, AuditAction, AuditSeverity } from "@/lib/audit-log";

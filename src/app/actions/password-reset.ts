@@ -1,9 +1,10 @@
 "use server";
 
 import { logger } from '@/lib/logger';
-import { db, adminAuth } from '@/lib/firebase-admin';
+import { adminAuth } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue } from "@/lib/firestore-compat";
 import crypto from 'crypto';
 import { Resend } from 'resend';
 

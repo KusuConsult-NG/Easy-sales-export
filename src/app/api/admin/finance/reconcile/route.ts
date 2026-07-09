@@ -3,7 +3,7 @@ export const maxDuration = 60; // 60s max execution duration
 
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/session-guard";
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";

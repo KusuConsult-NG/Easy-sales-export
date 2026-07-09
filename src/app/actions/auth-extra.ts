@@ -1,10 +1,10 @@
 "use server";
 
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/firestore-compat";
 
 /**
  * Clear Legacy Password Flag Action

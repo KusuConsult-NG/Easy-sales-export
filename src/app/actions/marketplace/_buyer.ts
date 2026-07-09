@@ -1,11 +1,11 @@
 "use server";
 import { requireSession } from "@/lib/session-guard";
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from "@/lib/logger";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Product, Order, ProductCategory } from "@/lib/types/marketplace";
 import { withSafeAction } from "@/lib/safe-action";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/firestore-compat";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import type { ActionResponse } from "@/lib/safe-action";
 import { ProductSchema } from "@/lib/validations/marketplace";
@@ -49,7 +49,7 @@ const categoryMapping: Record<string, string[]> = {
  */
 async function _getProductsAction(filters?: ProductFilters): Promise<ActionResponse<{ products: Product[] }>> { 
     try {
-        let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active");
+        let query: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active");
 
         // Apply Firestore-supported filters
         if (filters?.category && filters.category !== "all") { 

@@ -10,8 +10,9 @@
 
 "use server";
 
-import { db } from "@/lib/firebase-admin";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { supabaseDb as db } from "@/lib/supabase-db";
+import { FieldValue } from "@/lib/firestore-compat";
+import { Timestamp } from "@/lib/firestore-compat";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { getBaseUrl } from "@/lib/server-utils";

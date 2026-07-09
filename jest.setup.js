@@ -101,6 +101,59 @@ jest.mock('@/lib/firebase-admin', () => {
     };
 });
 
+jest.mock('@/lib/supabase-db', () => {
+    const mockDb = {
+        collection: (name) => {
+            global.mockFirestoreCollection(name);
+            const docObj = (id) => {
+                global.mockFirestoreDoc(id);
+                return {
+                    get: () => global.mockFirestoreGet(id),
+                    update: (fields) => global.mockFirestoreUpdate(id, fields),
+                    set: (data) => Promise.resolve(),
+                };
+            };
+            const queryObj = {
+                doc: docObj,
+                where: () => queryObj,
+                orderBy: () => queryObj,
+                limit: () => queryObj,
+                startAfter: () => queryObj,
+                get: () => global.mockFirestoreGet(name),
+                count: () => ({
+                    get: () => global.mockFirestoreGet(name + "_count")
+                })
+            };
+            return queryObj;
+        },
+        batch: () => {
+            global.mockFirestoreBatch();
+            return {
+                update: (ref, fields) => global.mockFirestoreBatchUpdate(ref, fields),
+                commit: () => global.mockFirestoreBatchCommit(),
+            };
+        },
+        runTransaction: (cb) => {
+            const tx = {
+                get: (ref) => global.mockFirestoreTxGet(ref),
+                set: (ref, data) => {
+                    global.mockFirestoreTxSet(ref, data);
+                    return Promise.resolve();
+                },
+                update: (ref, fields) => {
+                    global.mockFirestoreTxUpdate(ref, fields);
+                    return Promise.resolve();
+                },
+            };
+            return cb(tx);
+        }
+    };
+    return {
+        supabaseDb: mockDb,
+        getAdminDb: () => mockDb,
+    };
+});
+
 // Mock Cache Invalidation
 global.mockInvalidateUserCache = jest.fn(() => Promise.resolve());
 jest.mock('@/lib/cache-invalidation', () => ({

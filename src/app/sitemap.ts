@@ -2,7 +2,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 import { MetadataRoute } from 'next'
-import { getAdminDb } from '@/lib/firebase-admin'
+import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
 const BASE_URL = 'https://easysalesexport.com'

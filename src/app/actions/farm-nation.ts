@@ -4,8 +4,9 @@ import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { checkModuleAccess } from "@/lib/module-access-check";
 import { logger } from '@/lib/logger';
-import { db } from "@/lib/firebase-admin";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { supabaseDb as db } from "@/lib/supabase-db";
+import { FieldValue } from "@/lib/firestore-compat";
+import { Timestamp } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isValidState, isValidLGA, normalizeLocation } from "@/lib/locations";
 import { invalidateUserCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
@@ -79,7 +80,7 @@ async function _getPropertiesAction(filters?: {
     lastDocId?: string; 
 }): Promise<ActionResponse<{ properties: Property[] }>> { 
     try {
-        let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.LAND_LISTINGS);
+        let query: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.LAND_LISTINGS);
 
         // Sorting
         query = query.orderBy("createdAt", "desc");

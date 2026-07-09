@@ -3,11 +3,12 @@
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Order, OrderStatus } from "@/lib/types/marketplace";
 import { hasRole } from "@/lib/role-utils";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/firestore-compat";
+import { Timestamp } from "@/lib/firestore-compat";
 import { paystackPayout } from "@/lib/paystack-transfer";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
@@ -31,7 +32,7 @@ async function _getSellerOrdersAction(filters?: { status?: OrderStatus; }) { let
         if (!hasRole(userData?.roles || [], "seller")) { return { success: false as const, error: "Not authorized as seller", data: null };
         }
 
-        let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
+        let query: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
             .where("sellerIds", "array-contains", userId)
             .orderBy("createdAt", "desc");
 
@@ -87,7 +88,7 @@ async function _updateOrderStatusAction(
         }
 
         // Query associated escrow transactions if the status becomes delivered
-        let escrowDocs: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+        let escrowDocs: any[] = [];
         if (newStatus === "delivered") {
             const escrowQuery = await runQueryWithRetry(() => db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
                 .where("orderId", "==", orderId)

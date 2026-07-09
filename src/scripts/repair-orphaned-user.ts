@@ -11,8 +11,8 @@
  * 5. Run this as a server action or admin script
  */
 
-import { db } from '@/lib/firebase-admin';
-import { FieldValue } from 'firebase-admin/firestore';
+import { supabaseDb as db } from "@/lib/supabase-db";
+import { FieldValue } from "@/lib/firestore-compat";
 import { COLLECTIONS, type UserRole } from '@/lib/types/firestore';
 import type { User as FirestoreUser } from '@/lib/types/firestore';
 

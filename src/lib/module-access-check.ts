@@ -18,11 +18,11 @@
  */
 
 import { hasAppAccess, type AppIdentifier } from "@/lib/role-app-mapping";
-import { getAdminDb } from "@/lib/firebase-admin";
+import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { UserRole } from "@/lib/types/roles";
 import { logger } from "@/lib/logger";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/firestore-compat";
 import { normalizeUserUpdate } from "@/lib/schema-normalizer";
 
 /** Maps the AppIdentifier to the Firestore serviceRegistrations key */

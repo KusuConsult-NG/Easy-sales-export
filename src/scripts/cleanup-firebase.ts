@@ -11,7 +11,8 @@
  * 4. All data will be permanently deleted
  */
 
-import { adminAuth, db } from '@/lib/firebase-admin';
+import { adminAuth } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import * as readline from 'readline';
 
 const rl = readline.createInterface({
@@ -95,7 +96,7 @@ async function deleteCollection(collectionName: string, batchSize = 100): Promis
 }
 
 async function deleteQueryBatch(
-    query: FirebaseFirestore.Query,
+    query: import("@/lib/supabase-db").SupabaseQuery,
     collectionName: string,
     resolve: (value: number) => void,
     reject: (error: any) => void,

@@ -10,8 +10,10 @@ import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { checkModuleAccess } from "@/lib/module-access-check";
 import { logger } from '@/lib/logger';
-import { FieldValue, Timestamp, AggregateField } from "firebase-admin/firestore";
-import { db } from "@/lib/firebase-admin"; // Use Admin DB
+import { AggregateField } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/firestore-compat";
+import { Timestamp } from "@/lib/firestore-compat";
+import { supabaseDb as db } from "@/lib/supabase-db"; // Use Admin DB
 // import { uploadFileToStorage } from "@/lib/storage-admin";
 
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -1062,7 +1064,7 @@ async function _getMarketplaceProductsAction(params: {
     try {
         const { category, search, location, sortBy, limit: limitCount = 20, lastId } = params;
 
-        let query = db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active") as FirebaseFirestore.Query;
+        let query = db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active") as import("@/lib/supabase-db").SupabaseQuery;
 
         if (category && category !== "all") { 
             query = query.where("category", "==", category);
@@ -1522,7 +1524,7 @@ async function _getSellerOrdersAction(options: { limit?: number;
 
         const fetchLimit = search ? 5000 : limit;
 
-        let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
+        let query: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
             .where("sellerIds", "array-contains", userId)
             .orderBy("createdAt", "desc");
 
@@ -1757,7 +1759,7 @@ async function _getBuyerOrdersAction(options: { limit?: number;
 
         const { limit = 20, lastId, status } = options;
 
-        let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
+        let query: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
             .where("buyerId", "==", session.user.id)
             .orderBy("createdAt", "desc");
 

@@ -1,5 +1,6 @@
-import { getAdminDb } from "@/lib/firebase-admin";
-import { AggregateField, FieldPath } from "firebase-admin/firestore";
+import { getAdminDb } from "@/lib/supabase-db";
+import { AggregateField } from "firebase-admin/firestore";
+import { FieldPath } from "@/lib/firestore-compat";
 import { unstable_cache } from "next/cache";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
@@ -18,7 +19,7 @@ import type {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function safeCount(
-    ref: FirebaseFirestore.Query | FirebaseFirestore.CollectionReference
+    ref: import("@/lib/supabase-db").SupabaseQuery | any
 ): Promise<number> {
     try {
         const snap = await ref.count().get();
@@ -83,7 +84,7 @@ export class AnalyticsService implements AnalyticsServiceContract {
     }
 
     // Centralized Helper: Get Platform Metrics without session checks
-    private async getPlatformMetrics(db: FirebaseFirestore.Firestore, options?: { dateFrom?: Date; dateTo?: Date }) {
+    private async getPlatformMetrics(db: any, options?: { dateFrom?: Date; dateTo?: Date }) {
         const allUsersSnap = await db.collection(COLLECTIONS.USERS).count().get();
         const totalUsers = allUsersSnap.data().count ?? 0;
 
@@ -131,7 +132,7 @@ export class AnalyticsService implements AnalyticsServiceContract {
 
         if (!paystackSuccess) {
             try {
-                let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+                let query: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
                     .where("status", "==", "completed");
                 if (options?.dateFrom) {
                     query = query.where("processedAt", ">=", options.dateFrom);
@@ -161,7 +162,7 @@ export class AnalyticsService implements AnalyticsServiceContract {
     }
 
     // Centralized Helper: Get Global Pending Approvals without session checks
-    private async getGlobalPendingApprovals(db: FirebaseFirestore.Firestore) {
+    private async getGlobalPendingApprovals(db: any) {
         const [
             wave,
             cooperative,
@@ -201,7 +202,7 @@ export class AnalyticsService implements AnalyticsServiceContract {
     }
 
     // Centralized Helper: Get User Metrics without session checks
-    private async getUserMetrics(db: FirebaseFirestore.Firestore) {
+    private async getUserMetrics(db: any) {
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
         const [totalSnap, activeSnap, verifiedSnap] = await Promise.all([
@@ -401,7 +402,7 @@ export class AnalyticsService implements AnalyticsServiceContract {
         // Firestore composite index requirements on inequality fields.
         const recentTransactions: AnalyticsData["recentTransactions"] = [];
         try {
-            let txQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).where("status", "==", "completed");
+            let txQuery: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).where("status", "==", "completed");
             if (isDateFiltered) {
                 txQuery = txQuery
                     .where("processedAt", ">=", filterFrom)
@@ -588,7 +589,7 @@ export class AnalyticsService implements AnalyticsServiceContract {
                 db.collection(COLLECTIONS.PROCESSED_PAYMENTS).orderBy("processedAt", "desc").limit(1000).get()
             ]);
 
-            const toTx = (doc: FirebaseFirestore.QueryDocumentSnapshot) => {
+            const toTx = (doc: any) => {
                 const d = doc.data();
                 const ts = d.date ?? d.processedAt ?? d.createdAt ?? d.requestedAt ?? d.timestamp ?? null;
                 return {

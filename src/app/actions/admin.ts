@@ -9,10 +9,13 @@ import { revalidatePath, revalidateTag } from 'next/cache';
 import { deleteCache, CacheKeys } from "@/lib/redis";
 import { invalidateAdminGlobalStats, invalidateServiceCache } from "@/lib/cache-invalidation";
 import crypto from 'crypto';
-import { db, adminAuth } from "@/lib/firebase-admin";
+import { adminAuth } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from '@/lib/logger';
 import { runQueryWithRetry } from "@/lib/firestore-utils";
-import { FieldValue, Timestamp, FieldPath } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/firestore-compat";
+import { FieldPath } from "@/lib/firestore-compat";
+import { Timestamp } from "@/lib/firestore-compat";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -475,7 +478,7 @@ async function _getPendingWithdrawalsAction(
             buildQuery(COLLECTIONS.WAVE_WITHDRAWALS).get(),
         ]);
 
-        const toRecord = (doc: FirebaseFirestore.QueryDocumentSnapshot, source: string) =>
+        const toRecord = (doc: any, source: string) =>
             ({ ...serializeDoc(doc.id, doc.data()), source });
 
         const withdrawals = [
@@ -762,7 +765,7 @@ async function _getPendingLoanApplications(limit = 50, lastDocId?: string): Prom
         }
 
         const loanCol = db.collection(COLLECTIONS.LOAN_APPLICATIONS);
-        let loanQuery: FirebaseFirestore.Query = loanCol
+        let loanQuery: import("@/lib/supabase-db").SupabaseQuery = loanCol
             .where("status", "==", "pending")
             .orderBy("appliedAt", "desc")
             .limit(limit + 1);
@@ -1352,7 +1355,7 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
         const pageSize = options.search ? 5000 : (options.limit || 50);
         const page = options.page ?? 0; // page offset (0-indexed)
 
-        let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.USERS);
+        let query: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.USERS);
 
         let hasUnindexedFilter = false;
 
@@ -1419,7 +1422,7 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
         // ---------------------------------------------------------
         // EXACT DATABASE COUNT (Satisfies Data Consistency Audit)
         // ---------------------------------------------------------
-        let countQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.USERS);
+        let countQuery: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.USERS);
         if (options.search) {
             countQuery = countQuery.where(FieldPath.documentId(), "in", matchingUserIds);
         } else {
@@ -2039,8 +2042,8 @@ async function _approveExportOnboardingAction(
         }
 
         // 1. Get Application Doc — may be passed either as the Firestore doc ID or applicationId field
-        let appDocRef: FirebaseFirestore.DocumentReference;
-        let appData: FirebaseFirestore.DocumentData;
+        let appDocRef: any;
+        let appData: any;
 
         // First try exact doc ID
         const directDoc = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS).doc(applicationId).get();
@@ -2185,8 +2188,8 @@ async function _requestExportApplicationRevisionAction(
         }
 
         // Find the application — may be passed either as the Firestore doc ID or applicationId field
-        let appDocRef: FirebaseFirestore.DocumentReference;
-        let appData: FirebaseFirestore.DocumentData;
+        let appDocRef: any;
+        let appData: any;
 
         // First try exact doc ID
         const directDoc = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS).doc(applicationId).get();
@@ -2664,8 +2667,8 @@ async function _rejectExportApplicationAction(
         }
 
         // 1. Get Application Doc — may be passed either as the Firestore doc ID or applicationId field
-        let appDocRef: FirebaseFirestore.DocumentReference;
-        let appData: FirebaseFirestore.DocumentData;
+        let appDocRef: any;
+        let appData: any;
 
         // First try exact doc ID
         const directDoc = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS).doc(applicationId).get();
@@ -4344,7 +4347,7 @@ async function _getMarketplaceUsersAction(options: {
         }
 
         const fetchLimit = options.search ? 5000 : (options.limit || 50);
-        let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.USERS);
+        let q: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.USERS);
 
         // Query by roles array — flat indexed field, no composite index needed.
         // Covers marketplace_buyer (new registrations), buyer (legacy), and seller roles.

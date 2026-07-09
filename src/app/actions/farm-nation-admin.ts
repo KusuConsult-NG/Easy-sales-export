@@ -1,13 +1,14 @@
 "use server";
 import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
 
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isAdmin } from "@/lib/admin-permissions";
 import { serializeDocs, serializeDoc } from "@/lib/firestore-serialize";
-import { FieldValue, FieldPath } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/firestore-compat";
+import { FieldPath } from "@/lib/firestore-compat";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { createAdminAuditLog } from "@/lib/audit-log";
 
@@ -500,7 +501,7 @@ async function _getAdminLandVerificationsAction(options: {
         const useMemoryPagination = !!options.search;
         const fetchLimit = useMemoryPagination ? 5000 : (options.limit || 50);
         const orderDirection = options.sortOrder || "desc";
-        let queryRef: FirebaseFirestore.Query = db.collection(COLLECTIONS.LAND_LISTINGS).orderBy("createdAt", orderDirection);
+        let queryRef: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.LAND_LISTINGS).orderBy("createdAt", orderDirection);
 
         if (options.status && options.status !== "all" && !useMemoryPagination) {
             const mappedStatus = options.status === "pending" ? "pending_verification" : options.status;
@@ -531,7 +532,7 @@ async function _getAdminLandVerificationsAction(options: {
                 logger.warn("getAdminLandVerificationsAction query failed (missing index). Falling back to memory sorting.");
                 indexError = true;
                 
-                let fallbackQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.LAND_LISTINGS);
+                let fallbackQuery: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.LAND_LISTINGS);
                 if (options.status && options.status !== "all" && !useMemoryPagination) {
                     const mappedStatus = options.status === "pending" ? "pending_verification" : options.status;
                     if (mappedStatus === "pending_verification") {
@@ -745,7 +746,7 @@ async function _getFarmNationTransactionsAction(options: {
         }
 
         const fetchLimit = options.limit || 50;
-        let queryRef: FirebaseFirestore.Query = db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).orderBy("createdAt", "desc");
+        let queryRef: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).orderBy("createdAt", "desc");
 
         if (options.status && options.status !== "all") {
             queryRef = db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS)
@@ -769,7 +770,7 @@ async function _getFarmNationTransactionsAction(options: {
                 logger.warn("getFarmNationTransactionsAction query failed (missing index). Falling back to memory sorting.");
                 indexError = true;
                 
-                let fallbackQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS);
+                let fallbackQuery: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS);
                 if (options.status && options.status !== "all") {
                     fallbackQuery = fallbackQuery.where("status", "==", options.status);
                 }

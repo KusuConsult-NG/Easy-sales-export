@@ -9,7 +9,7 @@ import {
     saveMessageAsync,
     createChatbotSession,
 } from "@/lib/chatbot-db";
-import { getAdminDb } from "@/lib/firebase-admin";
+import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { Ratelimit } from "@upstash/ratelimit";
 import { redis } from "@/lib/redis";

@@ -1,4 +1,4 @@
-import { getAdminDb } from "@/lib/firebase-admin";
+import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { UserMetricsServiceContract, CooperativeMemberMetrics, AcademyMetrics } from "@easy-sales/services";
 
@@ -30,7 +30,7 @@ export class UserMetricsService implements UserMetricsServiceContract {
         const db = getAdminDb();
 
         // Build base query, scoped to cooperative when adminScope is provided
-        let baseQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
+        let baseQuery: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
         if (adminScope) {
             baseQuery = baseQuery.where("cooperativeId", "==", adminScope);
         }

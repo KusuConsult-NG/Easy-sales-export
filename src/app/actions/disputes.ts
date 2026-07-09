@@ -6,11 +6,12 @@
 
 import { requireSession, isAdmin } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Dispute, Order, DisputeReason, DisputeResolution } from "@/lib/types/marketplace";
 import { hasRole } from "@/lib/role-utils";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/firestore-compat";
+import { Timestamp } from "@/lib/firestore-compat";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { smsDisputeResolved } from "@/lib/africastalking";

@@ -1,9 +1,10 @@
 "use server";
 
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from '@/lib/logger';
 import { requireAdmin } from "@/lib/require-admin";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/firestore-compat";
+import { Timestamp } from "@/lib/firestore-compat";
 import { createAdminAuditLog, logAdminFinancialAction } from "@/lib/audit-log";
 import { requireSession, isAdmin } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";

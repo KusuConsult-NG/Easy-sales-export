@@ -5,10 +5,11 @@
  * target segment filtering, and clean lifecycle tracking.
  */
 
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/firestore-compat";
+import { Timestamp } from "@/lib/firestore-compat";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import type { ActionResponse } from "@/lib/safe-action";
 import type { Notification as SharedNotification } from "@/lib/types/shared";

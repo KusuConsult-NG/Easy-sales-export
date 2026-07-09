@@ -7,10 +7,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/session-guard";
-import { getAdminDb } from "@/lib/firebase-admin";
+import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { sendBatchEmailNotifications } from "@/lib/email-notifications";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/firestore-compat";
 import { collectRecipients } from "@/app/actions/broadcast";
 import { logger } from "@/lib/logger";
 import { isAdmin } from "@/lib/admin-permissions";
@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
                     const chunk = allRecipients.slice(i, i + BATCH);
 
                     // 1. Efficient Batched Bounce Check (Prevents OOM on large BOUNCED_EMAILS collection)
-                    const refs: FirebaseFirestore.DocumentReference[] = [];
+                    const refs: any[] = [];
                     chunk.forEach(r => {
                         refs.push(db.collection(COLLECTIONS.BOUNCED_EMAILS).doc(r.email.toLowerCase()));
                         const norm = r.email.toLowerCase().replace(/\//g, "_");

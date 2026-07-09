@@ -1,4 +1,4 @@
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
@@ -22,7 +22,7 @@ export async function searchUserIdsByQuery(searchQuery: string): Promise<string[
 
         // 2. Phone matches — exact AND prefix (so "0803" finds "08035678901")
         const rawPhone = searchQuery.trim();
-        const phonePromises: Promise<FirebaseFirestore.QuerySnapshot>[] = [
+        const phonePromises: Promise<any>[] = [
             // Exact match on both field names
             db.collection(COLLECTIONS.USERS).where("phone", "==", rawPhone).limit(30).get(),
             db.collection(COLLECTIONS.USERS).where("phoneNumber", "==", rawPhone).limit(30).get(),
@@ -58,7 +58,7 @@ export async function searchUserIdsByQuery(searchQuery: string): Promise<string[
             rawQ
         ])).filter(Boolean);
 
-        const namePromises: Promise<FirebaseFirestore.QuerySnapshot>[] = [];
+        const namePromises: Promise<any>[] = [];
         for (const val of searchVariations) {
             namePromises.push(
                 db.collection(COLLECTIONS.USERS)

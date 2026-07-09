@@ -5,8 +5,9 @@
  * This can happen if registration fails between Auth creation and Firestore write
  */
 
-import { adminAuth, db } from '@/lib/firebase-admin';
-import { FieldValue } from 'firebase-admin/firestore';
+import { adminAuth } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
+import { FieldValue } from "@/lib/firestore-compat";
 import { COLLECTIONS } from '@/lib/types/firestore';
 import type { User as FirestoreUser } from '@/lib/types/firestore';
 import { logger } from '@/lib/logger';

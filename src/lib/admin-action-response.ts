@@ -54,7 +54,7 @@ export function paginatedErr(error: string): PaginatedAdminResponse<never> {
  * than fetchLimit, meaning we've hit the end of the collection.
  */
 export function nextCursor(
-    docs: FirebaseFirestore.QueryDocumentSnapshot[],
+    docs: any[],
     fetchLimit: number
 ): string | undefined {
     return docs.length === fetchLimit ? docs[docs.length - 1].id : undefined;
@@ -66,8 +66,8 @@ export function nextCursor(
  * documents WITHOUT the field are not silently excluded by Firestore.
  */
 export function whereFieldExists(
-    query: FirebaseFirestore.CollectionReference | FirebaseFirestore.Query,
+    query: any | import("@/lib/supabase-db").SupabaseQuery,
     field: string
-): FirebaseFirestore.Query {
+): import("@/lib/supabase-db").SupabaseQuery {
     return query.where(field, '!=', null);
 }

@@ -15,9 +15,9 @@
 
 "use server";
 
-import { getAdminDb } from "@/lib/firebase-admin";
+import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/firestore-compat";
 import { requireAdmin } from "@/lib/require-admin";
 import { ActionResponse } from "@/lib/safe-action";
 import { logger } from "@/lib/logger";
@@ -67,7 +67,7 @@ export type InAppBroadcastResult = ActionResponse<{
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 /** Collect unique user IDs based on audience filter */
-async function resolveUsers(db: FirebaseFirestore.Firestore, userIds: string[]) {
+async function resolveUsers(db: any, userIds: string[]) {
     const compact = Array.from(new Set(userIds.filter(id => id && typeof id === 'string' && id.trim().length > 0)));
     const map = new Map<string, any>();
     
@@ -205,7 +205,7 @@ export async function collectRecipientUserIds(
         }
         case "sellers":
         case "wholesale_sellers":
-        case "retail_sellers": { let q: FirebaseFirestore.Query = db
+        case "retail_sellers": { let q: import("@/lib/supabase-db").SupabaseQuery = db
                 .collection(COLLECTIONS.SELLER_VERIFICATIONS);
             if (filters.sellerStatus && filters.sellerStatus !== "all") {
                 q = q.where("status", "==", filters.sellerStatus);

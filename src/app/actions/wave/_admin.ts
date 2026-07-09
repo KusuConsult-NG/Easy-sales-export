@@ -1,13 +1,15 @@
 "use server";
 import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
 
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
-import { FieldValue, FieldPath, Query } from "firebase-admin/firestore";
+import { Query } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/firestore-compat";
+import { FieldPath } from "@/lib/firestore-compat";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { getLogisticsProvider } from "@/lib/logistics";
 import { WaveApplicationReviewSchema } from "@/lib/schemas";

@@ -1,7 +1,7 @@
 import "server-only";
 import { requireSession } from "@/lib/session-guard";
 import { redirect } from "next/navigation";
-import { getAdminDb } from "@/lib/firebase-admin";
+import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**

@@ -1,10 +1,10 @@
 "use server";
 
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { COLLECTIONS, type ExportWindow } from "@/lib/types/firestore";
-import { Timestamp } from "firebase-admin/firestore";
+import { Timestamp } from "@/lib/firestore-compat";
 import { unstable_cache } from "next/cache";
 
 export type ExportOpportunity = { id: string;

@@ -7,11 +7,12 @@
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { ProductReview, Order } from "@/lib/types/marketplace";
 import { hasRole } from "@/lib/role-utils";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/firestore-compat";
+import { Timestamp } from "@/lib/firestore-compat";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { z } from "zod";
 import { ActionResponse } from "@/lib/safe-action";
@@ -90,7 +91,7 @@ export async function createReviewAction(params: {
             images,
             verified: true, // Purchased from platform
             status: "pending",
-            createdAt: FieldValue.serverTimestamp() };
+            createdAt: FieldValue.serverTimestamp() as any };
 
         await db.collection(COLLECTIONS.PRODUCT_REVIEWS).add(reviewData);
 

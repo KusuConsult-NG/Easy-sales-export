@@ -9,7 +9,7 @@
 
 import { requireSession } from "@/lib/session-guard";
 import { logger } from "@/lib/logger";
-import { db } from "@/lib/firebase-admin";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Conversation, Message, UserSearchResult } from "@/lib/types/messages";
 import * as messagingService from "@/infrastructure/messaging/service";
@@ -230,7 +230,7 @@ export async function searchUsersAction(query: string) {
         const users: UserSearchResult[] = [];
         const seenIds = new Set<string>([session.user.id]);
 
-        const processDoc = (doc: FirebaseFirestore.QueryDocumentSnapshot) => {
+        const processDoc = (doc: any) => {
             if (seenIds.has(doc.id)) return;
             const userData = doc.data();
             const fullName = (userData.fullName || "").toLowerCase();
@@ -388,7 +388,7 @@ export async function getApprovedCooperativeMembersAction(): Promise<{
         const seen = new Set<string>();
         const members: ApprovedCoopMember[] = [];
 
-        const process = (doc: FirebaseFirestore.QueryDocumentSnapshot) => {
+        const process = (doc: any) => {
             if (seen.has(doc.id)) return;
             seen.add(doc.id);
             const d = doc.data();

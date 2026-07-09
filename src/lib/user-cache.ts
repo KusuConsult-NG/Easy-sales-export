@@ -59,7 +59,7 @@ export async function getUserProfile(userId: string): Promise<CachedUserProfile 
             // Fallback: Try Firestore as a safe guard if not found in Supabase
             try {
                 const db = getAdminDb();
-                const userDoc = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS).doc(userId).get());
+                const userDoc = await runQueryWithRetry<any>(() => db.collection(COLLECTIONS.USERS).doc(userId).get());
                 if (!userDoc.exists) {
                     return null;
                 }
