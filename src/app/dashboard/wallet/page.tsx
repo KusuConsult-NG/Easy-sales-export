@@ -109,9 +109,9 @@ export default function WalletPage() {
 
         try {
             const html2canvasModule = await import("html2canvas");
-            const html2canvas = html2canvasModule.default || html2canvasModule;
+            const html2canvas = (html2canvasModule.default || html2canvasModule) as any;
             const jspdfModule = await import("jspdf");
-            const jsPDF = jspdfModule.jsPDF || jspdfModule.default || jspdfModule;
+            const jsPDF = (jspdfModule.jsPDF || jspdfModule.default || jspdfModule) as any;
 
             const canvas = await html2canvas(cardElement, {
                 scale: 2,
@@ -141,7 +141,7 @@ export default function WalletPage() {
 
         try {
             const html2canvasModule = await import("html2canvas");
-            const html2canvas = html2canvasModule.default || html2canvasModule;
+            const html2canvas = (html2canvasModule.default || html2canvasModule) as any;
             const canvas = await html2canvas(cardElement, {
                 scale: 2,
                 backgroundColor: "#ffffff",
@@ -165,7 +165,7 @@ export default function WalletPage() {
 
         try {
             const html2canvasModule = await import("html2canvas");
-            const html2canvas = html2canvasModule.default || html2canvasModule;
+            const html2canvas = (html2canvasModule.default || html2canvasModule) as any;
             const canvas = await html2canvas(cardElement, {
                 scale: 2,
                 backgroundColor: "#ffffff",

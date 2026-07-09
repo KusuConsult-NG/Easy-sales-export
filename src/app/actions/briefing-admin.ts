@@ -61,7 +61,7 @@ export async function getBriefingRegistrationsAction(
 
         if (typeof opts === "string" || opts === null) {
             // Legacy call: getBriefingRegistrationsAction(cursor, limit)
-            cursor = opts;
+            cursor = opts as string | null;
             limit = limitArg ?? 25;
         } else if (opts && typeof opts === "object") { cursor = opts.lastDocId;
             limit = opts.limit ?? limitArg ?? 25;

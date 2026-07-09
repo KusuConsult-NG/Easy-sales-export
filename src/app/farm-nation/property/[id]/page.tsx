@@ -217,7 +217,7 @@ export default function PropertyDetailsPage() {
                                         <span>
                                             {typeof property.location === "object" && property.location
                                                 ? `${property.location.address || ""}, ${property.location.lga || ""}, ${property.location.state || ""}`.trim().replace(/^,\s*/, "").replace(/,\s*,/g, ",").replace(/,\s*$/, "")
-                                                : (property.location || "Nigeria")}
+                                                : (property.location as any || "Nigeria")}
                                         </span>
                                     </div>
                                 </div>

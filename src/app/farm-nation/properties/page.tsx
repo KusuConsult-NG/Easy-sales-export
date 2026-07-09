@@ -322,7 +322,7 @@ function PropertiesContent() {
                                             <span className="text-sm line-clamp-1">
                                                 {typeof property.location === "object" && property.location
                                                     ? `${property.location.address || property.location.lga || ""}, ${property.location.state || ""}`.trim().replace(/^,\s*/, "")
-                                                    : (property.location || "Nigeria")}
+                                                    : (property.location as any || "Nigeria")}
                                             </span>
                                         </div>
 

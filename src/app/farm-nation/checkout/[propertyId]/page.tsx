@@ -353,7 +353,7 @@ export default function CheckoutPage() {
                                     <span>
                                         {typeof property.location === "object" && property.location
                                             ? `${property.location.address || property.location.lga || ""}, ${property.location.state || ""}`.trim().replace(/^,\s*/, "")
-                                            : (property.location || "Nigeria")}
+                                             : (property.location as any || "Nigeria")}
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-2 text-sm text-slate-600">
