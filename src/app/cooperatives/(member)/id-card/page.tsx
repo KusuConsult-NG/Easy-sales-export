@@ -588,7 +588,7 @@ export default function CooperativeIdCardPage() {
                         <div className="flex flex-col items-center gap-3">
                             <button
                                 onClick={handleDownload}
-                                disabled={downloading}
+                                disabled={downloading || !result.data?.gender || !result.data?.stateOfOrigin}
                                 className="inline-flex items-center gap-3 px-8 py-4 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-2xl shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-all disabled:opacity-70 disabled:cursor-not-allowed"
                             >
                                 {downloading ? (
@@ -603,6 +603,11 @@ export default function CooperativeIdCardPage() {
                                     </>
                                 )}
                             </button>
+                            {(!result.data?.gender || !result.data?.stateOfOrigin) && (
+                                <p className="text-xs text-amber-600 font-semibold text-center max-w-sm">
+                                    ⚠️ Please select your Gender and State of Origin below and click Save Details to enable download.
+                                </p>
+                            )}
                             <p className="text-xs text-slate-400">
                                 Downloads as a high-resolution PDF (CR80 card size · 86×54mm)
                             </p>

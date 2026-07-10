@@ -217,7 +217,35 @@ const authMiddleware = auth((req: any) => {
 });
 
 export default async function proxy(req: any, event: any) {
-    const res = await authMiddleware(req, event);
+    let res;
+    try {
+        res = await authMiddleware(req, event);
+    } catch (error) {
+        console.error("[Middleware Proxy Error] NextAuth crashed, likely due to a decryption secret mismatch:", error);
+        
+        // If it's a JWT decryption error or other NextAuth crash, heal the session by clearing cookies and redirecting to login
+        const loginUrl = new URL("/auth/login?error=SessionError", req.nextUrl.origin);
+        const errorRes = NextResponse.redirect(loginUrl);
+        
+        // Clear session cookies to break loop
+        const tokenNames = ['authjs.session-token', '__Secure-authjs.session-token', 'next-auth.session-token', '__Secure-next-auth.session-token'];
+        const hostname = (
+            req.headers.get("x-forwarded-host") ||
+            req.headers.get("host") ||
+            ""
+        ).split(",")[0].trim().replace(/:\d+$/, "").toLowerCase();
+        const hostParts = hostname.replace(/^www\./, "").split(".");
+        const isLocal = hostname.includes("localhost") || hostname.includes("127.0.0.1");
+        const domain = (!isLocal && hostParts.length >= 2) ? `.${hostParts.slice(-2).join(".")}` : undefined;
+
+        tokenNames.forEach(name => {
+            if (domain) {
+                errorRes.cookies.set(name, "", { domain, maxAge: 0, path: "/", secure: true });
+            }
+            errorRes.cookies.set(name, "", { maxAge: 0, path: "/", secure: true });
+        });
+        return errorRes;
+    }
     
     // ── 4. Zombie Session Recovery ───────────────────────────────────────────
     // If the user has a session cookie but NextAuth redirected us to login (res.status 30x),

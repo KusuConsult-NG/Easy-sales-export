@@ -1487,7 +1487,11 @@ export async function resubmitCooperativeApplicationAction(
                 memberRef = docRef;
                 existingMemberData = docSnap.data();
             } else {
-                return { success: false as const, error: 'No existing application found'};
+                // FALLBACK: If user doc is marked as pending_repair / pending but the member record
+                // was deleted during the mock database purge, auto-heal by allowing a new creation.
+                logger.info(`[resubmitCooperativeApplication] Member doc not found for user ${session.user.id} — falling back to new registration creation.`);
+                memberRef = docRef;
+                existingMemberData = {};
             }
         } else {
             const sortedDocs = snap.docs.sort((a, b) => { const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
