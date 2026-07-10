@@ -1852,7 +1852,25 @@ export async function getCooperativeMemberIdCardAction(): Promise<
         // Standard gating bypass for premium subscription plan holders
         if (!isPremiumSubscriber) {
             const isLegacy = d.isLegacy === true || !!userData?.legacyOnboardedBy;
-            const isApprovedOrActive = d.membershipStatus === "active" || d.membershipStatus === "approved" || d.status === "approved";
+            let isApprovedOrActive = d.membershipStatus === "active" || d.membershipStatus === "approved" || d.status === "approved";
+
+            // If the user has paid and completed onboarding, auto-activate them and heal their database record
+            if (!isApprovedOrActive && d.paymentStatus === "completed" && d.onboardingCompleted === true) {
+                isApprovedOrActive = true;
+                try {
+                    const docId = sortedDocs[0]?.id || userId;
+                    const healRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(docId);
+                    await healRef.set({ membershipStatus: "active", updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+                    await db.collection(COLLECTIONS.USERS).doc(userId).set({
+                        serviceRegistrations: {
+                            cooperatives: { status: "active" }
+                        }
+                    }, { merge: true });
+                    logger.info(`[getCooperativeMemberIdCardAction] Auto-healed membershipStatus to 'active' for user ${userId}`);
+                } catch (healErr: any) {
+                    logger.warn(`[getCooperativeMemberIdCardAction] Auto-heal update failed (non-fatal):`, healErr);
+                }
+            }
 
             // Gate 1: Paystack payment must be verified.
             // AUTHORITATIVE FALLBACK: If the member doc shows paymentStatus !== "completed"
