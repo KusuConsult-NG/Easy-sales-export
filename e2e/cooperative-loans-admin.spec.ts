@@ -169,11 +169,11 @@ test.describe('Admin Review Flow', () => {
         // Navigate to admin dashboard
         await page.goto('/admin');
 
-        // Wait for the loading state to resolve
-        await expect(page.locator('text=Loading dashboard...').first()).not.toBeVisible({ timeout: 30000 });
+        // Wait for the loading state to resolve (allow up to 90s for live Paystack API calls)
+        await expect(page.locator('text=Loading dashboard...').first()).not.toBeVisible({ timeout: 90000 });
 
         // Admin dashboard should load
-        await expect(page.locator('h1').first()).toContainText(/Admin|Dashboard|Welcome/i, { timeout: 10000 });
+        await expect(page.locator('h1').first()).toContainText(/Admin|Dashboard|Welcome/i, { timeout: 30000 });
 
         console.log('✅ Admin dashboard accessible');
     });
