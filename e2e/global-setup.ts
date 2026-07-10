@@ -74,13 +74,17 @@ export default async function globalSetup(config: FullConfig) {
     await waitForServer(BASE_URL);
 
     // ── 1.5. Run E2E Cooperative Seeding Script ─────────────────────────────────
-    try {
-        console.log('Seeding E2E database records...');
-        execSync('node scripts/seed-test-users.js', { stdio: 'inherit' });
-        execSync('npx tsx scripts/setup-e2e-coop.ts', { stdio: 'inherit' });
-        console.log('✅ E2E Database seeding completed successfully.');
-    } catch (err: any) {
-        console.error('⚠️ Database seeding failed:', err.message || err);
+    if (BASE_URL.includes('easysalesexport.com')) {
+        console.log('⚠️ Running against production URL (easysalesexport.com). Skipping database seeding to protect production data from pollution.');
+    } else {
+        try {
+            console.log('Seeding E2E database records...');
+            execSync('node scripts/seed-test-users.js', { stdio: 'inherit' });
+            execSync('npx tsx scripts/setup-e2e-coop.ts', { stdio: 'inherit' });
+            console.log('✅ E2E Database seeding completed successfully.');
+        } catch (err: any) {
+            console.error('⚠️ Database seeding failed:', err.message || err);
+        }
     }
 
     console.log('✅ Playwright Global Setup complete\n');
