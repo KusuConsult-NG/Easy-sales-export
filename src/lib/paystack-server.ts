@@ -89,8 +89,8 @@ export async function verifyPaystackPayment(
         const email = session?.user?.email || "mock@example.com";
         
         let type = "academy_registration";
-        let plan = "standard";
-        let amount = 5000000; // in kobo
+        const plan = "standard";
+        const amount = 5000000; // in kobo
 
         if (reference.includes("EXPORT") || reference.includes("export")) {
             type = "export_investment";
@@ -253,6 +253,12 @@ export async function initializePaystackPayment(
             const secretKey = process.env.PAYSTACK_SECRET_KEY;
             if (!secretKey) throw new Error("Payment service not configured");
 
+            let finalEmail = email ? email.trim() : "";
+            if (!finalEmail || !finalEmail.includes('@')) {
+                const identifier = metadata.userId || metadata.phoneNumber || metadata.phone || `user_${Date.now()}`;
+                finalEmail = `${identifier}@easysalesexport.com`.replace(/[^a-zA-Z0-9@._+-]/g, '');
+            }
+
             const response = await fetch(`${PAYSTACK_BASE_URL}/transaction/initialize`, {
                 method: 'POST',
                 headers: {
@@ -260,7 +266,7 @@ export async function initializePaystackPayment(
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    email,
+                    email: finalEmail,
                     amount,
                     channels,
                     metadata,
