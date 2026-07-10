@@ -157,6 +157,34 @@ export async function getDashboardDataAction() {
         );
 
         if (membershipSnapshot.empty) {
+            // Check if user is an active premium/paid plan subscriber in the Academy
+            const userDoc = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS).doc(userId).get());
+            const userData = userDoc.exists ? userDoc.data() : null;
+            const userPlan = (userData?.serviceRegistrations?.academy?.plan || "free").toLowerCase();
+            const isPremiumSubscriber = ["elite", "standard", "foundation", "advanced"].includes(userPlan);
+
+            if (isPremiumSubscriber) {
+                logger.info(`[getDashboardData] No membership found but user is premium subscriber — synthesizing for ${userId}`);
+                const membership: CooperativeMembership = {
+                    id: userId,
+                    cooperativeId: "easy-sales-cooperative",
+                    cooperativeName: "Easy Sales Cooperative",
+                    savingsBalance: 0,
+                    loanBalance: 0,
+                    memberSince: userData?.createdAt?.toDate ? userData.createdAt.toDate() : new Date(),
+                    monthlyTarget: 0,
+                    membershipTier: "Member",
+                    membershipStatus: "active",
+                    paymentStatus: "completed"
+                };
+
+                return {
+                    success: true as const,
+                    error: null,
+                    data: { membership, transactions: [] }
+                };
+            }
+
             logger.warn(`[getDashboardData] No membership found anywhere for user: ${userId}`);
             return { success: false as const, error: `No cooperative membership found for ${userId}` };
         }

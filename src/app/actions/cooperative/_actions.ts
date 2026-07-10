@@ -1672,11 +1672,99 @@ export async function getCooperativeMemberIdCardAction(): Promise<
 
 
         // Sort in memory: most recent createdAt first (mirrors the removed .orderBy)
-        const sortedDocs = memberSnapshot.docs.sort((a, b) => {
+        let sortedDocs = memberSnapshot.docs.sort((a, b) => {
             const aTs = a.data().createdAt?.toMillis?.() ?? 0;
             const bTs = b.data().createdAt?.toMillis?.() ?? 0;
             return bTs - aTs;
         });
+
+        // ── FALLBACK 2: Direct document ID lookup ──────────────────────────────
+        if (sortedDocs.length === 0) {
+            const docRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
+            const docSnap = await runQueryWithRetry(() => docRef.get());
+            if (docSnap.exists) {
+                logger.info(`[getCooperativeMemberIdCardAction] Found membership via DocID fallback for user: ${userId}`);
+                const docData = docSnap.data()!;
+                if (!docData.userId) {
+                    await docRef.update({ userId });
+                }
+                sortedDocs = [docSnap];
+            }
+        }
+
+        // ── FALLBACK 3: Email query ────────────────────────────────────────────
+        if (sortedDocs.length === 0) {
+            const userEmail = userData?.email;
+            if (userEmail) {
+                const emailQuery = await runQueryWithRetry(() =>
+                    db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                        .where("email", "==", userEmail.toLowerCase())
+                        .limit(1)
+                        .get()
+                );
+                if (!emailQuery.empty) {
+                    logger.info(`[getCooperativeMemberIdCardAction] Found membership via Email fallback for user: ${userId}`);
+                    const memberDoc = emailQuery.docs[0];
+                    if (!memberDoc.data().userId) {
+                        await memberDoc.ref.update({ userId });
+                    }
+                    sortedDocs = [memberDoc];
+                }
+            }
+        }
+
+        // ── FALLBACK 4: processed_payments ────────────────────────────────────
+        if (sortedDocs.length === 0) {
+            logger.warn(`[getCooperativeMemberIdCardAction] All direct lookups failed for ${userId} — checking processed_payments`);
+            const paymentSnap = await runQueryWithRetry(() =>
+                db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+                    .where("userId", "==", userId)
+                    .where("type", "==", "cooperative_membership_registration")
+                    .where("status", "==", "completed")
+                    .limit(1)
+                    .get()
+            );
+
+            if (!paymentSnap.empty) {
+                const paymentData = paymentSnap.docs[0].data();
+                const paymentReference = paymentData.reference;
+                logger.info(`[getCooperativeMemberIdCardAction] Found completed payment ${paymentReference} for ${userId} — locating member doc by paymentReference`);
+
+                const memberByRefQuery = await runQueryWithRetry(() =>
+                    db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                        .where("paymentReference", "==", paymentReference)
+                        .limit(1)
+                        .get()
+                );
+
+                if (!memberByRefQuery.empty) {
+                    const memberDoc = memberByRefQuery.docs[0];
+                    logger.info(`[getCooperativeMemberIdCardAction] Healed orphaned member doc ${memberDoc.id} → userId=${userId}`);
+                    await memberDoc.ref.update({ userId, updatedAt: FieldValue.serverTimestamp() });
+                    sortedDocs = [memberDoc];
+                } else {
+                    logger.info(`[getCooperativeMemberIdCardAction] No member doc found — synthesising from payment for ${userId}`);
+                    const newMemberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
+                    await newMemberRef.set({
+                        userId,
+                        email: userData?.email || "",
+                        firstName: userData?.firstName || "",
+                        lastName: userData?.lastName || "",
+                        fullName: userData?.fullName || userData?.displayName || "",
+                        phone: userData?.phone || "",
+                        paymentStatus: "completed",
+                        paymentReference,
+                        membershipStatus: "pending",
+                        membershipTier: paymentData.tier || "Member",
+                        createdAt: paymentData.processedAt || FieldValue.serverTimestamp(),
+                        updatedAt: FieldValue.serverTimestamp(),
+                        _healedFromPayment: true,
+                    }, { merge: true });
+                    const healedSnap = await newMemberRef.get();
+                    sortedDocs = [healedSnap];
+                }
+            }
+        }
 
         if (sortedDocs.length === 0 && !isPremiumSubscriber) {
             return { success: false as const, error: "No cooperative membership found.", reason: "not_member"};
@@ -1829,7 +1917,7 @@ export async function getCooperativeMemberIdCardAction(): Promise<
 
         // Shorter, intuitive ID format for cooperative members
         const membershipTier = "Member";
-        const memberNumber = `ESE-COOP-${userId.slice(-4).toUpperCase()}`;
+        const memberNumber = `ESE-COOP-${(sortedDocs[0]?.id || userId).slice(-4).toUpperCase()}`;
 
         // Issue date = approvedAt (when admin approved) — not createdAt (when applied).
         const issuedAt: Date =
