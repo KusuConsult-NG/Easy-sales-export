@@ -258,7 +258,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
             // blank form again, which caused users to get stuck in an infinite submit loop.
             if (coopStatus === "pending_review") {
                 setIsCheckingStatus(false);
-                router.replace(`${prefix}/onboarding/pending`);
+                router.replace(`${prefix}/dashboard`);
                 return;
             }
             if (coopStatus === "revision_required" || coopStatus === "rejected") {

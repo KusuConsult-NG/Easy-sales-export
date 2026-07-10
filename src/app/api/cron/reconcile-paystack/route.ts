@@ -126,12 +126,71 @@ export async function GET(request: NextRequest) {
 
         results.firebaseTotal = firebaseRefs.size;
 
-        // ── 3. Find transactions in Paystack but not in Firebase ──────────────────
+        // ── 3. Find and Auto-Heal transactions in Paystack but not in Firebase ──────────────────
+        const { 
+            processMarketplaceOrder, 
+            processExportInvestment, 
+            processCooperativeRegistration, 
+            processAcademyRegistration, 
+            processCooperativeContribution 
+        } = await import("@/infrastructure/payments/service");
+
         for (const tx of allPaystackTransactions) {
             if (!firebaseRefs.has(tx.reference)) {
+                // Fetch complete metadata from Paystack API to correctly route payment
+                try {
+                    const txDetailRes = await fetch(
+                        `https://api.paystack.co/transaction/verify/${tx.reference}`,
+                        {
+                            headers: { Authorization: `Bearer ${secretKey}` },
+                            signal: AbortSignal.timeout(10000),
+                        }
+                    );
+                    if (txDetailRes.ok) {
+                        const detail = await txDetailRes.json();
+                        if (detail.status && detail.data?.status === "success") {
+                            const data = detail.data;
+                            const amountPaidv = data.amount / 100;
+                            const metadata = data.metadata || {};
+                            const userId = metadata.userId;
+                            const type = metadata.type || metadata.purpose || null;
+                            const paidAtDate = data.paid_at ? new Date(data.paid_at) : undefined;
+
+                            console.log(`[Reconciliation Cron] Auto-healing missing payment ${tx.reference} of type "${type}" for user: ${userId}`);
+
+                            if (type === "marketplace_order") {
+                                await processMarketplaceOrder(tx.reference, amountPaidv, userId, paidAtDate);
+                            } else if (type === "export_investment") {
+                                const exportId = metadata.exportId;
+                                await processExportInvestment(tx.reference, amountPaidv, userId, exportId, paidAtDate);
+                            } else if (type === "cooperative_membership_registration") {
+                                const tier = metadata.membershipTier || metadata.plan || "Member";
+                                const membershipId = metadata.membershipId || userId;
+                                await processCooperativeRegistration(tx.reference, amountPaidv, userId, tier, membershipId, paidAtDate);
+                            } else if (type === "academy_registration") {
+                                const plan = metadata.plan;
+                                await processAcademyRegistration(tx.reference, amountPaidv, userId, plan, paidAtDate);
+                            } else if (type === "contribution") {
+                                await processCooperativeContribution(tx.reference, amountPaidv, userId, paidAtDate);
+                            } else if (type === "wallet_funding") {
+                                const { confirmWalletFundingAction } = await import("@/app/actions/wallet");
+                                await confirmWalletFundingAction(tx.reference, paidAtDate);
+                            }
+
+                            // Successfully processed — increment local counter and add to set to bypass discrepancy marking
+                            results.firebaseTotal++;
+                            firebaseRefs.add(tx.reference);
+                            continue;
+                        }
+                    }
+                } catch (healErr) {
+                    console.error(`[Reconciliation Cron] Failed to auto-heal transaction ${tx.reference}:`, healErr);
+                }
+
+                // If verification/processing fails, log as discrepancy in system health dashboard
                 results.missingInFirebase.push({
                     reference: tx.reference,
-                    amount: tx.amount / 100, // Paystack amounts are in kobo
+                    amount: tx.amount / 100,
                     email: tx.customer?.email,
                     date: tx.paid_at,
                     channel: tx.channel,

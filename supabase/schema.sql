@@ -201,3 +201,29 @@ CREATE INDEX IF NOT EXISTS idx_academy_apps_user_id ON academy_applications(user
 
 -- Marketplace orders status
 CREATE INDEX IF NOT EXISTS idx_marketplace_orders_status ON marketplace_orders(status);
+
+-- ==========================================
+-- Database Integrity Constraint:
+-- Enforce "active" status for members with verified payments
+-- ==========================================
+CREATE OR REPLACE FUNCTION enforce_member_active_on_paid()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Check if status is set to pending
+    IF NEW.status = 'pending' THEN
+        -- Check if a verified payment exists for this user in processed_payments
+        IF EXISTS (
+            SELECT 1 FROM processed_payments 
+            WHERE user_id = NEW.user_id
+        ) THEN
+            RAISE EXCEPTION 'Database Integrity Constraint: User % has a verified payment. Status cannot be set to pending.', NEW.user_id;
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE TRIGGER trg_enforce_member_active_on_paid
+    BEFORE INSERT OR UPDATE ON cooperative_members
+    FOR EACH ROW EXECUTE FUNCTION enforce_member_active_on_paid();
+

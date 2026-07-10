@@ -129,6 +129,73 @@ jobs:
           exit 1
 
   # ─────────────────────────────────────────────────────────────
+  # JOB 2B: PR E2E Regression (runs on PRs to verify staging before merge)
+  # ─────────────────────────────────────────────────────────────
+  pr-e2e:
+    name: PR E2E — Staging Regression
+    needs: validate
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium --with-deps
+
+      - name: Run E2E Tests against Staging
+        run: npx playwright test --project=chromium --reporter=github
+        env:
+          CI: true
+          PLAYWRIGHT_BASE_URL: https://staging.easysalesexport.com
+          TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL || 'e2e.user@easysalesexport.com' }}
+          TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD || 'E2eTest@2024!' }}
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 2C: Post-Deploy Staging E2E (runs after staging deploy to verify release)
+  # ─────────────────────────────────────────────────────────────
+  staging-post-deploy-e2e:
+    name: Staging E2E — Post-Deploy Verification
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium --with-deps
+
+      - name: Run E2E Tests against Staging
+        run: npx playwright test --project=chromium --reporter=github
+        env:
+          CI: true
+          PLAYWRIGHT_BASE_URL: https://staging.easysalesexport.com
+          TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL || 'e2e.user@easysalesexport.com' }}
+          TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD || 'E2eTest@2024!' }}
+
+
+  # ─────────────────────────────────────────────────────────────
   # JOB 3: Release summary comment on PRs to main
   # ─────────────────────────────────────────────────────────────
   pr-checklist:

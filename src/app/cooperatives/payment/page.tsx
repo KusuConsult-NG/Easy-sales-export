@@ -54,8 +54,8 @@ export default function CooperativePaymentPage() {
                     }
                     
                     if (status === "pending") {
-                        showToast("Your application is being reviewed.", "info");
-                        router.replace(`${prefix}/onboarding/pending`);
+                        showToast("Accessing dashboard...", "info");
+                        router.replace(`${prefix}/dashboard`);
                         return;
                     }
                 }
