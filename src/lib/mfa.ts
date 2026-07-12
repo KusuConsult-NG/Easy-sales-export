@@ -1,11 +1,9 @@
 import { Resend } from 'resend';
-import { getFirestore, collection, addDoc, query, where, getDocs, deleteDoc, updateDoc, Timestamp, runTransaction } from 'firebase/firestore';
-import app from './firebase';
+import { supabaseDb as db } from './supabase-db';
 import { generateOTP, isOTPExpired, encryptData, decryptData } from './security';
 
 // Lazy Resend factory — env var only available at request time, not build time
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
-const db = getFirestore(app);
 const MFA_COLLECTION = 'mfa_codes';
 
 export interface MFACode {
@@ -13,8 +11,8 @@ export interface MFACode {
     userId: string;
     email: string;
     code: string; // Encrypted
-    createdAt: Timestamp;
-    expiresAt: Timestamp;
+    createdAt: any;
+    expiresAt: any;
     verified: boolean;
     attempts: number;
 }
@@ -33,27 +31,25 @@ export async function sendMFACode(email: string, userId: string): Promise<{ succ
         const encryptedOTP = encryptData(otp, secretKey);
 
         // Delete any existing unverified codes for this user
-        const existingCodesQuery = query(
-            collection(db, MFA_COLLECTION),
-            where('userId', '==', userId),
-            where('verified', '==', false)
-        );
-        const existingCodes = await getDocs(existingCodesQuery);
+        const existingCodes = await db.collection(MFA_COLLECTION)
+            .where('userId', '==', userId)
+            .where('verified', '==', false)
+            .get();
         for (const doc of existingCodes.docs) {
-            await deleteDoc(doc.ref);
+            await doc.ref.delete();
         }
 
-        // Store encrypted OTP in Firestore
+        // Store encrypted OTP in database
         const expiryMinutes = parseInt(process.env.MFA_OTP_EXPIRY_MINUTES || '10', 10);
         const expiresAt = new Date();
         expiresAt.setMinutes(expiresAt.getMinutes() + expiryMinutes);
 
-        await addDoc(collection(db, MFA_COLLECTION), {
+        await db.collection(MFA_COLLECTION).add({
             userId,
             email,
             code: encryptedOTP,
-            createdAt: Timestamp.now(),
-            expiresAt: Timestamp.fromDate(expiresAt),
+            createdAt: new Date().toISOString(),
+            expiresAt: expiresAt.toISOString(),
             verified: false,
             attempts: 0,
         });
@@ -98,12 +94,10 @@ export async function verifyMFACode(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         // Find unverified code for this user
-        const codesQuery = query(
-            collection(db, MFA_COLLECTION),
-            where('userId', '==', userId),
-            where('verified', '==', false)
-        );
-        const codesSnapshot = await getDocs(codesQuery);
+        const codesSnapshot = await db.collection(MFA_COLLECTION)
+            .where('userId', '==', userId)
+            .where('verified', '==', false)
+            .get();
 
         if (codesSnapshot.empty) {
             return { success: false, error: 'No verification code found. Please request a new one.' };
@@ -113,43 +107,36 @@ export async function verifyMFACode(
         const codeDocRef = codeDoc.ref;
         const secretKey = process.env.MFA_SECRET_KEY || 'default-secret-key-change-in-production';
 
-        const result = await runTransaction(db, async (transaction) => {
-            const freshDoc = await transaction.get(codeDocRef);
-            if (!freshDoc.exists) {
-                throw new Error('Verification code not found.');
-            }
-            const mfaCode = freshDoc.data() as MFACode;
+        const mfaCode = codeDoc.data();
 
-            // Check if code is expired
-            const expiryMinutes = parseInt(process.env.MFA_OTP_EXPIRY_MINUTES || '10', 10);
-            if (isOTPExpired(mfaCode.createdAt.toDate(), expiryMinutes)) {
-                transaction.delete(codeDocRef);
-                return { success: false, error: 'Verification code has expired. Please request a new one.' };
-            }
+        // Check if code is expired
+        const expiryMinutes = parseInt(process.env.MFA_OTP_EXPIRY_MINUTES || '10', 10);
+        const createdAtDate = new Date(mfaCode.createdAt);
+        if (isOTPExpired(createdAtDate, expiryMinutes)) {
+            await codeDocRef.delete();
+            return { success: false, error: 'Verification code has expired. Please request a new one.' };
+        }
 
-            // Check attempts (max 3)
-            if (mfaCode.attempts >= 3) {
-                transaction.delete(codeDocRef);
-                return { success: false, error: 'Too many failed attempts. Please request a new code.' };
-            }
+        // Check attempts (max 3)
+        if (mfaCode.attempts >= 3) {
+            await codeDocRef.delete();
+            return { success: false, error: 'Too many failed attempts. Please request a new code.' };
+        }
 
-            // Decrypt and verify code
-            const decryptedOTP = decryptData(mfaCode.code, secretKey);
+        // Decrypt and verify code
+        const decryptedOTP = decryptData(mfaCode.code, secretKey);
 
-            if (code !== decryptedOTP) {
-                // Increment attempts
-                transaction.update(codeDocRef, {
-                    attempts: mfaCode.attempts + 1,
-                });
-                return { success: false, error: 'Invalid verification code. Please try again.' };
-            }
+        if (code !== decryptedOTP) {
+            // Increment attempts
+            await codeDocRef.update({
+                attempts: mfaCode.attempts + 1,
+            });
+            return { success: false, error: 'Invalid verification code. Please try again.' };
+        }
 
-            // Mark as verified and delete
-            transaction.delete(codeDocRef);
-            return { success: true };
-        });
-
-        return result;
+        // Mark as verified and delete
+        await codeDocRef.delete();
+        return { success: true };
     } catch (error: any) {
         console.error('Failed to verify MFA code:', error);
         return { success: false, error: error.message || 'Verification failed. Please try again.' };
@@ -170,16 +157,16 @@ export function generateBackupCodes(count: number = 10): string[] {
 }
 
 /**
- * Store backup codes in Firestore (encrypted)
+ * Store backup codes in database (encrypted)
  */
 export async function storeBackupCodes(userId: string, codes: string[]): Promise<void> {
     const secretKey = process.env.MFA_SECRET_KEY || 'default-secret-key-change-in-production';
     const encryptedCodes = codes.map(code => encryptData(code, secretKey));
 
-    await addDoc(collection(db, 'mfa_backup_codes'), {
+    await db.collection('mfa_backup_codes').add({
         userId,
         codes: encryptedCodes,
-        createdAt: Timestamp.now(),
+        createdAt: new Date().toISOString(),
         used: [],
     });
 }
@@ -189,11 +176,9 @@ export async function storeBackupCodes(userId: string, codes: string[]): Promise
  */
 export async function verifyBackupCode(userId: string, code: string): Promise<{ success: boolean; error?: string }> {
     try {
-        const backupCodesQuery = query(
-            collection(db, 'mfa_backup_codes'),
-            where('userId', '==', userId)
-        );
-        const backupCodesSnapshot = await getDocs(backupCodesQuery);
+        const backupCodesSnapshot = await db.collection('mfa_backup_codes')
+            .where('userId', '==', userId)
+            .get();
 
         if (backupCodesSnapshot.empty) {
             return { success: false, error: 'No backup codes found' };
@@ -212,7 +197,7 @@ export async function verifyBackupCode(userId: string, code: string): Promise<{ 
         }
 
         // Mark code as used
-        await updateDoc(backupCodeDoc.ref, {
+        await backupCodeDoc.ref.update({
             used: [...backupCodesData.used, codeIndex],
         });
 
@@ -226,7 +211,6 @@ export async function verifyBackupCode(userId: string, code: string): Promise<{ 
 /**
  * TOTP Authenticator App Functions
  */
-
 import { createHmac } from 'crypto';
 import QRCode from 'qrcode';
 

@@ -6,18 +6,15 @@ import { Fragment } from "react";
 import { Bell, BellDot, Package, DollarSign, GraduationCap, Users, Wallet, TrendingUp, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useSession } from "next-auth/react";
-import { collection, query, where, onSnapshot, Timestamp, orderBy, limit } from "firebase/firestore";
-import { db } from "@/lib/firebase";
-import { COLLECTIONS } from "@/lib/types/firestore";
+import { supabase } from "@/lib/supabase";
 import { markNotificationAsReadAction, markAllAsReadAction } from "@/app/actions/notifications";
-import { useFirebaseAuthed } from "@/hooks/useFirebaseAuthed";
 import { isNotificationVisible } from "@/lib/notification-filter";
 
 import type { Notification as FirestoreNotification } from "@/lib/types/firestore";
 
 export interface Notification extends Omit<FirestoreNotification, "createdAt" | "readAt"> {
-    createdAt: Timestamp;
-    readAt?: Timestamp;
+    createdAt: any;
+    readAt?: any;
 }
 
 export default function NotificationCenter() {
@@ -29,59 +26,70 @@ export default function NotificationCenter() {
     const pendingReadRef = useRef<Set<string>>(new Set());
 
     const userId = session?.user?.id;
-    const isAuthed = useFirebaseAuthed(userId);
 
     // Subscription data for module-based filtering
     const serviceRegistrations = (session?.user as any)?.serviceRegistrations as Record<string, any> | undefined;
     const roles = (session?.user as any)?.roles as string[] | undefined;
 
-    // Real-time Firestore listener
+    // Load notifications via Polling
     useEffect(() => {
-        if (!userId || !isAuthed) {
+        if (!userId) {
             setLoading(false);
             return;
         }
 
-        // Query notifications for current user
-        const q = query(
-            collection(db, COLLECTIONS.NOTIFICATIONS),
-            where("userId", "==", userId),
-            orderBy("createdAt", "desc"),
-            limit(50) // Limit to latest 50 notifications
-        );
+        let isMounted = true;
+        async function fetchNotifications() {
+            try {
+                const { data: rows, error } = await supabase
+                    .from('document_collections')
+                    .select('raw_data')
+                    .eq('collection_name', 'notifications')
+                    .eq('raw_data->>userId', userId);
 
-        // Set up real-time listener
-        const unsubscribe = onSnapshot(
-            q,
-            (snapshot) => {
-                const notifs: Notification[] = [];
-                snapshot.forEach((doc) => {
-                    const data = doc.data();
-                    notifs.push({
-                        id: doc.id,
-                        userId: data.userId,
-                        type: data.type || "info",
-                        title: data.title,
-                        message: data.message,
-                        link: data.link,
-                        linkText: data.linkText,
-                        read: data.read,
-                        createdAt: data.createdAt,
-                        readAt: data.readAt,
+                if (error) throw error;
+
+                if (isMounted && rows) {
+                    const notifs = rows.map(r => {
+                        const data = r.raw_data || {};
+                        return {
+                            id: data.id,
+                            userId: data.userId,
+                            type: data.type || "info",
+                            title: data.title,
+                            message: data.message,
+                            link: data.link,
+                            linkText: data.linkText,
+                            read: data.read,
+                            createdAt: data.createdAt,
+                            readAt: data.readAt,
+                        } as any;
                     });
-                });
-                setNotifications(notifs);
-                setLoading(false);
-            },
-            (error) => {
-                console.error("Notification listener error:", error);
-                setLoading(false);
-            }
-        );
 
-        // Cleanup listener on unmount
-        return () => unsubscribe();
-    }, [userId, isAuthed]);
+                    // Sort locally by createdAt desc
+                    notifs.sort((a, b) => {
+                        const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                        const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                        return tB - tA;
+                    });
+
+                    setNotifications(notifs.slice(0, 50));
+                }
+            } catch (err) {
+                console.error("Failed to fetch notifications from Supabase:", err);
+            } finally {
+                if (isMounted) setLoading(false);
+            }
+        }
+
+        fetchNotifications();
+        const interval = setInterval(fetchNotifications, 10000); // Poll every 10 seconds
+
+        return () => {
+            isMounted = false;
+            clearInterval(interval);
+        };
+    }, [userId]);
 
     // Filter to only show notifications for subscribed modules
     const visibleNotifications = notifications.filter((n) =>

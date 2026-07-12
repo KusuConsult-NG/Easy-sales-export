@@ -2,7 +2,6 @@
 
 import { createCourseAction } from "@/app/actions/academy";
 import { toast } from "sonner";
-import { Timestamp } from "firebase/firestore";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";

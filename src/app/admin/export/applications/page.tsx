@@ -26,15 +26,6 @@ import {
     Search,
 } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
-import { db } from "@/lib/firebase";
-import {
-    collection,
-    query,
-    where,
-    orderBy,
-    onSnapshot,
-    Unsubscribe,
-} from "firebase/firestore";
 import {
     approveExportOnboardingAction,
     rejectExportApplicationAction,

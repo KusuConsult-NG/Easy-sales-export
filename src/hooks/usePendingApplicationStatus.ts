@@ -1,7 +1,5 @@
 import { useState, useEffect } from "react";
-import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, doc } from "firebase/firestore";
-import { useFirebaseAuthed } from "./useFirebaseAuthed";
+import { supabase } from "@/lib/supabase";
 
 interface UsePendingApplicationStatusOptions {
     collectionName: string;
@@ -19,68 +17,87 @@ export function usePendingApplicationStatus({
     const [rejectionReason, setRejectionReason] = useState<string | null>(null);
     const [createdAt, setCreatedAt] = useState<Date | null>(null);
 
-    const isAuthed = useFirebaseAuthed(userId);
-
     useEffect(() => {
-        if (!userId || !isAuthed) return;
-
-        let unsub: () => void;
-
-        if (collectionName === "users") {
-            // Special case: Farm Nation listens directly on the user doc
-            const docRef = doc(db, "users", userId);
-            unsub = onSnapshot(docRef, (snap) => {
-                setIsLoading(false);
-                if (!snap.exists()) return;
-                const userData = snap.data();
-                const regData = userData?.serviceRegistrations?.[statusField];
-                const currentStatus = regData?.status;
-                if (currentStatus) {
-                    setStatus(currentStatus);
-                }
-            }, (error) => {
-                console.error("usePendingApplicationStatus user doc listener failed:", error);
-                setIsLoading(false);
-            });
-        } else {
-            // General case: Query collection by userId
-            const q = query(
-                collection(db, collectionName),
-                where("userId", "==", userId)
-            );
-
-            unsub = onSnapshot(q, (snap) => {
-                setIsLoading(false);
-                if (snap.empty) return;
-
-                // Sort to find the latest application in case of resubmissions
-                const sortedDocs = snap.docs.sort((a, b) => {
-                    const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
-                    const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
-                    return bTime - aTime;
-                });
-
-                const latestDoc = sortedDocs[0];
-                const data = latestDoc.data();
-                const currentStatus = data[statusField] || "pending";
-                
-                setStatus(currentStatus);
-                if (data.createdAt) {
-                    setCreatedAt(data.createdAt.toDate?.() || new Date(data.createdAt.seconds * 1000));
-                }
-                if (data.rejectionReason) {
-                    setRejectionReason(data.rejectionReason);
-                }
-            }, (error) => {
-                console.error(`usePendingApplicationStatus ${collectionName} listener failed:`, error);
-                setIsLoading(false);
-            });
+        if (!userId) {
+            setIsLoading(false);
+            return;
         }
 
-        return () => {
-            unsub?.();
-        };
-    }, [userId, isAuthed, collectionName, statusField]);
+        async function checkStatus() {
+            try {
+                if (collectionName === "users") {
+                    const { data: userRow, error } = await supabase
+                        .from('users')
+                        .select('raw_data')
+                        .eq('id', userId)
+                        .maybeSingle();
+
+                    if (!error && userRow) {
+                        const userData = userRow.raw_data || {};
+                        const regData = userData?.serviceRegistrations?.[statusField];
+                        const currentStatus = regData?.status;
+                        if (currentStatus) {
+                            setStatus(currentStatus);
+                        }
+                    }
+                } else {
+                    let tableName = 'document_collections';
+                    if (collectionName === 'cooperative_members') tableName = 'cooperative_members';
+                    else if (collectionName === 'academy_applications') tableName = 'academy_applications';
+
+                    let docs: any[] = [];
+                    if (tableName === 'document_collections') {
+                        const { data: rows, error } = await supabase
+                            .from('document_collections')
+                            .select('raw_data')
+                            .eq('collection_name', collectionName)
+                            .eq('raw_data->>userId', userId);
+
+                        if (!error && rows) {
+                            docs = rows.map(r => r.raw_data || {});
+                        }
+                    } else {
+                        const { data: rows, error } = await supabase
+                            .from(tableName)
+                            .select('*')
+                            .eq('user_id', userId);
+
+                        if (!error && rows) {
+                            docs = rows.map(r => r.raw_data || {});
+                        }
+                    }
+
+                    if (docs.length > 0) {
+                        // Sort by createdAt desc
+                        docs.sort((a, b) => {
+                            const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                            const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                            return bTime - aTime;
+                        });
+
+                        const latestData = docs[0];
+                        const currentStatus = latestData[statusField] || "pending";
+                        setStatus(currentStatus);
+                        if (latestData.createdAt) {
+                            setCreatedAt(new Date(latestData.createdAt));
+                        }
+                        if (latestData.rejectionReason) {
+                            setRejectionReason(latestData.rejectionReason);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error("usePendingApplicationStatus error:", err);
+            } finally {
+                setIsLoading(false);
+            }
+        }
+
+        checkStatus();
+        const interval = setInterval(checkStatus, 10000); // Poll every 10 seconds
+
+        return () => clearInterval(interval);
+    }, [userId, collectionName, statusField]);
 
     return { status, isLoading, rejectionReason, createdAt };
 }

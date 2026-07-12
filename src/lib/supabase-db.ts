@@ -997,4 +997,45 @@ export type QuerySnapshot = SupabaseQuerySnapshot;
 export type Transaction = SupabaseTransaction;
 export type WriteBatch = SupabaseWriteBatch;
 
+export function doc(dbInstance: any, path: string, ...segments: string[]) {
+    if (typeof dbInstance.doc === 'function') {
+        return dbInstance.doc(path, ...segments);
+    }
+    return doc(getAdminDb(), path, ...segments);
+}
+
+export function collection(dbInstance: any, path: string, ...segments: string[]) {
+    if (typeof dbInstance.collection === 'function') {
+        return dbInstance.collection(path, ...segments);
+    }
+    return collection(getAdminDb(), path, ...segments);
+}
+
+export async function getDoc(ref: any) {
+    return ref.get();
+}
+
+export async function setDoc(ref: any, data: any, options?: any) {
+    return ref.set(data, options);
+}
+
+export async function updateDoc(ref: any, data: any) {
+    return ref.update(data);
+}
+
+export function increment(value: number) {
+    return { __op: 'increment', value };
+}
+
+export function serverTimestamp() {
+    return new Date();
+}
+
+export async function runTransaction(dbInstance: any, updateFunction: (transaction: any) => Promise<any>) {
+    if (typeof dbInstance.runTransaction === 'function') {
+        return dbInstance.runTransaction(updateFunction);
+    }
+    return getAdminDb().runTransaction(updateFunction);
+}
+
 

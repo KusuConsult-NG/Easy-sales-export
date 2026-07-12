@@ -10,11 +10,9 @@ import {
     Landmark, BookOpen,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import { db } from "@/lib/firebase";
-import { collection, query, where, orderBy, limit, onSnapshot, doc, deleteDoc } from "firebase/firestore";
+import { db, collection, query, where, orderBy, limit, onSnapshot, doc, deleteDoc } from "@/lib/supabase-client-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { useToast } from "@/contexts/ToastContext";
-import { useFirebaseAuthed } from "@/hooks/useFirebaseAuthed";
 import { isNotificationVisible, getVisibleFilterTabs } from "@/lib/notification-filter";
 
 /* ──────────────────────────────────────────────────────────────
@@ -110,7 +108,6 @@ export default function NotificationsPage() {
     const [deletingId, setDeletingId] = useState<string | null>(null);
 
     const userId = session?.user?.id;
-    const isAuthed = useFirebaseAuthed(userId);
     // Prevent duplicate auto-read calls on re-renders
     const autoReadDoneRef = useRef(false);
 
@@ -121,7 +118,7 @@ export default function NotificationsPage() {
     /* ── Real-time Firestore listener ── */
     useEffect(() => {
         if (status === "unauthenticated") { router.push("/auth/login"); return; }
-        if (!userId || !isAuthed) return;
+        if (!userId) return;
 
         const q = query(
             collection(db, COLLECTIONS.NOTIFICATIONS),
@@ -143,7 +140,7 @@ export default function NotificationsPage() {
         });
 
         return () => unsub();
-    }, [userId, isAuthed, status, router]);
+    }, [userId, status, router]);
 
     /* ── Which tabs to show based on user's module subscriptions ── */
     const visibleTabs = useMemo(() => {

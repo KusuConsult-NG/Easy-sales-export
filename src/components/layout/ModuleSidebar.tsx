@@ -39,9 +39,7 @@ import { hasAppAccess } from "@/lib/role-app-mapping";
 import { signOut as nextAuthSignOut } from "next-auth/react";
 import type { UserRole } from "@/lib/types/roles";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
-import { useFirebaseAuthed } from "@/hooks/useFirebaseAuthed";
+import { db, collection, query, where, onSnapshot } from "@/lib/supabase-client-db";
 
 
 const COLLAPSED_KEY = "sidebar_collapsed_v2";
@@ -307,7 +305,6 @@ export function ModuleSidebar({ isMobileOpen = false, onMobileClose }: ModuleSid
     const [unreadMessages, setUnreadMessages] = useState(0);
 
     const userId   = session?.user?.id;
-    const isAuthed = useFirebaseAuthed(userId);
     const roles    = (session?.user?.roles as UserRole[]) || [];
     const userName = session?.user?.name || "User";
     const isSeller = roles.includes("seller");
@@ -376,7 +373,7 @@ export function ModuleSidebar({ isMobileOpen = false, onMobileClose }: ModuleSid
 
     // ── Real-time unread messages (lightweight) ───────────────────────────
     useEffect(() => {
-        if (!userId || !isAuthed) return;
+        if (!userId) return;
         const q = query(
             collection(db, COLLECTIONS.CONVERSATIONS),
             where("participants", "array-contains", userId)
@@ -387,14 +384,16 @@ export function ModuleSidebar({ isMobileOpen = false, onMobileClose }: ModuleSid
                 const data = d.data();
                 const lastRead = data.participantDetails?.[userId]?.lastRead;
                 const lastMsg  = data.lastMessage?.timestamp;
-                if (lastMsg && (!lastRead || lastMsg.toMillis?.() > lastRead.toMillis?.())) count++;
+                const lastMsgMs = lastMsg?.toMillis ? lastMsg.toMillis() : (lastMsg ? new Date(lastMsg).getTime() : 0);
+                const lastReadMs = lastRead?.toMillis ? lastRead.toMillis() : (lastRead ? new Date(lastRead).getTime() : 0);
+                if (lastMsgMs && (!lastReadMs || lastMsgMs > lastReadMs)) count++;
             });
             setUnreadMessages(count);
         }, (error) => {
             console.error("ModuleSidebar messages listener failed:", error);
         });
         return () => unsub();
-    }, [userId, isAuthed]);
+    }, [userId]);
 
     // ── Active path helper ────────────────────────────────────────────────
     const isActive = (href: string, exact?: boolean) => {

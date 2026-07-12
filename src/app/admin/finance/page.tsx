@@ -19,8 +19,7 @@ import {
     RefreshCw,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import { db } from "@/lib/firebase";
-import { Timestamp } from "firebase/firestore";
+import { Timestamp } from "@/lib/supabase-client-db";
 import { getFinancialOverviewAction } from "@/app/actions/admin-analytics";
 
 // ─── Types ─────────────────────────────────────────────────────────────────

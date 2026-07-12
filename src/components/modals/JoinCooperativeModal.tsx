@@ -29,8 +29,7 @@ async function joinCooperativeWrapper(
     "use server";
 
     const { requireSession } = await import("@/lib/session-guard");
-    const { db } = await import("@/lib/firebase");
-    const { doc, getDoc, setDoc, updateDoc, increment, serverTimestamp } = await import("firebase/firestore");
+    const { supabaseDb: db, doc, getDoc, setDoc, updateDoc, increment, serverTimestamp } = await import("@/lib/supabase-db");
     const { COLLECTIONS } = await import("@/lib/types/firestore");
 
     try {

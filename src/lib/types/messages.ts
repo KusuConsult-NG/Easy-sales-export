@@ -5,7 +5,12 @@
  * conversations between users and individual messages.
  */
 
-import { Timestamp } from "firebase/firestore";
+export interface Timestamp {
+    seconds: number;
+    nanoseconds: number;
+    toDate(): Date;
+    toMillis(): number;
+}
 
 /**
  * Individual message in a conversation

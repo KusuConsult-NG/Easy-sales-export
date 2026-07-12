@@ -8,11 +8,9 @@ import {
     AlertTriangle, Star, Sparkles, ChevronRight, Loader2,
     TrendingUp, Users, BookOpen, Landmark, ExternalLink, Settings,
 } from "lucide-react";
-import { db } from "@/lib/firebase";
 import AnnouncementBanner from "@/components/AnnouncementBanner";
-import { collection, doc, query, where, onSnapshot, orderBy, limit } from "firebase/firestore";
+import { db, collection, doc, query, where, onSnapshot, orderBy, limit } from "@/lib/supabase-client-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { useFirebaseAuthed } from "@/hooks/useFirebaseAuthed";
 import type { UserRole } from "@/lib/types/roles";
 
 const fmt = (n: number = 0) =>
@@ -188,7 +186,6 @@ function DashboardHomeContent() {
     const userId = session?.user?.id;
     const roles = (session?.user?.roles as UserRole[]) || [];
     const userName = session?.user?.name?.split(" ")[0] || "there";
-    const isAuthed = useFirebaseAuthed(userId);
 
     const [stats, setStats] = useState<StatsState>({
         walletBalance: 0, activeOrders: 0,
@@ -202,7 +199,7 @@ function DashboardHomeContent() {
 
     // Real-time user profile (for serviceRegistrations)
     useEffect(() => {
-        if (!userId || !isAuthed) return;
+        if (!userId) return;
         const userRef = doc(db, COLLECTIONS.USERS, userId);
         const unsub = onSnapshot(userRef, (snap) => {
             if (snap.exists()) {
@@ -212,11 +209,11 @@ function DashboardHomeContent() {
             console.error("Dashboard userRef listener failed:", error);
         });
         return () => unsub();
-    }, [userId, isAuthed]);
+    }, [userId]);
 
     // Real-time unread notifications
     useEffect(() => {
-        if (!userId || !isAuthed) return;
+        if (!userId) return;
         const q = query(
             collection(db, COLLECTIONS.NOTIFICATIONS),
             where("userId", "==", userId),
@@ -228,11 +225,11 @@ function DashboardHomeContent() {
             console.error("Dashboard unread notifications listener failed:", error);
         });
         return () => unsub();
-    }, [userId, isAuthed]);
+    }, [userId]);
 
     // Real-time unread messages
     useEffect(() => {
-        if (!userId || !isAuthed) return;
+        if (!userId) return;
         const q = query(
             collection(db, COLLECTIONS.CONVERSATIONS),
             where("participants", "array-contains", userId)
@@ -243,18 +240,20 @@ function DashboardHomeContent() {
                 const data = doc.data();
                 const lastRead = data.participantDetails?.[userId]?.lastRead;
                 const lastMsg = data.lastMessage?.timestamp;
-                if (lastMsg && (!lastRead || lastMsg.toMillis?.() > lastRead.toMillis?.())) count++;
+                const lastMsgMs = lastMsg?.toMillis ? lastMsg.toMillis() : (lastMsg ? new Date(lastMsg).getTime() : 0);
+                const lastReadMs = lastRead?.toMillis ? lastRead.toMillis() : (lastRead ? new Date(lastRead).getTime() : 0);
+                if (lastMsgMs && (!lastReadMs || lastMsgMs > lastReadMs)) count++;
             });
             setStats(s => ({ ...s, unreadMessages: count, loading: false }));
         }, (error) => {
             console.error("Dashboard unread messages listener failed:", error);
         });
         return () => unsub();
-    }, [userId, isAuthed]);
+    }, [userId]);
 
     // Wallet balance — keyed by userId (walletId === userId)
     useEffect(() => {
-        if (!userId || !isAuthed) return;
+        if (!userId) return;
         const walletRef = doc(db, COLLECTIONS.WALLETS, userId);
         const unsub = onSnapshot(walletRef, (snap) => {
             if (snap.exists()) {
@@ -264,11 +263,11 @@ function DashboardHomeContent() {
             console.error("Dashboard walletRef listener failed:", error);
         });
         return () => unsub();
-    }, [userId, isAuthed]);
+    }, [userId]);
 
     // Recent notifications (last 4)
     useEffect(() => {
-        if (!userId || !isAuthed) return;
+        if (!userId) return;
         const q = query(
             collection(db, COLLECTIONS.NOTIFICATIONS),
             where("userId", "==", userId),
@@ -281,11 +280,11 @@ function DashboardHomeContent() {
             console.error("Dashboard recent notifications listener failed:", error);
         });
         return () => unsub();
-    }, [userId, isAuthed]);
+    }, [userId]);
 
     // Subscribe to both WAVE Training Events and Village Market Events
     useEffect(() => {
-        if (!userId || !isAuthed) return;
+        if (!userId) return;
 
         let activeWaveEvents: DashboardEvent[] = [];
         let activeMarketEvents: DashboardEvent[] = [];
@@ -350,11 +349,11 @@ function DashboardHomeContent() {
             unsubWave();
             unsubMarket();
         };
-    }, [userId, isAuthed]);
+    }, [userId]);
 
     // Subscribe to WAVE resources
     useEffect(() => {
-        if (!userId || !isAuthed) return;
+        if (!userId) return;
 
         const q = query(collection(db, COLLECTIONS.WAVE_RESOURCES));
         const unsub = onSnapshot(q, (snap) => {
@@ -386,13 +385,13 @@ function DashboardHomeContent() {
         });
 
         return () => unsub();
-    }, [userId, isAuthed]);
+    }, [userId]);
 
     // Active orders count — real-time onSnapshot (avoids getDocs stale count and composite index crash).
     // ⚠️ Firestore requires a composite index for (buyerId + orderStatus IN [...]) which may not exist.
     // Safe alternative: listen on buyerId only, then filter client-side (resultset is small per-user).
     useEffect(() => {
-        if (!userId || !isAuthed) return;
+        if (!userId) return;
         const q = query(
             collection(db, COLLECTIONS.MARKETPLACE_ORDERS),
             where("buyerId", "==", userId)
@@ -407,7 +406,7 @@ function DashboardHomeContent() {
             setStats(s => ({ ...s, loading: false }));
         });
         return () => unsub();
-    }, [userId, isAuthed]);
+    }, [userId]);
 
 
     if (status === "loading") {

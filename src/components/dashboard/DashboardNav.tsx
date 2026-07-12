@@ -23,14 +23,12 @@ import {
     Settings,
 } from "lucide-react";
 import { logoutAction } from "@/app/actions/auth";
-import { db } from "@/lib/firebase";
-import { onSnapshot, doc, collection, query, where } from "firebase/firestore";
+import { db, onSnapshot, doc, collection, query, where } from "@/lib/supabase-client-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { UserRole } from "@/lib/types/roles";
 import { getPrimaryApp } from "@/lib/role-app-mapping";
 import { useFeatureToggles } from "@/hooks/useFeatureToggle";
 import { useUnreadNotifications } from "@/hooks/useUnreadNotifications";
-import { useFirebaseAuthed } from "@/hooks/useFirebaseAuthed";
 
 interface NavItem {
     label: string;
@@ -97,13 +95,13 @@ export default function DashboardNav() {
     const userName = session?.user?.name || "User";
     const userEmail = session?.user?.email || "";
 
-    const isAuthed = useFirebaseAuthed(userId);
+
     const { unreadCount } = useUnreadNotifications(userId);
     const [serviceRegs, setServiceRegs] = useState<any>({});
 
     // Real-time Service Registrations
     useEffect(() => {
-        if (!userId || !isAuthed) return;
+        if (!userId) return;
         const unsub = onSnapshot(doc(db, COLLECTIONS.USERS, userId), (docSnap) => {
             if (docSnap.exists()) {
                 setServiceRegs(docSnap.data()?.serviceRegistrations || {});
@@ -112,11 +110,11 @@ export default function DashboardNav() {
             console.error("DashboardNav user listener failed:", error);
         });
         return () => unsub();
-    }, [userId, isAuthed]);
+    }, [userId]);
 
     // Real-time unread messages count
     useEffect(() => {
-        if (!userId || !isAuthed) return;
+        if (!userId) return;
         const q = query(
             collection(db, COLLECTIONS.CONVERSATIONS),
             where("participants", "array-contains", userId)
@@ -127,7 +125,9 @@ export default function DashboardNav() {
                 const data = doc.data();
                 const lastRead = data.participantDetails?.[userId]?.lastRead;
                 const lastMsg = data.lastMessage?.timestamp;
-                if (lastMsg && (!lastRead || lastMsg.toMillis?.() > lastRead.toMillis?.() )) {
+                const lastMsgMs = lastMsg?.toMillis ? lastMsg.toMillis() : (lastMsg ? new Date(lastMsg).getTime() : 0);
+                const lastReadMs = lastRead?.toMillis ? lastRead.toMillis() : (lastRead ? new Date(lastRead).getTime() : 0);
+                if (lastMsgMs && (!lastReadMs || lastMsgMs > lastReadMs)) {
                     count++;
                 }
             });
@@ -136,7 +136,7 @@ export default function DashboardNav() {
             console.error("DashboardNav messages count listener failed:", error);
         });
         return () => unsub();
-    }, [userId, isAuthed]);
+    }, [userId]);
 
     const moduleLinks = getModuleLinks(roles, serviceRegs, session?.user?.gender);
     const toggles = useFeatureToggles(["digital_id_system", "escrow_messaging"]);

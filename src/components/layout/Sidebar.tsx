@@ -24,10 +24,8 @@ import { hasAppAccess, type AppIdentifier } from "@/lib/role-app-mapping";
 import type { UserRole } from "@/lib/types/roles";
 import { GLOBAL_NAV_ITEMS, MODULE_NAVIGATION, type NavigationItem } from "@/lib/sidebar-config";
 import { useFeatureToggles } from "@/hooks/useFeatureToggle";
-import { db } from "@/lib/firebase";
-import { doc, onSnapshot } from "firebase/firestore";
+import { db, doc, onSnapshot } from "@/lib/supabase-client-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { useFirebaseAuthed } from "@/hooks/useFirebaseAuthed";
 
 const ALL_SIDEBAR_TOGGLES = Array.from(new Set([
     ...Object.values(MODULE_NAVIGATION).flat().map(i => i.featureToggle),
@@ -45,7 +43,6 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
     const pathname = usePathname();
     const { data: session } = useSession();
     const userId = session?.user?.id;
-    const isAuthed = useFirebaseAuthed(userId);
 
     const featureToggles = useFeatureToggles(ALL_SIDEBAR_TOGGLES);
 
@@ -55,7 +52,7 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
     const [serviceRegs, setServiceRegs] = useState<any>({});
 
     useEffect(() => {
-        if (!userId || !isAuthed) return;
+        if (!userId) return;
         const unsub = onSnapshot(doc(db, COLLECTIONS.USERS, userId), (docSnap) => {
             if (docSnap.exists()) {
                 setServiceRegs(docSnap.data()?.serviceRegistrations || {});
@@ -64,7 +61,7 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
             console.error("Sidebar user listener failed:", error);
         });
         return () => unsub();
-    }, [userId, isAuthed]);
+    }, [userId]);
 
     useEffect(() => {
         setMounted(true);

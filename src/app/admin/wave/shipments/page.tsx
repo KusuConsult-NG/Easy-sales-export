@@ -14,8 +14,6 @@ import {
     syncShipmentWithCarrierAction,
     getStandardWaveApplicationsAction
 } from "@/app/actions/wave";
-import { db } from "@/lib/firebase";
-import { collection, query, where, getDocs, limit } from "firebase/firestore";
 import type { ShipmentTracking } from "@/app/actions/wave";
 
 interface UserSearchRef {

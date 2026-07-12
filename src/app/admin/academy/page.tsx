@@ -7,7 +7,6 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { getCoursesAction, deleteCourseAction, startAcademyLiveSessionAction, type Course } from "@/app/actions/academy";
 import { toast } from "sonner";
-import { Timestamp } from "firebase/firestore";
 import { useAdminData } from "@/hooks/useAdminData";
 import { formatDate } from "@/lib/utils";
 

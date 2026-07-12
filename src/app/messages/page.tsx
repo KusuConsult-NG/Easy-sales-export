@@ -7,11 +7,8 @@ import { isSessionExpired } from '@/lib/session-expiry-code';
 import { MessageSquare, Search, Plus, Send, Loader2 } from "lucide-react";
 import { getConversationsAction, getMessagesAction, sendMessageAction, startConversationAction, searchUsersAction, markAsReadAction, startSupportConversationAction } from "@/app/actions/messages";
 import type { Conversation, Message, UserSearchResult } from "@/lib/types/messages";
-import { db } from "@/lib/firebase";
-import { collection, query, orderBy, limit, onSnapshot, where } from "firebase/firestore";
 import { format } from "date-fns";
 import { useToast } from "@/contexts/ToastContext";
-import { useFirebaseAuthed } from "@/hooks/useFirebaseAuthed";
 
 export default function MessagesPage() {
     const { data: session } = useSession();
@@ -20,7 +17,6 @@ export default function MessagesPage() {
     const defaultConv = searchParams.get("conversation");
     
     const userId = session?.user?.id;
-    const isAuthed = useFirebaseAuthed(userId);
 
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [selectedConv, setSelectedConv] = useState<string | null>(defaultConv);
@@ -41,79 +37,82 @@ export default function MessagesPage() {
         }, 100);
     };
 
-    // Load conversations on mount using Real-time Listener
+    // Load conversations on mount using Polling
     useEffect(() => {
-        if (!userId || !isAuthed) return;
+        if (!userId) return;
 
-        setLoading(true);
-        // Let's use the explicit where clause and locally sort.
+        let isMounted = true;
+        async function fetchConversations() {
+            try {
+                const result = await getConversationsAction();
+                if (isMounted && result.conversations) {
+                    setConversations(result.conversations);
+                }
+            } catch (err) {
+                console.error("Messages page conversations poll failed:", err);
+            } finally {
+                if (isMounted) setLoading(false);
+            }
+        }
 
-        // Re-implement getConversationsAction's query logic synchronously to avoid memory leaks:
-        const convsQuery = query(
-            collection(db, "conversations"),
-            where("participants", "array-contains", userId)
-        );
+        fetchConversations();
+        const interval = setInterval(fetchConversations, 8000); // Poll every 8 seconds
 
-        const unsubscribe = onSnapshot(convsQuery, (snapshot) => {
-            const convs = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            })) as Conversation[];
-            
-            // Sort locally by updatedAt descending
-            convs.sort((a, b) => {
-                const tA = a.updatedAt ? (typeof (a.updatedAt as any).toDate === 'function' ? (a.updatedAt as any).toDate().getTime() : new Date(a.updatedAt as any).getTime()) : 0;
-                const tB = b.updatedAt ? (typeof (b.updatedAt as any).toDate === 'function' ? (b.updatedAt as any).toDate().getTime() : new Date(b.updatedAt as any).getTime()) : 0;
-                return tB - tA;
-            });
+        return () => {
+            isMounted = false;
+            clearInterval(interval);
+        };
+    }, [userId]);
 
-            setConversations(convs);
-            setLoading(false);
-        }, (error) => {
-            console.error("Messages page conversations listener failed:", error);
-            setLoading(false);
-        });
-
-        return () => unsubscribe();
-    }, [userId, isAuthed]);
-
-    // Load messages for selected conversation
+    // Load messages for selected conversation using Polling
     useEffect(() => {
-        if (!selectedConv || !userId || !isAuthed) {
+        if (!selectedConv || !userId) {
             if (!selectedConv) setMessages([]);
             return;
         }
 
+        let isMounted = true;
         async function loadMessages() {
-            const result = await getMessagesAction(selectedConv!);
-            if (!isSessionExpired(result) && result.messages) {
-                setMessages(result.messages);
-                scrollToBottom();
-            }
+            try {
+                const result = await getMessagesAction(selectedConv!);
+                if (isMounted && result.messages) {
+                    // Sort chronologically
+                    const sorted = [...result.messages].sort((a, b) => {
+                        const tA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+                        const tB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+                        return tA - tB;
+                    });
 
-            // Mark as read
-            await markAsReadAction(selectedConv!);
+                    setMessages(prev => {
+                        if (JSON.stringify(prev) !== JSON.stringify(sorted)) {
+                            const shouldScroll = prev.length !== sorted.length || 
+                                (prev.length > 0 && prev[prev.length - 1].id !== sorted[sorted.length - 1].id);
+                            if (shouldScroll) {
+                                setTimeout(scrollToBottom, 50);
+                            }
+                            return sorted;
+                        }
+                        return prev;
+                    });
+                }
+
+                // Mark as read
+                await markAsReadAction(selectedConv!);
+            } catch (err) {
+                console.error("Messages page messages poll failed:", err);
+            } finally {
+                if (isMounted) setLoading(false);
+            }
         }
 
         loadMessages();
+        const interval = setInterval(loadMessages, 3000); // Poll every 3 seconds for messages
 
-        // Set up real-time listener
-        const messagesRef = collection(db, `conversations/${selectedConv}/messages`);
-        const q = query(messagesRef, orderBy("timestamp", "desc"), limit(50));
-
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const newMessages: Message[] = [];
-            snapshot.forEach((doc) => {
-                newMessages.push({ id: doc.id, ...doc.data() } as Message);
-            });
-            setMessages(newMessages.reverse());
-            scrollToBottom();
-        }, (error) => {
-            console.error(`Messages page messages listener failed for conversation ${selectedConv}:`, error);
-        });
-
-        return () => unsubscribe();
-    }, [selectedConv, userId, isAuthed]);
+        return () => {
+            isMounted = false;
+            clearInterval(interval);
+        };
+    }, [selectedConv, userId]);
 
     // Handle send message
     async function handleSend() {

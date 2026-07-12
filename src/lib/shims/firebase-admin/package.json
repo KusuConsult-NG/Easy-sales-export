@@ -1,0 +1,14 @@
+{
+  "name": "firebase-admin",
+  "version": "1.0.0",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": "./index.js",
+    "./app": "./app.js",
+    "./auth": "./auth.js",
+    "./firestore": "./firestore.js",
+    "./storage": "./storage.js",
+    "./messaging": "./messaging.js"
+  }
+}

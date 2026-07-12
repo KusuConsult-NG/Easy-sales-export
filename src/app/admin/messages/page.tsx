@@ -14,26 +14,14 @@ import {
     ChevronLeft,
     HeadphonesIcon,
 } from "lucide-react";
-import { db } from "@/lib/firebase";
-import {
-    collection,
-    query,
-    orderBy,
-    limit,
-    onSnapshot,
-    where
-} from "firebase/firestore";
-import { COLLECTIONS } from "@/lib/types/firestore";
 import { sendMessageAction, getAllConversationsAdminAction } from "@/app/actions/messages";
 import { useToast } from "@/contexts/ToastContext";
 import type { Conversation, Message } from "@/lib/types/messages";
-import { useFirebaseAuthed } from "@/hooks/useFirebaseAuthed";
 
 export default function AdminMessagesPage() {
     const { data: session } = useSession();
     const { showToast } = useToast();
     const adminId = session?.user?.id;
-    const isAuthed = useFirebaseAuthed(adminId);
 
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
@@ -46,94 +34,78 @@ export default function AdminMessagesPage() {
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
-    // Real-time listener for conversations
+    // Load conversations on mount using Polling
     useEffect(() => {
-        if (!adminId || !isAuthed) return;
-        
-        const roles: string[] = (session?.user as any)?.roles || [];
-        const isFullAdmin = roles.includes("admin") || roles.includes("super_admin");
+        if (!adminId) return;
 
-        setLoading(true);
-        let q;
-        if (isFullAdmin) {
-            // Full admins see all global conversations
-            q = query(
-                collection(db, COLLECTIONS.CONVERSATIONS),
-                orderBy("updatedAt", "desc"),
-                limit(50)
-            );
-        } else {
-            // Module admins only see conversations explicitly mapped/assigned to them
-            q = query(
-                collection(db, COLLECTIONS.CONVERSATIONS),
-                where("participants", "array-contains", adminId),
-                orderBy("updatedAt", "desc"),
-                limit(50)
-            );
+        let isMounted = true;
+        async function fetchConversations() {
+            try {
+                const result = await getAllConversationsAdminAction();
+                if (isMounted && result.conversations) {
+                    setConversations(result.conversations);
+                }
+            } catch (err) {
+                console.error("Admin support conversations poll failed:", err);
+            } finally {
+                if (isMounted) setLoading(false);
+            }
         }
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const convs = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            })) as Conversation[];
-            setConversations(convs);
-            setLoading(false);
-        }, (error) => {
-            console.error("Admin support conversations listener failed:", error);
-            setLoading(false);
-        });
-        return () => unsubscribe();
-    }, [adminId, isAuthed, session]);
+        fetchConversations();
+        const interval = setInterval(fetchConversations, 8000); // Poll every 8 seconds
 
-    // Initial load for messages using server action to guarantee delivery
+        return () => {
+            isMounted = false;
+            clearInterval(interval);
+        };
+    }, [adminId]);
+
+    // Load and listen for messages in active conversation using Polling
     useEffect(() => {
-        if (!activeConversationId) {
-            setMessages([]);
+        if (!activeConversationId || !adminId) {
+            if (!activeConversationId) setMessages([]);
             return;
         }
 
+        let isMounted = true;
         async function loadMessages() {
             try {
-                // Fetch using admin SDK action to bypass client-side listener limitations
                 const { getMessagesAction } = await import("@/app/actions/messages");
                 const result = await getMessagesAction(activeConversationId!, 100);
-                if (result && result.messages) {
-                    setMessages(result.messages);
-                    scrollToBottom();
+                if (isMounted && result.messages) {
+                    // Sort chronologically
+                    const sorted = [...result.messages].sort((a, b) => {
+                        const tA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+                        const tB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+                        return tA - tB;
+                    });
+
+                    setMessages(prev => {
+                        if (JSON.stringify(prev) !== JSON.stringify(sorted)) {
+                            const shouldScroll = prev.length !== sorted.length || 
+                                (prev.length > 0 && prev[prev.length - 1].id !== sorted[sorted.length - 1].id);
+                            if (shouldScroll) {
+                                setTimeout(scrollToBottom, 50);
+                            }
+                            return sorted;
+                        }
+                        return prev;
+                    });
                 }
             } catch (error) {
-                console.error("Failed to fetch historical messages", error);
+                console.error("Failed to poll historical messages", error);
             }
         }
 
         loadMessages();
-    }, [activeConversationId]);
+        const interval = setInterval(loadMessages, 3000); // Poll every 3 seconds for active chat
 
-    // Real-time listener for messages in active conversation
-    useEffect(() => {
-        if (!activeConversationId || !adminId || !isAuthed) return;
-
-        const q = query(
-            collection(db, COLLECTIONS.CONVERSATIONS, activeConversationId, "messages"),
-            orderBy("timestamp", "desc"),
-            limit(100)
-        );
-
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const msgs = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data(),
-                timestamp: doc.data().timestamp?.toDate(),
-            })) as Message[];
-            setMessages(msgs.reverse());
-            scrollToBottom();
-        }, (error) => {
-            console.error(`Admin support messages listener failed for conversation ${activeConversationId}:`, error);
-        });
-
-        return () => unsubscribe();
-    }, [activeConversationId, adminId, isAuthed]);
+        return () => {
+            isMounted = false;
+            clearInterval(interval);
+        };
+    }, [activeConversationId, adminId]);
 
     function scrollToBottom() {
         setTimeout(() => {

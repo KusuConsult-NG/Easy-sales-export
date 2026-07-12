@@ -14,8 +14,7 @@ import {
     Clock,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import { db } from "@/lib/firebase";
-import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
+import { db, collection, query, where, getDocs, orderBy } from "@/lib/supabase-client-db";
 
 interface Withdrawal {
     id: string;

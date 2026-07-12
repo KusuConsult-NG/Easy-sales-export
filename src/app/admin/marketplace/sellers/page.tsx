@@ -8,8 +8,6 @@ import {
     BadgeCheck, BadgeX
 } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
-import { db } from "@/lib/firebase";
-import { collection, query, orderBy, onSnapshot, Unsubscribe } from "firebase/firestore";
 import RejectionModal from "@/components/admin/RejectionModal";
 import DynamicDetailModal from "@/components/admin/DynamicDetailModal";
 import { useAdminData } from "@/hooks/useAdminData";

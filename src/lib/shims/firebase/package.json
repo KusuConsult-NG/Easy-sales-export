@@ -1,0 +1,12 @@
+{
+  "name": "firebase",
+  "version": "1.0.0",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": "./index.js",
+    "./app": "./app.js",
+    "./auth": "./auth.js",
+    "./firestore": "./firestore.js"
+  }
+}

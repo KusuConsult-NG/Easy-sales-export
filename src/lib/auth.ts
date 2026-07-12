@@ -20,6 +20,8 @@ import { COLLECTIONS, type UserRole } from "./types/firestore";
 import type { User as FirestoreUser } from "./types/firestore";
 import { authConfig } from "./auth.config";
 import { runQueryWithRetry } from "@/lib/firestore-utils";
+import { supabase, supabaseAdmin } from "./supabase";
+import { supabaseDb as db } from "./supabase-db";
 
 /**
  * NextAuth v5 Configuration
@@ -69,41 +71,93 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         logger.error(`[Auth:Fallback] Redis consumeLoginAttempt failed, failing open. Error: ${err.message}`);
                     }
 
-                    // ── STEP 4: Firebase authentication (REST API) ───────────
-                    const responseData = await runQueryWithRetry(async () => {
-                        const authEmulatorHost = process.env.FIREBASE_AUTH_EMULATOR_HOST;
-                        const signInUrl = authEmulatorHost
-                            ? `http://${authEmulatorHost}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseApiKey}`
-                            : `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseApiKey}`;
-                        const res = await fetch(
-                            signInUrl,
-                            {
-                                method: "POST",
-                                headers: { 
-                                    "Content-Type": "application/json",
-                                    "Connection": "close"
-                                },
-                                body: JSON.stringify({
-                                    email,
-                                    password,
-                                    returnSecureToken: true
-                                })
-                            }
-                        );
-                        const data = await res.json();
-                        if (!res.ok) {
-                            const errorCode = data.error?.message || "auth/internal-error";
-                            console.error(`${authCtx} STEP 4 FAILED: Firebase REST API error: ${errorCode}`);
-                            const error = new Error(errorCode);
-                            (error as any).code = errorCode; // Match catch block structure
-                            (error as any).status = res.status;
-                            (error as any).data = data;
-                            throw error;
-                        }
-                        return data;
+                    // ── STEP 4: Supabase Auth Verification with JIT Fallback ──
+                    const { data: sbData, error: sbError } = await supabase.auth.signInWithPassword({
+                        email,
+                        password,
                     });
 
-                    const uid = responseData.localId;
+                    let uid: string;
+                    if (!sbError && sbData?.user) {
+                        // User exists and password is correct in Supabase Auth.
+                        // Query users collection by email to find their database profile (holding their legacy ID).
+                        const userSnap = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS)
+                            .where('email', '==', email.toLowerCase())
+                            .limit(1)
+                            .get());
+                        if (userSnap.empty) {
+                            console.error(`${authCtx} User verified in Supabase Auth but no profile found in database`);
+                            throw new Error("User profile not found in database");
+                        }
+                        uid = userSnap.docs[0].id;
+                        logger.info(`${authCtx} Authenticated via Supabase Auth. Profile ID: ${uid}`);
+                    } else {
+                        // Fallback: Verify credentials against Firebase Auth for JIT migration
+                        logger.info(`${authCtx} Supabase Login failed (${sbError?.message}). Checking Firebase Auth for JIT migration...`);
+
+                        const responseData = await runQueryWithRetry(async () => {
+                            const authEmulatorHost = process.env.FIREBASE_AUTH_EMULATOR_HOST;
+                            const signInUrl = authEmulatorHost
+                                ? `http://${authEmulatorHost}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseApiKey}`
+                                : `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseApiKey}`;
+                            const res = await fetch(
+                                signInUrl,
+                                {
+                                    method: "POST",
+                                    headers: { 
+                                        "Content-Type": "application/json",
+                                        "Connection": "close"
+                                    },
+                                    body: JSON.stringify({
+                                        email,
+                                        password,
+                                        returnSecureToken: true
+                                    })
+                                }
+                            );
+                            const data = await res.json();
+                            if (!res.ok) {
+                                const errorCode = data.error?.message || "auth/internal-error";
+                                console.error(`${authCtx} STEP 4 JIT FAILED: Firebase REST API error: ${errorCode}`);
+                                const error = new Error(errorCode);
+                                (error as any).code = errorCode;
+                                (error as any).status = res.status;
+                                (error as any).data = data;
+                                throw error;
+                            }
+                            return data;
+                        });
+
+                        const firebaseUid = responseData.localId;
+                        logger.info(`${authCtx} Verified via Firebase Auth. Legacy UID: ${firebaseUid}`);
+
+                        // Provision the user in Supabase Auth
+                        logger.info(`${authCtx} Provisioning user in Supabase Auth...`);
+                        const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+                            email,
+                            password,
+                            email_confirm: true,
+                        });
+
+                        if (createError) {
+                            // If they already exist in Supabase Auth but login failed, it means the password typed was incorrect
+                            if (createError.message?.includes('already exists') || createError.message?.includes('email_exists')) {
+                                throw new Error("auth/invalid-credential");
+                            }
+                            logger.error(`${authCtx} Failed to provision user in Supabase Auth:`, createError);
+                            throw new Error("Service registration failed. Please try again.");
+                        }
+
+                        // Map the new Supabase Auth user ID to the legacy profile in users collection (for audit/tracking)
+                        await db.collection(COLLECTIONS.USERS).doc(firebaseUid).update({
+                            supabaseAuthId: newUser.user.id,
+                        }).catch(err => {
+                            logger.error(`[Auth] Failed to save supabaseAuthId mapping for ${email}:`, err);
+                        });
+
+                        uid = firebaseUid;
+                        logger.info(`${authCtx} Successfully migrated user ${email} to Supabase Auth. Profile ID: ${uid}`);
+                    }
 
                     // ── STEP 5: Reset rate limit on success ─────────────────
                     try {

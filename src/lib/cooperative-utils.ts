@@ -6,9 +6,12 @@
 "use server";
 
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { doc, getDoc, collection } from "firebase/firestore";
+import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+
+const doc = (dbInstance: any, collectionName: string, id: string) => dbInstance.doc(collectionName, id);
+const getDoc = async (ref: any) => ref.get();
+const collection = (dbInstance: any, name: string) => dbInstance.collection(name);
 
 /**
  * Get user's cooperative balance
@@ -160,21 +163,17 @@ export async function getCooperativeQuickStats(): Promise<{
         let nextPaymentAmount: number | undefined;
 
         if (loanBalance > 0) {
-            const { getDocs, query, where, orderBy, limit } = await import('firebase/firestore');
+            const loansQuery = db.collection(COLLECTIONS.COOPERATIVE_LOANS)
+                .where('userId', '==', session.user.id)
+                .where('status', 'in', ['disbursed', 'approved'])
+                .orderBy('nextPaymentDate', 'asc')
+                .limit(1);
 
-            const loansQuery = query(
-                collection(db, COLLECTIONS.COOPERATIVE_LOANS),
-                where('userId', '==', session.user.id),
-                where('status', 'in', ['disbursed', 'approved']),
-                orderBy('nextPaymentDate', 'asc'),
-                limit(1)
-            );
-
-            const loansSnapshot = await getDocs(loansQuery);
+            const loansSnapshot = await loansQuery.get();
 
             if (!loansSnapshot.empty) {
                 const loanData = loansSnapshot.docs[0].data() as any;
-                nextPaymentDate = loanData.nextPaymentDate?.toDate();
+                nextPaymentDate = loanData.nextPaymentDate?.toDate ? loanData.nextPaymentDate.toDate() : (loanData.nextPaymentDate ? new Date(loanData.nextPaymentDate) : undefined);
                 nextPaymentAmount = loanData.nextPaymentAmount || loanData.monthlyPayment;
             }
         }

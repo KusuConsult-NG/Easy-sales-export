@@ -8,8 +8,7 @@ import {
     Clock, CheckCircle, XCircle, Eye, MessageCircle,
     ChevronRight,
 } from "lucide-react";
-import { db } from "@/lib/firebase";
-import { collection, query, where, orderBy, onSnapshot } from "firebase/firestore";
+import { supabase } from "@/lib/supabase";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { useFirebaseAuthed } from "@/hooks/useFirebaseAuthed";
 import { useToast } from "@/contexts/ToastContext";
@@ -65,29 +64,48 @@ export default function DisputesPage() {
     const [filterStatus, setFilterStatus] = useState<"all" | Dispute["status"]>("all");
 
     const userId = session?.user?.id;
-    const isAuthed = useFirebaseAuthed(userId);
 
-    // Real-time listener
+    // Load disputes via Polling
     useEffect(() => {
         if (status === "unauthenticated") { router.push("/auth/login"); return; }
-        if (!userId || !isAuthed) return;
+        if (!userId) return;
 
-        const q = query(
-            collection(db, COLLECTIONS.DISPUTES),
-            where("buyerId", "==", userId),
-            orderBy("createdAt", "desc")
-        );
+        let isMounted = true;
+        async function fetchDisputes() {
+            try {
+                const { data: rows, error } = await supabase
+                    .from('document_collections')
+                    .select('raw_data')
+                    .eq('collection_name', 'disputes')
+                    .eq('raw_data->>buyerId', userId);
 
-        const unsub = onSnapshot(q, (snap) => {
-            setDisputes(snap.docs.map(d => ({ id: d.id, ...d.data() } as Dispute)));
-            setLoading(false);
-        }, (error) => {
-            console.error("Disputes listener failed:", error);
-            setLoading(false);
-        });
+                if (error) throw error;
 
-        return () => unsub();
-    }, [userId, isAuthed, status, router]);
+                if (isMounted && rows) {
+                    const list = rows.map(r => r.raw_data as Dispute);
+                    // Sort locally by createdAt desc
+                    list.sort((a, b) => {
+                        const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                        const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                        return tB - tA;
+                    });
+                    setDisputes(list);
+                }
+            } catch (err) {
+                console.error("Disputes query failed:", err);
+            } finally {
+                if (isMounted) setLoading(false);
+            }
+        }
+
+        fetchDisputes();
+        const interval = setInterval(fetchDisputes, 10000); // Poll every 10 seconds
+
+        return () => {
+            isMounted = false;
+            clearInterval(interval);
+        };
+    }, [userId, status, router]);
 
     async function handleContactSupport(dispute: Dispute) {
         setContactingId(dispute.id);

@@ -1,0 +1,10 @@
+export * from "../../supabase-client-db";
+export function addDoc(collectionRef: any, data: any): Promise<any>;
+export function updateDoc(docRef: any, data: any): Promise<any>;
+export type Firestore = any;
+export type CollectionReference = any;
+export type DocumentReference = any;
+export type DocumentSnapshot = any;
+export type QuerySnapshot = any;
+export type Query = any;
+export type DocumentData = any;

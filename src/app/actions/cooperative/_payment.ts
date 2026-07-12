@@ -74,9 +74,8 @@ export async function verifyContributionPaymentAction(
 
         // Import here to avoid circular dependency
         const { verifyPaystackPayment } = await import('@/lib/paystack-server');
-        const { db } = await import('@/lib/firebase');
+        const { supabaseDb: db, doc, getDoc, setDoc, runTransaction, serverTimestamp } = await import('@/lib/supabase-db');
         const { COLLECTIONS } = await import('@/lib/types/firestore');
-        const { doc, getDoc, setDoc, runTransaction, serverTimestamp, FieldValue } = await import('firebase/firestore');
         const { calculateUserTier } = await import('@/lib/cooperative-tiers');
         const { createAdminAuditLog } = await import('@/lib/audit-log');
 
