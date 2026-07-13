@@ -1045,10 +1045,11 @@ async function _getStandardWaveApplicationsAction(options: {
                 } catch (e) { }
             }
 
+            const { serializeValue } = await import("@/lib/firestore-serialize");
             return {
                 success: true,
                 error: null,
-                data: finalForms,
+                data: serializeValue(finalForms),
                 lastDocId: nextCursor,
                 hasMore: hasMoreRaw,
                 meta: {
