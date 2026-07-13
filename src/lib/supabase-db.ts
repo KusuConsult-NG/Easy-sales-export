@@ -842,18 +842,28 @@ export class SupabaseQuery {
             }
         }
 
-        // Apply limit
-        if (this._limit !== null) {
-            const rangeEnd = (this._offset ?? 0) + this._limit - 1;
-            query = query.range(this._offset ?? 0, rangeEnd);
-        } else if (this._offset !== null) {
-            query = query.range(this._offset, this._offset + 9999);
+        // Apply limit and fetch auto-paginated batches to bypass Supabase 1,000-row select caps
+        const allData: any[] = [];
+        const limitVal = this._limit ?? 999999;
+        const offsetVal = this._offset ?? 0;
+        let fetchedSoFar = 0;
+
+        while (fetchedSoFar < limitVal) {
+            const batchLimit = Math.min(1000, limitVal - fetchedSoFar);
+            const rangeStart = offsetVal + fetchedSoFar;
+            const rangeEnd = rangeStart + batchLimit - 1;
+
+            const { data: batchData, error } = await query.range(rangeStart, rangeEnd);
+            if (error) throw new Error(`[supabase-db] query ${this._collection}: ${error.message}`);
+            if (!batchData || batchData.length === 0) break;
+
+            allData.push(...batchData);
+            fetchedSoFar += batchData.length;
+
+            if (batchData.length < batchLimit) break;
         }
 
-        const { data, error } = await query;
-        if (error) throw new Error(`[supabase-db] query ${this._collection}: ${error.message}`);
-
-        const docs = (data ?? []).map((row: any) => {
+        const docs = allData.map((row: any) => {
             const rawData = row.raw_data ?? {};
             const id = row.id || rawData.id;
             const withId = rawData.id ? rawData : { id, ...rawData };
