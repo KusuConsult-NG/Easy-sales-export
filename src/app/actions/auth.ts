@@ -129,14 +129,18 @@ export async function getPostLoginRedirect(email: string) { try {
             if (hasAdminRole) { // Determine specific admin landing page
                 let adminRedirect = '/admin';
                 
-                // Module admin roles take absolute priority because they are silo-isolated
-                // and explicitly blocked from the global /admin dashboard.
-                if (userRoles.includes('academy_admin')) adminRedirect = '/admin/academy';
-                else if (userRoles.includes('wave_admin')) adminRedirect = '/admin/wave';
-                else if (userRoles.includes('marketplace_admin')) adminRedirect = '/admin/marketplace';
-                else if (userRoles.includes('cooperative_admin')) adminRedirect = '/admin/cooperatives';
-                else if (userRoles.includes('export_admin')) adminRedirect = '/admin/export';
-                else if (userRoles.includes('farm_nation_admin')) adminRedirect = '/admin/farm-nation';
+                // If they are a global admin/super admin, they should land on the main /admin dashboard.
+                // Module admin roles take priority only for silo-isolated module admins.
+                const isGlobalAdmin = userRoles.includes('super_admin') || userRoles.includes('superadmin') || userRoles.includes('admin');
+                
+                if (!isGlobalAdmin) {
+                    if (userRoles.includes('academy_admin')) adminRedirect = '/admin/academy';
+                    else if (userRoles.includes('wave_admin')) adminRedirect = '/admin/wave';
+                    else if (userRoles.includes('marketplace_admin')) adminRedirect = '/admin/marketplace';
+                    else if (userRoles.includes('cooperative_admin')) adminRedirect = '/admin/cooperatives';
+                    else if (userRoles.includes('export_admin')) adminRedirect = '/admin/export';
+                    else if (userRoles.includes('farm_nation_admin')) adminRedirect = '/admin/farm-nation';
+                }
 
                 logger.info(`[getPostLoginRedirect] User ${email} has admin privileges, redirecting to ${adminRedirect}`);
                 return { error: null, success: true as const, data: { redirectUrl: adminRedirect } };
@@ -238,47 +242,104 @@ export async function preValidateLoginAction(credentials: any): Promise<{ succes
             });
 
             if (authError) {
-                const errMsg = authError.message || String(authError);
-                const isTransient = errMsg.includes("Premature close") || 
-                                    errMsg.includes("socket hang up") || 
-                                    errMsg.includes("ECONNRESET") ||
-                                    errMsg.includes("Client network socket disconnected") ||
-                                    errMsg.includes("FetchError") ||
-                                    errMsg.includes("fetch failed") ||
-                                    errMsg.includes("Connection closed") ||
-                                    errMsg.includes("Socket closed") ||
-                                    errMsg.includes("UNAVAILABLE") ||
-                                    errMsg.includes("stream terminated") ||
-                                    errMsg.includes("ERR_STREAM_PREMATURE_CLOSE") ||
-                                    errMsg.includes("ENOTFOUND") ||
-                                    errMsg.includes("getaddrinfo") ||
-                                    errMsg.includes("network-error") ||
-                                    errMsg.includes("DEADLINE_EXCEEDED") ||
-                                    errMsg.includes("deadline exceeded");
-                if (isTransient) {
-                    return { success: false, error: "A temporary connection issue occurred. Please try again." };
+                // FALLBACK: Verify credentials against Firebase Auth for JIT migration
+                const firebaseApiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+                if (firebaseApiKey && firebaseApiKey !== "mock-api-key-for-build") {
+                    try {
+                        const authEmulatorHost = process.env.FIREBASE_AUTH_EMULATOR_HOST;
+                        const signInUrl = authEmulatorHost
+                            ? `http://${authEmulatorHost}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseApiKey}`
+                            : `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseApiKey}`;
+                        
+                        const res = await fetch(signInUrl, {
+                            method: "POST",
+                            headers: { 
+                                "Content-Type": "application/json",
+                                "Connection": "close"
+                            },
+                            body: JSON.stringify({
+                                email,
+                                password,
+                                returnSecureToken: true
+                            })
+                        });
+                        
+                        const data = await res.json();
+                        if (res.ok) {
+                            // Firebase Auth succeeded! Provision the user in Supabase Auth
+                            const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+                            if (supabaseServiceKey) {
+                                const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+                                const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+                                    email,
+                                    password,
+                                    email_confirm: true,
+                                });
+
+                                if (!createError && newUser?.user) {
+                                    // Map the new Supabase Auth user ID to the legacy profile in users collection
+                                    const firebaseUid = data.localId;
+                                    await db.collection(COLLECTIONS.USERS).doc(firebaseUid).update({
+                                        supabaseAuthId: newUser.user.id,
+                                    }).catch(err => {
+                                        logger.error(`[PreValidate] Failed to save supabaseAuthId mapping:`, err);
+                                    });
+
+                                    logger.info(`[PreValidate] JIT migrated user ${email} during pre-validation.`);
+                                    responseData = { user: newUser.user };
+                                } else {
+                                    logger.error(`[PreValidate] Failed to provision user in Supabase Auth:`, createError);
+                                }
+                            }
+                        }
+                    } catch (fbErr: any) {
+                        logger.error(`[PreValidate] JIT Fallback error: ${fbErr.message}`);
+                    }
                 }
 
-                // Check if email exists in database to give a precise "Email address not registered" error
-                const emailCheck = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS)
-                    .where("email", "==", email.toLowerCase())
-                    .limit(1)
-                    .get());
-                     
-                if (emailCheck.empty) {
-                    return {
-                        success: false,
-                        error: "Email address not registered."
+                if (!responseData) {
+                    const errMsg = authError.message || String(authError);
+                    const isTransient = errMsg.includes("Premature close") || 
+                                        errMsg.includes("socket hang up") || 
+                                        errMsg.includes("ECONNRESET") ||
+                                        errMsg.includes("Client network socket disconnected") ||
+                                        errMsg.includes("FetchError") ||
+                                        errMsg.includes("fetch failed") ||
+                                        errMsg.includes("Connection closed") ||
+                                        errMsg.includes("Socket closed") ||
+                                        errMsg.includes("UNAVAILABLE") ||
+                                        errMsg.includes("stream terminated") ||
+                                        errMsg.includes("ERR_STREAM_PREMATURE_CLOSE") ||
+                                        errMsg.includes("ENOTFOUND") ||
+                                        errMsg.includes("getaddrinfo") ||
+                                        errMsg.includes("network-error") ||
+                                        errMsg.includes("DEADLINE_EXCEEDED") ||
+                                        errMsg.includes("deadline exceeded");
+                    if (isTransient) {
+                        return { success: false, error: "A temporary connection issue occurred. Please try again." };
+                    }
+
+                    // Check if email exists in database to give a precise "Email address not registered" error
+                    const emailCheck = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS)
+                        .where("email", "==", email.toLowerCase())
+                        .limit(1)
+                        .get());
+                         
+                    if (emailCheck.empty) {
+                        return {
+                            success: false,
+                            error: "Email address not registered."
+                        };
+                    }
+                    
+                    return { 
+                        success: false, 
+                        error: "Incorrect password." 
                     };
                 }
-                
-                return { 
-                    success: false, 
-                    error: "Incorrect password." 
-                };
+            } else {
+                responseData = authData;
             }
-
-            responseData = authData;
         } catch (authErr: any) {
             logger.error(`[PreValidate] Auth error: ${authErr.message}`);
             return { success: false, error: "An unexpected error occurred. Please try again." };
