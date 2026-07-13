@@ -10,6 +10,25 @@ import type { UserMetricsServiceContract, CooperativeMemberMetrics, AcademyMetri
  * ALL DASHBOARDS MUST CONSUME THIS SERVICE FOR USER METRICS.
  */
 
+async function fetchAllDocs(query: any): Promise<any[]> {
+    const allDocs: any[] = [];
+    let offset = 0;
+    let keepFetching = true;
+    while (keepFetching) {
+        const snap = await query.limit(1000).offset(offset).get();
+        if (snap.empty || snap.docs.length === 0) {
+            break;
+        }
+        allDocs.push(...snap.docs);
+        if (snap.docs.length < 1000) {
+            keepFetching = false;
+        } else {
+            offset += 1000;
+        }
+    }
+    return allDocs;
+}
+
 export class UserMetricsService implements UserMetricsServiceContract {
     /**
      * Gets the definitive count of cooperative members by strictly querying Firebase.
@@ -42,18 +61,12 @@ export class UserMetricsService implements UserMetricsServiceContract {
             legacyApprovedSnap, // "approved" is a legacy value written before May 2026
             pendingSnap,
             suspendedSnap,
-            paidPaymentsSnap,
         ] = await Promise.all([
             baseQuery.count().get(),
             baseQuery.where("membershipStatus", "==", "active").count().get(),
             baseQuery.where("membershipStatus", "==", "approved").count().get(),
             baseQuery.where("membershipStatus", "==", "pending").count().get(),
             baseQuery.where("membershipStatus", "==", "suspended").count().get(),
-            // Completed registration payments — global (no cooperative scope on PROCESSED_PAYMENTS)
-            db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
-                .where("type", "==", "cooperative_membership_registration")
-                .where("status", "==", "completed")
-                .get(),
         ]);
 
         const totalApplications = totalSnap.data().count ?? 0;
@@ -61,34 +74,36 @@ export class UserMetricsService implements UserMetricsServiceContract {
         const pendingCount = pendingSnap.data().count ?? 0;
         const suspendedCount = suspendedSnap.data().count ?? 0;
 
+        // Fetch all verified Paystack registration payments globally
+        const paidPaymentsDocs = await fetchAllDocs(
+            db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+                .where("type", "==", "cooperative_membership_registration")
+                .where("status", "==", "completed")
+                .select("userId")
+        );
+
         // Build set of userIds with verified Paystack payments
         const validPaidUserIds = new Set<string>();
-        paidPaymentsSnap.docs.forEach(doc => {
+        paidPaymentsDocs.forEach(doc => {
             const data = doc.data();
             if (data.userId) validPaidUserIds.add(data.userId);
         });
 
         // For legacy members paid outside Paystack, fetch their member docs to check paymentStatus.
         // Only fetch docs that are scoped to adminScope (if provided) and not already in the payment set.
-        // We use a separate lightweight query for this to avoid pulling the entire collection.
         let legacyPaidCount = 0;
         let orphanedPaymentsCount = 0;
 
         if (adminScope) {
-            // Scoped: count legacy-paid members within this cooperative
-            const legacyPaidSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                .where("cooperativeId", "==", adminScope)
-                .where("paymentStatus", "==", "completed")
-                .count()
-                .get();
             // These may overlap with Paystack-paid members; we rely on userId deduplication below
             // We'll fetch userId list to dedup properly
-            const legacyDocs = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                .where("cooperativeId", "==", adminScope)
-                .where("paymentStatus", "==", "completed")
-                .select("userId")
-                .get();
-            legacyDocs.docs.forEach(doc => {
+            const legacyDocs = await fetchAllDocs(
+                db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                    .where("cooperativeId", "==", adminScope)
+                    .where("paymentStatus", "==", "completed")
+                    .select("userId")
+            );
+            legacyDocs.forEach(doc => {
                 const uid = doc.data().userId || doc.id;
                 if (!validPaidUserIds.has(uid)) {
                     validPaidUserIds.add(uid);
@@ -97,15 +112,15 @@ export class UserMetricsService implements UserMetricsServiceContract {
             });
 
             // Orphaned = Paystack payments that have no matching member doc in this cooperative
-            // (skip for scoped queries: too expensive to cross-reference without cooperative on payments)
             orphanedPaymentsCount = 0;
         } else {
             // Global: count legacy-paid members across all cooperatives
-            const legacyDocs = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                .where("paymentStatus", "==", "completed")
-                .select("userId")
-                .get();
-            legacyDocs.docs.forEach(doc => {
+            const legacyDocs = await fetchAllDocs(
+                db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                    .where("paymentStatus", "==", "completed")
+                    .select("userId")
+            );
+            legacyDocs.forEach(doc => {
                 const uid = doc.data().userId || doc.id;
                 if (!validPaidUserIds.has(uid)) {
                     validPaidUserIds.add(uid);
@@ -116,10 +131,11 @@ export class UserMetricsService implements UserMetricsServiceContract {
             // Orphaned = Paystack payments with no member doc at all
             // We need member userId set for this — fetch only userId field for efficiency
             const allMemberUserIds = new Set<string>();
-            const allMembersDocs = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                .select("userId")
-                .get();
-            allMembersDocs.docs.forEach(doc => {
+            const allMembersDocs = await fetchAllDocs(
+                db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                    .select("userId")
+            );
+            allMembersDocs.forEach(doc => {
                 const uid = doc.data().userId || doc.id;
                 if (uid) allMemberUserIds.add(uid);
             });
@@ -152,15 +168,15 @@ export class UserMetricsService implements UserMetricsServiceContract {
      */
     static async getAcademyMetrics(): Promise<AcademyMetrics> {
         const db = getAdminDb();
-        const [coursesSnap, enrollmentsSnap, appsSnap] = await Promise.all([
+        const [coursesSnap, enrollmentsDocs, appsDocs] = await Promise.all([
             db.collection(COLLECTIONS.ACADEMY_COURSES).count().get(),
-            db.collection(COLLECTIONS.ACADEMY_ENROLLMENTS).get(),
-            db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).get()
+            fetchAllDocs(db.collection(COLLECTIONS.ACADEMY_ENROLLMENTS)),
+            fetchAllDocs(db.collection(COLLECTIONS.ACADEMY_APPLICATIONS))
         ]);
 
         const totalCourses = coursesSnap.data().count;
-        const enrollments = enrollmentsSnap.docs.map(d => d.data());
-        const applications = appsSnap.docs.map(d => d.data());
+        const enrollments = enrollmentsDocs.map(d => d.data());
+        const applications = appsDocs.map(d => d.data());
 
         const totalEnrollments = enrollments.length;
         const activeEnrollments = enrollments.filter(e => e.status === 'active').length;

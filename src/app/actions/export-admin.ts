@@ -306,7 +306,7 @@ export async function updateAdminExportOrderStatusAction(
         const db = getAdminDb();
         const orderRef = db.collection(COLLECTIONS.EXPORT_ORDERS).doc(orderId);
         // Import FieldValue from firebase-admin for arrayUnion
-        const { FieldValue } = await import('firebase-admin/firestore');
+        const { FieldValue } = await import('@/lib/firestore-compat');
 
         const updateData: any = { status,
             updatedAt: FieldValue.serverTimestamp() };

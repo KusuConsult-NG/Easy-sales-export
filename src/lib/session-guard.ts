@@ -70,12 +70,60 @@ export async function requireSession(): Promise<
             const userId = session.user.id;
             const userEmail = session.user.email;
             logger.debug(`[SessionGuard] Fetching user doc for ID: ${userId} from collection: ${COLLECTIONS.USERS}`);
-            const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+            let userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+
+            // ── JIT MIGRATION CHECK ──────────────────────────────────────────
+            if (!userDoc.exists && userEmail) {
+                // Check if there is an unmigrated legacy user profile with this email
+                try {
+                    const legacyQuery = await db.collection(COLLECTIONS.USERS)
+                        .where("email", "==", userEmail.toLowerCase())
+                        .limit(1)
+                        .get();
+                    if (!legacyQuery.empty) {
+                        const legacyUserDoc = legacyQuery.docs[0];
+                        const legacyUid = legacyUserDoc.id;
+                        if (legacyUid !== userId) {
+                            logger.info(`[SessionGuard] Triggering JIT data migration for ${userEmail} (${legacyUid} → ${userId})`);
+                            const { migrateLegacyUserData } = await import("@/lib/user-migration");
+                            await migrateLegacyUserData(legacyUid, userId, userEmail);
+                            
+                            // Re-fetch the newly migrated active user document
+                            userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+                        }
+                    }
+                } catch (migErr) {
+                    logger.error(`[SessionGuard] Legacy user JIT query/migration error:`, migErr);
+                }
+            } else if (userDoc.exists && userEmail) {
+                // If userDoc exists, but it's an empty auto-repaired account while a legacy account exists:
+                const userData = userDoc.data()!;
+                const isGhostDoc = !userData.profileComplete && (!userData.roles || userData.roles.length <= 1);
+                if (isGhostDoc) {
+                    try {
+                        const legacyQuery = await db.collection(COLLECTIONS.USERS)
+                            .where("email", "==", userEmail.toLowerCase())
+                            .get();
+                        const legacyUserDoc = legacyQuery.docs.find(doc => doc.id !== userId);
+                        if (legacyUserDoc) {
+                            logger.info(`[SessionGuard] Healing existing ghost account with richer legacy doc for ${userEmail} (${legacyUserDoc.id} → ${userId})`);
+                            const { migrateLegacyUserData } = await import("@/lib/user-migration");
+                            await migrateLegacyUserData(legacyUserDoc.id, userId, userEmail);
+                            
+                            // Re-fetch the healed document
+                            userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+                        }
+                    } catch (healErr) {
+                        logger.error(`[SessionGuard] Legacy user JIT healing query/migration error:`, healErr);
+                    }
+                }
+            }
+            // ──────────────────────────────────────────────────────────────────
 
             if (!userDoc.exists) {
                 logger.debug(`[SessionGuard] Account NOT found in Firestore for ID: ${userId}. Attempting auto-repair.`);
                 try {
-                    const { FieldValue } = await import("firebase-admin/firestore");
+                    const { FieldValue } = await import("./firestore-compat");
                     // IMPORTANT: session.user.name can be literally "User" when NextAuth
                     // reads an empty Firebase Auth displayName. Do NOT write that into Firestore
                     // or the admin table will show "User" for every such account.

@@ -279,14 +279,22 @@ export async function preValidateLoginAction(credentials: any): Promise<{ succes
                                 if (!createError && newUser?.user) {
                                     // Map the new Supabase Auth user ID to the legacy profile in users collection
                                     const firebaseUid = data.localId;
-                                    await db.collection(COLLECTIONS.USERS).doc(firebaseUid).update({
-                                        supabaseAuthId: newUser.user.id,
-                                    }).catch(err => {
-                                        logger.error(`[PreValidate] Failed to save supabaseAuthId mapping:`, err);
-                                    });
+                                     await db.collection(COLLECTIONS.USERS).doc(firebaseUid).update({
+                                         supabaseAuthId: newUser.user.id,
+                                     }).catch(err => {
+                                         logger.error(`[PreValidate] Failed to save supabaseAuthId mapping:`, err);
+                                     });
+ 
+                                     // Eagerly migrate their data to prevent any empty dashboard/onboarding states
+                                     try {
+                                         const { migrateLegacyUserData } = await import("@/lib/user-migration");
+                                         await migrateLegacyUserData(firebaseUid, newUser.user.id, email);
+                                     } catch (migErr) {
+                                         logger.error(`[PreValidate] Failed to execute migrateLegacyUserData:`, migErr);
+                                     }
 
-                                    logger.info(`[PreValidate] JIT migrated user ${email} during pre-validation.`);
-                                    responseData = { user: newUser.user };
+                                     logger.info(`[PreValidate] JIT migrated user ${email} during pre-validation.`);
+                                     responseData = { user: newUser.user };
                                 } else {
                                     logger.error(`[PreValidate] Failed to provision user in Supabase Auth:`, createError);
                                 }
@@ -348,7 +356,53 @@ export async function preValidateLoginAction(credentials: any): Promise<{ succes
         const uid = responseData.user.id;
 
         // 4. Fetch user profile and check status
-        const userDoc = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS).doc(uid).get());
+        let userDoc = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS).doc(uid).get());
+
+        // ── JIT MIGRATION FOR COMPLETED LOGIN ───────────────────────────────
+        if (!userDoc.exists && email) {
+            try {
+                const legacyQuery = await db.collection(COLLECTIONS.USERS)
+                    .where("email", "==", email.toLowerCase())
+                    .limit(1)
+                    .get();
+                if (!legacyQuery.empty) {
+                    const legacyUserDoc = legacyQuery.docs[0];
+                    const legacyUid = legacyUserDoc.id;
+                    if (legacyUid !== uid) {
+                        logger.info(`[PreValidate] User authenticated but doc missing. Triggering JIT migration for ${email} (${legacyUid} → ${uid})`);
+                        const { migrateLegacyUserData } = await import("@/lib/user-migration");
+                        await migrateLegacyUserData(legacyUid, uid, email);
+                        
+                        // Re-fetch the newly migrated active user document
+                        userDoc = await db.collection(COLLECTIONS.USERS).doc(uid).get();
+                    }
+                }
+            } catch (migErr) {
+                logger.error(`[PreValidate] Legacy user JIT login migration error:`, migErr);
+            }
+        }
+        // ───────────────────────────────────────────────────────────────────
+
+        if (!userDoc.exists) {
+            // Auto-repair/recreate default profile on the fly to prevent lockout
+            try {
+                logger.info(`[PreValidate] Profile not found in database for ${email}. Recreating default profile.`);
+                const defaultProfile = {
+                    uid: uid,
+                    email: email.toLowerCase(),
+                    roles: ["general_user"],
+                    isVerified: false,
+                    verified: false,
+                    profileComplete: false,
+                    createdAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp()
+                };
+                await db.collection(COLLECTIONS.USERS).doc(uid).set(defaultProfile, { merge: true });
+                userDoc = await db.collection(COLLECTIONS.USERS).doc(uid).get();
+            } catch (repairErr) {
+                logger.error(`[PreValidate] Failed to auto-repair missing user doc:`, repairErr);
+            }
+        }
 
         if (!userDoc.exists) {
             return { success: false, error: "User profile not found. Please contact support or register again." };

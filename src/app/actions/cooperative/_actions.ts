@@ -1401,6 +1401,21 @@ export async function getCooperativeApplicationAction(): Promise<
                     await docRef.update({ userId: session.user.id });
                 }
                 snap = { empty: false, docs: [docSnap] } as any;
+            } else if (session.user.email) {
+                // Fallback to email query
+                const emailQuery = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                    .where("email", "==", session.user.email.toLowerCase())
+                    .limit(1)
+                    .get();
+                if (!emailQuery.empty) {
+                    const memberDoc = emailQuery.docs[0];
+                    if (!memberDoc.data().userId) {
+                        await memberDoc.ref.update({ userId: session.user.id });
+                    }
+                    snap = { empty: false, docs: [memberDoc] } as any;
+                } else {
+                    return { success: false as const, error: 'No application found'};
+                }
             } else {
                 return { success: false as const, error: 'No application found'};
             }

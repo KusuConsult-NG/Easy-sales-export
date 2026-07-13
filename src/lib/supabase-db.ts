@@ -554,11 +554,19 @@ export class SupabaseDocumentReference {
             } else {
                 const { data, error } = await supabaseAdmin
                     .from(tableName)
-                    .select('raw_data')
+                    .select('*')
                     .eq('id', this.id)
                     .maybeSingle();
                 if (error) throw error;
-                raw = data?.raw_data ?? null;
+                if (data) {
+                    raw = {
+                        ...(data.raw_data ?? {}),
+                        createdAt: data.created_at || data.raw_data?.createdAt,
+                        updatedAt: data.updated_at || data.raw_data?.updatedAt,
+                        email: data.email || data.raw_data?.email,
+                        id: data.id
+                    };
+                }
             }
         } catch (err: any) {
             console.error(`[supabase-db] get ${this._collection}/${this.id}:`, err?.message);
@@ -804,8 +812,20 @@ export class SupabaseQuery {
         // Apply cursor pagination (startAfter)
         if (this._startAfterDoc && this._orderBy.length > 0) {
             const firstOrderField = this._orderBy[0].field;
-            const cursorValue = this._startAfterDoc.get(firstOrderField)
+            let cursorValue = this._startAfterDoc.get(firstOrderField)
                 ?? this._startAfterDoc.data()?.[firstOrderField];
+                
+            // Convert Firestore Timestamp objects or objects with seconds to ISO strings for SQL compatibility
+            if (cursorValue && typeof cursorValue === 'object') {
+                if (typeof cursorValue.toDate === 'function') {
+                    cursorValue = cursorValue.toDate().toISOString();
+                } else if (cursorValue.seconds !== undefined) {
+                    cursorValue = new Date(cursorValue.seconds * 1000).toISOString();
+                } else if (cursorValue._seconds !== undefined) {
+                    cursorValue = new Date(cursorValue._seconds * 1000).toISOString();
+                }
+            }
+
             if (cursorValue !== undefined) {
                 const fieldMap = FIELD_TO_COLUMN[tableName] || {};
                 const cols = NATIVE_COLUMNS[tableName] || [];

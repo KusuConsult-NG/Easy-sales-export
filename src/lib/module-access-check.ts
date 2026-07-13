@@ -304,13 +304,13 @@ export async function checkModuleAccess(
                         updates.userId = userId;
                     }
                     if (Object.keys(updates).length > 0 && appRef) {
-                        const { FieldValue } = await import("firebase-admin/firestore");
+                        const { FieldValue } = await import("./firestore-compat");
                         await appRef.update(updates);
                         logger.info(`[ModuleAccess] Healed application ${appRef.id} with updates: ${JSON.stringify(updates)}`);
                     }
 
                     // Proactively backfill the USERS doc so the primary Layer 2 check works in the future
-                    const { FieldValue } = await import("firebase-admin/firestore");
+                    const { FieldValue } = await import("./firestore-compat");
                     await db.collection(COLLECTIONS.USERS).doc(userId).set({
                         roles: FieldValue.arrayUnion("academy_participant"),
                         serviceRegistrations: {
@@ -376,7 +376,7 @@ export async function checkModuleAccess(
                     }
 
                     // Proactively backfill the USERS doc
-                    const { FieldValue } = await import("firebase-admin/firestore");
+                    const { FieldValue } = await import("./firestore-compat");
                     await db.collection(COLLECTIONS.USERS).doc(userId).set({
                         roles: FieldValue.arrayUnion("wave_participant"),
                         serviceRegistrations: {
@@ -442,7 +442,7 @@ export async function checkModuleAccess(
                     }
 
                     // Proactively backfill the USERS doc
-                    const { FieldValue } = await import("firebase-admin/firestore");
+                    const { FieldValue } = await import("./firestore-compat");
                     await db.collection(COLLECTIONS.USERS).doc(userId).set({
                         roles: FieldValue.arrayUnion("export_participant"),
                         serviceRegistrations: {
@@ -517,7 +517,7 @@ export async function checkModuleAccess(
                     }
 
                     // Proactively backfill the USERS doc
-                    const { FieldValue } = await import("firebase-admin/firestore");
+                    const { FieldValue } = await import("./firestore-compat");
                     await db.collection(COLLECTIONS.USERS).doc(userId).set({
                         roles: FieldValue.arrayUnion(...roles),
                         serviceRegistrations: {
@@ -552,7 +552,7 @@ export async function checkModuleAccess(
                     );
 
                     // Proactively backfill the USERS doc
-                    const { FieldValue } = await import("firebase-admin/firestore");
+                    const { FieldValue } = await import("./firestore-compat");
                     await db.collection(COLLECTIONS.USERS).doc(userId).set({
                         roles: FieldValue.arrayUnion("seller"),
                         serviceRegistrations: {

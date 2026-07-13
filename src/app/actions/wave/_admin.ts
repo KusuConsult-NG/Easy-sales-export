@@ -8,7 +8,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { Query } from "firebase-admin/firestore";
-import { FieldValue } from "@/lib/firestore-compat";
+import { FieldValue, Timestamp } from "@/lib/firestore-compat";
 import { FieldPath } from "@/lib/firestore-compat";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { getLogisticsProvider } from "@/lib/logistics";
@@ -942,7 +942,7 @@ async function _getStandardWaveApplicationsAction(options: {
             countQ = countQ.where("status", "==", options.status);
         }
 
-        const cacheKey = `admin:wave-applications-count:${options.status || "all"}`;
+        const cacheKey = options.status === "approved" ? "admin:wave-members-count:approved" : `admin:wave-applications-count:${options.status || "all"}`;
         let totalCount = 0;
         try {
             const cachedCount = await getCached<number>(cacheKey);
@@ -954,6 +954,110 @@ async function _getStandardWaveApplicationsAction(options: {
         let applications: any[] = [];
         let hasMoreRaw = false;
         let nextCursor: string | undefined = undefined;
+
+        if (options.status === "approved") {
+            let q = db.collection(COLLECTIONS.USERS)
+                .where("roles", "array-contains", "wave_participant")
+                .orderBy("createdAt", orderDirection);
+
+            if (options.search) {
+                const { searchUserIdsByQuery } = await import("@/lib/admin-search-helper");
+                const matchingUserIds = await searchUserIdsByQuery(options.search);
+                if (matchingUserIds.length === 0) {
+                    return {
+                        error: null, success: true as const,
+                        data: [],
+                        lastDocId: undefined,
+                        hasMore: false,
+                        meta: { totalFetched: 0, totalCount: 0, hasMore: false }
+                    };
+                }
+                q = db.collection(COLLECTIONS.USERS)
+                    .where("roles", "array-contains", "wave_participant")
+                    .where(FieldPath.documentId(), "in", matchingUserIds);
+            }
+
+            if (options.lastDocId) {
+                const lastDoc = await db.collection(COLLECTIONS.USERS).doc(options.lastDocId).get();
+                if (lastDoc.exists) {
+                    q = q.startAfter(lastDoc);
+                }
+            }
+
+            q = q.limit(fetchLimit + 1);
+            const snapshot = await q.get();
+            const userDocs = snapshot.docs;
+
+            const hasMoreRaw = userDocs.length > fetchLimit;
+            const slicedDocs = hasMoreRaw ? userDocs.slice(0, fetchLimit) : userDocs;
+
+            const finalForms = slicedDocs.map((uDoc: any) => {
+                const uData = uDoc.data();
+                const uid = uDoc.id;
+                const canonical = extractCanonicalUser(uData);
+
+                const approvalDate = uData.createdAt ? new Date(uData.createdAt.seconds ? uData.createdAt.seconds * 1000 : uData.createdAt) : new Date();
+                const mockApp = {
+                    id: `legacy-${uid}`,
+                    userId: uid,
+                    status: "approved",
+                    createdAt: Timestamp.fromDate(approvalDate),
+                    reviewedAt: Timestamp.fromDate(approvalDate),
+                    approvalTimestamp: Timestamp.fromDate(approvalDate),
+                    fullName: canonical.name,
+                    firstName: uData.firstName || "",
+                    surname: uData.lastName || uData.surname || "",
+                    email: canonical.email,
+                    phone: canonical.phone,
+                    state: canonical.address.state || "",
+                    lga: canonical.address.lga || "",
+                };
+
+                return {
+                    id: mockApp.id,
+                    user: {
+                        id: uid,
+                        name: canonical.name,
+                        email: canonical.email,
+                        phone: canonical.phone,
+                        dob: canonical.dateOfBirth || "",
+                        address: canonical.address.street,
+                        state: canonical.address.state,
+                        lga: canonical.address.lga,
+                        gender: uData.gender || canonical.gender || "",
+                        bankDetails: canonical.bankDetails
+                    },
+                    status: "approved",
+                    data: mockApp
+                };
+            });
+
+            const nextCursor = finalForms.length > 0 ? finalForms[finalForms.length - 1].user.id as string : undefined;
+
+            if (totalCount === 0) {
+                const countSnap = await db.collection(COLLECTIONS.USERS)
+                    .where("roles", "array-contains", "wave_participant")
+                    .count()
+                    .get();
+                totalCount = countSnap.data().count;
+                try {
+                    await setCache(cacheKey, totalCount, 120);
+                } catch (e) { }
+            }
+
+            return {
+                success: true,
+                error: null,
+                data: finalForms,
+                lastDocId: nextCursor,
+                hasMore: hasMoreRaw,
+                meta: {
+                    totalFetched: finalForms.length,
+                    totalCount,
+                    hasMore: hasMoreRaw
+                }
+            };
+        }
 
         if (options.search) {
             const { searchUserIdsByQuery } = await import("@/lib/admin-search-helper");
