@@ -136,51 +136,41 @@ const PERMISSION_MATRIX: Record<AdminRole, AdminPermission[]> = {
     ],
 
     wave_admin: [
-        "users:read", "users:create", "users:update", "users:delete", "users:suspend", "users:assign_roles", "users:impersonate",
-        "content:read", "content:approve", "content:reject", "content:delete", "announcements:manage",
-        "finance:read", "finance:process_withdrawals", "finance:refund", "finance:resolve_disputes",
-        "audit:read", "audit:export", "security:view_logs",
+        "users:read",
+        "audit:read",
         "wave:approve_applications",
         "wave:manage_training"
     ],
     cooperative_admin: [
-        "users:read", "users:create", "users:update", "users:delete", "users:suspend", "users:assign_roles", "users:impersonate",
-        "content:read", "content:approve", "content:reject", "content:delete", "announcements:manage",
-        "finance:read", "finance:process_withdrawals", "finance:refund", "finance:resolve_disputes",
-        "audit:read", "audit:export", "security:view_logs",
+        "users:read",
+        "audit:read",
+        "finance:read",
         "cooperatives:approve_loans",
         "cooperatives:approve_members",
         "cooperatives:manage_products"
     ],
     marketplace_admin: [
-        "users:read", "users:create", "users:update", "users:delete", "users:suspend", "users:assign_roles", "users:impersonate",
-        "content:read", "content:approve", "content:reject", "content:delete", "announcements:manage",
-        "finance:read", "finance:process_withdrawals", "finance:refund", "finance:resolve_disputes",
-        "audit:read", "audit:export", "security:view_logs",
+        "users:read",
+        "audit:read",
+        "finance:read",
         "marketplace:approve_sellers",
         "marketplace:suspend_sellers",
         "marketplace:moderate_reviews"
     ],
     export_admin: [
-        "users:read", "users:create", "users:update", "users:delete", "users:suspend", "users:assign_roles", "users:impersonate",
-        "content:read", "content:approve", "content:reject", "content:delete", "announcements:manage",
-        "finance:read", "finance:process_withdrawals", "finance:refund", "finance:resolve_disputes",
-        "audit:read", "audit:export", "security:view_logs",
+        "users:read",
+        "audit:read",
         "export:approve_applications"
     ],
     farm_nation_admin: [
-        "users:read", "users:create", "users:update", "users:delete", "users:suspend", "users:assign_roles", "users:impersonate",
-        "content:read", "content:approve", "content:reject", "content:delete", "announcements:manage",
-        "finance:read", "finance:process_withdrawals", "finance:refund", "finance:resolve_disputes",
-        "audit:read", "audit:export", "security:view_logs",
+        "users:read",
+        "audit:read",
         "farm_nation:verify_applications",
         "land:verify_listings"
     ],
     academy_admin: [
-        "users:read", "users:create", "users:update", "users:delete", "users:suspend", "users:assign_roles", "users:impersonate",
-        "content:read", "content:approve", "content:reject", "content:delete", "announcements:manage",
-        "finance:read", "finance:process_withdrawals", "finance:refund", "finance:resolve_disputes",
-        "audit:read", "audit:export", "security:view_logs",
+        "users:read",
+        "audit:read",
         "academy:approve_applications",
         "academy:manage_courses",
         "academy:manage_quizzes",
