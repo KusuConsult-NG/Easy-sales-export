@@ -172,6 +172,22 @@ export async function requireSession(): Promise<
                 data = userDoc.data();
             }
 
+            // Self-healing: normalize service registrations based on roles
+            if (data) {
+                try {
+                    const { normalizeUserDoc } = await import("./schema-normalizer");
+                    const normalized = normalizeUserDoc(data);
+                    const hasChanges = JSON.stringify(normalized.serviceRegistrations) !== JSON.stringify(data.serviceRegistrations);
+                    if (hasChanges) {
+                        logger.info(`[SessionGuard] Self-healing service registrations for user ${userId} (${userEmail})`);
+                        await db.collection(COLLECTIONS.USERS).doc(userId).set(normalized, { merge: true });
+                        data = normalized;
+                    }
+                } catch (healErr) {
+                    logger.error(`[SessionGuard] Non-fatal: failed to self-heal service registrations:`, healErr);
+                }
+            }
+
             // 3. Populate cache
             if (data) {
                 try {

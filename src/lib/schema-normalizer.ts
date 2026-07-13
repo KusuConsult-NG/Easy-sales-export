@@ -91,6 +91,43 @@ export function normalizeUserUpdate(update: AnyObject): AnyObject {
 export function normalizeUserDoc(doc: AnyObject): AnyObject {
     const result: AnyObject = deepClone(doc);
 
+    // Initialize serviceRegistrations if not present
+    if (!result.serviceRegistrations || typeof result.serviceRegistrations !== "object") {
+        result.serviceRegistrations = {};
+    }
+    const sr = result.serviceRegistrations;
+    const roles: string[] = Array.isArray(result.roles) ? result.roles : [];
+
+    // Sync roles to service registration statuses (self-healing for legacy users)
+    if (roles.includes("wave_participant")) {
+        if (!sr.wave) sr.wave = {};
+        if (sr.wave.status !== "approved") sr.wave.status = "approved";
+    }
+    if (roles.includes("cooperative_member")) {
+        if (!sr.cooperatives) sr.cooperatives = {};
+        if (sr.cooperatives.status !== "approved" && sr.cooperatives.status !== "active") {
+            sr.cooperatives.status = "approved";
+        }
+        if (!sr.cooperative) sr.cooperative = {};
+        if (sr.cooperative.status !== "approved" && sr.cooperative.status !== "active") {
+            sr.cooperative.status = "approved";
+        }
+    }
+    if (roles.includes("academy_participant")) {
+        if (!sr.academy) sr.academy = {};
+        if (sr.academy.status !== "approved") sr.academy.status = "approved";
+    }
+    if (roles.includes("farmer") || roles.includes("land_owner")) {
+        if (!sr.farmNation) sr.farmNation = {};
+        if (sr.farmNation.status !== "approved" && sr.farmNation.status !== "verified") {
+            sr.farmNation.status = "approved";
+        }
+        if (!sr.farm_nation) sr.farm_nation = {};
+        if (sr.farm_nation.status !== "approved" && sr.farm_nation.status !== "verified") {
+            sr.farm_nation.status = "approved";
+        }
+    }
+
     // ── Normalize serviceRegistrations nested object ───────────────────────
     if (result.serviceRegistrations && typeof result.serviceRegistrations === "object") {
         const sr = result.serviceRegistrations;

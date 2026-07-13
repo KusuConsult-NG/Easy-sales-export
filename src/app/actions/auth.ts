@@ -410,6 +410,19 @@ export async function preValidateLoginAction(credentials: any): Promise<{ succes
 
         const userData = userDoc.data() as FirestoreUser;
 
+        // Self-healing: normalize service registrations based on roles upon successful login
+        try {
+            const { normalizeUserDoc } = await import("@/lib/schema-normalizer");
+            const normalizedData = normalizeUserDoc(userData);
+            const hasChanges = JSON.stringify(normalizedData.serviceRegistrations) !== JSON.stringify(userData.serviceRegistrations);
+            if (hasChanges) {
+                logger.info(`[PreValidate] Self-healing service registrations for ${email}`);
+                await db.collection(COLLECTIONS.USERS).doc(uid).set(normalizedData, { merge: true });
+            }
+        } catch (healErr) {
+            logger.error(`[PreValidate] Non-fatal: failed to self-heal service registrations:`, healErr);
+        }
+
         // 5. Ban/suspend check
         if ((userData as any).isBanned === true || (userData as any).status === 'banned' || (userData as any).suspended === true) {
             return { success: false, error: "Your account has been suspended. Please contact support." };
