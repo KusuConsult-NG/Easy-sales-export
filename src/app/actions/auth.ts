@@ -220,100 +220,71 @@ export async function preValidateLoginAction(credentials: any): Promise<{ succes
             logger.error(`[PreValidate:Fallback] Redis consumeLoginAttempt failed. Error: ${err.message}`);
         }
 
-        // 3. Authenticate with Firebase REST API
+        // 3. Authenticate with Supabase Auth
         let responseData: any;
         try {
-            responseData = await runQueryWithRetry(async () => {
-                const authEmulatorHost = process.env.FIREBASE_AUTH_EMULATOR_HOST;
-                const signInUrl = authEmulatorHost
-                    ? `http://${authEmulatorHost}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseApiKey}`
-                    : `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseApiKey}`;
-                const res = await fetch(
-                    signInUrl,
-                    {
-                        method: "POST",
-                        headers: { 
-                            "Content-Type": "application/json",
-                            "Connection": "close"
-                        },
-                        body: JSON.stringify({
-                            email,
-                            password,
-                            returnSecureToken: true
-                        })
-                    }
-                );
-                const data = await res.json();
-                if (!res.ok) {
-                    const err = new Error(data.error?.message || "auth/internal-error");
-                    (err as any).status = res.status;
-                    (err as any).data = data;
-                    throw err;
-                }
-                return data;
-            });
-        } catch (authErr: any) {
-            const errMsg = authErr.message || String(authErr);
-            const isTransient = errMsg.includes("Premature close") || 
-                                errMsg.includes("socket hang up") || 
-                                errMsg.includes("ECONNRESET") ||
-                                errMsg.includes("Client network socket disconnected") ||
-                                errMsg.includes("FetchError") ||
-                                errMsg.includes("fetch failed") ||
-                                errMsg.includes("Connection closed") ||
-                                errMsg.includes("Socket closed") ||
-                                errMsg.includes("UNAVAILABLE") ||
-                                errMsg.includes("stream terminated") ||
-                                errMsg.includes("ERR_STREAM_PREMATURE_CLOSE") ||
-                                errMsg.includes("ENOTFOUND") ||
-                                errMsg.includes("getaddrinfo") ||
-                                errMsg.includes("network-error") ||
-                                errMsg.includes("DEADLINE_EXCEEDED") ||
-                                errMsg.includes("deadline exceeded");
-            if (isTransient) {
-                return { success: false, error: "A temporary connection issue occurred. Please try again." };
+            const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+            const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+            if (!supabaseUrl || !supabaseAnonKey) {
+                return { success: false, error: "Service configuration error. Please contact support." };
             }
-
-            const errorCode = authErr.message || "auth/internal-error";
             
-            // Check if email exists in Firestore to give a precise "Email address not registered" error
-            const emailCheck = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS)
-                .where("email", "==", email)
-                .limit(1)
-                .get());
+            const { createClient } = await import('@supabase/supabase-js');
+            const supabase = createClient(supabaseUrl, supabaseAnonKey);
+            
+            const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+                email,
+                password,
+            });
+
+            if (authError) {
+                const errMsg = authError.message || String(authError);
+                const isTransient = errMsg.includes("Premature close") || 
+                                    errMsg.includes("socket hang up") || 
+                                    errMsg.includes("ECONNRESET") ||
+                                    errMsg.includes("Client network socket disconnected") ||
+                                    errMsg.includes("FetchError") ||
+                                    errMsg.includes("fetch failed") ||
+                                    errMsg.includes("Connection closed") ||
+                                    errMsg.includes("Socket closed") ||
+                                    errMsg.includes("UNAVAILABLE") ||
+                                    errMsg.includes("stream terminated") ||
+                                    errMsg.includes("ERR_STREAM_PREMATURE_CLOSE") ||
+                                    errMsg.includes("ENOTFOUND") ||
+                                    errMsg.includes("getaddrinfo") ||
+                                    errMsg.includes("network-error") ||
+                                    errMsg.includes("DEADLINE_EXCEEDED") ||
+                                    errMsg.includes("deadline exceeded");
+                if (isTransient) {
+                    return { success: false, error: "A temporary connection issue occurred. Please try again." };
+                }
+
+                // Check if email exists in database to give a precise "Email address not registered" error
+                const emailCheck = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS)
+                    .where("email", "==", email.toLowerCase())
+                    .limit(1)
+                    .get());
+                     
+                if (emailCheck.empty) {
+                    return {
+                        success: false,
+                        error: "Email address not registered."
+                    };
+                }
                 
-            if (emailCheck.empty) {
-                return {
-                    success: false,
-                    error: "Email address not registered."
+                return { 
+                    success: false, 
+                    error: "Incorrect password." 
                 };
             }
 
-            const firebaseErrorMap: Record<string, string> = {
-                "auth/invalid-api-key": "Service configuration error. Please contact support.",
-                "auth/app-not-authorized": "Service configuration error. Please contact support.",
-                "auth/invalid-credential": "Incorrect password.",
-                "auth/wrong-password": "Incorrect password.",
-                "auth/user-not-found": "Email address not registered.",
-                "INVALID_LOGIN_CREDENTIALS": "Incorrect password.",
-                "INVALID_PASSWORD": "Incorrect password.",
-                "EMAIL_NOT_FOUND": "Email address not registered.",
-                "auth/user-disabled": "Your account has been disabled. Please contact support.",
-                "USER_DISABLED": "Your account has been disabled. Please contact support.",
-                "auth/too-many-requests": "Too many attempts. Please try again later.",
-                "TOO_MANY_ATTEMPTS_TRY_LATER": "Too many attempts. Please try again later.",
-                "auth/network-request-failed": "Network error — please check your connection and try again.",
-                "auth/operation-not-allowed": "Email/password login is not enabled. Please contact support.",
-                "OPERATION_NOT_ALLOWED": "Email/password login is not enabled. Please contact support.",
-            };
-            
-            return { 
-                success: false, 
-                error: firebaseErrorMap[errorCode] || firebaseErrorMap[authErr.data?.error?.message] || "Incorrect password." 
-            };
+            responseData = authData;
+        } catch (authErr: any) {
+            logger.error(`[PreValidate] Auth error: ${authErr.message}`);
+            return { success: false, error: "An unexpected error occurred. Please try again." };
         }
 
-        const uid = responseData.localId;
+        const uid = responseData.user.id;
 
         // 4. Fetch user profile and check status
         const userDoc = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS).doc(uid).get());
