@@ -19,6 +19,7 @@
 
 import { supabaseAdmin } from './supabase';
 import { v4 as uuidv4 } from 'uuid';
+import { Timestamp } from './firestore-compat';
 
 // ─── Table Mapping ─────────────────────────────────────────────────────────────
 // Maps Firestore collection names → dedicated Supabase table names.
@@ -203,6 +204,42 @@ function convertTimestamps(obj: any): any {
         for (const [k, v] of Object.entries(obj)) result[k] = convertTimestamps(v);
         return result;
     }
+    return obj;
+}
+
+/**
+ * Recursively convert ISO datetime strings back to Firestore Timestamp objects for read compatibility.
+ */
+function convertStringsToTimestamps(obj: any): any {
+    if (obj === null || obj === undefined) return obj;
+
+    if (typeof obj === 'string') {
+        const isoDateRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
+        if (isoDateRegex.test(obj)) {
+            const d = new Date(obj);
+            if (!isNaN(d.getTime())) {
+                try {
+                    return Timestamp.fromDate(d);
+                } catch {
+                    return obj;
+                }
+            }
+        }
+        return obj;
+    }
+
+    if (Array.isArray(obj)) return obj.map(convertStringsToTimestamps);
+
+    if (typeof obj === 'object') {
+        if (typeof obj.toDate === 'function') return obj;
+
+        const result: any = {};
+        for (const [k, v] of Object.entries(obj)) {
+            result[k] = convertStringsToTimestamps(v);
+        }
+        return result;
+    }
+
     return obj;
 }
 
@@ -575,7 +612,8 @@ export class SupabaseDocumentReference {
 
         // Ensure id is accessible via .data().id
         if (raw && !raw.id) raw = { id: this.id, ...raw };
-        return new SupabaseDocumentSnapshot(this.id, this, raw);
+        const parsedRaw = raw ? convertStringsToTimestamps(raw) : null;
+        return new SupabaseDocumentSnapshot(this.id, this, parsedRaw);
     }
 
     async set(data: Record<string, any>, options?: { merge?: boolean }): Promise<void> {
@@ -867,8 +905,9 @@ export class SupabaseQuery {
             const rawData = row.raw_data ?? {};
             const id = row.id || rawData.id;
             const withId = rawData.id ? rawData : { id, ...rawData };
+            const parsedWithId = convertStringsToTimestamps(withId);
             const ref = new SupabaseDocumentReference(this._collection, id);
-            return new SupabaseQueryDocumentSnapshot(id, ref, withId);
+            return new SupabaseQueryDocumentSnapshot(id, ref, parsedWithId);
         });
 
         return new SupabaseQuerySnapshot(docs);
