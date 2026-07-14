@@ -39,6 +39,39 @@ import { requireAdmin } from "@/lib/require-admin";
 import { atomicUpdateUser } from "@/lib/services/userService";
 import { writeGuard, UserRolesWriteSchema } from "@/lib/write-guard";
 
+// Helper functions for safe date formatting to prevent RangeError: Invalid time value
+function safeToISOString(val: any, fallback: string): string {
+    if (!val) return fallback;
+    try {
+        let d;
+        if (val.toDate && typeof val.toDate === "function") {
+            d = val.toDate();
+        } else {
+            d = new Date(val);
+        }
+        if (isNaN(d.getTime())) return fallback;
+        return d.toISOString();
+    } catch {
+        return fallback;
+    }
+}
+
+function safeToISOStringOptional(val: any): string | undefined {
+    if (!val) return undefined;
+    try {
+        let d;
+        if (val.toDate && typeof val.toDate === "function") {
+            d = val.toDate();
+        } else {
+            d = new Date(val);
+        }
+        if (isNaN(d.getTime())) return undefined;
+        return d.toISOString();
+    } catch {
+        return undefined;
+    }
+}
+
 /**
  * Admin Server Actions
  * 
@@ -1557,8 +1590,8 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
                 role: data.roles?.[0] || "general_user",
                 roles: data.roles || [],
                 isVerified: data.isVerified ?? data.verified ?? false,
-                createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt ? new Date(data.createdAt).toISOString() : new Date(0).toISOString()),
-                verifiedAt: data.verifiedAt?.toDate ? data.verifiedAt.toDate().toISOString() : (data.verifiedAt ? new Date(data.verifiedAt).toISOString() : undefined),
+                createdAt: safeToISOString(data.createdAt, new Date(0).toISOString()),
+                verifiedAt: safeToISOStringOptional(data.verifiedAt),
                 // Location
                 address: data.address,
                 state: bestState || "",
@@ -4435,7 +4468,7 @@ async function _getMarketplaceUsersAction(options: {
                 roles: data.roles || [],
                 buyerRole,
                 status: data.status || "active",
-                createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt ? new Date(data.createdAt).toISOString() : null),
+                createdAt: safeToISOString(data.createdAt, new Date(0).toISOString()),
                 bankDetails: serializeValue(data.bankDetails || {
                     bankName: data.bankName || data.bankAccount?.bankName || "",
                     accountNumber: data.accountNumber || data.bankAccountNumber || data.bankAccount?.accountNumber || "",
