@@ -39,11 +39,49 @@ export async function migrateLegacyUserData(
             const activeUserDocSnap = await activeUserDocRef.get();
             const activeData = activeUserDocSnap.exists ? activeUserDocSnap.data() : {};
 
+            // Merge serviceRegistrations safely, keeping whichever registration is further along
+            const mergedServiceRegistrations = {
+                ...(legacyData.serviceRegistrations || {}),
+                ...(activeData.serviceRegistrations || {})
+            };
+
+            const getProgressScore = (status: string) => {
+                switch (status) {
+                    case 'active':
+                    case 'approved':
+                    case 'verified':
+                        return 4;
+                    case 'pending':
+                    case 'pending_review':
+                    case 'under_review':
+                    case 'revision_required':
+                        return 3;
+                    case 'pending_repair':
+                    case 'legacy_pending_onboarding':
+                        return 2;
+                    case 'not_started':
+                        return 1;
+                    default:
+                        return 0;
+                }
+            };
+
+            for (const key of Object.keys(mergedServiceRegistrations)) {
+                const legacyVal = legacyData.serviceRegistrations?.[key];
+                const activeVal = activeData.serviceRegistrations?.[key];
+                if (legacyVal && activeVal) {
+                    const scoreLegacy = getProgressScore(legacyVal.status || '');
+                    const scoreActive = getProgressScore(activeVal.status || '');
+                    mergedServiceRegistrations[key] = scoreActive > scoreLegacy ? activeVal : legacyVal;
+                }
+            }
+
             // Merge legacy data with active data, prioritizing legacy data for profile configurations,
-            // but keeping current active IDs.
+            // but keeping current active IDs and safely merged registrations.
             const mergedUser = normalizeUserDoc({
                 ...activeData,
                 ...legacyData,
+                serviceRegistrations: mergedServiceRegistrations,
                 uid: supabaseUid,
                 supabaseAuthId: supabaseUid,
                 updatedAt: new Date().toISOString(),
