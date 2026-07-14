@@ -214,6 +214,20 @@ export async function migrateLegacyUserData(
             logger.info(`[UserMigration] Migrated ${farmQuery.size} farm nation applications.`);
         }
 
+        // ── 10. WAVE APPLICATIONS ────────────────────────────────────────────
+        const waveQuery = await db.collection("wave_applications")
+            .where("userId", "==", firebaseUid)
+            .get();
+        if (!waveQuery.empty) {
+            for (const doc of waveQuery.docs) {
+                await doc.ref.update({
+                    userId: supabaseUid,
+                    _legacyUserId: firebaseUid
+                });
+            }
+            logger.info(`[UserMigration] Migrated ${waveQuery.size} wave applications.`);
+        }
+
         logger.info(`[UserMigration] Completed migration for ${firebaseUid} → ${supabaseUid}`);
         return { success: true };
     } catch (err: any) {

@@ -359,7 +359,8 @@ export async function preValidateLoginAction(credentials: any): Promise<{ succes
         let userDoc = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS).doc(uid).get());
 
         // ── JIT MIGRATION FOR COMPLETED LOGIN ───────────────────────────────
-        if (!userDoc.exists && email) {
+        const needsMigration = !userDoc.exists || (!userDoc.data()?._migratedAt && !userDoc.data()?._legacyFirebaseUid);
+        if (needsMigration && email) {
             try {
                 const legacyQuery = await db.collection(COLLECTIONS.USERS)
                     .where("email", "==", email.toLowerCase())
@@ -369,7 +370,7 @@ export async function preValidateLoginAction(credentials: any): Promise<{ succes
                     const legacyUserDoc = legacyQuery.docs[0];
                     const legacyUid = legacyUserDoc.id;
                     if (legacyUid !== uid) {
-                        logger.info(`[PreValidate] User authenticated but doc missing. Triggering JIT migration for ${email} (${legacyUid} → ${uid})`);
+                        logger.info(`[PreValidate] User JIT migration needed. Triggering JIT migration for ${email} (${legacyUid} → ${uid})`);
                         const { migrateLegacyUserData } = await import("@/lib/user-migration");
                         await migrateLegacyUserData(legacyUid, uid, email);
                         

@@ -73,7 +73,8 @@ export async function requireSession(): Promise<
             let userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
 
             // ── JIT MIGRATION CHECK ──────────────────────────────────────────
-            if (!userDoc.exists && userEmail) {
+            const needsMigration = !userDoc.exists || (!userDoc.data()?._migratedAt && !userDoc.data()?._legacyFirebaseUid);
+            if (needsMigration && userEmail) {
                 // Check if there is an unmigrated legacy user profile with this email
                 try {
                     const legacyQuery = await db.collection(COLLECTIONS.USERS)
@@ -94,28 +95,6 @@ export async function requireSession(): Promise<
                     }
                 } catch (migErr) {
                     logger.error(`[SessionGuard] Legacy user JIT query/migration error:`, migErr);
-                }
-            } else if (userDoc.exists && userEmail) {
-                // If userDoc exists, but it's an empty auto-repaired account while a legacy account exists:
-                const userData = userDoc.data()!;
-                const isGhostDoc = !userData.profileComplete && (!userData.roles || userData.roles.length <= 1);
-                if (isGhostDoc) {
-                    try {
-                        const legacyQuery = await db.collection(COLLECTIONS.USERS)
-                            .where("email", "==", userEmail.toLowerCase())
-                            .get();
-                        const legacyUserDoc = legacyQuery.docs.find(doc => doc.id !== userId);
-                        if (legacyUserDoc) {
-                            logger.info(`[SessionGuard] Healing existing ghost account with richer legacy doc for ${userEmail} (${legacyUserDoc.id} → ${userId})`);
-                            const { migrateLegacyUserData } = await import("@/lib/user-migration");
-                            await migrateLegacyUserData(legacyUserDoc.id, userId, userEmail);
-                            
-                            // Re-fetch the healed document
-                            userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-                        }
-                    } catch (healErr) {
-                        logger.error(`[SessionGuard] Legacy user JIT healing query/migration error:`, healErr);
-                    }
                 }
             }
             // ──────────────────────────────────────────────────────────────────
