@@ -6,8 +6,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { z } from "zod";
 import type { EscrowStatus, EscrowTransaction } from "@/types/escrow";
-import { FieldValue } from "@/lib/firestore-compat";
-import { Timestamp } from "@/lib/firestore-compat";
+import { FieldValue, Timestamp, FieldPath } from "@/lib/firestore-compat";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { createNotificationAction } from "@/app/actions/notifications";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
@@ -120,7 +119,7 @@ async function _getAllEscrowTransactionsAdmin(options: { status?: EscrowStatus;
             for (let i = 0; i < participantIds.length; i += 30) {
                 const chunk = participantIds.slice(i, i + 30);
                 if (chunk.length > 0) {
-                    userPromises.push(db.collection(COLLECTIONS.USERS).where(require("firebase-admin/firestore").FieldPath.documentId(), "in", chunk).get());
+                    userPromises.push(db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get());
                 }
             }
             const userSnapsArray = await Promise.all(userPromises);

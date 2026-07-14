@@ -9,7 +9,7 @@
  * JSON-serializable objects safe for the server→client boundary.
  */
 
-import type { DocumentData } from "firebase-admin/firestore";
+type DocumentData = Record<string, any>;
 
 /**
  * Checks if a value looks like a Firestore Timestamp (Admin, Client SDK, or REST API plain object).

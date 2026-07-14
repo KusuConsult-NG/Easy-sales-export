@@ -197,43 +197,104 @@ class Query {
   }
 
   async get() {
-    let rawDocs = [];
-    if (this.collectionName === 'users') {
-      const { data, error } = await supabase.from('users').select('*');
+    const isUsers = this.collectionName === 'users';
+    const tableName = isUsers ? 'users' : 'document_collections';
+    
+    let query = supabase.from(tableName).select('*');
+    if (!isUsers) {
+      query = query.eq('collection_name', this.collectionName);
+    }
+    
+    for (const f of this.filters) {
+      const field = f.field;
+      const op = f.op;
+      const value = f.value;
+      
+      const isDocumentId = (field && typeof field === 'object' && field._methodName === 'FieldPath.documentId') || field === '__name__' || field === 'id';
+      const isNative = isUsers && ['id', 'email', 'roles', 'created_at', 'updated_at'].includes(field);
+      
+      let columnPath;
+      if (isDocumentId) {
+        columnPath = 'id';
+      } else if (isNative) {
+        columnPath = field;
+      } else {
+        const parts = typeof field === 'string' ? field.split('.') : [String(field)];
+        if (parts.length === 1) {
+          columnPath = `raw_data->>${JSON.stringify(parts[0])}`;
+        } else {
+          const intermediate = parts.slice(0, -1).map(p => `->${JSON.stringify(p)}`).join('');
+          columnPath = `raw_data${intermediate}->>${JSON.stringify(parts[parts.length - 1])}`;
+        }
+      }
+      
+      if (op === '==') {
+        if (value === null) {
+          query = query.is(columnPath, null);
+        } else {
+          query = query.eq(columnPath, value);
+        }
+      } else if (op === '!=') {
+        if (value === null) {
+          query = query.not(columnPath, 'is', null);
+        } else {
+          query = query.neq(columnPath, value);
+        }
+      } else if (op === '<') {
+        query = query.lt(columnPath, value);
+      } else if (op === '<=') {
+        query = query.lte(columnPath, value);
+      } else if (op === '>') {
+        query = query.gt(columnPath, value);
+      } else if (op === '>=') {
+        query = query.gte(columnPath, value);
+      } else if (op === 'in') {
+        query = query.in(columnPath, Array.isArray(value) ? value : [value]);
+      } else if (op === 'array-contains') {
+        if (isUsers && field === 'roles') {
+          query = query.contains('roles', [value]);
+        } else {
+          // JSONB array contains
+          const parts = typeof field === 'string' ? field.split('.') : [String(field)];
+          const arrPath = parts.length === 1
+            ? `raw_data->${JSON.stringify(parts[0])}`
+            : `raw_data${parts.slice(0, -1).map(p => `->${JSON.stringify(p)}`).join('')}->${JSON.stringify(parts[parts.length - 1])}`;
+          query = query.filter(arrPath, 'cs', JSON.stringify([value]));
+        }
+      }
+    }
+    
+    // Auto-paginated batch retrieval to bypass 1,000-row select capping
+    const allData = [];
+    let fetchedSoFar = 0;
+    const limitVal = 999999;
+    
+    while (fetchedSoFar < limitVal) {
+      const batchLimit = 1000;
+      const rangeStart = fetchedSoFar;
+      const rangeEnd = rangeStart + batchLimit - 1;
+      
+      const { data, error } = await query.range(rangeStart, rangeEnd);
       if (error) throw new Error(error.message);
-      rawDocs = (data || []).map(row => {
-        const raw = row.raw_data || {};
-        raw.id = row.id;
+      if (!data || data.length === 0) break;
+      
+      allData.push(...data);
+      fetchedSoFar += data.length;
+      
+      if (data.length < batchLimit) break;
+    }
+    
+    const docs = allData.map(row => {
+      const raw = row.raw_data || {};
+      raw.id = row.id;
+      if (isUsers) {
         raw.email = row.email;
         raw.roles = row.roles;
-        return new DocumentSnapshot(row.id, raw, true);
-      });
-    } else {
-      const { data, error } = await supabase
-        .from('document_collections')
-        .select('*')
-        .eq('collection_name', this.collectionName);
-      if (error) throw new Error(error.message);
-      rawDocs = (data || []).map(row => {
-        const raw = row.raw_data || {};
-        raw.id = row.id;
-        return new DocumentSnapshot(row.id, raw, true);
-      });
-    }
-
-    // Filter in-memory
-    let filtered = rawDocs;
-    for (const f of this.filters) {
-      filtered = filtered.filter(doc => {
-        const data = doc.data() || {};
-        const val = data[f.field];
-        if (f.op === '==') return val === f.value;
-        if (f.op === 'in') return Array.isArray(f.value) && f.value.includes(val);
-        return true;
-      });
-    }
-
-    return new QuerySnapshot(filtered);
+      }
+      return new DocumentSnapshot(row.id, raw, true);
+    });
+    
+    return new QuerySnapshot(docs);
   }
 }
 

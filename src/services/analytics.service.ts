@@ -1,6 +1,5 @@
 import { getAdminDb } from "@/lib/supabase-db";
-import { AggregateField } from "firebase-admin/firestore";
-import { FieldPath } from "@/lib/firestore-compat";
+import { AggregateField, FieldPath } from "@/lib/firestore-compat";
 import { unstable_cache } from "next/cache";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";

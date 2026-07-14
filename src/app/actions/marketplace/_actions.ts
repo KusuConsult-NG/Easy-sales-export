@@ -10,9 +10,7 @@ import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { checkModuleAccess } from "@/lib/module-access-check";
 import { logger } from '@/lib/logger';
-import { AggregateField } from "firebase-admin/firestore";
-import { FieldValue } from "@/lib/firestore-compat";
-import { Timestamp } from "@/lib/firestore-compat";
+import { FieldValue, Timestamp, AggregateField } from "@/lib/firestore-compat";
 import { supabaseDb as db } from "@/lib/supabase-db"; // Use Admin DB
 // import { uploadFileToStorage } from "@/lib/storage-admin";
 

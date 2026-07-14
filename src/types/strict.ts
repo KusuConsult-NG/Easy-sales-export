@@ -1,7 +1,5 @@
 
-import { GeoPoint } from "firebase-admin/firestore";
-import { FieldValue } from "@/lib/firestore-compat";
-import { Timestamp } from "@/lib/firestore-compat";
+import { GeoPoint, FieldValue, Timestamp } from "@/lib/firestore-compat";
 
 export enum AuditActionType {
     LAND_VERIFIED = 'land_verified',

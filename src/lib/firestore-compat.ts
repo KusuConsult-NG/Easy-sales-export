@@ -60,6 +60,18 @@ export const FieldPath = {
     },
 };
 
+// ─── GeoPoint ─────────────────────────────────────────────────────────────────
+
+export class GeoPoint {
+    latitude: number;
+    longitude: number;
+
+    constructor(latitude: number, longitude: number) {
+        this.latitude = latitude;
+        this.longitude = longitude;
+    }
+}
+
 // ─── Timestamp ────────────────────────────────────────────────────────────────
 
 export class Timestamp {
