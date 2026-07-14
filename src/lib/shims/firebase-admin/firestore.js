@@ -200,7 +200,7 @@ class Query {
     const isUsers = this.collectionName === 'users';
     const tableName = isUsers ? 'users' : 'document_collections';
     
-    let query = supabase.from(tableName).select('*');
+    let query = supabase.from(tableName).select('*').order('id');
     if (!isUsers) {
       query = query.eq('collection_name', this.collectionName);
     }
