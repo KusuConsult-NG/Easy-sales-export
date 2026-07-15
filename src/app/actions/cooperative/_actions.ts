@@ -1869,8 +1869,14 @@ export async function getCooperativeMemberIdCardAction(): Promise<
             const isLegacy = d.isLegacy === true || !!userData?.legacyOnboardedBy;
             let isApprovedOrActive = d.membershipStatus === "active" || d.membershipStatus === "approved" || d.status === "approved";
 
-            // If the user has paid and completed onboarding, auto-activate them and heal their database record
-            if (!isApprovedOrActive && d.paymentStatus === "completed" && d.onboardingCompleted === true) {
+            const isCentralActive = 
+                userData?.serviceRegistrations?.cooperative?.status === "active" ||
+                userData?.serviceRegistrations?.cooperatives?.status === "active" ||
+                userData?.serviceRegistrations?.cooperative?.status === "approved" ||
+                userData?.serviceRegistrations?.cooperatives?.status === "approved";
+
+            // If the user is active/approved centrally, or has paid and completed onboarding, auto-activate them and heal their database record
+            if (!isApprovedOrActive && (isCentralActive || (d.paymentStatus === "completed" && d.onboardingCompleted === true))) {
                 isApprovedOrActive = true;
                 try {
                     const docId = sortedDocs[0]?.id || userId;
