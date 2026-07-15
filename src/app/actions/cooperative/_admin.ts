@@ -623,6 +623,8 @@ async function _getAllTransactionsAction(options?: {
 
         if (options?.type && options.type !== "all") {
             q = q.where("type", "==", options.type);
+        } else {
+            q = q.where("type", "in", ["contribution", "withdrawal", "loan", "fixed_savings"]);
         }
 
         if (options?.status && options.status !== "all") {
@@ -671,10 +673,7 @@ async function _getAllTransactionsAction(options?: {
         const rawDocs = docs.map((doc) => ({
             id: doc.id,
             ...doc.data(),
-        })).filter((raw: any) => {
-            if (options?.type && options.type !== "all") return true;
-            return raw.type !== "membership_registration" && raw.type !== "registration_fee";
-        });
+        }));
 
         // HYDRATION: Batch-resolve user profiles and bank details
         const userIds = [...new Set(rawDocs.map((d: any) => d.userId).filter(id => id && typeof id === 'string' && id.trim().length > 0))];

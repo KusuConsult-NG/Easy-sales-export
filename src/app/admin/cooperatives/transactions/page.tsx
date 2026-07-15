@@ -42,6 +42,12 @@ interface Transaction {
         email?: string;
         name?: string;
     } | null;
+    bankDetails?: {
+        bankName?: string;
+        accountNumber?: string;
+        accountName?: string;
+        bankCode?: string;
+    } | null;
 }
 
 export default function AdminTransactionsPage() {
@@ -485,21 +491,43 @@ export default function AdminTransactionsPage() {
                                                 {/* Expandable Detail Row */}
                                                 {isExpanded && (
                                                     <tr key={`${transaction.id}-detail`}>
-                                                        <td colSpan={7} className="px-6 py-4 bg-slate-50/80">
-                                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                                                <div className="space-y-2">
-                                                                    <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Transaction Info</h4>
-                                                                    <div className="space-y-1 text-sm">
-                                                                        <p><span className="text-slate-500">ID:</span> <span className="font-mono text-slate-900">{transaction.id}</span></p>
-                                                                        <p><span className="text-slate-500">User ID:</span> <span className="font-mono text-slate-900">{transaction.userId}</span></p>
-                                                                        {transaction.description && (
-                                                                            <p><span className="text-slate-500">Description:</span> <span className="text-slate-900">{transaction.description}</span></p>
+                                                        <td colSpan={7} className="px-6 py-5 bg-slate-50/80 border-t border-b border-slate-100">
+                                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                                                {/* Transaction Info */}
+                                                                <div className="space-y-3">
+                                                                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Transaction Details</h4>
+                                                                    <div className="space-y-2 text-sm text-slate-600">
+                                                                        <p><span className="font-medium text-slate-400">ID:</span> <span className="font-mono text-slate-900 bg-white px-1.5 py-0.5 rounded border border-slate-200 text-xs">{transaction.id}</span></p>
+                                                                        <p><span className="font-medium text-slate-400">Reference:</span> <span className="font-mono text-slate-900 bg-white px-1.5 py-0.5 rounded border border-slate-200 text-xs">{transaction.reference || "N/A"}</span></p>
+                                                                        <p><span className="font-medium text-slate-400">Type:</span> <span className="font-semibold text-slate-900 capitalize">{transaction.type.replace(/_/g, " ")}</span></p>
+                                                                        <p><span className="font-medium text-slate-400">Description:</span> <span className="text-slate-900">{transaction.description || "N/A"}</span></p>
+                                                                        <p><span className="font-medium text-slate-400">Date:</span> <span className="text-slate-900">{new Date(transaction.date).toLocaleString("en-NG")}</span></p>
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Member Info */}
+                                                                <div className="space-y-3">
+                                                                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Member Details</h4>
+                                                                    <div className="space-y-2 text-sm text-slate-600">
+                                                                        <p><span className="font-medium text-slate-400">Name:</span> <span className="font-semibold text-slate-900">{transaction.userName}</span></p>
+                                                                        <p><span className="font-medium text-slate-400">User ID:</span> <span className="font-mono text-slate-900 text-xs">{transaction.userId}</span></p>
+                                                                        <p><span className="font-medium text-slate-400">Email:</span> <span className="text-slate-900">{transaction.user?.email || "N/A"}</span></p>
+                                                                        <p><span className="font-medium text-slate-400">Phone:</span> <span className="text-slate-900">{transaction.user?.phone || "N/A"}</span></p>
+                                                                        {transaction.bankDetails?.accountNumber && (
+                                                                            <p>
+                                                                                <span className="font-medium text-slate-400">Bank:</span>{" "}
+                                                                                <span className="text-slate-900 font-mono text-xs">
+                                                                                    {transaction.bankDetails.bankName} - {transaction.bankDetails.accountNumber} ({transaction.bankDetails.accountName})
+                                                                                </span>
+                                                                            </p>
                                                                         )}
                                                                     </div>
                                                                 </div>
-                                                                <div className="md:col-span-2">
-                                                                    <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Full Metadata</h4>
-                                                                    <pre className="text-xs text-slate-600 bg-white p-3 rounded-lg border border-slate-200 overflow-auto max-h-48 whitespace-pre-wrap font-mono">
+
+                                                                {/* Diagnostic Metadata */}
+                                                                <div className="space-y-3">
+                                                                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Full Metadata Logs</h4>
+                                                                    <pre className="text-xs text-slate-600 bg-white p-3 rounded-xl border border-slate-200 overflow-auto max-h-40 whitespace-pre-wrap font-mono shadow-inner">
                                                                         {JSON.stringify(transaction.metadata, null, 2)}
                                                                     </pre>
                                                                 </div>
