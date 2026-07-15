@@ -95,33 +95,67 @@ export class AnalyticsService implements AnalyticsServiceContract {
 
         if (secretKey) {
             try {
-                let page = 1;
-                while (true) {
-                    let url = `https://api.paystack.co/transaction?perPage=100&page=${page}&status=success`;
-                    if (options?.dateFrom) {
-                        url += `&from=${encodeURIComponent(options.dateFrom.toISOString())}`;
+                // 1. Fetch Page 1 to get meta pageCount
+                let url = `https://api.paystack.co/transaction?perPage=100&page=1&status=success`;
+                if (options?.dateFrom) {
+                    url += `&from=${encodeURIComponent(options.dateFrom.toISOString())}`;
+                }
+                if (options?.dateTo) {
+                    url += `&to=${encodeURIComponent(options.dateTo.toISOString())}`;
+                }
+                const res = await fetch(url, {
+                    headers: {
+                        Authorization: `Bearer ${secretKey}`,
+                        "Content-Type": "application/json",
+                    },
+                    cache: "no-store",
+                    signal: AbortSignal.timeout(6000), // Increased timeout to 6s
+                });
+                if (!res.ok) throw new Error(`Paystack API returned status ${res.status}`);
+                const json = await res.json();
+                const data = json.data ?? [];
+                
+                for (const tx of data) {
+                    totalRevenue += (tx.amount / 100);
+                    totalTransactions++;
+                }
+
+                const totalPages = json.meta?.pageCount ?? 1;
+                
+                // 2. Fetch remaining pages in parallel if totalPages > 1
+                if (totalPages > 1) {
+                    const pagePromises = [];
+                    for (let page = 2; page <= totalPages; page++) {
+                        let pageUrl = `https://api.paystack.co/transaction?perPage=100&page=${page}&status=success`;
+                        if (options?.dateFrom) {
+                            pageUrl += `&from=${encodeURIComponent(options.dateFrom.toISOString())}`;
+                        }
+                        if (options?.dateTo) {
+                            pageUrl += `&to=${encodeURIComponent(options.dateTo.toISOString())}`;
+                        }
+                        pagePromises.push(
+                            fetch(pageUrl, {
+                                headers: {
+                                    Authorization: `Bearer ${secretKey}`,
+                                    "Content-Type": "application/json",
+                                },
+                                cache: "no-store",
+                                signal: AbortSignal.timeout(6000),
+                            }).then(async (pageRes) => {
+                                if (!pageRes.ok) throw new Error(`Page ${page} failed: ${pageRes.status}`);
+                                return pageRes.json();
+                            })
+                        );
                     }
-                    if (options?.dateTo) {
-                        url += `&to=${encodeURIComponent(options.dateTo.toISOString())}`;
+
+                    const pageResults = await Promise.all(pagePromises);
+                    for (const result of pageResults) {
+                        const pageData = result.data ?? [];
+                        for (const tx of pageData) {
+                            totalRevenue += (tx.amount / 100);
+                            totalTransactions++;
+                        }
                     }
-                    const res = await fetch(url, {
-                        headers: {
-                            Authorization: `Bearer ${secretKey}`,
-                            "Content-Type": "application/json",
-                        },
-                        cache: "no-store",
-                        signal: AbortSignal.timeout(3000),
-                    });
-                    if (!res.ok) throw new Error(`Paystack API returned status ${res.status}`);
-                    const json = await res.json();
-                    const data = json.data ?? [];
-                    for (const tx of data) {
-                        totalRevenue += (tx.amount / 100);
-                        totalTransactions++;
-                    }
-                    const totalPages = json.meta?.pageCount ?? 1;
-                    if (page >= totalPages || data.length === 0) break;
-                    page++;
                 }
                 paystackSuccess = true;
             } catch (e: any) {
