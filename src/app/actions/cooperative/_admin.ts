@@ -146,6 +146,12 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
         const txnStream = txnQuery.select("type", "status", "amount", "date").get();
         for (const doc of (await txnStream).docs) {
             const t = doc.data();
+            
+            // Exclude platform onboarding fees from cooperative financial stats
+            if (t.type === "membership_registration" || t.type === "registration_fee") {
+                continue;
+            }
+
             totalTransactions++;
             const amount = Number(t.amount) || 0;
             totalTransactionAmount += amount;
@@ -665,7 +671,10 @@ async function _getAllTransactionsAction(options?: {
         const rawDocs = docs.map((doc) => ({
             id: doc.id,
             ...doc.data(),
-        }));
+        })).filter((raw: any) => {
+            if (options?.type && options.type !== "all") return true;
+            return raw.type !== "membership_registration" && raw.type !== "registration_fee";
+        });
 
         // HYDRATION: Batch-resolve user profiles and bank details
         const userIds = [...new Set(rawDocs.map((d: any) => d.userId).filter(id => id && typeof id === 'string' && id.trim().length > 0))];
