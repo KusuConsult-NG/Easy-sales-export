@@ -826,10 +826,6 @@ export async function getContributionReportsAction(options?: {
         }
 
         const stream = q.select("type", "amount", "userId", "date", "paidAt").get();
-        // Track the FIRST (earliest) transaction per user only.
-        // This is a one-time registration fee — if Paystack shows
-        // multiple charges for the same userId those are accidental repeat payments,
-        // not additional contributions. We count each member exactly once.
         const seenUserIds = new Set<string>();
 
         for (const doc of (await stream).docs) {
@@ -838,20 +834,16 @@ export async function getContributionReportsAction(options?: {
                 const amount = Number(t.amount) || 0;
                 const uid = t.userId as string | undefined;
 
-                // Deduplicate per user — only count their first/canonical payment
-                const isNewUser = !uid || !seenUserIds.has(uid);
-                if (isNewUser) {
-                    totalContributions += amount;
-                    transactionCount++;
-                    if (uid) {
-                        seenUserIds.add(uid);
-                        contributorMap.set(uid, amount); // for registration
-                    }
+                totalContributions += amount;
+                transactionCount++;
+                if (uid) {
+                    seenUserIds.add(uid);
+                    contributorMap.set(uid, (contributorMap.get(uid) || 0) + amount);
                 }
 
                 // Prefer paidAt (Paystack-sourced) over date field
                 const rawDate = t.paidAt || t.date;
-                if (rawDate && isNewUser) {
+                if (rawDate) {
                     const cDate = rawDate.toDate ? rawDate.toDate() : new Date(rawDate);
                     const bucket = monthlyTrendData.find(b => b.mKey === cDate.getMonth() && b.yKey === cDate.getFullYear());
                     if (bucket) bucket.amount += amount;
@@ -859,9 +851,8 @@ export async function getContributionReportsAction(options?: {
             }
         }
 
-        // Both numerator and denominator come from unique users — no drift, no duplicates
-        const memberCount = transactionCount;
-        const averageContribution = transactionCount > 0 ? totalContributions / transactionCount : 0;
+        const memberCount = seenUserIds.size;
+        const averageContribution = memberCount > 0 ? totalContributions / memberCount : 0;
 
         const topContributors = Array.from(contributorMap.entries())
             .sort((a, b) => b[1] - a[1])

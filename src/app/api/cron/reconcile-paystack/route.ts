@@ -257,6 +257,21 @@ export async function GET(request: NextRequest) {
         console.error("Failed to write reconciliation results to Firestore:", writeErr);
     }
 
+    // Invalidate Redis caches to ensure Total Revenue and other dashboard stats update immediately if we healed any records
+    if (results.firebaseTotal > 0) {
+        try {
+            const { deleteCache, deleteCachePattern } = await import("@/lib/redis");
+            await deleteCache("admin:finance-overview:global");
+            await deleteCache("admin:dashboard-stats:global");
+            await deleteCachePattern("admin:dashboard-stats:*");
+            await deleteCache("admin:coop-reports:global");
+            await deleteCachePattern("admin:coop-reports:*");
+            console.log("[Reconciliation Cron] Invalidated finance, dashboard, and coop report Redis caches.");
+        } catch (cacheErr: any) {
+            console.error("[Reconciliation Cron] Cache invalidation error:", cacheErr);
+        }
+    }
+
     // ── 5. Return summary ────────────────────────────────────────────────────────
     const httpStatus =
         results.status === "ok"       ? 200 :

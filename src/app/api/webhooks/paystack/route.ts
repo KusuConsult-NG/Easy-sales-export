@@ -120,7 +120,9 @@ export async function POST(req: NextRequest) {
                 await deleteCache("admin:finance-overview:global");
                 await deleteCache("admin:dashboard-stats:global");
                 await deleteCachePattern("admin:dashboard-stats:*");
-                logger.info("[Paystack Webhook] Invalidated finance and dashboard analytics Redis caches.");
+                await deleteCache("admin:coop-reports:global");
+                await deleteCachePattern("admin:coop-reports:*");
+                logger.info("[Paystack Webhook] Invalidated finance, dashboard, and coop report Redis caches.");
             } catch (cacheErr: any) {
                 logger.error("[Paystack Webhook] Cache invalidation error:", cacheErr);
             }
