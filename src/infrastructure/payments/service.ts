@@ -844,7 +844,19 @@ export async function processWaveRegistration(reference: string, amount: number,
  * Handle Cooperative Savings / Contribution Fulfillment
  */
 export async function processCooperativeContribution(reference: string, amount: number, userId: string, paidAt?: Date) {
-    const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
+    // Resolve legacy Firebase UID to active Supabase ID if migrated
+    let activeUserId = userId;
+    const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+    if (userDoc.exists) {
+        const userData = userDoc.data();
+        if (userData?._migratedTo) {
+            activeUserId = userData._migratedTo;
+        } else if (userData?.supabaseAuthId) {
+            activeUserId = userData.supabaseAuthId;
+        }
+    }
+
+    const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(activeUserId);
 
     const result = await db.runTransaction(async (transaction) => {
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
@@ -857,12 +869,14 @@ export async function processCooperativeContribution(reference: string, amount: 
 
         const memberDoc = await transaction.get(memberRef);
         if (!memberDoc.exists) {
-            throw new Error(`Cooperative member record not found for user: ${userId}`);
+            throw new Error(`Cooperative member record not found for user: ${activeUserId}`);
         }
 
         const memberData = memberDoc.data() || {};
         const currentTotal = memberData.totalContributions || 0;
+        const currentSavings = memberData.savingsBalance || 0;
         const newTotal = currentTotal + amount;
+        const newSavings = currentSavings + amount;
         const newTier = "Member";
         const cooperativeId = memberData.cooperativeId || "default";
 
@@ -871,6 +885,7 @@ export async function processCooperativeContribution(reference: string, amount: 
         // 1. Update membership atomically
         transaction.update(memberRef, {
             totalContributions: newTotal,
+            savingsBalance: newSavings,
             tier: newTier,
             lastContributionAt: paymentTimestamp,
             updatedAt: FieldValue.serverTimestamp()
@@ -880,7 +895,7 @@ export async function processCooperativeContribution(reference: string, amount: 
         transaction.set(processedRef, {
             reference,
             type: "contribution",
-            userId,
+            userId: activeUserId,
             amount,
             processedAt: paymentTimestamp,
             status: "completed",
@@ -890,7 +905,7 @@ export async function processCooperativeContribution(reference: string, amount: 
         // 3. Write to Unified Ledger
         transaction.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(reference), {
             id: reference,
-            userId,
+            userId: activeUserId,
             type: "contribution",
             module: "cooperative",
             amount,
@@ -904,7 +919,7 @@ export async function processCooperativeContribution(reference: string, amount: 
         // 4. Cooperative Ledger write
         const coopTxRef = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc();
         transaction.set(coopTxRef, {
-            userId,
+            userId: activeUserId,
             cooperativeId,
             type: "contribution",
             amount,
