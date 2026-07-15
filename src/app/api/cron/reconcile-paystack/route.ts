@@ -152,7 +152,22 @@ export async function GET(request: NextRequest) {
                             const data = detail.data;
                             const amountPaidv = data.amount / 100;
                             const metadata = data.metadata || {};
-                            const userId = metadata.userId;
+                            const rawUserId = metadata.userId;
+                            let userId = rawUserId;
+
+                            // Resolve legacy Firebase UID to active Supabase ID if migrated
+                            if (rawUserId) {
+                                const userDoc = await db.collection("users").doc(rawUserId).get();
+                                if (userDoc.exists) {
+                                    const userData = userDoc.data();
+                                    if (userData?._migratedTo) {
+                                        userId = userData._migratedTo;
+                                    } else if (userData?.supabaseAuthId) {
+                                        userId = userData.supabaseAuthId;
+                                    }
+                                }
+                            }
+
                             const type = metadata.type || metadata.purpose || null;
                             const paidAtDate = data.paid_at ? new Date(data.paid_at) : undefined;
 

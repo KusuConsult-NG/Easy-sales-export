@@ -35,12 +35,27 @@ export async function POST(req: NextRequest) {
             const reference = data.reference;
             const amountPaidv = data.amount / 100; // Paystack sends kobo
             const metadata = data.metadata || {};
-            const userId = metadata.userId; // user who initiated payment
+            const rawUserId = metadata.userId; // user who initiated payment
+            let userId = rawUserId;
+
+            // Resolve legacy Firebase UID to active Supabase ID if migrated
+            if (rawUserId) {
+                const userDoc = await db.collection(COLLECTIONS.USERS).doc(rawUserId).get();
+                if (userDoc.exists) {
+                    const userData = userDoc.data();
+                    if (userData?._migratedTo) {
+                        userId = userData._migratedTo;
+                    } else if (userData?.supabaseAuthId) {
+                        userId = userData.supabaseAuthId;
+                    }
+                }
+            }
+
             // COMPATIBILITY: Old cooperative portal used `purpose` instead of `type`.
             // Always prefer `type`, fall back to `purpose` so legacy payments are handled correctly.
             const type = metadata.type || metadata.purpose || null;
 
-            logger.info(`[Paystack Webhook] Processing success for ${reference}`, { type, amount: amountPaidv });
+            logger.info(`[Paystack Webhook] Processing success for ${reference}`, { type, amount: amountPaidv, userId });
 
             const paidAtDate = data.paid_at ? new Date(data.paid_at) : undefined;
 
