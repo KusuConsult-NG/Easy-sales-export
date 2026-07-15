@@ -74,7 +74,7 @@ export async function getUserProfile(userId: string): Promise<CachedUserProfile 
 
         // Self-healing migration resolver:
         // If the database profile points to a migrated target, fetch and cache the migrated target instead!
-        if (userData && userData._migratedTo) {
+        if (userData && userData._migratedTo && userData._migratedTo !== userId) {
             const migratedId = userData._migratedTo;
             console.log(`[getUserProfile] Intercepted legacy user ${userId} migrated to ${migratedId}. Fetching migrated profile.`);
             return getUserProfile(migratedId);

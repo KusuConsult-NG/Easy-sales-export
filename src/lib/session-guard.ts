@@ -73,7 +73,7 @@ export async function requireSession(): Promise<
             let userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
 
             // Intercept migrated user session ID
-            if (userDoc.exists && userDoc.data()?._migratedTo) {
+            if (userDoc.exists && userDoc.data()?._migratedTo && userDoc.data()?._migratedTo !== userId) {
                 const migratedId = userDoc.data()?._migratedTo;
                 logger.info(`[SessionGuard] Profile ${userId} has been migrated to ${migratedId}. Loading migrated profile instead.`);
                 userDoc = await db.collection(COLLECTIONS.USERS).doc(migratedId).get();

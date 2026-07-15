@@ -342,7 +342,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         
                         // Self-healing migration interceptor:
                         // If the loaded profile points to a migrated target, load the migrated target profile and update the session token ID!
-                        if (cachedProfile && (cachedProfile as any)._migratedTo) {
+                        if (cachedProfile && (cachedProfile as any)._migratedTo && (cachedProfile as any)._migratedTo !== token.id) {
                             const migratedId = (cachedProfile as any)._migratedTo;
                             console.log(`[NextAuth JWT] Intercepted legacy user ${token.id} migrated to ${migratedId}. Updating token ID.`);
                             const migratedProfile = await getUserProfile(migratedId);
