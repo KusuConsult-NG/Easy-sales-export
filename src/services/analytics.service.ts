@@ -206,7 +206,7 @@ export class AnalyticsService implements AnalyticsServiceContract {
 
         const [totalSnap, activeSnap, verifiedSnap] = await Promise.all([
             db.collection(COLLECTIONS.USERS).count().get(),
-            db.collection(COLLECTIONS.USERS).where("lastLoginAt", ">=", thirtyDaysAgo).count().get(),
+            db.collection(COLLECTIONS.USERS).where("updatedAt", ">=", thirtyDaysAgo).count().get(),
             db.collection(COLLECTIONS.USERS).where("isVerified", "==", true).count().get()
         ]);
 
@@ -243,7 +243,7 @@ export class AnalyticsService implements AnalyticsServiceContract {
             pendingLoansCount,
             recentActivityCount,
         ] = await Promise.allSettled([
-            db.collection(COLLECTIONS.USERS).where("lastLoginAt", ">=", thirtyDaysAgo).count().get(),
+            db.collection(COLLECTIONS.USERS).where("updatedAt", ">=", thirtyDaysAgo).count().get(),
             safeCount(db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("status", "==", "pending")),
             safeCount(db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "active")),
             safeCount(db.collection(COLLECTIONS.LOAN_APPLICATIONS).where("status", "==", "pending")),

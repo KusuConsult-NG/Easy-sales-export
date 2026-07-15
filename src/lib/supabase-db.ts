@@ -413,12 +413,32 @@ function applyFilter(
 ): any {
     const { field, op, value } = filter;
 
+    let normalizedValue = value;
+    if (Array.isArray(value)) {
+        normalizedValue = value.map(v => {
+            if (v instanceof Date) return v.toISOString();
+            if (v && typeof v === 'object') {
+                if (typeof v.toDate === 'function') return v.toDate().toISOString();
+                if (typeof v.toISOString === 'function') return v.toISOString();
+            }
+            return v;
+        });
+    } else if (value instanceof Date) {
+        normalizedValue = value.toISOString();
+    } else if (value && typeof value === 'object') {
+        if (typeof value.toDate === 'function') {
+            normalizedValue = value.toDate().toISOString();
+        } else if (typeof value.toISOString === 'function') {
+            normalizedValue = value.toISOString();
+        }
+    }
+
     // Special: FieldPath.documentId() — filter on the primary key `id`
     if (field === '__name__' || field === '__id__' || (typeof field === 'object' && (field as any)._methodName === 'FieldPath.documentId')) {
-        if (op === 'in' && Array.isArray(value)) {
-            return query.in('id', value);
+        if (op === 'in' && Array.isArray(normalizedValue)) {
+            return query.in('id', normalizedValue);
         }
-        return applySimpleFilter(query, 'id', op, value);
+        return applySimpleFilter(query, 'id', op, normalizedValue);
     }
 
     // Check if this field has a native column mapping
@@ -429,22 +449,22 @@ function applyFilter(
         // Route to native SQL column
         if (op === 'array-contains') {
             // For TEXT[] arrays like roles
-            return query.contains(nativeCol, [value]);
+            return query.contains(nativeCol, [normalizedValue]);
         }
-        return applySimpleFilter(query, nativeCol, op, value);
+        return applySimpleFilter(query, nativeCol, op, normalizedValue);
     }
 
     // Check if field is a direct native column name (e.g. 'email' on users)
     const cols = NATIVE_COLUMNS[tableName] || [];
     if (cols.includes(field)) {
         if (op === 'array-contains') {
-            return query.contains(field, [value]);
+            return query.contains(field, [normalizedValue]);
         }
-        return applySimpleFilter(query, field, op, value);
+        return applySimpleFilter(query, field, op, normalizedValue);
     }
 
     // Otherwise: JSONB query on raw_data
-    return applyJsonbFilter(query, field, op, value);
+    return applyJsonbFilter(query, field, op, normalizedValue);
 }
 
 function applySimpleFilter(query: any, column: string, op: FilterOperator, value: any): any {

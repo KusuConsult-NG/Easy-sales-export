@@ -114,7 +114,7 @@ export async function getUserMetricsAction() {
 
         const [totalSnap, activeSnap, verifiedSnap] = await Promise.all([
             db.collection(COLLECTIONS.USERS).count().get(),
-            db.collection(COLLECTIONS.USERS).where("lastLoginAt", ">=", thirtyDaysAgo).count().get(),
+            db.collection(COLLECTIONS.USERS).where("updatedAt", ">=", thirtyDaysAgo).count().get(),
             db.collection(COLLECTIONS.USERS).where("isVerified", "==", true).count().get()
         ]);
 
