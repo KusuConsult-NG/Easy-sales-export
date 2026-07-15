@@ -581,12 +581,36 @@ async function _submitMarketplaceOnboardingAction(
                 transaction.set(verificationRef, verificationData);
             }
 
-            const userUpdate: Record<string, unknown> = {
+            const userUpdate: Record<string, any> = {
                 phone: formData.get("phone") as string,
                 location: `${location.address}, ${location.lga}, ${location.state}`,
                 updatedAt: FieldValue.serverTimestamp(),
                 _version: FieldValue.increment(1) 
             };
+
+            // Replicate bankAccount to user root bankDetails (DISEASE 6 / Save Bank Account Details fix)
+            if (bankAccount?.accountNumber) {
+                userUpdate.bankDetails = {
+                    accountNumber: bankAccount.accountNumber,
+                    bankName: bankAccount.bankName || "",
+                    accountName: bankAccount.accountName || "",
+                    bankCode: (bankAccount as any).bankCode || ""
+                };
+            }
+
+            // Replicate location address to user root address object
+            if (location?.address) {
+                userUpdate.address = {
+                    street: location.address,
+                    city: "",
+                    state: location.state || "",
+                    lga: location.lga || "",
+                    country: "Nigeria"
+                };
+                userUpdate.residentialAddress = location.address;
+                userUpdate.stateOfOrigin = location.state;
+                userUpdate.lga = location.lga;
+            }
 
             const canonicalProfile = {
                 firstName: userDoc.data()?.firstName || "",

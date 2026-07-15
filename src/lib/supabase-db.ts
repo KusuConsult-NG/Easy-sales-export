@@ -867,6 +867,10 @@ export class SupabaseQuery {
             query = query.order(colName, { ascending: ob.direction === 'asc' });
         }
 
+        if (this._orderBy.length === 0) {
+            query = query.order('id');
+        }
+
         // Apply cursor pagination (startAfter)
         if (this._startAfterDoc && this._orderBy.length > 0) {
             const firstOrderField = this._orderBy[0].field;

@@ -847,36 +847,74 @@ export class AnalyticsService implements AnalyticsServiceContract {
 const fetchModuleRegistrationStatsCached = unstable_cache(
     async (): Promise<ModuleRegistrationStats> => {
         const db = getAdminDb();
+        const { supabaseAdmin } = await import("@/lib/supabase");
+
         const [
             waveBriefing,
-            waveApplications,
-            cooperativeOnboarding,
-            exportOnboarding,
-            academySnap,
-            cooperativesSnap,
-            farmNationSnap,
-            marketplaceSnap,
+            waveRes,
+            academyRes,
+            coopsRes,
+            coopOnbRes,
+            farmNationRes,
+            exportHubRes,
+            marketplaceRes
         ] = await Promise.all([
+            // WAVE Briefing registrations (keep direct dedicated table count)
             safeCount(db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS)),
-            safeCount(db.collection(COLLECTIONS.WAVE_APPLICATIONS)),
-            safeCount(db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).where("status", "in", ["pending", "legacy_pending_onboarding"])),
-            safeCount(db.collection(COLLECTIONS.EXPORT_APPLICATIONS)),
-            safeCount(db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)),
-            safeCount(db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).where("status", "in", ["active", "approved"])),
-            safeCount(db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)),
-            safeCount(db.collection(COLLECTIONS.SELLER_VERIFICATIONS)),
+
+            // WAVE Applications
+            supabaseAdmin
+                .from('users')
+                .select('*', { count: 'exact', head: true })
+                .or('raw_data->serviceRegistrations->wave->>status.in.(pending,under_review,approved,active,paid,completed,suspended),roles.cs.{"wave_participant"}'),
+
+            // Academy
+            supabaseAdmin
+                .from('users')
+                .select('*', { count: 'exact', head: true })
+                .or('raw_data->serviceRegistrations->academy->>status.in.(pending,under_review,approved,active,paid,completed,suspended),roles.cs.{"academy_participant"}'),
+
+            // Cooperatives (active/approved)
+            supabaseAdmin
+                .from('users')
+                .select('*', { count: 'exact', head: true })
+                .or('raw_data->serviceRegistrations->cooperatives->>status.in.(approved,active,paid,completed,suspended),raw_data->serviceRegistrations->cooperative->>status.in.(approved,active,paid,completed,suspended),roles.cs.{"cooperative_member"}'),
+
+            // Cooperative Onboarding (pending)
+            supabaseAdmin
+                .from('users')
+                .select('*', { count: 'exact', head: true })
+                .or('raw_data->serviceRegistrations->cooperatives->>status.in.(pending,legacy_pending_onboarding),raw_data->serviceRegistrations->cooperative->>status.in.(pending,legacy_pending_onboarding)'),
+
+            // Farm Nation
+            supabaseAdmin
+                .from('users')
+                .select('*', { count: 'exact', head: true })
+                .or('raw_data->serviceRegistrations->farmNation->>status.in.(pending,under_review,approved,active,paid,completed,suspended),raw_data->serviceRegistrations->farm_nation->>status.in.(pending,under_review,approved,active,paid,completed,suspended),roles.cs.{"farm-nation-buyer"},roles.cs.{"farm-nation-seller"}'),
+
+            // Export Hub
+            supabaseAdmin
+                .from('users')
+                .select('*', { count: 'exact', head: true })
+                .or('raw_data->serviceRegistrations->export->>status.in.(pending,under_review,approved,active,paid,completed,suspended),roles.cs.{"export_participant"}'),
+
+            // Marketplace
+            supabaseAdmin
+                .from('users')
+                .select('*', { count: 'exact', head: true })
+                .or('raw_data->serviceRegistrations->marketplace->>status.in.(pending,under_review,approved,active,paid,completed,suspended),roles.cs.{"seller"},roles.cs.{"marketplace_buyer"}')
         ]);
 
         return {
-            wave: waveApplications,
+            wave: waveRes.count ?? 0,
             waveBriefing,
-            academy: academySnap,
-            cooperatives: cooperativesSnap,
-            cooperativeOnboarding,
-            farmNation: farmNationSnap,
-            exportHub: exportOnboarding,
-            exportOnboarding,
-            marketplace: marketplaceSnap
+            academy: academyRes.count ?? 0,
+            cooperatives: coopsRes.count ?? 0,
+            cooperativeOnboarding: coopOnbRes.count ?? 0,
+            farmNation: farmNationRes.count ?? 0,
+            exportHub: exportHubRes.count ?? 0,
+            exportOnboarding: exportHubRes.count ?? 0,
+            marketplace: marketplaceRes.count ?? 0
         };
     },
     ["module-registration-stats-service"],

@@ -48,31 +48,18 @@ export class UserMetricsService implements UserMetricsServiceContract {
     static async getCooperativeMemberMetrics(adminScope?: string): Promise<CooperativeMemberMetrics> {
         const db = getAdminDb();
 
-        // Build base query, scoped to cooperative when adminScope is provided
         let baseQuery: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
         if (adminScope) {
             baseQuery = baseQuery.where("cooperativeId", "==", adminScope);
         }
 
-        // Run all count queries in parallel for performance
-        const [
-            totalSnap,
-            approvedSnap,       // "active" is the canonical approved state (set by approve-member route)
-            legacyApprovedSnap, // "approved" is a legacy value written before May 2026
-            pendingSnap,
-            suspendedSnap,
-        ] = await Promise.all([
-            baseQuery.count().get(),
-            baseQuery.where("membershipStatus", "==", "active").count().get(),
-            baseQuery.where("membershipStatus", "==", "approved").count().get(),
-            baseQuery.where("membershipStatus", "==", "pending").count().get(),
-            baseQuery.where("membershipStatus", "==", "suspended").count().get(),
-        ]);
+        const allMembers = await fetchAllDocs(baseQuery.select("status", "membershipStatus", "userId", "paymentStatus"));
 
-        const totalApplications = totalSnap.data().count ?? 0;
-        const approvedCount = (approvedSnap.data().count ?? 0) + (legacyApprovedSnap.data().count ?? 0);
-        const pendingCount = pendingSnap.data().count ?? 0;
-        const suspendedCount = suspendedSnap.data().count ?? 0;
+        let totalApplications = 0;
+        let approvedCount = 0;
+        let pendingCount = 0;
+        let suspendedCount = 0;
+        const validPaidUserIds = new Set<string>();
 
         // Fetch all verified Paystack registration payments globally
         const paidPaymentsDocs = await fetchAllDocs(
@@ -82,60 +69,35 @@ export class UserMetricsService implements UserMetricsServiceContract {
                 .select("userId")
         );
 
-        // Build set of userIds with verified Paystack payments
-        const validPaidUserIds = new Set<string>();
         paidPaymentsDocs.forEach(doc => {
             const data = doc.data();
             if (data.userId) validPaidUserIds.add(data.userId);
         });
 
-        // For legacy members paid outside Paystack, fetch their member docs to check paymentStatus.
-        // Only fetch docs that are scoped to adminScope (if provided) and not already in the payment set.
-        let legacyPaidCount = 0;
+        for (const doc of allMembers) {
+            const m = doc.data();
+            totalApplications++;
+            
+            const statusVal = m.status || m.membershipStatus || "pending";
+            if (statusVal === "active" || statusVal === "approved") {
+                approvedCount++;
+            } else if (statusVal === "pending") {
+                pendingCount++;
+            } else if (statusVal === "suspended") {
+                suspendedCount++;
+            }
+
+            const uid = m.userId || doc.id;
+            if (m.paymentStatus === "completed" && uid) {
+                validPaidUserIds.add(uid);
+            }
+        }
+
         let orphanedPaymentsCount = 0;
-
-        if (adminScope) {
-            // These may overlap with Paystack-paid members; we rely on userId deduplication below
-            // We'll fetch userId list to dedup properly
-            const legacyDocs = await fetchAllDocs(
-                db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                    .where("cooperativeId", "==", adminScope)
-                    .where("paymentStatus", "==", "completed")
-                    .select("userId")
-            );
-            legacyDocs.forEach(doc => {
-                const uid = doc.data().userId || doc.id;
-                if (!validPaidUserIds.has(uid)) {
-                    validPaidUserIds.add(uid);
-                    legacyPaidCount++;
-                }
-            });
-
-            // Orphaned = Paystack payments that have no matching member doc in this cooperative
-            orphanedPaymentsCount = 0;
-        } else {
-            // Global: count legacy-paid members across all cooperatives
-            const legacyDocs = await fetchAllDocs(
-                db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                    .where("paymentStatus", "==", "completed")
-                    .select("userId")
-            );
-            legacyDocs.forEach(doc => {
-                const uid = doc.data().userId || doc.id;
-                if (!validPaidUserIds.has(uid)) {
-                    validPaidUserIds.add(uid);
-                    legacyPaidCount++;
-                }
-            });
-
-            // Orphaned = Paystack payments with no member doc at all
-            // We need member userId set for this — fetch only userId field for efficiency
+        if (!adminScope) {
+            // Global: count Paystack payments with no member doc at all
             const allMemberUserIds = new Set<string>();
-            const allMembersDocs = await fetchAllDocs(
-                db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                    .select("userId")
-            );
-            allMembersDocs.forEach(doc => {
+            allMembers.forEach(doc => {
                 const uid = doc.data().userId || doc.id;
                 if (uid) allMemberUserIds.add(uid);
             });
@@ -147,8 +109,6 @@ export class UserMetricsService implements UserMetricsServiceContract {
             });
         }
 
-        // paidMembersCount = distinct members who paid via Paystack OR have legacy paymentStatus="completed"
-        // Capped at totalApplications to avoid inflating beyond total
         const paidMembersCount = Math.min(validPaidUserIds.size, totalApplications);
         const unpaidMembers = Math.max(0, totalApplications - paidMembersCount);
 

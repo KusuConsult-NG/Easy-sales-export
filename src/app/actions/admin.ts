@@ -1957,6 +1957,30 @@ async function _approveSellerVerificationAction(
                 "verificationProfile.verifiedAt": FieldValue.serverTimestamp(),
                 phone: verificationData.phoneNumber || verificationData.phone,
                 updatedAt: FieldValue.serverTimestamp(),
+
+                // Replicate bankAccount to user root bankDetails (DISEASE 6 / Save Bank Account Details fix)
+                ...(verificationData.bankAccount?.accountNumber ? {
+                    bankDetails: {
+                        accountNumber: verificationData.bankAccount.accountNumber,
+                        bankName: verificationData.bankAccount.bankName || "",
+                        accountName: verificationData.bankAccount.accountName || "",
+                        bankCode: verificationData.bankAccount.bankCode || ""
+                    }
+                } : {}),
+
+                // Replicate location address to user root address object
+                ...(verificationData.location?.address ? {
+                    address: {
+                        street: verificationData.location.address,
+                        city: "",
+                        state: verificationData.location.state || "",
+                        lga: verificationData.location.lga || "",
+                        country: "Nigeria"
+                    },
+                    residentialAddress: verificationData.location.address,
+                    stateOfOrigin: verificationData.location.state,
+                    lga: verificationData.location.lga
+                } : {}),
             });
         });
 
@@ -2026,9 +2050,13 @@ async function _approveSellerVerificationAction(
         });
 
         // Revalidate
-        revalidatePath("/marketplace", "page");
-        revalidatePath("/dashboard", "page");
-        revalidateTag(`user-status-${userId}`, "page");
+        try {
+            revalidatePath("/marketplace", "page");
+            revalidatePath("/dashboard", "page");
+            revalidateTag(`user-status-${userId}`, "page");
+        } catch (revalError) {
+            logger.warn("Revalidation failed (expected in test/script environments):", revalError);
+        }
 
         return {
             error: null,
