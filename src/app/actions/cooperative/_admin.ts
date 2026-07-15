@@ -157,8 +157,9 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
             if (t.status === "completed") {
                 if (t.type === "fixed_savings") {
                     totalSavings += amount;
-                } else if (t.type === "contribution" || t.type === "membership_registration") {
+                } else if (t.type === "contribution") {
                     totalContributions += amount;
+                    totalSavings += amount;
                     if (t.date) {
                         const date = t.date.toDate ? t.date.toDate() : new Date(t.date);
                         if (date >= thirtyDaysAgo) {
@@ -167,6 +168,8 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
                             previousMonthContributions += amount;
                         }
                     }
+                } else if (t.type === "withdrawal") {
+                    totalSavings -= amount;
                 }
             }
         }
@@ -830,7 +833,7 @@ export async function getContributionReportsAction(options?: {
 
         for (const doc of (await stream).docs) {
             const t = doc.data();
-            if (t.type === "contribution" || t.type === "membership_registration" || t.type === "registration_fee") {
+            if (t.type === "contribution") {
                 const amount = Number(t.amount) || 0;
                 const uid = t.userId as string | undefined;
 
