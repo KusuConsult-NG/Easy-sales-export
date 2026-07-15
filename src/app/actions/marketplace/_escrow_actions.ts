@@ -79,11 +79,10 @@ async function _getAllEscrowTransactionsAdmin(options: { status?: EscrowStatus;
 
         const fetchLimit = options.search ? 5000 : (options.limit || 50);
         const sortDirection = options.sortOrder || "desc";
-        let q = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).orderBy("createdAt", sortDirection);
+        let q = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS);
 
         if (options.status && (options.status as string) !== "all") { q = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
-                .where("status", "==", options.status)
-                .orderBy("createdAt", sortDirection);
+                .where("status", "==", options.status);
         }
 
         if (options.lastDocId) { const lastDoc = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(options.lastDocId).get();
@@ -108,6 +107,13 @@ async function _getAllEscrowTransactionsAdmin(options: { status?: EscrowStatus;
                 refundedAt: data.refundedAt ? (data.refundedAt as Timestamp).toDate().toISOString() : null,
                 releaseRequestedAt: data.releaseRequestedAt ? (data.releaseRequestedAt as Timestamp).toDate().toISOString() : null 
             } as any;
+        });
+
+        // Sort in memory to guarantee that corrupt or empty createdAt fields don't exclude documents from index
+        transactions.sort((a: any, b: any) => {
+            const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return sortDirection === "desc" ? dateB - dateA : dateA - dateB;
         });
 
         // 2. Batch fetch user profiles for bank details and contact info
