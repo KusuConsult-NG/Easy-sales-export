@@ -233,20 +233,21 @@ export class AnalyticsService implements AnalyticsServiceContract {
         const filterFrom = options?.dateFrom ? dateRangeStart(options.dateFrom) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
         const filterTo   = options?.dateTo   ? dateRangeEnd(options.dateTo) : now;
 
-        // Active users always uses a fixed 30-day window — this is a health
-        // indicator, not a date-filtered KPI. It must NOT use filterFrom.
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
         const [
             activeUsersSnap,
             pendingEscrowsCount,
             activeLandCount,
             pendingLoansCount,
+            recentActivityCount,
         ] = await Promise.allSettled([
             db.collection(COLLECTIONS.USERS).where("lastLoginAt", ">=", thirtyDaysAgo).count().get(),
             safeCount(db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("status", "==", "pending")),
             safeCount(db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "active")),
             safeCount(db.collection(COLLECTIONS.LOAN_APPLICATIONS).where("status", "==", "pending")),
+            safeCount(db.collection(COLLECTIONS.AUDIT_LOGS).where("timestamp", ">=", twentyFourHoursAgo)),
         ]);
 
         const isDateFiltered = !!(options?.dateFrom || options?.dateTo);
@@ -290,6 +291,7 @@ export class AnalyticsService implements AnalyticsServiceContract {
         const pendingEscrows = pendingEscrowsCount.status === "fulfilled" ? pendingEscrowsCount.value : 0;
         const activeLandListings = activeLandCount.status === "fulfilled" ? activeLandCount.value : 0;
         const pendingLoans = pendingLoansCount.status === "fulfilled" ? pendingLoansCount.value : 0;
+        const recentActivity = recentActivityCount.status === "fulfilled" ? recentActivityCount.value : 0;
 
         // Revenue by month
         const secretKey = process.env.PAYSTACK_SECRET_KEY;
@@ -458,6 +460,7 @@ export class AnalyticsService implements AnalyticsServiceContract {
                 monthlyRevenue,
                 totalTransactions,
                 pendingApprovals,
+                recentActivityCount: recentActivity,
             },
             counts: {
                 pendingEscrows,

@@ -60,6 +60,7 @@ export interface AnalyticsData {
         monthlyRevenue: number;
         totalTransactions: number;
         pendingApprovals: number;
+        recentActivityCount: number;
     };
     counts: {
         pendingEscrows: number;

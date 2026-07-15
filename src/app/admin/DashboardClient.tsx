@@ -163,7 +163,7 @@ export default function AdminDashboardPage() {
         },
         {
             label: "Recent Activity",
-            value: stats.recentTransactions.length,
+            value: stats.platformOverview.recentActivityCount ?? 0,
             icon: GraduationCap,
             color: "cyan",
             change: "Actions in last 24h",
