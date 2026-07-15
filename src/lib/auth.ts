@@ -80,17 +80,54 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     let uid: string;
                     if (!sbError && sbData?.user) {
                         // User exists and password is correct in Supabase Auth.
-                        // Query users collection by email to find their database profile (holding their legacy ID).
-                        const userSnap = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS)
-                            .where('email', '==', email.toLowerCase())
-                            .limit(1)
-                            .get());
-                        if (userSnap.empty) {
-                            console.error(`${authCtx} User verified in Supabase Auth but no profile found in database`);
-                            throw new Error("User profile not found in database");
+                        // Priority 1: Direct lookup by Supabase Auth user ID
+                        const directDocSnap = await runQueryWithRetry(() => 
+                            db.collection(COLLECTIONS.USERS).doc(sbData.user.id).get()
+                        );
+                        
+                        if (directDocSnap.exists) {
+                            const directData = directDocSnap.data()!;
+                            uid = directData._migratedTo || sbData.user.id;
+                            logger.info(`${authCtx} Authenticated via Supabase Auth. Direct Profile ID Match: ${uid}`);
+                        } else {
+                            // Priority 2: Query users collection by email to find their database profile (holding legacy ID).
+                            const userSnap = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS)
+                                .where('email', '==', email.toLowerCase())
+                                .get());
+                            if (userSnap.empty) {
+                                console.error(`${authCtx} User verified in Supabase Auth but no profile found in database`);
+                                throw new Error("User profile not found in database");
+                            }
+                            
+                            // If there are multiple profiles matching this email, prefer:
+                            // a) The one whose ID matches the Supabase user ID
+                            // b) The one that is migrated (has _migratedTo pointing to the Supabase ID)
+                            // c) Any profile whose ID is a UUID
+                            let matchedDoc = userSnap.docs[0];
+                            const supabaseMatch = userSnap.docs.find(doc => doc.id === sbData.user.id);
+                            if (supabaseMatch) {
+                                matchedDoc = supabaseMatch;
+                            } else {
+                                const migratedMatch = userSnap.docs.find(doc => doc.data()?.email?.toLowerCase() === email.toLowerCase() && doc.data()?._migratedTo === sbData.user.id);
+                                if (migratedMatch) {
+                                    matchedDoc = migratedMatch;
+                                } else {
+                                    const anyMigratedMatch = userSnap.docs.find(doc => !!doc.data()?._migratedTo);
+                                    if (anyMigratedMatch) {
+                                        matchedDoc = anyMigratedMatch;
+                                    }
+                                }
+                            }
+                            
+                            const matchedData = matchedDoc.data()!;
+                            if (matchedData._migratedTo) {
+                                uid = matchedData._migratedTo;
+                                logger.info(`${authCtx} Authenticated via Supabase Auth. Profile ID: ${matchedDoc.id} (Migrated to: ${uid})`);
+                            } else {
+                                uid = matchedDoc.id;
+                                logger.info(`${authCtx} Authenticated via Supabase Auth. Profile ID: ${uid}`);
+                            }
                         }
-                        uid = userSnap.docs[0].id;
-                        logger.info(`${authCtx} Authenticated via Supabase Auth. Profile ID: ${uid}`);
                     } else {
                         // Fallback: Verify credentials against Firebase Auth for JIT migration
                         logger.info(`${authCtx} Supabase Login failed (${sbError?.message}). Checking Firebase Auth for JIT migration...`);
@@ -301,7 +338,20 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 if (trigger === "update" || !lastSynced || (now - lastSynced) > SYNC_INTERVAL) {
                     try {
                         const { getUserProfile } = await import("@/lib/user-cache");
-                        const cachedProfile = await getUserProfile(token.id as string);
+                        let cachedProfile = await getUserProfile(token.id as string);
+                        
+                        // Self-healing migration interceptor:
+                        // If the loaded profile points to a migrated target, load the migrated target profile and update the session token ID!
+                        if (cachedProfile && (cachedProfile as any)._migratedTo) {
+                            const migratedId = (cachedProfile as any)._migratedTo;
+                            console.log(`[NextAuth JWT] Intercepted legacy user ${token.id} migrated to ${migratedId}. Updating token ID.`);
+                            const migratedProfile = await getUserProfile(migratedId);
+                            if (migratedProfile) {
+                                token.id = migratedId;
+                                cachedProfile = migratedProfile;
+                            }
+                        }
+
                         if (cachedProfile) {
                             token.roles = cachedProfile.roles || [];
                             token.verified = cachedProfile.displayName ? (cachedProfile as any).verified ?? true : true; // default to true if legacy profile structure

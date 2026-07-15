@@ -72,6 +72,13 @@ export async function requireSession(): Promise<
             logger.debug(`[SessionGuard] Fetching user doc for ID: ${userId} from collection: ${COLLECTIONS.USERS}`);
             let userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
 
+            // Intercept migrated user session ID
+            if (userDoc.exists && userDoc.data()?._migratedTo) {
+                const migratedId = userDoc.data()?._migratedTo;
+                logger.info(`[SessionGuard] Profile ${userId} has been migrated to ${migratedId}. Loading migrated profile instead.`);
+                userDoc = await db.collection(COLLECTIONS.USERS).doc(migratedId).get();
+            }
+
             // ── JIT MIGRATION CHECK ──────────────────────────────────────────
             const needsMigration = !userDoc.exists || (!userDoc.data()?._migratedAt && !userDoc.data()?._legacyFirebaseUid);
             if (needsMigration && userEmail) {

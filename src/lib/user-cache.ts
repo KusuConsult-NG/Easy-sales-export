@@ -72,6 +72,14 @@ export async function getUserProfile(userId: string): Promise<CachedUserProfile 
             userData = dbRow.raw_data || {};
         }
 
+        // Self-healing migration resolver:
+        // If the database profile points to a migrated target, fetch and cache the migrated target instead!
+        if (userData && userData._migratedTo) {
+            const migratedId = userData._migratedTo;
+            console.log(`[getUserProfile] Intercepted legacy user ${userId} migrated to ${migratedId}. Fetching migrated profile.`);
+            return getUserProfile(migratedId);
+        }
+
         // NOTE: registerAction writes 'fullName' to Firestore, not 'displayName'.
         // We read both to handle legacy documents that may have used 'displayName'.
         const resolvedName = userData.fullName || userData.displayName || '';
