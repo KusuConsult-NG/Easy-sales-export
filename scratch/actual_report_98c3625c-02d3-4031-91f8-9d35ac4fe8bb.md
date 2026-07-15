@@ -1,1 +1,0 @@
-I'll start by exploring the codebase structure before diving into the deep audit.
