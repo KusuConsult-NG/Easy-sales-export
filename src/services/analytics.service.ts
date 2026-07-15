@@ -200,26 +200,84 @@ export class AnalyticsService implements AnalyticsServiceContract {
         };
     }
 
-    // Centralized Helper: Get User Metrics without session checks
-    private async getUserMetrics(db: any) {
-        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    private async calculateUserSegments(): Promise<UserSegments> {
+        const { supabaseAdmin } = await import("@/lib/supabase");
+        const { categorizeUser } = await import("@/lib/broadcast-logic");
 
-        const [totalSnap, activeSnap, verifiedSnap] = await Promise.all([
-            db.collection(COLLECTIONS.USERS).count().get(),
-            db.collection(COLLECTIONS.USERS).where("updatedAt", ">=", thirtyDaysAgo).count().get(),
-            db.collection(COLLECTIONS.USERS).where("isVerified", "==", true).count().get()
-        ]);
+        // Fetch total count to determine chunks
+        const { count, error: countErr } = await supabaseAdmin
+            .from("users")
+            .select("*", { count: "exact", head: true });
 
-        const total = totalSnap.data().count || 0;
-        const active = activeSnap.data().count || 0;
-        const verified = verifiedSnap.data().count || 0;
+        if (countErr || count === null) {
+            console.error("[ANALYTICS SERVICE] Failed to get user count for segmentation:", countErr);
+            return { active: 0, pending: 0, stalled: 0, ghost: 0 };
+        }
+
+        const pageSize = 1000;
+        const totalPages = Math.ceil(count / pageSize);
+        const promises = [];
+
+        for (let page = 0; page < totalPages; page++) {
+            promises.push(
+                supabaseAdmin
+                    .from("users")
+                    .select("raw_data->serviceRegistrations, raw_data->verificationProfile, raw_data->bankDetails, raw_data->address")
+                    .range(page * pageSize, (page + 1) * pageSize - 1)
+            );
+        }
+
+        const results = await Promise.all(promises);
+        const counts = {
+            active_users: 0,
+            pending_users: 0,
+            stalled_users: 0,
+            ghost_users: 0
+        };
+
+        for (const res of results) {
+            if (res.error) continue;
+            const users = res.data || [];
+            for (const u of users) {
+                const reconstructed = {
+                    serviceRegistrations: (u as any).serviceRegistrations,
+                    verificationProfile: (u as any).verificationProfile,
+                    bankDetails: (u as any).bankDetails,
+                    address: (u as any).address
+                };
+                const category = categorizeUser(reconstructed);
+                if (category in counts) {
+                    counts[category as keyof typeof counts]++;
+                }
+            }
+        }
 
         return {
-            total,
-            active,
-            verified,
-            unverified: total - verified,
+            active: counts.active_users,
+            pending: counts.pending_users,
+            stalled: counts.stalled_users,
+            ghost: counts.ghost_users
         };
+    }
+
+    private async getUserSegmentsCached(): Promise<UserSegments> {
+        const { getCached, setCache } = await import("@/lib/redis");
+        const cacheKey = "admin:user-segments-counts";
+
+        try {
+            const cached = await getCached<UserSegments>(cacheKey);
+            if (cached) return cached;
+        } catch (e) {
+            // quiet fail on cache read
+        }
+
+        const segments = await this.calculateUserSegments();
+
+        try {
+            await setCache(cacheKey, segments, 600); // Cache for 10 minutes
+        } catch (e) {}
+
+        return segments;
     }
 
     /**
@@ -444,13 +502,7 @@ export class AnalyticsService implements AnalyticsServiceContract {
         }
 
         // User segments
-        const userMetrics = await this.getUserMetrics(db);
-        const userSegments: UserSegments = {
-            active: userMetrics.active,
-            pending: userMetrics.unverified,
-            stalled: Math.max(0, userMetrics.total - userMetrics.active - userMetrics.unverified),
-            ghost: 0
-        };
+        const userSegments = await this.getUserSegmentsCached();
 
         return {
             platformOverview: {
