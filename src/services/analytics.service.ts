@@ -773,10 +773,10 @@ const fetchModuleRegistrationStatsCached = unstable_cache(
         ] = await Promise.all([
             safeCount(db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS)),
             safeCount(db.collection(COLLECTIONS.WAVE_APPLICATIONS)),
-            safeCount(db.collection(COLLECTIONS.COOPERATIVE_ONBOARDING)),
+            safeCount(db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).where("status", "in", ["pending", "legacy_pending_onboarding"])),
             safeCount(db.collection(COLLECTIONS.EXPORT_APPLICATIONS)),
             safeCount(db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)),
-            safeCount(db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)),
+            safeCount(db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).where("status", "in", ["active", "approved"])),
             safeCount(db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)),
             safeCount(db.collection(COLLECTIONS.SELLER_VERIFICATIONS)),
         ]);
