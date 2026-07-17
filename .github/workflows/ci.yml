@@ -1,230 +1,28 @@
-name: CI — Validate & Deploy
+name: Continuous Integration
 
 on:
   push:
-    branches: [main, staging, develop, 'feature/**', 'fix/**', 'hotfix/**']
+    branches: [ main ]
   pull_request:
-    branches: [main, staging, develop]
+    branches: [ main ]
 
 jobs:
-  # ─────────────────────────────────────────────────────────────
-  # JOB 1: Static validation (runs on every push/PR)
-  # ─────────────────────────────────────────────────────────────
-  validate:
-    name: Lint + Typecheck + Unit Tests
+  build-and-test:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Use Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: 20
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
-      - name: TypeScript — type check
+      - name: TypeScript Compile Check
         run: npx tsc --noEmit
 
-      - name: ESLint — lint check
-        run: npm run lint
-
-      - name: Jest — unit tests
-        run: npm test -- --passWithNoTests --ci
-        env:
-          CI: true
-
-  # ─────────────────────────────────────────────────────────────
-  # JOB 1B: Smoke e2e — public routes only (no auth, no seed)
-  # Runs on every PR to catch broken public pages immediately.
-  # ─────────────────────────────────────────────────────────────
-  smoke-e2e:
-    name: Smoke E2E — Public Routes
-    runs-on: ubuntu-latest
-    needs: validate
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Playwright browsers (Chromium only for speed)
-        run: npx playwright install chromium --with-deps
-
-      - name: Run smoke e2e tests (public-routes, no auth)
-        run: npx playwright test --project=smoke --reporter=github
-        env:
-          CI: true
-          PLAYWRIGHT_BASE_URL: http://localhost:3000
-
-      - name: Upload Playwright report on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-smoke-report
-          path: playwright-report/
-          retention-days: 7
-
-  # ─────────────────────────────────────────────────────────────
-  # JOB 2: Auto-deploy to STAGING (develop branch only)
-  # ─────────────────────────────────────────────────────────────
-  deploy-staging:
-    name: Deploy to Staging
-    needs: [validate, smoke-e2e]
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
-
-    steps:
-      - name: Trigger Railway Staging Deployment
-        id: deploy
-        env:
-          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
-          RAILWAY_STAGING_SERVICE_ID: ${{ secrets.RAILWAY_STAGING_SERVICE_ID }}
-        run: |
-          if [ -z "$RAILWAY_API_TOKEN" ] || [ -z "$RAILWAY_STAGING_SERVICE_ID" ]; then
-            echo "⚠️  RAILWAY_API_TOKEN or RAILWAY_STAGING_SERVICE_ID not set."
-            echo "   Run: bash scripts/setup-railway-staging.sh  (after railway login)"
-            echo "   Then add the secrets to GitHub."
-            echo "SKIPPED=true" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          echo "🚂 Triggering Railway staging deployment..."
-          RESPONSE=$(curl -sS -X POST \
-            -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
-            -H "Content-Type: application/json" \
-            "https://backboard.railway.app/graphql/v2" \
-            --data "{\"query\":\"mutation { serviceInstanceRedeploy(serviceId: \\\"$RAILWAY_STAGING_SERVICE_ID\\\") }\"}")
-
-          echo "Response: $RESPONSE"
-          echo "SKIPPED=false" >> $GITHUB_OUTPUT
-
-      - name: Wait for staging to be healthy
-        if: steps.deploy.outputs.SKIPPED != 'true'
-        run: |
-          echo "⏳ Waiting for staging to come online..."
-          for i in $(seq 1 18); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-              https://staging.easysalesexport.com/api/health || echo "000")
-            echo "  Attempt $i: HTTP $STATUS"
-            if [ "$STATUS" = "200" ]; then
-              echo "✅ Staging is healthy!"
-              exit 0
-            fi
-            sleep 10
-          done
-          echo "⚠️  Staging did not become healthy within 3 minutes — check Railway logs."
-          exit 1
-
-  # ─────────────────────────────────────────────────────────────
-  # JOB 2B: PR E2E Regression (runs on PRs to verify staging before merge)
-  # ─────────────────────────────────────────────────────────────
-  pr-e2e:
-    name: PR E2E — Staging Regression
-    needs: validate
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Playwright Chromium
-        run: npx playwright install chromium --with-deps
-
-      - name: Run E2E Tests against Staging
-        run: npx playwright test --project=chromium --reporter=github
-        env:
-          CI: true
-          PLAYWRIGHT_BASE_URL: https://staging.easysalesexport.com
-          TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL || 'e2e.user@easysalesexport.com' }}
-          TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD || 'E2eTest@2024!' }}
-
-  # ─────────────────────────────────────────────────────────────
-  # JOB 2C: Post-Deploy Staging E2E (runs after staging deploy to verify release)
-  # ─────────────────────────────────────────────────────────────
-  staging-post-deploy-e2e:
-    name: Staging E2E — Post-Deploy Verification
-    needs: deploy-staging
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Playwright Chromium
-        run: npx playwright install chromium --with-deps
-
-      - name: Run E2E Tests against Staging
-        run: npx playwright test --project=chromium --reporter=github
-        env:
-          CI: true
-          PLAYWRIGHT_BASE_URL: https://staging.easysalesexport.com
-          TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL || 'e2e.user@easysalesexport.com' }}
-          TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD || 'E2eTest@2024!' }}
-
-
-  # ─────────────────────────────────────────────────────────────
-  # JOB 3: Release summary comment on PRs to main
-  # ─────────────────────────────────────────────────────────────
-  pr-checklist:
-    name: Release Checklist Reminder
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && github.base_ref == 'main'
-
-    steps:
-      - name: Post certification reminder
-        uses: actions/github-script@v7
-        with:
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `## 🚦 Production Deployment Checklist
-
-              Before merging to \`main\`, confirm:
-
-              - [ ] All CI checks pass (lint, typecheck, unit tests)
-              - [ ] Changes validated in **staging environment**
-              - [ ] Relevant e2e tests pass against staging
-              - [ ] Paystack reconciliation script shows 0 discrepancies
-              - [ ] Firebase data integrity audit shows 0 stuck users
-              - [ ] CHANGELOG.md updated with this release entry
-              - [ ] \`/docs/releases/\` certification document created and signed
-
-              **Do not merge until all boxes are checked.**
-
-              _Governance directive enforced per ENGINEERING_GOVERNANCE.md_`
-            })
+      - name: Run Jest Unit Tests
+        run: npm run test

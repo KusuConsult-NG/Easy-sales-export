@@ -147,6 +147,15 @@ export default function CheckoutPage() {
         if (typeof window !== "undefined" && (window as any).google) {
             setMapsLoaded(true);
         }
+        
+        // Developer warning check
+        const hasMapsKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY;
+        if (!hasMapsKey) {
+            console.warn(
+                "[Google Maps] Warning: Dedicated maps key (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY or NEXT_PUBLIC_GOOGLE_MAPS_KEY) is not defined. " +
+                "Using Firebase API key, which might cause restriction errors on checkout page."
+            );
+        }
     }, []);
 
     const calculateHaversineDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
