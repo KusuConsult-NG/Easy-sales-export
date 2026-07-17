@@ -48,24 +48,33 @@ function CreateEventModal({ onClose, onCreated }: { onClose: () => void; onCreat
     });
 
     async function handleCreate() {
-        if (!form.title || !form.location || !form.startTime || !form.endTime)
-            return showToast("All required fields must be filled", "error");
+        if (!form.title.trim()) return showToast("Event title is required", "error");
+        if (!form.location.trim()) return showToast("Location / Market name is required", "error");
+        if (!form.startTime) return showToast("Start time is required", "error");
+        if (!form.endTime) return showToast("End time is required", "error");
+
+        const startDate = new Date(form.startTime);
+        const endDate = new Date(form.endTime);
+
+        if (isNaN(startDate.getTime())) return showToast("Start time is invalid. Please re-enter it.", "error");
+        if (isNaN(endDate.getTime())) return showToast("End time is invalid. Please re-enter it.", "error");
+        if (endDate <= startDate) return showToast("End time must be after start time", "error");
 
         setLoading(true);
         const res = await createVillageMarketEventAction({
-            title: form.title,
-            description: form.description || undefined,
-            location: form.location,
+            title: form.title.trim(),
+            description: form.description.trim() || undefined,
+            location: form.location.trim(),
             state: form.state,
-            startTime: new Date(form.startTime).toISOString(),
-            endTime: new Date(form.endTime).toISOString(),
+            startTime: startDate.toISOString(),
+            endTime: endDate.toISOString(),
             isRecurring: form.isRecurring,
             recurringDay: form.isRecurring ? form.recurringDay : undefined,
         });
         setLoading(false);
 
         if (res.success) {
-            showToast("Village Market event created!", "success");
+            showToast("Village Market event created successfully!", "success");
             onCreated();
             onClose();
         } else {

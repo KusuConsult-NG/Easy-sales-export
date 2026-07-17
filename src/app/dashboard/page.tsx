@@ -114,7 +114,7 @@ function getPlatformModules(serviceRegistrations: Record<string, any>, roles: Us
             icon: Package,
             color: "from-orange-500 to-amber-600",
             onboardingUrl: "/marketplace/onboarding",
-            dashboardUrl: roles.includes("seller") ? "/marketplace/seller/dashboard" : "/marketplace/buyer/dashboard",
+            dashboardUrl: (roles.includes("seller") || roles.includes("marketplace_seller")) ? "/marketplace/seller/dashboard" : "/marketplace/buyer/dashboard",
             pendingUrl: "/marketplace/onboarding/pending",
         },
         {
@@ -163,7 +163,10 @@ function getPlatformModules(serviceRegistrations: Record<string, any>, roles: Us
         if (mod.id === 'academy' && roles.includes('academy_participant')) status = 'approved';
         if (mod.id === 'wave' && roles.includes('wave_participant')) status = 'approved';
         if (mod.id === 'export' && roles.includes('export_participant')) status = 'approved';
-        if (mod.id === 'marketplace' && (roles.includes('seller') || roles.includes('buyer'))) status = 'approved';
+        if (mod.id === 'marketplace' && (
+            roles.includes('seller') || roles.includes('buyer') ||
+            roles.includes('marketplace_seller') || roles.includes('marketplace_buyer')
+        )) status = 'approved';
         if (mod.id === 'cooperatives' && roles.includes('cooperative_member')) status = 'approved';
         if (mod.id === 'farmNation' && (roles.includes('farmer') || roles.includes('land_owner') || roles.includes('investor'))) status = 'approved';
         

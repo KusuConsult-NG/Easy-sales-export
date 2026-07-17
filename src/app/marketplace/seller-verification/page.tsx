@@ -34,6 +34,8 @@ export default function SellerVerificationPage() {
         businessDoc: null as File | null,
         idDoc: null as File | null,
         addressProof: null as File | null,
+        productSample1: null as File | null,
+        productSample2: null as File | null,
     });
 
     const nigerianStates = [
@@ -61,6 +63,12 @@ export default function SellerVerificationPage() {
     };
 
     async function handleSubmit() {
+        // Validate product samples are provided
+        if (!documents.productSample1) {
+            setToast({ type: "error", message: "At least one product sample image is required. Please upload a photo of your product." });
+            return;
+        }
+
         setIsSubmitting(true);
         try {
             // Create FormData for file uploads
@@ -75,6 +83,8 @@ export default function SellerVerificationPage() {
             if (documents.businessDoc) submitData.append("businessDoc", documents.businessDoc);
             if (documents.idDoc) submitData.append("idDoc", documents.idDoc);
             if (documents.addressProof) submitData.append("addressProof", documents.addressProof);
+            if (documents.productSample1) submitData.append("productSample1", documents.productSample1);
+            if (documents.productSample2) submitData.append("productSample2", documents.productSample2);
 
             const response = await fetch("/api/marketplace/submit-verification", {
                 method: "POST",
@@ -84,8 +94,8 @@ export default function SellerVerificationPage() {
             const data = await response.json();
 
             if (data.success) {
-                setToast({ type: "success", message: "Verification submitted successfully! Our team will review your application." });
-                setTimeout(() => router.push("/marketplace/sell"), 2000);
+                setToast({ type: "success", message: "✅ Your seller registration has been submitted successfully! Our team will review your application within 2–3 business days and notify you by email." });
+                setTimeout(() => router.push("/marketplace/sell"), 3000);
             } else {
                 setToast({ type: "error", message: data.message || "Failed to submit verification" });
             }
@@ -343,6 +353,26 @@ export default function SellerVerificationPage() {
                                     onChange={(file) => handleFileChange("addressProof", file)}
                                     required
                                 />
+
+                                <div className="border-t border-slate-200 pt-4 mt-2">
+                                    <h3 className="text-base font-bold text-slate-900 mb-1">Product Samples <span className="text-red-500">*</span></h3>
+                                    <p className="text-sm text-slate-500 mb-4">Upload at least one clear photo of the products you plan to sell. This helps our team verify your inventory.</p>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <FileUploadField
+                                            label="Product Sample Photo 1"
+                                            description="Clear photo of your product (JPG/PNG, max 5MB)"
+                                            file={documents.productSample1}
+                                            onChange={(file) => handleFileChange("productSample1", file)}
+                                            required
+                                        />
+                                        <FileUploadField
+                                            label="Product Sample Photo 2 (Optional)"
+                                            description="Additional product photo for better visibility"
+                                            file={documents.productSample2}
+                                            onChange={(file) => handleFileChange("productSample2", file)}
+                                        />
+                                    </div>
+                                </div>
                             </div>
                         )}
 

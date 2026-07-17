@@ -448,8 +448,12 @@ function applyFilter(
     if (nativeCol) {
         // Route to native SQL column
         if (op === 'array-contains') {
-            // For TEXT[] arrays like roles
+            // For TEXT[] arrays like roles: column @> ARRAY[value]
             return query.contains(nativeCol, [normalizedValue]);
+        }
+        if (op === 'array-contains-any') {
+            // For TEXT[] arrays: column && ARRAY[...values] (overlap)
+            return query.overlaps(nativeCol, Array.isArray(normalizedValue) ? normalizedValue : [normalizedValue]);
         }
         return applySimpleFilter(query, nativeCol, op, normalizedValue);
     }
@@ -459,6 +463,9 @@ function applyFilter(
     if (cols.includes(field)) {
         if (op === 'array-contains') {
             return query.contains(field, [normalizedValue]);
+        }
+        if (op === 'array-contains-any') {
+            return query.overlaps(field, Array.isArray(normalizedValue) ? normalizedValue : [normalizedValue]);
         }
         return applySimpleFilter(query, field, op, normalizedValue);
     }
@@ -517,11 +524,11 @@ function applyJsonbFilter(query: any, field: string, op: FilterOperator, value: 
             return query.filter(arrPath, 'cs', JSON.stringify([value]));
         }
         case 'array-contains-any': {
-            // Use the && (overlap) operator
+            // Use the && (overlap) operator — checks if JSONB array overlaps with given values
             const arrPath = parts.length === 1
                 ? `raw_data->${JSON.stringify(field)}`
                 : `raw_data${parts.slice(0, -1).map(p => `->${JSON.stringify(p)}`).join('')}->${JSON.stringify(parts[parts.length - 1])}`;
-            return query.filter(arrPath, 'cd', JSON.stringify(Array.isArray(value) ? value : [value]));
+            return query.filter(arrPath, 'ov', JSON.stringify(Array.isArray(value) ? value : [value]));
         }
         default: return query.eq(jsonPath, String(value));
     }
@@ -836,7 +843,11 @@ export class SupabaseQuery {
 
     async get(): Promise<SupabaseQuerySnapshot> {
         const tableName = getTableName(this._collection);
-        let query = supabaseAdmin.from(tableName).select('id, raw_data');
+        // For dedicated tables, select ALL columns so native columns (status, user_id, etc.)
+        // are available and can be merged into doc.data(). Raw-only select misses these.
+        // For the generic document_collections table, 'id, raw_data' is sufficient.
+        const isDedicated = isDedicatedTable(this._collection);
+        let query = supabaseAdmin.from(tableName).select(isDedicated ? '*' : 'id, raw_data');
 
         if (tableName === 'document_collections') {
             query = query.eq('collection_name', this._collection);
@@ -928,8 +939,43 @@ export class SupabaseQuery {
         const docs = allData.map((row: any) => {
             const rawData = row.raw_data ?? {};
             const id = row.id || rawData.id;
-            const withId = rawData.id ? rawData : { id, ...rawData };
-            const parsedWithId = convertStringsToTimestamps(withId);
+            // Merge native columns into raw_data so doc.data() returns a complete view.
+            // This ensures fields like 'status', 'user_id', 'email' stored in native SQL
+            // columns are accessible the same way as fields stored in JSONB raw_data.
+            const mergedData: Record<string, any> = { ...rawData };
+            if (!mergedData.id) mergedData.id = id;
+            if (isDedicated) {
+                // Map known native columns back to their Firestore field names
+                if (row.status !== undefined && mergedData.status === undefined) {
+                    mergedData.status = row.status;
+                }
+                if (row.status !== undefined && mergedData.membershipStatus === undefined) {
+                    // cooperative_members uses membershipStatus in code but status in SQL
+                    mergedData.membershipStatus = row.status;
+                }
+                if (row.user_id !== undefined && mergedData.userId === undefined) {
+                    mergedData.userId = row.user_id;
+                }
+                if (row.email !== undefined && mergedData.email === undefined) {
+                    mergedData.email = row.email;
+                }
+                if (row.roles !== undefined && mergedData.roles === undefined) {
+                    mergedData.roles = row.roles;
+                }
+                if (row.balance !== undefined && mergedData.balance === undefined) {
+                    mergedData.balance = row.balance;
+                }
+                if (row.amount !== undefined && mergedData.amount === undefined) {
+                    mergedData.amount = row.amount;
+                }
+                if (row.created_at !== undefined) {
+                    mergedData.createdAt = mergedData.createdAt || row.created_at;
+                }
+                if (row.updated_at !== undefined) {
+                    mergedData.updatedAt = mergedData.updatedAt || row.updated_at;
+                }
+            }
+            const parsedWithId = convertStringsToTimestamps(mergedData);
             const ref = new SupabaseDocumentReference(this._collection, id);
             return new SupabaseQueryDocumentSnapshot(id, ref, parsedWithId);
         });

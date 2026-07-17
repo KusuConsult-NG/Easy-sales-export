@@ -1055,9 +1055,18 @@ export default function CheckoutPage() {
                                                     state: selectedState,
                                                     lga: "" // Reset LGA when state changes
                                                 });
-                                                setIsAddressVerified(false);
-                                                setDestinationCoords(null);
                                                 setVerificationError(null);
+                                                // Auto-set coords from local state map — works without Google Maps
+                                                const matchedStateKey = Object.keys(NIGERIAN_STATE_COORDINATES).find(
+                                                    s => s.toLowerCase() === selectedState.toLowerCase()
+                                                );
+                                                if (matchedStateKey) {
+                                                    setDestinationCoords(NIGERIAN_STATE_COORDINATES[matchedStateKey]);
+                                                    setIsAddressVerified(true);
+                                                } else {
+                                                    setIsAddressVerified(false);
+                                                    setDestinationCoords(null);
+                                                }
                                             }}
                                             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary"
                                             required
@@ -1076,9 +1085,8 @@ export default function CheckoutPage() {
                                             value={deliveryAddress.lga}
                                             onChange={(e) => {
                                                 setDeliveryAddress({ ...deliveryAddress, lga: e.target.value });
-                                                setIsAddressVerified(false);
-                                                setDestinationCoords(null);
                                                 setVerificationError(null);
+                                                // Keep state-level coords when LGA changes — map already verified at state level
                                             }}
                                             disabled={!deliveryAddress.state}
                                             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"

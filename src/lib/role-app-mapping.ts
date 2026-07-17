@@ -38,6 +38,7 @@ export const ROLE_APP_ACCESS: Record<UserRole, AppIdentifier[]> = {
     buyer: ["marketplace", "escrow"],
     marketplace_buyer: ["marketplace", "escrow"],
     seller: ["marketplace", "escrow"],
+    marketplace_seller: ["marketplace", "escrow"],
 
     // Export Participants (includes Escrow)
     export_participant: ["export", "escrow"],
@@ -145,7 +146,7 @@ export function canAccessRoute(userRoles: UserRole[], routePath: string): boolea
  */
 export function canAccessEscrow(userRoles: UserRole[]): boolean {
     const escrowRoles: UserRole[] = [
-        "buyer", "marketplace_buyer", "seller",         // Marketplace
+        "buyer", "marketplace_buyer", "seller", "marketplace_seller", // Marketplace
         "export_participant",                          // Export Windows
         "farmer", "land_owner", "investor",           // Farm Nation
         "admin", "super_admin"                        // Admins
@@ -170,6 +171,7 @@ export function getPrimaryApp(userRoles: UserRole[]): string {
         buyer: "/marketplace/buyer/dashboard",
         marketplace_buyer: "/marketplace/buyer/dashboard",
         seller: "/marketplace/seller/dashboard",
+        marketplace_seller: "/marketplace/seller/dashboard",
         farmer: "/farm-nation/dashboard",
         land_owner: "/farm-nation/dashboard",
         investor: "/farm-nation/dashboard",
@@ -192,7 +194,7 @@ export function getPrimaryApp(userRoles: UserRole[]): string {
     // A user who enrolled in WAVE (and also has admin) must reach /wave/dashboard.
     const modulePriorityOrder: UserRole[] = [
         "export_participant",
-        "seller", "buyer", "marketplace_buyer",
+        "seller", "buyer", "marketplace_buyer", "marketplace_seller",
         "farmer", "land_owner", "investor",
         "cooperative_member",
         "wave_participant",

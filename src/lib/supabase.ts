@@ -22,6 +22,15 @@ export const supabaseAdmin = createClient(
         auth: {
             persistSession: false,
             autoRefreshToken: false,
+        },
+        realtime: {
+            // Disabled on the admin client — it's never used server-side
+            // and avoids Node.js 20 WebSocket compatibility issues in scripts
+            params: { eventsPerSecond: 0 }
+        } as any,
+        global: {
+            // Signal no realtime needed
+            headers: { 'x-client-no-realtime': '1' }
         }
     }
 );

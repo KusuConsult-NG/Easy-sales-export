@@ -10,6 +10,7 @@ export type UserRole =
     | "buyer"              // Can purchase from marketplace
     | "marketplace_buyer"  // Can purchase from marketplace (new standardized role)
     | "seller"             // Can sell on marketplace  
+    | "marketplace_seller" // Can sell on marketplace (new standardized role)
     | "land_owner"         // Owns land for farming
     | "farmer"             // Farm operator
     | "investor"           // Investment opportunities
@@ -53,6 +54,7 @@ export const ROLE_HIERARCHY: Record<UserRole, number> = {
     buyer: 2,
     marketplace_buyer: 2,
     seller: 2,
+    marketplace_seller: 2,
     land_owner: 2,
     farmer: 2,
     investor: 2,
@@ -79,6 +81,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
     buyer: "Buyer",
     marketplace_buyer: "Marketplace Buyer",
     seller: "Seller",
+    marketplace_seller: "Marketplace Seller",
     land_owner: "Land Owner",
     farmer: "Farmer / Farm Operator",
     investor: "Investor",

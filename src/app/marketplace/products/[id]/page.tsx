@@ -26,6 +26,7 @@ export default function ProductDetailPage() {
     const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
     const [showQuoteModal, setShowQuoteModal] = useState(false);
     const [isAddingToCart, setIsAddingToCart] = useState(false);
+    const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
     useEffect(() => {
         async function loadProduct() {
@@ -117,7 +118,8 @@ export default function ProductDetailPage() {
     }
 
     const isFS = (product as any).isFlashSale === true;
-    const mainImage = product.images && product.images.length > 0 ? product.images[0] : "/images/placeholder-product.jpg";
+    const allImages = product.images && product.images.length > 0 ? product.images : ["/images/placeholder-product.jpg"];
+    const mainImage = allImages[selectedImageIndex] || allImages[0];
     const priceDisplay = product.pricingTiers && product.pricingTiers.length > 0
         ? formatCurrency(product.pricingTiers[0].price)
         : "Price on Request";
@@ -150,13 +152,13 @@ export default function ProductDetailPage() {
             <div className="max-w-7xl mx-auto px-8 py-12">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
                     {/* Product Image */}
-                    <div className="space-y-6">
+                    <div className="space-y-4">
                         <div className="relative h-96 lg:h-[500px] bg-white rounded-2xl overflow-hidden shadow-xl">
                             <Image
                                 src={mainImage}
                                 alt={product.title}
                                 fill
-                                className="object-cover"
+                                className="object-cover transition-opacity duration-300"
                                 priority
                                 sizes="(max-width: 1024px) 100vw, 50vw"
                             />
@@ -165,7 +167,45 @@ export default function ProductDetailPage() {
                                     {badge}
                                 </span>
                             </div>
+                            {allImages.length > 1 && (
+                                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5">
+                                    {allImages.map((_, i) => (
+                                        <button
+                                            key={i}
+                                            onClick={() => setSelectedImageIndex(i)}
+                                            className={`w-2 h-2 rounded-full transition-all ${
+                                                i === selectedImageIndex ? 'bg-white scale-125' : 'bg-white/50'
+                                            }`}
+                                        />
+                                    ))}
+                                </div>
+                            )}
                         </div>
+
+                        {/* Thumbnail Strip */}
+                        {allImages.length > 1 && (
+                            <div className="flex gap-2 overflow-x-auto pb-1">
+                                {allImages.map((img, i) => (
+                                    <button
+                                        key={i}
+                                        onClick={() => setSelectedImageIndex(i)}
+                                        className={`relative flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden border-2 transition-all ${
+                                            i === selectedImageIndex
+                                                ? 'border-green-500 shadow-md scale-105'
+                                                : 'border-slate-200 hover:border-green-300'
+                                        }`}
+                                    >
+                                        <Image
+                                            src={img}
+                                            alt={`${product.title} - image ${i + 1}`}
+                                            fill
+                                            className="object-cover"
+                                            sizes="80px"
+                                        />
+                                    </button>
+                                ))}
+                            </div>
+                        )}
 
                         {/* Trust Badges */}
                         <div className="grid grid-cols-3 gap-4">
