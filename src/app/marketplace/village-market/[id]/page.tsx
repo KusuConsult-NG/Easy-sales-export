@@ -102,7 +102,7 @@ export default function VillageMarketEventPage() {
                     title: p.title,
                     description: p.description || "",
                     sellerId: p.sellerId,
-                    images: p.imageUrl ? [p.imageUrl] : [],
+                    images: p.images && p.images.length > 0 ? p.images : (p.imageUrl ? [p.imageUrl] : []),
                     pricingTiers: [{ type: "retail", price: p.flashPrice || p.price, minQuantity: 1 }],
                     availableQuantity: p.availableQuantity ?? 999,
                     unit: p.unit || "unit",

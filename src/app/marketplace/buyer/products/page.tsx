@@ -142,7 +142,7 @@ export default function ProductsPage() {
                 title: fp.title,
                 description: fp.description || "",
                 category: "flash_sales" as any,
-                images: fp.imageUrl ? [fp.imageUrl] : [],
+                images: fp.images && fp.images.length > 0 ? fp.images : (fp.imageUrl ? [fp.imageUrl] : []),
                 pricingTiers: [{ type: "retail", price: fp.flashPrice || fp.price, minQuantity: 1 }],
                 availableQuantity: fp.availableQuantity ?? 0,
                 minimumOrderQuantity: 1,

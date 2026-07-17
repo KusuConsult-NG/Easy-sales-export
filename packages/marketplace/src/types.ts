@@ -507,6 +507,7 @@ export interface FlashSaleProduct {
     title: string;
     description?: string;
     imageUrl?: string;
+    images?: string[];
     price: number;
     unit?: string;
     availableQuantity?: number;

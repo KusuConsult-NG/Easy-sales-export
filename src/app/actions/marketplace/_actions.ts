@@ -1239,7 +1239,7 @@ async function _getProductByIdAction(productId: string): Promise<ActionResponse<
                 title: data.title || "Flash Sale Product",
                 description: data.description || "",
                 category: "other",
-                images: data.imageUrl ? [data.imageUrl] : [],
+                images: data.images && data.images.length > 0 ? data.images : (data.imageUrl ? [data.imageUrl] : []),
                 pricingTiers: [{ type: "retail", price: data.flashPrice || data.price, minQuantity: 1 }],
                 availableQuantity: data.availableQuantity ?? 0,
                 minimumOrderQuantity: 1,

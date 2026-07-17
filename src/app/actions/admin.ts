@@ -3950,12 +3950,29 @@ async function _manualAcademyEnrollmentAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        // ── Write Mock Application for Admin Dashboard ────────────────────────
-        // Create an application document so the user appears in the admin Academy dashboard
+        // ── Write/Update Application for Admin Dashboard ────────────────────────
+        // Find existing applications for this user and update them, or create a mock one
         try {
-            const mockAppRef = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(`manual_${userId}`);
-            const existingApp = await mockAppRef.get();
-            if (!existingApp.exists) {
+            const appsQuery = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+                .where("userId", "==", userId)
+                .get();
+
+            if (!appsQuery.empty) {
+                // Update all existing applications
+                const promises = appsQuery.docs.map(doc => {
+                    return db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(doc.id).update({
+                        status: "approved",
+                        plan: plan,
+                        paymentStatus: "completed",
+                        reviewedAt: FieldValue.serverTimestamp(),
+                        reviewedBy: session.user.id
+                    });
+                });
+                await Promise.all(promises);
+                logger.info(`[Academy Manual Enrollment] Updated ${promises.length} existing applications to ${plan}`);
+            } else {
+                // Create mock application if none exists
+                const mockAppRef = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(`manual_${userId}`);
                 await mockAppRef.set({
                     applicationId: `manual_${userId}`,
                     userId: userId,
@@ -3967,9 +3984,10 @@ async function _manualAcademyEnrollmentAction(
                     reviewedAt: FieldValue.serverTimestamp(),
                     reviewedBy: session.user.id
                 }, { merge: true });
+                logger.info(`[Academy Manual Enrollment] Created mock application for ${userId} with plan ${plan}`);
             }
         } catch (e) {
-            logger.error("[Academy Manual Enrollment] Failed to create mock application:", e);
+            logger.error("[Academy Manual Enrollment] Failed to create or update application:", e);
         }
 
         // CLEAR CACHE
