@@ -152,9 +152,9 @@ const authMiddleware = auth((req: any) => {
         }
     }
 
-    if (rewritePrefix && !pathname.startsWith("/api") && !pathname.startsWith("/_next") && !pathname.startsWith("/__session")) {
+    if (rewritePrefix && rewritePrefix !== "" && rewritePrefix !== "/" && !pathname.startsWith("/api") && !pathname.startsWith("/_next") && !pathname.startsWith("/__session")) {
         // Redirect requests with redundant module prefix on subdomains/dedicated domains to the clean apex domain
-        if (rewritePrefix !== "/" && (pathname === rewritePrefix || pathname.startsWith(rewritePrefix + "/"))) {
+        if (pathname === rewritePrefix || pathname.startsWith(rewritePrefix + "/")) {
             let hubOrigin = req.nextUrl.origin;
             const hostParts = hostname.split(".");
             const isLocalhost = hostname.endsWith("localhost");
