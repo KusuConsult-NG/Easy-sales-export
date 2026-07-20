@@ -23,8 +23,11 @@ export async function getBaseUrl() {
  */
 export function getModuleDomain(slug: string) {
     const isDev = process.env.NODE_ENV === "development";
-    if (isDev) {
-        return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const useSubdomains = process.env.USE_SUBDOMAINS === "true";
+    const mainAppUrl = process.env.NEXT_PUBLIC_APP_URL || "https://easysalesexport.com";
+
+    if (isDev || !useSubdomains) {
+        return mainAppUrl;
     }
 
     // Look up domain dynamically from master configuration mapping
@@ -33,5 +36,5 @@ export function getModuleDomain(slug: string) {
         return `https://${mod.domain}`;
     }
 
-    return 'https://easysalesexport.com';
+    return mainAppUrl;
 }
