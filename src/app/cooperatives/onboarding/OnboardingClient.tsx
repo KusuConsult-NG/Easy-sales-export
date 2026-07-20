@@ -463,7 +463,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
         formData.append("occupation", personalInfo.occupation);
         formData.append("stateOfOrigin", personalInfo.address.state);
         formData.append("lga", personalInfo.address.lga || "N/A");
-        formData.append("ward", personalInfo.address.ward || "");
+        formData.append("ward", personalInfo.address.ward || "N/A");
         formData.append("residentialAddress", personalInfo.address.street);
         formData.append("nextOfKinName", nextOfKin.fullName);
         formData.append("nextOfKinPhone", nextOfKin.phone);

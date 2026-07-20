@@ -41,14 +41,14 @@ export const cooperativeMembershipSchema = z.object({
     phone: strictPhoneSchema,
     stateOfOrigin: z.string().min(1, "State of origin is required"),
     lga: z.string().min(1, "LGA is required"),
-    ward: z.string().min(1, "Ward is required"),
-    residentialAddress: z.string().min(10, "Complete address is required"),
+    ward: z.string().optional().default("N/A"),
+    residentialAddress: z.string().min(2, "Complete address is required"),
     occupation: z.string().min(2, "Occupation is required"),
 
     // Next of Kin
     nextOfKinName: strictNameSchema,
     nextOfKinPhone: strictPhoneSchema,
-    nextOfKinAddress: z.string().min(10, "Next of kin address is required"),
+    nextOfKinAddress: z.string().min(2, "Next of kin address is required"),
 
     // Membership Tier
     membershipTier: z.enum(["Member"], {
