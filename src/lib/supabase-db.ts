@@ -191,6 +191,9 @@ function setNestedValue(obj: any, path: string, value: any): void {
  */
 function convertTimestamps(obj: any): any {
     if (obj === null || obj === undefined) return obj;
+    if (obj instanceof Date) {
+        return obj.toISOString();
+    }
     // Firestore Timestamp has _seconds and _nanoseconds, or toDate() method
     if (obj && typeof obj === 'object' && typeof obj.toDate === 'function') {
         return obj.toDate().toISOString();
@@ -295,7 +298,7 @@ function processNestedFieldValues(value: any, existing: any): any {
     const fvType = getFieldValueType(value);
     if (fvType) return resolveFieldValue(fvType, value, existing);
     if (Array.isArray(value)) return value.map((v, i) => processNestedFieldValues(v, Array.isArray(existing) ? existing[i] : undefined));
-    if (value && typeof value === 'object' && typeof value.toDate !== 'function') {
+    if (value && typeof value === 'object' && !(value instanceof Date) && typeof value.toDate !== 'function') {
         const result: any = {};
         for (const [k, v] of Object.entries(value)) {
             result[k] = processNestedFieldValues(v, existing?.[k]);
