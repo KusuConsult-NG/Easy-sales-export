@@ -20,6 +20,8 @@
 import { supabaseAdmin } from './supabase';
 import { v4 as uuidv4 } from 'uuid';
 import { Timestamp } from './firestore-compat';
+import { invalidateCacheForCollection } from './cache-map';
+import { logger } from './logger';
 
 // ─── Table Mapping ─────────────────────────────────────────────────────────────
 // Maps Firestore collection names → dedicated Supabase table names.
@@ -93,8 +95,28 @@ const FIELD_TO_COLUMN: Record<string, Record<string, string>> = {
     },
 };
 
+const _unknownCollectionsWarned = new Set<string>();
+
 function getTableName(collection: string): string {
-    return DEDICATED_TABLE_MAP[collection] || 'document_collections';
+    if (collection in DEDICATED_TABLE_MAP) {
+        return DEDICATED_TABLE_MAP[collection];
+    }
+
+    if (!_unknownCollectionsWarned.has(collection)) {
+        _unknownCollectionsWarned.add(collection);
+        logger.warn(`[supabase-db] Collection '${collection}' is not in DEDICATED_TABLE_MAP. Falling back to document_collections table.`);
+        if (typeof window === 'undefined' && process.env.NODE_ENV === 'production') {
+            import('@sentry/nextjs').then(Sentry => {
+                Sentry.addBreadcrumb({
+                    category: 'database',
+                    message: `Unmapped collection fallback: ${collection}`,
+                    level: 'warning',
+                });
+            }).catch(() => {});
+        }
+    }
+
+    return 'document_collections';
 }
 
 function isDedicatedTable(collection: string): boolean {
@@ -368,6 +390,101 @@ async function supabaseUpsert(
             .from(tableName)
             .upsert(row, { onConflict: 'id' });
         if (error) throw new Error(`[supabase-db] upsert ${tableName}/${id}: ${error.message}`);
+    }
+}
+
+/**
+ * Partial update via PostgreSQL JSONB merge.
+ *
+ * Unlike supabaseUpsert (which replaces the entire raw_data object), this
+ * function safely overlays only the supplied keys on top of existing raw_data.
+ * All other keys in raw_data are preserved even if the in-memory read of the
+ * existing document was incomplete or stale.
+ *
+ * Used by DocumentReference.update() to ensure admin edits never silently
+ * wipe out fields that weren't part of the edit form.
+ */
+async function supabasePartialUpdate(
+    collection: string,
+    id: string,
+    patch: Record<string, any>,
+): Promise<void> {
+    const tableName = getTableName(collection);
+
+    // Extract native column overrides from the patch (e.g., email, roles for users table)
+    const fieldMap = FIELD_TO_COLUMN[tableName] || {};
+    const nativeOverrides: Record<string, any> = {};
+    for (const [firestoreField, sqlCol] of Object.entries(fieldMap)) {
+        if (firestoreField in patch && patch[firestoreField] !== undefined) {
+            nativeOverrides[sqlCol] = patch[firestoreField];
+        }
+    }
+
+    // Try server-side RPC merge first for 0-read atomic performance
+    try {
+        const { error: rpcErr } = await supabaseAdmin.rpc('merge_raw_data', {
+            p_table: tableName === 'document_collections' ? 'document_collections' : tableName,
+            p_id: tableName === 'document_collections' ? `${collection}::${id}` : id,
+            p_patch: patch,
+        });
+
+        if (!rpcErr) {
+            // If native column overrides exist, apply them
+            if (Object.keys(nativeOverrides).length > 0 && tableName !== 'document_collections') {
+                const { error: e2 } = await supabaseAdmin
+                    .from(tableName)
+                    .update(nativeOverrides)
+                    .eq('id', id);
+                if (e2) throw e2;
+            }
+            return;
+        }
+    } catch {
+        // Fall back to JS-level fetch+patch if RPC function is missing or in mock environment
+    }
+
+    if (tableName === 'document_collections') {
+        // Fetch current raw_data, merge patch on top, then upsert full row
+        const { data: existing, error: fetchErr } = await supabaseAdmin
+            .from('document_collections')
+            .select('raw_data')
+            .eq('id', id)
+            .eq('collection_name', collection)
+            .maybeSingle();
+        if (fetchErr) throw new Error(`[supabase-db] partial-update fetch ${collection}/${id}: ${fetchErr.message}`);
+
+        const merged = { ...(existing?.raw_data ?? {}), ...patch };
+        if (!merged.id) merged.id = id;
+        const row = buildGenericRow(collection, id, merged);
+        const { error } = await supabaseAdmin
+            .from('document_collections')
+            .upsert(row, { onConflict: 'id,collection_name' });
+        if (error) throw new Error(`[supabase-db] partial-update upsert ${collection}/${id}: ${error.message}`);
+    } else {
+        // For dedicated tables: fetch current raw_data, merge patch on top, then PATCH
+        const { data: cur, error: fetchErr } = await supabaseAdmin
+            .from(tableName)
+            .select('raw_data')
+            .eq('id', id)
+            .maybeSingle();
+
+        if (fetchErr) throw new Error(`[supabase-db] partial-update fetch ${tableName}/${id}: ${fetchErr.message}`);
+
+        // Merge: existing raw_data fields are preserved; patch keys overwrite only changed fields
+        const mergedRaw = { ...(cur?.raw_data ?? {}), ...patch };
+        if (!mergedRaw.id) mergedRaw.id = id;
+
+        const updatePayload: Record<string, any> = {
+            raw_data: mergedRaw,
+            ...nativeOverrides,
+        };
+
+        const { error: patchErr } = await supabaseAdmin
+            .from(tableName)
+            .update(updatePayload)
+            .eq('id', id);
+
+        if (patchErr) throw new Error(`[supabase-db] partial-update PATCH ${tableName}/${id}: ${patchErr.message}`);
     }
 }
 
@@ -654,15 +771,27 @@ export class SupabaseDocumentReference {
         }
         const processed = processWriteData(data, base, !!options?.merge);
         if (!processed.id) processed.id = this.id;
-        await supabaseUpsert(this._collection, this.id, processed);
+
+        if (options?.merge) {
+            await supabasePartialUpdate(this._collection, this.id, processed);
+        } else {
+            await supabaseUpsert(this._collection, this.id, processed);
+        }
+        await invalidateCacheForCollection(this._collection, this.id);
     }
 
     async update(data: Record<string, any>): Promise<void> {
+        // Process FieldValue sentinels and dot-notation keys against existing data
+        // (the get() call here handles FieldValue.increment, arrayUnion, etc.)
         const snap = await this.get();
         const existing = snap.data() ?? {};
         const processed = processWriteData(data, existing, true);
         if (!processed.id) processed.id = this.id;
-        await supabaseUpsert(this._collection, this.id, processed);
+        // Use partial update (not full upsert) so only changed fields overwrite raw_data.
+        // This prevents wiping out fields like serviceRegistrations, kyc, etc.
+        // if the in-memory `get()` above returned a partial or stale document.
+        await supabasePartialUpdate(this._collection, this.id, processed);
+        await invalidateCacheForCollection(this._collection, this.id);
     }
 
     async create(data: Record<string, any>): Promise<void> {
@@ -680,6 +809,7 @@ export class SupabaseDocumentReference {
                 const { error } = await supabaseAdmin.from(tableName).insert(row);
                 if (error) throw error;
             }
+            await invalidateCacheForCollection(this._collection, this.id);
         } catch (err: any) {
             // If already exists, throw ALREADY_EXISTS error (mimics Firestore)
             if (err.code === '23505' || err.message?.includes('duplicate')) {
@@ -691,6 +821,7 @@ export class SupabaseDocumentReference {
 
     async delete(): Promise<void> {
         await supabaseDelete(this._collection, this.id);
+        await invalidateCacheForCollection(this._collection, this.id);
     }
 
     // Subcollection support (used by cooperatives/members subcollection in dashboard)

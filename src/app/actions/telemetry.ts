@@ -2,7 +2,14 @@
 
 import { logger } from "@/lib/logger";
 
-export async function logTelemetryAction(level: 'debug' | 'info' | 'warn' | 'error', message: string, payload?: unknown) { try {
+import { requireSession } from "@/lib/session-guard";
+
+export async function logTelemetryAction(level: 'debug' | 'info' | 'warn' | 'error', message: string, payload?: unknown) {
+    try {
+        const { session } = await requireSession();
+        if (!session?.user && level !== 'error') {
+            return { error: "Authentication required", success: false as const, data: null };
+        }
         if (level === 'error') {
             logger.error(message, undefined, payload as any);
             

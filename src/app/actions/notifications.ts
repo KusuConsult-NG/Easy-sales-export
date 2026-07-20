@@ -46,6 +46,12 @@ export async function createBulkNotificationsAction(
  */
 export async function getUserNotificationsAction(userId: string): Promise<Notification[]> { 
     try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return [];
+        const { session } = sessionResult;
+        if (!session?.user?.id || (session.user.id !== userId && !session.user.roles?.includes('admin'))) {
+            return [];
+        }
         return await notificationService.getUserNotifications(userId);
     } catch (error) { 
         logger.error("Failed to fetch notifications action:", error);
@@ -95,6 +101,12 @@ export async function markAllAsReadAction(userId: string): Promise<ActionRespons
  */
 export async function getUnreadCountAction(userId: string): Promise<number> { 
     try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return 0;
+        const { session } = sessionResult;
+        if (!session?.user?.id || (session.user.id !== userId && !session.user.roles?.includes('admin'))) {
+            return 0;
+        }
         return await notificationService.getUnreadCount(userId);
     } catch (error) { 
         logger.error("Failed to get unread count action:", error);

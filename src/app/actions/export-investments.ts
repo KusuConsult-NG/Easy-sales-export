@@ -102,10 +102,16 @@ const getCachedExportOpportunities = (limit: number = 12, lastId?: string) => un
  */
 export async function getExportOpportunities(limit: number = 12, lastId?: string) { return getCachedExportOpportunities(limit, lastId); }
 
+import { requireSession } from "@/lib/session-guard";
+
 /**
  * Seed initial export opportunities (Temporary helper) - Admin Only
  */
-export async function seedExportOpportunities() { // Legacy seeding function - discouraged now that we use real Export Windows
+export async function seedExportOpportunities() {
+    const { session } = await requireSession();
+    if (!session?.user) {
+        return { success: false as const, error: "Authentication required", meta: null };
+    }
     return { success: false as const, error: "Seeding is deprecated. Please create Export Windows from Admin Panel.", meta: null };
 }
 

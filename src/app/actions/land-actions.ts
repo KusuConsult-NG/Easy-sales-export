@@ -86,8 +86,9 @@ async function _getLandListings(filters?: z.infer<typeof landSearchSchema>): Pro
 
         // Apply status filter if provided
         if (filters?.status) {
+            const targetStatuses = filters.status === 'verified' ? ['verified', 'approved'] : [filters.status];
             listingsQuery = db.collection(COLLECTIONS.LAND_LISTINGS)
-                .where('status', '==', filters.status)
+                .where('status', 'in', targetStatuses)
                 .orderBy('createdAt', 'desc');
         }
 

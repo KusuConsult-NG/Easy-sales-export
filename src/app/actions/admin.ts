@@ -3806,6 +3806,14 @@ async function _editApplicationAction(params: {
             },
         });
 
+        // Bust Next.js route cache so the admin users list shows fresh data
+        // immediately on the next navigation without a full browser reload.
+        revalidatePath('/admin/users');
+        revalidatePath('/admin/cooperative/members');
+        revalidatePath('/admin/export/applications');
+        revalidatePath('/admin/wave/applications');
+        revalidatePath('/admin/farm-nation/applications');
+
         return {
             success: true as const,
             error: null,

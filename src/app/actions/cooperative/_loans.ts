@@ -293,7 +293,10 @@ export async function getAdminLoanApplicationsAction(options: {
         let query: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS);
 
         if (options.statusFilter && options.statusFilter !== "all") {
-            query = query.where("status", "==", options.statusFilter);
+            const targetStatuses = (options.statusFilter === "active" || options.statusFilter === "disbursed")
+                ? ["disbursed", "active"]
+                : [options.statusFilter];
+            query = query.where("status", "in", targetStatuses);
         }
 
         // Date range filters (must be before orderBy when filtering on the same field)

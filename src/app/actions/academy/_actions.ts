@@ -1422,7 +1422,7 @@ export interface EnrolledCourseWithDetails {
 export async function autoEnrollPaidUser(userId: string, userPlan: string) {
     if (!userId || !userPlan) return;
     const plan = userPlan.toLowerCase();
-    const isPaid = ["elite", "standard", "foundation", "advanced"].includes(plan);
+    const isPaid = ["elite", "standard", "foundation", "advanced", "member", "student", "academy_student", "scholarship", "active", "enrolled", "approved"].includes(plan);
     if (!isPaid) return;
 
     try {

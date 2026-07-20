@@ -40,7 +40,9 @@ export async function checkWaveMembershipAction(): Promise<ActionResponse<{ enro
             // Auto-Healing: If user has role but no doc, create/reactivate it
             // This handles cases where registration succeeded (role assigned) but doc creation failed
             // or environment mismatch caused data loss
-            const hasRole = session.user.roles?.includes("wave_participant");
+            const hasRole = session.user.roles?.some((r: string) => r === "wave_participant" || r === "wave_member") ||
+                            (session.user as any).serviceRegistrations?.wave?.status === "approved" ||
+                            (session.user as any).serviceRegistrations?.wave?.status === "enrolled";
 
             if (hasRole) {
                 logger.info(`[Auto-Heal] Creating missing wave_members doc for ${session.user.id}`);

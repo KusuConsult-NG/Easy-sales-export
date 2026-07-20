@@ -38,16 +38,8 @@ export function writeGuard<T>(
 
     const message = `[writeGuard] Schema violation in ${context}: ${errorSummary}`;
 
-    if (process.env.NODE_ENV === 'production') {
-        // Fail-open in production: log and allow the write to proceed
-        // (blocking a payment write is worse than allowing slightly bad data)
-        logger.error(message, { context, issues: result.error.issues });
-        return data as T; // allow write with original data
-    } else {
-        // Fail-closed in dev/staging: throw so developers see the problem immediately
-        logger.error(message);
-        throw new Error(message);
-    }
+    logger.error(message, { context, issues: result.error.issues });
+    throw new Error(message);
 }
 
 /**

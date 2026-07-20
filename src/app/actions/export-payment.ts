@@ -445,6 +445,7 @@ export async function verifyInvestmentPaymentAction(reference: string) { try {
             transaction.update(windowRef, { 
                 fundedAmount: currentFunding + amountInNaira,
                 spotsFilled: spotsFilled + 1,
+                participantsCount: spotsFilled + 1,
                 currentFunding: currentFunding + amountInNaira,
                 investorCount: spotsFilled + 1,
                 updatedAt: FieldValue.serverTimestamp() 

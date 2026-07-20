@@ -55,11 +55,10 @@ type EscrowActionState = { error: string | null;
 // Dashboard Stats Action
 // ============================================
 
-// ============================================
-// Dashboard Stats Action
-// ============================================
+import { withFlexibleSafeAction } from "@/lib/safe-action";
 
-export async function getDashboardStatsAction(): Promise<DashboardActionState> { try {
+async function _getDashboardStatsAction(): Promise<DashboardActionState> {
+    try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
@@ -180,11 +179,13 @@ export async function getDashboardStatsAction(): Promise<DashboardActionState> {
     }
 }
 
+export const getDashboardStatsAction = withFlexibleSafeAction("getDashboardStatsAction", _getDashboardStatsAction);
+
 // ============================================
 // Recent Activity Action
 // ============================================
 
-export async function getRecentActivityAction(): Promise<ActivityActionState> { try {
+async function _getRecentActivityAction(): Promise<ActivityActionState> { try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
@@ -239,11 +240,13 @@ export async function getRecentActivityAction(): Promise<ActivityActionState> { 
     }
 }
 
+export const getRecentActivityAction = withFlexibleSafeAction("getRecentActivityAction", _getRecentActivityAction);
+
 // ============================================
 // Escrow Status Action
 // ============================================
 
-export async function getEscrowStatusAction(): Promise<EscrowActionState> { try {
+async function _getEscrowStatusAction(): Promise<EscrowActionState> { try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
@@ -325,3 +328,5 @@ export async function getEscrowStatusAction(): Promise<EscrowActionState> { try 
         return { error: "Failed to fetch escrow status", success: false as const, data: null };
     }
 }
+
+export const getEscrowStatusAction = withFlexibleSafeAction("getEscrowStatusAction", _getEscrowStatusAction);

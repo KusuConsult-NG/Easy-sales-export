@@ -59,13 +59,24 @@ export async function POST(req: NextRequest) {
 
             const paidAtDate = data.paid_at ? new Date(data.paid_at) : undefined;
 
-            // Check if already processed
+            // Atomically claim payment reference in database to prevent concurrent double-processing
             const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
-            const processedDoc = await processedRef.get();
-
-            if (processedDoc.exists) {
-                logger.info(`[Paystack Webhook] Payment ${reference} already processed.`);
-                return NextResponse.json({ message: "Already processed" }, { status: 200 });
+            try {
+                await processedRef.create({
+                    reference,
+                    type,
+                    userId,
+                    amount: amountPaidv,
+                    status: "processing",
+                    claimedAt: FieldValue.serverTimestamp(),
+                    source: "webhook",
+                });
+            } catch (claimErr: any) {
+                if (claimErr?.code === "ALREADY_EXISTS" || claimErr?.message?.includes("already exists")) {
+                    logger.info(`[Paystack Webhook] Payment ${reference} already claimed or processed.`);
+                    return NextResponse.json({ message: "Already processed" }, { status: 200 });
+                }
+                throw claimErr;
             }
 
             // Route based on Payment Type
@@ -93,17 +104,13 @@ export async function POST(req: NextRequest) {
                     if (!res.success && res.error !== "Already processed") {
                         throw new Error(res.error || "Wallet funding verification failed");
                     }
-                } else {
-                    // Log unhandled types so they appear in Vercel logs — never silently drop money.
-                    logger.warn(`[Paystack Webhook] UNHANDLED payment type: "${type}" for reference ${reference}. Amount: ${amountPaidv}. Metadata: ${JSON.stringify(metadata)}`);
-                    // Still mark as processed to avoid infinite retries.
-                    await db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference).set({
-                        reference, type, userId, amount: amountPaidv,
-                        processedAt: FieldValue.serverTimestamp(),
-                        source: "webhook",
-                        status: "unhandled_type",
-                    });
                 }
+
+                // Update claim record to completed status
+                await processedRef.update({
+                    status: type ? "completed" : "unhandled_type",
+                    processedAt: FieldValue.serverTimestamp(),
+                });
             } catch (processingError: any) {
                 logger.error(`[Paystack Webhook] Processing failed for ${reference}:`, processingError);
                 // Return 500 so Paystack retries the webhook delivery.

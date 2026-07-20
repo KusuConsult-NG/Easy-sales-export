@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Users, CheckCircle, XCircle, Loader2, Edit, Shield, FileCheck, FileX, SlidersHorizontal, X, MapPin, Download, Layers, Home, CreditCard, FileText } from "lucide-react";
 import { toggleUserVerificationAction, toggleUserKycVerificationAction, updateUserRolesAction, getUsersAction, manualAcademyEnrollmentAction, updateUserGenderAction, editApplicationAction } from "@/app/actions/admin";
 import Modal from "@/components/ui/Modal";
@@ -211,6 +211,17 @@ export default function AdminUsersPage() {
         (filters.role && filters.role !== "all") || (filters.status && filters.status !== "all") ||
         (filters.sortOrder && filters.sortOrder !== "desc") || (filters.sortBy && filters.sortBy !== "createdAt") ||
         (filters.modules && filters.modules !== "all") || (filters.gender && filters.gender !== "all"));
+
+    // Sync the open modal's user object when the data list is refreshed after a save.
+    // This ensures the admin sees the true server-side values (not just optimistic ones).
+    useEffect(() => {
+        if (!selectedUserForModal || !users.length) return;
+        const freshUser = users.find(u => u.id === selectedUserForModal.id);
+        if (freshUser) {
+            setSelectedUserForModal(freshUser as unknown as User);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [users]);
 
     const clearFilters = () => {
         updateFilter("state", "all");

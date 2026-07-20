@@ -14,10 +14,14 @@ export const supabase = createClient(
     supabaseAnonKey || 'placeholder'
 );
 
+if (typeof window === 'undefined' && !supabaseServiceKey && process.env.NODE_ENV !== 'test') {
+    console.error('[Supabase Client] CRITICAL WARNING: SUPABASE_SERVICE_ROLE_KEY is missing in server environment. Admin database operations will fail RLS permissions.');
+}
+
 // Admin-side service client (bypasses Row Level Security)
 export const supabaseAdmin = createClient(
     supabaseUrl || 'https://placeholder.supabase.co', 
-    supabaseServiceKey || supabaseAnonKey || 'placeholder', 
+    supabaseServiceKey || 'placeholder-service-key-missing', 
     {
         auth: {
             persistSession: false,

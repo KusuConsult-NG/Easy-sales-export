@@ -14,6 +14,8 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Conversation, Message, UserSearchResult } from "@/lib/types/messages";
 import * as messagingService from "@/infrastructure/messaging/service";
 
+import { withFlexibleSafeAction } from "@/lib/safe-action";
+
 /**
  * Get all conversations for the current user
  */
@@ -27,9 +29,9 @@ export async function getConversationsAction() {
 
         const conversations = await messagingService.getConversations(session.user.id);
         return { conversations, error: null };
-    } catch (error) {
+    } catch (error: any) {
         logger.error("getConversationsAction error", error);
-        return { error: "Failed to load conversations", conversations: [] };
+        return { error: error?.message || "Failed to load conversations", conversations: [] };
     }
 }
 

@@ -18,10 +18,18 @@ interface StandardizationReport { collection: string;
  * 
  * @param dryRun If true, only logs changes without writing to DB.
  */
+import { requireSession } from "@/lib/session-guard";
+import { hasAdminPermission } from "@/lib/admin-permissions";
+
 export async function runSchemaStandardizationAction(dryRun: boolean = true): Promise<
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > {
+    const { session } = await requireSession();
+    if (!session?.user || !hasAdminPermission(session.user.roles, "config:update")) {
+        return { success: false, error: "Unauthorized: Admin permission 'config:update' required.", data: null };
+    }
+
     const reports: StandardizationReport[] = [];
 
     try {
