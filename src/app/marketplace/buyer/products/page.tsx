@@ -401,13 +401,14 @@ export default function ProductsPage() {
                                         >
                                             {/* Product Image */}
                                             <div className="h-44 bg-slate-100 relative overflow-hidden">
-                                                {product.images?.[0] ? (
+                                                {product.images?.[0] && (product.images[0].startsWith('http://') || product.images[0].startsWith('https://')) ? (
                                                     <Image
                                                         src={product.images[0]}
                                                         alt={product.title}
                                                         fill
                                                         sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                                                         className="object-cover group-hover:scale-105 transition-transform duration-300"
+                                                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                                                     />
                                                 ) : (
                                                     <div className="w-full h-full flex items-center justify-center">

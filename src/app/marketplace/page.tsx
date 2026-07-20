@@ -1,10 +1,10 @@
 import { ArrowRight, ShoppingCart, Star, TrendingUp, Shield, Package, CheckCircle, Home } from "lucide-react";
 import { logger } from '@/lib/logger';
-import Image from "next/image";
 import Link from "next/link";
 import { getRecommendedProductsAction, getMarketplaceStatsAction } from "@/app/actions/marketplace";
 import BackToHub from "@/components/common/BackToHub";
 import MarketplaceRouteGuard from "@/components/marketplace/MarketplaceRouteGuard";
+import ProductImage from "@/components/marketplace/ProductImage";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -135,19 +135,10 @@ export default async function MarketplaceLandingPage() {
                             <Link href={`/marketplace/products/${product.id}`} key={product.id} className="block group">
                                 <div className="bg-white rounded-2xl overflow-hidden elevation-2 hover-lift transition-all duration-300">
                                     <div className="relative h-56 bg-slate-200">
-                                        {product.images && product.images[0] ? (
-                                            <Image
-                                                src={product.images[0]}
-                                                alt={product.title}
-                                                fill
-                                                className="object-cover group-hover:scale-105 transition-transform duration-500"
-                                                sizes="(max-width: 768px) 100vw, 33vw"
-                                            />
-                                        ) : (
-                                            <div className="w-full h-full flex items-center justify-center text-slate-400">
-                                                <Package className="w-12 h-12" />
-                                            </div>
-                                        )}
+                                        <ProductImage
+                                            src={product.images?.[0]}
+                                            alt={product.title}
+                                        />
                                         {product.exportReady && (
                                             <div className="absolute top-4 right-4">
                                                 <span className="px-3 py-1 bg-green-600 text-white text-xs font-bold rounded-full shadow-sm">

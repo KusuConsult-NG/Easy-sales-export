@@ -182,13 +182,14 @@ export default function MarketplaceProductsPage() {
                                 <div key={product.id} className="bg-white rounded-3xl overflow-hidden shadow-md hover:shadow-xl border border-slate-100 hover:border-slate-200/80 transition-all duration-300 hover:-translate-y-1.5 h-full flex flex-col group">
                                     {/* Product Image */}
                                     <div className="relative h-60 bg-slate-100 overflow-hidden">
-                                        {product.images && product.images[0] ? (
+                                        {product.images && product.images[0] && (product.images[0].startsWith('http://') || product.images[0].startsWith('https://')) ? (
                                             <Image
                                                 src={product.images[0]}
                                                 alt={product.title}
                                                 fill
                                                 className="object-cover group-hover:scale-[1.03] transition-transform duration-500"
                                                 sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                                             />
                                         ) : (
                                             <div className="w-full h-full flex items-center justify-center text-slate-300">
