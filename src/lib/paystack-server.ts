@@ -276,7 +276,14 @@ export async function initializePaystackPayment(
             });
 
             if (!response.ok) {
-                throw new Error(`Paystack API error: ${response.statusText}`);
+                let errorMsg = `Paystack API error: ${response.statusText}`;
+                try {
+                    const errJson = await response.json();
+                    if (errJson?.message) {
+                        errorMsg = errJson.message;
+                    }
+                } catch (_e) {}
+                throw new Error(errorMsg);
             }
 
             const data = await response.json();

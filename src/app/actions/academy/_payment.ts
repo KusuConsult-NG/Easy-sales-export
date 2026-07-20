@@ -326,7 +326,8 @@ async function _initiateAcademyPaymentAction(plan: "foundation" | "standard" | "
             plan,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { error: "Failed to initiate payment", success: false as const , data: null };
+        const errMsg = error instanceof Error ? error.message : String(error);
+        return { error: errMsg || "Failed to initiate payment", success: false as const , data: null };
     }
 }
 export const initiateAcademyPaymentAction = withFlexibleSafeAction("initiateAcademyPaymentAction", _initiateAcademyPaymentAction);

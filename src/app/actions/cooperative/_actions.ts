@@ -286,7 +286,7 @@ async function _initiateCooperativePaymentAction(
                             errMsg.includes("ERR_STREAM_PREMATURE_CLOSE");
         const userFriendlyMessage = isTransient 
             ? "A temporary connection issue occurred. Please try again." 
-            : "Failed to initiate payment";
+            : (errMsg && errMsg.length > 2 && !errMsg.includes("[object") ? errMsg : "Failed to initiate payment");
         return { error: userFriendlyMessage, success: false as const, data: null };
     }
 }
