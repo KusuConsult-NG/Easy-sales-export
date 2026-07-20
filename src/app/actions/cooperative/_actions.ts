@@ -216,7 +216,12 @@ async function _initiateCooperativePaymentAction(
         const memberDoc = await runQueryWithRetry(() => memberRef.get());
         if (memberDoc.exists) { const data = memberDoc.data();
             if (data?.membershipStatus === "active") {
-                return { error: "You are already an active cooperative member.", success: false as const, data: null };
+                return {
+                    error: null,
+                    success: true as const,
+                    meta: null,
+                    data: { message: "You are already an active cooperative member.", paymentUrl: null, redirectTo: "/cooperatives/dashboard" } as any
+                };
             }
             if (data?.paymentStatus === "completed") {
                 // Payment was completed — guide them to onboarding rather than showing a raw error.

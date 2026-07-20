@@ -540,6 +540,12 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
             if (result.success && result.data?.paymentUrl) {
                 window.location.href = result.data.paymentUrl;
             } else {
+                const errText = (result?.error || "").toLowerCase();
+                if (errText.includes("already") || errText.includes("active") || errText.includes("completed")) {
+                    showToast("Membership is active. Redirecting to dashboard...", "info");
+                    router.replace('/cooperatives/dashboard');
+                    return;
+                }
                 showToast(result.error || "Failed to initiate payment", "error");
                 setIsPaymentLoading(false);
             }
