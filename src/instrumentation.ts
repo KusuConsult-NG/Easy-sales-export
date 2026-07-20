@@ -12,6 +12,14 @@ export async function register() {
                 dns.setDefaultResultOrder('ipv4first');
                 console.log('[DNS Configuration] Prefer IPv4 resolver order configured in instrumentation.');
             }
+            
+            // Validate environment variables on startup
+            try {
+                const { logEnvValidation } = require('./lib/env-validator');
+                logEnvValidation();
+            } catch (envErr) {
+                console.error('[Env Validator] Failed to run environment variable validation:', envErr);
+            }
         } catch (e) {
             console.error('[DNS Configuration] Failed to configure DNS result order in instrumentation:', e);
         }
