@@ -657,18 +657,25 @@ export class AnalyticsService implements AnalyticsServiceContract {
             }
         }
 
-        // 3. Firestore fallbacks if Paystack API was not reached/failed
+        // Always calculate accurate counts from FAILED_PAYMENTS database collection
+        const [countAbandonedR, countFailedR] = await Promise.allSettled([
+            db.collection(COLLECTIONS.FAILED_PAYMENTS).where("status", "==", "abandoned").count().get(),
+            db.collection(COLLECTIONS.FAILED_PAYMENTS).where("status", "==", "failed").count().get(),
+        ]);
+        if (totalAbandonedCount === 0 || totalAbandonedCount === undefined) {
+            totalAbandonedCount = countAbandonedR.status === "fulfilled" ? (countAbandonedR.value.data().count ?? 0) : 0;
+        }
+        if (totalFailedCount === 0 || totalFailedCount === undefined) {
+            totalFailedCount = countFailedR.status === "fulfilled" ? (countFailedR.value.data().count ?? 0) : 0;
+        }
+
         if (!paystackSuccess) {
-            const [countSuccessR, countAbandonedR, countFailedR, allTxnsR] = await Promise.allSettled([
+            const [countSuccessR, allTxnsR] = await Promise.allSettled([
                 db.collection(COLLECTIONS.PROCESSED_PAYMENTS).where("status", "==", "completed").count().get(),
-                db.collection(COLLECTIONS.FAILED_PAYMENTS).where("status", "==", "abandoned").count().get(),
-                db.collection(COLLECTIONS.FAILED_PAYMENTS).where("status", "==", "failed").count().get(),
                 db.collection(COLLECTIONS.PROCESSED_PAYMENTS).where("status", "==", "completed").aggregate({ totalRevenue: AggregateField.sum("amount") }).get(),
             ]);
 
             totalSuccessfulCount = countSuccessR.status === "fulfilled" ? (countSuccessR.value.data().count ?? 0) : 0;
-            totalAbandonedCount = countAbandonedR.status === "fulfilled" ? (countAbandonedR.value.data().count ?? 0) : 0;
-            totalFailedCount = countFailedR.status === "fulfilled" ? (countFailedR.value.data().count ?? 0) : 0;
             totalRevenue = allTxnsR.status === "fulfilled" ? (Number(allTxnsR.value.data().totalRevenue) || 0) : 0;
         }
 
@@ -719,24 +726,37 @@ export class AnalyticsService implements AnalyticsServiceContract {
 
         const failedTransactions: FinancialOverview["failedTransactions"] = [];
         try {
-            const failedSnap = await db.collection(COLLECTIONS.FAILED_PAYMENTS).orderBy("failedAt", "desc").limit(1000).get();
+            const failedSnap = await db.collection(COLLECTIONS.FAILED_PAYMENTS).limit(1000).get();
             failedSnap.docs.forEach((doc: any) => {
                 const d = doc.data();
-                const ts = d.failedAt ?? d.abandonedAt ?? null;
+                const parseTs = (val: any) => {
+                    if (!val || (typeof val === 'object' && Object.keys(val).length === 0)) return null;
+                    if (typeof val.toDate === 'function') return val.toDate().toISOString();
+                    if (val._seconds) return new Date(val._seconds * 1000).toISOString();
+                    if (typeof val === 'string' && val.length > 5) {
+                        const parsedDate = new Date(val);
+                        return isNaN(parsedDate.getTime()) ? null : parsedDate.toISOString();
+                    }
+                    if (typeof val === 'number') return new Date(val).toISOString();
+                    return null;
+                };
+
+                const timestamp = parseTs(d.failedAt) ?? parseTs(d.abandonedAt) ?? parseTs(d.createdAt) ?? parseTs(d.updatedAt) ?? null;
+
                 failedTransactions.push({
                     id: doc.id,
                     type: d.type ?? "unknown",
                     amount: Number(d.amount) || 0,
                     status: (d.status === "abandoned" ? "abandoned" : "failed") as "failed" | "abandoned",
-                    gatewayResponse: d.gatewayResponse ?? null,
-                    timestamp: ts?.toDate ? ts.toDate().toISOString() : (ts ? new Date(ts).toISOString() : null),
+                    gatewayResponse: d.gatewayResponse ?? d.paystackEvent ?? null,
+                    timestamp,
                     phone: d.phone ?? d.userPhone ?? d.customerPhone ?? d.metadata?.phone ?? d.customer?.phone ?? null,
                     userId: d.userId ?? d.metadata?.userId ?? null,
                 });
             });
             failedTransactions.sort((a, b) => {
-                const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-                const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+                const ta = a.timestamp && !isNaN(new Date(a.timestamp).getTime()) ? new Date(a.timestamp).getTime() : 0;
+                const tb = b.timestamp && !isNaN(new Date(b.timestamp).getTime()) ? new Date(b.timestamp).getTime() : 0;
                 return tb - ta;
             });
         } catch (_e) {
