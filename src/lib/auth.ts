@@ -14,6 +14,7 @@ class AuthError extends CredentialsSignin {
 }
 // Using Firebase REST API for backend auth to avoid Vercel Node environment crashes
 // instead of importing the browser-targeted "firebase/auth" client SDK.
+import { FieldValue } from "@/lib/firestore-compat";
 import { logger } from "@/lib/logger";
 import { loginSchema } from "./schemas";
 import { COLLECTIONS, type UserRole } from "./types/firestore";
@@ -95,37 +96,46 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                                 .where('email', '==', email.toLowerCase())
                                 .get());
                             if (userSnap.empty) {
-                                console.error(`${authCtx} User verified in Supabase Auth but no profile found in database`);
-                                throw new Error("User profile not found in database");
-                            }
-                            
-                            // If there are multiple profiles matching this email, prefer:
-                            // a) The one whose ID matches the Supabase user ID
-                            // b) The one that is migrated (has _migratedTo pointing to the Supabase ID)
-                            // c) Any profile whose ID is a UUID
-                            let matchedDoc = userSnap.docs[0];
-                            const supabaseMatch = userSnap.docs.find(doc => doc.id === sbData.user.id);
-                            if (supabaseMatch) {
-                                matchedDoc = supabaseMatch;
+                                logger.info(`${authCtx} User verified in Supabase Auth but no profile found in database. Auto-provisioning default profile...`);
+                                const newUid = sbData.user.id;
+                                const defaultProfile = {
+                                    id: newUid,
+                                    uid: newUid,
+                                    email: email.toLowerCase(),
+                                    fullName: email.split('@')[0],
+                                    roles: ['general_user'],
+                                    isVerified: true,
+                                    verified: true,
+                                    profileComplete: false,
+                                    createdAt: FieldValue.serverTimestamp(),
+                                    updatedAt: FieldValue.serverTimestamp(),
+                                };
+                                await db.collection(COLLECTIONS.USERS).doc(newUid).set(defaultProfile, { merge: true });
+                                uid = newUid;
                             } else {
-                                const migratedMatch = userSnap.docs.find(doc => doc.data()?.email?.toLowerCase() === email.toLowerCase() && doc.data()?._migratedTo === sbData.user.id);
-                                if (migratedMatch) {
-                                    matchedDoc = migratedMatch;
+                                let matchedDoc = userSnap.docs[0];
+                                const supabaseMatch = userSnap.docs.find(doc => doc.id === sbData.user.id);
+                                if (supabaseMatch) {
+                                    matchedDoc = supabaseMatch;
                                 } else {
-                                    const anyMigratedMatch = userSnap.docs.find(doc => !!doc.data()?._migratedTo);
-                                    if (anyMigratedMatch) {
-                                        matchedDoc = anyMigratedMatch;
+                                    const migratedMatch = userSnap.docs.find(doc => doc.data()?.email?.toLowerCase() === email.toLowerCase() && doc.data()?._migratedTo === sbData.user.id);
+                                    if (migratedMatch) {
+                                        matchedDoc = migratedMatch;
+                                    } else {
+                                        const anyMigratedMatch = userSnap.docs.find(doc => !!doc.data()?._migratedTo);
+                                        if (anyMigratedMatch) {
+                                            matchedDoc = anyMigratedMatch;
+                                        }
                                     }
                                 }
-                            }
-                            
-                            const matchedData = matchedDoc.data()!;
-                            if (matchedData._migratedTo) {
-                                uid = matchedData._migratedTo;
-                                logger.info(`${authCtx} Authenticated via Supabase Auth. Profile ID: ${matchedDoc.id} (Migrated to: ${uid})`);
-                            } else {
-                                uid = matchedDoc.id;
-                                logger.info(`${authCtx} Authenticated via Supabase Auth. Profile ID: ${uid}`);
+                                const matchedData = matchedDoc.data()!;
+                                if (matchedData._migratedTo) {
+                                    uid = matchedData._migratedTo;
+                                    logger.info(`${authCtx} Authenticated via Supabase Auth. Profile ID: ${matchedDoc.id} (Migrated to: ${uid})`);
+                                } else {
+                                    uid = matchedDoc.id;
+                                    logger.info(`${authCtx} Authenticated via Supabase Auth. Profile ID: ${uid}`);
+                                }
                             }
                         }
                     } else {
