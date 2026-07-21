@@ -681,7 +681,7 @@ export class AnalyticsService implements AnalyticsServiceContract {
 
         try {
             const [txSnap] = await Promise.allSettled([
-                db.collection(COLLECTIONS.PROCESSED_PAYMENTS).orderBy("processedAt", "desc").limit(1000).get()
+                db.collection(COLLECTIONS.PROCESSED_PAYMENTS).orderBy("processedAt", "desc").get()
             ]);
 
             const toTx = (doc: any) => {
@@ -726,7 +726,7 @@ export class AnalyticsService implements AnalyticsServiceContract {
 
         const failedTransactions: FinancialOverview["failedTransactions"] = [];
         try {
-            const failedSnap = await db.collection(COLLECTIONS.FAILED_PAYMENTS).limit(1000).get();
+            const failedSnap = await db.collection(COLLECTIONS.FAILED_PAYMENTS).get();
             failedSnap.docs.forEach((doc: any) => {
                 const d = doc.data();
                 const parseTs = (val: any) => {

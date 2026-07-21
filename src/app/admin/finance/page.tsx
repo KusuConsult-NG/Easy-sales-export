@@ -485,7 +485,7 @@ export default function AdminFinancePage() {
                         {hasMore && (
                             <div className="flex flex-col items-center gap-2 py-6 border-t border-slate-100">
                                 <p className="text-xs text-slate-400">
-                                    Showing {visibleTx.length} of {displayedTx.length} loaded records {activeTab === "abandoned" && totalAbandonedCount ? `(${totalAbandonedCount.toLocaleString()} total in database)` : activeTab === "failed" && totalFailedCount ? `(${totalFailedCount.toLocaleString()} total in database)` : ""}
+                                    Showing {visibleTx.length} of {displayedTx.length.toLocaleString()} transactions
                                 </p>
                                 <button
                                     onClick={() => setVisibleCount(c => c + 50)}
@@ -499,7 +499,7 @@ export default function AdminFinancePage() {
 
                         {!hasMore && displayedTx.length > 0 && (
                             <p className="text-center text-xs text-slate-400 py-4">
-                                All {displayedTx.length} loaded records displayed {activeTab === "abandoned" && totalAbandonedCount ? `(${totalAbandonedCount.toLocaleString()} total in database)` : activeTab === "failed" && totalFailedCount ? `(${totalFailedCount.toLocaleString()} total in database)` : ""}
+                                All {displayedTx.length.toLocaleString()} transactions loaded
                             </p>
                         )}
                     </div>
