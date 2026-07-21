@@ -657,10 +657,11 @@ export class AnalyticsService implements AnalyticsServiceContract {
             }
         }
 
-        // Always calculate accurate counts from FAILED_PAYMENTS database collection
-        const [countAbandonedR, countFailedR] = await Promise.allSettled([
+        // Always calculate accurate counts from database collections
+        const [countAbandonedR, countFailedR, countSuccessR] = await Promise.allSettled([
             db.collection(COLLECTIONS.FAILED_PAYMENTS).where("status", "==", "abandoned").count().get(),
             db.collection(COLLECTIONS.FAILED_PAYMENTS).where("status", "==", "failed").count().get(),
+            db.collection(COLLECTIONS.PROCESSED_PAYMENTS).where("status", "==", "completed").count().get(),
         ]);
         if (totalAbandonedCount === 0 || totalAbandonedCount === undefined) {
             totalAbandonedCount = countAbandonedR.status === "fulfilled" ? (countAbandonedR.value.data().count ?? 0) : 0;
@@ -668,14 +669,17 @@ export class AnalyticsService implements AnalyticsServiceContract {
         if (totalFailedCount === 0 || totalFailedCount === undefined) {
             totalFailedCount = countFailedR.status === "fulfilled" ? (countFailedR.value.data().count ?? 0) : 0;
         }
+        const dbSuccessCount = countSuccessR.status === "fulfilled" ? (countSuccessR.value.data().count ?? 0) : 0;
+        if (dbSuccessCount > 0) {
+            totalSuccessfulCount = Math.max(totalSuccessfulCount, dbSuccessCount);
+        }
 
         if (!paystackSuccess) {
-            const [countSuccessR, allTxnsR] = await Promise.allSettled([
-                db.collection(COLLECTIONS.PROCESSED_PAYMENTS).where("status", "==", "completed").count().get(),
+            const [allTxnsR] = await Promise.allSettled([
                 db.collection(COLLECTIONS.PROCESSED_PAYMENTS).where("status", "==", "completed").aggregate({ totalRevenue: AggregateField.sum("amount") }).get(),
             ]);
 
-            totalSuccessfulCount = countSuccessR.status === "fulfilled" ? (countSuccessR.value.data().count ?? 0) : 0;
+            totalSuccessfulCount = countSuccessR.status === "fulfilled" ? (countSuccessR.value.data().count ?? 0) : totalSuccessfulCount;
             totalRevenue = allTxnsR.status === "fulfilled" ? (Number(allTxnsR.value.data().totalRevenue) || 0) : 0;
         }
 
@@ -711,6 +715,10 @@ export class AnalyticsService implements AnalyticsServiceContract {
                     return tb - ta;
                 })
                 .forEach(tx => recentTransactions.push(tx));
+
+            if (recentTransactions.length > totalSuccessfulCount) {
+                totalSuccessfulCount = recentTransactions.length;
+            }
         } catch (e: any) {
             console.error("[FINANCE SERVICE] Transactions fetch error:", e.message);
         }
