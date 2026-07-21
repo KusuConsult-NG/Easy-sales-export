@@ -494,12 +494,53 @@ export async function registerAction(prevState: any, formData: FormData) { const
             }
         }
 
-        // Create Firebase Auth user via Admin SDK
-        const userRecord = await adminAuth.createUser({ email: validatedData.email,
-            password: validatedData.password,
-            displayName: validatedData.fullName,
-            emailVerified: true, // Auto-verify for now
-        });
+        // Create user in Supabase Auth FIRST to obtain canonical UUID
+        let canonicalUid: string;
+        try {
+            const { supabaseAdmin } = await import('@/lib/supabase');
+            const { data: sbUser, error: sbErr } = await supabaseAdmin.auth.admin.createUser({
+                email: validatedData.email.toLowerCase(),
+                password: validatedData.password,
+                email_confirm: true,
+                user_metadata: { full_name: validatedData.fullName }
+            });
+
+            if (sbErr) {
+                if (sbErr.message.includes('already been registered') || sbErr.message.includes('already registered') || sbErr.message.includes('already exists')) {
+                    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
+                    const match = existingUsers?.users?.find(u => u.email?.toLowerCase() === validatedData.email.toLowerCase());
+                    if (match) {
+                        canonicalUid = match.id;
+                    } else {
+                        return { success: false as const, error: "A user with this email address has already been registered", redirectUrl: "" };
+                    }
+                } else {
+                    return { success: false as const, error: sbErr.message || "Registration failed", redirectUrl: "" };
+                }
+            } else if (sbUser?.user) {
+                canonicalUid = sbUser.user.id;
+            } else {
+                return { success: false as const, error: "Failed to initialize authentication", redirectUrl: "" };
+            }
+        } catch (sbException: any) {
+            logger.error("[Register] Supabase Auth creation exception:", sbException);
+            return { success: false as const, error: "Authentication system error. Please try again.", redirectUrl: "" };
+        }
+
+        // Also create in Firebase Auth for legacy fallback compatibility
+        let firebaseUid: string | null = null;
+        try {
+            const userRecord = await adminAuth.createUser({
+                uid: canonicalUid, // Attempt to align Firebase UID with Supabase UUID
+                email: validatedData.email,
+                password: validatedData.password,
+                displayName: validatedData.fullName,
+                emailVerified: true,
+            });
+            firebaseUid = userRecord.uid;
+        } catch (fbCreateErr: any) {
+            logger.warn("[Register] Firebase Auth secondary creation skipped or failed:", fbCreateErr.message);
+        }
 
         // SIMPLIFIED: Everyone gets only general_user role on registration
         // Additional roles are granted after application approval
@@ -512,18 +553,22 @@ export async function registerAction(prevState: any, formData: FormData) { const
         const registrationFirstName = nameParts[0] || "";
         let registrationOtherName = "";
         let registrationLastName = "";
-        if (nameParts.length > 2) { registrationOtherName = nameParts.slice(1, -1).join(" ");
-             registrationLastName = nameParts[nameParts.length - 1];
-        } else if (nameParts.length === 2) { registrationLastName = nameParts[1];
+        if (nameParts.length > 2) { 
+            registrationOtherName = nameParts.slice(1, -1).join(" ");
+            registrationLastName = nameParts[nameParts.length - 1];
+        } else if (nameParts.length === 2) { 
+            registrationLastName = nameParts[1];
         }
 
-        // Create Firestore user profile
-        const userProfile: Omit<FirestoreUser, "createdAt" | "updatedAt"> = { uid: userRecord.uid,
+        // Create Firestore user profile under canonical Supabase UUID
+        const userProfile: Omit<FirestoreUser, "createdAt" | "updatedAt"> = { 
+            uid: canonicalUid,
+            id: canonicalUid,
             fullName: validatedData.fullName,
             firstName: registrationFirstName,
             lastName: registrationLastName,
             otherName: registrationOtherName || undefined,
-            email: validatedData.email,
+            email: validatedData.email.toLowerCase(),
             phone: normalisedPhone,
             gender: validatedData.gender.toLowerCase() as "male" | "female",
             roles: userRoles,
@@ -532,19 +577,14 @@ export async function registerAction(prevState: any, formData: FormData) { const
             profileComplete: true,
         };
 
-        try { await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS).doc(userRecord.uid).set({
+        try { 
+            await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS).doc(canonicalUid).set({
                 ...userProfile,
                 createdAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp() }, { merge: true }));
+                updatedAt: FieldValue.serverTimestamp() 
+            }, { merge: true }));
         } catch (firestoreError: any) {
-            logger.error("Firestore profile creation failed, rolling back Auth user:", firestoreError);
-            // ROLLBACK: Delete the Auth user so they can try again (prevents "Ghost User" state)
-            try {
-                await adminAuth.deleteUser(userRecord.uid);
-                logger.info(`Rollback successful for user ${userRecord.uid}`);
-            } catch (rollbackError) {
-                logger.error(`CRITICAL: Failed to rollback user ${userRecord.uid}:`, rollbackError);
-            }
+            logger.error("Database profile creation failed:", firestoreError);
             throw new Error("Failed to create user profile. Please try again.");
         }
 
