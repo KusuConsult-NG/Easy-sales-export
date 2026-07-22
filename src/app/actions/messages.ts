@@ -186,26 +186,24 @@ export async function searchUsersAction(query: string) {
             .filter(Boolean) as string[];
 
         if (!trimmedQuery) {
-            const adminsSnapshot = await db.collection(COLLECTIONS.USERS)
-                .where("roles", "array-contains-any", ADMIN_ROLES)
-                .get();
+            const { supabaseAdmin } = await import("@/lib/supabase");
+            const { data: adminDocs } = await supabaseAdmin
+                .from("users")
+                .select("id, email, roles, raw_data")
+                .overlaps("roles", ADMIN_ROLES);
 
-            const admins = adminsSnapshot.docs
+            const admins = (adminDocs || [])
                 .filter(doc => doc.id !== session.user.id)
                 .map(doc => {
-                    const userData = doc.data();
+                    const fullName = doc.raw_data?.fullName || doc.email || doc.raw_data?.email || "Admin";
+                    const email = doc.email || doc.raw_data?.email || "";
+                    const roles = doc.roles || doc.raw_data?.roles || [];
                     return {
                         uid: doc.id,
-                        fullName: userData.fullName || "Admin",
-                        email: userData.email || "",
-                        roles: userData.roles || []
+                        fullName,
+                        email,
+                        roles
                     };
-                })
-                .filter(admin => {
-                    if (userIsAdmin) return true;
-                    const email = admin.email.toLowerCase();
-                    if (email.includes("super") || email.includes("admin.easysalesexport")) return true;
-                    return userModuleKeywords.some(keyword => email.includes(keyword));
                 });
 
             return { users: admins, error: null };
@@ -307,34 +305,49 @@ export async function startSupportConversationAction(module?: string) {
             userModuleKeywords.unshift(module);
         }
 
-        const adminSnapshot = await db.collection(COLLECTIONS.USERS)
-            .where("roles", "array-contains-any", ["admin", "super_admin", "wave_admin", "cooperative_admin", "marketplace_admin", "export_admin", "farmnation_admin", "academy_admin"])
-            .get();
+        const { supabaseAdmin } = await import("@/lib/supabase");
+        const ADMIN_ROLES = ["admin", "super_admin", "wave_admin", "cooperative_admin", "marketplace_admin", "export_admin", "farmnation_admin", "academy_admin"];
 
-        if (adminSnapshot.empty) {
+        const { data: adminDocs, error: adminErr } = await supabaseAdmin
+            .from("users")
+            .select("id, email, roles, raw_data")
+            .overlaps("roles", ADMIN_ROLES);
+
+        if (adminErr || !adminDocs || adminDocs.length === 0) {
+            logger.error("[startSupportConversation] Failed to query admin users:", adminErr?.message);
             return { error: "No admin available currently", conversationId: null };
         }
 
-        let targetAdmin = adminSnapshot.docs.find(doc => {
-            const email = (doc.data().email || "").toLowerCase();
-            return userModuleKeywords.some(keyword => email.includes(keyword));
+        // Target module-specific admin first, then super admin, then any admin
+        const targetModule = module || (userModuleKeywords.length > 0 ? userModuleKeywords[0] : null);
+
+        let targetAdmin = adminDocs.find(doc => {
+            const roles = doc.roles || doc.raw_data?.roles || [];
+            const email = (doc.email || doc.raw_data?.email || "").toLowerCase();
+            if (targetModule && (roles.includes(`${targetModule}_admin`) || email.includes(targetModule))) return true;
+            return false;
         });
 
         if (!targetAdmin) {
-            targetAdmin = adminSnapshot.docs.find(doc => {
-                const email = (doc.data().email || "").toLowerCase();
-                return email.includes("super") || email.includes("admin.easysalesexport");
+            targetAdmin = adminDocs.find(doc => {
+                const roles = doc.roles || doc.raw_data?.roles || [];
+                return roles.includes("super_admin") || roles.includes("admin");
             });
         }
 
         if (!targetAdmin) {
-            targetAdmin = adminSnapshot.docs[0];
+            targetAdmin = adminDocs[0];
         }
 
         const adminUid = targetAdmin.id;
 
         if (adminUid === session.user.id) {
-            return { error: "You are an admin", conversationId: null };
+            // Pick another admin if user is themselves an admin
+            const otherAdmin = adminDocs.find(d => d.id !== session.user.id);
+            if (!otherAdmin) {
+                return { error: "You are the primary admin", conversationId: null };
+            }
+            return await startConversationAction(otherAdmin.id, undefined, undefined, module ? `${module}_support` : "general_support");
         }
 
         const context = module ? `${module}_support` : "general_support";
