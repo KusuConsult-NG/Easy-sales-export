@@ -1963,9 +1963,21 @@ export async function getCooperativeMemberIdCardAction(): Promise<
         const applicationDate: Date = d.createdAt?.toDate ? d.createdAt.toDate() : (userData?.createdAt?.toDate ? userData.createdAt.toDate() : new Date());
         const joinYear = applicationDate.getFullYear();
 
-        // Shorter, intuitive ID format for cooperative members
+        // Lock in stored member number permanently (fallback to ESE-COOP-XXXX only if missing)
         const membershipTier = "Member";
-        const memberNumber = `ESE-COOP-${(sortedDocs[0]?.id || userId).slice(-4).toUpperCase()}`;
+        const memberNumber = d.memberNumber || d.memberId || userData?.memberNumber || `ESE-COOP-${(sortedDocs[0]?.id || userId).slice(-4).toUpperCase()}`;
+
+        // Robust passport photo fallback chain (checks doc & central user profile)
+        const resolvedPassportPhotoUrl = 
+            d.documents?.passportPhoto?.url ||
+            (typeof d.documents?.passportPhoto === "string" ? d.documents.passportPhoto : null) ||
+            d.passportPhotoUrl ||
+            d.photoUrl ||
+            userData?.passportPhotoUrl ||
+            userData?.photoUrl ||
+            userData?.documents?.passportPhoto?.url ||
+            (typeof userData?.documents?.passportPhoto === "string" ? userData.documents.passportPhoto : null) ||
+            null;
 
         // Issue date = approvedAt (when admin approved) — not createdAt (when applied).
         const issuedAt: Date =
@@ -1984,7 +1996,7 @@ export async function getCooperativeMemberIdCardAction(): Promise<
                 membershipTier,
                 gender: d.gender || "",
                 stateOfOrigin: d.stateOfOrigin || "",
-                passportPhotoUrl: d.documents?.passportPhoto?.url || null,
+                passportPhotoUrl: resolvedPassportPhotoUrl,
                 joinedAt: issuedAt.toISOString(),
                 validUntil: validUntil.toISOString(),
                 membershipStatus: d.membershipStatus || "active",
@@ -2065,10 +2077,30 @@ export async function updatePassportPhotoAction(
         }
 
         const memberDoc = memberSnapshot.docs[0];
-        await memberDoc.ref.update({ "documents.passportPhoto": {
+        await memberDoc.ref.update({
+            "documents.passportPhoto": {
                 name: passportName,
-                url: passportUrl },
-            updatedAt: FieldValue.serverTimestamp() });
+                url: passportUrl
+            },
+            passportPhotoUrl: passportUrl,
+            updatedAt: FieldValue.serverTimestamp()
+        });
+
+        // Also update central users table for consistency
+        try {
+            await db.collection(COLLECTIONS.USERS).doc(userId).set({
+                passportPhotoUrl: passportUrl,
+                documents: {
+                    passportPhoto: {
+                        name: passportName,
+                        url: passportUrl
+                    }
+                },
+                updatedAt: FieldValue.serverTimestamp()
+            }, { merge: true });
+        } catch (uErr) {
+            logger.warn(`Failed syncing passport photo to users table (non-fatal):`, uErr);
+        }
 
         revalidatePath("/cooperatives/id-card");
 
