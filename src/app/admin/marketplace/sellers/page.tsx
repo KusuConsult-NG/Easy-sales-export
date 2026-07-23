@@ -316,7 +316,8 @@ export default function AdminSellersPage() {
                     <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                     <span className="text-xs text-slate-500">Live</span>
                 </div>
-                <button
+                {/* Temporarily removed Export CSV button */}
+                {/* <button
                     onClick={() => {
                         setExportConfig({
                             status: filters.status || "all",
@@ -329,7 +330,7 @@ export default function AdminSellersPage() {
                 >
                     {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                     {isExporting ? "Preparing Export..." : `Export CSV (${stats.total}+)`}
-                </button>
+                </button> */}
             </div>
 
             {/* Stats Cards */}
@@ -760,14 +761,15 @@ export default function AdminSellersPage() {
                             >
                                 Cancel
                             </button>
-                            <button
+                            {/* Temporarily removed Export CSV button */}
+                            {/* <button
                                 onClick={() => handleExportCSV(exportConfig)}
                                 disabled={isExporting}
                                 className="px-5 py-2 font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition shadow-sm flex items-center gap-2 disabled:opacity-50"
                             >
                                 {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                                 Export CSV
-                            </button>
+                            </button> */}
                         </div>
                     </div>
                 </div>

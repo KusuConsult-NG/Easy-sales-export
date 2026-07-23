@@ -375,7 +375,8 @@ export default function FarmNationApplicationsPage() {
                             <Users className="w-4 h-4" />
                             Legacy Member
                         </button>
-                        <button
+                        {/* Temporarily removed Export CSV button */}
+                        {/* <button
                             onClick={() => {
                                 setExportConfig({
                                     status: filters.status || "all",
@@ -388,7 +389,7 @@ export default function FarmNationApplicationsPage() {
                         >
                             {processingId === "export" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                             {processingId === "export" ? "Exporting..." : "Export CSV"}
-                        </button>
+                        </button> */}
                     </div>
                 }
                 filters={
@@ -654,14 +655,15 @@ export default function FarmNationApplicationsPage() {
                             >
                                 Cancel
                             </button>
-                            <button
+                            {/* Temporarily removed Export CSV button */}
+                            {/* <button
                                 onClick={() => handleExportCSV(exportConfig)}
                                 disabled={processingId === "export"}
                                 className="px-5 py-2 font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition shadow-sm flex items-center gap-2 disabled:opacity-50"
                             >
                                 {processingId === "export" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                                 Export CSV
-                            </button>
+                            </button> */}
                         </div>
                     </div>
                 </div>

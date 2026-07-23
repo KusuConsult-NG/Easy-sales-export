@@ -320,8 +320,8 @@ export default function AdminWaveApplicationsPage() {
                         <RefreshCw className={`w-4 h-4 text-slate-500 ${isLoading ? 'animate-spin' : ''}`} />
                         <span className="text-xs font-semibold text-slate-600">Refresh</span>
                     </button>
-                    {/* CSV Export */}
-                    {applications.length > 0 && (
+                    {/* Temporarily removed Export CSV button */}
+                    {/* {applications.length > 0 && (
                         <button
                             onClick={handleExportCSV}
                             className="ml-auto inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-semibold text-sm transition-all"
@@ -329,7 +329,7 @@ export default function AdminWaveApplicationsPage() {
                             <Download className="w-4 h-4" />
                             Export CSV ({(meta as any)?.totalCount ?? applications.length})
                         </button>
-                    )}
+                    )} */}
                 </div>
             </div>
 

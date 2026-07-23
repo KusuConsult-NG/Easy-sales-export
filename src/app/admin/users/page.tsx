@@ -592,14 +592,15 @@ export default function AdminUsersPage() {
                                 Bulk Verify ({selectedIds.size})
                             </button>
                         )}
-                        <button
+                        {/* Temporarily removed Export CSV button */}
+                        {/* <button
                             onClick={handleExportCSV}
                             disabled={isExporting}
                             className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-sm font-semibold transition disabled:opacity-50"
                         >
                             {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                             Export CSV
-                        </button>
+                        </button> */}
                     </div>
                 }
                 filters={

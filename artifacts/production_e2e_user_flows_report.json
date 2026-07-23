@@ -1,0 +1,68 @@
+{
+  "auditSummary": [
+    {
+      "module": "Hub Auth",
+      "userRole": "General Buyer",
+      "userEmail": "marketplaceuser04@gmail.com",
+      "testFlow": "Sign-in & Session Creation",
+      "targetPath": "/auth/login",
+      "status": "WARN",
+      "details": "Sign-in completed"
+    },
+    {
+      "module": "Cooperative",
+      "userRole": "Member",
+      "userEmail": "cooperativeuser02@gmail.com",
+      "testFlow": "Cooperative Dashboard & Loans",
+      "targetPath": "/cooperatives/dashboard",
+      "status": "PASS",
+      "details": "Member dashboard loaded (274 chars)"
+    },
+    {
+      "module": "WAVE Program",
+      "userRole": "Participant",
+      "userEmail": "waveuser02@gmail.com",
+      "testFlow": "WAVE Dashboard & Auto-Heal",
+      "targetPath": "/wave/dashboard",
+      "status": "PASS",
+      "details": "WAVE Participant dashboard loaded (243 chars)"
+    },
+    {
+      "module": "Academy LMS",
+      "userRole": "Student",
+      "userEmail": "academyuser02@gmail.com",
+      "testFlow": "Enrolled Course & Lesson Access",
+      "targetPath": "/academy/dashboard",
+      "status": "PASS",
+      "details": "Academy LMS Student dashboard loaded (206 chars)"
+    },
+    {
+      "module": "Marketplace",
+      "userRole": "Buyer",
+      "userEmail": "marketplaceuser04@gmail.com",
+      "testFlow": "Marketplace Buyer Dashboard & Orders",
+      "targetPath": "/marketplace/buyer/dashboard",
+      "status": "PASS",
+      "details": "Marketplace Buyer dashboard loaded (206 chars)"
+    },
+    {
+      "module": "Export Hub",
+      "userRole": "Investor",
+      "userEmail": "exportwindowuser@gmail.com",
+      "testFlow": "Export Portfolio & Window Slots",
+      "targetPath": "/export/dashboard",
+      "status": "PASS",
+      "details": "Export Investor dashboard loaded (10 chars)"
+    },
+    {
+      "module": "Admin Portal",
+      "userRole": "Super Admin",
+      "userEmail": "e2e.admin@easysalesexport.com",
+      "testFlow": "Admin Management Overview",
+      "targetPath": "/admin",
+      "status": "PASS",
+      "details": "Admin Portal overview loaded (206 chars)"
+    }
+  ],
+  "timestamp": "2026-07-20T12:50:28.229Z"
+}

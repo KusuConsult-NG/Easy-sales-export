@@ -361,14 +361,15 @@ export default function CooperativeMembersPage() {
                         <Users className="w-4 h-4" />
                         Onboard Legacy Member
                     </button>
-                    <button
+                    {/* Temporarily removed Export CSV button */}
+                    {/* <button
                         onClick={handleExportCSV}
                         disabled={processingId === "export"}
                         className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-semibold text-sm transition-all disabled:opacity-50"
                     >
                         <Download className="w-4 h-4" />
                         {processingId === "export" ? "Exporting..." : "Export Full CSV"}
-                    </button>
+                    </button> */}
                 </div>
             </div>
 

@@ -261,14 +261,14 @@ export default function AdminLoansPage() {
                     <h1 className="text-3xl font-bold text-slate-900 mb-2">Loan Applications</h1>
                     <p className="text-slate-600">Review and manage cooperative loan applications</p>
                 </div>
-                {/* Export button */}
-                <button
+                {/* Temporarily removed Export CSV button */}
+                {/* <button
                     onClick={handleExportCSV}
                     disabled={applications.length === 0}
                     className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-semibold text-sm transition-all disabled:opacity-50"
                 >
                     <Download className="w-4 h-4" /> Export CSV ({applications.length})
-                </button>
+                </button> */}
             </div>
 
             {/* Stats Cards */}

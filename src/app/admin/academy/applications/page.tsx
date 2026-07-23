@@ -706,7 +706,8 @@ export default function AdminAcademyApplicationsPage() {
                     <p className="text-slate-600">Live — {displayStats ? displayStats.totalApplications.toLocaleString() : applications.length} total applications</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
-                    {filtered.length > 0 && (
+                    {/* Temporarily removed Export CSV button */}
+                    {/* {filtered.length > 0 && (
                         <button
                             onClick={() => {
                                 setExportConfig({
@@ -722,7 +723,7 @@ export default function AdminAcademyApplicationsPage() {
                             {processingId === "export" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                             {processingId === "export" ? "Exporting..." : "Export CSV"}
                         </button>
-                    )}
+                    )} */}
                     <button
                         onClick={() => setIsImportModalOpen(true)}
                         className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-semibold transition shadow-sm border border-slate-700 flex items-center gap-2"
@@ -1077,14 +1078,15 @@ export default function AdminAcademyApplicationsPage() {
                             >
                                 Cancel
                             </button>
-                            <button
+                            {/* Temporarily removed Export CSV button */}
+                            {/* <button
                                 onClick={() => handleExportCSV(exportConfig)}
                                 disabled={processingId === "export"}
                                 className="px-5 py-2 font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition shadow-sm flex items-center gap-2 disabled:opacity-50"
                             >
                                 {processingId === "export" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                                 Export CSV
-                            </button>
+                            </button> */}
                         </div>
                     </div>
                 </div>

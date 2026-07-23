@@ -295,13 +295,14 @@ export default function AdminExportApplicationsPage() {
                         <Users className="w-4 h-4" />
                         Legacy Member
                     </button>
-                    <button
+                    {/* Temporarily removed Export CSV button */}
+                    {/* <button
                         onClick={handleExportCSV}
                         className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
                     >
                         <Download className="w-4 h-4" />
                         Export CSV
-                    </button>
+                    </button> */}
                 </div>
             </div>
 

@@ -144,7 +144,8 @@ export default function AdminAuditLogsPage() {
                         </h1>
                         <p className="text-sm sm:text-base text-blue-200">Monitor all system activities and security events</p>
                     </div>
-                    <button
+                    {/* Temporarily removed Export CSV button */}
+                    {/* <button
                         onClick={handleExport}
                         disabled={exporting || logs.length === 0}
                         className="w-full sm:w-auto px-6 py-3 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-500/50 text-white rounded-xl font-medium transition flex items-center justify-center space-x-2 touch-manipulation"
@@ -160,7 +161,7 @@ export default function AdminAuditLogsPage() {
                                 <span>Export CSV</span>
                             </>
                         )}
-                    </button>
+                    </button> */}
                 </div>
 
                 {/* Stats Cards */}

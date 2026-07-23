@@ -1,0 +1,185 @@
+{
+  "domainResults": [
+    {
+      "name": "Hub Core",
+      "url": "https://easysalesexport.com",
+      "finalUrl": "https://www.easysalesexport.com/",
+      "statusCode": 200,
+      "title": "Easy Sales Export - Agricultural Export Platform",
+      "loadTimeMs": 3214,
+      "consoleErrors": 0,
+      "networkFailures": 0,
+      "status": "PASS"
+    },
+    {
+      "name": "Hub WWW",
+      "url": "https://www.easysalesexport.com",
+      "finalUrl": "https://www.easysalesexport.com/",
+      "statusCode": 200,
+      "title": "Easy Sales Export - Agricultural Export Platform",
+      "loadTimeMs": 1508,
+      "consoleErrors": 12,
+      "networkFailures": 12,
+      "status": "PASS"
+    },
+    {
+      "name": "Cooperative Module",
+      "url": "https://easysalescooperative.com",
+      "finalUrl": "https://easysalescooperative.com",
+      "statusCode": "FAILED_TO_CONNECT",
+      "title": "N/A",
+      "loadTimeMs": 2336,
+      "consoleErrors": 1,
+      "networkFailures": 1,
+      "status": "FAIL"
+    },
+    {
+      "name": "Academy LMS Module",
+      "url": "https://easysalesacademy.com",
+      "finalUrl": "https://easysalesacademy.com",
+      "statusCode": "FAILED_TO_CONNECT",
+      "title": "N/A",
+      "loadTimeMs": 191,
+      "consoleErrors": 1,
+      "networkFailures": 1,
+      "status": "FAIL"
+    },
+    {
+      "name": "WAVE Module",
+      "url": "https://waveprogramme.com",
+      "finalUrl": "https://waveprogramme.com",
+      "statusCode": "FAILED_TO_CONNECT",
+      "title": "N/A",
+      "loadTimeMs": 2140,
+      "consoleErrors": 1,
+      "networkFailures": 1,
+      "status": "FAIL"
+    },
+    {
+      "name": "Export Module",
+      "url": "https://easysalesexportng.com",
+      "finalUrl": "https://easysalesexportng.com",
+      "statusCode": "FAILED_TO_CONNECT",
+      "title": "N/A",
+      "loadTimeMs": 2082,
+      "consoleErrors": 1,
+      "networkFailures": 1,
+      "status": "FAIL"
+    },
+    {
+      "name": "Farm Nation Module",
+      "url": "https://farmnation.ng",
+      "finalUrl": "https://farmnation.ng",
+      "statusCode": "FAILED_TO_CONNECT",
+      "title": "N/A",
+      "loadTimeMs": 1459,
+      "consoleErrors": 1,
+      "networkFailures": 1,
+      "status": "FAIL"
+    },
+    {
+      "name": "Marketplace Subdomain",
+      "url": "https://marketplace.easysalesexport.com",
+      "finalUrl": "https://marketplace.easysalesexport.com",
+      "statusCode": "FAILED_TO_CONNECT",
+      "title": "N/A",
+      "loadTimeMs": 297,
+      "consoleErrors": 1,
+      "networkFailures": 1,
+      "status": "FAIL"
+    }
+  ],
+  "detailedDomainErrors": [
+    {
+      "domain": "https://www.easysalesexport.com/",
+      "type": "request-failed",
+      "message": "GET https://www.easysalesexport.com/_next/image?url=%2Fimages%2Flanding-page%2Fphoto_2026-02-21%2002.05.12.jpeg&w=1920&q=75"
+    },
+    {
+      "domain": "https://www.easysalesexport.com/",
+      "type": "request-failed",
+      "message": "GET https://www.easysalesexport.com/_next/static/chunks/app/not-found-d53645b7ae712448.js"
+    },
+    {
+      "domain": "https://www.easysalesexport.com/",
+      "type": "request-failed",
+      "message": "GET https://www.easysalesexport.com/_next/image?url=%2Fimages%2Fmodules%2Fmarketplace-v3.png&w=96&q=75"
+    },
+    {
+      "domain": "https://www.easysalesexport.com/",
+      "type": "request-failed",
+      "message": "GET https://www.easysalesexport.com/_next/image?url=%2Fimages%2Fmodules%2Facademy-v3.png&w=96&q=75"
+    },
+    {
+      "domain": "https://www.easysalesexport.com/",
+      "type": "request-failed",
+      "message": "GET https://www.easysalesexport.com/_next/image?url=%2Fimages%2Fmodules%2Fexport-v3.png&w=96&q=75"
+    },
+    {
+      "domain": "https://www.easysalesexport.com/",
+      "type": "request-failed",
+      "message": "GET https://www.easysalesexport.com/_next/image?url=%2Fimages%2Fmodules%2Fwave-v3.png&w=96&q=75"
+    },
+    {
+      "domain": "https://www.easysalesexport.com/",
+      "type": "request-failed",
+      "message": "GET https://www.easysalesexport.com/_next/image?url=%2Fimages%2Fmodules%2Ffarm-nation-v3.png&w=96&q=75"
+    },
+    {
+      "domain": "https://www.easysalesexport.com/",
+      "type": "request-failed",
+      "message": "GET https://www.easysalesexport.com/_next/static/chunks/app/page-071b8a0b85ae6313.js"
+    },
+    {
+      "domain": "https://www.easysalesexport.com/",
+      "type": "request-failed",
+      "message": "GET https://www.easysalesexport.com/_next/image?url=%2Fimages%2Fmodules%2Fcooperative-v3.png&w=96&q=75"
+    },
+    {
+      "domain": "https://www.easysalesexport.com/",
+      "type": "request-failed",
+      "message": "GET https://www.easysalesexport.com/_next/image?url=%2Fimages%2Flanding-page%2Fphoto_2026-02-21%2014.56.29.jpeg&w=1920&q=75"
+    },
+    {
+      "domain": "https://www.easysalesexport.com/",
+      "type": "request-failed",
+      "message": "GET https://www.easysalesexport.com/_next/static/chunks/app/error-3745f176c56d6e9b.js"
+    },
+    {
+      "domain": "https://www.easysalesexport.com/",
+      "type": "request-failed",
+      "message": "GET https://www.easysalesexport.com/_next/static/chunks/app/global-error-83397b69dd75fa7a.js"
+    },
+    {
+      "domain": "https://www.easysalesexport.com/",
+      "type": "request-failed",
+      "message": "GET https://easysalescooperative.com/"
+    },
+    {
+      "domain": "chrome-error://chromewebdata/",
+      "type": "request-failed",
+      "message": "GET https://easysalesacademy.com/"
+    },
+    {
+      "domain": "chrome-error://chromewebdata/",
+      "type": "request-failed",
+      "message": "GET https://waveprogramme.com/"
+    },
+    {
+      "domain": "chrome-error://chromewebdata/",
+      "type": "request-failed",
+      "message": "GET https://easysalesexportng.com/"
+    },
+    {
+      "domain": "chrome-error://chromewebdata/",
+      "type": "request-failed",
+      "message": "GET https://farmnation.ng/"
+    },
+    {
+      "domain": "chrome-error://chromewebdata/",
+      "type": "request-failed",
+      "message": "GET https://marketplace.easysalesexport.com/"
+    }
+  ],
+  "timestamp": "2026-07-20T12:28:26.564Z"
+}

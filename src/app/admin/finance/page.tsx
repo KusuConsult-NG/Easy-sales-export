@@ -310,13 +310,14 @@ export default function AdminFinancePage() {
                                 </button>
                             )}
                         </div>
-                        <button
+                        {/* Temporarily removed Export CSV button */}
+                        {/* <button
                             onClick={exportCsv}
                             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition"
                         >
                             <Download className="w-4 h-4" />
                             Export CSV
-                        </button>
+                        </button> */}
                         <div className="flex items-center gap-2">
                             {lastSynced && !isSyncing && (
                                 <span className="text-xs text-slate-400">Synced {lastSynced}</span>

@@ -204,14 +204,15 @@ export default function BriefingRegistrationsPage() {
                         </span>
                         <span className="text-xl font-black text-slate-900">{(meta as any)?.totalCount ?? registrations.length}</span>
                     </div>
-                    <button
+                    {/* Temporarily removed Export CSV button */}
+                    {/* <button
                         onClick={handleExportCSV}
                         disabled={isExporting || registrations.length === 0}
                         className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-semibold transition-all disabled:opacity-50 shadow-sm"
                     >
                         {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                         Export CSV
-                    </button>
+                    </button> */}
                 </div>
             </div>
 

@@ -365,13 +365,14 @@ export default function AdminLandVerificationPage() {
                             <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                             <span className="text-xs text-slate-500">Live</span>
                         </div>
-                        <button
+                        {/* Temporarily removed Export CSV button */}
+                        {/* <button
                             onClick={handleExportCSV}
                             disabled={verifications.length === 0}
                             className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-semibold text-sm transition-all disabled:opacity-50"
                         >
                             <Download className="w-4 h-4" /> Export CSV ({filteredVerifications.length})
-                        </button>
+                        </button> */}
                     </div>
                 </div>
 

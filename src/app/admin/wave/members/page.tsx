@@ -223,15 +223,15 @@ export default function AdminWaveMembersPage() {
                         <Users className="w-4 h-4" />
                         Legacy Member
                     </button>
-                    {/* CSV Export */}
-                    <button
+                    {/* Temporarily removed Export CSV button */}
+                    {/* <button
                         onClick={handleExportCSV}
                         disabled={isExporting || members.length === 0}
                         className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-semibold transition-all disabled:opacity-50 shadow-sm"
                     >
                         {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                         Export CSV
-                    </button>
+                    </button> */}
                 </div>
             </div>
 
