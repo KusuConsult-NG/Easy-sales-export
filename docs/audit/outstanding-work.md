@@ -114,6 +114,12 @@ writes a `processed_payments` row for every marketplace checkout, where checkout
 previously wrote none. Under the old trigger that would have caught more users
 once deployed, not fewer.
 
+**Verified on staging, 2026-08-07.** A user holding a marketplace payment but no
+cooperative contribution could be inserted at `pending` — which the old trigger
+refused — and a member with a real `contribution` on record still raised on an
+unexplained downgrade. Both halves confirmed: the false positive is gone and the
+protection is intact.
+
 ---
 
 ## 3. Ready to build — no input needed
