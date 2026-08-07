@@ -301,3 +301,150 @@ settings, since a mismatch fails every signed upload.
 The Jest suite could not be executed in the audit environment: the Next SWC
 native binding is unavailable there, so all 24 suites fail to load before any test
 runs. This is an environment limitation and says nothing about the suite itself.
+
+---
+
+# Round 2 — Application-wide sweep
+
+The first pass covered the data layer. This pass swept the whole codebase for
+the same *class* of defect: contracts that no type checker can see. Coverage is
+stated honestly at the end.
+
+## Fixed
+
+### 13. The notification bell crashed whenever a notification existed
+
+`NotificationCenter.tsx` reads notifications straight from Supabase, so
+`createdAt` is an ISO string — line 71 sorts it with `new Date(a.createdAt)`,
+treating it correctly as a string. Sixty lines later the render called
+`notification.createdAt.toDate()`, which does not exist on a string. The same
+component held both assumptions.
+
+The bell is in the global layout, so this threw on every page for any user with
+at least one notification. Now routed through `date-utils.toDate()`.
+
+Sweeping every other unguarded `.toDate()` call site found this was the only one
+reachable with a serialized value — the rest either run server-side (where
+`convertStringsToTimestamps` rehydrates real Timestamp instances) or already
+test `typeof x.toDate === 'function'` first.
+
+### 14. "Recent Orders" on the seller dashboard was ordered arbitrarily
+
+`marketplace/seller/dashboard` sorted with
+`new Date(a.createdAt.seconds * 1000)`. Orders arrive from a server action, so
+`createdAt` is an ISO string, `.seconds` is `undefined`, and the expression is
+`new Date(NaN)`. The comparator returned `NaN` for every pair, leaving the order
+unspecified — then `.slice(0, 5)` picked an arbitrary five.
+
+### 15. `date-utils.toDate()` did not understand admin-style Timestamps
+
+The shared helper handled `toDate()` methods and `.seconds`, but not
+`._seconds` — the shape `firestore-compat.Timestamp` produces, and the only one
+that survives serialization to a client component. Added.
+
+## Confirmed broken — not fixed here
+
+### L. Every push notification silently no-ops
+
+`src/lib/fcm.ts` calls `getMessaging()` from `firebase-admin/messaging`, which
+resolves to the shim: `send: async () => "mock-message-id"`. Every push returns
+success with that fake id, and `fcm.ts` logs `[fcm] Push sent to uid=...`.
+
+Nothing has ever been delivered for: order placed, escrow released, withdrawal
+approved/declined, dispute resolved, and all admin broadcast fan-out
+(`sendPushToMany`). The logs actively assert the opposite, which is why this
+would never surface from monitoring.
+
+Not fixed because there is no push provider configured to switch to — that is a
+product decision (FCM via a real service account, or a web-push provider).
+
+### M. GDPR purge never deletes authentication identities
+
+`src/app/api/cron/gdpr-purge/route.ts` imports `auth` from `firebase-admin`,
+whose shim index exports `auth: () => ({})`. `authService.deleteUser(uid)` is
+therefore `undefined`, throwing `TypeError` per user inside
+`Promise.allSettled`. The catch inspects `e.code !== "auth/user-not-found"`; a
+TypeError has no `code`, so every deletion is counted as an auth failure.
+
+The user's PII rows are deleted while the Supabase Auth identity — holding their
+email — survives indefinitely. The route returns HTTP 200 with a non-zero
+`authFailures` count. This is a compliance gap, not just a bug. The fix is to
+call `supabaseAdmin.auth.admin.deleteUser`, as the auth shim already does
+elsewhere.
+
+### N. Wallet funding can double-credit, and never checks the amount paid
+
+`_confirmWalletFundingAction` (`src/app/actions/wallet.ts`) is reachable through
+`GET /api/wallet/verify?ref=...`, which takes no session — it is the Paystack
+redirect callback, so the reference travels in the URL.
+
+Two problems:
+
+1. **No amount cross-check.** The wallet is credited `metadata.amountNGN` and
+   the actually-paid `paystackData.data.amount` is never compared against it.
+   The metadata is written server-side at initialization, so this is not
+   directly exploitable — but the cooperative path *does* perform exactly this
+   check (`Math.abs(amountInNaira - expectedAmount) > 1`). One money path
+   validates and the other does not.
+
+2. **The idempotency guard is a race.** It reads `status == "pending"`, then
+   writes `status = "completed"` inside `db.runTransaction`, which is not atomic
+   (see risk B): reads execute immediately, writes are replayed sequentially
+   afterwards, with no locking and no rollback. Two concurrent requests for the
+   same reference both observe `pending` and both credit the wallet. Reloading
+   the callback URL twice is enough to attempt it.
+
+   The deferred writes also apply wallet-credit *before* the status flip, so a
+   crash between them leaves the wallet credited and the transaction still
+   `pending` — replayable.
+
+Fixing this properly means a Postgres function that claims the reference and
+credits the balance in one statement. That is the same work item as risk B and
+should be done once, for all money paths.
+
+### O. `runTransaction` is used on roughly 30 money-handling call sites
+
+`infrastructure/payments/service.ts` alone has eight, plus escrow, export
+payments, cooperative loans, marketplace orders and admin adjustments. Every one
+inherits the non-atomic semantics in risk B. Item N is simply the most exposed
+instance because its entry point is unauthenticated.
+
+## What this pass covered
+
+Swept across the entire repository (`src/` and `packages/`, 836 TypeScript
+files):
+
+- adapter contract misuse — `exists`, `doc()`, query operators
+- every `firebase` / `firebase-admin` import, checked against what the shim
+  actually implements
+- authentication and authorization on all 118 API routes
+- `CRON_SECRET` on all 4 cron routes, admin checks on all admin routes
+- every `.seconds` / `._seconds` / `.toDate()` site
+- unawaited database writes and floating promises
+- empty and swallowing catch blocks
+
+Read in full: the data layer, storage, auth bootstrap, the Paystack webhook, the
+wallet and cooperative money paths, the GDPR purge and FCM.
+
+## What this pass did NOT cover
+
+Stating this plainly, because "audit every line" is not what happened and the
+difference matters:
+
+- **Business-rule correctness** inside the ~200 server actions — whether the
+  loan interest schedule, tier thresholds, escrow release windows or commission
+  splits compute the intended numbers. Verifying these needs the product rules,
+  not the code.
+- **React hook correctness** across ~400 components — dependency arrays, effect
+  cleanup, stale closures. Only the timestamp-handling paths were examined.
+- **`packages/*` internals** beyond their type imports.
+- **Runtime behaviour.** Nothing here was executed against a real Supabase or
+  Paystack environment; every finding is from static tracing plus a clean
+  `tsc` / `eslint` / `next build`. The Jest suite could not run in the audit
+  environment (missing SWC native binding).
+- **RLS policy design** — risk A identifies that none exist; writing them is a
+  separate, staged piece of work.
+
+The highest-value next step is not more reading. It is closing risk A (RLS) and
+risk B (atomic money operations), then typing the adapter surfaces so this class
+of defect becomes visible to `tsc` instead of to users.

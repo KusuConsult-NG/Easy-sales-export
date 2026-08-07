@@ -15,6 +15,11 @@ export function toDate(date: any): Date {
         if (typeof date.seconds === 'number') {
             return new Date(date.seconds * 1000);
         }
+        // Admin-style Timestamps (firestore-compat) expose _seconds, and lose
+        // their methods once serialized across the server/client boundary.
+        if (typeof date._seconds === 'number') {
+            return new Date(date._seconds * 1000);
+        }
     }
     
     // Handle numeric timestamp or ISO string

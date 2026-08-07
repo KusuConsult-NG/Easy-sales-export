@@ -9,6 +9,7 @@ import { useSession } from "next-auth/react";
 import { supabase } from "@/lib/supabase";
 import { markNotificationAsReadAction, markAllAsReadAction } from "@/app/actions/notifications";
 import { isNotificationVisible } from "@/lib/notification-filter";
+import { toDate } from "@/lib/date-utils";
 
 import type { Notification as FirestoreNotification } from "@/lib/types/firestore";
 
@@ -318,7 +319,7 @@ export default function NotificationCenter() {
                                                             </p>
                                                             <p className="text-xs text-slate-500">
                                                                 {formatDistanceToNow(
-                                                                    notification.createdAt.toDate(),
+                                                                    toDate(notification.createdAt),
                                                                     { addSuffix: true }
                                                                 )}
                                                             </p>
