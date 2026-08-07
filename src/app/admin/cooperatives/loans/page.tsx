@@ -360,7 +360,7 @@ export default function AdminLoansPage() {
                                         </td>
                                         <td className="px-6 py-4">
                                             <p className="font-medium text-slate-900">{app.productName}</p>
-                                            <p className="text-sm text-slate-500">{app.interestRate}% APR</p>
+                                            <p className="text-sm text-slate-500">{app.interestRate}% per month</p>
                                         </td>
                                         <td className="px-6 py-4">
                                             <p className="font-bold text-slate-900">{formatCurrency(app.amount)}</p>
@@ -455,7 +455,7 @@ export default function AdminLoansPage() {
                                 <div><p className="text-sm text-slate-600">Email</p><p className="font-semibold">{selectedApplication.userEmail}</p></div>
                                 <div><p className="text-sm text-slate-600">Product</p><p className="font-semibold">{selectedApplication.productName}</p></div>
                                 <div><p className="text-sm text-slate-600">Amount</p><p className="font-semibold">{formatCurrency(selectedApplication.amount)}</p></div>
-                                <div><p className="text-sm text-slate-600">Interest Rate</p><p className="font-semibold">{selectedApplication.interestRate}% APR</p></div>
+                                <div><p className="text-sm text-slate-600">Interest Rate</p><p className="font-semibold">{selectedApplication.interestRate}% per month</p></div>
                                 <div><p className="text-sm text-slate-600">Duration</p><p className="font-semibold">{selectedApplication.durationMonths} months</p></div>
                                 <div><p className="text-sm text-slate-600">Monthly Payment</p><p className="font-semibold text-green-600">{formatCurrency(selectedApplication.monthlyPayment)}</p></div>
                                 <div><p className="text-sm text-slate-600">Applied</p><p className="font-semibold">{formatLocalDate(selectedApplication.appliedAt)}</p></div>
