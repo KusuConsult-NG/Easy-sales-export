@@ -1,7 +1,7 @@
 -- Migration: 004_enable_row_level_security.sql
 --
--- ⚠️  DO NOT APPLY THIS TO PRODUCTION WITHOUT READING THE NOTES BELOW.
---     It is written for review and for testing on a staging copy first.
+-- ⚠️  READ THE NOTES BELOW BEFORE APPLYING. Apply STEP 1 only.
+--     The code side is ready; the rollout is not tested anywhere yet.
 --
 -- WHY THIS EXISTS
 -- ---------------
@@ -31,33 +31,39 @@
 --    Everything else the browser touches should move to a Server Action.
 --
 -- 3. The application authenticates users with NextAuth, NOT Supabase Auth
---    sessions. auth.uid() is therefore NULL for browser requests, and the
---    policies below would deny everything.
+--    sessions. auth.uid() is therefore NULL for browser requests, so the
+--    per-user policies in STEP 2 would deny everything and must stay
+--    commented out. That is fine — see below.
 --
---    *** THIS IS THE CRITICAL DECISION POINT. ***
+-- WHICH OPTION THIS FILE IS NOW SET UP FOR
+-- ----------------------------------------
+-- OPTION A, and the code side of it is COMPLETE. Nothing in the browser
+-- queries the database any more: the client components moved to Server
+-- Actions first, and the three polling hooks that were missed in that pass
+-- (useMembershipStatus, usePendingApplicationStatus, useUnreadNotifications)
+-- followed. src/app/actions/my-data.ts holds the replacements.
 --
---    Read "BEFORE YOU APPLY" below. Applying this file as-is will break the
---    dashboard, sidebar and notification panel.
+-- So STEP 1 alone is what you apply. RLS on, no policies, anon key locked out
+-- entirely. STEP 2 stays commented out unless someone later chooses Option B
+-- (issue a Supabase session alongside the NextAuth one, and accept two session
+-- lifetimes to keep in sync).
 --
--- BEFORE YOU APPLY
--- ----------------
--- Pick one of these, then adjust this migration to match:
+-- Confirm the precondition still holds before applying — this comment ages,
+-- the grep does not:
 --
---   OPTION A (recommended, smallest blast radius)
---     Stop querying Supabase from the browser. Move the seven client
---     components that use supabase-client-db onto Server Actions, then apply
---     the "deny all" section below and skip the per-user policies entirely.
---     The anon key ends up with no access at all, which is the safest outcome.
---     Cost: rewrite ~7 components. No auth changes.
+--   grep -rn "from ['\"]@/lib/supabase['\"]" src/
 --
---   OPTION B
---     Issue a Supabase session alongside the NextAuth session so auth.uid()
---     is populated in the browser, then apply the per-user policies below
---     as written. Cost: real auth work, and two session lifetimes to keep in
---     sync. More moving parts, more ways to break.
+-- Expect only supabaseAdmin (the service role, server-side). Any hit importing
+-- the plain `supabase` client from a component or hook is a browser reader,
+-- and applying this migration will silently break it.
 --
--- HOW TO TEST (either option)
+-- HOW TO TEST
 --   1. Restore a production backup into a staging Supabase project.
+--
+--      NOTE: no staging project exists today. .env.staging defines no Supabase
+--      variables, and .env.local and .env.production.local point at the SAME
+--      project. Until that changes, production is the first place this runs.
+--
 --   2. Apply this migration there.
 --   3. Exercise: sign in, dashboard, notification bell, unread message badge,
 --      wallet balance, cooperative pages, admin portal.
@@ -65,6 +71,13 @@
 --        curl "$SUPABASE_URL/rest/v1/users?select=*" -H "apikey: $ANON_KEY"
 --      Expect an empty array, not rows.
 --   5. Only then schedule production, during a low-traffic window.
+--
+-- WHAT FAILURE LOOKS LIKE
+--   Not an error. With RLS on and no policy, Postgres returns ZERO ROWS to the
+--   anon key rather than raising. If a browser reader was missed, it shows up
+--   as members reported as non-members, empty dashboards and notification
+--   counts stuck at zero — with nothing in the logs. Watch the app directly
+--   after applying, and keep the rollback at the bottom of this file to hand.
 --
 -- ROLLBACK
 --   Each ENABLE has a matching DISABLE at the bottom of this file, commented
