@@ -22,13 +22,41 @@ production build succeeding.
 
 ## 2. Blocked on a decision only you can make
 
-### Business loan at `/loans/apply`
-Confirmed as a real product, but no interest rate, term or eligibility rule
-exists anywhere in the code. Applications currently fail with a clear message
-rather than silently creating a loan with no repayment schedule.
+### Business loan at `/loans/apply` — RESOLVED 2026-08-07
 
-**Needed:** the rate (and whether monthly or annual), the maximum term, and what
-qualifies someone.
+Rate confirmed by the business owner: **10% per month**. Implemented in
+`src/lib/loan-terms.ts`; applications now store `interestRate`,
+`monthlyPayment`, `totalRepayment` and `totalInterest` at submission time.
+
+Two corrections to what this file previously said:
+
+- **Term and amount bounds already existed** in `loanApplicationSchema` —
+  3–24 months, ₦1,000–₦5,000,000, with collateral, business details and
+  documents required. Only the rate was missing.
+- **Applications did not fail.** They were saved silently with no rate and no
+  schedule. Any application submitted before this change has no repayment terms
+  recorded — see below.
+
+**Term capped at 12 months**, decided 2026-08-07 once the rate and the term were
+considered together. The schema previously allowed 24, which had been set before
+any rate existed; at 10% per month that would have repaid 2.67× principal.
+
+| Term | Monthly on ₦1m | Total repaid | × principal |
+|---|---|---|---|
+| 3 months | ₦402,115 | ₦1,206,344 | 1.21× |
+| 6 months | ₦229,607 | ₦1,377,644 | 1.38× |
+| 9 months | ₦173,641 | ₦1,562,765 | 1.56× |
+| 12 months (max) | ₦146,763 | ₦1,761,160 | 1.76× |
+
+At the ₦5,000,000 ceiling over 12 months: ₦8,805,799 repaid.
+
+**One thing still needs a decision:**
+
+- **Existing applications have no terms.** Records created before this change
+  carry an amount and a term but no rate. Decide whether to backfill them at
+  10%/month or leave them for manual handling; do not assume the borrower was
+  told a number that was never stored. Any with a term above 12 months predates
+  the cap and needs handling either way.
 
 ### Savings interest labelling
 `cooperatives/(member)/my-savings` displays `{rate}% APR` for fixed savings

@@ -10,6 +10,7 @@ import { loanApplicationSchema,
     type LoanApplicationData,
     type LoanApprovalData } from "@/lib/validations/loan";
 import { AuditActionType, LoanStatus, type LoanApplication } from "@/types/strict";
+import { calculateRepaymentTerms } from "@/lib/loan-terms";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
@@ -43,12 +44,27 @@ export async function submitLoanApplication(
                 throw new Error("Active or pending loan application already exists platform-wide.");
             }
 
+            // Repayment terms are computed and stored at application time.
+            //
+            // Applications were previously saved with an amount and a term but
+            // no rate and no schedule, so nothing recorded what the borrower
+            // would actually owe. The rate is stored on the record rather than
+            // read from config at display time, so a later rate change does not
+            // silently rewrite the terms of loans already applied for.
+            const terms = calculateRepaymentTerms(validated.amount, validated.repaymentPeriod);
+
             const loanRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc();
             transaction.set(loanRef, {
                 ...validated,
                 userId: session.user.id,
                 status: LoanStatus.PENDING,
                 guarantorVerified: true, // General loans have no guarantor and are pre-verified
+                // interestRate is a MONTHLY percentage. See src/lib/loan-terms.ts —
+                // treating it as annual is a defect this codebase has already had.
+                interestRate: terms.interestRate,
+                monthlyPayment: terms.monthlyPayment,
+                totalRepayment: terms.totalRepayment,
+                totalInterest: terms.totalInterest,
                 appliedAt: FieldValue.serverTimestamp(),
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
