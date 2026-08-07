@@ -9,12 +9,15 @@ interface EnvValidationResult {
     warnings: string[];
 }
 
+// NOTE: the six FIREBASE_* / NEXT_PUBLIC_FIREBASE_* variables that used to be
+// listed here have been removed. Firebase is shimmed to Supabase (see
+// src/lib/shims), so those variables are read by nothing. Requiring them made
+// startup print "❌ Environment validation failed!" on every correctly
+// configured deploy, which buried the entries that genuinely matter — most
+// importantly SUPABASE_SERVICE_ROLE_KEY.
 const REQUIRED_ENV_VARS = [
     'NEXTAUTH_URL',
     'NEXTAUTH_SECRET',
-    'NEXT_PUBLIC_FIREBASE_API_KEY',
-    'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',
-    'NEXT_PUBLIC_FIREBASE_PROJECT_ID',
     'NEXT_PUBLIC_SUPABASE_URL',
     'NEXT_PUBLIC_SUPABASE_ANON_KEY',
     'QOREID_CLIENT_ID',
@@ -27,10 +30,12 @@ const PRODUCTION_REQUIRED_ENV_VARS = [
     'PAYSTACK_SECRET_KEY',
     'MFA_SECRET_KEY',
     'QR_ENCRYPTION_KEY',
-    'FIREBASE_PRIVATE_KEY',
-    'FIREBASE_CLIENT_EMAIL',
-    'FIREBASE_PROJECT_ID',
     'SUPABASE_SERVICE_ROLE_KEY',
+    // Server-side uploads (marketplace media, certificates, export documents)
+    // go to Cloudinary — without these every upload fails at request time.
+    'NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME',
+    'CLOUDINARY_API_KEY',
+    'CLOUDINARY_API_SECRET',
 ] as const;
 
 const RECOMMENDED_ENV_VARS = [
