@@ -15,6 +15,7 @@ import {
     CheckCircle
 } from "lucide-react";
 import { loanApplicationSchema, type LoanApplicationData } from "@/lib/validations/loan";
+import { BUSINESS_LOAN_MONTHLY_RATE, MIN_TERM_MONTHS, MAX_TERM_MONTHS } from "@/lib/loan-terms";
 import { LoanPurpose } from "@/types/strict";
 
 const STEPS = [
@@ -227,10 +228,17 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                                         </label>
                                         <input
                                             type="number"
+                                            min={MIN_TERM_MONTHS}
+                                            max={MAX_TERM_MONTHS}
+                                            step={1}
                                             {...register("repaymentPeriod", { valueAsNumber: true })}
                                             className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-[#1358ec]"
                                             placeholder="12"
                                         />
+                                        <p className="mt-1 text-xs text-slate-500">
+                                            {MIN_TERM_MONTHS}–{MAX_TERM_MONTHS} months, at{" "}
+                                            {BUSINESS_LOAN_MONTHLY_RATE}% interest per month.
+                                        </p>
                                         {errors.repaymentPeriod && (
                                             <p className="mt-1 text-sm text-red-600">{errors.repaymentPeriod.message}</p>
                                         )}

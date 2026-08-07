@@ -9,9 +9,13 @@ export const loanApplicationSchema = z.object({
 
     purpose: z.nativeEnum(LoanPurpose),
 
+    // 12 months is the ceiling, set deliberately: at 10% per month (see
+    // src/lib/loan-terms.ts) a longer term compounds to a repayment multiple
+    // that is not a product anyone intended to sell.
     repaymentPeriod: z.number()
+        .int('Repayment period must be a whole number of months')
         .min(3, 'Minimum repayment period is 3 months')
-        .max(24, 'Maximum repayment period is 24 months'),
+        .max(12, 'Maximum repayment period is 12 months'),
 
     collateral: z.object({
         type: z.string().min(2, 'Collateral type is required'),

@@ -21,7 +21,7 @@
  * ---------------
  * All arithmetic runs in kobo (integer) and converts back at the end, matching
  * src/app/actions/cooperative/_loans.ts. Repeated floating-point addition over
- * a 24-month schedule drifts, and drift in money is not acceptable.
+ * a full schedule drifts, and drift in money is not acceptable.
  *
  * NOTE: cooperative/_loans.ts carries an equivalent calculation inline, driven
  * by tier rates rather than one flat rate. The two should converge on this
@@ -32,9 +32,16 @@
 /** Monthly interest rate for business loans, as a percentage. */
 export const BUSINESS_LOAN_MONTHLY_RATE = 10;
 
-/** Term bounds, matching loanApplicationSchema. */
+/**
+ * Term bounds, matching loanApplicationSchema.
+ *
+ * The 12-month ceiling is deliberate. At 10% per month, a ₦1,000,000 loan
+ * repays ₦1,761,160 over 12 months (1.76× principal) and ₦2,671,194 over 24
+ * (2.67×). The longer term was allowed by the schema before anyone had chosen
+ * a rate; capped at 12 once the two were considered together.
+ */
 export const MIN_TERM_MONTHS = 3;
-export const MAX_TERM_MONTHS = 24;
+export const MAX_TERM_MONTHS = 12;
 
 /** Amount bounds in naira, matching loanApplicationSchema. */
 export const MIN_LOAN_AMOUNT = 1_000;

@@ -37,25 +37,26 @@ Two corrections to what this file previously said:
   schedule. Any application submitted before this change has no repayment terms
   recorded — see below.
 
-**Two things still need a decision:**
-
-- **Existing applications have no terms.** Records created before this change
-  carry an amount and a term but no rate. Decide whether to backfill them at
-  10%/month or leave them for manual handling; do not assume the borrower was
-  told a number that was never stored.
-- **The 24-month term at 10% monthly is severe.** On ₦1,000,000 the borrower
-  repays ₦2,671,194 — 2.67× the principal. At the ₦5,000,000 ceiling that is
-  ₦13,355,973 repaid. The rate is a business decision and is implemented as
-  given; whether the term should be capped shorter than 24 months for this
-  product is a separate one worth taking deliberately.
+**Term capped at 12 months**, decided 2026-08-07 once the rate and the term were
+considered together. The schema previously allowed 24, which had been set before
+any rate existed; at 10% per month that would have repaid 2.67× principal.
 
 | Term | Monthly on ₦1m | Total repaid | × principal |
 |---|---|---|---|
 | 3 months | ₦402,115 | ₦1,206,344 | 1.21× |
 | 6 months | ₦229,607 | ₦1,377,644 | 1.38× |
-| 12 months | ₦146,763 | ₦1,761,160 | 1.76× |
-| 18 months | ₦121,930 | ₦2,194,744 | 2.19× |
-| 24 months | ₦111,300 | ₦2,671,194 | 2.67× |
+| 9 months | ₦173,641 | ₦1,562,765 | 1.56× |
+| 12 months (max) | ₦146,763 | ₦1,761,160 | 1.76× |
+
+At the ₦5,000,000 ceiling over 12 months: ₦8,805,799 repaid.
+
+**One thing still needs a decision:**
+
+- **Existing applications have no terms.** Records created before this change
+  carry an amount and a term but no rate. Decide whether to backfill them at
+  10%/month or leave them for manual handling; do not assume the borrower was
+  told a number that was never stored. Any with a term above 12 months predates
+  the cap and needs handling either way.
 
 ### Savings interest labelling
 `cooperatives/(member)/my-savings` displays `{rate}% APR` for fixed savings

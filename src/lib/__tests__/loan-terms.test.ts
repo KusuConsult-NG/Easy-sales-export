@@ -12,10 +12,34 @@ import {
     MIN_TERM_MONTHS,
     MAX_TERM_MONTHS,
 } from "@/lib/loan-terms";
+import { loanApplicationSchema } from "@/lib/validations/loan";
 
-describe("BUSINESS_LOAN_MONTHLY_RATE", () => {
+describe("configured terms", () => {
     it("is 10 percent per month", () => {
         expect(BUSINESS_LOAN_MONTHLY_RATE).toBe(10);
+    });
+
+    it("caps the term at 12 months", () => {
+        // Deliberate: at 10%/month a 24-month term repays 2.67x principal.
+        // The schema allowed 24 before a rate had been chosen.
+        expect(MAX_TERM_MONTHS).toBe(12);
+        expect(MIN_TERM_MONTHS).toBe(3);
+    });
+
+    it("agrees with the validation schema", () => {
+        // The two must not drift: the schema is what rejects an application,
+        // the constants are what the UI and the maths use.
+        const tooLong = loanApplicationSchema.shape.repaymentPeriod.safeParse(
+            MAX_TERM_MONTHS + 1
+        );
+        const tooShort = loanApplicationSchema.shape.repaymentPeriod.safeParse(
+            MIN_TERM_MONTHS - 1
+        );
+        const ok = loanApplicationSchema.shape.repaymentPeriod.safeParse(MAX_TERM_MONTHS);
+
+        expect(tooLong.success).toBe(false);
+        expect(tooShort.success).toBe(false);
+        expect(ok.success).toBe(true);
     });
 });
 
@@ -42,8 +66,8 @@ describe("calculateRepaymentTerms", () => {
     });
 
     it("charges more interest over a longer term", () => {
-        const short = calculateRepaymentTerms(1_000_000, 3);
-        const long = calculateRepaymentTerms(1_000_000, 24);
+        const short = calculateRepaymentTerms(1_000_000, MIN_TERM_MONTHS);
+        const long = calculateRepaymentTerms(1_000_000, MAX_TERM_MONTHS);
 
         expect(long.totalInterest).toBeGreaterThan(short.totalInterest);
         // Monthly instalment falls as the term lengthens, even though the
@@ -51,8 +75,8 @@ describe("calculateRepaymentTerms", () => {
         expect(long.monthlyPayment).toBeLessThan(short.monthlyPayment);
     });
 
-    it("leaves no balance behind at either bound of the allowed term", () => {
-        for (const term of [MIN_TERM_MONTHS, 6, 12, 18, MAX_TERM_MONTHS]) {
+    it("leaves no balance behind at any point in the allowed range", () => {
+        for (const term of [MIN_TERM_MONTHS, 6, 9, MAX_TERM_MONTHS]) {
             const t = calculateRepaymentTerms(1_000_000, term);
             // Principal plus interest must equal the total exactly; the final
             // instalment absorbs rounding rather than leaving a stray kobo.
@@ -60,11 +84,17 @@ describe("calculateRepaymentTerms", () => {
         }
     });
 
-    it("handles the maximum permitted loan", () => {
-        const terms = calculateRepaymentTerms(5_000_000, 24);
+    it("handles the maximum permitted loan over the maximum term", () => {
+        const terms = calculateRepaymentTerms(5_000_000, MAX_TERM_MONTHS);
 
-        expect(terms.totalRepayment).toBeGreaterThan(13_000_000);
-        expect(terms.totalRepayment).toBeLessThan(13_500_000);
+        // ₦5,000,000 over 12 months at 10%/month → ₦8,805,798.88.
+        //
+        // Note this is NOT exactly five times the ₦1,000,000 case
+        // (₦8,805,798.70). Interest is rounded per instalment against a
+        // declining balance, so totals do not scale linearly with principal.
+        // Anyone "correcting" this to a round multiple would be introducing
+        // an error, not removing one.
+        expect(terms.totalRepayment).toBeCloseTo(8_805_798.88, 2);
     });
 
     it("supports an interest-free loan without dividing by zero", () => {
