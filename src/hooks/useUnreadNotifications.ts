@@ -1,6 +1,14 @@
-import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
+"use client";
 
+import { useState, useEffect } from "react";
+import { getMyUnreadNotificationCount } from "@/app/actions/my-data";
+
+/**
+ * Unread notification count for the signed-in user.
+ *
+ * `userId` only gates whether to poll — the count is always resolved from the
+ * session on the server, so a browser-supplied id cannot widen what is read.
+ */
 export function useUnreadNotifications(userId: string | undefined) {
     const [unreadCount, setUnreadCount] = useState<number>(0);
     const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -12,21 +20,16 @@ export function useUnreadNotifications(userId: string | undefined) {
             return;
         }
 
+        let cancelled = false;
+
         async function fetchCount() {
             try {
-                const { count, error } = await supabase
-                    .from('document_collections')
-                    .select('*', { count: 'exact', head: true })
-                    .eq('collection_name', 'notifications')
-                    .eq('raw_data->>userId', userId)
-                    .eq('raw_data->>read', 'false');
-
-                if (error) throw error;
-                setUnreadCount(count ?? 0);
+                const count = await getMyUnreadNotificationCount();
+                if (!cancelled) setUnreadCount(count);
             } catch (err) {
-                console.error("Error fetching unread notifications count from Supabase:", err);
+                console.error("Error fetching unread notification count:", err);
             } finally {
-                setIsLoading(false);
+                if (!cancelled) setIsLoading(false);
             }
         }
 
@@ -35,7 +38,10 @@ export function useUnreadNotifications(userId: string | undefined) {
         // Poll every 10 seconds
         const interval = setInterval(fetchCount, 10000);
 
-        return () => clearInterval(interval);
+        return () => {
+            cancelled = true;
+            clearInterval(interval);
+        };
     }, [userId]);
 
     return { unreadCount, isLoading };

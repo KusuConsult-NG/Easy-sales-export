@@ -333,3 +333,211 @@ export async function getMyWithdrawals(): Promise<any[]> {
         return [];
     }
 }
+
+/* ==========================================================================
+ * Application and membership status
+ *
+ * These back the three polling hooks that were still reading Supabase from the
+ * browser after the first pass of this refactor (useMembershipStatus,
+ * usePendingApplicationStatus, useUnreadNotifications). They are the last
+ * anon-key readers, and RLS cannot be enabled until they are gone.
+ *
+ * Both actions take a *kind*, never a query. The browser picks from a fixed
+ * allowlist below and the collection, the status field and the ownership
+ * filter are all decided here — see rule 2 at the top of this file.
+ * ========================================================================== */
+
+/**
+ * Application lookups a pending page is allowed to poll, keyed
+ * `collection:statusField` to match what the calling hook already passes.
+ *
+ * `fromServiceRegistrations` reads users.serviceRegistrations[key].status
+ * instead of a document in its own collection — farm-nation records
+ * onboarding state on the user record rather than in an applications table.
+ */
+const APPLICATION_QUERIES: Record<
+    string,
+    { collection: string; statusField: string; fromServiceRegistrations?: string }
+> = {
+    [`${COLLECTIONS.SELLER_VERIFICATIONS}:status`]: {
+        collection: COLLECTIONS.SELLER_VERIFICATIONS,
+        statusField: "status",
+    },
+    [`${COLLECTIONS.ACADEMY_APPLICATIONS}:status`]: {
+        collection: COLLECTIONS.ACADEMY_APPLICATIONS,
+        statusField: "status",
+    },
+    [`${COLLECTIONS.WAVE_APPLICATIONS}:status`]: {
+        collection: COLLECTIONS.WAVE_APPLICATIONS,
+        statusField: "status",
+    },
+    [`${COLLECTIONS.USERS}:farmNation`]: {
+        collection: COLLECTIONS.USERS,
+        statusField: "status",
+        fromServiceRegistrations: "farmNation",
+    },
+};
+
+export interface MyApplicationStatus {
+    status: string;
+    createdAt: string | null;
+    rejectionReason: string | null;
+}
+
+const PENDING: MyApplicationStatus = { status: "pending", createdAt: null, rejectionReason: null };
+
+/**
+ * Status of the caller's most recent application of one kind.
+ *
+ * The browser version selected the newest record by sorting in JavaScript
+ * after fetching every matching row; the ordering is done in the query here.
+ */
+export async function getMyApplicationStatus(
+    collectionName: string,
+    statusField: string
+): Promise<MyApplicationStatus> {
+    const userId = await currentUserId();
+    if (!userId) return PENDING;
+
+    const spec = APPLICATION_QUERIES[`${collectionName}:${statusField}`];
+    if (!spec) {
+        logger.warn("[my-data] getMyApplicationStatus called with an unlisted lookup", {
+            collectionName,
+            statusField,
+        });
+        return PENDING;
+    }
+
+    try {
+        if (spec.fromServiceRegistrations) {
+            const snap = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+            if (!snap.exists) return PENDING;
+
+            const registration =
+                serializeDoc<any>(userId, snap.data()).serviceRegistrations?.[
+                    spec.fromServiceRegistrations
+                ];
+            return {
+                status: registration?.status ?? "pending",
+                createdAt: registration?.createdAt ?? null,
+                rejectionReason: registration?.rejectionReason ?? null,
+            };
+        }
+
+        const snap = await db
+            .collection(spec.collection)
+            .where("userId", "==", userId)
+            .orderBy("createdAt", "desc")
+            .limit(1)
+            .get();
+
+        if (snap.empty) return PENDING;
+
+        const latest = serializeDocs<any>(snap.docs)[0] ?? {};
+        return {
+            status: latest[spec.statusField] ?? "pending",
+            createdAt: latest.createdAt ?? null,
+            rejectionReason: latest.rejectionReason ?? null,
+        };
+    } catch (error) {
+        logger.error("[my-data] getMyApplicationStatus failed", { userId, collectionName, error });
+        return PENDING;
+    }
+}
+
+/**
+ * Modules whose membership the caller may check, mapped to the registration
+ * key on the user record and the collection to fall back to.
+ *
+ * Two of these fallbacks name a different collection than the browser version
+ * did. It looked for `farmnation_applications` and `export_applications`,
+ * neither of which is written anywhere in the codebase — the writers use
+ * COLLECTIONS.FARM_NATION_APPLICATIONS (`farm_nation_applications`) and
+ * COLLECTIONS.EXPORT_APPLICATIONS (`export_onboarding_applications`). Those
+ * two fallbacks therefore never matched a row and always fell through to the
+ * session value. They query the real collections here.
+ *
+ * `fallback: null` preserves the browser behaviour for marketplace, which
+ * named no fallback collection at all.
+ */
+const MEMBERSHIP_MODULES: Record<string, { regKeys: string[]; fallback: string | null }> = {
+    wave: { regKeys: ["wave"], fallback: COLLECTIONS.WAVE_APPLICATIONS },
+    academy: { regKeys: ["academy"], fallback: COLLECTIONS.ACADEMY_APPLICATIONS },
+    export: { regKeys: ["export"], fallback: COLLECTIONS.EXPORT_APPLICATIONS },
+    cooperative: {
+        regKeys: ["cooperatives", "cooperative"],
+        fallback: COLLECTIONS.COOPERATIVE_MEMBERS,
+    },
+    cooperatives: {
+        regKeys: ["cooperatives", "cooperative"],
+        fallback: COLLECTIONS.COOPERATIVE_MEMBERS,
+    },
+    "farm-nation": {
+        regKeys: ["farmNation", "farm_nation"],
+        fallback: COLLECTIONS.FARM_NATION_APPLICATIONS,
+    },
+    farmNation: {
+        regKeys: ["farmNation", "farm_nation"],
+        fallback: COLLECTIONS.FARM_NATION_APPLICATIONS,
+    },
+    marketplace: { regKeys: ["marketplace"], fallback: null },
+};
+
+/** Statuses that settle the question without consulting the fallback. */
+const SETTLED_STATUSES = new Set(["approved", "active", "verified", "paid"]);
+
+export interface MyMembershipStatus {
+    status: string;
+    data: any | null;
+}
+
+/**
+ * The caller's membership status for one module.
+ *
+ * Returns status "unknown" when nothing is found, leaving the hook to fall
+ * back to the value already in the NextAuth session.
+ */
+export async function getMyMembershipStatus(moduleType: string): Promise<MyMembershipStatus> {
+    const userId = await currentUserId();
+    if (!userId) return { status: "unauthenticated", data: null };
+
+    const spec = MEMBERSHIP_MODULES[moduleType];
+    if (!spec) {
+        logger.warn("[my-data] getMyMembershipStatus called for an unknown module", { moduleType });
+        return { status: "unknown", data: null };
+    }
+
+    try {
+        const snap = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        if (snap.exists) {
+            const registrations =
+                serializeDoc<any>(userId, snap.data()).serviceRegistrations ?? {};
+            const registration = spec.regKeys.map((k) => registrations[k]).find(Boolean);
+
+            if (registration?.status && SETTLED_STATUSES.has(registration.status)) {
+                return { status: registration.status, data: registration };
+            }
+        }
+
+        if (!spec.fallback) return { status: "unknown", data: null };
+
+        const fallbackSnap = await db
+            .collection(spec.fallback)
+            .where("userId", "==", userId)
+            .limit(1)
+            .get();
+
+        if (!fallbackSnap.empty) {
+            const doc = serializeDocs<any>(fallbackSnap.docs)[0] ?? {};
+            return {
+                status: doc.status ?? doc.membershipStatus ?? "pending",
+                data: doc,
+            };
+        }
+
+        return { status: "unknown", data: null };
+    } catch (error) {
+        logger.error("[my-data] getMyMembershipStatus failed", { userId, moduleType, error });
+        return { status: "error", data: null };
+    }
+}

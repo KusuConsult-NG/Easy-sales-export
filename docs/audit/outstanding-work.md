@@ -54,9 +54,36 @@ and surfaces as a server error. Confirm whether this is intended.
 No table has row-level security and the browser holds a publicly visible key, so
 that key can currently read and write every table without anyone signing in.
 
-The hard half is done: no browser code touches the database any more. What
-remains is applying `supabase/migrations/004_enable_row_level_security.sql` and
-verifying the anon key can no longer read anything.
+The code side is now done. An earlier revision of this file claimed it already
+was, which was wrong: three polling hooks — `useMembershipStatus`,
+`usePendingApplicationStatus` and `useUnreadNotifications` — were still reading
+Supabase with the anon key, on the academy and wave dashboards, four onboarding
+pending pages, and the notification badge on every dashboard. They now go
+through server actions. Verify before applying, rather than trusting this
+paragraph:
+
+```
+grep -rn "from ['\"]@/lib/supabase['\"]" src/     # expect only supabaseAdmin
+```
+
+What remains is applying `supabase/migrations/004_enable_row_level_security.sql`
+(Option A — step 1 only, policies left commented out) and confirming the anon
+key can no longer read anything.
+
+**Two things still block a safe rollout:**
+
+- **There is no staging environment.** `.env.staging` defines no Supabase
+  variables, and `.env.local` and `.env.production.local` point at the *same*
+  project. The migration's own test plan — restore a backup into staging,
+  exercise the app, then schedule production — has nowhere to run. Either
+  create a second project or accept that production is the first place this
+  is tried.
+- **Failures will be silent.** Under RLS with no policy, Postgres returns zero
+  rows rather than an error. If anything was missed, it surfaces as empty
+  dashboards and members locked out, not as errors in the log. Exercise sign-in,
+  both dashboards, the notification bell, the unread badge, wallet balance and
+  the admin portal immediately after applying, and keep the one-line rollback
+  at the bottom of the migration to hand.
 
 ### Atomic money operations
 `runTransaction` reads, then replays writes sequentially, with no locking and no
