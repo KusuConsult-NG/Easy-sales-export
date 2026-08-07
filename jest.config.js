@@ -11,6 +11,10 @@ const customJestConfig = {
     testEnvironment: 'jest-environment-jsdom',
     moduleNameMapper: {
         '^@/(.*)$': '<rootDir>/src/$1',
+        // uuid v14 ships ESM only, which Jest cannot parse. Without this, any
+        // suite importing supabase-db fails at import time — part of why the
+        // adapter was only ever exercised through a hand-written mock.
+        '^uuid$': '<rootDir>/src/lib/__mocks__/uuid.js',
     },
     collectCoverageFrom: [
         'src/app/actions/**/*.ts',

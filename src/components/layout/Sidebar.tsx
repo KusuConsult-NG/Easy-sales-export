@@ -24,7 +24,7 @@ import { hasAppAccess, type AppIdentifier } from "@/lib/role-app-mapping";
 import type { UserRole } from "@/lib/types/roles";
 import { GLOBAL_NAV_ITEMS, MODULE_NAVIGATION, type NavigationItem } from "@/lib/sidebar-config";
 import { useFeatureToggles } from "@/hooks/useFeatureToggle";
-import { db, doc, onSnapshot } from "@/lib/supabase-client-db";
+import { getMyServiceRegistrations } from "@/app/actions/my-data";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
 const ALL_SIDEBAR_TOGGLES = Array.from(new Set([
@@ -51,16 +51,27 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
     const [mounted, setMounted] = useState(false);
     const [serviceRegs, setServiceRegs] = useState<any>({});
 
+    // Polls a session-scoped server action rather than querying Supabase from
+    // the browser. Same 8s cadence as the listener it replaces.
     useEffect(() => {
         if (!userId) return;
-        const unsub = onSnapshot(doc(db, COLLECTIONS.USERS, userId), (docSnap) => {
-            if (docSnap.exists()) {
-                setServiceRegs(docSnap.data()?.serviceRegistrations || {});
+        let cancelled = false;
+
+        const load = async () => {
+            try {
+                const regs = await getMyServiceRegistrations();
+                if (!cancelled) setServiceRegs(regs);
+            } catch (error) {
+                console.error("Sidebar service registrations failed:", error);
             }
-        }, (error) => {
-            console.error("Sidebar user listener failed:", error);
-        });
-        return () => unsub();
+        };
+
+        load();
+        const interval = setInterval(load, 8000);
+        return () => {
+            cancelled = true;
+            clearInterval(interval);
+        };
     }, [userId]);
 
     useEffect(() => {

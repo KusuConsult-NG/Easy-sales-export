@@ -95,7 +95,7 @@ export async function submitLoanApplicationAction(formData: {
         if (formData.amount > maxLoanAmount) {
             return {
                 success: false as const,
-                error: `Loan amount exceeds ${actualTier} tier limit. Maximum: ₦${maxLoanAmount.toLocaleString()} (${tierInfo.maxLoanMultiplier}x your contribution)`};
+                error: `Loan amount exceeds your limit. You may borrow up to ₦${maxLoanAmount.toLocaleString()} — savings must be at least twice the loan amount.`};
         }
 
         // 4. Validate duration against tier limits
@@ -931,12 +931,37 @@ async function _getRepaymentScheduleAction(
             return { error: null, success: true as const, data: { schedule } };
         }
 
-        // Generate schedule in kobo to eliminate floating-point drift
+        // Generate schedule in kobo to eliminate floating-point drift.
+        //
+        // interestRate is a MONTHLY percentage (see cooperative-tiers.ts).
+        //
+        // Refuse to build a schedule from missing inputs. Loans created through
+        // /loans/apply record neither field, which made `n` undefined, so the
+        // loop condition `1 <= undefined` was false and the borrower received a
+        // schedule with no instalments at all — nothing to repay against, and no
+        // overdue payments could ever be detected. Failing loudly surfaces the
+        // loan as needing terms rather than silently producing an empty one.
+        const interestRate = Number(loanData.interestRate);
+        const n = Number(loanData.durationMonths ?? (loanData as any).repaymentPeriod);
+
+        if (!Number.isFinite(interestRate) || !Number.isFinite(n) || n < 1) {
+            logger.error("[getRepaymentSchedule] loan is missing repayment terms", {
+                loanId,
+                interestRate: loanData.interestRate,
+                durationMonths: loanData.durationMonths,
+            });
+            return {
+                success: false as const,
+                error: "This loan has no interest rate or repayment period recorded, so a schedule cannot be generated. Please contact support.",
+                data: null,
+            };
+        }
+
         const amountKobo = Math.round(loanData.amount * 100);
-        const interestRate = loanData.interestRate;
         const r = interestRate / 100;
-        const n = loanData.durationMonths;
-        const monthlyPaymentKobo = Math.round((amountKobo * (r * Math.pow(1 + r, n))) / (Math.pow(1 + r, n) - 1));
+        const monthlyPaymentKobo = r === 0
+            ? Math.round(amountKobo / n)
+            : Math.round((amountKobo * (r * Math.pow(1 + r, n))) / (Math.pow(1 + r, n) - 1));
 
         const startDate = (loanData.disbursedAt && 'toDate' in loanData.disbursedAt)
             ? loanData.disbursedAt.toDate()

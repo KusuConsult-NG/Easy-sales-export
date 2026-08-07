@@ -84,7 +84,7 @@ export async function verifyContributionPaymentAction(
         const existingPayment = await getDoc(processedRef);
 
         // ✅ FIX: If webhook already processed this payment, return success not an error.
-        if (existingPayment.exists()) {
+        if (existingPayment.exists) {
             logger.info(`[verifyContributionPaymentAction] Payment ${reference} already processed — returning success.`);
             return { error: null, success: true as const, message: 'Your contribution has been recorded.', data: undefined };
         }
@@ -157,8 +157,9 @@ export async function verifyContributionPaymentAction(
                 description: "Cooperative savings contribution"
             });
 
-            // Cooperative Ledger write
-            const coopTxRef = doc(db, COLLECTIONS.COOPERATIVE_TRANSACTIONS);
+            // Cooperative Ledger write — auto-generated id, so go through the
+            // collection reference. doc() needs an explicit document id.
+            const coopTxRef = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc();
             transaction.set(coopTxRef, { userId,
                 cooperativeId,
                 type: "contribution",

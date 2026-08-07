@@ -30,7 +30,7 @@ export async function getCooperativeBalance(): Promise<{
         const memberRef = doc(db, COLLECTIONS.COOPERATIVE_MEMBERS, session.user.id);
         const memberDoc = await getDoc(memberRef);
 
-        if (!memberDoc.exists()) {
+        if (!memberDoc.exists) {
             return { success: false, error: "Not a cooperative member" };
         }
 
@@ -63,7 +63,7 @@ export async function checkCooperativeCreditEligibility(amount: number): Promise
         const memberRef = doc(db, COLLECTIONS.COOPERATIVE_MEMBERS, session.user.id);
         const memberDoc = await getDoc(memberRef);
 
-        if (!memberDoc.exists()) {
+        if (!memberDoc.exists) {
             return {
                 success: true,
                 eligible: false,
@@ -107,7 +107,7 @@ export async function getCooperativeMembershipStatus(): Promise<{
         const memberRef = doc(db, COLLECTIONS.COOPERATIVE_MEMBERS, session.user.id);
         const memberDoc = await getDoc(memberRef);
 
-        if (!memberDoc.exists()) {
+        if (!memberDoc.exists) {
             return {
                 success: true,
                 isMember: false,
@@ -149,7 +149,7 @@ export async function getCooperativeQuickStats(): Promise<{
         const memberRef = doc(db, COLLECTIONS.COOPERATIVE_MEMBERS, session.user.id);
         const memberDoc = await getDoc(memberRef);
 
-        if (!memberDoc.exists()) {
+        if (!memberDoc.exists) {
             return { success: false, error: "Not a member" };
         }
 

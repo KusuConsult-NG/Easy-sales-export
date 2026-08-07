@@ -5,7 +5,7 @@ import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { getStorage } from "firebase-admin/storage";
+import { uploadFileToStorage } from "@/lib/storage-admin";
 import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { createAdminAuditLog } from "@/lib/audit-log";
@@ -85,19 +85,10 @@ export async function uploadResourceAction(formData: FormData): Promise<
         const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
         const storagePath = `wave_resources/${category}/${timestamp}_${sanitizedFileName}`;
 
-        // Upload to Firebase Storage using Admin SDK
-        const bucket = getStorage().bucket();
-        const fileRef = bucket.file(storagePath);
-        const arrayBuffer = await file.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-
-        await fileRef.save(buffer, { metadata: {
-                contentType: file.type } });
-
-        // Make file public or generate signed URL
-        // For simplicity, we'll make it public assuming resources are public
-        await fileRef.makePublic();
-        const fileUrl = `https://storage.googleapis.com/${bucket.name}/${storagePath}`;
+        // Upload via the shared server-side uploader (Cloudinary).
+        // This previously went through the firebase-admin/storage shim, whose
+        // bucket handle has no makePublic() — so every resource upload threw.
+        const fileUrl = await uploadFileToStorage(file, storagePath, true);
 
         // Create Firestore record
         const resourceData: Omit<WaveResource, "id"> = { title,

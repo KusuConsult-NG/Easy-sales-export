@@ -6,6 +6,7 @@ import {
     calculateUserTier,
     isEligibleForLoan,
     getTierInterestRate,
+    getMaxLoanAmount,
     getTierMaxDuration,
     calculateRepaymentSchedule,
     COOPERATIVE_TIERS,
@@ -21,9 +22,11 @@ describe('Cooperative Tier System', () => {
     });
 
     describe('getTierInterestRate', () => {
-        it('should return 10/12% monthly rate (10% APR) for Member tier', () => {
-            const rate = getTierInterestRate('Member');
-            expect(rate).toBeCloseTo(10 / 12, 5);
+        // Confirmed business rule: 10% PER MONTH, not per year. The value used
+        // to be 10/12 while every screen labelled it "APR", so members were
+        // shown an annual figure for a monthly rate.
+        it('should return 10% as a monthly rate for Member tier', () => {
+            expect(getTierInterestRate('Member')).toBe(10);
         });
     });
 
@@ -41,28 +44,32 @@ describe('Cooperative Tier System', () => {
             expect(result.reason).toContain('Minimum');
         });
 
-        it('should reject if user has requested amount + active loan exceeding max', () => {
-            const result = isEligibleForLoan(15000, 40000, 10000); // 40k+10k = 50k > 3*15k (45k)
+        // Confirmed business rule: savings must be at least TWICE the loan, so
+        // the borrowable maximum is half of savings. The multiplier used to be
+        // 3, letting a member borrow six times more than intended.
+        it('should reject if requested amount plus active loan exceeds half of savings', () => {
+            // 20k saved -> max 10k. 8k requested + 4k outstanding = 12k.
+            const result = isEligibleForLoan(20000, 8000, 4000);
             expect(result.eligible).toBe(false);
             expect(result.reason).toContain('exceeds your maximum limit');
         });
 
-        it('should reject if loan exceeds tier multiplier (Member)', () => {
-            // Member: 3x multiplier, so max loan for 15k is 45k
-            const result = isEligibleForLoan(15000, 50000, 0);
+        it('should reject a loan above half of savings', () => {
+            // 20k saved -> max 10k. Request 15k.
+            const result = isEligibleForLoan(20000, 15000, 0);
             expect(result.eligible).toBe(false);
             expect(result.reason).toContain('exceeds your maximum limit');
         });
 
-        it('should approve valid Member tier loan', () => {
-            // 5000 contribution * 3x multiplier = max 15000. Request 12000.
-            const result = isEligibleForLoan(5000, 12000, 0);
+        it('should approve a loan within half of savings', () => {
+            // 20k saved -> max 10k. Request 6k.
+            const result = isEligibleForLoan(20000, 6000, 0);
             expect(result.eligible).toBe(true);
         });
 
-        it('should approve loan at exact tier limit', () => {
-            // 10000 contribution * 3x = max 30000. Request exactly 30000.
-            const result = isEligibleForLoan(10000, 30000, 0);
+        it('should approve a loan at exactly half of savings', () => {
+            // 20k saved -> max exactly 10k.
+            const result = isEligibleForLoan(20000, 10000, 0);
             expect(result.eligible).toBe(true);
         });
     });
@@ -126,8 +133,49 @@ describe('Cooperative Tier System', () => {
             expect(COOPERATIVE_TIERS.Member.name).toBe('Member');
             // Source of truth: src/lib/cooperative-tiers.ts — minContribution is 5000
             expect(COOPERATIVE_TIERS.Member.minContribution).toBe(5000);
-            expect(COOPERATIVE_TIERS.Member.maxLoanMultiplier).toBe(3);
+            // Half of savings — see the eligibility tests above.
+            expect(COOPERATIVE_TIERS.Member.maxLoanMultiplier).toBe(0.5);
             expect(COOPERATIVE_TIERS.Member.color).toBe('emerald');
         });
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Regression guards for the confirmed loan terms.
+//
+// The rate is a MONTHLY percentage. Reading it as annual (or writing an annual
+// figure into the field) silently changes what borrowers are billed by 12x,
+// and nothing in the type system prevents it.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('Loan terms — regression guards', () => {
+    it('treats the tier rate as monthly, not annual', () => {
+        const rate = getTierInterestRate('Member');
+        const schedule = calculateRepaymentSchedule(100_000, rate, 1);
+
+        // One month at 10% monthly on 100,000 is 10,000 of interest.
+        // If the rate were read as annual it would be roughly 833.
+        expect(schedule[0].interestAmount).toBeCloseTo(10_000, 0);
+    });
+
+    it('never produces NaN instalments at a zero interest rate', () => {
+        // The annuity formula divides by zero when the rate is 0.
+        const schedule = calculateRepaymentSchedule(120_000, 0, 12);
+
+        expect(schedule).toHaveLength(12);
+        for (const inst of schedule) {
+            expect(Number.isFinite(inst.totalAmount)).toBe(true);
+            expect(Number.isFinite(inst.principalAmount)).toBe(true);
+            expect(inst.interestAmount).toBe(0);
+        }
+        const totalPrincipal = schedule.reduce((s, i) => s + i.principalAmount, 0);
+        expect(totalPrincipal).toBeCloseTo(120_000, 2);
+    });
+
+    it('caps borrowing at half of savings', () => {
+        expect(getMaxLoanAmount(50_000)).toBe(25_000);
+    });
+
+    it('caps the repayment term at 12 months', () => {
+        expect(getTierMaxDuration('Member')).toBe(12);
     });
 });

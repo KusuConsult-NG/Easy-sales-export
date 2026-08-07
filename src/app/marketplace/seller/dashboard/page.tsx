@@ -17,6 +17,7 @@ import { getSellerAnalyticsAction, getSellerOrdersAction, getSellerProductsActio
 import { getFeatureTogglesAction } from "@/app/actions/health";
 import type { Order, Product } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
+import { toDate } from "@/lib/date-utils";
 
 export default function SellerDashboard() {
     const [loading, setLoading] = useState(true);
@@ -54,9 +55,10 @@ export default function SellerDashboard() {
                     // Sort by date desc and take top 5
                     const sortedOrders = ordersRes.data.orders
                         .sort((a, b) => {
-                            const dateA = a.createdAt instanceof Date ? a.createdAt : new Date((a.createdAt as unknown as { seconds: number }).seconds * 1000);
-                            const dateB = b.createdAt instanceof Date ? b.createdAt : new Date((b.createdAt as unknown as { seconds: number }).seconds * 1000);
-                            return dateB.getTime() - dateA.getTime();
+                            // Orders arrive from a server action, so createdAt is
+                            // already an ISO string — reading .seconds off it gave
+                            // NaN and made this comparator meaningless.
+                            return toDate(b.createdAt).getTime() - toDate(a.createdAt).getTime();
                         })
                         .slice(0, 5);
                     setRecentOrders(sortedOrders);

@@ -19,7 +19,7 @@
 
 import { supabaseAdmin } from './supabase';
 import { v4 as uuidv4 } from 'uuid';
-import { Timestamp } from './firestore-compat';
+import { Timestamp, FieldValue } from './firestore-compat';
 import { invalidateCacheForCollection } from './cache-map';
 import { logger } from './logger';
 
@@ -95,7 +95,20 @@ const FIELD_TO_COLUMN: Record<string, Record<string, string>> = {
     },
 };
 
+/**
+ * Rows returned by a query that specifies no .limit().
+ *
+ * Chosen to match the existing 5,000-document threshold that
+ * firestore-serialize already warns at, so the two agree. Reaching it is
+ * reported, never silent — see SupabaseQuery.get().
+ */
+const DEFAULT_QUERY_LIMIT = Math.max(
+    1,
+    Number(process.env.SUPABASE_DEFAULT_QUERY_LIMIT) || 5000
+);
+
 const _unknownCollectionsWarned = new Set<string>();
+const _limitReachedWarned = new Set<string>();
 
 function getTableName(collection: string): string {
     if (collection in DEDICATED_TABLE_MAP) {
@@ -725,36 +738,40 @@ export class SupabaseDocumentReference {
         const tableName = getTableName(this._collection);
         let raw: Record<string, any> | null = null;
 
-        try {
-            if (tableName === 'document_collections') {
-                const { data, error } = await supabaseAdmin
-                    .from('document_collections')
-                    .select('raw_data')
-                    .eq('id', this.id)
-                    .eq('collection_name', this._collection)
-                    .maybeSingle();
-                if (error) throw error;
-                raw = data?.raw_data ?? null;
-            } else {
-                const { data, error } = await supabaseAdmin
-                    .from(tableName)
-                    .select('*')
-                    .eq('id', this.id)
-                    .maybeSingle();
-                if (error) throw error;
-                if (data) {
-                    raw = {
-                        ...(data.raw_data ?? {}),
-                        createdAt: data.created_at || data.raw_data?.createdAt,
-                        updatedAt: data.updated_at || data.raw_data?.updatedAt,
-                        email: data.email || data.raw_data?.email,
-                        id: data.id
-                    };
-                }
+        // NOTE: read errors are deliberately NOT swallowed. Returning an
+        // "does not exist" snapshot when the database actually failed made
+        // transient errors indistinguishable from a missing document, so
+        // callers went on to re-create records and overwrite live data.
+        if (tableName === 'document_collections') {
+            const { data, error } = await supabaseAdmin
+                .from('document_collections')
+                .select('raw_data')
+                .eq('id', this.id)
+                .eq('collection_name', this._collection)
+                .maybeSingle();
+            if (error) throw new Error(`[supabase-db] get ${this._collection}/${this.id}: ${error.message}`);
+            raw = data?.raw_data ?? null;
+        } else {
+            const { data, error } = await supabaseAdmin
+                .from(tableName)
+                .select('*')
+                .eq('id', this.id)
+                .maybeSingle();
+            if (error) throw new Error(`[supabase-db] get ${this._collection}/${this.id}: ${error.message}`);
+            if (data) {
+                // Precedence must match SupabaseQuery.get(): the domain value in
+                // raw_data wins, the native SQL column is only a fallback.
+                // These used to be inverted here, so the same document read via
+                // .doc().get() and via .where().get() reported different
+                // createdAt / email values.
+                raw = {
+                    ...(data.raw_data ?? {}),
+                    createdAt: data.raw_data?.createdAt ?? data.created_at,
+                    updatedAt: data.raw_data?.updatedAt ?? data.updated_at,
+                    email: data.raw_data?.email ?? data.email,
+                    id: data.id
+                };
             }
-        } catch (err: any) {
-            console.error(`[supabase-db] get ${this._collection}/${this.id}:`, err?.message);
-            raw = null;
         }
 
         // Ensure id is accessible via .data().id
@@ -765,14 +782,21 @@ export class SupabaseDocumentReference {
 
     async set(data: Record<string, any>, options?: { merge?: boolean }): Promise<void> {
         let base: Record<string, any> = {};
+        let exists = false;
+
         if (options?.merge) {
             const snap = await this.get();
+            exists = snap.exists;
             base = snap.data() ?? {};
         }
         const processed = processWriteData(data, base, !!options?.merge);
         if (!processed.id) processed.id = this.id;
 
-        if (options?.merge) {
+        // A merging set() on a document that does not exist yet must CREATE it.
+        // supabasePartialUpdate() issues a bare SQL UPDATE, which matches zero
+        // rows and reports no error — so the write was silently discarded for
+        // every first-time set(..., { merge: true }).
+        if (options?.merge && exists) {
             await supabasePartialUpdate(this._collection, this.id, processed);
         } else {
             await supabaseUpsert(this._collection, this.id, processed);
@@ -785,6 +809,17 @@ export class SupabaseDocumentReference {
         // (the get() call here handles FieldValue.increment, arrayUnion, etc.)
         const snap = await this.get();
         const existing = snap.data() ?? {};
+
+        if (!snap.exists) {
+            // Firestore throws NOT_FOUND here. We keep the write a no-op to avoid
+            // changing behaviour under load, but it must not stay invisible —
+            // this is how "the save button did nothing" bugs reach production.
+            logger.warn(
+                `[supabase-db] update() on missing document ${this._collection}/${this.id} — ` +
+                `no rows will be affected. Use set(data, { merge: true }) if the document may not exist yet.`
+            );
+        }
+
         const processed = processWriteData(data, existing, true);
         if (!processed.id) processed.id = this.id;
         // Use partial update (not full upsert) so only changed fields overwrite raw_data.
@@ -950,18 +985,39 @@ export class SupabaseQuery {
                     query = applyFilter(query, tableName, this._collection, filter);
                 }
 
-                const { data, error } = await query;
-                if (error) throw new Error(`[supabase-db] aggregate: ${error.message}`);
+                // PostgREST caps a plain select at 1,000 rows. Reading that
+                // single page made every aggregate silently under-report once a
+                // collection passed 1k documents — financial totals included.
+                const rows: any[] = [];
+                for (let offset = 0; ; offset += 1000) {
+                    const { data, error } = await query.range(offset, offset + 999);
+                    if (error) throw new Error(`[supabase-db] aggregate ${this._collection}: ${error.message}`);
+                    if (!data || data.length === 0) break;
+                    rows.push(...data);
+                    if (data.length < 1000) break;
+                }
 
                 const sums: Record<string, number> = {};
                 for (const [key, value] of Object.entries(spec)) {
-                    const field = (value as any)?._field || "amountDisbursed";
-                    let sum = 0;
-                    for (const row of data || []) {
-                        const raw = row.raw_data || {};
-                        sum += Number(raw[field]) || 0;
+                    const op = (value as any)?._op ?? 'sum';
+                    const field = (value as any)?._field;
+
+                    if (op === 'count') {
+                        sums[key] = rows.length;
+                        continue;
                     }
-                    sums[key] = sum;
+
+                    let sum = 0;
+                    let counted = 0;
+                    for (const row of rows) {
+                        const raw = row.raw_data || {};
+                        const n = Number(raw[field]);
+                        if (Number.isFinite(n)) {
+                            sum += n;
+                            counted++;
+                        }
+                    }
+                    sums[key] = op === 'average' ? (counted ? sum / counted : 0) : sum;
                 }
 
                 return {
@@ -1037,21 +1093,39 @@ export class SupabaseQuery {
                 const fieldMap = FIELD_TO_COLUMN[tableName] || {};
                 const cols = NATIVE_COLUMNS[tableName] || [];
                 let colName = fieldMap[firstOrderField] || (cols.includes(firstOrderField) ? firstOrderField : null);
-                if (!colName) colName = (firstOrderField === 'createdAt' || firstOrderField === 'created_at') ? 'created_at' : null;
+                if (!colName) {
+                    // Fall back to the same JSONB path the orderBy above used.
+                    // Previously the cursor was simply dropped for any field that
+                    // was not a native column, so startAfter() returned page 1
+                    // again — "load more" repeated the same rows forever.
+                    colName = (firstOrderField === 'createdAt' || firstOrderField === 'created_at')
+                        ? 'created_at'
+                        : `raw_data->>${JSON.stringify(firstOrderField)}`;
+                }
 
-                if (colName) {
-                    if (this._orderBy[0].direction === 'desc') {
-                        query = query.lt(colName, cursorValue);
-                    } else {
-                        query = query.gt(colName, cursorValue);
-                    }
+                if (this._orderBy[0].direction === 'desc') {
+                    query = query.lt(colName, cursorValue);
+                } else {
+                    query = query.gt(colName, cursorValue);
                 }
             }
         }
 
         // Apply limit and fetch auto-paginated batches to bypass Supabase 1,000-row select caps
         const allData: any[] = [];
-        const limitVal = this._limit ?? 999999;
+        // A query with no .limit() used to read the ENTIRE table, one 1,000-row
+        // page at a time. 415 of the 516 read call sites in this codebase have
+        // no limit, so a single page load against the 41,000-row users table
+        // meant ~41 sequential round trips to Supabase before anything
+        // rendered — the main reason the application feels slow, and one that
+        // gets worse as data grows.
+        //
+        // The cap is deliberately NOT silent: exceeding it logs the collection
+        // by name, so the screens that genuinely need pagination identify
+        // themselves in production instead of being guessed at. Raise it with
+        // SUPABASE_DEFAULT_QUERY_LIMIT if a specific screen needs more while
+        // it is being fixed properly.
+        const limitVal = this._limit ?? DEFAULT_QUERY_LIMIT;
         const offsetVal = this._offset ?? 0;
         let fetchedSoFar = 0;
 
@@ -1068,6 +1142,20 @@ export class SupabaseQuery {
             fetchedSoFar += batchData.length;
 
             if (batchData.length < batchLimit) break;
+        }
+
+        // Truncation must never pass unnoticed — a short result that looks
+        // complete is how "the report is missing rows" bugs reach production.
+        if (this._limit == null && fetchedSoFar >= DEFAULT_QUERY_LIMIT) {
+            const key = this._collection;
+            if (!_limitReachedWarned.has(key)) {
+                _limitReachedWarned.add(key);
+                logger.warn(
+                    `[supabase-db] Query on '${key}' returned the default cap of ${DEFAULT_QUERY_LIMIT} rows ` +
+                    `and was truncated. This query has no .limit() — give it real pagination, ` +
+                    `or raise SUPABASE_DEFAULT_QUERY_LIMIT if the whole collection is genuinely required.`
+                );
+            }
         }
 
         const docs = allData.map((row: any) => {
@@ -1224,9 +1312,39 @@ export const supabaseDb = {
         return new SupabaseCollectionReference(name);
     },
 
-    doc(path: string): SupabaseDocumentReference {
-        const parts = path.split('/');
-        if (parts.length < 2) throw new Error(`Invalid document path: ${path}`);
+    /**
+     * Resolve a document reference.
+     *
+     * Accepts both call styles used across the codebase:
+     *   db.doc("users/abc")                          — Admin SDK slash path
+     *   db.doc("users", "abc")                       — client SDK style segments
+     *   db.doc("cooperatives", id, "members", uid)   — nested segments
+     *
+     * Previously only the first form was honoured; the extra segments were
+     * dropped, so `db.doc("processedPayments", ref)` collapsed to a
+     * single-segment path and threw "Invalid document path". That took out the
+     * cooperative contribution verification and balance lookups entirely.
+     */
+    doc(path: string, ...segments: string[]): SupabaseDocumentReference {
+        const parts = [path, ...segments]
+            .filter(p => p !== undefined && p !== null && p !== '')
+            .flatMap(p => String(p).split('/'))
+            .filter(Boolean);
+
+        if (parts.length < 2) {
+            throw new Error(
+                `Invalid document path: "${[path, ...segments].join('/')}". ` +
+                `A document path needs an even number of segments (collection/id). ` +
+                `To create a document with a generated id use db.collection(name).doc().`
+            );
+        }
+        if (parts.length % 2 !== 0) {
+            throw new Error(
+                `Invalid document path: "${parts.join('/')}" has an odd number of segments. ` +
+                `Document paths must alternate collection/id.`
+            );
+        }
+
         const id = parts[parts.length - 1];
         const collection = parts.slice(0, -1).join('/');
         return new SupabaseDocumentReference(collection, id);
@@ -1296,12 +1414,33 @@ export async function updateDoc(ref: any, data: any) {
     return ref.update(data);
 }
 
+/**
+ * Numeric increment sentinel.
+ *
+ * Must produce the same shape the write pipeline detects (`_methodName`).
+ * The previous `{ __op: 'increment' }` shape was invisible to
+ * getFieldValueType(), so `increment(1)` was persisted verbatim as a JSON
+ * object — silently replacing counters like memberCount/totalSavings with
+ * `{"__op":"increment","value":1}` instead of adding to them.
+ */
 export function increment(value: number) {
-    return { __op: 'increment', value };
+    return FieldValue.increment(value);
 }
 
 export function serverTimestamp() {
-    return new Date();
+    return FieldValue.serverTimestamp();
+}
+
+export function arrayUnion(...elements: any[]) {
+    return FieldValue.arrayUnion(...elements);
+}
+
+export function arrayRemove(...elements: any[]) {
+    return FieldValue.arrayRemove(...elements);
+}
+
+export function deleteField() {
+    return FieldValue.delete();
 }
 
 export async function runTransaction(dbInstance: any, updateFunction: (transaction: any) => Promise<any>) {

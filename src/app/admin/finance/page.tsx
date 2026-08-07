@@ -19,7 +19,9 @@ import {
     RefreshCw,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import { Timestamp } from "@/lib/supabase-client-db";
+// Timestamp is used only for an instanceof check. Imported from
+// firestore-compat so this page no longer pulls in the browser database client.
+import { Timestamp } from "@/lib/firestore-compat";
 import { getFinancialOverviewAction } from "@/app/actions/admin-analytics";
 
 // ─── Types ─────────────────────────────────────────────────────────────────

@@ -52,7 +52,7 @@ async function joinCooperativeWrapper(
         const cooperativeRef = doc(db, COLLECTIONS.COOPERATIVES, cooperativeId);
         const cooperativeDoc = await getDoc(cooperativeRef);
 
-        if (!cooperativeDoc.exists()) {
+        if (!cooperativeDoc.exists) {
             return { error: "Cooperative not found", success: false };
         }
 
@@ -60,7 +60,7 @@ async function joinCooperativeWrapper(
         const memberRef = doc(db, COLLECTIONS.COOPERATIVES, cooperativeId, "members", userId);
         const memberDoc = await getDoc(memberRef);
 
-        if (memberDoc.exists()) {
+        if (memberDoc.exists) {
             return { error: "You are already a member of this cooperative", success: false };
         }
 

@@ -4,7 +4,14 @@ import { withSentryConfig } from '@sentry/nextjs';
 
 const nextConfig: NextConfig = {
   typescript: {
-    ignoreBuildErrors: false,
+    // Type checking runs as a separate `npx tsc --noEmit` step immediately
+    // before this build — in the Dockerfile and in CI. Letting next build
+    // type-check the whole project a SECOND time roughly doubled peak memory
+    // and was a direct contributor to the build running out of heap on Railway.
+    //
+    // Type safety is unchanged: the standalone tsc step fails the build on any
+    // error before `next build` is ever reached. Do not remove that step.
+    ignoreBuildErrors: true,
   },
 
 

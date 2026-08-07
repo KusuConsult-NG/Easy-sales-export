@@ -6,9 +6,10 @@ import { Fragment } from "react";
 import { Bell, BellDot, Package, DollarSign, GraduationCap, Users, Wallet, TrendingUp, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useSession } from "next-auth/react";
-import { supabase } from "@/lib/supabase";
+import { getMyNotifications } from "@/app/actions/my-data";
 import { markNotificationAsReadAction, markAllAsReadAction } from "@/app/actions/notifications";
 import { isNotificationVisible } from "@/lib/notification-filter";
+import { toDate } from "@/lib/date-utils";
 
 import type { Notification as FirestoreNotification } from "@/lib/types/firestore";
 
@@ -39,44 +40,14 @@ export default function NotificationCenter() {
         }
 
         let isMounted = true;
+        // Scoped server-side to the signed-in user. This previously queried
+        // Supabase directly from the browser with the public anon key.
         async function fetchNotifications() {
             try {
-                const { data: rows, error } = await supabase
-                    .from('document_collections')
-                    .select('raw_data')
-                    .eq('collection_name', 'notifications')
-                    .eq('raw_data->>userId', userId);
-
-                if (error) throw error;
-
-                if (isMounted && rows) {
-                    const notifs = rows.map(r => {
-                        const data = r.raw_data || {};
-                        return {
-                            id: data.id,
-                            userId: data.userId,
-                            type: data.type || "info",
-                            title: data.title,
-                            message: data.message,
-                            link: data.link,
-                            linkText: data.linkText,
-                            read: data.read,
-                            createdAt: data.createdAt,
-                            readAt: data.readAt,
-                        } as any;
-                    });
-
-                    // Sort locally by createdAt desc
-                    notifs.sort((a, b) => {
-                        const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-                        const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-                        return tB - tA;
-                    });
-
-                    setNotifications(notifs.slice(0, 50));
-                }
+                const notifs = await getMyNotifications(50);
+                if (isMounted) setNotifications(notifs as any);
             } catch (err) {
-                console.error("Failed to fetch notifications from Supabase:", err);
+                console.error("Failed to fetch notifications:", err);
             } finally {
                 if (isMounted) setLoading(false);
             }
@@ -318,7 +289,7 @@ export default function NotificationCenter() {
                                                             </p>
                                                             <p className="text-xs text-slate-500">
                                                                 {formatDistanceToNow(
-                                                                    notification.createdAt.toDate(),
+                                                                    toDate(notification.createdAt),
                                                                     { addSuffix: true }
                                                                 )}
                                                             </p>

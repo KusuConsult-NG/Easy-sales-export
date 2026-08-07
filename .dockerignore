@@ -23,6 +23,19 @@ __tests__
 coverage
 .nyc_output
 
+# Large directories not needed to build the app. These were being copied into
+# the build context, inflating the image and the builder's working set.
+artifacts
+screenshots
+exports
+e2e
+tests
+docs
+scripts
+.turbo
+playwright-report
+test-results
+
 # Misc
 .DS_Store
 *.log

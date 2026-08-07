@@ -18,6 +18,21 @@ declare global {
     var __FIREBASE_STORAGE_INSTANCE__: ReturnType<typeof getStorage> | undefined;
 }
 
+/**
+ * IMPORTANT — read before adding credential checks here.
+ *
+ * `firebase-admin` resolves to the local shim in src/lib/shims/firebase-admin
+ * (see package.json). Its `initializeApp`/`cert` return empty objects and
+ * `getAuth()` ignores the app entirely, talking to Supabase Auth directly.
+ *
+ * The credential parsing below therefore has no effect on anything. It used to
+ * `throw` when FIREBASE_PRIVATE_KEY / FIREBASE_PROJECT_ID / FIREBASE_CLIENT_EMAIL
+ * were absent or malformed, which meant registration, login provisioning,
+ * password reset and profile email changes all failed with
+ * "Missing FIREBASE_PRIVATE_KEY environment variable" in any environment where
+ * those now-meaningless variables were not set. Credential problems are logged
+ * instead of thrown so a dead dependency cannot take down authentication.
+ */
 export function initializeFirebaseAdmin(): App {
     if (globalThis.__FIREBASE_ADMIN_APP__) {
         return globalThis.__FIREBASE_ADMIN_APP__;
@@ -45,10 +60,12 @@ export function initializeFirebaseAdmin(): App {
             // Provide a dummy private key for local development/testing with Firebase Emulators
             privateKey = "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCzbUIqcf2E9CEq\nmBCYoNr8xL0YcG8uU5IaJ2YA9A0Yj5HsU5oiRAypTPjzLu6/QEgw5tlbMroU2jP6\ni8t1je6a+qQ4p4zjTXwD1+7kmfPCvxGH2+dzIKI2x/C5/tG33kK2uOqBxsvk9EqH\nfVCna9bjx1z/Qs1GstVzM8TeilxAZM0KborOow+iBUlOCRdH3J+/nIOD9wbQBZ0d\nVBN6d0uJsAvbWIDh1MJkvPJ690meuw7uBMnyHQOrN98omahKXSt9yghR0Ou23M5J\nObpWk8MD4+2YwEqBSHKsck+W0JiOYh3EGaRzMIvkx2nj5cuRedJg7ZH7DD2LjdSy\nSkr5RD3LAgMBAAECggEAWCDSjmGFyY9VWQPupuDfHqcNT9stqL3wdXsjfVVht04R\nONgJTUpKQ7+kSWGkb3iF3MsOOF6Oil5wiF+wc9FeQG3aSl91clGlF4gwdMTvNxi8\n5hOLN39wXWLQKLLx1BNNhk0GFe8MR6z7jFfvTQRJPIC3+0KW6+I7uAVV7Y5c6F0l\nBLYZ1qKKl1Nd8KyWCUrds2dHvVLrqr0OOd04VPKfDy0Cr9CwYsWXzRlVcAxsMaxR\n8H2QHDJFGeiMtNKIpuF4SsDZlHMx/kvfPZVbIMeYnqJ6+sIA9/XWuEcu8CbvFoqe\nzS6sDwlMvNMW3E3SHv+WH5CTcEMWZ5JbMl0IlkNyxQKBgQD8WWu8oLZG71p0aJjR\n/kvtwa0Tsun07P7qQTpHNvbkRqL2ujY9ZJKnPMMt1nNHhoKoxRNs4qV1dI7Rhy8i\ngaxbNq5jxJ1RUu5yK4NO/dnvVckx0sZquVwnoCUgbXW+P6LWwrc3kClc4rC8T46z\n94yfSs+ULNbY3k0Sg4XseSKsPwKBgQC2BcShEpd9w0Lps2H9Uo+Lz9clwR27NPSI\n1lbd38GyV8mpsvKFT9LN+spH8zLmCDL2XQ3guwk05J30POjMi6vKOlGOjSvqxDXD\nwje2RA30GCPDWsNa7Y/JmwyHhQVlm10hv2Q4hO81GV48nwkRHPcENfWAz52zxWdj\nOzEP1wc7dQKBgQDr4Xo/m8pGjD31SkBvKlE3MS7jlv3yIAY4WjhrkQk/YHe8QVuq\nD3S2NqoLEsY3OZiwwWbjBQi8vfMyEDcS/jtqF7bzMzoKZobU2a+oCsnIWlvy4p7t\n684kjCGoKilBaKKCNQimO28ukAe8PnGZ7+/Whkt6ql854LISeDabULAEaQKBgG00\nYrbcZ6UdPAzoAXcxTEvuYz8UcJj7eWaLacxtzVEJWEUGxnfy3x+TQj8Ois/1xVWH\nmKbmr+xa6OU6kdT+Sw/mEz46NkoAc91BrZkdlV2IChTPZHsuIeErs8WuqgE+yA5S\nPHeoUbeCw8YNCCyLOyv8j5E7fnr3iULApXvCX2VtAoGAYFoeYzYlrsMCGEsSwOPJ\nYGUSlIebEncBCzbQwt/xcvRy0qYvsVIB1WIL6nALT9nv3Vhob6o3jYvsuR3IRec9\n0Fs/KDNlQqp0gpoisnYDvI1l3xTblGMiLknsfFfSz+8z+l0s4KI8GHslDtqM1Kxc\n0PPDYErUYB3/M7tHoR9yYpM=\n-----END PRIVATE KEY-----";
         } else {
-            throw new Error(
-                'Missing FIREBASE_PRIVATE_KEY environment variable. ' +
-                'Please check your .env.local file.'
+            console.warn(
+                '[firebase-admin] FIREBASE_PRIVATE_KEY is not set. Firebase is shimmed to ' +
+                'Supabase, so this is expected — continuing without Firebase credentials.'
             );
+            globalThis.__FIREBASE_ADMIN_APP__ = initializeApp({}) as App;
+            return globalThis.__FIREBASE_ADMIN_APP__;
         }
     }
 
@@ -69,18 +86,21 @@ export function initializeFirebaseAdmin(): App {
 
     // Validate PEM format
     if (!privateKey.includes('BEGIN PRIVATE KEY') || !privateKey.includes('END PRIVATE KEY')) {
-        throw new Error(
-            'Invalid FIREBASE_PRIVATE_KEY format. ' +
-            'Must be a valid PEM formatted private key. ' +
-            'Check that your .env.local has the complete key including BEGIN/END markers.'
+        console.warn(
+            '[firebase-admin] FIREBASE_PRIVATE_KEY is not PEM formatted. Ignoring it — ' +
+            'Firebase credentials are unused now that auth runs on Supabase.'
         );
+        globalThis.__FIREBASE_ADMIN_APP__ = initializeApp({}) as App;
+        return globalThis.__FIREBASE_ADMIN_APP__;
     }
 
     if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_CLIENT_EMAIL) {
-        throw new Error(
-            'Missing Firebase Admin SDK environment variables. ' +
-            'Required: FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY'
+        console.warn(
+            '[firebase-admin] FIREBASE_PROJECT_ID / FIREBASE_CLIENT_EMAIL are not set. ' +
+            'Continuing without them — they are no longer used.'
         );
+        globalThis.__FIREBASE_ADMIN_APP__ = initializeApp({}) as App;
+        return globalThis.__FIREBASE_ADMIN_APP__;
     }
 
     try {
@@ -93,10 +113,8 @@ export function initializeFirebaseAdmin(): App {
             storageBucket: process.env.FIREBASE_STORAGE_BUCKET || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
         });
     } catch (error: any) {
-        throw new Error(
-            `Failed to initialize Firebase Admin SDK: ${error.message}. ` +
-            'Please verify your Firebase credentials in .env.local'
-        );
+        console.warn(`[firebase-admin] initializeApp failed (${error.message}). Continuing with an empty app.`);
+        globalThis.__FIREBASE_ADMIN_APP__ = initializeApp({}) as App;
     }
 
     return globalThis.__FIREBASE_ADMIN_APP__;

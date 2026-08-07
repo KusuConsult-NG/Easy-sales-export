@@ -119,8 +119,11 @@ async function applyLoanHandler(request: NextRequest) {
             );
         }
 
-        // Calculate monthly payment (simple calculation)
-        const monthlyRate = product.interestRate / 100 / 12;
+        // product.interestRate is a MONTHLY percentage (see cooperative-tiers.ts).
+        // This previously divided by 12 as well, treating it as an annual rate —
+        // so the monthly payment quoted here was a twelfth of what the repayment
+        // schedule generator, which reads the same field as monthly, went on to bill.
+        const monthlyRate = product.interestRate / 100;
         const monthlyPayment = (amount * monthlyRate * Math.pow(1 + monthlyRate, product.durationMonths)) /
             (Math.pow(1 + monthlyRate, product.durationMonths) - 1);
 

@@ -294,6 +294,23 @@ async function _confirmWalletFundingAction(reference: string, paidAt?: Date): Pr
     const amountNGN: number = metadata.amountNGN;
     const userId: string = metadata.userId;
 
+    // Credit what Paystack says was actually paid, not just what the metadata
+    // claims. The cooperative contribution path performs this same check; this
+    // one did not, so any divergence between the charged amount and the
+    // metadata would have been credited in full without complaint.
+    // 1 naira of tolerance for rounding, matching _payment.ts.
+    const amountPaidNGN = Number(paystackData.data.amount) / 100;
+    if (!Number.isFinite(amountPaidNGN) || !Number.isFinite(amountNGN)) {
+        logger.error(`[Wallet] Non-numeric amount for ${reference}`, { amountPaidNGN, amountNGN });
+        return { success: false as const, error: "Payment verification failed", data: null };
+    }
+    if (Math.abs(amountPaidNGN - amountNGN) > 1) {
+        logger.error(
+            `[Wallet] Amount mismatch for ${reference}: Paystack charged ₦${amountPaidNGN}, metadata claims ₦${amountNGN}`
+        );
+        return { success: false as const, error: "Payment amount mismatch", data: null };
+    }
+
     // Guard: idempotency — mark txn as done only once
     const txnSnap = await db.collection(TXN_COLLECTION)
         .where("reference", "==", reference)

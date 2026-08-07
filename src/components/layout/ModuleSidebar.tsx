@@ -39,7 +39,7 @@ import { hasAppAccess } from "@/lib/role-app-mapping";
 import { signOut as nextAuthSignOut } from "next-auth/react";
 import type { UserRole } from "@/lib/types/roles";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { db, collection, query, where, onSnapshot } from "@/lib/supabase-client-db";
+import { getMyUnreadMessageCount } from "@/app/actions/my-data";
 
 
 const COLLAPSED_KEY = "sidebar_collapsed_v2";
@@ -371,28 +371,28 @@ export function ModuleSidebar({ isMobileOpen = false, onMobileClose }: ModuleSid
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pathname]);
 
-    // ── Real-time unread messages (lightweight) ───────────────────────────
+    // ── Unread messages, scoped server-side ───────────────────────────────
+    // The browser query this replaces silently dropped its array-contains
+    // filter, counting every conversation on the platform.
     useEffect(() => {
         if (!userId) return;
-        const q = query(
-            collection(db, COLLECTIONS.CONVERSATIONS),
-            where("participants", "array-contains", userId)
-        );
-        const unsub = onSnapshot(q, snap => {
-            let count = 0;
-            snap.docs.forEach(d => {
-                const data = d.data();
-                const lastRead = data.participantDetails?.[userId]?.lastRead;
-                const lastMsg  = data.lastMessage?.timestamp;
-                const lastMsgMs = lastMsg?.toMillis ? lastMsg.toMillis() : (lastMsg ? new Date(lastMsg).getTime() : 0);
-                const lastReadMs = lastRead?.toMillis ? lastRead.toMillis() : (lastRead ? new Date(lastRead).getTime() : 0);
-                if (lastMsgMs && (!lastReadMs || lastMsgMs > lastReadMs)) count++;
-            });
-            setUnreadMessages(count);
-        }, (error) => {
-            console.error("ModuleSidebar messages listener failed:", error);
-        });
-        return () => unsub();
+        let cancelled = false;
+
+        const load = async () => {
+            try {
+                const count = await getMyUnreadMessageCount();
+                if (!cancelled) setUnreadMessages(count);
+            } catch (error) {
+                console.error("ModuleSidebar unread messages failed:", error);
+            }
+        };
+
+        load();
+        const interval = setInterval(load, 8000);
+        return () => {
+            cancelled = true;
+            clearInterval(interval);
+        };
     }, [userId]);
 
     // ── Active path helper ────────────────────────────────────────────────
