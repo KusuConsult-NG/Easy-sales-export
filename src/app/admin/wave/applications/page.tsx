@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from "react";
 import { FileText, CheckCircle, XCircle, Loader2, AlertCircle, Filter, Download, Pencil, X, Save, RefreshCw, Eye } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
-import { db } from "@/lib/firebase";
 import { approveWaveApplicationAction, rejectWaveApplicationAction, getStandardWaveApplicationsAction } from "@/app/actions/wave";
 import { editApplicationAction } from "@/app/actions/admin";
 import RejectionModal from "@/components/admin/RejectionModal";
