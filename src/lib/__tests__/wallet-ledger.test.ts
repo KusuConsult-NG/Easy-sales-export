@@ -20,7 +20,7 @@ jest.mock("@/lib/supabase", () => ({
     supabase: {},
 }));
 
-import { creditWalletOnce, debitWalletOnce } from "@/lib/wallet-ledger";
+import { creditWalletOnce, debitWalletOnce, debitWalletLocked } from "@/lib/wallet-ledger";
 
 beforeAll(() => {
     jest.spyOn(console, "error").mockImplementation(() => {});
@@ -177,5 +177,78 @@ describe("debitWalletOnce", () => {
         await expect(
             debitWalletOnce({ reference: "o", userId: "u", amount: 10 })
         ).rejects.toThrow(/Wallet debit failed/);
+    });
+});
+
+describe("revenue accounting", () => {
+    /**
+     * processed_payments is summed as revenue in global-aggregation.ts, filtered
+     * on status == "completed". Anything that is not money coming in must record
+     * a different status, or it inflates reported revenue.
+     */
+
+    it("defaults a credit to completed", async () => {
+        mockRpc.mockResolvedValue({ data: [{ claimed: true, balance: 100 }], error: null });
+
+        await creditWalletOnce({ reference: "r", userId: "u", amount: 100 });
+
+        expect(mockRpc).toHaveBeenCalledWith(
+            "credit_wallet_once",
+            expect.objectContaining({ p_status: "completed" })
+        );
+    });
+
+    it("records a refund as refund, so it is not counted as revenue", async () => {
+        mockRpc.mockResolvedValue({ data: [{ claimed: true, balance: 100 }], error: null });
+
+        await creditWalletOnce({
+            reference: "withdrawal-refund:txn-1",
+            userId: "u",
+            amount: 100,
+            status: "refund",
+        });
+
+        expect(mockRpc).toHaveBeenCalledWith(
+            "credit_wallet_once",
+            expect.objectContaining({ p_status: "refund" })
+        );
+    });
+});
+
+describe("debitWalletLocked", () => {
+    it("debits without claiming a reference", async () => {
+        mockRpc.mockResolvedValue({
+            data: [{ ok: true, balance: 4000, reason: null }],
+            error: null,
+        });
+
+        const result = await debitWalletLocked({ userId: "user-1", amount: 5000 });
+
+        expect(result).toEqual({ ok: true, balance: 4000, reason: null });
+        // No reference is sent: a withdrawal request has no stable key, and two
+        // genuine requests should both succeed if the funds cover both.
+        expect(mockRpc).toHaveBeenCalledWith("debit_wallet_locked", {
+            p_user_id: "user-1",
+            p_amount: 5000,
+        });
+    });
+
+    it("refuses when funds are short", async () => {
+        mockRpc.mockResolvedValue({
+            data: [{ ok: false, balance: 100, reason: "insufficient_funds" }],
+            error: null,
+        });
+
+        const result = await debitWalletLocked({ userId: "u", amount: 5000 });
+
+        expect(result.ok).toBe(false);
+        expect(result.reason).toBe("insufficient_funds");
+    });
+
+    it("rejects a non-positive amount before calling the database", async () => {
+        await expect(debitWalletLocked({ userId: "u", amount: 0 })).rejects.toThrow(
+            /must be positive/
+        );
+        expect(mockRpc).not.toHaveBeenCalled();
     });
 });

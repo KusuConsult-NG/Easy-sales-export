@@ -17,7 +17,7 @@ import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { getBaseUrl } from "@/lib/server-utils";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { creditWalletOnce, debitWalletOnce } from "@/lib/wallet-ledger";
+import { creditWalletOnce, debitWalletOnce, debitWalletLocked } from "@/lib/wallet-ledger";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import type { Wallet, WalletTransaction } from "@/lib/types/marketplace";
 import { smsWithdrawalApproved, smsWithdrawalRejected } from "@/lib/africastalking";
@@ -461,42 +461,40 @@ async function _withdrawFromWalletAction(
     const { session } = sessionResult;
     const userId = session.user.id;
 
-    const walletRef = db.collection(WALLET_COLLECTION).doc(userId);
-
-    // ATOMICITY FIX: Use transaction to prevent double-spending race conditions
-    const result = await db.runTransaction(async (t) => {
-        const snap = await t.get(walletRef);
-        const currentBalance = snap.exists ? (snap.data()?.balance || 0) : 0;
-
-        if (currentBalance < amountNGN) {
-            throw new Error("Insufficient balance for withdrawal");
-        }
-
-        // Reserve the amount immediately (debit wallet, pending admin approval)
-        const newBalance = currentBalance - amountNGN;
-
-        t.update(walletRef, { 
-            balance: newBalance, 
-            updatedAt: FieldValue.serverTimestamp() 
-        });
-
-        const txnRef = db.collection(TXN_COLLECTION).doc();
-        t.set(txnRef, {
-            walletId: userId,
-            userId,
-            type: "withdrawal",
-            amount: -amountNGN,
-            balanceBefore: currentBalance,
-            balanceAfter: newBalance,
-            description: `Withdrawal request — ₦${amountNGN.toLocaleString()} to ${bankDetails.bankName}`,
-            status: "pending",          // Pending admin processing
-            bankDetails,
-            createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-        });
-
-        return { withdrawalId: txnRef.id };
+    // Reserve the amount immediately (debit wallet, pending admin approval).
+    //
+    // The previous version claimed to be an atomicity fix but used
+    // runTransaction, which takes no lock: two withdrawal requests arriving
+    // together both read the same balance, both passed this check, and both
+    // debited. debitWalletLocked takes the row lock, so they serialise.
+    //
+    // No idempotency reference here — each withdrawal request is a genuinely
+    // new intent, and two of them should both succeed if the funds cover both.
+    const { ok, balance: newBalance, reason } = await debitWalletLocked({
+        userId,
+        amount: amountNGN,
     });
+
+    if (!ok) {
+        logger.warn(`[Wallet] Withdrawal refused for ${userId}: ${reason}`);
+        return { success: false as const, error: "Insufficient balance for withdrawal", data: null };
+    }
+
+    const txnRef = db.collection(TXN_COLLECTION).doc();
+    await txnRef.set({
+        walletId: userId,
+        userId,
+        type: "withdrawal",
+        amount: -amountNGN,
+        balanceAfter: newBalance,
+        description: `Withdrawal request — ₦${amountNGN.toLocaleString()} to ${bankDetails.bankName}`,
+        status: "pending",          // Pending admin processing
+        bankDetails,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    const result = { withdrawalId: txnRef.id };
 
     // Notify admins of the pending withdrawal (Non-blocking post-commit)
     try {
@@ -630,28 +628,38 @@ async function _processWalletWithdrawalAction(
     }
 
     if (action === "reject") {
-        // Reverse the debit atomically
-        await db.runTransaction(async (t) => {
-            const freshTxn = await t.get(txnRef);
-            if (!freshTxn.exists) throw new Error("Transaction not found");
-            if (freshTxn.data()?.status !== "pending") throw new Error("Withdrawal is no longer pending");
+        // Return the reserved amount to the wallet.
+        //
+        // The previous version read the balance and wrote it back inside
+        // runTransaction, guarded only by a "status == pending" check that took
+        // no lock — so two admins rejecting the same withdrawal at once could
+        // both refund it. The withdrawal id is a stable idempotency key, so the
+        // refund is claimed exactly once regardless of how many times this runs.
+        //
+        // Recorded as "refund" rather than "completed": global-aggregation sums
+        // completed rows as revenue, and money going back out is not revenue.
+        const refundAmount = Math.abs(txnData.amount);
 
-            const walletRef = db.collection(WALLET_COLLECTION).doc(txnData.userId);
-            const walletSnap = await t.get(walletRef);
-            const currentBalance = walletSnap.data()?.balance || 0;
-            const refundAmount = Math.abs(txnData.amount);
+        const { claimed } = await creditWalletOnce({
+            reference: `withdrawal-refund:${txnRef.id}`,
+            userId: txnData.userId,
+            amount: refundAmount,
+            paymentType: "withdrawal_refund",
+            source: "wallet_withdrawal_rejected",
+            status: "refund",
+            metadata: { withdrawalId: txnRef.id, rejectedBy: adminId },
+        });
 
-            t.update(walletRef, {
-                balance: currentBalance + refundAmount,
-                updatedAt: FieldValue.serverTimestamp(),
-            });
+        if (!claimed) {
+            logger.info(`[Wallet] Withdrawal ${txnRef.id} already refunded; ignoring duplicate rejection`);
+            return { success: false as const, error: "Withdrawal is no longer pending", data: null };
+        }
 
-            t.update(txnRef, {
-                status: "failed",
-                adminNote: note || "Withdrawal rejected by admin",
-                processedBy: adminId,
-                updatedAt: FieldValue.serverTimestamp(),
-            });
+        await txnRef.update({
+            status: "failed",
+            adminNote: note || "Withdrawal rejected by admin",
+            processedBy: adminId,
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         // Post-commit side effects: Notifications

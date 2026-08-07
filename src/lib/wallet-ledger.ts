@@ -55,8 +55,16 @@ export async function creditWalletOnce(params: {
     paymentType?: string;
     source?: string;
     metadata?: Record<string, any>;
+    /**
+     * Payment status recorded on the processed_payments row.
+     *
+     * Leave as "completed" for real money in. Use "refund" — or anything other
+     * than "completed" — when returning money, because global-aggregation sums
+     * completed rows as revenue and a refund is not revenue.
+     */
+    status?: "completed" | "refund";
 }): Promise<CreditResult> {
-    const { reference, userId, amount, paymentType, source, metadata } = params;
+    const { reference, userId, amount, paymentType, source, metadata, status } = params;
 
     if (!reference) throw new Error("creditWalletOnce: reference is required");
     if (!userId) throw new Error("creditWalletOnce: userId is required");
@@ -71,6 +79,7 @@ export async function creditWalletOnce(params: {
         p_payment_type: paymentType ?? null,
         p_source: source ?? null,
         p_raw_data: metadata ?? {},
+        p_status: status ?? "completed",
     });
 
     if (error) {
@@ -117,6 +126,50 @@ export async function debitWalletOnce(params: {
 
     if (error) {
         logger.error("[wallet-ledger] debit_wallet_once failed", { reference, userId, error });
+        throw new Error(`Wallet debit failed: ${error.message}`);
+    }
+
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) {
+        throw new Error("Wallet debit returned no result");
+    }
+
+    return {
+        ok: Boolean(row.ok),
+        balance: Number(row.balance ?? 0),
+        reason: (row.reason ?? null) as DebitFailure | null,
+    };
+}
+
+/**
+ * Debit a wallet atomically without claiming an idempotency reference.
+ *
+ * For debits that have no stable key — a withdrawal request is a fresh intent
+ * each time, and two genuine requests should both succeed. This still takes the
+ * row lock, so concurrent debits cannot both pass the sufficiency check and
+ * overdraw the wallet.
+ *
+ * Prefer `debitWalletOnce` whenever a stable reference exists; it protects
+ * against duplicate submission as well as concurrency.
+ */
+export async function debitWalletLocked(params: {
+    userId: string;
+    amount: number;
+}): Promise<DebitResult> {
+    const { userId, amount } = params;
+
+    if (!userId) throw new Error("debitWalletLocked: userId is required");
+    if (!Number.isFinite(amount) || amount <= 0) {
+        throw new Error(`debitWalletLocked: amount must be positive, got ${amount}`);
+    }
+
+    const { data, error } = await supabaseAdmin.rpc("debit_wallet_locked", {
+        p_user_id: userId,
+        p_amount: amount,
+    });
+
+    if (error) {
+        logger.error("[wallet-ledger] debit_wallet_locked failed", { userId, error });
         throw new Error(`Wallet debit failed: ${error.message}`);
     }
 
