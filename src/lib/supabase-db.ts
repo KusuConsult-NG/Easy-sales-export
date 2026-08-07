@@ -19,7 +19,7 @@
 
 import { supabaseAdmin } from './supabase';
 import { v4 as uuidv4 } from 'uuid';
-import { Timestamp } from './firestore-compat';
+import { Timestamp, FieldValue } from './firestore-compat';
 import { invalidateCacheForCollection } from './cache-map';
 import { logger } from './logger';
 
@@ -725,36 +725,40 @@ export class SupabaseDocumentReference {
         const tableName = getTableName(this._collection);
         let raw: Record<string, any> | null = null;
 
-        try {
-            if (tableName === 'document_collections') {
-                const { data, error } = await supabaseAdmin
-                    .from('document_collections')
-                    .select('raw_data')
-                    .eq('id', this.id)
-                    .eq('collection_name', this._collection)
-                    .maybeSingle();
-                if (error) throw error;
-                raw = data?.raw_data ?? null;
-            } else {
-                const { data, error } = await supabaseAdmin
-                    .from(tableName)
-                    .select('*')
-                    .eq('id', this.id)
-                    .maybeSingle();
-                if (error) throw error;
-                if (data) {
-                    raw = {
-                        ...(data.raw_data ?? {}),
-                        createdAt: data.created_at || data.raw_data?.createdAt,
-                        updatedAt: data.updated_at || data.raw_data?.updatedAt,
-                        email: data.email || data.raw_data?.email,
-                        id: data.id
-                    };
-                }
+        // NOTE: read errors are deliberately NOT swallowed. Returning an
+        // "does not exist" snapshot when the database actually failed made
+        // transient errors indistinguishable from a missing document, so
+        // callers went on to re-create records and overwrite live data.
+        if (tableName === 'document_collections') {
+            const { data, error } = await supabaseAdmin
+                .from('document_collections')
+                .select('raw_data')
+                .eq('id', this.id)
+                .eq('collection_name', this._collection)
+                .maybeSingle();
+            if (error) throw new Error(`[supabase-db] get ${this._collection}/${this.id}: ${error.message}`);
+            raw = data?.raw_data ?? null;
+        } else {
+            const { data, error } = await supabaseAdmin
+                .from(tableName)
+                .select('*')
+                .eq('id', this.id)
+                .maybeSingle();
+            if (error) throw new Error(`[supabase-db] get ${this._collection}/${this.id}: ${error.message}`);
+            if (data) {
+                // Precedence must match SupabaseQuery.get(): the domain value in
+                // raw_data wins, the native SQL column is only a fallback.
+                // These used to be inverted here, so the same document read via
+                // .doc().get() and via .where().get() reported different
+                // createdAt / email values.
+                raw = {
+                    ...(data.raw_data ?? {}),
+                    createdAt: data.raw_data?.createdAt ?? data.created_at,
+                    updatedAt: data.raw_data?.updatedAt ?? data.updated_at,
+                    email: data.raw_data?.email ?? data.email,
+                    id: data.id
+                };
             }
-        } catch (err: any) {
-            console.error(`[supabase-db] get ${this._collection}/${this.id}:`, err?.message);
-            raw = null;
         }
 
         // Ensure id is accessible via .data().id
@@ -765,14 +769,21 @@ export class SupabaseDocumentReference {
 
     async set(data: Record<string, any>, options?: { merge?: boolean }): Promise<void> {
         let base: Record<string, any> = {};
+        let exists = false;
+
         if (options?.merge) {
             const snap = await this.get();
+            exists = snap.exists;
             base = snap.data() ?? {};
         }
         const processed = processWriteData(data, base, !!options?.merge);
         if (!processed.id) processed.id = this.id;
 
-        if (options?.merge) {
+        // A merging set() on a document that does not exist yet must CREATE it.
+        // supabasePartialUpdate() issues a bare SQL UPDATE, which matches zero
+        // rows and reports no error — so the write was silently discarded for
+        // every first-time set(..., { merge: true }).
+        if (options?.merge && exists) {
             await supabasePartialUpdate(this._collection, this.id, processed);
         } else {
             await supabaseUpsert(this._collection, this.id, processed);
@@ -785,6 +796,17 @@ export class SupabaseDocumentReference {
         // (the get() call here handles FieldValue.increment, arrayUnion, etc.)
         const snap = await this.get();
         const existing = snap.data() ?? {};
+
+        if (!snap.exists) {
+            // Firestore throws NOT_FOUND here. We keep the write a no-op to avoid
+            // changing behaviour under load, but it must not stay invisible —
+            // this is how "the save button did nothing" bugs reach production.
+            logger.warn(
+                `[supabase-db] update() on missing document ${this._collection}/${this.id} — ` +
+                `no rows will be affected. Use set(data, { merge: true }) if the document may not exist yet.`
+            );
+        }
+
         const processed = processWriteData(data, existing, true);
         if (!processed.id) processed.id = this.id;
         // Use partial update (not full upsert) so only changed fields overwrite raw_data.
@@ -950,18 +972,39 @@ export class SupabaseQuery {
                     query = applyFilter(query, tableName, this._collection, filter);
                 }
 
-                const { data, error } = await query;
-                if (error) throw new Error(`[supabase-db] aggregate: ${error.message}`);
+                // PostgREST caps a plain select at 1,000 rows. Reading that
+                // single page made every aggregate silently under-report once a
+                // collection passed 1k documents — financial totals included.
+                const rows: any[] = [];
+                for (let offset = 0; ; offset += 1000) {
+                    const { data, error } = await query.range(offset, offset + 999);
+                    if (error) throw new Error(`[supabase-db] aggregate ${this._collection}: ${error.message}`);
+                    if (!data || data.length === 0) break;
+                    rows.push(...data);
+                    if (data.length < 1000) break;
+                }
 
                 const sums: Record<string, number> = {};
                 for (const [key, value] of Object.entries(spec)) {
-                    const field = (value as any)?._field || "amountDisbursed";
-                    let sum = 0;
-                    for (const row of data || []) {
-                        const raw = row.raw_data || {};
-                        sum += Number(raw[field]) || 0;
+                    const op = (value as any)?._op ?? 'sum';
+                    const field = (value as any)?._field;
+
+                    if (op === 'count') {
+                        sums[key] = rows.length;
+                        continue;
                     }
-                    sums[key] = sum;
+
+                    let sum = 0;
+                    let counted = 0;
+                    for (const row of rows) {
+                        const raw = row.raw_data || {};
+                        const n = Number(raw[field]);
+                        if (Number.isFinite(n)) {
+                            sum += n;
+                            counted++;
+                        }
+                    }
+                    sums[key] = op === 'average' ? (counted ? sum / counted : 0) : sum;
                 }
 
                 return {
@@ -1224,9 +1267,39 @@ export const supabaseDb = {
         return new SupabaseCollectionReference(name);
     },
 
-    doc(path: string): SupabaseDocumentReference {
-        const parts = path.split('/');
-        if (parts.length < 2) throw new Error(`Invalid document path: ${path}`);
+    /**
+     * Resolve a document reference.
+     *
+     * Accepts both call styles used across the codebase:
+     *   db.doc("users/abc")                          — Admin SDK slash path
+     *   db.doc("users", "abc")                       — client SDK style segments
+     *   db.doc("cooperatives", id, "members", uid)   — nested segments
+     *
+     * Previously only the first form was honoured; the extra segments were
+     * dropped, so `db.doc("processedPayments", ref)` collapsed to a
+     * single-segment path and threw "Invalid document path". That took out the
+     * cooperative contribution verification and balance lookups entirely.
+     */
+    doc(path: string, ...segments: string[]): SupabaseDocumentReference {
+        const parts = [path, ...segments]
+            .filter(p => p !== undefined && p !== null && p !== '')
+            .flatMap(p => String(p).split('/'))
+            .filter(Boolean);
+
+        if (parts.length < 2) {
+            throw new Error(
+                `Invalid document path: "${[path, ...segments].join('/')}". ` +
+                `A document path needs an even number of segments (collection/id). ` +
+                `To create a document with a generated id use db.collection(name).doc().`
+            );
+        }
+        if (parts.length % 2 !== 0) {
+            throw new Error(
+                `Invalid document path: "${parts.join('/')}" has an odd number of segments. ` +
+                `Document paths must alternate collection/id.`
+            );
+        }
+
         const id = parts[parts.length - 1];
         const collection = parts.slice(0, -1).join('/');
         return new SupabaseDocumentReference(collection, id);
@@ -1296,12 +1369,33 @@ export async function updateDoc(ref: any, data: any) {
     return ref.update(data);
 }
 
+/**
+ * Numeric increment sentinel.
+ *
+ * Must produce the same shape the write pipeline detects (`_methodName`).
+ * The previous `{ __op: 'increment' }` shape was invisible to
+ * getFieldValueType(), so `increment(1)` was persisted verbatim as a JSON
+ * object — silently replacing counters like memberCount/totalSavings with
+ * `{"__op":"increment","value":1}` instead of adding to them.
+ */
 export function increment(value: number) {
-    return { __op: 'increment', value };
+    return FieldValue.increment(value);
 }
 
 export function serverTimestamp() {
-    return new Date();
+    return FieldValue.serverTimestamp();
+}
+
+export function arrayUnion(...elements: any[]) {
+    return FieldValue.arrayUnion(...elements);
+}
+
+export function arrayRemove(...elements: any[]) {
+    return FieldValue.arrayRemove(...elements);
+}
+
+export function deleteField() {
+    return FieldValue.delete();
 }
 
 export async function runTransaction(dbInstance: any, updateFunction: (transaction: any) => Promise<any>) {
