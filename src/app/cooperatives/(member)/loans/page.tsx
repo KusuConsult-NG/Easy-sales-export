@@ -263,7 +263,7 @@ export default function LoansPage() {
                                                 </div>
                                                 <div className="px-3 py-1 bg-blue-100 rounded-full">
                                                     <span className="text-xs font-bold text-blue-700">
-                                                        {product.interestRate}% APR
+                                                        {product.interestRate}% / month
                                                     </span>
                                                 </div>
                                             </div>
@@ -355,7 +355,7 @@ export default function LoansPage() {
                                                 <div>
                                                     <p className="text-xs text-slate-500 mb-1">Interest Rate</p>
                                                     <p className="font-bold text-slate-900">
-                                                        {app.interestRate}% APR
+                                                        {app.interestRate}% / month
                                                     </p>
                                                 </div>
                                                 <div>
@@ -497,7 +497,7 @@ function LoanApplicationModal({
                             <div className="bg-blue-50 p-4 rounded-xl space-y-2">
                                 <div className="flex justify-between text-sm">
                                     <span className="text-slate-600">Interest Rate</span>
-                                    <span className="font-semibold text-slate-900">{product.interestRate}%</span>
+                                    <span className="font-semibold text-slate-900">{product.interestRate}% / month</span>
                                 </div>
                                 <div className="flex justify-between text-sm">
                                     <span className="text-slate-600">Duration</span>
