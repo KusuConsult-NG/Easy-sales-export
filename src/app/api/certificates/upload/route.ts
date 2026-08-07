@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
-import { adminStorage } from "@/lib/firebase-admin";
+import { uploadFileToStorage } from "@/lib/storage-admin";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
@@ -89,17 +89,10 @@ export async function POST(request: NextRequest) {
             fileType = file.type;
             const uniqueFileName = `${Date.now()}_${file.name}`;
             storagePath = `certificates/${session.user.id}/${uniqueFileName}`;
-            const bucket = adminStorage.bucket();
-            const fileRef = bucket.file(storagePath);
-
-            const buffer = Buffer.from(await file.arrayBuffer());
-            await fileRef.save(buffer, {
-                metadata: { contentType: file.type },
-            });
-
-            // Make file public or generate signed URL
-            await fileRef.makePublic();
-            fileUrl = `https://storage.googleapis.com/${bucket.name}/${storagePath}`;
+            // Upload via the shared server-side uploader (Cloudinary).
+            // The firebase-admin/storage shim used here before stored nothing
+            // and had no makePublic(), so certificate uploads always threw.
+            fileUrl = await uploadFileToStorage(file, storagePath, true);
         }
 
         // Save metadata to Firestore (Admin SDK)
