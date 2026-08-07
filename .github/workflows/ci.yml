@@ -12,10 +12,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Must match .node-version, the Dockerfile (node:22-alpine) and the
+      # ">=22.12.0" engines constraint in package.json. CI was pinned to Node 20,
+      # so it validated the app on a runtime production never uses.
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version-file: '.node-version'
           cache: 'npm'
 
       - name: Install dependencies
@@ -23,6 +26,21 @@ jobs:
 
       - name: TypeScript Compile Check
         run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      # CI previously stopped at tsc + jest. Neither catches a broken production
+      # build, which is what actually ships, so build regressions reached
+      # production unchallenged.
+      - name: Production Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+          SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key
+          NEXTAUTH_SECRET: placeholder-ci-secret-placeholder-ci-secret
+          AUTH_SECRET: placeholder-ci-secret-placeholder-ci-secret
 
       - name: Run Jest Unit Tests
         run: npm run test
