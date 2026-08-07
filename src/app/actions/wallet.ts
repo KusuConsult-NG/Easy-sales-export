@@ -17,6 +17,7 @@ import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { getBaseUrl } from "@/lib/server-utils";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { creditWalletOnce, debitWalletOnce } from "@/lib/wallet-ledger";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import type { Wallet, WalletTransaction } from "@/lib/types/marketplace";
 import { smsWithdrawalApproved, smsWithdrawalRejected } from "@/lib/africastalking";
@@ -311,56 +312,46 @@ async function _confirmWalletFundingAction(reference: string, paidAt?: Date): Pr
         return { success: false as const, error: "Payment amount mismatch", data: null };
     }
 
-    // Guard: idempotency — mark txn as done only once
     const txnSnap = await db.collection(TXN_COLLECTION)
         .where("reference", "==", reference)
-        .where("status", "==", "pending")
         .limit(1)
         .get();
 
-    if (txnSnap.empty) {
-        // Either already processed or not found — safe to ignore
+    const txnRef = txnSnap.empty ? null : txnSnap.docs[0].ref;
+    const paymentTimestamp = paidAt ? Timestamp.fromDate(paidAt) : FieldValue.serverTimestamp();
+
+    // Claim the reference and credit the wallet in one database statement.
+    //
+    // This previously read the balance, added to it in JavaScript and wrote the
+    // absolute result back inside runTransaction — which takes no lock, so two
+    // payments landing together on one wallet lost an update. Idempotency was
+    // decided by the "status == pending" query above, which two concurrent
+    // deliveries of the same webhook could both pass.
+    const { claimed, balance: newBalance } = await creditWalletOnce({
+        reference,
+        userId,
+        amount: amountNGN,
+        paymentType: "wallet_funding",
+        source: "wallet_funding_action",
+    });
+
+    if (!claimed) {
+        // A duplicate delivery of a payment already credited. Not an error.
+        logger.info(`[Wallet] ${reference} already credited; ignoring duplicate`);
         return { success: false as const, error: "Already processed", data: null };
     }
 
-    const txnRef = txnSnap.docs[0].ref;
-
-    // Credit wallet via Firestore transaction for atomicity
-    const walletRef = db.collection(WALLET_COLLECTION).doc(userId);
-
-    const paymentTimestamp = paidAt ? Timestamp.fromDate(paidAt) : FieldValue.serverTimestamp();
-
-    const newBalance = await db.runTransaction(async (t) => {
-        const freshTxn = await t.get(txnRef);
-        if (!freshTxn.exists || freshTxn.data()?.status !== "pending") {
-            throw new Error("Transaction already processed");
-        }
-
-        const walletSnap = await t.get(walletRef);
-        const currentBalance = walletSnap.exists ? (walletSnap.data()?.balance || 0) : 0;
-        const updatedBalance = currentBalance + amountNGN;
-
-        if (walletSnap.exists) {
-            t.update(walletRef, { balance: updatedBalance, updatedAt: FieldValue.serverTimestamp() });
-        } else {
-            t.set(walletRef, {
-                userId,
-                balance: updatedBalance,
-                currency: "NGN",
-                createdAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
-            });
-        }
-
-        // Update the pending transaction record
-        t.update(txnRef, {
-            balanceBefore: currentBalance,
-            balanceAfter: updatedBalance,
+    // Bookkeeping after the money has moved. These records are descriptive; the
+    // balance and the reference claim above are the source of truth, so a
+    // failure here cannot double-credit.
+    if (txnRef) {
+        await txnRef.update({
+            balanceAfter: newBalance,
             status: "completed",
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        t.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(txnRef.id), {
+        await db.collection(COLLECTIONS.TRANSACTIONS).doc(txnRef.id).set({
             id: txnRef.id,
             userId,
             type: "funding",
@@ -372,19 +363,7 @@ async function _confirmWalletFundingAction(reference: string, paidAt?: Date): Pr
             reference,
             description: "Wallet funded successfully"
         }, { merge: true });
-
-        t.set(db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference), {
-            reference,
-            type: "wallet_funding",
-            userId,
-            amount: amountNGN,
-            processedAt: paymentTimestamp,
-            source: "wallet_funding_action",
-            status: "completed",
-        });
-
-        return updatedBalance;
-    });
+    }
 
     return { error: null, success: true as const, data: { newBalance } };
 }
@@ -405,61 +384,57 @@ async function _walletCheckoutAction(
     const { session } = sessionResult;
     const userId = session.user.id;
 
-    const walletRef = db.collection(WALLET_COLLECTION).doc(userId);
+    // Debit under a row lock, keyed on the order so a double-submitted checkout
+    // charges once.
+    //
+    // The previous version read the balance and wrote back an absolute value
+    // with no lock: two checkouts arriving together both saw the same balance,
+    // both passed the sufficiency check, and both charged it — overdrawing the
+    // wallet. The order id is the idempotency key because it is stable across
+    // retries of the same purchase.
+    const { ok, balance: newBalance, reason } = await debitWalletOnce({
+        reference: `order:${orderId}`,
+        userId,
+        amount: amountNGN,
+        purpose: "marketplace_checkout",
+        metadata: { orderId },
+    });
 
-    const newBalance = await db.runTransaction(async (t) => {
-        const snap = await t.get(walletRef);
-        const currentBalance = snap.exists ? (snap.data()?.balance || 0) : 0;
-
-        if (currentBalance < amountNGN) {
-            throw new Error("Insufficient wallet balance");
+    if (!ok) {
+        if (reason === "already_processed") {
+            logger.info(`[Wallet] Order ${orderId} already charged; ignoring duplicate checkout`);
+            return { error: null, success: true as const, data: { newBalance } };
         }
+        return { success: false as const, error: "Insufficient wallet balance", data: null };
+    }
 
-        const updatedBalance = currentBalance - amountNGN;
+    // Ledger records, written after the money moved.
+    const shortId = orderId.substring(0, 8).toUpperCase();
+    const txnRef = db.collection(TXN_COLLECTION).doc();
+    await txnRef.set({
+        walletId: userId,
+        userId,
+        type: "purchase",
+        amount: -amountNGN, // Negative = debit
+        balanceAfter: newBalance,
+        orderId,
+        description: `Marketplace purchase — Order #${shortId}`,
+        status: "completed",
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+    });
 
-        if (snap.exists) {
-            t.update(walletRef, { balance: updatedBalance, updatedAt: FieldValue.serverTimestamp() });
-        } else {
-            t.set(walletRef, {
-                userId,
-                balance: updatedBalance,
-                currency: "NGN",
-                createdAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
-            });
-        }
-
-        // Record the transaction
-        const shortId = orderId.substring(0, 8).toUpperCase();
-        const txnRef = db.collection(TXN_COLLECTION).doc();
-        t.set(txnRef, {
-            walletId: userId,
-            userId,
-            type: "purchase",
-            amount: -amountNGN, // Negative = debit
-            balanceBefore: currentBalance,
-            balanceAfter: updatedBalance,
-            orderId,
-            description: `Marketplace purchase — Order #${shortId}`,
-            status: "completed",
-            createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-        });
-
-        t.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(txnRef.id), {
-            id: txnRef.id,
-            userId,
-            type: "purchase",
-            module: "wallet",
-            amount: -amountNGN, // Explicitly negative to show debit in ledger.
-            currency: "NGN",
-            status: "completed",
-            date: FieldValue.serverTimestamp(),
-            reference: orderId,
-            description: `Marketplace purchase — Order #${shortId}`
-        });
-
-        return updatedBalance;
+    await db.collection(COLLECTIONS.TRANSACTIONS).doc(txnRef.id).set({
+        id: txnRef.id,
+        userId,
+        type: "purchase",
+        module: "wallet",
+        amount: -amountNGN, // Explicitly negative to show debit in ledger.
+        currency: "NGN",
+        status: "completed",
+        date: FieldValue.serverTimestamp(),
+        reference: orderId,
+        description: `Marketplace purchase — Order #${shortId}`
     });
 
     return { error: null, success: true as const, data: { newBalance } };
