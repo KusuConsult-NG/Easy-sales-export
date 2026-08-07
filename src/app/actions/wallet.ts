@@ -18,6 +18,7 @@ import { requireSession } from "@/lib/session-guard";
 import { getBaseUrl } from "@/lib/server-utils";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { creditWalletOnce, debitWalletOnce, debitWalletLocked } from "@/lib/wallet-ledger";
+import { claimStatusTransition } from "@/lib/status-transition";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import type { Wallet, WalletTransaction } from "@/lib/types/marketplace";
 import { smsWithdrawalApproved, smsWithdrawalRejected } from "@/lib/africastalking";
@@ -685,21 +686,31 @@ async function _processWalletWithdrawalAction(
             logger.error("Rejection notification error:", notifyErr);
         }
     } else {
-        // Approval Flow — 1. State Lock
-        try {
-            await db.runTransaction(async (t) => {
-                const freshTxn = await t.get(txnRef);
-                if (!freshTxn.exists) throw new Error("Transaction not found");
-                if (freshTxn.data()?.status !== "pending") throw new Error("Withdrawal is no longer pending");
+        // Approval Flow — 1. Claim the payout.
+        //
+        // This is the gate that stops a double payout. It was a check-then-write
+        // inside runTransaction, which takes no lock: two admins approving the
+        // same withdrawal at once both read "pending", both wrote
+        // "payout_initiated", and both continued to the Paystack transfer below
+        // — paying the user twice, out of the business's money, with nothing
+        // raised. One conditional UPDATE means exactly one caller wins.
+        const claim = await claimStatusTransition({
+            collection: COLLECTIONS.WALLET_TRANSACTIONS,
+            id: transactionId,
+            from: "pending",
+            to: "payout_initiated",
+            patch: { processedBy: adminId },
+        });
 
-                t.update(txnRef, {
-                    status: "payout_initiated",
-                    processedBy: adminId,
-                    updatedAt: FieldValue.serverTimestamp(),
-                });
-            });
-        } catch (err: any) {
-            return { success: false as const, error: err.message || "Failed to lock transaction state", data: null };
+        if (!claim.claimed) {
+            if (claim.status === null) {
+                return { success: false as const, error: "Transaction not found", data: null };
+            }
+            // Another admin already took it. Not an error worth retrying.
+            logger.info(
+                `[Wallet] Withdrawal ${transactionId} already claimed (status: ${claim.status})`
+            );
+            return { success: false as const, error: "Withdrawal is no longer pending", data: null };
         }
 
         // 2. Execute payout
@@ -728,36 +739,50 @@ async function _processWalletWithdrawalAction(
         }
 
         // 3. Mark as completed (Final status update + Ledger)
-        await db.runTransaction(async (t) => {
-            const freshTxn = await t.get(txnRef);
-            if (!freshTxn.exists) throw new Error("Transaction not found");
-            if (freshTxn.data()?.status !== "payout_initiated") {
-                throw new Error("Withdrawal has been modified outside the lock");
-            }
-
-            t.update(txnRef, {
-                status: "completed",
+        //
+        // Conditional on still being payout_initiated, so a concurrent writer
+        // cannot silently overwrite the outcome of a transfer that has already
+        // left the building.
+        const completion = await claimStatusTransition({
+            collection: COLLECTIONS.WALLET_TRANSACTIONS,
+            id: transactionId,
+            from: "payout_initiated",
+            to: "completed",
+            patch: {
                 adminNote: note || null,
                 transferCode: payoutRes.transferCode || null,
                 payoutReference: payoutRes.reference || null,
-                updatedAt: FieldValue.serverTimestamp(),
-            });
+            },
+        });
 
-            // Global Ledger Record (Unified Tracking)
-            const reference = payoutRes.reference || `WALLET-WITHDRAW-${transactionId}`;
-            const globalTxRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(reference);
-            t.set(globalTxRef, {
-                id: reference,
-                userId: txnData.userId,
-                type: "withdrawal",
-                module: "wallet",
-                amount: payoutAmount, // Withdrawal is stored as negative in wallet_txns, absolute in ledger
-                currency: "NGN",
-                status: "completed",
-                date: FieldValue.serverTimestamp(),
-                reference,
-                description: `Wallet withdrawal processed - ${transactionId}`
-            });
+        if (!completion.claimed) {
+            // The transfer already succeeded, so this must not read as failure —
+            // the money has moved. Record it loudly for reconciliation instead.
+            logger.error(
+                `[Wallet] Payout for ${transactionId} succeeded but the record was ` +
+                `modified concurrently (status: ${completion.status}). ` +
+                `Paystack reference: ${payoutRes.reference}. Needs manual reconciliation.`
+            );
+        }
+
+        // Global Ledger Record (Unified Tracking).
+        //
+        // A plain write: the status claim above is what guarantees this runs
+        // once, and a single-write runTransaction bought nothing but the
+        // appearance of safety. Keyed on the Paystack reference, so a retry
+        // overwrites rather than duplicating.
+        const reference = payoutRes.reference || `WALLET-WITHDRAW-${transactionId}`;
+        await db.collection(COLLECTIONS.TRANSACTIONS).doc(reference).set({
+            id: reference,
+            userId: txnData.userId,
+            type: "withdrawal",
+            module: "wallet",
+            amount: payoutAmount, // Withdrawal is stored as negative in wallet_txns, absolute in ledger
+            currency: "NGN",
+            status: "completed",
+            date: FieldValue.serverTimestamp(),
+            reference,
+            description: `Wallet withdrawal processed - ${transactionId}`
         });
 
         // Post-commit side effects: Notifications

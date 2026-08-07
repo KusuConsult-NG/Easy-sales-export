@@ -77,17 +77,31 @@ Note the scope of that evidence. It proves the *primitives* behave correctly.
 It does not prove every caller uses them correctly — that is what reading each
 conversion is for.
 
-## Known, not yet fixed: the withdrawal state machine
+## Fixed: the withdrawal state machine
 
-`_processWalletWithdrawalAction` moves a withdrawal `pending → payout_initiated
-→ completed` with check-then-write inside `runTransaction`. No balance is
-touched, so it is outside the scope above, but it is still a race: two admins
-approving the same withdrawal at once can both read `pending`, both write
-`payout_initiated`, and **both call Paystack transfer** — paying out twice.
+`_processWalletWithdrawalAction` moved a withdrawal `pending → payout_initiated
+→ completed` with check-then-write inside `runTransaction`. No balance was
+touched, so the wallet functions did not cover it, but two admins approving at
+once could both read `pending`, both write `payout_initiated`, and **both call
+Paystack transfer** — paying out twice, out of the business's money, with
+nothing raised.
 
-Fixing it needs a compare-and-swap (`UPDATE ... WHERE status = 'pending'
-RETURNING`), which the adapter has no primitive for. Worth doing, and separate
-from the balance work.
+Migration `007` adds `claim_status_transition`, a compare-and-swap: the status
+changes only if it still holds the expected value, and the caller is told
+whether it was the one that changed it. A single conditional `UPDATE` locks the
+row and re-reads under the lock, so exactly one of two concurrent callers
+matches the `WHERE`.
+
+Use `claimStatusTransition` from `src/lib/status-transition.ts` for any action
+that must happen once per state change — payouts, escrow release, order
+fulfilment, loan disbursement. Two rules:
+
+1. **`claimed: false` means somebody else is handling it.** Stop; do not retry.
+2. **`status: null` means the record does not exist**, which is a different
+   failure. Confusing the two either pays a user twice or refuses a legitimate
+   payout.
+
+`wallet.ts` now contains no `runTransaction` calls at all.
 
 ## Not yet migrated
 
