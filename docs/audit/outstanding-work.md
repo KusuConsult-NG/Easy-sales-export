@@ -58,10 +58,10 @@ At the ₦5,000,000 ceiling over 12 months: ₦8,805,799 repaid.
   told a number that was never stored. Any with a term above 12 months predates
   the cap and needs handling either way.
 
-### Savings interest — the code says annual, and that is now the open question
+### Savings interest — RESOLVED 2026-08-07: annual, as the code has it
 
 `cooperatives/(member)/my-savings` displays `{rate}% APR` for fixed savings
-plans. That label matches what the code actually pays:
+plans. Confirmed correct. Savings interest is **14% per year**:
 
 ```js
 // src/app/api/cooperative/create-fixed-savings/route.ts
@@ -69,26 +69,14 @@ const interestRate = 14; // 14% annual interest for fixed savings
 const projectedProfit = (amount * interestRate * (durationMonths / 12)) / 100;
 ```
 
-The `/12` is annual simple interest pro-rated by months, so `% APR` is correct
-as things stand.
+The `/12` is annual simple interest pro-rated by months. Label and calculation
+agree; nothing to do.
 
-The business owner stated on 2026-08-07 that the savings rate is monthly, which
-conflicts with this. **Nothing was changed, because both ways of resolving it
-are expensive:**
-
-| ₦1,000,000 for 12 months at 14% | Profit paid |
-|---|---|
-| Annual — what the code does today | ₦140,000 |
-| Monthly simple | ₦1,680,000 |
-| Monthly compounding | ₦3,817,905 |
-
-Relabelling alone would tell savers 14% per month while paying 14% per year.
-Changing the calculation multiplies the liability on every fixed savings plan
-by roughly 12×, including plans already sold.
-
-**Needed:** confirmation of which is intended, and — if the rate really is
-monthly — a decision about existing plans, which were sold and are accruing
-under the annual formula.
+Recorded because the question is easy to reopen by mistake. Loans are monthly
+and savings are annual, so anyone moving between the two will feel like one of
+them must be wrong. It is not. For scale, had savings been monthly, ₦1,000,000
+over 12 months would pay ₦1,680,000 rather than ₦140,000 — which is why this
+was confirmed rather than inferred.
 
 ### `interestRate` means different things on different records
 
