@@ -214,7 +214,7 @@ export default function LoanProductsPage() {
                                 <div className="flex items-center justify-between text-sm">
                                     <span className="text-slate-600">Interest Rate</span>
                                     <span className="font-bold text-blue-600">
-                                        {product.interestRate}% APR
+                                        {product.interestRate}% per month
                                     </span>
                                 </div>
                                 <div className="flex items-center justify-between text-sm">

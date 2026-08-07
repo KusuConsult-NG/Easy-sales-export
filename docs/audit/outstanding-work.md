@@ -58,10 +58,32 @@ At the ₦5,000,000 ceiling over 12 months: ₦8,805,799 repaid.
   told a number that was never stored. Any with a term above 12 months predates
   the cap and needs handling either way.
 
-### Savings interest labelling
+### Savings interest — RESOLVED 2026-08-07: annual, as the code has it
+
 `cooperatives/(member)/my-savings` displays `{rate}% APR` for fixed savings
-plans. Left untouched because it is unknown whether that figure is monthly or
-annual. If monthly, the label is wrong in the same way the loan label was.
+plans. Confirmed correct. Savings interest is **14% per year**:
+
+```js
+// src/app/api/cooperative/create-fixed-savings/route.ts
+const interestRate = 14; // 14% annual interest for fixed savings
+const projectedProfit = (amount * interestRate * (durationMonths / 12)) / 100;
+```
+
+The `/12` is annual simple interest pro-rated by months. Label and calculation
+agree; nothing to do.
+
+Recorded because the question is easy to reopen by mistake. Loans are monthly
+and savings are annual, so anyone moving between the two will feel like one of
+them must be wrong. It is not. For scale, had savings been monthly, ₦1,000,000
+over 12 months would pay ₦1,680,000 rather than ₦140,000 — which is why this
+was confirmed rather than inferred.
+
+### `interestRate` means different things on different records
+
+A trap worth knowing before touching either area. `interestRate` is a **monthly**
+percentage on loans (see `src/lib/cooperative-tiers.ts`) and an **annual** one on
+fixed savings plans. Same field name, same value range, different meaning. Any
+shared formatter or report that treats them alike will be wrong for one of them.
 
 ### Push notifications
 Have never worked. The messaging layer was a stub that returned a fake success
