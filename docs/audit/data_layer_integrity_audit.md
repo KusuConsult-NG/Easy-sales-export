@@ -448,3 +448,104 @@ difference matters:
 The highest-value next step is not more reading. It is closing risk A (RLS) and
 risk B (atomic money operations), then typing the adapter surfaces so this class
 of defect becomes visible to `tsc` instead of to users.
+
+---
+
+# Round 3 — Business-rule deep read: the loan subsystem
+
+Rounds 1 and 2 found contract mismatches by sweeping. This class cannot be
+found that way: every line reads correctly on its own. It needs the rules held
+in mind while reading the whole subsystem.
+
+## P. Three loan implementations write to one collection with incompatible schemas
+
+`COLLECTIONS.LOAN_APPLICATIONS` is written by three independent code paths, and
+read by one shared admin approval/disbursement/repayment pipeline.
+
+| Path | Reachable from UI | Interest rate | Eligibility | Amount cap |
+|---|---|---|---|---|
+| `api/cooperative/apply-loan` | no caller anywhere | `product.interestRate`, **annual** | savings ≥ 2× loan | product min/max |
+| `_loans.ts` (`submitLoanApplicationAction`) | only via `LoanApplicationWizard`, which is not mounted | `getTierInterestRate()` → `10/12`, **monthly** | tier: 3× contributions, ≤ 12 months | 3× contributions |
+| `loan-actions.ts` (`submitLoanApplication`) | **yes** — `/loans/apply`, linked from `/loans` | **none written** | **none** | Zod only: ₦1k–₦5m, 3–24 months |
+
+Field names collide or go missing across the three: `durationMonths` vs
+`repaymentPeriod`; `interestRate`, `monthlyPayment`, `totalRepayment` and
+`productId` are absent entirely from the live path.
+
+### P1. The same field carries two different units — a 12× overcharge
+
+`_getRepaymentScheduleAction` (`_loans.ts:~936`) generates the amortisation
+schedule:
+
+    const interestRate = loanData.interestRate;
+    const r = interestRate / 100;          // treated as a MONTHLY rate
+
+That is correct for `_loans.ts`, which stores `10/12 = 0.833` (monthly).
+It is wrong for `api/cooperative/apply-loan`, which stores `product.interestRate`
+as an **annual** percentage — that path divides by 12 itself at application time
+but persists the annual figure.
+
+A product advertised at 10% APR, applied for through that route, yields
+`r = 10/100 = 0.10` **per month** — roughly 120% APR. Members would be billed
+about twelve times the advertised rate.
+
+The endpoint has no UI caller today, so this is latent rather than live. It is
+an authenticated route and remains callable.
+
+### P2. General loans get an empty repayment schedule
+
+The live path (`/loans/apply`) writes neither `interestRate` nor
+`durationMonths`. In the schedule generator that gives:
+
+    const r = undefined / 100;             // NaN
+    const n = undefined;
+    for (let i = 1; i <= n; i++)           // 1 <= undefined → false
+
+The loop never executes, so **zero installments are created** and the borrower
+is returned an empty schedule — no due dates, nothing to repay against.
+`calculatePenalty` never fires because there are no installments to be overdue.
+
+Had only one of the two fields been missing, the loop would instead have
+persisted `NaN` into `principalAmount` / `interestAmount` / `totalAmount` on
+every `LOAN_REPAYMENTS` row.
+
+### P3. Lending limits differ by 6× between paths
+
+`api/cooperative/apply-loan` requires savings ≥ 2× the loan (so at most 0.5×
+savings). `_loans.ts` permits 3× contributions. The same member is entitled to
+six times more through one route than the other.
+
+### P4. The member UI mislabels the rate
+
+`cooperatives/(member)/loans/page.tsx:358` renders `{app.interestRate}% APR`.
+For a `_loans.ts` loan that field is the **monthly** rate, so a 10% APR loan
+displays as "0.83% APR". For a general loan the field is absent and it renders
+`undefined`.
+
+### P5. Loan creation is audit-logged as an approval
+
+`loan-actions.ts:66` logs `action: 'loan_approved'` when an application is
+merely *submitted*, with a comment conceding the enum is being reused. The
+audit trail therefore shows approvals that never happened — the one record you
+would rely on in a dispute.
+
+### Not fixed
+
+Deliberately. Which path is authoritative, whether the general-loan product
+should exist alongside the cooperative one, and what the real lending policy is
+(2× savings or 3× contributions) are product decisions, not code decisions.
+Guessing would silently change lending terms for real members.
+
+The minimum safe sequence: pick the authoritative path, delete or gate the other
+two, settle whether `interestRate` is monthly or annual and migrate existing
+rows to it, then add a schedule-generation guard that refuses to write a
+schedule when rate or duration is missing rather than emitting an empty one.
+
+## Method note
+
+Nothing in round 3 would have surfaced from pattern matching. Each line is
+locally correct: `r = interestRate / 100` is right, `interestRate:
+product.interestRate` is right, `for (let i = 1; i <= n; i++)` is right. The
+defects live in the agreement between files that no type in the codebase
+expresses — `LoanApplication` is written by three producers that each satisfy a
+different subset of it.
