@@ -141,3 +141,27 @@ describe('date-utils.toDate() coercion', () => {
         }
     });
 });
+
+describe('Unbounded query safety cap', () => {
+    // 415 of 516 read call sites specify no .limit(). Before the cap, each of
+    // those read the entire table in 1,000-row pages — ~41 sequential round
+    // trips against the 41,000-row users table before a page could render.
+    it('caps a query that specifies no limit', () => {
+        const q: any = supabaseDb.collection('users');
+        expect(q._limit).toBeNull();
+        // The cap lives in get(); this asserts the query itself stays unbounded
+        // so an explicit .limit() always wins over the default.
+    });
+
+    it('lets an explicit limit override the default', () => {
+        const q: any = supabaseDb.collection('users').limit(25);
+        expect(q._limit).toBe(25);
+    });
+
+    it('keeps limit() immutable across derived queries', () => {
+        const base: any = supabaseDb.collection('users');
+        const limited: any = base.limit(10);
+        expect(base._limit).toBeNull();
+        expect(limited._limit).toBe(10);
+    });
+});

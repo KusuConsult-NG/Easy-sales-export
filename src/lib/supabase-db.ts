@@ -95,7 +95,20 @@ const FIELD_TO_COLUMN: Record<string, Record<string, string>> = {
     },
 };
 
+/**
+ * Rows returned by a query that specifies no .limit().
+ *
+ * Chosen to match the existing 5,000-document threshold that
+ * firestore-serialize already warns at, so the two agree. Reaching it is
+ * reported, never silent — see SupabaseQuery.get().
+ */
+const DEFAULT_QUERY_LIMIT = Math.max(
+    1,
+    Number(process.env.SUPABASE_DEFAULT_QUERY_LIMIT) || 5000
+);
+
 const _unknownCollectionsWarned = new Set<string>();
+const _limitReachedWarned = new Set<string>();
 
 function getTableName(collection: string): string {
     if (collection in DEDICATED_TABLE_MAP) {
@@ -1100,7 +1113,19 @@ export class SupabaseQuery {
 
         // Apply limit and fetch auto-paginated batches to bypass Supabase 1,000-row select caps
         const allData: any[] = [];
-        const limitVal = this._limit ?? 999999;
+        // A query with no .limit() used to read the ENTIRE table, one 1,000-row
+        // page at a time. 415 of the 516 read call sites in this codebase have
+        // no limit, so a single page load against the 41,000-row users table
+        // meant ~41 sequential round trips to Supabase before anything
+        // rendered — the main reason the application feels slow, and one that
+        // gets worse as data grows.
+        //
+        // The cap is deliberately NOT silent: exceeding it logs the collection
+        // by name, so the screens that genuinely need pagination identify
+        // themselves in production instead of being guessed at. Raise it with
+        // SUPABASE_DEFAULT_QUERY_LIMIT if a specific screen needs more while
+        // it is being fixed properly.
+        const limitVal = this._limit ?? DEFAULT_QUERY_LIMIT;
         const offsetVal = this._offset ?? 0;
         let fetchedSoFar = 0;
 
@@ -1117,6 +1142,20 @@ export class SupabaseQuery {
             fetchedSoFar += batchData.length;
 
             if (batchData.length < batchLimit) break;
+        }
+
+        // Truncation must never pass unnoticed — a short result that looks
+        // complete is how "the report is missing rows" bugs reach production.
+        if (this._limit == null && fetchedSoFar >= DEFAULT_QUERY_LIMIT) {
+            const key = this._collection;
+            if (!_limitReachedWarned.has(key)) {
+                _limitReachedWarned.add(key);
+                logger.warn(
+                    `[supabase-db] Query on '${key}' returned the default cap of ${DEFAULT_QUERY_LIMIT} rows ` +
+                    `and was truncated. This query has no .limit() — give it real pagination, ` +
+                    `or raise SUPABASE_DEFAULT_QUERY_LIMIT if the whole collection is genuinely required.`
+                );
+            }
         }
 
         const docs = allData.map((row: any) => {
