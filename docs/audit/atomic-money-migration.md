@@ -26,18 +26,25 @@ Use `src/lib/wallet-ledger.ts`, never a hand-rolled read-modify-write:
 
 | Function | Use for |
 |---|---|
-| `creditWalletOnce({ reference, userId, amount, ... })` | Money in. Returns `claimed: false` when the reference was already credited. |
-| `debitWalletOnce({ reference, userId, amount, ... })` | Money out. Returns `reason: 'insufficient_funds' \| 'already_processed' \| 'no_wallet'`. |
+| `creditWalletOnce({ reference, userId, amount, status?, ... })` | Money in. Returns `claimed: false` when the reference was already credited. |
+| `debitWalletOnce({ reference, userId, amount, ... })` | Money out **with** a stable key. Returns `reason: 'insufficient_funds' \| 'already_processed' \| 'no_wallet'`. |
+| `debitWalletLocked({ userId, amount })` | Money out with **no** stable key (a withdrawal request). Locks the row; claims nothing. |
 
-Three rules:
+Four rules:
 
 1. **Never read a balance, adjust it, and write it back.** That is the bug.
 2. **The reference is the idempotency key and must be stable across retries** —
    a Paystack reference, or an id derived from the order. A fresh random
-   reference per attempt defeats the whole mechanism.
+   reference per attempt defeats the whole mechanism. When no stable key exists,
+   use `debitWalletLocked` rather than inventing one.
 3. **`claimed: false` and `already_processed` are successes, not errors.** They
    mean the money already moved. A caller that treats them as failure will
    retry a payment that already succeeded.
+4. **Anything that is not money coming in must not record status `completed`.**
+   `global-aggregation.ts` sums `processed_payments` rows with
+   `status == "completed"` as revenue. Debits record `wallet_debit`
+   automatically; refunds must pass `status: "refund"` explicitly. Getting this
+   wrong inflates reported revenue rather than breaking anything visibly.
 
 ## Done
 
@@ -45,6 +52,22 @@ Three rules:
 |---|---|
 | `src/app/actions/wallet.ts` → `_confirmWalletFundingAction` | Paystack wallet funding (credit) |
 | `src/app/actions/wallet.ts` → `_walletCheckoutAction` | Marketplace checkout (debit) |
+| `src/app/actions/wallet.ts` → `_withdrawFromWalletAction` | Withdrawal request reservation (locked debit) |
+| `src/app/actions/wallet.ts` → withdrawal rejection | Refund to wallet (credit, status `refund`) |
+
+`wallet.ts` no longer performs balance arithmetic anywhere.
+
+## Known, not yet fixed: the withdrawal state machine
+
+`_processWalletWithdrawalAction` moves a withdrawal `pending → payout_initiated
+→ completed` with check-then-write inside `runTransaction`. No balance is
+touched, so it is outside the scope above, but it is still a race: two admins
+approving the same withdrawal at once can both read `pending`, both write
+`payout_initiated`, and **both call Paystack transfer** — paying out twice.
+
+Fixing it needs a compare-and-swap (`UPDATE ... WHERE status = 'pending'
+RETURNING`), which the adapter has no primitive for. Worth doing, and separate
+from the balance work.
 
 ## Not yet migrated
 
