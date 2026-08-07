@@ -92,6 +92,11 @@ whether it was the one that changed it. A single conditional `UPDATE` locks the
 row and re-reads under the lock, so exactly one of two concurrent callers
 matches the `WHERE`.
 
+**Verified on staging, 2026-08-07.** With a record at `pending`, the first
+caller returned `claimed = true` and the second `claimed = false` — and the
+row carried the winner's `processedBy`, not the loser's. That second call is
+the payout that used to get through.
+
 Use `claimStatusTransition` from `src/lib/status-transition.ts` for any action
 that must happen once per state change — payouts, escrow release, order
 fulfilment, loan disbursement. Two rules:
