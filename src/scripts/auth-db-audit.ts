@@ -30,14 +30,33 @@ async function auditAuthGap() {
             // Check existence in Firestore for this batch
             // Note: Using individual gets is slow for 44k, but 'in' query has 30 limit.
             // We use Promise.all for the batch.
-            const existenceChecks = await Promise.all(
+            // A read that FAILS must never be recorded as "profile missing".
+            // This previously relied on doc().get() returning a non-existent
+            // snapshot on error, so any timeout or rate limit — likely, given
+            // 1,000 concurrent reads per batch — silently marked live users as
+            // orphans. auth-purge-orphans.ts then deletes whatever lands here.
+            const existenceChecks = await Promise.allSettled(
                 uids.map(async (uid) => {
                     const doc = await db.collection(COLLECTIONS.USERS).doc(uid).get();
                     return { uid, exists: doc.exists };
                 })
             );
 
-            const batchOrphans = existenceChecks.filter(c => !c.exists).map(c => c.uid);
+            const failedReads = existenceChecks.filter(r => r.status === "rejected");
+            if (failedReads.length > 0) {
+                console.error(
+                    `\nABORTING: ${failedReads.length} of ${uids.length} profile reads failed in this batch.\n` +
+                    `The orphan list would be wrong and acting on it would delete live users.\n` +
+                    `First error: ${(failedReads[0] as PromiseRejectedResult).reason}`
+                );
+                process.exitCode = 1;
+                return;
+            }
+
+            const batchOrphans = existenceChecks
+                .map(r => (r as PromiseFulfilledResult<{ uid: string; exists: boolean }>).value)
+                .filter(c => !c.exists)
+                .map(c => c.uid);
             orphans.push(...batchOrphans);
 
             console.log(`Processed ${totalAuthUsers} users... Found ${orphans.length} orphans so far.`);
