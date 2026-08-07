@@ -77,10 +77,27 @@ export class GeoPoint {
 export class Timestamp {
     _seconds: number;
     _nanoseconds: number;
+    /**
+     * Client-SDK aliases.
+     *
+     * Two Timestamp shapes exist in this codebase: this one (admin style,
+     * `_seconds`) and supabase-client-db's (client style, `seconds`).
+     * Consumers read whichever they were written against, so the same value
+     * yielded `undefined` — and then `Invalid Date` or a NaN sort key —
+     * depending on which path produced it.
+     *
+     * These are assigned as own properties rather than getters on purpose:
+     * only own enumerable properties survive serialization to a Client
+     * Component, which is exactly where the mismatch used to surface.
+     */
+    seconds: number;
+    nanoseconds: number;
 
     constructor(seconds: number, nanoseconds: number = 0) {
         this._seconds = seconds;
         this._nanoseconds = nanoseconds;
+        this.seconds = seconds;
+        this.nanoseconds = nanoseconds;
     }
 
     static now(): Timestamp {

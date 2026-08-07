@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseDb as db } from "@/lib/supabase-db";
-import { auth } from "firebase-admin";
+import { supabaseAdmin } from "@/lib/supabase";
 import { logger } from "@/lib/logger";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { Timestamp } from "@/lib/firestore-compat";
@@ -76,24 +76,49 @@ export async function GET(request: NextRequest) {
         // Execute Firestore Batch Delete
         await batch.commit();
 
-        // Pass 2: Destroy Firebase Authentication Identities
-        const authService = auth();
+        // Pass 2: Destroy Authentication Identities.
+        //
+        // This previously called auth() from firebase-admin, which resolves to
+        // the local shim exporting `auth: () => ({})`. deleteUser was therefore
+        // undefined and threw a TypeError for every user; the catch only
+        // recognised Firebase's "auth/user-not-found" code, so a TypeError was
+        // counted as a failure and swallowed. The result was that PII rows were
+        // deleted while the auth identity — holding the user's email — survived
+        // indefinitely, and the route still returned HTTP 200.
+        // SAFETY GATE — read this before enabling.
+        //
+        // Because auth deletion has never actually worked, `auth.users` still
+        // holds the email, id, created_at and user_metadata of every account
+        // this cron has ever "purged". That orphaned auth data is currently the
+        // best available source for reconstructing deleted user records.
+        //
+        // Repairing the deletion therefore destroys the recovery source on the
+        // next run. It stays off until GDPR_PURGE_DELETE_AUTH=true is set
+        // explicitly, so identity data can be exported first. The sweep still
+        // reports exactly what it would remove.
+        const authDeletionEnabled = process.env.GDPR_PURGE_DELETE_AUTH === "true";
         let failedAuthDeletions = 0;
 
-        // FirebaseAuth doesn't super easily support bulk delete inside a transaction, doing it concurrently
-        await Promise.allSettled(
-            deletedUids.map(async (uid) => {
-                try {
-                    await authService.deleteUser(uid);
-                } catch (e: any) {
-                    // It's possible the user was already deleted from Auth manually
-                    if (e.code !== "auth/user-not-found") {
-                        logger.error(`Failed to delete Auth identity for ${uid}`, e);
-                        failedAuthDeletions++;
+        if (!authDeletionEnabled) {
+            logger.warn(
+                `GDPR Sweep: auth deletion disabled (GDPR_PURGE_DELETE_AUTH is not "true"). ` +
+                `${deletedUids.length} auth identities left intact: ${deletedUids.join(", ")}`
+            );
+        } else {
+            await Promise.allSettled(
+                deletedUids.map(async (uid) => {
+                    const { error } = await supabaseAdmin.auth.admin.deleteUser(uid);
+                    if (error) {
+                        // Already removed from Auth (manually or by a previous run) is not a failure.
+                        const alreadyGone = error.status === 404 || /not.?found/i.test(error.message || "");
+                        if (!alreadyGone) {
+                            logger.error(`Failed to delete Auth identity for ${uid}`, error);
+                            failedAuthDeletions++;
+                        }
                     }
-                }
-            })
-        );
+                })
+            );
+        }
 
         logger.info(`GDPR Sweep Complete: Eradicated ${deletedUids.length} accounts (${failedAuthDeletions} Auth failures).`);
 
@@ -105,6 +130,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({
             status: "success",
             deletedCount: deletedUids.length,
+            authDeletionEnabled,
             authFailures: failedAuthDeletions
         });
 

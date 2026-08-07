@@ -190,7 +190,14 @@ export function orderBy(field: string, direction: 'asc' | 'desc' = 'asc') {
 
 // Custom Timestamp shim matching Firebase structure
 export class Timestamp {
-    constructor(public readonly seconds: number, public readonly nanoseconds: number) {}
+    /** Admin-style aliases — see the note in firestore-compat.Timestamp. */
+    public readonly _seconds: number;
+    public readonly _nanoseconds: number;
+
+    constructor(public readonly seconds: number, public readonly nanoseconds: number) {
+        this._seconds = seconds;
+        this._nanoseconds = nanoseconds;
+    }
 
     static now(): Timestamp {
         const ms = Date.now();

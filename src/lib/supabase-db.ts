@@ -1080,14 +1080,20 @@ export class SupabaseQuery {
                 const fieldMap = FIELD_TO_COLUMN[tableName] || {};
                 const cols = NATIVE_COLUMNS[tableName] || [];
                 let colName = fieldMap[firstOrderField] || (cols.includes(firstOrderField) ? firstOrderField : null);
-                if (!colName) colName = (firstOrderField === 'createdAt' || firstOrderField === 'created_at') ? 'created_at' : null;
+                if (!colName) {
+                    // Fall back to the same JSONB path the orderBy above used.
+                    // Previously the cursor was simply dropped for any field that
+                    // was not a native column, so startAfter() returned page 1
+                    // again — "load more" repeated the same rows forever.
+                    colName = (firstOrderField === 'createdAt' || firstOrderField === 'created_at')
+                        ? 'created_at'
+                        : `raw_data->>${JSON.stringify(firstOrderField)}`;
+                }
 
-                if (colName) {
-                    if (this._orderBy[0].direction === 'desc') {
-                        query = query.lt(colName, cursorValue);
-                    } else {
-                        query = query.gt(colName, cursorValue);
-                    }
+                if (this._orderBy[0].direction === 'desc') {
+                    query = query.lt(colName, cursorValue);
+                } else {
+                    query = query.gt(colName, cursorValue);
                 }
             }
         }
