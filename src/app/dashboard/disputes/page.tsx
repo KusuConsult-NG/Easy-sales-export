@@ -8,7 +8,7 @@ import {
     Clock, CheckCircle, XCircle, Eye, MessageCircle,
     ChevronRight,
 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { getMyDisputes } from "@/app/actions/my-data";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { useFirebaseAuthed } from "@/hooks/useFirebaseAuthed";
 import { useToast } from "@/contexts/ToastContext";
@@ -71,26 +71,12 @@ export default function DisputesPage() {
         if (!userId) return;
 
         let isMounted = true;
+        // Scoped server-side to the signed-in buyer. This previously queried
+        // Supabase directly from the browser with the public anon key.
         async function fetchDisputes() {
             try {
-                const { data: rows, error } = await supabase
-                    .from('document_collections')
-                    .select('raw_data')
-                    .eq('collection_name', 'disputes')
-                    .eq('raw_data->>buyerId', userId);
-
-                if (error) throw error;
-
-                if (isMounted && rows) {
-                    const list = rows.map(r => r.raw_data as Dispute);
-                    // Sort locally by createdAt desc
-                    list.sort((a, b) => {
-                        const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-                        const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-                        return tB - tA;
-                    });
-                    setDisputes(list);
-                }
+                const list = await getMyDisputes();
+                if (isMounted) setDisputes(list as Dispute[]);
             } catch (err) {
                 console.error("Disputes query failed:", err);
             } finally {

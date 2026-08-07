@@ -14,7 +14,7 @@ import {
     Clock,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import { db, collection, query, where, getDocs, orderBy } from "@/lib/supabase-client-db";
+import { getMyWithdrawals } from "@/app/actions/my-data";
 
 interface Withdrawal {
     id: string;
@@ -50,21 +50,11 @@ export default function WithdrawalsHistoryPage() {
                 return;
             }
 
-            // Query withdrawals for current user
-            const withdrawalsQuery = query(
-                collection(db, "withdrawals"),
-                where("userId", "==", session.user.id),
-                orderBy("createdAt", "desc")
-            );
-
-            const snapshot = await getDocs(withdrawalsQuery);
-            const data = snapshot.docs.map((doc) => ({
-                id: doc.id,
-                ...doc.data(),
-                requestedAt: doc.data().createdAt?.toDate() || new Date(),
-                processedAt: doc.data().processedAt?.toDate(),
-            })) as Withdrawal[];
-
+            // Scoped to the signed-in user server-side. requestedAt and
+            // processedAt come back as ISO strings; the previous browser query
+            // called .toDate() on them and fell back to `new Date()` whenever
+            // that failed, silently showing today's date on every row.
+            const data = (await getMyWithdrawals()) as Withdrawal[];
             setWithdrawals(data);
         } catch (error) {
             logger.error("Failed to load withdrawals:", error);

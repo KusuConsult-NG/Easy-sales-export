@@ -9,7 +9,17 @@ import {
     TrendingUp, Users, BookOpen, Landmark, ExternalLink, Settings,
 } from "lucide-react";
 import AnnouncementBanner from "@/components/AnnouncementBanner";
-import { db, collection, doc, query, where, onSnapshot, orderBy, limit } from "@/lib/supabase-client-db";
+import {
+    getMyServiceRegistrations,
+    getMyUnreadNotificationCount,
+    getMyUnreadMessageCount,
+    getMyNotifications,
+    getMyWalletBalance,
+    getMyActiveOrderCount,
+    getUpcomingEvents,
+    getRecentResources,
+} from "@/app/actions/my-data";
+import { toDate } from "@/lib/date-utils";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { UserRole } from "@/lib/types/roles";
 
@@ -200,215 +210,69 @@ function DashboardHomeContent() {
     const [upcomingEvents, setUpcomingEvents] = useState<DashboardEvent[]>([]);
     const [recentResources, setRecentResources] = useState<DashboardResource[]>([]);
 
-    // Real-time user profile (for serviceRegistrations)
+    // ── All dashboard data, polled from session-scoped server actions ─────
+    // These were six direct Supabase queries from the browser using the public
+    // anon key. With no row-level security on any table, that key could read
+    // and write the whole database. Everything now runs server-side, scoped to
+    // the signed-in user, on the same 8s cadence as the listeners it replaces.
     useEffect(() => {
         if (!userId) return;
-        const userRef = doc(db, COLLECTIONS.USERS, userId);
-        const unsub = onSnapshot(userRef, (snap) => {
-            if (snap.exists()) {
-                setServiceRegistrations(snap.data()?.serviceRegistrations || {});
-            }
-        }, (error) => {
-            console.error("Dashboard userRef listener failed:", error);
-        });
-        return () => unsub();
-    }, [userId]);
+        let cancelled = false;
 
-    // Real-time unread notifications
-    useEffect(() => {
-        if (!userId) return;
-        const q = query(
-            collection(db, COLLECTIONS.NOTIFICATIONS),
-            where("userId", "==", userId),
-            where("read", "==", false)
-        );
-        const unsub = onSnapshot(q, (snap) => {
-            setStats(s => ({ ...s, unreadNotifications: snap.size }));
-        }, (error) => {
-            console.error("Dashboard unread notifications listener failed:", error);
-        });
-        return () => unsub();
-    }, [userId]);
+        const load = async () => {
+            const [
+                regs,
+                unreadNotifications,
+                unreadMessages,
+                recent,
+                walletBalance,
+                activeOrders,
+                events,
+                resources,
+            ] = await Promise.all([
+                getMyServiceRegistrations(),
+                getMyUnreadNotificationCount(),
+                getMyUnreadMessageCount(),
+                getMyNotifications(4),
+                getMyWalletBalance(),
+                getMyActiveOrderCount(),
+                getUpcomingEvents(3),
+                getRecentResources(3),
+            ]);
 
-    // Real-time unread messages
-    useEffect(() => {
-        if (!userId) return;
-        const q = query(
-            collection(db, COLLECTIONS.CONVERSATIONS),
-            where("participants", "array-contains", userId)
-        );
-        const unsub = onSnapshot(q, (snap) => {
-            let count = 0;
-            snap.docs.forEach((doc) => {
-                const data = doc.data();
-                const lastRead = data.participantDetails?.[userId]?.lastRead;
-                const lastMsg = data.lastMessage?.timestamp;
-                const lastMsgMs = lastMsg?.toMillis ? lastMsg.toMillis() : (lastMsg ? new Date(lastMsg).getTime() : 0);
-                const lastReadMs = lastRead?.toMillis ? lastRead.toMillis() : (lastRead ? new Date(lastRead).getTime() : 0);
-                if (lastMsgMs && (!lastReadMs || lastMsgMs > lastReadMs)) count++;
-            });
-            setStats(s => ({ ...s, unreadMessages: count, loading: false }));
-        }, (error) => {
-            console.error("Dashboard unread messages listener failed:", error);
-        });
-        return () => unsub();
-    }, [userId]);
+            if (cancelled) return;
 
-    // Wallet balance — keyed by userId (walletId === userId)
-    useEffect(() => {
-        if (!userId) return;
-        const walletRef = doc(db, COLLECTIONS.WALLETS, userId);
-        const unsub = onSnapshot(walletRef, (snap) => {
-            if (snap.exists()) {
-                setStats(s => ({ ...s, walletBalance: snap.data()?.balance || 0 }));
-            }
-        }, (error) => {
-            console.error("Dashboard walletRef listener failed:", error);
-        });
-        return () => unsub();
-    }, [userId]);
-
-    // Recent notifications (last 4)
-    useEffect(() => {
-        if (!userId) return;
-        const q = query(
-            collection(db, COLLECTIONS.NOTIFICATIONS),
-            where("userId", "==", userId),
-            orderBy("createdAt", "desc"),
-            limit(4)
-        );
-        const unsub = onSnapshot(q, (snap) => {
-            setRecentNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() } as RecentNotification)));
-        }, (error) => {
-            console.error("Dashboard recent notifications listener failed:", error);
-        });
-        return () => unsub();
-    }, [userId]);
-
-    // Subscribe to both WAVE Training Events and Village Market Events
-    useEffect(() => {
-        if (!userId) return;
-
-        let activeWaveEvents: DashboardEvent[] = [];
-        let activeMarketEvents: DashboardEvent[] = [];
-
-        const updateEvents = () => {
-            const combined = [...activeWaveEvents, ...activeMarketEvents];
-            // Sort by date ascending (closest events first)
-            combined.sort((a, b) => a.date.getTime() - b.date.getTime());
-            setUpcomingEvents(combined.slice(0, 3)); // show top 3
+            setServiceRegistrations(regs);
+            setRecentNotifications(recent as RecentNotification[]);
+            setUpcomingEvents(
+                (events as any[]).map(e => ({ ...e, date: toDate(e.date) })) as DashboardEvent[]
+            );
+            setRecentResources(
+                (resources as any[]).map(r => ({ ...r, uploadedAt: toDate(r.uploadedAt) })) as DashboardResource[]
+            );
+            setStats(s => ({
+                ...s,
+                unreadNotifications,
+                unreadMessages,
+                walletBalance,
+                activeOrders,
+                loading: false,
+            }));
         };
 
-        // 1. WAVE Training Events
-        const qWave = query(
-            collection(db, COLLECTIONS.WAVE_TRAINING_EVENTS)
-        );
-        const unsubWave = onSnapshot(qWave, (snap) => {
-            const now = new Date();
-            activeWaveEvents = snap.docs.map((doc) => {
-                const data = doc.data();
-                const eventDate = data.date?.toDate ? data.date.toDate() : new Date(data.date || 0);
-                return {
-                    id: doc.id,
-                    title: data.title || "Training Session",
-                    description: data.description || "",
-                    date: eventDate,
-                    status: data.status || "upcoming",
-                    type: "wave",
-                    meetingLink: data.meetingLink || "",
-                    instructor: data.instructor || "",
-                } as DashboardEvent;
-            }).filter(e => e.status !== "cancelled" && e.status !== "completed" && e.date >= now);
-            updateEvents();
-        }, (error) => {
-            console.error("WAVE events subscription failed:", error);
+        load().catch(error => {
+            console.error("Dashboard data load failed:", error);
+            if (!cancelled) setStats(s => ({ ...s, loading: false }));
         });
 
-        // 2. Village Market Events
-        const qMarket = query(
-            collection(db, COLLECTIONS.VILLAGE_MARKET_EVENTS)
-        );
-        const unsubMarket = onSnapshot(qMarket, (snap) => {
-            const now = new Date();
-            activeMarketEvents = snap.docs.map((doc) => {
-                const data = doc.data();
-                const eventDate = data.startTime?.toDate ? data.startTime.toDate() : new Date(data.startTime || 0);
-                return {
-                    id: doc.id,
-                    title: data.title || "Village Market",
-                    description: data.description || "",
-                    date: eventDate,
-                    status: data.status || "upcoming",
-                    type: "village_market",
-                    location: data.location ? `${data.location}, ${data.state || ""}` : (data.state || ""),
-                } as DashboardEvent;
-            }).filter(e => e.status !== "cancelled" && e.status !== "completed" && e.date >= now);
-            updateEvents();
-        }, (error) => {
-            console.error("Village Market events subscription failed:", error);
-        });
+        const interval = setInterval(() => {
+            load().catch(error => console.error("Dashboard refresh failed:", error));
+        }, 8000);
 
         return () => {
-            unsubWave();
-            unsubMarket();
+            cancelled = true;
+            clearInterval(interval);
         };
-    }, [userId]);
-
-    // Subscribe to WAVE resources
-    useEffect(() => {
-        if (!userId) return;
-
-        const q = query(collection(db, COLLECTIONS.WAVE_RESOURCES));
-        const unsub = onSnapshot(q, (snap) => {
-            const list: DashboardResource[] = [];
-            snap.forEach((doc) => {
-                const data = doc.data();
-                const isActive = data.isActive !== false;
-                if (isActive) {
-                    const uploadedAt = data.uploadedAt?.toDate ? data.uploadedAt.toDate() : new Date(data.uploadedAt || data.createdAt || 0);
-                    list.push({
-                        id: doc.id,
-                        title: data.title || "Resource File",
-                        description: data.description || "",
-                        category: data.category || "document",
-                        fileUrl: data.fileUrl || "",
-                        fileName: data.fileName || "",
-                        fileSize: data.fileSize || 0,
-                        downloads: data.downloads || 0,
-                        uploadedAt,
-                    });
-                }
-            });
-
-            // Sort by uploadedAt desc
-            list.sort((a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime());
-            setRecentResources(list.slice(0, 3)); // show top 3
-        }, (error) => {
-            console.error("Resources subscription failed:", error);
-        });
-
-        return () => unsub();
-    }, [userId]);
-
-    // Active orders count — real-time onSnapshot (avoids getDocs stale count and composite index crash).
-    // ⚠️ Firestore requires a composite index for (buyerId + orderStatus IN [...]) which may not exist.
-    // Safe alternative: listen on buyerId only, then filter client-side (resultset is small per-user).
-    useEffect(() => {
-        if (!userId) return;
-        const q = query(
-            collection(db, COLLECTIONS.MARKETPLACE_ORDERS),
-            where("buyerId", "==", userId)
-        );
-        const ACTIVE_STATUSES = new Set(["pending", "confirmed", "processing", "shipped"]);
-        const unsub = onSnapshot(q, (snap) => {
-            const activeCount = snap.docs.filter(d => ACTIVE_STATUSES.has(d.data().orderStatus)).length;
-            setStats(s => ({ ...s, activeOrders: activeCount, loading: false }));
-        }, (error) => {
-            console.error("Dashboard active orders listener failed:", error);
-            // On error (e.g. missing index) silently set loading done, count stays 0
-            setStats(s => ({ ...s, loading: false }));
-        });
-        return () => unsub();
     }, [userId]);
 
 

@@ -10,7 +10,7 @@ import {
     Landmark, BookOpen,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import { db, collection, query, where, orderBy, limit, onSnapshot, doc, deleteDoc } from "@/lib/supabase-client-db";
+import { getMyNotifications, deleteMyNotification } from "@/app/actions/my-data";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { useToast } from "@/contexts/ToastContext";
 import { isNotificationVisible, getVisibleFilterTabs } from "@/lib/notification-filter";
@@ -120,26 +120,27 @@ export default function NotificationsPage() {
         if (status === "unauthenticated") { router.push("/auth/login"); return; }
         if (!userId) return;
 
-        const q = query(
-            collection(db, COLLECTIONS.NOTIFICATIONS),
-            where("userId", "==", userId),
-            orderBy("createdAt", "desc"),
-            limit(200)
-        );
+        // Polls a session-scoped server action instead of querying Supabase
+        // from the browser. Same 8s cadence as the listener it replaces.
+        let cancelled = false;
 
-        const unsub = onSnapshot(q, (snapshot) => {
-            const data: Notification[] = snapshot.docs.map(d => ({
-                id: d.id,
-                ...d.data(),
-            } as Notification));
-            setNotifications(data);
-            setLoading(false);
-        }, (error) => {
-            console.error("Notification listener error:", error);
-            setLoading(false);
-        });
+        const load = async () => {
+            try {
+                const data = await getMyNotifications(200);
+                if (!cancelled) setNotifications(data as Notification[]);
+            } catch (error) {
+                console.error("Notification load error:", error);
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        };
 
-        return () => unsub();
+        load();
+        const interval = setInterval(load, 8000);
+        return () => {
+            cancelled = true;
+            clearInterval(interval);
+        };
     }, [userId, status, router]);
 
     /* ── Which tabs to show based on user's module subscriptions ── */
@@ -238,7 +239,12 @@ export default function NotificationsPage() {
         setDeletingId(id);
         setNotifications(prev => prev.filter(n => n.id !== id));
         try {
-            await deleteDoc(doc(db, COLLECTIONS.NOTIFICATIONS, id));
+            // Ownership is verified server-side; the browser can no longer
+            // delete an arbitrary notification id.
+            const result = await deleteMyNotification(id);
+            if (!result.success) {
+                showToast(result.error || "Failed to delete notification", "error");
+            }
         } catch {
             showToast("Failed to delete notification", "error");
         } finally {

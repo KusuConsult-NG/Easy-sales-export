@@ -23,7 +23,7 @@ import {
     Settings,
 } from "lucide-react";
 import { logoutAction } from "@/app/actions/auth";
-import { db, onSnapshot, doc, collection, query, where } from "@/lib/supabase-client-db";
+import { getMyServiceRegistrations, getMyUnreadMessageCount } from "@/app/actions/my-data";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { UserRole } from "@/lib/types/roles";
 import { getPrimaryApp } from "@/lib/role-app-mapping";
@@ -99,43 +99,51 @@ export default function DashboardNav() {
     const { unreadCount } = useUnreadNotifications(userId);
     const [serviceRegs, setServiceRegs] = useState<any>({});
 
-    // Real-time Service Registrations
+    // Service registrations, via a session-scoped server action rather than a
+    // direct browser query. Same 8s cadence as the listener it replaces.
     useEffect(() => {
         if (!userId) return;
-        const unsub = onSnapshot(doc(db, COLLECTIONS.USERS, userId), (docSnap) => {
-            if (docSnap.exists()) {
-                setServiceRegs(docSnap.data()?.serviceRegistrations || {});
+        let cancelled = false;
+
+        const load = async () => {
+            try {
+                const regs = await getMyServiceRegistrations();
+                if (!cancelled) setServiceRegs(regs);
+            } catch (error) {
+                console.error("DashboardNav service registrations failed:", error);
             }
-        }, (error) => {
-            console.error("DashboardNav user listener failed:", error);
-        });
-        return () => unsub();
+        };
+
+        load();
+        const interval = setInterval(load, 8000);
+        return () => {
+            cancelled = true;
+            clearInterval(interval);
+        };
     }, [userId]);
 
-    // Real-time unread messages count
+    // Unread messages. The browser query this replaces lost its
+    // array-contains filter silently, so it counted every conversation on the
+    // platform and downloaded them all. The count is now scoped server-side.
     useEffect(() => {
         if (!userId) return;
-        const q = query(
-            collection(db, COLLECTIONS.CONVERSATIONS),
-            where("participants", "array-contains", userId)
-        );
-        const unsub = onSnapshot(q, (snap) => {
-            let count = 0;
-            snap.docs.forEach((doc) => {
-                const data = doc.data();
-                const lastRead = data.participantDetails?.[userId]?.lastRead;
-                const lastMsg = data.lastMessage?.timestamp;
-                const lastMsgMs = lastMsg?.toMillis ? lastMsg.toMillis() : (lastMsg ? new Date(lastMsg).getTime() : 0);
-                const lastReadMs = lastRead?.toMillis ? lastRead.toMillis() : (lastRead ? new Date(lastRead).getTime() : 0);
-                if (lastMsgMs && (!lastReadMs || lastMsgMs > lastReadMs)) {
-                    count++;
-                }
-            });
-            setUnreadMessages(count);
-        }, (error) => {
-            console.error("DashboardNav messages count listener failed:", error);
-        });
-        return () => unsub();
+        let cancelled = false;
+
+        const load = async () => {
+            try {
+                const count = await getMyUnreadMessageCount();
+                if (!cancelled) setUnreadMessages(count);
+            } catch (error) {
+                console.error("DashboardNav unread messages failed:", error);
+            }
+        };
+
+        load();
+        const interval = setInterval(load, 8000);
+        return () => {
+            cancelled = true;
+            clearInterval(interval);
+        };
     }, [userId]);
 
     const moduleLinks = getModuleLinks(roles, serviceRegs, session?.user?.gender);
