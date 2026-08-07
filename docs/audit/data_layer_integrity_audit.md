@@ -549,3 +549,113 @@ product.interestRate` is right, `for (let i = 1; i <= n; i++)` is right. The
 defects live in the agreement between files that no type in the codebase
 expresses — `LoanApplication` is written by three producers that each satisfy a
 different subset of it.
+
+---
+
+# Round 4 — Implementation quality across modules
+
+Measured across `src/` and `packages/` (204,451 lines).
+
+## Q. 409 unbounded full-collection scans — the "breaks eventually" mechanism
+
+Of 510 terminal `db.collection(...).get()` calls, **409 carry no `.limit()`**.
+
+This compounds with the adapter: `SupabaseQuery.get()` defaults to
+`limitVal = this._limit ?? 999999` and loops `.range()` in 1,000-row batches
+until the collection is exhausted. Every one of those 409 call sites therefore
+reads an **entire table** across N round trips into Node memory, then
+`serializeDocs` walks all of it (it logs a warning past 5,000 documents, which
+is an admission the pattern was known).
+
+Nothing breaks at low volume. Everything degrades together as data grows —
+first latency, then request timeouts, then memory. This is the clearest
+structural answer to "it works, then it breaks eventually."
+
+Worst files: `actions/admin.ts` (27), `academy/_actions.ts` (24),
+`marketplace/_actions.ts` (22), `cooperative/_admin.ts` (18), `export.ts` (13),
+`broadcast-logic.ts` (13).
+
+Not fixed here: adding `.limit()` changes what each screen returns, so each site
+needs a real pagination decision. The adapter-level mitigation — refusing an
+unbounded scan above a threshold — would take down whichever screens currently
+depend on one.
+
+## R. The monorepo is largely unused
+
+11 workspace packages, 3,827 lines, wired through `workspaces`, `turbo.json` and
+11 `tsconfig` path aliases:
+
+| Package | LOC | Importing files in `src/` |
+|---|---|---|
+| `@easy-sales/types` | 900 | 1 |
+| `@easy-sales/marketplace` | 744 | 1 |
+| `@easy-sales/wave` | 463 | **0** |
+| `@easy-sales/cooperative` | 386 | **0** |
+| `@easy-sales/academy` | 366 | **0** |
+| `@easy-sales/farm-nation` | 237 | 1 |
+| `@easy-sales/config` | 217 | **0** |
+| `@easy-sales/services` | 210 | 5 |
+| `@easy-sales/export` | 164 | 1 |
+| `@easy-sales/auth` | 123 | **0** |
+| `@easy-sales/ui` | 17 | **0** |
+
+Six packages have no consumer at all. The whole workspace serves ~9 import
+sites. It carries real cost: build configuration, CI time, path aliases, and a
+second place where the same concept can be defined and drift.
+
+## S. Core concepts defined in more than one place
+
+| Symbol | Defined in |
+|---|---|
+| `COLLECTIONS` | `lib/types/firestore.ts` (117 keys), `lib/client-collections.ts` (10), `packages/config/src/collections.ts` (117) |
+| `Timestamp` | `lib/firestore-compat.ts` (`_seconds`), `lib/supabase-client-db.ts` (`seconds`) |
+| `getAdminDb` | `lib/supabase-db.ts`, `lib/firebase-admin.ts` |
+| `FieldValue` | `lib/firestore-compat.ts`, `lib/shims/firebase-admin/firestore.d.ts` |
+
+The three `COLLECTIONS` definitions were diffed key-by-key: **they currently
+agree**, so this is latent rather than live. But 117 constants are duplicated
+verbatim between `lib/types/firestore.ts` and `packages/config` with no shared
+source, and one is in a package nothing imports. The two `Timestamp` classes
+have *already* drifted — that is finding 13/14 in round 2.
+
+## T. Type safety is opted out of at scale
+
+- **2,173** `any` annotations (`: any`, `as any`, `<any>`)
+- **84** `@ts-ignore` / `@ts-expect-error` / `eslint-disable`
+- `strictNullChecks: false`, `noImplicitAny: false`
+
+This is the enabling condition for every defect in rounds 1–3. `tsc --noEmit`
+passes cleanly on a codebase where `db.doc("x", id)` silently drops an argument,
+`snapshot.exists()` is called on a boolean, and three producers write mutually
+incompatible shapes into one collection. The compiler is not being asked to
+check the things that are actually wrong.
+
+## U. Structural
+
+- **18 files over 1,000 lines.** `actions/admin.ts` is 5,473 lines with 40
+  exported actions covering users, exports, settings, migrations and
+  reconciliation. Merge conflicts and accidental coupling are near-certain.
+- **Dead but reachable code.** `api/cooperative/apply-loan` has no caller;
+  `LoanApplicationWizard` is not mounted anywhere. Both remain live and
+  authenticated — see round 3 for why the loan route matters.
+- **N+1 loops**: `marketplace/_payment.ts` and `bulk-user-operations.ts` await
+  per-item database calls inside iteration. Costly under the non-atomic
+  transaction model, where each `update()` is already a read-modify-write.
+- **29** stray `console.log` calls in application code despite a `logger`
+  abstraction; **13** TODO/FIXME/HACK markers.
+
+## Priority
+
+Ordered by how much breakage each removes per unit of work:
+
+1. **RLS** (risk A) — currently the anon key can read and write every table.
+2. **Atomic money operations** (risks B, N) — one Postgres function per
+   money-moving flow, replacing the fake transaction.
+3. **Settle the loan subsystem** (risk P) — before anyone is billed at 12× or
+   left with an empty schedule.
+4. **Bound the 409 unbounded scans**, worst files first.
+5. **Type the adapter surfaces.** Not global strict mode — just real types on
+   `supabase-db` and `supabase-client-db`, so this class of defect fails the
+   build instead of reaching production.
+6. Then structural cleanup: delete unused packages, collapse duplicate
+   definitions, split the god files.
