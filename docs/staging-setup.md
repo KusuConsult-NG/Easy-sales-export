@@ -3,6 +3,12 @@
 Standing up a second Supabase project so database migrations can be tested
 before they touch the ~41,000 live users.
 
+> **Status: done.** A staging project was created on 2026-08-07 and migrations
+> `002`, `003`, `004`, `005` and `006` were applied and verified there. Results
+> are recorded in `docs/audit/atomic-money-migration.md` and
+> `docs/audit/outstanding-work.md`. Keep this document as the procedure for
+> rebuilding staging, and for every future migration — which goes here first.
+
 Time: roughly 30–45 minutes. Everything here happens in your Supabase account —
 none of it can be done from the repo alone.
 

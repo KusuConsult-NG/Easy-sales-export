@@ -57,6 +57,26 @@ Four rules:
 
 `wallet.ts` no longer performs balance arithmetic anywhere.
 
+## Verified on staging, 2026-08-07
+
+Migrations `005` and `006` were applied to a staging Supabase project and the
+behaviour checked against a real Postgres:
+
+| Property | Check | Result |
+|---|---|---|
+| Idempotency | `credit_wallet_once` twice with one reference | second returns `claimed = false`, balance unchanged |
+| Revenue accounting | status recorded by `debit_wallet_once` | `wallet_debit`, not `completed` — so it is not summed as revenue |
+| **Concurrency** | two sessions, second debit while the first is uncommitted | **second session blocked on the row lock** |
+
+The concurrency result is the important one. It is the property the unit tests
+explicitly cannot cover, and the whole point of this work: under the old
+`runTransaction` both sessions would have read the same balance and proceeded.
+Blocking is the fix working.
+
+Note the scope of that evidence. It proves the *primitives* behave correctly.
+It does not prove every caller uses them correctly — that is what reading each
+conversion is for.
+
 ## Known, not yet fixed: the withdrawal state machine
 
 `_processWalletWithdrawalAction` moves a withdrawal `pending → payout_initiated

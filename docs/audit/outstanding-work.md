@@ -70,20 +70,26 @@ What remains is applying `supabase/migrations/004_enable_row_level_security.sql`
 (Option A — step 1 only, policies left commented out) and confirming the anon
 key can no longer read anything.
 
-**Two things still block a safe rollout:**
+**Verified on staging, 2026-08-07.** A staging Supabase project now exists (see
+`docs/staging-setup.md`), and this migration was applied and exercised there:
 
-- **There is no staging environment.** `.env.staging` defines no Supabase
-  variables, and `.env.local` and `.env.production.local` point at the *same*
-  project. The migration's own test plan — restore a backup into staging,
-  exercise the app, then schedule production — has nowhere to run. Either
-  create a second project or accept that production is the first place this
-  is tried.
-- **Failures will be silent.** Under RLS with no policy, Postgres returns zero
-  rows rather than an error. If anything was missed, it surfaces as empty
-  dashboards and members locked out, not as errors in the log. Exercise sign-in,
-  both dashboards, the notification bell, the unread badge, wallet balance and
-  the admin portal immediately after applying, and keep the one-line rollback
-  at the bottom of the migration to hand.
+- 9 tables report `rowsecurity = true`, with 0 policies attached — Option A,
+  deny-all, as intended.
+- The anon key returns `[]` from `/rest/v1/users`. The public key can no longer
+  read the database.
+- The app was run against staging and exercised: sign-in, dashboard, the
+  notification bell and unread badge, wallet balance, the academy and wave
+  member dashboards, and the onboarding pending pages all loaded correctly.
+
+That last point is what proves Option A is genuinely complete. Failures here are
+silent — RLS with no policy returns zero rows rather than raising — so a missed
+browser reader would have shown as a paying member reported as a non-member, not
+as an error in the log. Nothing of the kind appeared.
+
+**Still to do:** apply to production during a low-traffic window, keeping the
+one-line rollback at the bottom of the migration to hand. Production is a
+different database with real row volumes; staging proves the mechanism, not the
+data.
 
 ### Atomic money operations
 `runTransaction` reads, then replays writes sequentially, with no locking and no
