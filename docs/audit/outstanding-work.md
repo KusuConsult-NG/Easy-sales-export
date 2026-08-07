@@ -22,13 +22,40 @@ production build succeeding.
 
 ## 2. Blocked on a decision only you can make
 
-### Business loan at `/loans/apply`
-Confirmed as a real product, but no interest rate, term or eligibility rule
-exists anywhere in the code. Applications currently fail with a clear message
-rather than silently creating a loan with no repayment schedule.
+### Business loan at `/loans/apply` — RESOLVED 2026-08-07
 
-**Needed:** the rate (and whether monthly or annual), the maximum term, and what
-qualifies someone.
+Rate confirmed by the business owner: **10% per month**. Implemented in
+`src/lib/loan-terms.ts`; applications now store `interestRate`,
+`monthlyPayment`, `totalRepayment` and `totalInterest` at submission time.
+
+Two corrections to what this file previously said:
+
+- **Term and amount bounds already existed** in `loanApplicationSchema` —
+  3–24 months, ₦1,000–₦5,000,000, with collateral, business details and
+  documents required. Only the rate was missing.
+- **Applications did not fail.** They were saved silently with no rate and no
+  schedule. Any application submitted before this change has no repayment terms
+  recorded — see below.
+
+**Two things still need a decision:**
+
+- **Existing applications have no terms.** Records created before this change
+  carry an amount and a term but no rate. Decide whether to backfill them at
+  10%/month or leave them for manual handling; do not assume the borrower was
+  told a number that was never stored.
+- **The 24-month term at 10% monthly is severe.** On ₦1,000,000 the borrower
+  repays ₦2,671,194 — 2.67× the principal. At the ₦5,000,000 ceiling that is
+  ₦13,355,973 repaid. The rate is a business decision and is implemented as
+  given; whether the term should be capped shorter than 24 months for this
+  product is a separate one worth taking deliberately.
+
+| Term | Monthly on ₦1m | Total repaid | × principal |
+|---|---|---|---|
+| 3 months | ₦402,115 | ₦1,206,344 | 1.21× |
+| 6 months | ₦229,607 | ₦1,377,644 | 1.38× |
+| 12 months | ₦146,763 | ₦1,761,160 | 1.76× |
+| 18 months | ₦121,930 | ₦2,194,744 | 2.19× |
+| 24 months | ₦111,300 | ₦2,671,194 | 2.67× |
 
 ### Savings interest labelling
 `cooperatives/(member)/my-savings` displays `{rate}% APR` for fixed savings
