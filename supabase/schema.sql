@@ -206,19 +206,50 @@ CREATE INDEX IF NOT EXISTS idx_marketplace_orders_status ON marketplace_orders(s
 -- Database Integrity Constraint:
 -- Enforce "active" status for members with verified payments
 -- ==========================================
+-- Prevents a paid-up cooperative member being silently reverted to 'pending'.
+--
+-- Narrow by design — see supabase/migrations/008_fix_member_status_trigger.sql
+-- for why. The earlier version blocked ANY user with ANY payment anywhere on
+-- the platform, and fired on INSERT, so anyone who had ever paid for anything
+-- could not even apply to the cooperative.
 CREATE OR REPLACE FUNCTION enforce_member_active_on_paid()
 RETURNS TRIGGER AS $$
 BEGIN
-    -- Check if status is set to pending
-    IF NEW.status = 'pending' THEN
-        -- Check if a verified payment exists for this user in processed_payments
-        IF EXISTS (
-            SELECT 1 FROM processed_payments 
-            WHERE user_id = NEW.user_id
-        ) THEN
-            RAISE EXCEPTION 'Database Integrity Constraint: User % has a verified payment. Status cannot be set to pending.', NEW.user_id;
-        END IF;
+    -- Applications begin at 'pending'. Never block an insert.
+    IF TG_OP <> 'UPDATE' THEN
+        RETURN NEW;
     END IF;
+
+    -- Only a genuine downgrade of a paid-up member is in scope.
+    IF NEW.status <> 'pending' THEN
+        RETURN NEW;
+    END IF;
+
+    IF OLD.status IS NULL OR OLD.status NOT IN ('active', 'paid') THEN
+        RETURN NEW;
+    END IF;
+
+    -- An explicit reason permits the change, and records it: the path for
+    -- refunds, reversals and administrative corrections.
+    IF COALESCE(NULLIF(TRIM(NEW.raw_data->>'statusChangeReason'), ''), '') <> '' THEN
+        RETURN NEW;
+    END IF;
+
+    -- Only cooperative contributions count as dues paid. Wallet funding,
+    -- marketplace purchases and academy fees do not.
+    IF EXISTS (
+        SELECT 1
+          FROM processed_payments p
+         WHERE p.user_id = NEW.user_id
+           AND p.raw_data->>'type' = 'contribution'
+    ) THEN
+        RAISE EXCEPTION
+            'Member % has a cooperative contribution on record, so status cannot be set to pending. To reverse a payment or correct an error, set raw_data.statusChangeReason explaining why.',
+            NEW.user_id
+            USING ERRCODE = 'check_violation',
+                  HINT = 'Set statusChangeReason on the update to permit this change.';
+    END IF;
+
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
