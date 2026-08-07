@@ -70,6 +70,92 @@ export class ClientQuery {
     constructor(public readonly colRef: ClientColRef) {}
 }
 
+/**
+ * Resolve a Firestore field name to the Supabase column (or JSONB path) it lives in.
+ */
+function resolveColumn(tableName: string, field: string): string {
+    const fieldMap = FIELD_TO_COLUMN[tableName] || {};
+    const cols = NATIVE_COLUMNS[tableName] || [];
+    if (fieldMap[field]) return fieldMap[field];
+    if (cols.includes(field)) return field;
+    return `raw_data->>${field}`;
+}
+
+/**
+ * Apply a single where() clause to a Supabase query builder.
+ *
+ * Every operator the app actually uses is handled here. Previously only
+ * ==, >= and <= were implemented and anything else — notably
+ * `array-contains` — was dropped on the floor, which turned a scoped query
+ * into "select the entire collection". That is what made the unread-message
+ * badge count every conversation on the platform rather than the signed-in
+ * user's, and it pulled those documents into the browser.
+ */
+function applyClientFilter(query: any, tableName: string, f: WhereFilter): any {
+    const fieldMap = FIELD_TO_COLUMN[tableName] || {};
+    const cols = NATIVE_COLUMNS[tableName] || [];
+    const nativeCol = fieldMap[f.field] || (cols.includes(f.field) ? f.field : null);
+
+    if (f.op === 'array-contains') {
+        // Native TEXT[] column vs. a JSONB array inside raw_data
+        return nativeCol
+            ? query.contains(nativeCol, [f.value])
+            : query.filter(`raw_data->${f.field}`, 'cs', JSON.stringify([f.value]));
+    }
+
+    if (f.op === 'array-contains-any') {
+        const values = Array.isArray(f.value) ? f.value : [f.value];
+        return nativeCol
+            ? query.overlaps(nativeCol, values)
+            : query.filter(`raw_data->${f.field}`, 'ov', JSON.stringify(values));
+    }
+
+    // Scalar comparisons. JSONB values come back as text, so the comparison
+    // value has to be stringified to match.
+    const column = nativeCol || `raw_data->>${f.field}`;
+    const value = nativeCol ? f.value : (f.value === null ? null : String(f.value));
+
+    switch (f.op) {
+        case '==':
+            return value === null ? query.is(column, null) : query.eq(column, value);
+        case '!=':
+            return value === null ? query.not(column, 'is', null) : query.neq(column, value);
+        case '<': return query.lt(column, value);
+        case '<=': return query.lte(column, value);
+        case '>': return query.gt(column, value);
+        case '>=': return query.gte(column, value);
+        case 'in':
+            return query.in(column, (Array.isArray(f.value) ? f.value : [f.value]).map(v => nativeCol ? v : String(v)));
+        default:
+            // Fail loudly rather than returning an unfiltered collection.
+            throw new Error(`[supabase-client-db] Unsupported query operator "${f.op}" on field "${f.field}"`);
+    }
+}
+
+/**
+ * Apply filters, ordering and limit to a Supabase query builder.
+ * Shared by getDocs() and onSnapshot() so the two cannot drift apart.
+ */
+function applyQueryClauses(query: any, tableName: string, target: ClientColRef | ClientQuery): any {
+    const isQuery = target instanceof ClientQuery;
+
+    for (const f of isQuery ? target.filters : []) {
+        query = applyClientFilter(query, tableName, f);
+    }
+
+    for (const o of isQuery ? target.orderByVal : []) {
+        const column = (o.field === 'createdAt' || o.field === 'created_at')
+            ? 'created_at'
+            : resolveColumn(tableName, o.field);
+        query = query.order(column, { ascending: o.direction === 'asc' });
+    }
+
+    const lim = isQuery ? target.limitVal : null;
+    if (lim !== null) query = query.limit(lim);
+
+    return query;
+}
+
 export const db = {};
 
 export function collection(_db: any, path: string): ClientColRef {
@@ -168,40 +254,7 @@ export function onSnapshot(
                     query = query.eq('collection_name', colName);
                 }
 
-                // Apply Filters
-                const filters = target instanceof ClientQuery ? target.filters : [];
-                filters.forEach(f => {
-                    const fieldMap = FIELD_TO_COLUMN[tableName] || {};
-                    const cols = NATIVE_COLUMNS[tableName] || [];
-                    const colName = fieldMap[f.field] || (cols.includes(f.field) ? f.field : null);
-
-                    if (colName) {
-                        if (f.op === '==') query = query.eq(colName, f.value);
-                        else if (f.op === '>=') query = query.gte(colName, f.value);
-                        else if (f.op === '<=') query = query.lte(colName, f.value);
-                    } else {
-                        // JSONB filter
-                        if (f.op === '==') query = query.eq(`raw_data->>${f.field}`, String(f.value));
-                    }
-                });
-
-                // Apply OrderBy
-                const orders = target instanceof ClientQuery ? target.orderByVal : [];
-                orders.forEach(o => {
-                    const fieldMap = FIELD_TO_COLUMN[tableName] || {};
-                    const cols = NATIVE_COLUMNS[tableName] || [];
-                    let colName = fieldMap[o.field] || (cols.includes(o.field) ? o.field : null);
-                    if (!colName) {
-                        colName = (o.field === 'createdAt' || o.field === 'created_at') ? 'created_at' : `raw_data->>${o.field}`;
-                    }
-                    query = query.order(colName, { ascending: o.direction === 'asc' });
-                });
-
-                // Apply Limit
-                const lim = target instanceof ClientQuery ? target.limitVal : null;
-                if (lim !== null) {
-                    query = query.limit(lim);
-                }
+                query = applyQueryClauses(query, tableName, target);
 
                 const { data, error } = await query;
                 if (error) throw error;
@@ -266,40 +319,7 @@ export async function getDocs(target: ClientColRef | ClientQuery) {
         query = query.eq('collection_name', colName);
     }
 
-    // Apply Filters
-    const filters = target instanceof ClientQuery ? target.filters : [];
-    filters.forEach(f => {
-        const fieldMap = FIELD_TO_COLUMN[tableName] || {};
-        const cols = NATIVE_COLUMNS[tableName] || [];
-        const colName = fieldMap[f.field] || (cols.includes(f.field) ? f.field : null);
-
-        if (colName) {
-            if (f.op === '==') query = query.eq(colName, f.value);
-            else if (f.op === '>=') query = query.gte(colName, f.value);
-            else if (f.op === '<=') query = query.lte(colName, f.value);
-        } else {
-            // JSONB filter
-            if (f.op === '==') query = query.eq(`raw_data->>${f.field}`, String(f.value));
-        }
-    });
-
-    // Apply OrderBy
-    const orders = target instanceof ClientQuery ? target.orderByVal : [];
-    orders.forEach(o => {
-        const fieldMap = FIELD_TO_COLUMN[tableName] || {};
-        const cols = NATIVE_COLUMNS[tableName] || [];
-        let colName = fieldMap[o.field] || (cols.includes(o.field) ? o.field : null);
-        if (!colName) {
-            colName = (o.field === 'createdAt' || o.field === 'created_at') ? 'created_at' : `raw_data->>${o.field}`;
-        }
-        query = query.order(colName, { ascending: o.direction === 'asc' });
-    });
-
-    // Apply Limit
-    const lim = target instanceof ClientQuery ? target.limitVal : null;
-    if (lim !== null) {
-        query = query.limit(lim);
-    }
+    query = applyQueryClauses(query, tableName, target);
 
     const { data, error } = await query;
     if (error) throw error;
