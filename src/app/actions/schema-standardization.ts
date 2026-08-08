@@ -40,7 +40,7 @@ export async function runSchemaStandardizationAction(dryRun: boolean = true): Pr
         // ============================================================================
         const usersReport: StandardizationReport = { collection: "users", scanned: 0, updated: 0, details: [] };
         // Validating in batches or just all for now (assuming < 10k users for this script run, otherwise paginate)
-        const usersSnapshot = await db.collection(COLLECTIONS.USERS).get();
+        const usersSnapshot = await db.collection(COLLECTIONS.USERS).all().get();
         usersReport.scanned = usersSnapshot.size;
 
         const userUpdates: Promise<any>[] = [];

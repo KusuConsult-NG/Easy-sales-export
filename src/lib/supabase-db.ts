@@ -107,6 +107,16 @@ const DEFAULT_QUERY_LIMIT = Math.max(
     Number(process.env.SUPABASE_DEFAULT_QUERY_LIMIT) || 5000
 );
 
+/**
+ * Runaway guard for `.all()`. Not a limit anyone should reach — hitting it
+ * means the result is incomplete, and it is logged as an error rather than
+ * quietly returned.
+ */
+const UNBOUNDED_CEILING = Math.max(
+    DEFAULT_QUERY_LIMIT,
+    Number(process.env.SUPABASE_UNBOUNDED_CEILING) || 500_000
+);
+
 const _unknownCollectionsWarned = new Set<string>();
 const _limitReachedWarned = new Set<string>();
 
@@ -705,8 +715,19 @@ export class SupabaseQueryDocumentSnapshot extends SupabaseDocumentSnapshot {
 export class SupabaseQuerySnapshot {
     public readonly docs: SupabaseQueryDocumentSnapshot[];
 
-    constructor(docs: SupabaseQueryDocumentSnapshot[]) {
+    /**
+     * True when the default cap was hit and rows were left behind.
+     *
+     * A truncated result looks identical to a complete one, which is how a
+     * repair script reports success having processed a fraction of the table.
+     * Anything that sweeps a whole collection should either use `.all()` or
+     * check this.
+     */
+    public readonly truncated: boolean;
+
+    constructor(docs: SupabaseQueryDocumentSnapshot[], truncated = false) {
         this.docs = docs;
+        this.truncated = truncated;
     }
 
     get size(): number { return this.docs.length; }
@@ -871,6 +892,7 @@ export class SupabaseQuery {
     protected readonly _collection: string;
     protected _filters: WhereFilter[] = [];
     protected _limit: number | null = null;
+    protected _unbounded = false;
     protected _offset: number | null = null;
     protected _orderBy: OrderByClause[] = [];
     protected _startAfterDoc: SupabaseDocumentSnapshot | null = null;
@@ -888,6 +910,7 @@ export class SupabaseQuery {
         q._orderBy = [...this._orderBy];
         q._startAfterDoc = this._startAfterDoc;
         q._selectedFields = this._selectedFields ? [...this._selectedFields] : null;
+        q._unbounded = this._unbounded;
         return q;
     }
 
@@ -910,6 +933,29 @@ export class SupabaseQuery {
     limit(n: number): this {
         const q = this._clone();
         q._limit = n;
+        return q;
+    }
+
+    /**
+     * Read every matching row, ignoring the default cap.
+     *
+     * For whole-collection work only: data repair sweeps, migrations,
+     * broadcasts — anything where processing a subset is worse than being slow.
+     * Never for a screen; that is what the cap exists to prevent.
+     *
+     * The cap was added to stop page loads reading entire tables, and it does
+     * that well. But it applies to any query without an explicit `.limit()`,
+     * which silently turned "repair every user" into "repair the first 5,000
+     * and report success" — with ~41,000 users, 12% coverage presented as
+     * completion. This is the way to say the whole collection is genuinely
+     * meant.
+     *
+     * Still batched internally, so it does not load everything in one request.
+     */
+    all(): this {
+        const q = this._clone();
+        q._unbounded = true;
+        q._limit = null;
         return q;
     }
 
@@ -1125,7 +1171,12 @@ export class SupabaseQuery {
         // themselves in production instead of being guessed at. Raise it with
         // SUPABASE_DEFAULT_QUERY_LIMIT if a specific screen needs more while
         // it is being fixed properly.
-        const limitVal = this._limit ?? DEFAULT_QUERY_LIMIT;
+        // .all() means the caller genuinely wants every row — a repair sweep, a
+        // migration, a broadcast. UNBOUNDED_CEILING is a runaway guard, not a
+        // limit anyone should hit; reaching it is reported as an error.
+        const limitVal = this._unbounded
+            ? UNBOUNDED_CEILING
+            : (this._limit ?? DEFAULT_QUERY_LIMIT);
         const offsetVal = this._offset ?? 0;
         let fetchedSoFar = 0;
 
@@ -1144,16 +1195,29 @@ export class SupabaseQuery {
             if (batchData.length < batchLimit) break;
         }
 
-        // Truncation must never pass unnoticed — a short result that looks
-        // complete is how "the report is missing rows" bugs reach production.
-        if (this._limit == null && fetchedSoFar >= DEFAULT_QUERY_LIMIT) {
+        // Did we stop because the data ran out, or because we hit a ceiling?
+        const truncated = this._unbounded
+            ? fetchedSoFar >= UNBOUNDED_CEILING
+            : this._limit == null && fetchedSoFar >= DEFAULT_QUERY_LIMIT;
+
+        if (truncated && this._unbounded) {
+            // A sweep that silently covers part of a collection is worse than
+            // one that fails, so this is an error rather than a warning.
+            logger.error(
+                `[supabase-db] .all() on '${this._collection}' hit the ${UNBOUNDED_CEILING}-row ceiling. ` +
+                `The result is INCOMPLETE. Raise UNBOUNDED_CEILING or process the collection in explicit pages.`
+            );
+        } else if (truncated) {
+            // Truncation must never pass unnoticed — a short result that looks
+            // complete is how "the report is missing rows" bugs reach production.
             const key = this._collection;
             if (!_limitReachedWarned.has(key)) {
                 _limitReachedWarned.add(key);
                 logger.warn(
                     `[supabase-db] Query on '${key}' returned the default cap of ${DEFAULT_QUERY_LIMIT} rows ` +
                     `and was truncated. This query has no .limit() — give it real pagination, ` +
-                    `or raise SUPABASE_DEFAULT_QUERY_LIMIT if the whole collection is genuinely required.`
+                    `use .all() if the whole collection is genuinely required, ` +
+                    `or raise SUPABASE_DEFAULT_QUERY_LIMIT.`
                 );
             }
         }
@@ -1202,7 +1266,7 @@ export class SupabaseQuery {
             return new SupabaseQueryDocumentSnapshot(id, ref, parsedWithId);
         });
 
-        return new SupabaseQuerySnapshot(docs);
+        return new SupabaseQuerySnapshot(docs, truncated);
     }
 }
 

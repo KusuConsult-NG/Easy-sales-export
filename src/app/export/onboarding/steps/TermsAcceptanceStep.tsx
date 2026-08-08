@@ -109,7 +109,12 @@ export function TermsAcceptanceStep({
                             </div>
                             <p className="text-sm text-slate-600">
                                 I have read and agree to the{" "}
-                                <a href="#" className="text-orange-600 hover:underline">
+                                <a
+                                    href="/terms"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-orange-600 hover:underline"
+                                >
                                     Investment Terms and Conditions
                                 </a>
                             </p>
@@ -157,7 +162,12 @@ export function TermsAcceptanceStep({
                             </div>
                             <p className="text-sm text-slate-600">
                                 I agree to the{" "}
-                                <a href="#" className="text-orange-600 hover:underline">
+                                <a
+                                    href="/terms"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-orange-600 hover:underline"
+                                >
                                     Escrow Service Terms
                                 </a>{" "}
                                 for fund protection
@@ -183,7 +193,12 @@ export function TermsAcceptanceStep({
                             </div>
                             <p className="text-sm text-slate-600">
                                 I have read and agree to the{" "}
-                                <a href="#" className="text-orange-600 hover:underline">
+                                <a
+                                    href="/privacy"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-orange-600 hover:underline"
+                                >
                                     Privacy Policy
                                 </a>{" "}
                                 and data processing terms
