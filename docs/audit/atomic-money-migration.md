@@ -224,6 +224,54 @@ Cancellation now returns the listing to `"available"` and clears the pending
 buyer. Worth checking production for listings sitting at `"verified"` — each one
 is a property nobody can buy.
 
+## Fixed: admin withdrawal payout
+
+`_processWithdrawalAction` in `admin.ts` had the same double-payout defect as
+the wallet withdrawal path, on a different set of collections (`withdrawals`,
+`cooperative_withdrawals`, `wave_withdrawals`). The guard was labelled
+
+```
+// 1. STATE LOCK — Mark as payout_initiated
+```
+
+and was not a lock: the status check ran inside `runTransaction`, so two admins
+approving the same withdrawal both read "pending", both wrote
+"payout_initiated", and both continued to the Paystack transfer — paying the
+user twice.
+
+Now claims `pending → payout_initiated` first. The collection is tracked through
+the three-way lookup so the claim targets the right one.
+
+## NOT converted: loan approval is a dual-control, and the race defeats it
+
+`_approveLoanApplication` implements maker/checker: a first admin approves
+(`pending → partially_approved`), a second must be a *different* admin, enforced
+by
+
+```js
+if (approvalChain.firstApprover === session.user.id) {
+    throw new Error("Security Violation: You cannot verify your own approval.");
+}
+```
+
+That check reads `approvalChain` inside `runTransaction`, which takes no lock.
+Two admins approving simultaneously both read an empty chain, both write
+themselves as `firstApprover`, and the second overwrites the first. The control
+that requires two distinct approvers can be defeated by concurrency rather than
+by intent.
+
+**This was deliberately left alone.** It is a security control on lending, not
+only a money movement, and the correct fix is not the one-line claim used
+elsewhere: the first approval could claim `pending → partially_approved`, but
+the second approval writes no status change and needs a compare-and-swap on the
+approval chain itself. Getting it wrong either blocks legitimate approvals or
+weakens a dual-control safeguard, and it deserves its own change with its own
+review rather than being appended to a batch.
+
+There is also double-lending verification in the same transaction — querying for
+other active loans — which has the same staleness problem: two applications
+approved at once can each fail to see the other.
+
 ## Not yet migrated
 
 Ordered by `runTransaction` count. Presence here is not proof of a live defect —
@@ -232,7 +280,7 @@ can be ruled out.
 
 | Count | File | Notes |
 |---|---|---|
-| 8 | `src/app/actions/admin.ts` | 5,473 lines, 40 exported actions. Split before touching. |
+| 7 | `src/app/actions/admin.ts` | Withdrawal payout converted. Loan approval NOT converted — see the security note below. |
 | 1 | `src/infrastructure/payments/service.ts` | 6 of 7 converted. Only `processExportInvestment` remains — see below. |
 | 4 | `src/app/actions/marketplace/_escrow.ts` | Both money paths converted; 4 non-money status transitions remain — see below. |
 | 6 | `src/app/actions/academy/_actions.ts` | Payment claim converted; 6 non-payment transitions remain. |
