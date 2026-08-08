@@ -43,6 +43,41 @@ describe("configured terms", () => {
     });
 });
 
+describe("document requirement", () => {
+    /**
+     * The wizard used to default `documents` to a hardcoded dummy_id.pdf, which
+     * satisfied this rule — so the requirement passed while every application
+     * referenced a file that did not exist. These pin the rule now that the
+     * default is empty and step 4 actually uploads.
+     */
+
+    it("rejects an application with no documents", () => {
+        const result = loanApplicationSchema.shape.documents.safeParse([]);
+        expect(result.success).toBe(false);
+    });
+
+    it("accepts one uploaded document", () => {
+        const result = loanApplicationSchema.shape.documents.safeParse([
+            {
+                name: "id.pdf",
+                url: "https://res.cloudinary.com/demo/image/upload/v1/loan_id.pdf",
+                type: "id",
+            },
+        ]);
+        expect(result.success).toBe(true);
+    });
+
+    it("rejects a document without a real URL", () => {
+        // Guards against a placeholder or a blob: URL being stored as a
+        // document location — the latter is only valid in the uploader's own
+        // browser tab.
+        const result = loanApplicationSchema.shape.documents.safeParse([
+            { name: "id.pdf", url: "not-a-url", type: "id" },
+        ]);
+        expect(result.success).toBe(false);
+    });
+});
+
 describe("calculateRepaymentTerms", () => {
     it("computes an amortising schedule at the monthly rate", () => {
         const terms = calculateRepaymentTerms(1_000_000, 12);
