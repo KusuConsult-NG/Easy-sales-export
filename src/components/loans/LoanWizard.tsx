@@ -92,8 +92,8 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
      *
      * The file goes through uploadDocumentAction, which validates it and stores
      * it in Cloudinary. It previously went nowhere: step 4 was never built, and
-     * the marketplace equivalent still records URL.createObjectURL(file) — a
-     * blob URL valid only inside the uploader's own browser tab.
+     * the form defaulted to a hardcoded dummy_id.pdf that satisfied the
+     * schema's "at least one document" rule.
      */
     async function handleDocumentUpload(
         docType: "id" | "business_reg" | "financial_statement" | "other",
