@@ -8,6 +8,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { claimStatusTransition } from "@/lib/status-transition";
 import { isValidState, isValidLGA, normalizeLocation } from "@/lib/locations";
 import { invalidateUserCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { serializeDoc, serializeDocs, serializeValue } from "@/lib/firestore-serialize";
@@ -510,14 +511,41 @@ async function _initiatePropertyPurchaseAction(
             return { success: false as const, error: "Cooperative membership required. Please complete your cooperative registration.", data: null, meta: null };
         }
 
-        // ── EXECUTE PURCHASE IN A TRANSACTION ──────
-        await db.runTransaction(async (transaction) => {
-            const propSnap = await transaction.get(propertyRef);
-            if (!propSnap.exists) throw new Error("Property not found");
-            
-            const propData = propSnap.data() as Property;
-            if (propData.status !== "available") throw new Error("Property is no longer available");
+        // ── CLAIM THE PROPERTY, THEN RECORD THE PURCHASE ──────
+        //
+        // The availability check used to live inside runTransaction, which
+        // takes no lock. Two buyers requesting the same property at once both
+        // read "available", both created a purchase request, and both marked it
+        // pending — the same property sold twice, with two buyers each expecting
+        // to pay for it.
+        //
+        // Claiming available → pending is the reservation: exactly one buyer
+        // wins, and the loser is told it has gone rather than being taken to
+        // payment for something they cannot have.
+        const propSnapPre = await propertyRef.get();
+        if (!propSnapPre.exists) {
+            return { success: false as const, error: "Property not found", data: null, meta: null };
+        }
+        const propData = propSnapPre.data() as Property;
 
+        const claim = await claimStatusTransition({
+            collection: COLLECTIONS.LAND_LISTINGS,
+            id: propertyId,
+            from: "available",
+            to: "pending",
+            patch: { pendingBuyerId: session.user.id, pendingSince: new Date().toISOString() },
+        });
+
+        if (!claim.claimed) {
+            return {
+                success: false as const,
+                error: "Property is no longer available",
+                data: null,
+                meta: null,
+            };
+        }
+
+        await db.runTransaction(async (transaction) => {
             // Create purchase request record
             const purchaseRequestRef = db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).doc();
             transaction.set(purchaseRequestRef, { 
@@ -540,11 +568,9 @@ async function _initiatePropertyPurchaseAction(
                 updatedAt: FieldValue.serverTimestamp() 
             });
 
-            // Mark property as pending
-            transaction.update(propertyRef, { 
-                status: "pending",
-                updatedAt: FieldValue.serverTimestamp() 
-            });
+            // (The property was already moved to "pending" by the claim above.
+            //  Setting it here as well is what put the reservation AFTER the
+            //  purchase request, so two buyers could both get that far.)
         });
 
         return { error: null, success: true as const, meta: null, data: null };
@@ -633,32 +659,41 @@ async function _cancelPurchaseRequestAction(requestId: string): Promise<ActionRe
             return { success: false as const, error: "Can only cancel pending payment requests", data: null, meta: null };
         }
 
-        // ── EXECUTE CANCELLATION IN A TRANSACTION ──────
-        await db.runTransaction(async (transaction) => {
-            const reqSnap = await transaction.get(requestRef);
-            if (!reqSnap.exists) throw new Error("Purchase request not found");
-            
-            const reqData = reqSnap.data();
-            if (reqData?.buyerId !== session.user.id) throw new Error("Unauthorized");
-            if (reqData?.status !== "pending_payment") throw new Error("Can only cancel pending payment requests");
-
-            // Update request status
-            transaction.update(requestRef, { 
-                status: "cancelled",
-                escrowStatus: "refunded",
-                cancelledAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp() 
-            });
-
-            // Mark property as available again
-            if (reqData?.propertyId) { 
-                const pRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(reqData.propertyId);
-                transaction.update(pRef, {
-                    status: "verified",
-                    updatedAt: FieldValue.serverTimestamp() 
-                });
-            }
+        // ── CLAIM THE CANCELLATION, THEN RELEASE THE PROPERTY ──────
+        //
+        // Claiming means two simultaneous cancellations cannot both release the
+        // property — which, now that the reservation happens up front, would
+        // otherwise free a listing another buyer had already claimed.
+        const cancelClaim = await claimStatusTransition({
+            collection: COLLECTIONS.FARM_NATION_TRANSACTIONS,
+            id: requestId,
+            from: "pending_payment",
+            to: "cancelled",
+            patch: { escrowStatus: "refunded", cancelledAt: new Date().toISOString() },
         });
+
+        if (!cancelClaim.claimed) {
+            return {
+                success: false as const,
+                error: "Can only cancel pending payment requests",
+                data: null,
+                meta: null,
+            };
+        }
+
+        // Return the property to the pool.
+        //
+        // This used to set "verified", which is not one of the statuses a
+        // Property can hold — the union is available | pending | sold | leased —
+        // and purchasing requires "available". So cancelling a purchase left the
+        // listing permanently unbuyable: no buyer could ever claim it again.
+        if (requestData?.propertyId) {
+            await db.collection(COLLECTIONS.LAND_LISTINGS).doc(requestData.propertyId).update({
+                status: "available",
+                pendingBuyerId: null,
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+        }
 
         return { error: null, success: true as const, meta: null, data: null };
     } catch (error: any) { 
