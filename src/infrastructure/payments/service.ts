@@ -7,12 +7,12 @@ import { generateAndSendWhatsAppInvite } from "@/lib/whatsapp-invites";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { ACADEMY_CONFIG } from "@/lib/constants";
 import { normalizeUserDoc } from "@/lib/schema-normalizer";
+import { claimPaymentOnce } from "@/lib/wallet-ledger";
 
 /**
  * Handle Marketplace Order Fulfillment
  */
 export async function processMarketplaceOrder(reference: string, amount: number, userId: string, paidAt?: Date) {
-    const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
 
     // Find order
     const orderQuery = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
@@ -68,20 +68,39 @@ export async function processMarketplaceOrder(reference: string, amount: number,
     const { getPlatformFees } = await import("@/lib/system-settings");
     const fees = await getPlatformFees();
 
+    const buyerIdForClaim = userId || orderData.buyerId;
+
+    // Claim the payment before fulfilling any of it.
+    //
+    // This was a check-then-write inside runTransaction, which takes no lock:
+    // two deliveries of the same Paystack webhook both read "not completed",
+    // both fulfilled, and both wrote the marker — duplicate escrow rows,
+    // duplicate ledger entries, duplicate seller credits. Paystack retries
+    // webhooks by design, so this was not a rare race.
+    //
+    // If fulfilment below fails, the reference stays claimed and the payment
+    // will not retry. Deliberate: a stuck payment somebody investigates beats
+    // one that silently fulfils twice. The catch logs loudly for that reason.
+    const claim = await claimPaymentOnce({
+        reference,
+        userId: buyerIdForClaim,
+        amount,
+        type: "marketplace_order",
+        source: "webhook",
+        metadata: { orderId: orderData.orderId || orderDoc.id },
+    });
+
+    if (!claim.claimed) {
+        logger.info(`[Paystack Fulfillment] Marketplace Order ${reference} already processed.`);
+        return;
+    }
+
     const result = await db.runTransaction(async (transaction) => {
-        const processedSnapTrans = await transaction.get(processedRef);
-
-        if (processedSnapTrans.exists) {
-            const data = processedSnapTrans.data();
-            if (data?.status === "completed") {
-                logger.info(`[Paystack Fulfillment] Marketplace Order ${reference} already processed.`);
-                return { alreadyProcessed: true };
-            }
-        }
-
-        const buyerId = userId || orderData.buyerId;
+        const buyerId = buyerIdForClaim;
         const walletRef = db.collection(COLLECTIONS.WALLETS).doc(buyerId);
         const walletSnap = await transaction.get(walletRef);
+        // Display only: the balanced pair of wallet_transactions rows below is
+        // net zero, and no wallet balance is changed by this function.
         let currentBalance = 0;
         if (walletSnap.exists) {
             currentBalance = walletSnap.data()?.balance || 0;
@@ -101,17 +120,9 @@ export async function processMarketplaceOrder(reference: string, amount: number,
             paymentMethod: "paystack_webhook"
         });
 
-        // 2. Set Outbox Document Status to completed
-        transaction.set(processedRef, {
-            processedAt: paymentTimestamp,
-            userId: buyerId,
-            amount: amount,
-            type: "marketplace_order",
-            reference,
-            status: "completed",
-            source: "webhook",
-            updatedAt: FieldValue.serverTimestamp()
-        }, { merge: true });
+        // 2. (The processed_payments row is written by claimPaymentOnce above.
+        //    Writing it here as well was what made the marker land AFTER the
+        //    fulfilment rather than before it.)
 
         // 2b. Write to Unified Ledger
         transaction.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(reference), {
@@ -254,7 +265,13 @@ export async function processMarketplaceOrder(reference: string, amount: number,
         return { success: true };
     });
 
-    if (result && result.alreadyProcessed) {
+    if (!result?.success) {
+        // The reference is already claimed, so this will not be retried
+        // automatically. Surface it rather than letting it disappear.
+        logger.error(
+            `[Paystack Fulfillment] Order ${orderData.orderId} claimed reference ${reference} ` +
+            `but fulfilment did not complete. Needs manual reconciliation.`
+        );
         return;
     }
 

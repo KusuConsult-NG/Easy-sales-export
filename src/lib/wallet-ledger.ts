@@ -141,6 +141,65 @@ export async function debitWalletOnce(params: {
     };
 }
 
+export interface ClaimResult {
+    /** True when this call claimed the reference and should do the work. */
+    claimed: boolean;
+    /** Status on the existing row when `claimed` is false. */
+    status: string | null;
+}
+
+/**
+ * Claim a payment reference without moving any money.
+ *
+ * For fulfilment that marks an order paid, creates escrow rows or writes a
+ * ledger entry — work that must happen exactly once per payment, but changes no
+ * balance. Paystack retries webhooks, so a duplicate delivery is expected
+ * behaviour rather than a rare race.
+ *
+ * Claim FIRST, then fulfil. On `claimed: false`, return early and do nothing.
+ *
+ * This is not a transaction around the fulfilment that follows it. If the work
+ * fails after a successful claim, the reference stays claimed and the payment
+ * will not retry — deliberately, because for money a stuck payment somebody has
+ * to look at beats one that silently fulfils twice. Log loudly so it is findable.
+ */
+export async function claimPaymentOnce(params: {
+    reference: string;
+    userId: string;
+    amount: number;
+    type?: string;
+    source?: string;
+    metadata?: Record<string, any>;
+    /** Anything that is not money in must not be "completed" — see creditWalletOnce. */
+    status?: string;
+}): Promise<ClaimResult> {
+    const { reference, userId, amount, type, source, metadata, status } = params;
+
+    if (!reference) throw new Error("claimPaymentOnce: reference is required");
+
+    const { data, error } = await supabaseAdmin.rpc("claim_payment_once", {
+        p_reference: reference,
+        p_user_id: userId ?? null,
+        p_amount: amount ?? null,
+        p_type: type ?? null,
+        p_source: source ?? null,
+        p_raw_data: metadata ?? {},
+        p_status: status ?? "completed",
+    });
+
+    if (error) {
+        logger.error("[wallet-ledger] claim_payment_once failed", { reference, userId, error });
+        throw new Error(`Payment claim failed: ${error.message}`);
+    }
+
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) {
+        throw new Error("Payment claim returned no result");
+    }
+
+    return { claimed: Boolean(row.claimed), status: row.status ?? null };
+}
+
 /**
  * Debit a wallet atomically without claiming an idempotency reference.
  *
