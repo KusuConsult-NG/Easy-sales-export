@@ -272,6 +272,36 @@ There is also double-lending verification in the same transaction — querying f
 other active loans — which has the same staleness problem: two applications
 approved at once can each fail to see the other.
 
+## Fixed: cooperative savings could be overdrawn
+
+Two paths debited `cooperative_members.savingsBalance` with a read-check-write:
+
+| Path | What it does |
+|---|---|
+| `_submitWithdrawalAction` | reserves funds for a withdrawal request |
+| `_createFixedSavingsAction` | locks funds into a fixed savings plan |
+
+Both read the balance, compared it to the amount, and then decremented — inside
+`runTransaction`, which takes no lock. Two withdrawals submitted at once both
+read the same balance, both passed the check, and both deducted. **A member's
+savings went negative.**
+
+Migration `010` made this worse rather than better, the same way it did for the
+escrow cron: the decrements used to lose one another, which accidentally hid the
+overdraft. Once increments apply correctly, both deductions land.
+
+Migration `013` adds `debit_jsonb_balance` — a locked, checked debit for
+balances held in `raw_data` rather than a native column. The wallet functions
+(005/006/011) could not be reused: they are specific to the `wallets` table and
+its native `balance` column, and cooperative savings are neither.
+
+Deliberately generic over table and field, because the same shape appears on
+locked balances and WAVE earnings. One primitive rather than one per balance.
+
+An integration test drives three concurrent 400 debits against a balance of
+1,000 and asserts exactly two succeed with 200 left. Under the old code all
+three passed and the balance ended at −200.
+
 ## Not yet migrated
 
 Ordered by `runTransaction` count. Presence here is not proof of a live defect —
@@ -287,7 +317,7 @@ can be ruled out.
 | 4 | `src/app/actions/farm-nation.ts` | Property reservation and cancellation converted; 4 non-inventory transitions remain. |
 | 5 | `src/app/actions/wave/_actions.ts` | |
 | 5 | `src/app/actions/wallet.ts` | Remaining non-balance transactions (withdrawal request, admin decisions). |
-| 5 | `src/app/actions/cooperative/_actions.ts` | |
+| 3 | `src/app/actions/cooperative/_actions.ts` | Both overdraft paths converted; 3 non-money transitions remain. |
 | 4 | `src/app/actions/vendor-settings.ts` | |
 | 4 | `src/app/actions/marketplace/_escrow_actions.ts` | |
 | 4 | `src/app/actions/marketplace/_actions.ts` | |

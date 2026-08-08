@@ -34,7 +34,7 @@ export interface CreditResult {
     balance: number;
 }
 
-export type DebitFailure = "already_processed" | "insufficient_funds" | "no_wallet";
+export type DebitFailure = "already_processed" | "insufficient_funds" | "no_wallet" | "not_found";
 
 export interface DebitResult {
     ok: boolean;
@@ -236,6 +236,59 @@ export async function debitWalletLocked(params: {
     if (!row) {
         throw new Error("Wallet debit returned no result");
     }
+
+    return {
+        ok: Boolean(row.ok),
+        balance: Number(row.balance ?? 0),
+        reason: (row.reason ?? null) as DebitFailure | null,
+    };
+}
+
+/**
+ * Debit a numeric field held inside raw_data, under a row lock.
+ *
+ * For balances that are not the wallet's own: cooperative savings, locked
+ * balances, WAVE earnings. Those live in the JSONB blob rather than a native
+ * column, so `debitWalletOnce` does not reach them.
+ *
+ * Locks the row, re-reads the balance under that lock, refuses if funds are
+ * short, then decrements. The read-check-write it replaces let two concurrent
+ * debits both pass the sufficiency check and take a balance negative.
+ *
+ * See supabase/migrations/013_debit_jsonb_balance.sql.
+ */
+export async function debitJsonbBalance(params: {
+    /** Firestore-style collection name; mapped to its table by the caller's COLLECTIONS constant. */
+    table: string;
+    id: string;
+    field: string;
+    amount: number;
+    /** Required when the collection lives in document_collections. */
+    collection?: string;
+}): Promise<DebitResult> {
+    const { table, id, field, amount, collection } = params;
+
+    if (!id) throw new Error("debitJsonbBalance: id is required");
+    if (!field) throw new Error("debitJsonbBalance: field is required");
+    if (!Number.isFinite(amount) || amount <= 0) {
+        throw new Error(`debitJsonbBalance: amount must be positive, got ${amount}`);
+    }
+
+    const { data, error } = await supabaseAdmin.rpc("debit_jsonb_balance", {
+        p_table: table,
+        p_id: id,
+        p_field: field,
+        p_amount: amount,
+        p_collection: collection ?? null,
+    });
+
+    if (error) {
+        logger.error("[wallet-ledger] debit_jsonb_balance failed", { table, id, field, error });
+        throw new Error(`Balance debit failed: ${error.message}`);
+    }
+
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) throw new Error("Balance debit returned no result");
 
     return {
         ok: Boolean(row.ok),
