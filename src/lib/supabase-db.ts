@@ -417,6 +417,105 @@ async function supabaseUpsert(
  * Used by DocumentReference.update() to ensure admin edits never silently
  * wipe out fields that weren't part of the edit form.
  */
+/**
+ * Separates FieldValue.increment entries from the rest of a write.
+ *
+ * Increments must not be resolved in JavaScript — that is a read-modify-write
+ * and loses concurrent updates. They are applied in SQL instead, by
+ * applyIncrements below.
+ */
+function splitIncrements(data: Record<string, any>): {
+    increments: Record<string, number>;
+    rest: Record<string, any>;
+} {
+    const increments: Record<string, number> = {};
+    const rest: Record<string, any> = {};
+
+    for (const [key, value] of Object.entries(data)) {
+        if (getFieldValueType(value) === 'FieldValue.increment') {
+            const operand = Number((value as any)?._operand ?? 0);
+            if (Number.isFinite(operand)) {
+                increments[key] = operand;
+                continue;
+            }
+            // A non-numeric operand is a caller bug. Fall through so the old
+            // path handles it rather than silently dropping the field.
+        }
+        rest[key] = value;
+    }
+
+    return { increments, rest };
+}
+
+/**
+ * Applies increments atomically in the database.
+ *
+ * Splits them into native typed columns and raw_data paths, because both exist:
+ * `balance` is a real column on `wallets`, while most counters live inside the
+ * JSONB blob. The mapping lives here rather than in SQL because this module
+ * already owns it.
+ *
+ * Falls back to the previous read-modify-write when the RPC is unavailable —
+ * migration 010 not yet applied, or the mocked adapter under test. The fallback
+ * is not atomic, and says so, but it keeps writes working rather than failing.
+ */
+async function applyIncrements(
+    collection: string,
+    id: string,
+    increments: Record<string, number>,
+    existing: Record<string, any>,
+): Promise<void> {
+    const tableName = getTableName(collection);
+    const nativeCols = NATIVE_COLUMNS[tableName] || [];
+    const fieldMap = FIELD_TO_COLUMN[tableName] || {};
+
+    const nativeIncrements: Record<string, number> = {};
+    const jsonIncrements: Record<string, number> = {};
+
+    for (const [field, delta] of Object.entries(increments)) {
+        // Dotted paths always live in raw_data — a native column has no dots.
+        if (!field.includes('.')) {
+            const column = fieldMap[field] ?? field;
+            if (nativeCols.includes(column)) {
+                nativeIncrements[column] = (nativeIncrements[column] ?? 0) + delta;
+                continue;
+            }
+        }
+        jsonIncrements[field] = (jsonIncrements[field] ?? 0) + delta;
+    }
+
+    try {
+        const { error } = await supabaseAdmin.rpc('apply_increments', {
+            p_table: tableName,
+            p_id: tableName === 'document_collections' ? id : id,
+            p_collection: tableName === 'document_collections' ? collection : null,
+            p_native: nativeIncrements,
+            p_json: jsonIncrements,
+        });
+
+        if (!error) return;
+
+        logger.warn(
+            `[supabase-db] apply_increments RPC unavailable for ${collection}/${id} ` +
+            `(${error.message}); falling back to a NON-ATOMIC increment. ` +
+            `Apply supabase/migrations/010_atomic_increments.sql to fix this.`
+        );
+    } catch (err: any) {
+        logger.warn(
+            `[supabase-db] apply_increments RPC threw for ${collection}/${id} ` +
+            `(${err?.message}); falling back to a NON-ATOMIC increment.`
+        );
+    }
+
+    // Fallback: the old behaviour. Concurrent increments can still be lost here.
+    const patch: Record<string, any> = {};
+    for (const [field, delta] of Object.entries(increments)) {
+        const current = Number(getNestedValue(existing, field) ?? 0);
+        patch[field] = (Number.isFinite(current) ? current : 0) + delta;
+    }
+    await supabasePartialUpdate(collection, id, patch);
+}
+
 async function supabasePartialUpdate(
     collection: string,
     id: string,
@@ -805,8 +904,16 @@ export class SupabaseDocumentReference {
     }
 
     async update(data: Record<string, any>): Promise<void> {
-        // Process FieldValue sentinels and dot-notation keys against existing data
-        // (the get() call here handles FieldValue.increment, arrayUnion, etc.)
+        // Increments are pulled out and applied in SQL, not resolved here.
+        //
+        // They used to go through processWriteData below, which reads the
+        // document and adds to the value it just read. Two concurrent
+        // increments therefore computed the same result and the second write
+        // overwrote the first, silently losing one — on seller payouts, loan
+        // repayments and savings balances among others. See
+        // supabase/migrations/010_atomic_increments.sql.
+        const { increments, rest } = splitIncrements(data);
+
         const snap = await this.get();
         const existing = snap.data() ?? {};
 
@@ -820,12 +927,20 @@ export class SupabaseDocumentReference {
             );
         }
 
-        const processed = processWriteData(data, existing, true);
-        if (!processed.id) processed.id = this.id;
-        // Use partial update (not full upsert) so only changed fields overwrite raw_data.
-        // This prevents wiping out fields like serviceRegistrations, kyc, etc.
-        // if the in-memory `get()` above returned a partial or stale document.
-        await supabasePartialUpdate(this._collection, this.id, processed);
+        // Non-increment fields keep the existing behaviour exactly.
+        if (Object.keys(rest).length > 0) {
+            const processed = processWriteData(rest, existing, true);
+            if (!processed.id) processed.id = this.id;
+            // Use partial update (not full upsert) so only changed fields overwrite raw_data.
+            // This prevents wiping out fields like serviceRegistrations, kyc, etc.
+            // if the in-memory `get()` above returned a partial or stale document.
+            await supabasePartialUpdate(this._collection, this.id, processed);
+        }
+
+        if (Object.keys(increments).length > 0) {
+            await applyIncrements(this._collection, this.id, increments, existing);
+        }
+
         await invalidateCacheForCollection(this._collection, this.id);
     }
 
