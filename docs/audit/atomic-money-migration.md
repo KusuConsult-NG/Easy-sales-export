@@ -197,6 +197,33 @@ remove. It depends on that change landing first — PR #13, still open.
 Recorded rather than fixed because fixing half of a class and calling it done is
 what produced this gap in the first place.
 
+## Fixed: farm-nation property double sale
+
+`_initiatePropertyPurchaseAction` checked `status === "available"` inside
+`runTransaction`, which takes no lock. Two buyers requesting the same property
+at once both read "available", both created a purchase request, and both marked
+it pending — **the same property sold twice**, with two buyers each expecting to
+pay.
+
+The reservation now happens as a claim (`available → pending`) before the
+purchase request is written. Exactly one buyer wins; the loser is told the
+property is gone rather than being taken to payment for something they cannot
+have.
+
+### A pre-existing bug this surfaced
+
+Cancelling a purchase set the listing back to **`"verified"`** — which is not one
+of the statuses a `Property` can hold. The union is
+`available | pending | sold | leased`. Purchasing requires `"available"`.
+
+So **cancelling a purchase left the listing permanently unbuyable**: no buyer
+could claim it again, and nothing reported an error. It simply stopped being
+purchasable, quietly, forever.
+
+Cancellation now returns the listing to `"available"` and clears the pending
+buyer. Worth checking production for listings sitting at `"verified"` — each one
+is a property nobody can buy.
+
 ## Not yet migrated
 
 Ordered by `runTransaction` count. Presence here is not proof of a live defect —
@@ -209,7 +236,7 @@ can be ruled out.
 | 1 | `src/infrastructure/payments/service.ts` | 6 of 7 converted. Only `processExportInvestment` remains — see below. |
 | 4 | `src/app/actions/marketplace/_escrow.ts` | Both money paths converted; 4 non-money status transitions remain — see below. |
 | 6 | `src/app/actions/academy/_actions.ts` | Payment claim converted; 6 non-payment transitions remain. |
-| 6 | `src/app/actions/farm-nation.ts` | |
+| 4 | `src/app/actions/farm-nation.ts` | Property reservation and cancellation converted; 4 non-inventory transitions remain. |
 | 5 | `src/app/actions/wave/_actions.ts` | |
 | 5 | `src/app/actions/wallet.ts` | Remaining non-balance transactions (withdrawal request, admin decisions). |
 | 5 | `src/app/actions/cooperative/_actions.ts` | |
