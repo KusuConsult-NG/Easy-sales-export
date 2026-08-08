@@ -163,7 +163,18 @@ export class AnalyticsService implements AnalyticsServiceContract {
             }
         }
 
+        let revenueSource: "paystack" | "database" | null = paystackSuccess ? "paystack" : null;
+
         if (!paystackSuccess) {
+            // Discard any partial Paystack total before falling back.
+            //
+            // Page 1's transactions are added before the remaining pages are
+            // fetched, so a failure part-way through left a partial sum behind.
+            // If the fallback below also failed, that partial figure was
+            // returned as the platform's revenue.
+            totalRevenue = 0;
+            totalTransactions = 0;
+
             try {
                 let query: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
                     .where("status", "==", "completed");
@@ -182,15 +193,29 @@ export class AnalyticsService implements AnalyticsServiceContract {
                 const data = revenueSnap.data();
                 totalRevenue = Number(data.totalRevenue) || 0;
                 totalTransactions = Number(data.totalTransactions) || 0;
+                revenueSource = "database";
             } catch (e: any) {
                 logger.error(`[PlatformMetrics] Firestore fallback aggregate query failed: ${e.message}`);
             }
         }
 
+        if (revenueSource === null) {
+            // Both sources failed. Returning 0 here is what made an outage
+            // indistinguishable from a day with no sales — the figure was
+            // rendered with the same confidence as a real one. revenueAvailable
+            // lets the dashboard say "unavailable" instead of "₦0".
+            logger.error(
+                "[PlatformMetrics] Revenue could not be determined from Paystack or the database. " +
+                "Reporting it as unavailable rather than as zero."
+            );
+        }
+
         return {
             totalRevenue,
             totalTransactions,
-            totalUsers
+            totalUsers,
+            revenueAvailable: revenueSource !== null,
+            revenueSource,
         };
     }
 
@@ -348,6 +373,9 @@ export class AnalyticsService implements AnalyticsServiceContract {
         let totalRevenue: number;
         let totalTransactions: number;
         let pendingApprovals: number;
+        // False when neither Paystack nor the database could give a figure, so the
+        // dashboard can say "unavailable" rather than render a confident zero.
+        let revenueAvailable: boolean;
 
         if (isDateFiltered) {
             const [newUsersSnap, metricsResult, pendingRes] = await Promise.allSettled([
@@ -363,9 +391,12 @@ export class AnalyticsService implements AnalyticsServiceContract {
             if (metricsResult.status === "fulfilled") {
                 totalRevenue = metricsResult.value.totalRevenue;
                 totalTransactions = metricsResult.value.totalTransactions;
+                revenueAvailable = metricsResult.value.revenueAvailable;
             } else {
+                // A rejected metrics call is not zero revenue, it is no answer.
                 totalRevenue = 0;
                 totalTransactions = 0;
+                revenueAvailable = false;
             }
             pendingApprovals = pendingRes.status === "fulfilled" ? pendingRes.value.totalPending : 0;
         } else {
@@ -376,6 +407,7 @@ export class AnalyticsService implements AnalyticsServiceContract {
             totalUsers = metricsResult.totalUsers;
             totalTransactions = metricsResult.totalTransactions;
             totalRevenue = metricsResult.totalRevenue;
+            revenueAvailable = metricsResult.revenueAvailable;
             pendingApprovals = pendingResult.totalPending;
         }
 
@@ -545,6 +577,7 @@ export class AnalyticsService implements AnalyticsServiceContract {
                 totalRevenue,
                 monthlyRevenue,
                 totalTransactions,
+                revenueAvailable,
                 pendingApprovals,
                 recentActivityCount: recentActivity,
             },
