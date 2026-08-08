@@ -18,7 +18,7 @@
 
 import { supabaseAdmin } from "@/lib/supabase";
 import { supabaseDb as db } from "@/lib/supabase-db";
-import { creditWalletOnce, debitWalletOnce } from "@/lib/wallet-ledger";
+import { creditWalletOnce, debitWalletOnce, debitJsonbBalance } from "@/lib/wallet-ledger";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
 declare const maybeDescribe: jest.Describe;
@@ -157,5 +157,81 @@ maybeDescribe("wallet balance, against real Postgres", () => {
         // the same money twice.
         expect(data?.raw_data?.status).toBe("wallet_debit");
         expect(data?.raw_data?.status).not.toBe("completed");
+    });
+});
+
+maybeDescribe("debitJsonbBalance, against real Postgres", () => {
+    /**
+     * Cooperative savings live in raw_data, not a native column, so the wallet
+     * functions do not reach them. Two paths debited them with a read-check-
+     * write: two withdrawals at once both passed the sufficiency check and both
+     * deducted, taking a member's savings negative.
+     *
+     * Requires migration 013.
+     */
+
+    const memberId = `${TEST_PREFIX}member-1`;
+
+    async function seedMember(savingsBalance: number) {
+        await supabaseAdmin.from("cooperative_members").upsert({
+            id: memberId,
+            user_id: memberId,
+            status: "active",
+            raw_data: { id: memberId, userId: memberId, savingsBalance, membershipStatus: "active" },
+        });
+    }
+
+    async function readSavings(): Promise<number> {
+        const { data } = await supabaseAdmin
+            .from("cooperative_members")
+            .select("raw_data")
+            .eq("id", memberId)
+            .single();
+        return Number(data?.raw_data?.savingsBalance ?? 0);
+    }
+
+    afterAll(async () => {
+        await supabaseAdmin.from("cooperative_members").delete().like("id", `${TEST_PREFIX}%`);
+    });
+
+    it("debits a raw_data balance", async () => {
+        await seedMember(1000);
+
+        const result = await debitJsonbBalance({
+            table: "cooperative_members", id: memberId, field: "savingsBalance", amount: 400,
+        });
+
+        expect(result.ok).toBe(true);
+        await expect(readSavings()).resolves.toBe(600);
+    });
+
+    it("refuses to overdraw", async () => {
+        await seedMember(500);
+
+        const result = await debitJsonbBalance({
+            table: "cooperative_members", id: memberId, field: "savingsBalance", amount: 900,
+        });
+
+        expect(result.ok).toBe(false);
+        expect(result.reason).toBe("insufficient_funds");
+        await expect(readSavings()).resolves.toBe(500);
+    });
+
+    it("does not let concurrent debits take savings negative", async () => {
+        await seedMember(1000);
+
+        // Three withdrawals of 400 against 1000. Exactly two can succeed.
+        // Under the old read-check-write all three passed the check and the
+        // balance ended at -200.
+        const results = await Promise.all([
+            debitJsonbBalance({ table: "cooperative_members", id: memberId, field: "savingsBalance", amount: 400 }),
+            debitJsonbBalance({ table: "cooperative_members", id: memberId, field: "savingsBalance", amount: 400 }),
+            debitJsonbBalance({ table: "cooperative_members", id: memberId, field: "savingsBalance", amount: 400 }),
+        ]);
+
+        expect(results.filter(r => r.ok)).toHaveLength(2);
+        const remaining = await readSavings();
+        expect(remaining).toBe(200);
+        expect(remaining).toBeGreaterThanOrEqual(0);
     });
 });
