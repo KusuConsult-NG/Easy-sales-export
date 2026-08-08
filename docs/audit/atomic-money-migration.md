@@ -302,6 +302,62 @@ An integration test drives three concurrent 400 debits against a balance of
 1,000 and asserts exactly two succeed with 200 left. Under the old code all
 three passed and the balance ended at −200.
 
+## Fixed: WAVE earnings could be withdrawn twice
+
+`_withdrawEarningsAction` debited `serviceRegistrations.wave.waveEarningsBalance`
+with a worse variant of the read-check-write: the sufficiency check happened
+**outside the transaction entirely** —
+
+```js
+// PHASE 1: Balance Calculation (Snapshot)
+if (earnings.data.paidAmount < amount) return "Insufficient available balance";
+...
+transaction.update(userRef, {
+    'serviceRegistrations.wave.waveEarningsBalance': FieldValue.increment(-amount),
+});
+```
+
+so the balance was read, released, and only then decremented. Two withdrawals
+submitted at once both passed against the same snapshot and both debited.
+
+The `hasPendingWithdrawal` flag was intended to prevent exactly this and could
+not: it was itself a check-then-write inside the same lock-free transaction.
+
+Migration `014` extends `debit_jsonb_balance` to nested paths, since WAVE
+earnings live three levels into `raw_data` rather than at the top level like
+cooperative savings. Single-segment callers are unaffected.
+
+The debit now happens first, under a lock. A second concurrent request is
+refused for insufficient funds, which is the honest answer — the first one has
+the money.
+
+## NOT fixed: training events can be overbooked
+
+`_registerForTrainingAction` checks capacity and then increments:
+
+```js
+if (currentParticipants >= maxParticipants) throw new Error("Event is full");
+...
+transaction.update(eventRef, { currentParticipants: FieldValue.increment(1) });
+```
+
+No lock, so two registrations on the last seat both pass and the event goes over
+capacity. Not money, but it oversells a physical training session.
+
+The fix needs a primitive none of the existing ones provide: a **conditional
+increment** — raise a counter only while it stays below a bound, in one
+statement:
+
+```sql
+UPDATE ... SET currentParticipants = currentParticipants + 1
+ WHERE currentParticipants < maxParticipants
+RETURNING currentParticipants;
+```
+
+Same shape as `claim_status_transition`, but on a numeric bound rather than an
+equality. Worth adding when the next capacity-style bug appears, rather than
+building it for one caller.
+
 ## Not yet migrated
 
 Ordered by `runTransaction` count. Presence here is not proof of a live defect —
@@ -315,7 +371,7 @@ can be ruled out.
 | 4 | `src/app/actions/marketplace/_escrow.ts` | Both money paths converted; 4 non-money status transitions remain — see below. |
 | 6 | `src/app/actions/academy/_actions.ts` | Payment claim converted; 6 non-payment transitions remain. |
 | 4 | `src/app/actions/farm-nation.ts` | Property reservation and cancellation converted; 4 non-inventory transitions remain. |
-| 5 | `src/app/actions/wave/_actions.ts` | |
+| 4 | `src/app/actions/wave/_actions.ts` | Earnings withdrawal converted. Training capacity NOT fixed — see below. |
 | 5 | `src/app/actions/wallet.ts` | Remaining non-balance transactions (withdrawal request, admin decisions). |
 | 3 | `src/app/actions/cooperative/_actions.ts` | Both overdraft paths converted; 3 non-money transitions remain. |
 | 4 | `src/app/actions/vendor-settings.ts` | |
