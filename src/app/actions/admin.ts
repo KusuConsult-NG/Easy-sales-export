@@ -19,6 +19,7 @@ import { Timestamp } from "@/lib/firestore-compat";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { claimStatusTransition } from "@/lib/status-transition";
 import { createAdminAuditLog, logAdminAction } from "@/lib/audit-log";
 import { serializeDoc, serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { normalizeAggressive } from "@/lib/canonical/normalizer";
@@ -111,16 +112,21 @@ async function _processWithdrawalAction(
             return { error: (valid.error as ZodError).issues[0].message, success: false as const };
         }
 
-        // Try standard withdrawals first, then cooperative_withdrawals
+        // Try standard withdrawals first, then cooperative_withdrawals.
+        // The collection is tracked because the claim below needs to know which
+        // one this withdrawal actually lives in.
+        let withdrawalCollection: string = COLLECTIONS.WITHDRAWALS;
         let withdrawalRef = db.collection(COLLECTIONS.WITHDRAWALS).doc(withdrawalId);
         let withdrawalDoc = await withdrawalRef.get();
 
         if (!withdrawalDoc.exists) {
+            withdrawalCollection = COLLECTIONS.COOPERATIVE_WITHDRAWALS;
             withdrawalRef = db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).doc(withdrawalId);
             withdrawalDoc = await withdrawalRef.get();
         }
 
         if (!withdrawalDoc.exists) {
+            withdrawalCollection = COLLECTIONS.WAVE_WITHDRAWALS;
             withdrawalRef = db.collection(COLLECTIONS.WAVE_WITHDRAWALS).doc(withdrawalId);
             withdrawalDoc = await withdrawalRef.get();
         }
@@ -133,23 +139,32 @@ async function _processWithdrawalAction(
 
         if (action === "approve") {
             // ══════════════════════════════════════════════
-            // 1. STATE LOCK — Mark as payout_initiated
+            // 1. CLAIM THE PAYOUT — Mark as payout_initiated
             // ══════════════════════════════════════════════
-            await db.runTransaction(async (transaction) => {
-                const freshDoc = await transaction.get(withdrawalRef);
-                if (!freshDoc.exists) throw new Error("Withdrawal request not found");
-                const currentStatus = freshDoc.data()?.status;
-                if (currentStatus !== "pending") {
-                    throw new Error(`Withdrawal is already ${currentStatus}`);
-                }
-
-                transaction.update(withdrawalRef, {
-                    status: "payout_initiated",
-                    processedBy: session.user.id,
-                    processedAt: FieldValue.serverTimestamp(),
-                    updatedAt: FieldValue.serverTimestamp(),
-                });
+            //
+            // This was labelled a STATE LOCK and was not one. The status check
+            // ran inside runTransaction, which takes no lock, so two admins
+            // approving the same withdrawal both read "pending", both wrote
+            // "payout_initiated", and both continued to the Paystack transfer
+            // below — paying the user twice, out of the business's money.
+            //
+            // Same defect and same fix as the wallet withdrawal path.
+            const claim = await claimStatusTransition({
+                collection: withdrawalCollection,
+                id: withdrawalId,
+                from: "pending",
+                to: "payout_initiated",
+                patch: { processedBy: session.user.id, processedAt: new Date().toISOString() },
             });
+
+            if (!claim.claimed) {
+                return {
+                    error: claim.status === null
+                        ? "Withdrawal request not found"
+                        : `Withdrawal is already ${claim.status}`,
+                    success: false as const,
+                };
+            }
 
             // ══════════════════════════════════════════════
             // 2. PAYOUT — Trigger Paystack Transfer
