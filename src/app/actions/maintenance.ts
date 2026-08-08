@@ -15,7 +15,7 @@ export async function repairDataAction() { const authCheck = await requireAdmin(
     if ("error" in authCheck) return { success: false as const, error: "Unauthorized", data: null };
 
     try { const db = getAdminDb();
-        const snapshot = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS).get();
+        const snapshot = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS).all().get();
         const batch = db.batch();
         let count = 0;
 

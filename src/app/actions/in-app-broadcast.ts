@@ -116,8 +116,11 @@ export async function collectRecipientUserIds(
             }
 
             // 1. Primary: root users collection
+            // .all(): a broadcast must reach every recipient, not the first
+            // 5,000 of ~41,000.
             const stream = db.collection(COLLECTIONS.USERS)
                 .select("name", "fullName", "stateOfOrigin", "state", "address")
+                .all()
                 .get();
             for (const d of (await stream).docs) {
                 if (excludeIds.has(d.id)) continue;
