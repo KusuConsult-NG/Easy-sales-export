@@ -9,6 +9,7 @@
 
 import { useState } from "react";
 import DocumentUpload from "@/components/shared/DocumentUpload";
+import { uploadDocumentAction } from "@/app/actions/upload";
 import { FileText, Image as ImageIcon, Package } from "lucide-react";
 
 interface BusinessVerificationData {
@@ -30,6 +31,9 @@ interface BusinessVerificationStepProps {
 export default function BusinessVerificationStep({ data = {}, onChange, onNext, onBack }: BusinessVerificationStepProps) {
     const [documents, setDocuments] = useState<BusinessVerificationData>(data);
 
+    const [uploading, setUploading] = useState<string[]>([]);
+    const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
+
     const updateDocuments = (updates: Partial<BusinessVerificationData>) => {
         setDocuments(prev => {
             const next = { ...prev, ...updates };
@@ -37,6 +41,70 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
             return next;
         });
     };
+
+    /**
+     * Uploads a file and returns its stored URL, or null on failure.
+     *
+     * Every slot on this step previously recorded URL.createObjectURL(file) —
+     * a blob: URL valid only inside the uploader's own browser tab. It dies
+     * with the tab, so no seller verification document was ever retained and
+     * admins reviewing an application saw broken links.
+     *
+     * uploadDocumentAction validates type and size and stores the file in
+     * Cloudinary. It existed, fully written, with no callers.
+     */
+    async function uploadFile(slot: string, file: File, documentType: string): Promise<string | null> {
+        setUploadErrors(prev => {
+            const next = { ...prev };
+            delete next[slot];
+            return next;
+        });
+        setUploading(prev => [...prev, slot]);
+
+        try {
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("fileName", file.name);
+            formData.append("mimeType", file.type);
+            formData.append("documentType", documentType);
+
+            const result = await uploadDocumentAction(formData);
+
+            if (!result.success || !result.url) {
+                setUploadErrors(prev => ({
+                    ...prev,
+                    [slot]: result.success ? "Upload returned no file location." : result.error,
+                }));
+                return null;
+            }
+
+            return result.url as string;
+        } catch (err) {
+            setUploadErrors(prev => ({
+                ...prev,
+                [slot]: err instanceof Error ? err.message : "Upload failed. Please try again.",
+            }));
+            return null;
+        } finally {
+            setUploading(prev => prev.filter(s => s !== slot));
+        }
+    }
+
+    /** Places an uploaded photo at a fixed index within a list field. */
+    async function uploadPhotoAt(
+        field: "farmPhotos" | "productSamples",
+        index: number,
+        file: File,
+        documentType: string
+    ) {
+        const slot = `${field}-${index}`;
+        const url = await uploadFile(slot, file, documentType);
+        if (!url) return;
+
+        const list = documents[field] ? [...documents[field]!] : [];
+        list[index] = { name: file.name, url };
+        updateDocuments({ [field]: list } as Partial<BusinessVerificationData>);
+    }
 
     return (
         <div className="space-y-6">
@@ -84,8 +152,21 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
                         label=""
                         accept=".pdf,.jpg,.jpeg,.png"
                         maxSize={5}
-                        onUpload={(file) => updateDocuments({ businessRegistration: { name: file.name, url: URL.createObjectURL(file) } })}
+                        error={uploadErrors["businessRegistration"]}
+                        onUpload={async (file) => {
+                            const url = await uploadFile(
+                                "businessRegistration",
+                                file,
+                                "marketplace_business_registration"
+                            );
+                            if (url) {
+                                updateDocuments({ businessRegistration: { name: file.name, url } });
+                            }
+                        }}
                     />
+                    {uploading.includes("businessRegistration") && (
+                        <p className="mt-2 text-sm text-slate-500">Uploading…</p>
+                    )}
 
                     {documents.businessRegistration && (
                         <div className="mt-4 p-4 border border-slate-200 rounded-lg bg-white space-y-4">
@@ -157,21 +238,15 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
                             label="Photo 1"
                             accept=".jpg,.jpeg,.png"
                             maxSize={5}
-                            onUpload={(file) => {
-                                const photos = documents.farmPhotos ? [...documents.farmPhotos] : [];
-                                photos[0] = { name: file.name, url: URL.createObjectURL(file) };
-                                updateDocuments({ farmPhotos: photos });
-                            }}
+                            error={uploadErrors["farmPhotos-0"]}
+                            onUpload={(file) => uploadPhotoAt("farmPhotos", 0, file, "marketplace_farm_photo")}
                         />
                         <DocumentUpload
                             label="Photo 2"
                             accept=".jpg,.jpeg,.png"
                             maxSize={5}
-                            onUpload={(file) => {
-                                const photos = documents.farmPhotos ? [...documents.farmPhotos] : [];
-                                photos[1] = { name: file.name, url: URL.createObjectURL(file) };
-                                updateDocuments({ farmPhotos: photos });
-                            }}
+                            error={uploadErrors["farmPhotos-1"]}
+                            onUpload={(file) => uploadPhotoAt("farmPhotos", 1, file, "marketplace_farm_photo")}
                         />
                     </div>
                 </div>
@@ -192,21 +267,15 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
                             label="Product 1"
                             accept=".jpg,.jpeg,.png"
                             maxSize={5}
-                            onUpload={(file) => {
-                                const samples = documents.productSamples ? [...documents.productSamples] : [];
-                                samples[0] = { name: file.name, url: URL.createObjectURL(file) };
-                                updateDocuments({ productSamples: samples });
-                            }}
+                            error={uploadErrors["productSamples-0"]}
+                            onUpload={(file) => uploadPhotoAt("productSamples", 0, file, "marketplace_product_sample")}
                         />
                         <DocumentUpload
                             label="Product 2"
                             accept=".jpg,.jpeg,.png"
                             maxSize={5}
-                            onUpload={(file) => {
-                                const samples = documents.productSamples ? [...documents.productSamples] : [];
-                                samples[1] = { name: file.name, url: URL.createObjectURL(file) };
-                                updateDocuments({ productSamples: samples });
-                            }}
+                            error={uploadErrors["productSamples-1"]}
+                            onUpload={(file) => uploadPhotoAt("productSamples", 1, file, "marketplace_product_sample")}
                         />
                     </div>
                 </div>
