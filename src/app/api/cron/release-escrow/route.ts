@@ -5,6 +5,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
+import { claimStatusTransition } from "@/lib/status-transition";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { createNotificationAction } from "@/app/actions/notifications";
 
@@ -63,9 +64,9 @@ async function processExportWindows(now: Timestamp) {
         .limit(MAX_BATCH_SIZE)
         .get();
 
-    if (snapshot.empty) return { processed: 0, succeeded: 0, failed: 0, totalValueReleased: 0 };
+    if (snapshot.empty) return { processed: 0, succeeded: 0, skipped: 0, failed: 0, totalValueReleased: 0 };
 
-    const stats = { processed: 0, succeeded: 0, failed: 0, totalValueReleased: 0 };
+    const stats = { processed: 0, succeeded: 0, skipped: 0, failed: 0, totalValueReleased: 0 };
 
     const results = await Promise.allSettled(snapshot.docs.map(async (doc) => {
         const data = doc.data();
@@ -84,17 +85,32 @@ async function processExportWindows(now: Timestamp) {
 
         const totalPayout = amount * (1 + roiPercentage);
 
+        // Claim the payout before making it.
+        //
+        // This read the status, checked it, then updated — inside
+        // runTransaction, which takes no lock. Two overlapping cron runs both
+        // saw "delivered" and both credited the member's savings.
+        //
+        // That got worse, not better, when FieldValue.increment became atomic
+        // (migration 010): before, one of the two credits was likely lost, which
+        // accidentally masked the duplicate. Now both would land and the member
+        // would be paid twice.
+        const claim = await claimStatusTransition({
+            collection: COLLECTIONS.EXPORT_WINDOWS,
+            id: doc.id,
+            from: "delivered",
+            to: "completed",
+            patch: { finalPayoutAmount: totalPayout, completedAt: new Date().toISOString() },
+        });
+
+        if (!claim.claimed) {
+            logger.info(
+                `[Cron] Export window ${doc.id} already ${claim.status ?? "gone"}; skipping payout.`
+            );
+            return;
+        }
+
         await db.runTransaction(async (tx) => {
-            const freshDoc = await tx.get(doc.ref);
-            if (freshDoc.data()?.status !== "delivered") throw new Error("Status changed concurrently");
-
-            tx.update(doc.ref, {
-                status: "completed",
-                completedAt: FieldValue.serverTimestamp(),
-                finalPayoutAmount: totalPayout,
-                updatedAt: FieldValue.serverTimestamp()
-            });
-
             const userDoc = await tx.get(db.collection(COLLECTIONS.USERS).doc(userId));
             const cooperativeId = userDoc.data()?.cooperativeId;
 
@@ -132,10 +148,16 @@ async function processExportWindows(now: Timestamp) {
         return true;
     }));
 
-    results.forEach(r => r.status === "fulfilled" ? stats.succeeded++ : stats.failed++);
+    // A lost claim returns early, so it resolves with undefined. Counting that
+    // as a success would report payouts that never happened.
+    results.forEach(r => {
+        if (r.status === "rejected") stats.failed++;
+        else if (r.value === true) stats.succeeded++;
+        else stats.skipped++;
+    });
     stats.processed = results.length;
 
-    logger.info(`[Cron: ExportWindows] Processed ${stats.processed}. Success: ${stats.succeeded}. Value: ₦${stats.totalValueReleased.toLocaleString()}`);
+    logger.info(`[Cron: ExportWindows] Processed ${stats.processed}. Success: ${stats.succeeded}. Skipped: ${stats.skipped}. Value: ₦${stats.totalValueReleased.toLocaleString()}`);
     return stats;
 }
 
@@ -159,9 +181,9 @@ async function processEscrowTransactions(now: Timestamp) {
         .limit(MAX_BATCH_SIZE)
         .get();
 
-    if (snapshot.empty) return { processed: 0, succeeded: 0, failed: 0, totalValueReleased: 0 };
+    if (snapshot.empty) return { processed: 0, succeeded: 0, skipped: 0, failed: 0, totalValueReleased: 0 };
 
-    const stats = { processed: 0, succeeded: 0, failed: 0, totalValueReleased: 0 };
+    const stats = { processed: 0, succeeded: 0, skipped: 0, failed: 0, totalValueReleased: 0 };
 
     const results = await Promise.allSettled(snapshot.docs.map(async (doc) => {
         const data = doc.data();
@@ -171,23 +193,29 @@ async function processEscrowTransactions(now: Timestamp) {
         const amount: number = data.amount || 0;
         const productName: string = data.productName || "Unknown product";
 
+        // Claim the release before crediting the seller.
+        //
+        // The old guard read the status and checked it inside runTransaction,
+        // which takes no lock — so two overlapping runs both saw "funded" and
+        // both credited the seller's wallet. The compare-and-swap also still
+        // does the job the guard was there for: a buyer filing a dispute moves
+        // the status off "funded", and this then refuses to release.
+        const claim = await claimStatusTransition({
+            collection: COLLECTIONS.ESCROW_TRANSACTIONS,
+            id: doc.id,
+            from: "funded",
+            to: "released",
+            patch: { releasedBy: "cron", releasedAt: new Date().toISOString() },
+        });
+
+        if (!claim.claimed) {
+            logger.info(
+                `[Cron] Escrow ${escrowId} is '${claim.status ?? "missing"}', not 'funded' — skipping auto-release.`
+            );
+            return;
+        }
+
         await db.runTransaction(async (tx) => {
-            const freshDoc = await tx.get(doc.ref);
-            const freshData = freshDoc.data();
-
-            // Guard: bail if status changed concurrently (e.g. buyer just filed a dispute)
-            if (freshData?.status !== "funded") {
-                throw new Error(`Escrow ${escrowId} status changed to '${freshData?.status}', skipping auto-release`);
-            }
-
-            // 1. Update Escrow Status
-            tx.update(doc.ref, {
-                status: "released",
-                releasedBy: "cron",
-                releasedAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
-            });
-
             // 2. Credit Seller's Wallet
             const walletRef = db.collection(COLLECTIONS.WALLETS).doc(sellerId);
             const walletSnap = await tx.get(walletRef);
@@ -277,10 +305,16 @@ async function processEscrowTransactions(now: Timestamp) {
         return true;
     }));
 
-    results.forEach(r => r.status === "fulfilled" ? stats.succeeded++ : stats.failed++);
+    // A lost claim returns early, so it resolves with undefined. Counting that
+    // as a success would report payouts that never happened.
+    results.forEach(r => {
+        if (r.status === "rejected") stats.failed++;
+        else if (r.value === true) stats.succeeded++;
+        else stats.skipped++;
+    });
     stats.processed = results.length;
 
-    logger.info(`[Cron: EscrowTransactions] Processed ${stats.processed}. Success: ${stats.succeeded}. Value: ₦${stats.totalValueReleased.toLocaleString()}`);
+    logger.info(`[Cron: EscrowTransactions] Processed ${stats.processed}. Success: ${stats.succeeded}. Skipped: ${stats.skipped}. Value: ₦${stats.totalValueReleased.toLocaleString()}`);
     return stats;
 }
 
@@ -300,9 +334,9 @@ async function processDeliveredEscrowTransactions(now: Timestamp) {
         .limit(MAX_BATCH_SIZE)
         .get();
 
-    if (snapshot.empty) return { processed: 0, succeeded: 0, failed: 0, totalValueReleased: 0 };
+    if (snapshot.empty) return { processed: 0, succeeded: 0, skipped: 0, failed: 0, totalValueReleased: 0 };
 
-    const stats = { processed: 0, succeeded: 0, failed: 0, totalValueReleased: 0 };
+    const stats = { processed: 0, succeeded: 0, skipped: 0, failed: 0, totalValueReleased: 0 };
 
     const results = await Promise.allSettled(snapshot.docs.map(async (doc) => {
         const data = doc.data();
@@ -322,21 +356,25 @@ async function processDeliveredEscrowTransactions(now: Timestamp) {
             orderEscrowsDocs = querySnap.docs;
         }
 
+        // Claim the release before crediting the seller. Same reasoning as the
+        // two loops above: the status check took no lock, so two overlapping
+        // runs both saw "delivered" and both paid out.
+        const claim = await claimStatusTransition({
+            collection: COLLECTIONS.ESCROW_TRANSACTIONS,
+            id: doc.id,
+            from: "delivered",
+            to: "released",
+            patch: { releasedBy: "cron", releasedAt: new Date().toISOString() },
+        });
+
+        if (!claim.claimed) {
+            logger.info(
+                `[Cron] Escrow ${escrowId} is '${claim.status ?? "missing"}', not 'delivered' — skipping auto-release.`
+            );
+            return;
+        }
+
         await db.runTransaction(async (tx) => {
-            const freshDoc = await tx.get(doc.ref);
-            const freshData = freshDoc.data();
-
-            if (freshData?.status !== "delivered") {
-                throw new Error(`Escrow ${escrowId} status changed to '${freshData?.status}', skipping auto-release`);
-            }
-
-            // 1. Update Escrow Status
-            tx.update(doc.ref, {
-                status: "released",
-                releasedBy: "cron",
-                releasedAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
-            });
 
             // 2. Credit Seller's Wallet
             const walletRef = db.collection(COLLECTIONS.WALLETS).doc(sellerId);
@@ -434,10 +472,16 @@ async function processDeliveredEscrowTransactions(now: Timestamp) {
         return true;
     }));
 
-    results.forEach(r => r.status === "fulfilled" ? stats.succeeded++ : stats.failed++);
+    // A lost claim returns early, so it resolves with undefined. Counting that
+    // as a success would report payouts that never happened.
+    results.forEach(r => {
+        if (r.status === "rejected") stats.failed++;
+        else if (r.value === true) stats.succeeded++;
+        else stats.skipped++;
+    });
     stats.processed = results.length;
 
-    logger.info(`[Cron: DeliveredEscrowTransactions] Processed ${stats.processed}. Success: ${stats.succeeded}. Value: ₦${stats.totalValueReleased.toLocaleString()}`);
+    logger.info(`[Cron: DeliveredEscrowTransactions] Processed ${stats.processed}. Success: ${stats.succeeded}. Skipped: ${stats.skipped}. Value: ₦${stats.totalValueReleased.toLocaleString()}`);
     return stats;
 }
 
