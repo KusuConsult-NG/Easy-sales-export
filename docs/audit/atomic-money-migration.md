@@ -117,7 +117,7 @@ can be ruled out.
 | Count | File | Notes |
 |---|---|---|
 | 8 | `src/app/actions/admin.ts` | 5,473 lines, 40 exported actions. Split before touching. |
-| 7 | `src/infrastructure/payments/service.ts` | Shared payment layer — likely the highest-value next target. |
+| 1 | `src/infrastructure/payments/service.ts` | 6 of 7 converted. Only `processExportInvestment` remains — see below. |
 | 7 | `src/app/actions/marketplace/_escrow.ts` | Escrow hold/release. |
 | 7 | `src/app/actions/academy/_actions.ts` | |
 | 6 | `src/app/actions/farm-nation.ts` | |
@@ -147,6 +147,31 @@ Refresh the list with:
 ```
 grep -rln "runTransaction" src/ | grep -v "supabase-db.ts\|__tests__\|shims/"
 ```
+
+## processExportInvestment — deliberately not converted
+
+The other six sites in `infrastructure/payments/service.ts` now claim the
+payment reference before fulfilling. This one does not, because it is not a
+mechanical conversion.
+
+It writes the marker with **two different statuses**: `completed` on the normal
+path, and `overfunded_review` when the investment would exceed the funding goal.
+`global-aggregation` sums rows with status `completed` as revenue, so the second
+status deliberately keeps an overfunded payment out of the revenue figure.
+
+Claiming first means choosing a status before the overfunding check has run. The
+options are to claim as `completed` (which would start counting overfunded
+payments as revenue — a behaviour change), or to claim with a neutral status and
+promote it once the branch resolves (correct, but a two-step write that needs
+its own thought).
+
+There is also a second race it does not fix: the overfunding guard reads
+`fundedAmount` and compares `currentFunded + amount > fundingGoal`. Two
+investments arriving together can both pass. The write itself is safe —
+`FieldValue.increment` is atomic since migration 010 — so the total is right,
+but the goal can be exceeded.
+
+Both want a decision rather than a refactor.
 
 ## Suggested order
 

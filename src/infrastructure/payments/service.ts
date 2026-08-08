@@ -478,14 +478,27 @@ export async function processCooperativeRegistration(reference: string, amount: 
         }
     }
 
+    // Claim the payment before fulfilling any of it.
+    //
+    // This checked the marker, fulfilled, then wrote the marker — inside
+    // runTransaction, which takes no lock. Two deliveries of the same Paystack
+    // webhook both read "not processed" and both fulfilled. Paystack retries
+    // webhooks by design.
+    const claim = await claimPaymentOnce({
+        reference,
+        userId,
+        amount,
+        type: "cooperative_membership_registration",
+        source: "webhook",
+    });
+
+    if (!claim.claimed) {
+        logger.info(`[Paystack Fulfillment] Cooperative Registration ${reference} already processed.`);
+        return;
+    }
+
     const result = await db.runTransaction(async (transaction) => {
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
-        const processedSnap = await transaction.get(processedRef);
-
-        if (processedSnap.exists) {
-            logger.info(`[Paystack Fulfillment] Cooperative Registration ${reference} already processed.`);
-            return { alreadyProcessed: true };
-        }
 
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
         const transactionRef = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc();
@@ -543,16 +556,8 @@ export async function processCooperativeRegistration(reference: string, amount: 
             reference
         });
 
-        transaction.set(processedRef, {
-            reference,
-            type: "cooperative_membership_registration",
-            userId,
-            amount,
-            tier,
-            processedAt: paymentTimestamp,
-            status: "completed",
-            source: "webhook"
-        });
+        // (The processed_payments row is written by claimPaymentOnce above.
+        //  Writing it here as well is what put the marker AFTER the work.)
 
         transaction.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(reference), {
             id: reference,
@@ -570,7 +575,13 @@ export async function processCooperativeRegistration(reference: string, amount: 
         return { success: true };
     });
 
-    if (result && result.alreadyProcessed) {
+    if (!result?.success) {
+        // The reference is already claimed, so this will not be retried
+        // automatically. Surface it rather than letting it disappear.
+        logger.error(
+            `[Paystack Fulfillment] ${reference} was claimed but fulfilment did not complete. ` +
+            `Needs manual reconciliation.`
+        );
         return;
     }
 
@@ -626,14 +637,27 @@ export async function processAcademyRegistration(reference: string, amount: numb
     const hasApp = !appQuery.empty;
     const appDoc = hasApp ? appQuery.docs[0] : null;
 
+    // Claim the payment before fulfilling any of it.
+    //
+    // This checked the marker, fulfilled, then wrote the marker — inside
+    // runTransaction, which takes no lock. Two deliveries of the same Paystack
+    // webhook both read "not processed" and both fulfilled. Paystack retries
+    // webhooks by design.
+    const claim = await claimPaymentOnce({
+        reference,
+        userId,
+        amount,
+        type: "academy_registration",
+        source: "webhook",
+    });
+
+    if (!claim.claimed) {
+        logger.info(`[Paystack Fulfillment] Academy Registration ${reference} already processed.`);
+        return;
+    }
+
     const result = await db.runTransaction(async (transaction) => {
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
-        const processedSnap = await transaction.get(processedRef);
-
-        if (processedSnap.exists) {
-            logger.info(`[Paystack Fulfillment] Academy Registration ${reference} already processed.`);
-            return { alreadyProcessed: true };
-        }
 
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
 
@@ -676,16 +700,8 @@ export async function processAcademyRegistration(reference: string, amount: numb
         // DISEASE 2 FIX: normalizeUserDoc ensures academy key is canonical.
         transaction.set(userRef, normalizeUserDoc(userUpdatePayload), { merge: true });
 
-        transaction.set(processedRef, {
-            reference,
-            type: "academy_registration",
-            userId,
-            amount,
-            plan: planToStore,
-            processedAt: paymentTimestamp,
-            status: "completed",
-            source: "webhook"
-        });
+        // (The processed_payments row is written by claimPaymentOnce above.
+        //  Writing it here as well is what put the marker AFTER the work.)
 
         transaction.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(reference), {
             id: reference,
@@ -703,7 +719,13 @@ export async function processAcademyRegistration(reference: string, amount: numb
         return { success: true };
     });
 
-    if (result && result.alreadyProcessed) {
+    if (!result?.success) {
+        // The reference is already claimed, so this will not be retried
+        // automatically. Surface it rather than letting it disappear.
+        logger.error(
+            `[Paystack Fulfillment] ${reference} was claimed but fulfilment did not complete. ` +
+            `Needs manual reconciliation.`
+        );
         return;
     }
 
@@ -732,14 +754,27 @@ export async function processAcademyRegistration(reference: string, amount: numb
  * Handle Farm Nation Fulfillment
  */
 export async function processFarmNationRegistration(reference: string, amount: number, userId: string, paidAt?: Date) {
+    // Claim the payment before fulfilling any of it.
+    //
+    // This checked the marker, fulfilled, then wrote the marker — inside
+    // runTransaction, which takes no lock. Two deliveries of the same Paystack
+    // webhook both read "not processed" and both fulfilled. Paystack retries
+    // webhooks by design.
+    const claim = await claimPaymentOnce({
+        reference,
+        userId,
+        amount,
+        type: "farmnation_registration",
+        source: "webhook",
+    });
+
+    if (!claim.claimed) {
+        logger.info(`[Paystack Fulfillment] Farm Nation Registration ${reference} already processed.`);
+        return;
+    }
+
     const result = await db.runTransaction(async (transaction) => {
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
-        const processedSnap = await transaction.get(processedRef);
-
-        if (processedSnap.exists) {
-            logger.info(`[Paystack Fulfillment] Farm Nation Registration ${reference} already processed.`);
-            return { alreadyProcessed: true };
-        }
 
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
 
@@ -759,15 +794,8 @@ export async function processFarmNationRegistration(reference: string, amount: n
             updatedAt: FieldValue.serverTimestamp(),
         }), { merge: true });
 
-        transaction.set(processedRef, {
-            reference,
-            type: "farm_nation_registration",
-            userId,
-            amount,
-            processedAt: paymentTimestamp,
-            status: "completed",
-            source: "webhook"
-        });
+        // (The processed_payments row is written by claimPaymentOnce above.
+        //  Writing it here as well is what put the marker AFTER the work.)
 
         transaction.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(reference), {
             id: reference,
@@ -785,7 +813,13 @@ export async function processFarmNationRegistration(reference: string, amount: n
         return { success: true };
     });
 
-    if (result && result.alreadyProcessed) {
+    if (!result?.success) {
+        // The reference is already claimed, so this will not be retried
+        // automatically. Surface it rather than letting it disappear.
+        logger.error(
+            `[Paystack Fulfillment] ${reference} was claimed but fulfilment did not complete. ` +
+            `Needs manual reconciliation.`
+        );
         return;
     }
 
@@ -797,14 +831,27 @@ export async function processFarmNationRegistration(reference: string, amount: n
  * Handle WAVE Fulfillment
  */
 export async function processWaveRegistration(reference: string, amount: number, userId: string, paidAt?: Date) {
+    // Claim the payment before fulfilling any of it.
+    //
+    // This checked the marker, fulfilled, then wrote the marker — inside
+    // runTransaction, which takes no lock. Two deliveries of the same Paystack
+    // webhook both read "not processed" and both fulfilled. Paystack retries
+    // webhooks by design.
+    const claim = await claimPaymentOnce({
+        reference,
+        userId,
+        amount,
+        type: "wave_registration",
+        source: "webhook",
+    });
+
+    if (!claim.claimed) {
+        logger.info(`[Paystack Fulfillment] WAVE Registration ${reference} already processed.`);
+        return;
+    }
+
     const result = await db.runTransaction(async (transaction) => {
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
-        const processedSnap = await transaction.get(processedRef);
-
-        if (processedSnap.exists) {
-            logger.info(`[Paystack Fulfillment] WAVE Registration ${reference} already processed.`);
-            return { alreadyProcessed: true };
-        }
 
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
 
@@ -823,15 +870,8 @@ export async function processWaveRegistration(reference: string, amount: number,
             updatedAt: FieldValue.serverTimestamp(),
         }), { merge: true });
 
-        transaction.set(processedRef, {
-            reference,
-            type: "wave_registration",
-            userId,
-            amount,
-            processedAt: paymentTimestamp,
-            status: "completed",
-            source: "webhook"
-        });
+        // (The processed_payments row is written by claimPaymentOnce above.
+        //  Writing it here as well is what put the marker AFTER the work.)
 
         transaction.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(reference), {
             id: reference,
@@ -849,7 +889,13 @@ export async function processWaveRegistration(reference: string, amount: number,
         return { success: true };
     });
 
-    if (result && result.alreadyProcessed) {
+    if (!result?.success) {
+        // The reference is already claimed, so this will not be retried
+        // automatically. Surface it rather than letting it disappear.
+        logger.error(
+            `[Paystack Fulfillment] ${reference} was claimed but fulfilment did not complete. ` +
+            `Needs manual reconciliation.`
+        );
         return;
     }
 
@@ -875,49 +921,55 @@ export async function processCooperativeContribution(reference: string, amount: 
 
     const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(activeUserId);
 
+    // Claim the payment before crediting anything.
+    //
+    // This checked the marker, credited the member's savings, then wrote the
+    // marker — inside runTransaction, which takes no lock. Two deliveries of
+    // the same Paystack webhook both read "not processed" and both credited.
+    // Paystack retries webhooks by design.
+    const claim = await claimPaymentOnce({
+        reference,
+        userId: activeUserId,
+        amount,
+        type: "contribution",
+        source: "webhook",
+    });
+
+    if (!claim.claimed) {
+        logger.info(`[Paystack Fulfillment] Cooperative Contribution ${reference} already processed.`);
+        return;
+    }
+
     const result = await db.runTransaction(async (transaction) => {
-        const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
-        const processedSnap = await transaction.get(processedRef);
-
-        if (processedSnap.exists) {
-            logger.info(`[Paystack Fulfillment] Cooperative Contribution ${reference} already processed.`);
-            return { alreadyProcessed: true };
-        }
-
         const memberDoc = await transaction.get(memberRef);
         if (!memberDoc.exists) {
             throw new Error(`Cooperative member record not found for user: ${activeUserId}`);
         }
 
         const memberData = memberDoc.data() || {};
-        const currentTotal = memberData.totalContributions || 0;
-        const currentSavings = memberData.savingsBalance || 0;
-        const newTotal = currentTotal + amount;
-        const newSavings = currentSavings + amount;
         const newTier = "Member";
         const cooperativeId = memberData.cooperativeId || "default";
 
         const paymentTimestamp = paidAt ? Timestamp.fromDate(paidAt) : FieldValue.serverTimestamp();
 
-        // 1. Update membership atomically
+        // 1. Credit the member.
+        //
+        // Increments rather than read-modify-write. This read totalContributions
+        // and savingsBalance, added in JavaScript, and wrote the results back —
+        // so a contribution landing at the same time as any other write to the
+        // member record lost one of them. FieldValue.increment applies the
+        // addition in SQL (migration 010).
         transaction.update(memberRef, {
-            totalContributions: newTotal,
-            savingsBalance: newSavings,
+            totalContributions: FieldValue.increment(amount),
+            savingsBalance: FieldValue.increment(amount),
             tier: newTier,
             lastContributionAt: paymentTimestamp,
             updatedAt: FieldValue.serverTimestamp()
         });
 
         // 2. Mark payment as processed
-        transaction.set(processedRef, {
-            reference,
-            type: "contribution",
-            userId: activeUserId,
-            amount,
-            processedAt: paymentTimestamp,
-            status: "completed",
-            source: "webhook"
-        });
+        // (The processed_payments row is written by claimPaymentOnce above.
+        //  Writing it here as well is what put the marker AFTER the work.)
 
         // 3. Write to Unified Ledger
         transaction.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(reference), {
@@ -949,7 +1001,13 @@ export async function processCooperativeContribution(reference: string, amount: 
         return { success: true };
     });
 
-    if (result && result.alreadyProcessed) {
+    if (!result?.success) {
+        // The reference is already claimed, so this will not be retried
+        // automatically. Surface it rather than letting it disappear.
+        logger.error(
+            `[Paystack Fulfillment] Cooperative Contribution ${reference} was claimed but ` +
+            `crediting did not complete. Needs manual reconciliation.`
+        );
         return;
     }
 
