@@ -3,6 +3,7 @@
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from '@/lib/logger';
 import { requireAdmin } from "@/lib/require-admin";
+import { claimStatusTransition } from "@/lib/status-transition";
 import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { createAdminAuditLog, logAdminFinancialAction } from "@/lib/audit-log";
@@ -19,10 +20,24 @@ import { withFlexibleSafeAction } from "@/lib/safe-action";
  * Marketplace Escrow System
  * Buyer → Escrow → Seller workflow with admin release
  *
- * All status-changing operations run inside Firestore transactions to prevent
- * race conditions. A plain .update() call is a last-write-wins operation; a
- * runTransaction() reads the current state and rejects the write if the
- * precondition is violated — turning a race condition into a clear error.
+ * ON TRANSACTIONS — read before adding a state change here.
+ *
+ * This file used to say that runTransaction "reads the current state and
+ * rejects the write if the precondition is violated — turning a race condition
+ * into a clear error". That is what a Firestore transaction does. It is NOT
+ * what supabaseDb.runTransaction does: it runs the callback, then replays the
+ * queued writes, with no lock and no rollback. A status check inside it is an
+ * ordinary read, so two callers can both pass the same check.
+ *
+ * That belief is why two admins releasing one escrow both credited the seller.
+ *
+ * The paths that move money now use claimStatusTransition (migration 007),
+ * which advances the status only if it still holds the expected value and tells
+ * the caller whether it was the one that changed it. Whoever wins the claim is
+ * the only one who pays out.
+ *
+ * Anything added here that moves money, or must happen once per state change,
+ * belongs on the same primitive. A check inside runTransaction is not a guard.
  */
 
 export interface EscrowTransaction { id?: string;
@@ -329,27 +344,39 @@ async function _releaseEscrowAction(
 
         let escrowData: EscrowTransaction | null = null;
 
+        // Claim the release before crediting the seller.
+        //
+        // The status check ran inside runTransaction, which takes no lock, so
+        // two admins releasing the same escrow at once both read "funded" and
+        // both credited the seller's wallet. Migration 010 made that worse
+        // rather than better: concurrent increments used to lose one another,
+        // which hid the duplicate; now both land and the seller is paid twice.
+        const preClaim = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId).get();
+        if (!preClaim.exists) {
+            return { success: false as const, error: "Escrow transaction not found", data: null };
+        }
+        escrowData = preClaim.data() as EscrowTransaction;
+
+        const claim = await claimStatusTransition({
+            collection: COLLECTIONS.ESCROW_TRANSACTIONS,
+            id: escrowId,
+            from: "funded",
+            to: "released",
+            patch: { releasedBy: adminId, releasedAt: new Date().toISOString() },
+        });
+
+        if (!claim.claimed) {
+            return {
+                success: false as const,
+                error: `Invalid state transition: expected 'funded', got '${claim.status ?? "missing"}'`,
+                data: null,
+            };
+        }
+
         await db.runTransaction(async (tx) => {
-            const escrowDoc = await tx.get(escrowRef);
-            if (!escrowDoc.exists) throw new Error("Escrow transaction not found");
+            const data = escrowData as EscrowTransaction;
 
-            const data = escrowDoc.data() as EscrowTransaction;
-            if (data.status !== "funded") {
-                throw new Error(`Invalid state transition: expected 'funded', got '${data.status}'`);
-            }
-
-            escrowData = data;
-
-            // 1. Update Escrow Status
-            tx.update(escrowRef, { 
-                status: "released",
-                releasedAt: FieldValue.serverTimestamp(),
-                releasedBy: adminId,
-                updatedAt: FieldValue.serverTimestamp(),
-                _version: FieldValue.increment(1) 
-            });
-
-            // 2. Credit Seller's Wallet
+            // Credit the Seller's Wallet
             const walletRef = db.collection(COLLECTIONS.WALLETS).doc(data.sellerId);
             const walletSnap = await tx.get(walletRef);
             let balanceBefore = 0;
@@ -580,29 +607,57 @@ async function _resolveDisputeAction(
         let escrowId: string | null = null;
         let disputeData: Dispute | null = null;
 
+        // Claim the resolution before moving any money.
+        //
+        // The status check ran inside runTransaction, which takes no lock, so
+        // two admins resolving the same dispute at once both passed it and both
+        // credited the payee. Claiming the dispute gates the whole operation:
+        // whoever wins it is the only one who proceeds.
+        //
+        // Two attempts because a dispute may be resolved from either state, and
+        // the compare-and-swap takes one `from` at a time. This is still safe
+        // under a race: once the first attempt succeeds the status is
+        // "resolved", so every later attempt fails both ways.
+        const disputeSnap = await disputeRef.get();
+        if (!disputeSnap.exists) {
+            return { success: false as const, error: "Dispute not found", data: null };
+        }
+        const preDispute = disputeSnap.data() as Dispute;
+
+        let claim = await claimStatusTransition({
+            collection: COLLECTIONS.DISPUTES,
+            id: disputeId,
+            from: "open",
+            to: "resolved",
+            patch: { resolution, resolvedBy: adminId, resolvedAt: new Date().toISOString() },
+        });
+
+        if (!claim.claimed) {
+            claim = await claimStatusTransition({
+                collection: COLLECTIONS.DISPUTES,
+                id: disputeId,
+                from: "under_review",
+                to: "resolved",
+                patch: { resolution, resolvedBy: adminId, resolvedAt: new Date().toISOString() },
+            });
+        }
+
+        if (!claim.claimed) {
+            return {
+                success: false as const,
+                error: `Cannot resolve: dispute is already '${claim.status ?? "missing"}'`,
+                data: null,
+            };
+        }
+
+        escrowId = preDispute.escrowId;
+        disputeData = preDispute;
+
         await db.runTransaction(async (tx) => {
-            const disputeDoc = await tx.get(disputeRef);
-            if (!disputeDoc.exists) throw new Error("Dispute not found");
-
-            const data = disputeDoc.data() as Dispute;
-            if (!["open", "under_review"].includes(data.status)) {
-                throw new Error(`Cannot resolve: dispute is already '${data.status}'`);
-            }
-
-            escrowId = data.escrowId;
-            disputeData = data;
             const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId!);
             const escrowDoc = await tx.get(escrowRef);
             if (!escrowDoc.exists) throw new Error("Escrow transaction not found");
             const escrowData = escrowDoc.data() as EscrowTransaction;
-
-            // 1. Resolve dispute
-            tx.update(disputeRef, { 
-                status: "resolved",
-                resolution,
-                resolvedBy: adminId,
-                resolvedAt: FieldValue.serverTimestamp() 
-            });
 
             // 2. Update escrow status
             const finalStatus = outcome === "release_seller" ? "released" : "refunded";

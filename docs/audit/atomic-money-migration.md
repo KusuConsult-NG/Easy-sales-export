@@ -136,6 +136,32 @@ one.
 The loops also counted a skipped item as a success, so a run that paid nothing
 reported full success. They now report `skipped` separately.
 
+## Fixed: marketplace escrow release and dispute resolution
+
+`marketplace/_escrow.ts` is the manual counterpart to the escrow cron, and had
+the same defect. Two paths move money and both now claim the transition first:
+
+| Path | Transition | Credits |
+|---|---|---|
+| `_releaseEscrowAction` | `funded → released` | seller's wallet |
+| `_resolveDisputeAction` | dispute `open`/`under_review` → `resolved` | seller or buyer |
+
+Dispute resolution attempts the claim twice, because a dispute may be resolved
+from either state and the compare-and-swap takes one `from` at a time. That is
+still race-safe: once the first attempt succeeds the status is `resolved`, so
+every later attempt fails both ways.
+
+**The file's header comment was the root of it.** It stated that
+`runTransaction` "reads the current state and rejects the write if the
+precondition is violated — turning a race condition into a clear error". True of
+Firestore, false of this adapter, and precisely the belief that made a status
+check look like a guard. The comment now says what actually happens.
+
+Four non-money status transitions in that file are not converted: confirming
+payment (`pending → funded`), requesting release, creating a dispute, and
+escalating a dispute. A double-apply there duplicates notifications and audit
+entries rather than money, so they were left rather than expanding a money PR.
+
 ## Not yet migrated
 
 Ordered by `runTransaction` count. Presence here is not proof of a live defect —
@@ -146,7 +172,7 @@ can be ruled out.
 |---|---|---|
 | 8 | `src/app/actions/admin.ts` | 5,473 lines, 40 exported actions. Split before touching. |
 | 1 | `src/infrastructure/payments/service.ts` | 6 of 7 converted. Only `processExportInvestment` remains — see below. |
-| 7 | `src/app/actions/marketplace/_escrow.ts` | Escrow hold/release. |
+| 4 | `src/app/actions/marketplace/_escrow.ts` | Both money paths converted; 4 non-money status transitions remain — see below. |
 | 7 | `src/app/actions/academy/_actions.ts` | |
 | 6 | `src/app/actions/farm-nation.ts` | |
 | 5 | `src/app/actions/wave/_actions.ts` | |
