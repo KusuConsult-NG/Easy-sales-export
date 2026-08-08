@@ -20,7 +20,12 @@ jest.mock("@/lib/supabase", () => ({
     supabase: {},
 }));
 
-import { creditWalletOnce, debitWalletOnce, debitWalletLocked } from "@/lib/wallet-ledger";
+import {
+    creditWalletOnce,
+    debitWalletOnce,
+    debitWalletLocked,
+    claimPaymentOnce,
+} from "@/lib/wallet-ledger";
 
 beforeAll(() => {
     jest.spyOn(console, "error").mockImplementation(() => {});
@@ -212,6 +217,76 @@ describe("revenue accounting", () => {
             "credit_wallet_once",
             expect.objectContaining({ p_status: "refund" })
         );
+    });
+});
+
+describe("claimPaymentOnce", () => {
+    /**
+     * Used for fulfilment that must happen exactly once per payment but moves
+     * no balance — marking an order paid, creating escrow, writing a ledger
+     * entry. Paystack retries webhooks, so a duplicate delivery is expected
+     * behaviour rather than a rare race.
+     */
+
+    it("claims a reference and reports the status recorded", async () => {
+        mockRpc.mockResolvedValue({
+            data: [{ claimed: true, status: "completed" }],
+            error: null,
+        });
+
+        const result = await claimPaymentOnce({
+            reference: "psk_order_1",
+            userId: "buyer-1",
+            amount: 25_000,
+            type: "marketplace_order",
+            source: "webhook",
+        });
+
+        expect(result).toEqual({ claimed: true, status: "completed" });
+        expect(mockRpc).toHaveBeenCalledWith(
+            "claim_payment_once",
+            expect.objectContaining({
+                p_reference: "psk_order_1",
+                p_type: "marketplace_order",
+                p_status: "completed",
+            })
+        );
+    });
+
+    it("refuses a duplicate webhook delivery", async () => {
+        mockRpc.mockResolvedValue({
+            data: [{ claimed: false, status: "completed" }],
+            error: null,
+        });
+
+        const result = await claimPaymentOnce({
+            reference: "psk_order_1",
+            userId: "buyer-1",
+            amount: 25_000,
+        });
+
+        // The caller must return without fulfilling. Doing the work anyway is
+        // duplicate escrow rows and duplicate seller credits.
+        expect(result.claimed).toBe(false);
+        expect(result.status).toBe("completed");
+    });
+
+    it("requires a reference", async () => {
+        await expect(
+            claimPaymentOnce({ reference: "", userId: "u", amount: 1 })
+        ).rejects.toThrow(/reference is required/);
+
+        expect(mockRpc).not.toHaveBeenCalled();
+    });
+
+    it("throws when the database call fails rather than reporting a claim", async () => {
+        mockRpc.mockResolvedValue({ data: null, error: { message: "timeout" } });
+
+        // Returning claimed:false here would look like "already handled" and
+        // silently skip fulfilment nobody performed.
+        await expect(
+            claimPaymentOnce({ reference: "r", userId: "u", amount: 1 })
+        ).rejects.toThrow(/Payment claim failed/);
     });
 });
 
