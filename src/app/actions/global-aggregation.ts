@@ -3,6 +3,7 @@
 import { requireSession } from "@/lib/session-guard";
 import { requireAdmin } from "@/lib/require-admin";
 import { supabaseDb as db } from "@/lib/supabase-db";
+import { supabaseAdmin } from "@/lib/supabase";
 import { AggregateField } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
@@ -15,34 +16,43 @@ export async function getPlatformMetricsAction() { try {
         const sessionResult = await requireAdmin();
         if ('error' in sessionResult) return { success: false as const, error: sessionResult.error, data: null };
 
-        // 1. Transactions - Aggregate from actual historical collections 
-        const [revenueSnap, allUsersSnap, usersSnap2] = await Promise.allSettled([
-            db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
-                .where("status", "==", "completed")
-                .select("amount")
-                .get(),
+        // Revenue is summed in the database, not by fetching rows.
+        //
+        // This previously pulled every completed payment and added the amounts
+        // up in JavaScript. The query had no .limit(), so it inherited the
+        // 5,000-row default cap: total revenue was the sum of at most 5,000
+        // payments however many existed, and totalTransactions came from that
+        // same truncated array — while a .count() query ran alongside it and
+        // had its result thrown away.
+        const [totals, usersCount] = await Promise.all([
+            supabaseAdmin.rpc("platform_revenue_totals"),
             db.collection(COLLECTIONS.USERS).count().get(),
-            db.collection(COLLECTIONS.PROCESSED_PAYMENTS).count().get()
         ]);
 
-        let totalRevenue = 0;
-        let totalTransactions = 0;
-        
-        if (revenueSnap.status === 'fulfilled') { revenueSnap.value.docs.forEach(d => {
-                totalRevenue += (Number(d.data().amount) || 0);
-            });
-            totalTransactions = revenueSnap.value.docs.length;
+        if (totals.error) {
+            // Deliberately an error, not a zero.
+            //
+            // The old code used Promise.allSettled and returned
+            // success: true, error: null with the totals left at 0, so a failed
+            // query displayed as ₦0 revenue — indistinguishable from a quiet
+            // day, and impossible for anyone to notice.
+            logger.error("[platform-metrics] platform_revenue_totals failed", { error: totals.error });
+            return {
+                success: false as const,
+                error: "Could not calculate platform revenue. The figures shown would be wrong, so none are shown.",
+                data: null,
+            };
         }
 
-        const totalUsers = (allUsersSnap.status === 'fulfilled' ? allUsersSnap.value.data().count || 0 : 0);
-        
-        return { 
-            error: null, 
-            success: true as const, 
+        const row = Array.isArray(totals.data) ? totals.data[0] : totals.data;
+
+        return {
+            error: null,
+            success: true as const,
             data: {
-                totalRevenue,
-                totalTransactions,
-                totalUsers
+                totalRevenue: Number(row?.total_revenue ?? 0),
+                totalTransactions: Number(row?.transaction_count ?? 0),
+                totalUsers: usersCount.data().count || 0,
             }
         };
     } catch (error: any) { logger.error("Failed to aggregate platform metrics:", error);

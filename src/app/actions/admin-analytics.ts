@@ -22,6 +22,8 @@ export interface AnalyticsData {
         totalRevenue: number;
         monthlyRevenue: number;
         totalTransactions: number;
+        /** False when revenue could not be determined. Do not render totalRevenue as a figure when this is false. */
+        revenueAvailable: boolean;
         pendingApprovals: number;
         recentActivityCount: number;
     };
