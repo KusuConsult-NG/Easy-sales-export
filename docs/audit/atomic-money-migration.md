@@ -108,6 +108,34 @@ fulfilment, loan disbursement. Two rules:
 
 `wallet.ts` now contains no `runTransaction` calls at all.
 
+## Fixed: escrow auto-release (the unattended cron)
+
+All three loops in `api/cron/release-escrow/route.ts` read a status, checked it,
+then paid out — inside `runTransaction`, which takes no lock. Two overlapping
+runs both saw the same status and both credited.
+
+Each now claims the transition with `claimStatusTransition` before paying:
+
+| Loop | Transition |
+|---|---|
+| Export windows | `delivered → completed`, credits cooperative savings |
+| Escrow transactions | `funded → released`, credits the seller's wallet |
+| Delivered escrow | `delivered → released`, credits the seller's wallet |
+
+The compare-and-swap also preserves the guard the status check existed for: a
+buyer filing a dispute moves the record off `funded`, and the release then
+refuses.
+
+**Worth noting the interaction with migration 010.** Making `FieldValue.increment`
+atomic made this worse before it was fixed, not better. Previously one of two
+concurrent credits was likely lost, which accidentally masked the duplicate.
+Once increments sum correctly, both land and the payee is paid twice. Fixing the
+increment without fixing the claim would have turned a hidden bug into a paying
+one.
+
+The loops also counted a skipped item as a success, so a run that paid nothing
+reported full success. They now report `skipped` separately.
+
 ## Not yet migrated
 
 Ordered by `runTransaction` count. Presence here is not proof of a live defect —
@@ -130,7 +158,6 @@ can be ruled out.
 | 4 | `src/app/actions/loan-actions.ts` | |
 | 4 | `src/app/actions/cooperative/_loans.ts` | |
 | 4 | `src/app/actions/cooperative/_admin.ts` | |
-| 3 | `src/app/api/cron/release-escrow/route.ts` | Runs unattended — a lost update here is silent. |
 | 3 | `src/app/actions/wave/_admin.ts` | |
 | 3 | `src/app/actions/marketplace/_payment.ts` | |
 | 3 | `src/app/actions/academy/_admin.ts` | |
