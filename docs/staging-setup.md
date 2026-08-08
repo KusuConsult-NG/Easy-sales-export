@@ -117,6 +117,33 @@ Confirm `.env.staging` is git-ignored before you put any key in it:
 git check-ignore -v .env.staging   # must print a matching rule
 ```
 
+## 4b. Run the integration suite — the payoff for doing step 4
+
+```bash
+npm run test:db
+```
+
+With `.env.staging` filled in, this runs 25 tests against the staging database
+instead of a mock. Without it they all skip, which is why the command reports
+"skipped" rather than passing.
+
+This is the check that the rest of the test suite structurally cannot make.
+Every one of the 398 unit tests mocks `@/lib/supabase-db`, so they verify the
+mock. Two defects shipped through that in one day:
+
+- wallet credits updating `wallets.balance` while the application reads
+  `raw_data->>'balance'` — a credit changed a value nobody could see, and it
+  passed unit tests, review **and** a manual staging check, because every check
+  queried the column the bug was writing to
+- `FieldValue.increment` resolving in JavaScript, losing concurrent updates
+  across 142 call sites
+
+The suite refuses to run if `.env.staging` points at the production project —
+it writes and deletes rows, and that is a one-character mistake in an env file.
+
+It needs migrations `005`–`012` applied. Run it after step 6 and again after
+step 7.
+
 ## 5. Seed some data
 
 ```bash
