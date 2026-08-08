@@ -108,6 +108,57 @@ fulfilment, loan disbursement. Two rules:
 
 `wallet.ts` now contains no `runTransaction` calls at all.
 
+## FieldValue.increment is not atomic — 142 call sites
+
+Found 2026-08-08, while converting `infrastructure/payments/service.ts`. This is
+larger than everything else on this page.
+
+`FieldValue.increment` is the idiom you reach for **specifically to avoid**
+read-modify-write. In this codebase it *is* one. `SupabaseDocumentReference.update`
+reads the document, resolves the sentinel in JavaScript, and writes the result:
+
+```js
+// src/lib/supabase-db.ts — update()
+const snap = await this.get();
+const existing = snap.data() ?? {};
+...
+case 'FieldValue.increment':
+    return (typeof existing === 'number' ? existing : 0) + (fvObj._operand || 0);
+```
+
+There is no `col = col + n`. Two concurrent increments read the same `existing`,
+compute the same result, and the second write overwrites the first. **One
+increment is silently lost.**
+
+So code written *correctly* by Firestore conventions is broken here, and it
+looks right on inspection. That is worse than the `runTransaction` problem,
+which at least looks suspicious once you know.
+
+**Scale: 142 call sites across 37 files.** The money-shaped ones include:
+
+| Site | What is lost |
+|---|---|
+| `marketplace/_escrow.ts:368`, `:632` | seller wallet credit on escrow release |
+| `marketplace/_escrow_actions.ts:415` | seller wallet credit |
+| `disputes.ts:525` | wallet credit on dispute resolution |
+| `loan-actions.ts:275`, `:412`, `:422` | loan disbursement, repayment, repaid total |
+| `platform.ts:237`, `:238` | savings and locked balances |
+| `order-management.ts:262` | WAVE earnings balance |
+| `export.ts:947` | export window funded amount |
+
+**The fix is one change, not 142.** Make the adapter emit an atomic increment
+instead of resolving in JavaScript — a Postgres function applying
+`raw_data = jsonb_set(raw_data, key, existing + n)` in a single statement, in the
+same spirit as `merge_raw_data`, which the adapter already calls. Every call site
+is then correct without being touched.
+
+That change sits on the write path used by every table, so it wants its own PR,
+careful review, and the staging concurrency check (two sessions, second must
+block or serialise) that proved 005/006.
+
+Until then, treat `FieldValue.increment` as unsafe under concurrency wherever it
+touches money.
+
 ## Not yet migrated
 
 Ordered by `runTransaction` count. Presence here is not proof of a live defect —
