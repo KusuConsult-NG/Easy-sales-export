@@ -162,6 +162,41 @@ payment (`pending → funded`), requesting release, creating a dispute, and
 escalating a dispute. A double-apply there duplicates notifications and audit
 entries rather than money, so they were left rather than expanding a money PR.
 
+## arrayUnion and arrayRemove are still NOT atomic — 38 call sites
+
+Found 2026-08-08 while converting `academy/_actions.ts`. Same class as the
+`FieldValue.increment` bug, and **not** fixed by the change that fixed that one.
+
+`splitIncrements` in `supabase-db.ts` pulls only `FieldValue.increment` out of a
+write. `arrayUnion` and `arrayRemove` still go through `resolveFieldValue`,
+which reads the existing array, modifies it in JavaScript, and writes the whole
+array back:
+
+```js
+case 'FieldValue.arrayUnion': {
+    const arr = Array.isArray(existing) ? [...existing] : [];
+    ...
+    return arr;
+}
+```
+
+Two concurrent `arrayUnion` calls on the same field read the same array and the
+second write overwrites the first, so one element is silently lost. 38 call
+sites.
+
+A concrete example in the same file: completing a lesson does
+`progress.completedLessons.push(lessonId)` and writes the array back. A learner
+finishing two lessons quickly can lose one, and the "optimistic locking" guard
+above it does not help — it compares `_version` inside `runTransaction`, which
+takes no lock, so both callers read the same version and both pass.
+
+**The fix is the same shape as migration 010:** extend `splitIncrements` to
+carry array operations, and apply them in SQL with `jsonb` array append and
+remove. It depends on that change landing first — PR #13, still open.
+
+Recorded rather than fixed because fixing half of a class and calling it done is
+what produced this gap in the first place.
+
 ## Not yet migrated
 
 Ordered by `runTransaction` count. Presence here is not proof of a live defect —
@@ -173,7 +208,7 @@ can be ruled out.
 | 8 | `src/app/actions/admin.ts` | 5,473 lines, 40 exported actions. Split before touching. |
 | 1 | `src/infrastructure/payments/service.ts` | 6 of 7 converted. Only `processExportInvestment` remains — see below. |
 | 4 | `src/app/actions/marketplace/_escrow.ts` | Both money paths converted; 4 non-money status transitions remain — see below. |
-| 7 | `src/app/actions/academy/_actions.ts` | |
+| 6 | `src/app/actions/academy/_actions.ts` | Payment claim converted; 6 non-payment transitions remain. |
 | 6 | `src/app/actions/farm-nation.ts` | |
 | 5 | `src/app/actions/wave/_actions.ts` | |
 | 5 | `src/app/actions/wallet.ts` | Remaining non-balance transactions (withdrawal request, admin decisions). |
