@@ -40,7 +40,8 @@
     "audit:runtime": "tsx scripts/audit-runtime.ts",
     "verify:sync": "tsx scripts/verify-sync.ts",
     "repair:schemas": "tsx scripts/repair-schemas.ts",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test:db": "jest --config jest.config.db.js --runInBand"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",
