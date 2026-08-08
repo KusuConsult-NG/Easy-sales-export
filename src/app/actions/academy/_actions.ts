@@ -11,6 +11,7 @@ import { initializePaystackPayment, verifyPaystackPayment } from "@/lib/paystack
 import { revalidatePath } from "next/cache";
 
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { claimPaymentOnce } from "@/lib/wallet-ledger";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { serializeDoc, serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
@@ -403,13 +404,27 @@ async function _verifyCoursePaymentAction(reference: string): Promise<ActionResp
             }
         }
 
-        await db.runTransaction(async (t) => {
-            // 🔒 TRANSACTION FIX: Check again inside transaction to prevent race conditions
-            const tExistingDoc = await t.get(existingRef);
-            if (tExistingDoc.exists) {
-                throw new Error("Payment already processed");
-            }
+        // Claim the payment before enrolling anyone.
+        //
+        // The check that used to live inside runTransaction was labelled a fix
+        // for race conditions, and was not one: runTransaction takes no lock, so
+        // a re-read inside it is still an ordinary read and two deliveries of
+        // the same Paystack webhook both passed it. Paystack retries webhooks by
+        // design.
+        const claim = await claimPaymentOnce({
+            reference,
+            userId,
+            amount: amountPaid,
+            type: "academy_enrollment",
+            source: "academy_course_purchase",
+            metadata: { courseId },
+        });
 
+        if (!claim.claimed) {
+            return { success: false as const, error: "Payment already processed", data: null };
+        }
+
+        await db.runTransaction(async (t) => {
             // 1. Enroll User
             const progressRef = db.doc(`user_progress/${userId}/courses/${courseId}`);
             // Check if user already has progress (in case they are somehow re-enrolling or upgrading)
@@ -428,15 +443,9 @@ async function _verifyCoursePaymentAction(reference: string): Promise<ActionResp
                 t.set(progressRef, progress);
             }
 
-            // 2. Mark Payment Processed
-            t.set(existingRef, {
-                reference,
-                type: "academy_enrollment",
-                courseId,
-                userId,
-                amount: amountPaid,
-                processedAt: FieldValue.serverTimestamp(),
-            });
+            // 2. (The processed_payments row is written by claimPaymentOnce
+            //     above. Writing it here as well is what put the marker AFTER
+            //     the enrolment, so a duplicate delivery could enrol twice.)
         });
 
         // Audit
