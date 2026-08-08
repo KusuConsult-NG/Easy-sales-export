@@ -190,9 +190,12 @@ worst offenders in production.
 
 ## 4. For whoever takes the codebase on
 
-- **Numeric comparisons on unindexed fields compare as text**, so
-  `where("amount", ">", 900)` treats `"1000"` as smaller than `"900"`. Affects
-  any range filter on a field not promoted to a real column.
+- ~~**Numeric comparisons on unindexed fields compare as text**~~ — FIXED
+  2026-08-08. `raw_data->>'field'` yields TEXT, so `where("amount", ">", 900)`
+  compared `'1000' > '900'` lexicographically and silently skipped every amount
+  beginning with a digit below 9. Ordering comparisons against a number now cast
+  the extracted value to `::numeric`. Dates are deliberately not cast — ISO-8601
+  strings already sort correctly as text, and a cast would fail outright.
 - **Date sorting uses row-insert time**, not the real date. For migrated records
   that is the migration timestamp for every row, so ordering is effectively
   arbitrary. Fixing it needs a data backfill.

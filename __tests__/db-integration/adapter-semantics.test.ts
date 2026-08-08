@@ -80,6 +80,23 @@ maybeDescribe("adapter semantics, against real Postgres", () => {
         expect(snap.data()?.fresh).toBe(7);
     });
 
+    it("compares numbers as numbers, not as text", async () => {
+        // raw_data->>'amount' is TEXT. Before the ::numeric cast this compared
+        // lexicographically, so '1000' > '900' was false and a range filter on
+        // money silently skipped rows.
+        const amounts = [50, 900, 1000, 1500, 90000];
+        for (const [i, amount] of amounts.entries()) {
+            await db.collection(COLLECTION).doc(`${TEST_PREFIX}amt-${i}`).set({ amount });
+        }
+
+        const above = await db.collection(COLLECTION).where("amount", ">", 900).get();
+        const found = above.docs.map(d => Number(d.data().amount)).sort((a, b) => a - b);
+
+        // Text comparison would have returned only [] or a subset — '1000',
+        // '1500' and '90000' all sort BEFORE '900' as strings.
+        expect(found).toEqual([1000, 1500, 90000]);
+    });
+
     it("truncates an unbounded query and says so", async () => {
         // Deliberately small so the test stays quick; the property is that
         // truncation is reported, not the specific number.

@@ -631,6 +631,24 @@ function applySimpleFilter(query: any, column: string, op: FilterOperator, value
     }
 }
 
+/**
+ * Adds a ::numeric cast to a JSONB path when the value being compared is a
+ * number.
+ *
+ * PostgREST returns JSONB text from `->>`, so an ordering comparison against a
+ * number is done lexicographically unless the column is cast. Numbers only:
+ * dates are ISO-8601 strings which already sort correctly, and casting them
+ * would fail outright.
+ *
+ * A non-finite number is left uncast — the comparison is meaningless either
+ * way, and an invalid cast would turn a wrong answer into a query error.
+ */
+function numericAware(jsonPath: string, value: any): string {
+    return typeof value === 'number' && Number.isFinite(value)
+        ? `${jsonPath}::numeric`
+        : jsonPath;
+}
+
 function applyJsonbFilter(query: any, field: string, op: FilterOperator, value: any): any {
     // Convert dotted path to PostgREST JSONB path
     // e.g. "serviceRegistrations.cooperatives.status" → "raw_data->serviceRegistrations->cooperatives->>status"
@@ -650,10 +668,20 @@ function applyJsonbFilter(query: any, field: string, op: FilterOperator, value: 
         case '!=':
             if (value === null) return query.not(jsonPath, 'is', null);
             return query.neq(jsonPath, String(value));
-        case '<': return query.lt(jsonPath, String(value));
-        case '<=': return query.lte(jsonPath, String(value));
-        case '>': return query.gt(jsonPath, String(value));
-        case '>=': return query.gte(jsonPath, String(value));
+        // Ordering comparisons on a NUMBER must compare as numbers.
+        //
+        // `->>` yields text, so these were string comparisons: '1000' > '900'
+        // is false, and where("amount", ">", 900) silently skipped every amount
+        // beginning with a digit below 9. Casting the extracted value to
+        // numeric makes the database compare them properly.
+        //
+        // Only numbers are cast. Dates are stored as ISO-8601 strings, which
+        // already sort correctly as text, and casting them would break the
+        // comparison rather than fix it.
+        case '<': return query.lt(numericAware(jsonPath, value), String(value));
+        case '<=': return query.lte(numericAware(jsonPath, value), String(value));
+        case '>': return query.gt(numericAware(jsonPath, value), String(value));
+        case '>=': return query.gte(numericAware(jsonPath, value), String(value));
         case 'in': {
             // Use OR filters for each value
             const values = (Array.isArray(value) ? value : [value]).map(String);
