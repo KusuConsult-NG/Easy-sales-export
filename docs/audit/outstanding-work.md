@@ -90,11 +90,35 @@ Have never worked. The messaging layer was a stub that returned a fake success
 id for every send, so nothing was ever delivered while the logs reported
 success. Restoring them requires choosing and paying for a notification service.
 
-### A database trigger
-`enforce_member_active_on_paid` in `supabase/schema.sql` raises an exception
-whenever a cooperative member is written with status `pending` while any payment
-exists for them. That blocks refunds, reversals and administrative corrections,
-and surfaces as a server error. Confirm whether this is intended.
+### A database trigger — FIXED 2026-08-07 (migration 008)
+
+`enforce_member_active_on_paid` blocked far more than intended. It checked for
+**any** payment by the user anywhere on the platform — wallet top-ups,
+marketplace purchases, academy fees — and fired on **INSERT** as well as UPDATE.
+A cooperative application starts at `pending`, so anyone who had ever paid for
+anything could not apply to the cooperative at all. There was also no path for a
+refund, reversal or admin correction; support could not fix a mistake without
+dropping the trigger.
+
+Migration `008` keeps the intent — a paid-up member should not be silently
+reverted — and removes the false positives:
+
+- UPDATE only; applications may start at `pending`
+- Only a real downgrade (`active`/`paid` → `pending`)
+- Only `type = 'contribution'` payments count as cooperative dues
+- `raw_data.statusChangeReason` permits and records an override, so the rule is
+  "say why", not "you may not"
+
+Note this also mattered for the wallet work: `debit_wallet_once` (005/006) now
+writes a `processed_payments` row for every marketplace checkout, where checkout
+previously wrote none. Under the old trigger that would have caught more users
+once deployed, not fewer.
+
+**Verified on staging, 2026-08-07.** A user holding a marketplace payment but no
+cooperative contribution could be inserted at `pending` — which the old trigger
+refused — and a member with a real `contribution` on record still raised on an
+unexplained downgrade. Both halves confirmed: the false positive is gone and the
+protection is intact.
 
 ---
 
