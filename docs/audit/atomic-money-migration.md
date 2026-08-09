@@ -412,6 +412,54 @@ Same shape as `claim_status_transition`, but on a numeric bound rather than an
 equality. Worth adding when the next capacity-style bug appears, rather than
 building it for one caller.
 
+## Fixed: escrow release and refund could each pay twice
+
+`marketplace/_escrow_actions.ts` had the same defect as the paths already fixed,
+in its two money-moving actions:
+
+| Action | Guard | Where it lived |
+|---|---|---|
+| `_releaseEscrowFunds` | status is `delivered`/`disputed`/`funded` | **entirely outside** the transaction — a plain read, then a blind write |
+| `_refundEscrowToBuyer` | status is `funded`/`in_transit`/`disputed`, plus `refundedAt` | inside `runTransaction`, which takes no lock |
+
+Two admins acting at once both passed and both created a payout or refund
+instruction, and the release also credited the seller's wallet.
+
+The `refundedAt` field was a second check on the same unlocked read, so it added
+nothing. Moving the record to `refunded` is now the guard.
+
+Both use `claimStatusTransitionFromAny`, added for the several transitions that
+are legitimately valid from more than one state — escrow release from three,
+refund from three, dispute resolution from two. It attempts each in turn and
+stops on the first win. Race-safe, because once any attempt succeeds the row
+holds the target status and every other attempt fails against all of them.
+
+## Remaining runTransaction sites: 108, and a way to prioritise them
+
+Converting file by file has diminishing returns — most of the remaining sites
+change a status nobody pays against. The ones worth reading first are those
+whose file shows both money signals and guard signals:
+
+```
+grep -c "increment(\|balance\|amount\|PROCESSED_PAYMENTS\|payout\|escrow" <file>
+```
+
+By that measure, the unconverted files with the most money in them are:
+
+| File | Why it is on the list |
+|---|---|
+| `marketplace/_payment.ts` | order payment fulfilment |
+| `cooperative/_admin.ts` | admin-side contribution and withdrawal handling |
+| `cooperative/_loans.ts` | loan disbursement and repayment |
+| `actions/export.ts`, `export-payment.ts` | export investment payments |
+| `actions/order-management.ts` | order state and seller earnings |
+| `actions/disputes.ts` | dispute payouts |
+| `wave/_admin.ts` | WAVE earnings administration |
+| `academy/_payment.ts`, `farm-nation-payment.ts` | module payment fulfilment |
+
+Everything else is a status change with no money attached to it, and can be
+converted opportunistically when the file is touched for another reason.
+
 ## Not yet migrated
 
 Ordered by `runTransaction` count. Presence here is not proof of a live defect —
@@ -429,7 +477,7 @@ can be ruled out.
 | 5 | `src/app/actions/wallet.ts` | Remaining non-balance transactions (withdrawal request, admin decisions). |
 | 3 | `src/app/actions/cooperative/_actions.ts` | Both overdraft paths converted; 3 non-money transitions remain. |
 | 4 | `src/app/actions/vendor-settings.ts` | |
-| 4 | `src/app/actions/marketplace/_escrow_actions.ts` | |
+| 2 | `src/app/actions/marketplace/_escrow_actions.ts` | Release and refund converted; 2 non-money transitions remain. |
 | 4 | `src/app/actions/marketplace/_actions.ts` | |
 | 4 | `src/app/actions/loan-actions.ts` | |
 | 4 | `src/app/actions/cooperative/_loans.ts` | |

@@ -4,6 +4,7 @@ import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { z } from "zod";
 import type { EscrowStatus, EscrowTransaction } from "@/types/escrow";
 import { FieldValue, Timestamp, FieldPath } from "@/lib/firestore-compat";
@@ -361,12 +362,6 @@ async function _releaseEscrowFunds(
         if (!txDoc.exists) return { success: false as const, error: "Transaction not found" };
         const data = txDoc.data()!;
 
-        if (data.status !== "delivered" && data.status !== "disputed" && data.status !== "funded") {
-            return { success: false as const, error: `Cannot release escrow in ${data.status} status.` };
-        }
-
-        if (data.status === "released") return { success: false as const, error: "Escrow already released" };
-        
         const escrowAmount = data.amount || data.grossAmount || 0;
         if (escrowAmount <= 0) return { success: false as const, error: "Invalid transaction amount" };
 
@@ -375,15 +370,35 @@ async function _releaseEscrowFunds(
             .where("orderId", "==", orderId)
             .get();
 
-        await db.runTransaction(async (tx) => {
-            // 1. Update Escrow status
-            tx.update(txRef, { status: "released",
-                releasedAt: FieldValue.serverTimestamp(),
-                releasedBy: userId,
-                updatedAt: FieldValue.serverTimestamp(),
-                _version: FieldValue.increment(1) });
+        // Claim the release before creating a payout or crediting anyone.
+        //
+        // The status check used to sit entirely OUTSIDE the transaction — a
+        // plain read, followed by a blind write. Two admins releasing the same
+        // escrow both passed it, and both created a payout instruction and
+        // credited the seller.
+        //
+        // Release is valid from three states, so each is attempted in turn.
+        // Once one wins the row holds "released" and every other attempt fails,
+        // including a concurrent caller's.
+        const claim = await claimStatusTransitionFromAny({
+            collection: COLLECTIONS.ESCROW_TRANSACTIONS,
+            id: transactionId,
+            fromAny: ["delivered", "disputed", "funded"],
+            to: "released",
+            patch: { releasedBy: userId, releasedAt: new Date().toISOString() },
+        });
 
-            // 2. Create payout instruction
+        if (!claim.claimed) {
+            return {
+                success: false as const,
+                error: claim.status === "released"
+                    ? "Escrow already released"
+                    : `Cannot release escrow in ${claim.status ?? "missing"} status.`,
+            };
+        }
+
+        await db.runTransaction(async (tx) => {
+            // Create payout instruction
             const paymentInstructionRef = db.collection(COLLECTIONS.PAYMENT_INSTRUCTIONS).doc();
             tx.set(paymentInstructionRef, {
                 type: "escrow_release",
@@ -530,21 +545,45 @@ async function _refundEscrowToBuyer(
         let txData: any = null;
         let escrowAmount = 0;
 
+        // Claim the refund before creating a refund instruction.
+        //
+        // The status check and the `refundedAt` guard both ran inside
+        // runTransaction, which takes no lock, so two refunds issued at once
+        // both passed and both created an instruction — refunding the buyer
+        // twice out of the business's money.
+        //
+        // Moving to "refunded" is itself the guard: `refundedAt` was only ever
+        // a second check on the same unlocked read.
+        const preRefund = await txRef.get();
+        if (!preRefund.exists) {
+            return { success: false as const, error: "Transaction not found" };
+        }
+
+        escrowAmount = preRefund.data()?.amount || preRefund.data()?.grossAmount || 0;
+        if (escrowAmount <= 0) {
+            return { success: false as const, error: "Invalid transaction amount" };
+        }
+
+        const refundClaim = await claimStatusTransitionFromAny({
+            collection: COLLECTIONS.ESCROW_TRANSACTIONS,
+            id: transactionId,
+            fromAny: ["funded", "in_transit", "disputed"],
+            to: "refunded",
+            patch: { refundedAt: new Date().toISOString(), refundedBy: userId },
+        });
+
+        if (!refundClaim.claimed) {
+            return {
+                success: false as const,
+                error: refundClaim.status === "refunded"
+                    ? "Escrow already refunded"
+                    : `Cannot refund escrow in ${refundClaim.status ?? "missing"} status`,
+            };
+        }
+
         await db.runTransaction(async (tx) => {
             const txDoc = await tx.get(txRef);
-            if (!txDoc.exists) throw new Error("Transaction not found");
             const data = txDoc.data()!;
-
-            if (!["funded", "in_transit", "disputed"].includes(data.status)) {
-                throw new Error(`Cannot refund escrow in ${data.status} status`);
-            }
-
-            if (data.refundedAt) throw new Error("Escrow already refunded");
-
-            escrowAmount = data.amount || data.grossAmount || 0;
-            if (escrowAmount <= 0) {
-                throw new Error("Invalid transaction amount");
-            }
 
             txData = data;
             const refundInstructionRef = db.collection(COLLECTIONS.PAYMENT_INSTRUCTIONS).doc();

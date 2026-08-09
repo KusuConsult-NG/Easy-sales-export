@@ -74,3 +74,41 @@ export async function claimStatusTransition(params: {
 
     return { claimed: Boolean(row.claimed), status: row.status ?? null };
 }
+
+/**
+ * Claims a transition that may legitimately start from more than one status.
+ *
+ * Escrow release is valid from `delivered`, `disputed` or `funded`; a dispute
+ * may be resolved from `open` or `under_review`. The compare-and-swap takes one
+ * `from` at a time, so this tries each in turn.
+ *
+ * Still race-safe: once any attempt wins, the row holds `to`, so every later
+ * attempt — in this call or a concurrent one — fails against all of them.
+ *
+ * Returns the first successful claim, or the last failure, whose `status` is
+ * the value that actually blocked it.
+ */
+export async function claimStatusTransitionFromAny(params: {
+    collection: string;
+    id: string;
+    fromAny: string[];
+    to: string;
+    patch?: Record<string, any>;
+}): Promise<TransitionResult> {
+    const { collection, id, fromAny, to, patch } = params;
+
+    if (fromAny.length === 0) {
+        throw new Error("claimStatusTransitionFromAny: fromAny must not be empty");
+    }
+
+    let last: TransitionResult = { claimed: false, status: null };
+
+    for (const from of fromAny) {
+        last = await claimStatusTransition({ collection, id, from, to, patch });
+        if (last.claimed) return last;
+        // A missing record will not become present on the next attempt.
+        if (last.status === null) return last;
+    }
+
+    return last;
+}
