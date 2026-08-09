@@ -53,6 +53,7 @@ const EXPECTED = [
     { n: "012", why: "platform revenue totals" },
     { n: "013", why: "locked debit for raw_data balances" },
     { n: "014", why: "extends 013 to nested paths — MUST come after 013" },
+    { n: "015", why: "bounded counters — MUST ship with the code that guards stock and capacity" },
     { n: "004", why: "row-level security — LAST, and in a low-traffic window" },
 ];
 
@@ -155,6 +156,8 @@ SELECT proname
     'apply_increments',
     'platform_revenue_totals',
     'debit_jsonb_balance',
+    'decrement_many_or_fail',
+    'increment_within_ceiling',
     'enforce_member_active_on_paid'
  )
  ORDER BY proname;

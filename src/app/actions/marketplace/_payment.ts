@@ -7,7 +7,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { revalidatePath } from "next/cache";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { claimPaymentOnce } from "@/lib/wallet-ledger";
+import { claimPaymentOnce, decrementManyOrFail } from "@/lib/wallet-ledger";
 import { getPlatformFees } from "@/lib/system-settings";
 import { rateLimit } from "@/lib/rate-limiter";
 import { rateLimitConfig } from "@/lib/rate-limits.config";
@@ -467,6 +467,64 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
             };
         }
 
+        // Reserve stock across every product in the order, atomically.
+        //
+        // The decrement below used to sit behind `if (currentQty >= quantity)`
+        // inside runTransaction, which takes no lock — so two DIFFERENT orders
+        // for the last unit both passed and stock went negative. The claim above
+        // only stops the SAME payment fulfilling twice; it cannot stop two
+        // separate buyers racing.
+        //
+        // All-or-nothing matters here: a per-product loop would leave the first
+        // items decremented when the third is short. See migration 015.
+        const stockItems = (orderData.items || []).map((item: any) => ({
+            collection: item.isFlashSale ? COLLECTIONS.FLASH_SALE_PRODUCTS : COLLECTIONS.PRODUCTS,
+            id: item.productId,
+            field: "availableQuantity",
+            amount: item.quantity,
+        }));
+
+        const stock = await decrementManyOrFail(stockItems);
+
+        if (!stock.ok) {
+            // The buyer has already paid — the claim above succeeded, so this is
+            // real money with nothing to ship. Returning a bare error would lose
+            // it: the payment reference is now claimed, so a retry takes the
+            // "already processed" path above and tells the buyer the order is
+            // live. Nothing decremented (015 is all-or-nothing), so the only
+            // thing outstanding is the refund.
+            //
+            // Record it on the order so it is findable and refundable rather
+            // than silent. This is the same gap the old in-transaction throw
+            // had; it is fixed here because the early return makes it plain.
+            const shortItem = (orderData.items || []).find((i: any) => i.productId === stock.failedId);
+
+            logger.error(
+                `[Marketplace] PAID BUT UNFULFILLABLE — order ${orderDoc.id}, reference ${reference}, ` +
+                `₦${amountInNaira} taken, product ${stock.failedId} ${stock.reason}. Needs refund.`
+            );
+
+            await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderDoc.id).update({
+                paymentStatus: "paid_awaiting_refund",
+                status: "cancelled_out_of_stock",
+                paidAmount: amountInNaira,
+                paymentVerifiedAt: FieldValue.serverTimestamp(),
+                refundReason: stock.reason === "not_found"
+                    ? `Product ${stock.failedId} is no longer listed`
+                    : `Insufficient stock for ${shortItem?.productTitle ?? stock.failedId}`,
+                refundRequiredAmount: amountInNaira,
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+
+            return {
+                error: stock.reason === "not_found"
+                    ? "A product in this order is no longer available. You have been charged and a refund is being processed."
+                    : `${shortItem?.productTitle ?? "A product"} sold out before your payment completed. You have been charged and a refund is being processed.`,
+                success: false as const,
+                data: null,
+            };
+        }
+
         await db.runTransaction(async (transaction) => { 
             const items = orderData.items || [];
 
@@ -501,29 +559,29 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
             //     above. Writing it here as well is what put the marker AFTER
             //     the fulfilment, so a duplicate could fulfil twice.)
 
-            // 4. Decrement Inventory
+            // 4. Inventory — already decremented by the reservation above.
+            //
+            // Do NOT decrement here as well. These reads ran after the
+            // reservation, so availableQuantity is the post-decrement figure and
+            // is what the low-stock alert should report. The check-then-write
+            // that used to live here is exactly the race migration 015 removes.
             for (const { ref, doc, item } of productSnapshots) { 
                 if (doc.exists) {
-                    const currentQty = doc.data()?.availableQuantity || 0;
-                    const newQty = currentQty - item.quantity;
-                    if (currentQty >= item.quantity) {
-                        transaction.update(ref, {
-                            availableQuantity: FieldValue.increment(-item.quantity),
-                            orders: FieldValue.increment(1),
-                            _version: FieldValue.increment(1) 
+                    const remainingQty = doc.data()?.availableQuantity || 0;
+
+                    transaction.update(ref, {
+                        orders: FieldValue.increment(1),
+                        _version: FieldValue.increment(1) 
+                    });
+
+                    if (remainingQty <= 5) {
+                        lowStockProducts.push({
+                            sellerId: doc.data()?.sellerId || item.sellerId,
+                            title: doc.data()?.title || item.productTitle,
+                            qty: remainingQty,
+                            isFlashSale: !!item.isFlashSale,
+                            id: item.productId
                         });
-                        
-                        if (newQty <= 5) {
-                            lowStockProducts.push({
-                                sellerId: doc.data()?.sellerId || item.sellerId,
-                                title: doc.data()?.title || item.productTitle,
-                                qty: newQty,
-                                isFlashSale: !!item.isFlashSale,
-                                id: item.productId
-                            });
-                        }
-                    } else {
-                        throw new Error(`Insufficient stock for product: ${item.productTitle}`);
                     }
                 }
             }
