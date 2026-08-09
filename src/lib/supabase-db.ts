@@ -458,36 +458,106 @@ function splitIncrements(data: Record<string, any>): {
 }
 
 /**
- * Removes the paths owned by an atomic operation from a patch.
+ * Applies a targeted patch to a document in JavaScript.
  *
- * processWriteData returns `{ ...existingData, ...changes }` — the WHOLE
- * document, not just the changed fields. That is deliberate: merge_raw_data
- * does a shallow `raw_data || patch`, so a nested change has to carry its
- * whole top-level object or the siblings are dropped.
- *
- * It also means the patch carries a stale copy of every field the atomic
- * functions are about to update. Writing that first would undo a concurrent
- * writer's change moments before applying our own on top — which is precisely
- * the race the SQL functions exist to prevent. The value must reach the
- * database only once, from the function that changes it.
- *
- * Dotted paths are removed at their exact position so their siblings survive.
+ * Only for the fallback path, when apply_document_patch is unavailable. It is a
+ * read-modify-write and therefore NOT concurrent — the same defect this whole
+ * change exists to remove — but it keeps dotted paths and deletions working on
+ * a database that has not had migration 017 applied, rather than dropping them
+ * silently. Silently dropping a delete is how FieldValue.delete() went
+ * unnoticed for so long.
  */
-function stripAtomicPaths(patch: Record<string, any>, paths: string[]): void {
-    for (const path of paths) {
+function applyPatchInJs(
+    base: Record<string, any>,
+    patch: Record<string, any>,
+    paths: Record<string, any>,
+    deletes: string[],
+): Record<string, any> {
+    const merged: Record<string, any> = { ...base, ...patch };
+
+    for (const [path, value] of Object.entries(paths)) {
+        setNestedValue(merged, path, value);
+    }
+
+    for (const path of deletes) {
         if (!path.includes('.')) {
-            delete patch[path];
+            delete merged[path];
             continue;
         }
-
         const parts = path.split('.');
-        let cur: any = patch;
+        let cur: any = merged;
         for (let i = 0; i < parts.length - 1; i++) {
             if (cur == null || typeof cur !== 'object') { cur = null; break; }
             cur = cur[parts[i]];
         }
         if (cur && typeof cur === 'object') delete cur[parts[parts.length - 1]];
     }
+
+    return merged;
+}
+
+/**
+ * Builds a patch containing ONLY the fields a write actually changes.
+ *
+ * processWriteData returns `{ ...existingData, ...changes }` — the whole
+ * document. That was correct but not concurrent: two updates to unrelated
+ * fields clobber one another, because each writes back everything it read.
+ * See supabase/migrations/017_targeted_document_patch.sql.
+ *
+ * The three shapes are separated because Firestore treats them differently and
+ * a single shallow merge cannot express all three:
+ *
+ *   patch    top-level fields. `update({a: {x: 1}})` REPLACES a.
+ *   paths    dotted paths. `update({"a.b": 1})` leaves a's siblings alone.
+ *   deletes  FieldValue.delete(), which a merge can never express — an absent
+ *            key means "unchanged", not "remove".
+ *
+ * Sentinels still resolve against `existing`, but only the ones that have to:
+ * increments and top-level array ops are pulled out before this runs and are
+ * applied in SQL.
+ */
+function buildWritePatch(
+    data: Record<string, any>,
+    existing: Record<string, any>,
+): { patch: Record<string, any>; paths: Record<string, any>; deletes: string[] } {
+    const patch: Record<string, any> = {};
+    const paths: Record<string, any> = {};
+    const deletes: string[] = [];
+
+    for (const [key, rawValue] of Object.entries(data)) {
+        const fvType = getFieldValueType(rawValue);
+
+        if (fvType === 'FieldValue.delete') {
+            deletes.push(key);
+            continue;
+        }
+
+        if (fvType) {
+            const resolved = resolveFieldValue(fvType, rawValue, getNestedValue(existing, key));
+            if (resolved === undefined) {
+                deletes.push(key);
+            } else if (key.includes('.')) {
+                paths[key] = convertTimestamps(resolved);
+            } else {
+                patch[key] = convertTimestamps(resolved);
+            }
+            continue;
+        }
+
+        // A nested object may still contain sentinels. They resolve against the
+        // existing value at that position, as before.
+        const resolved = processNestedFieldValues(rawValue, getNestedValue(existing, key));
+
+        if (resolved === undefined) {
+            deletes.push(key);
+        } else if (key.includes('.')) {
+            paths[key] = resolved;
+        } else {
+            patch[key] = resolved;
+        }
+    }
+
+    return { patch, paths, deletes };
 }
 
 /**
@@ -687,7 +757,18 @@ async function supabasePartialUpdate(
     collection: string,
     id: string,
     patch: Record<string, any>,
+    /**
+     * Dotted paths and deletions, which a shallow merge cannot express.
+     *
+     * A dotted path must not carry its whole parent object — that is what made
+     * every write clobber concurrent changes. A deletion cannot be expressed by
+     * a merge at all: an absent key means "unchanged", so FieldValue.delete()
+     * was a silent no-op until migration 017.
+     */
+    extras?: { paths?: Record<string, any>; deletes?: string[] },
 ): Promise<void> {
+    const paths = extras?.paths ?? {};
+    const deletes = extras?.deletes ?? [];
     const tableName = getTableName(collection);
 
     // Extract native column overrides from the patch (e.g., email, roles for users table)
@@ -699,12 +780,22 @@ async function supabasePartialUpdate(
         }
     }
 
-    // Try server-side RPC merge first for 0-read atomic performance
+    // Try server-side RPC merge first for 0-read atomic performance.
+    //
+    // apply_document_patch (017) is preferred because it can express dotted
+    // paths and deletions. merge_raw_data can express neither, so it is only a
+    // fallback for a database that has not had 017 applied yet — and on that
+    // path the two shapes it cannot carry are handled in JavaScript below.
     try {
-        const { error: rpcErr } = await supabaseAdmin.rpc('merge_raw_data', {
-            p_table: tableName === 'document_collections' ? 'document_collections' : tableName,
-            p_id: tableName === 'document_collections' ? `${collection}::${id}` : id,
+        const hasExtras = Object.keys(paths).length > 0 || deletes.length > 0;
+
+        const { error: rpcErr } = await supabaseAdmin.rpc('apply_document_patch', {
+            p_table: tableName,
+            p_id: id,
+            p_collection: tableName === 'document_collections' ? collection : null,
             p_patch: patch,
+            p_paths: paths,
+            p_deletes: deletes,
         });
 
         if (!rpcErr) {
@@ -717,6 +808,28 @@ async function supabasePartialUpdate(
                 if (e2) throw e2;
             }
             return;
+        }
+
+        // 017 not applied. merge_raw_data still handles the common case — a
+        // plain shallow patch — without reading the document first. Anything it
+        // cannot express falls through to the JavaScript path below.
+        if (!hasExtras) {
+            const { error: legacyErr } = await supabaseAdmin.rpc('merge_raw_data', {
+                p_table: tableName,
+                p_id: tableName === 'document_collections' ? `${collection}::${id}` : id,
+                p_patch: patch,
+            });
+
+            if (!legacyErr) {
+                if (Object.keys(nativeOverrides).length > 0 && tableName !== 'document_collections') {
+                    const { error: e2 } = await supabaseAdmin
+                        .from(tableName)
+                        .update(nativeOverrides)
+                        .eq('id', id);
+                    if (e2) throw e2;
+                }
+                return;
+            }
         }
     } catch {
         // Fall back to JS-level fetch+patch if RPC function is missing or in mock environment
@@ -732,7 +845,7 @@ async function supabasePartialUpdate(
             .maybeSingle();
         if (fetchErr) throw new Error(`[supabase-db] partial-update fetch ${collection}/${id}: ${fetchErr.message}`);
 
-        const merged = { ...(existing?.raw_data ?? {}), ...patch };
+        const merged = applyPatchInJs(existing?.raw_data ?? {}, patch, paths, deletes);
         if (!merged.id) merged.id = id;
         const row = buildGenericRow(collection, id, merged);
         const { error } = await supabaseAdmin
@@ -750,7 +863,7 @@ async function supabasePartialUpdate(
         if (fetchErr) throw new Error(`[supabase-db] partial-update fetch ${tableName}/${id}: ${fetchErr.message}`);
 
         // Merge: existing raw_data fields are preserved; patch keys overwrite only changed fields
-        const mergedRaw = { ...(cur?.raw_data ?? {}), ...patch };
+        const mergedRaw = applyPatchInJs(cur?.raw_data ?? {}, patch, paths, deletes);
         if (!mergedRaw.id) mergedRaw.id = id;
 
         const updatePayload: Record<string, any> = {
@@ -1112,10 +1225,8 @@ export class SupabaseDocumentReference {
             const { arrayOps, rest } = splitArrayOps(afterIncrements);
 
             if (Object.keys(rest).length > 0) {
-                const processedRest = processWriteData(rest, base, true);
-                stripAtomicPaths(processedRest, [...Object.keys(increments), ...Object.keys(arrayOps)]);
-                if (!processedRest.id) processedRest.id = this.id;
-                await supabasePartialUpdate(this._collection, this.id, processedRest);
+                const { patch, paths, deletes } = buildWritePatch(rest, base);
+                await supabasePartialUpdate(this._collection, this.id, patch, { paths, deletes });
             }
 
             if (Object.keys(increments).length > 0) {
@@ -1176,13 +1287,12 @@ export class SupabaseDocumentReference {
 
         // Non-increment fields keep the existing behaviour exactly.
         if (Object.keys(rest).length > 0) {
-            const processed = processWriteData(rest, existing, true);
-            stripAtomicPaths(processed, [...Object.keys(increments), ...Object.keys(arrayOps)]);
-            if (!processed.id) processed.id = this.id;
-            // Use partial update (not full upsert) so only changed fields overwrite raw_data.
-            // This prevents wiping out fields like serviceRegistrations, kyc, etc.
-            // if the in-memory `get()` above returned a partial or stale document.
-            await supabasePartialUpdate(this._collection, this.id, processed);
+            // Only the changed fields are sent. This used to be the whole
+            // document — see migration 017 — so two updates to unrelated fields
+            // reverted one another, and the stale copy of a counter or array
+            // rode along and undid the atomic functions below.
+            const { patch, paths, deletes } = buildWritePatch(rest, existing);
+            await supabasePartialUpdate(this._collection, this.id, patch, { paths, deletes });
         }
 
         if (Object.keys(increments).length > 0) {
