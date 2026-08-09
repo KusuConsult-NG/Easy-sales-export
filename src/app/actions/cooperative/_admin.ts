@@ -16,6 +16,7 @@ import { isAdmin } from "@/lib/admin-permissions";
 import { FieldValue } from "@/lib/firestore-compat";
 import { FieldPath } from "@/lib/firestore-compat";
 import { logAuditAction } from "@/lib/audit-log";
+import { claimStatusTransition } from "@/lib/status-transition";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { ActionResponse, withFlexibleSafeAction } from "@/lib/safe-action";
 import { paginatedOk, paginatedErr, nextCursor as computeNextCursor, PaginatedAdminResponse } from "@/lib/admin-action-response";
@@ -445,18 +446,27 @@ async function _updateMemberStatusAction(
             targetUserId = memberId; // fallback
         }
 
-        const emailData = await db.runTransaction(async (transaction) => {
+        // No status guard here, so there is no check-then-write to claim: this
+        // writes membershipStatus unconditionally. The wrapper bought it
+        // nothing — the writes below are already atomic on their own
+        // (FieldValue.increment and arrayUnion apply in SQL since migrations
+        // 010 and 016), which is the whole of what it appeared to provide.
+        //
+        // The member record is written before the user record, so a crash
+        // between them leaves the admin's view ahead of the member's, which is
+        // the direction the caching layer already re-syncs.
+        const emailData = await (async () => {
             const mRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberId);
-            const mDoc = await transaction.get(mRef);
+            const mDoc = await mRef.get();
             if (!mDoc.exists) throw new Error("Member not found");
 
             // Always fetch the user doc — we need to sync it for BOTH "approved" and "active"
             // BUG FIX: Previously only fetched when status === "active", meaning "approved"
             // never synced to serviceRegistrations → user saw "pending" while admin saw "approved"
             const userRef = db.collection(COLLECTIONS.USERS).doc(targetUserId);
-            const userDoc = await transaction.get(userRef);
+            const userDoc = await userRef.get();
 
-            transaction.update(mRef, {
+            await mRef.update({
                 membershipStatus: status,
                 updatedAt: FieldValue.serverTimestamp(),
                 _version: FieldValue.increment(1),
@@ -505,13 +515,13 @@ async function _updateMemberStatusAction(
                         updatedAt: FieldValue.serverTimestamp(),
                         _version: 1
                     };
-                    transaction.set(userRef, initialData);
+                    await userRef.set(initialData);
                 } else {
-                    transaction.update(userRef, normalizeUserUpdate(userDocUpdate));
+                    await userRef.update(normalizeUserUpdate(userDocUpdate));
                 }
             }
             return { notificationInfo, targetUserId };
-        });
+        })();
 
 
         // 4. Invalidate Caches (Kill the "State vs. Truth" bug)
@@ -994,9 +1004,16 @@ export async function approveWithdrawalAction(
 
         const adminScope = await getAdminScope(adminId, roles);
 
-        // Execute transaction and return notification data
-        const notificationData = await db.runTransaction(async (transaction) => {
-            const withdrawalDoc = await transaction.get(withdrawalRef);
+        // The status check below used to read "pending" and write "approved"
+        // inside runTransaction, which takes no lock. This is the same defect
+        // the wallet withdrawal state machine had, and it is worse here because
+        // approval and rejection compete for the same field: an approve and a
+        // reject arriving together both read "pending" and both proceeded, so
+        // the member's locked funds were released AND refunded to savings.
+        //
+        // The transition is claimed now, so exactly one of them wins.
+        const notificationData = await (async () => {
+            const withdrawalDoc = await withdrawalRef.get();
             if (!withdrawalDoc.exists) {
                 throw new Error("Withdrawal request not found");
             }
@@ -1006,10 +1023,6 @@ export async function approveWithdrawalAction(
             // 🔒 Prevent IDOR on Approval
             if (adminScope && withdrawalData?.cooperativeId && withdrawalData.cooperativeId !== adminScope) {
                 throw new Error("Unauthorized: Cannot approve withdrawal for another cooperative");
-            }
-
-            if (withdrawalData?.status !== "pending") {
-                throw new Error(`Request is already ${withdrawalData?.status}`);
             }
 
             const requestTime = withdrawalData?.requestedAt || withdrawalData?.createdAt;
@@ -1027,21 +1040,44 @@ export async function approveWithdrawalAction(
             const userId = withdrawalData.userId;
             const amount = withdrawalData.amount;
 
+            // Claim BEFORE the balance moves. A crash between the two leaves the
+            // request approved with the funds still locked — visible to an admin
+            // and correctable. Releasing first and claiming second would let a
+            // lost claim release the same funds twice.
+            const nowIso = new Date().toISOString();
+            const claim = await claimStatusTransition({
+                collection: COLLECTIONS.COOPERATIVE_WITHDRAWALS,
+                id: withdrawalId,
+                from: "pending",
+                to: "approved",
+                patch: {
+                    approvedBy: adminId,
+                    approvedAt: nowIso,
+                    updatedAt: nowIso,
+                },
+            });
+
+            if (!claim.claimed) {
+                throw new Error(claim.status === null
+                    ? "Withdrawal request not found"
+                    : `Request is already ${claim.status}`);
+            }
+
             // Fetch user for details
             let email = "";
             let name = "Member";
 
-            const userDoc = await transaction.get(db.collection(COLLECTIONS.USERS).doc(userId));
+            const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
             if (userDoc.exists) {
                 email = userDoc.data()?.email || "";
                 name = userDoc.data()?.fullName || "Member";
             }
 
             const coopMemberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
-            const coopMemberDoc = await transaction.get(coopMemberRef);
+            const coopMemberDoc = await coopMemberRef.get();
 
             if (coopMemberDoc.exists) {
-                transaction.update(coopMemberRef, {
+                await coopMemberRef.update({
                     lockedBalance: FieldValue.increment(-amount),
                     updatedAt: FieldValue.serverTimestamp(),
                 });
@@ -1053,9 +1089,9 @@ export async function approveWithdrawalAction(
                         .collection("members")
                         .doc(userId);
 
-                    const nestedDoc = await transaction.get(nestedMemberRef);
+                    const nestedDoc = await nestedMemberRef.get();
                     if (nestedDoc.exists) {
-                        transaction.update(nestedMemberRef, {
+                        await nestedMemberRef.update({
                             lockedBalance: FieldValue.increment(-amount),
                             updatedAt: FieldValue.serverTimestamp(),
                         });
@@ -1063,15 +1099,8 @@ export async function approveWithdrawalAction(
                 }
             }
 
-            transaction.update(withdrawalRef, {
-                status: "approved",
-                approvedBy: adminId,
-                approvedAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
-            });
-
             return { email, name, amount, userId };
-        });
+        })();
 
         // 🚀 POST-COMMIT SIDE EFFECTS (Non-blocking)
         try {
@@ -1136,9 +1165,21 @@ export async function rejectWithdrawalAction(
 
         const adminScope = await getAdminScope(adminId, roles);
 
-        // Execute transaction and return notification data
-        const notificationData = await db.runTransaction(async (transaction) => {
-            const withdrawalDoc = await transaction.get(withdrawalRef);
+        // This one REFUNDS, which makes the unguarded check-then-write worse
+        // than on the approval side. The status was read, compared to
+        // "pending", and the refund written — inside runTransaction, which
+        // takes no lock. Two rejections of one request both passed and both
+        // credited savingsBalance: the member's savings grew by twice what was
+        // ever withdrawn. Migration 010 made that reliable rather than lossy —
+        // before it, one of the two increments was silently dropped, which
+        // accidentally hid the double refund.
+        //
+        // The transition is claimed now, and claimed BEFORE the money moves: a
+        // crash between the two leaves the request rejected with the funds
+        // still locked, which an admin can see and correct. Refunding first
+        // would let a lost claim refund twice — the exact bug.
+        const notificationData = await (async () => {
+            const withdrawalDoc = await withdrawalRef.get();
             if (!withdrawalDoc.exists) {
                 throw new Error("Withdrawal request not found");
             }
@@ -1150,28 +1191,44 @@ export async function rejectWithdrawalAction(
                 throw new Error("Unauthorized: Cannot reject withdrawal for another cooperative");
             }
 
-            if (withdrawalData?.status !== "pending") {
-                throw new Error(`Request is already ${withdrawalData?.status}`);
-            }
-
             const userId = withdrawalData.userId;
             const amount = withdrawalData.amount;
+
+            const nowIso = new Date().toISOString();
+            const claim = await claimStatusTransition({
+                collection: COLLECTIONS.COOPERATIVE_WITHDRAWALS,
+                id: withdrawalId,
+                from: "pending",
+                to: "rejected",
+                patch: {
+                    rejectionReason: reason,
+                    rejectedBy: adminId,
+                    rejectedAt: nowIso,
+                    updatedAt: nowIso,
+                },
+            });
+
+            if (!claim.claimed) {
+                throw new Error(claim.status === null
+                    ? "Withdrawal request not found"
+                    : `Request is already ${claim.status}`);
+            }
 
             // Fetch user for details
             let email = "";
             let name = "Member";
 
-            const userDoc = await transaction.get(db.collection(COLLECTIONS.USERS).doc(userId));
+            const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
             if (userDoc.exists) {
                 email = userDoc.data()?.email || "";
                 name = userDoc.data()?.fullName || "Member";
             }
 
             const coopMemberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
-            const coopMemberDoc = await transaction.get(coopMemberRef);
+            const coopMemberDoc = await coopMemberRef.get();
 
             if (coopMemberDoc.exists) {
-                transaction.update(coopMemberRef, {
+                await coopMemberRef.update({
                     savingsBalance: FieldValue.increment(amount),
                     lockedBalance: FieldValue.increment(-amount),
                     updatedAt: FieldValue.serverTimestamp(),
@@ -1184,9 +1241,9 @@ export async function rejectWithdrawalAction(
                         .collection("members")
                         .doc(userId);
 
-                    const nestedDoc = await transaction.get(nestedMemberRef);
+                    const nestedDoc = await nestedMemberRef.get();
                     if (nestedDoc.exists) {
-                        transaction.update(nestedMemberRef, {
+                        await nestedMemberRef.update({
                             balance: FieldValue.increment(amount),
                             lockedBalance: FieldValue.increment(-amount),
                             updatedAt: FieldValue.serverTimestamp(),
@@ -1195,16 +1252,8 @@ export async function rejectWithdrawalAction(
                 }
             }
 
-            transaction.update(withdrawalRef, {
-                status: "rejected",
-                rejectionReason: reason,
-                rejectedBy: adminId,
-                rejectedAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
-            });
-
             return { email, name, amount, userId };
-        });
+        })();
 
         // 🚀 POST-COMMIT SIDE EFFECTS (Non-blocking)
         try {
@@ -1268,15 +1317,17 @@ export async function requestCooperativeRevisionAction(
         }
 
         const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberId);
-        // Execute transaction for atomic updates to application and user registration
-        const notificationData = await db.runTransaction(async (t) => {
-            const memberDoc = await t.get(memberRef);
+        // Two status writes, no balance and no guard to claim. The wrapper made
+        // them look like one commit; they never were. They are written member
+        // first, user second, for the same reason as updateMemberStatus above.
+        const notificationData = await (async () => {
+            const memberDoc = await memberRef.get();
             if (!memberDoc.exists) throw new Error('Member not found');
 
             const memberData = memberDoc.data();
             const userId = memberData?.userId;
 
-            t.update(memberRef, {
+            await memberRef.update({
                 membershipStatus: 'revision_required',
                 revisionNote: reason,
                 revisionRequestedAt: FieldValue.serverTimestamp(),
@@ -1285,7 +1336,7 @@ export async function requestCooperativeRevisionAction(
             });
 
             if (userId) {
-                t.update(db.collection(COLLECTIONS.USERS).doc(userId), normalizeUserUpdate({
+                await db.collection(COLLECTIONS.USERS).doc(userId).update(normalizeUserUpdate({
                     'serviceRegistrations.cooperatives.status': 'revision_required',
                     updatedAt: FieldValue.serverTimestamp(),
                 }));
@@ -1295,7 +1346,7 @@ export async function requestCooperativeRevisionAction(
                 email: memberData?.email,
                 name: memberData?.firstName ? `${memberData.firstName} ${memberData.lastName || ''}`.trim() : 'Member'
             };
-        });
+        })();
 
         // Send revision requested email (non-blocking post-commit)
         try {
