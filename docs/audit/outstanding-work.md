@@ -178,7 +178,7 @@ that nothing invoked.
 
 | Endpoint | What its absence meant |
 |---|---|
-| `reconcile-paystack` | The safety net for payments the webhook missed. It is what would have caught the eight unfulfilled registrations. |
+| `reconcile-paystack` | The safety net for payments the webhook missed. It would NOT have caught the eight unfulfilled registrations — see the correction below. |
 | `release-escrow` | Escrow auto-release. Without it a seller is paid only when the buyer explicitly confirms delivery; otherwise funds sit in escrow indefinitely. |
 | `process-email-queue` | Queued mail sent only when something else happens to drain the queue. |
 | `gdpr-purge` | Data retention — a legal obligation rather than a convenience. |
@@ -188,6 +188,50 @@ until two repository secrets are set:** `CRON_SECRET` (matching what the app
 checks) and `PRODUCTION_URL`. Until they are, every run fails loudly at a
 preflight step rather than silently no-opping — a scheduler that quietly does
 nothing is how this went unnoticed.
+
+### Correction: reconcile-paystack would not have caught the eight
+
+Claimed above, and in PR #53, that this job was the safety net that would have
+caught the eight unfulfilled cooperative registrations. **That was wrong**, and
+running it proved it.
+
+First run, 2026-08-09 23:18 UTC, against production:
+
+```json
+{"status":"ok","paystackTotal":215,"firebaseTotal":1221,
+ "missingInFirebase":[],"discrepancies":0,"durationMs":43442}
+```
+
+Zero discrepancies — over a 30-day window that contains eight registrations
+known to be broken, because they had been repaired by hand hours earlier.
+
+The reason is structural. The job compares **payment references**: Paystack's
+list of successful transactions against `processed_payments`. All eight had
+their `processed_payments` row; the payment was recorded correctly. What was
+missing was the `cooperative_members` row. A payment that is *recorded but not
+fulfilled* is invisible to a reference-level comparison.
+
+**The real gap is that nothing reconciles FULFILMENT.** Every check in this
+codebase asks "was the payment recorded?", and none asks "did the thing the
+payment paid for actually happen?" A fulfilment reconciler would join
+`processed_payments` to the artefact each payment type should have produced —
+the shape of the SQL used to find the eight:
+
+```sql
+SELECT p.id, p.raw_data->>'type'
+FROM processed_payments p
+WHERE p.raw_data->>'type' = 'cooperative_membership_registration'
+  AND p.raw_data->>'status' = 'completed'
+  AND NOT EXISTS (SELECT 1 FROM cooperative_members m WHERE m.id = p.user_id);
+```
+
+...and equivalently for marketplace orders (an order at `escrow_held`), academy
+enrolments, export investments and farm-nation purchases. That job does not
+exist. It is the one that would have caught this, and would catch the next one.
+
+The good news from the same run: 215 Paystack transactions and zero unrecorded,
+so the client-callback path has been recording payments reliably even with the
+webhook apparently silent.
 
 Note what this does NOT settle: whether the Paystack webhook is reaching
 `/api/webhooks/paystack` at all. No `processed_payments` row in 30 days carries

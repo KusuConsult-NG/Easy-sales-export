@@ -24,6 +24,13 @@ name: Scheduled Jobs
 #   gdpr-purge           Data retention. This one is a legal obligation, not a
 #                        convenience.
 #
+#   reconcile-fulfilment Asks whether each recorded payment produced the thing
+#                        it paid for. reconcile-paystack cannot see that — it
+#                        compares references, and the eight broken registrations
+#                        all HAD their reference. Runs 8 minutes after it, so a
+#                        payment reconcile-paystack has just healed is not
+#                        reported as unfulfilled by a race between the two.
+#
 # GitHub's scheduler is best-effort and can be delayed under load, which is
 # acceptable for all four: every one of them is idempotent and catch-up by
 # design, so a late or skipped run costs latency rather than correctness.
@@ -40,6 +47,7 @@ on:
     - cron: '*/15 * * * *'   # process-email-queue  — every 15 minutes
     - cron: '17 * * * *'     # release-escrow       — hourly, off the hour
     - cron: '43 */6 * * *'   # reconcile-paystack   — every 6 hours
+    - cron: '51 */6 * * *'   # reconcile-fulfilment — every 6 hours, after it
     - cron: '0 3 * * *'      # gdpr-purge           — daily at 03:00 UTC
   workflow_dispatch:
     inputs:
@@ -51,6 +59,7 @@ on:
           - process-email-queue
           - release-escrow
           - reconcile-paystack
+          - reconcile-fulfilment
           - gdpr-purge
 
 # The offsets (:17, :43) keep these off the top of the hour, when GitHub's
@@ -90,6 +99,7 @@ jobs:
             '*/15 * * * *') echo "path=process-email-queue" >> "$GITHUB_OUTPUT" ;;
             '17 * * * *')   echo "path=release-escrow"      >> "$GITHUB_OUTPUT" ;;
             '43 */6 * * *') echo "path=reconcile-paystack"  >> "$GITHUB_OUTPUT" ;;
+            '51 */6 * * *') echo "path=reconcile-fulfilment" >> "$GITHUB_OUTPUT" ;;
             '0 3 * * *')    echo "path=gdpr-purge"          >> "$GITHUB_OUTPUT" ;;
             *)              echo "path=${{ inputs.job }}"   >> "$GITHUB_OUTPUT" ;;
           esac
