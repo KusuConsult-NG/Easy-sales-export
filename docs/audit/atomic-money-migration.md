@@ -657,7 +657,7 @@ refund from three, dispute resolution from two. It attempts each in turn and
 stops on the first win. Race-safe, because once any attempt succeeds the row
 holds the target status and every other attempt fails against all of them.
 
-## Remaining runTransaction sites: 90, and a way to prioritise them
+## Remaining runTransaction sites: 86, and a way to prioritise them
 
 Converting file by file has diminishing returns — most of the remaining sites
 change a status nobody pays against. The ones worth reading first are those
@@ -671,7 +671,6 @@ By that measure, the unconverted files with the most money in them are:
 
 | File | Why it is on the list |
 |---|---|
-| `cooperative/_admin.ts` | admin-side contribution and withdrawal handling |
 | `actions/export.ts`, `export-payment.ts` | export investment payments |
 | `actions/order-management.ts` | order state and seller earnings |
 | `actions/disputes.ts` | dispute payouts |
@@ -811,6 +810,109 @@ bug and a lost payment, but somebody has to run the refund.
 `increment_within_ceiling` treats a missing ceiling as unbounded. Events created
 without `maxParticipants` must keep accepting registrations; refusing them would
 break every uncapped session on the platform.
+
+## Verified in PRODUCTION, 2026-08-09
+
+Everything above this line was only ever checked on staging. The production
+Supabase project was queried directly, and **every Postgres function the code
+calls exists there at the version the code expects**:
+
+```sql
+SELECT proname, pg_get_function_identity_arguments(oid) AS args
+  FROM pg_proc
+ WHERE proname IN (
+   'apply_array_ops','apply_document_patch','apply_increments',
+   'claim_payment_once','claim_status_transition','credit_wallet_once',
+   'debit_jsonb_balance','debit_wallet_locked','debit_wallet_once',
+   'decrement_many_or_fail','increment_within_ceiling','merge_raw_data',
+   'platform_revenue_totals'
+ );
+```
+
+All 13 present, signatures matching every call site — including the `p_status`
+parameter that distinguishes `credit_wallet_once` from its `005` definition.
+
+**Two traps that a name-only check would have walked into.**
+
+First, `proname` alone proves nothing about *version*. Several migrations
+redefine a function without changing its parameters, and the older definition
+would resolve happily and then behave wrong. Probe the body instead:
+
+```sql
+SELECT proname,
+       pg_get_functiondef(oid) LIKE '%string_to_array%' AS is_014,
+       pg_get_functiondef(oid) LIKE '%raw_data%'        AS is_011
+  FROM pg_proc
+ WHERE proname IN ('debit_jsonb_balance','credit_wallet_once','debit_wallet_once');
+```
+
+Confirmed: `debit_jsonb_balance` is the `014` version with dotted-path support
+(WAVE earnings withdrawal depends on it), and the two wallet functions are the
+`011` versions that keep `raw_data.balance` and the native column in step.
+
+Second, **grepping TypeScript for `.rpc(` does not find every dependency.**
+`jsonb_set_deep`, `jsonb_array_union` and `jsonb_array_remove` are called from
+*inside* other functions, never from the application. `jsonb_set_deep` is the
+one that matters: `apply_increments` (010), `apply_array_ops` (016) and
+`apply_document_patch` (017) all invoke it, and all three are *earlier*
+migrations than the `018` that creates it — so their presence would not have
+implied it. It is present. Had it not been, those three would have resolved
+fine and thrown at runtime on the first nested-path write, which in this
+codebase is the ordinary write path rather than an edge case.
+
+**What this does NOT cover:** `004_enable_row_level_security.sql` creates no
+functions, so none of this says anything about it — `docs/audit/outstanding-work.md`
+still lists it as pending. Migration `008`'s trigger function
+`enforce_member_active_on_paid` was not covered either.
+
+## Fixed: cooperative/_admin.ts — approve and reject raced each other
+
+The admin side of cooperative withdrawals. Both actions read the withdrawal
+status, compared it to `pending`, and wrote — inside `runTransaction`, which
+takes no lock. The same defect as the wallet withdrawal state machine, and
+worse, because the two actions compete for the same field:
+
+| Race | Result |
+|---|---|
+| approve + reject together | funds released **and** refunded to savings |
+| reject + reject together | `savingsBalance` credited twice — savings grew by twice what was ever withdrawn |
+
+Migration `010` made the second one reliable rather than lossy. Before it, one
+of the two increments was silently dropped, which **accidentally hid the double
+refund**. This is the third time on this page that fixing increments made an
+unguarded check-then-write worse; it is worth expecting by now.
+
+Both transitions are claimed now, and claimed **before** the money moves. A
+crash between the claim and the balance write leaves the request marked
+approved or rejected with the funds still locked — visible to an admin and
+correctable. Refunding first and claiming second is what allowed the double
+refund.
+
+The 24-hour pending hold still gates the claim rather than being checked after
+it. A policy check that runs after the transition is not a policy check.
+
+The other two wrappers in the file — `updateMemberStatus` and the revision flow
+— write status with no guard to claim and no balance to lose. Mechanical
+conversions.
+
+### Proving it
+
+`src/__tests__/unit/cooperative-withdrawal-admin.test.ts` — 6 tests, **5 fail**
+against the pre-fix code.
+
+Getting that number honest took two corrections worth recording, because both
+are easy to repeat:
+
+1. The two "claim is lost" tests originally asserted only on the direct-write
+   spy. The pre-fix code writes through `transaction.update`, a *different*
+   spy, so they passed against exactly the code they exist to catch. They assert
+   on both spies now.
+2. Even then they passed, because the pre-fix code's first `transaction.get`
+   was unstubbed, so it threw before writing anything. The fixture stubs
+   `mockFirestoreTxGet` as well as `mockFirestoreGet`.
+
+A test that passes against the pre-fix code is not evidence. Run the suite
+against the old file before believing it.
 
 ## Fixed: cooperative/_loans.ts — a lost repayment, and a duplicate one
 
@@ -1054,7 +1156,7 @@ can be ruled out.
 | 4 | `src/app/actions/marketplace/_actions.ts` | |
 | 0 | `src/app/actions/loan-actions.ts` | Converted. Dual-control bypass, double disbursement and repayment overdraft all fixed — see above. |
 | 0 | `src/app/actions/cooperative/_loans.ts` | Converted. Lost repayment and missing idempotency fixed — see above. |
-| 4 | `src/app/actions/cooperative/_admin.ts` | |
+| 0 | `src/app/actions/cooperative/_admin.ts` | Converted. Approve/reject withdrawal race fixed — see above. |
 | 3 | `src/app/actions/wave/_admin.ts` | |
 | 3 | `src/app/actions/marketplace/_payment.ts` | Payment claim and stock reservation converted; 3 order-creation transitions remain. |
 | 3 | `src/app/actions/academy/_admin.ts` | |
