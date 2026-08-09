@@ -121,7 +121,7 @@ BEGIN
     LOOP
         v_path := string_to_array(v_key, '.');
         v_raw := format(
-            'jsonb_set(%1$s, %2$L::text[], to_jsonb(COALESCE((%1$s #>> %2$L::text[])::numeric, 0) + %3$L::numeric), true)',
+            'jsonb_set_deep(%1$s, %2$L::text[], to_jsonb(COALESCE((%1$s #>> %2$L::text[])::numeric, 0) + %3$L::numeric))',
             v_raw, v_path, v_val
         );
     END LOOP;

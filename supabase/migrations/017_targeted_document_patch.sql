@@ -104,7 +104,9 @@ BEGIN
         SELECT k, v FROM jsonb_each(COALESCE(p_paths, '{}'::jsonb)) AS t(k, v)
     LOOP
         v_path := string_to_array(v_key, '.');
-        v_raw := format('jsonb_set(%s, %L::text[], %L::jsonb, true)', v_raw, v_path, v_val);
+        -- jsonb_set_deep, not jsonb_set: the parent may not exist yet, and
+        -- jsonb_set would silently discard the write. See migration 018.
+        v_raw := format('jsonb_set_deep(%s, %L::text[], %L::jsonb)', v_raw, v_path, v_val);
     END LOOP;
 
     -- 3. Deletes, last, so they win.

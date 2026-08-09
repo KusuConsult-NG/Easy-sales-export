@@ -167,14 +167,14 @@ BEGIN
 
         IF v_ops ? 'union' THEN
             v_raw := format(
-                'jsonb_set(%1$s, %2$L::text[], jsonb_array_union(COALESCE(%1$s #> %2$L::text[], ''[]''::jsonb), %3$L::jsonb), true)',
+                'jsonb_set_deep(%1$s, %2$L::text[], jsonb_array_union(COALESCE(%1$s #> %2$L::text[], ''[]''::jsonb), %3$L::jsonb))',
                 v_raw, v_path, v_ops -> 'union'
             );
         END IF;
 
         IF v_ops ? 'remove' THEN
             v_raw := format(
-                'jsonb_set(%1$s, %2$L::text[], jsonb_array_remove(COALESCE(%1$s #> %2$L::text[], ''[]''::jsonb), %3$L::jsonb), true)',
+                'jsonb_set_deep(%1$s, %2$L::text[], jsonb_array_remove(COALESCE(%1$s #> %2$L::text[], ''[]''::jsonb), %3$L::jsonb))',
                 v_raw, v_path, v_ops -> 'remove'
             );
         END IF;
