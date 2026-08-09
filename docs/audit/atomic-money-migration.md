@@ -221,8 +221,62 @@ could claim it again, and nothing reported an error. It simply stopped being
 purchasable, quietly, forever.
 
 Cancellation now returns the listing to `"available"` and clears the pending
-buyer. Worth checking production for listings sitting at `"verified"` — each one
-is a property nobody can buy.
+buyer. ### CORRECTION, 2026-08-09
+
+The paragraph above originally said `"verified"` is not a valid Property status
+and that every listing sitting at `"verified"` is stuck. **Both claims were
+wrong**, and the production fix they implied — a blanket
+`verified → available` UPDATE — would have removed every admin-verified land
+listing from the public marketplace.
+
+`"verified"` is the land module's approved state:
+
+```js
+// land-actions.ts
+status: validated.verified ? 'verified' : 'rejected',
+...
+_getVerifiedLandListings → _getLandListings({ status: 'verified' })
+```
+
+The real defect is that `LAND_LISTINGS` is shared by two modules with
+incompatible status vocabularies:
+
+| Module | Lifecycle | Reads |
+|---|---|---|
+| `land-actions` | `pending_verification` → `verified` / `rejected` → `deleted` | public view queries `status = 'verified'` |
+| `farm-nation` | creates as `available`; purchase requires `available` | — |
+
+A listing is therefore **visible in one module or purchasable in the other,
+never both**. A land listing an admin verified cannot be bought through
+farm-nation at all; a farm-nation property never appears in the verified land
+view.
+
+Restoring `"available"` on cancellation is still correct, because only a
+farm-nation listing can reach that path — a `"verified"` listing cannot be
+purchased in the first place.
+
+**If you want to find listings genuinely stuck by the old cancel bug**, do not
+select on status alone. Select the ones that have a cancelled farm-nation
+purchase against them:
+
+```sql
+SELECT l.id, l.raw_data->>'name' AS name, l.raw_data->>'status' AS status
+  FROM document_collections l
+  JOIN document_collections t
+    ON t.collection_name = 'farm_nation_transactions'
+   AND t.raw_data->>'propertyId' = l.id
+   AND t.raw_data->>'status' = 'cancelled'
+ WHERE l.collection_name = 'land_listings'
+   AND l.raw_data->>'status' = 'verified';
+```
+
+Those are listings that went `available → pending → cancelled → verified` and
+can no longer be bought. Everything else at `"verified"` is a normal,
+correctly-approved land listing and must be left alone.
+
+**The vocabulary split itself needs a decision, not a patch:** either the two
+modules agree on one lifecycle, or farm-nation stops sharing the collection.
+Until then, any status written by one module is invisible to the other.
 
 ## Fixed: admin withdrawal payout
 

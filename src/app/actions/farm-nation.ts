@@ -683,10 +683,25 @@ async function _cancelPurchaseRequestAction(requestId: string): Promise<ActionRe
 
         // Return the property to the pool.
         //
-        // This used to set "verified", which is not one of the statuses a
-        // Property can hold — the union is available | pending | sold | leased —
-        // and purchasing requires "available". So cancelling a purchase left the
-        // listing permanently unbuyable: no buyer could ever claim it again.
+        // This used to set "verified", which left the listing unbuyable:
+        // purchasing requires "available", so no buyer could claim it again.
+        //
+        // "verified" is NOT an invalid status — it is the land module's
+        // admin-approved state, and getVerifiedLandListings queries exactly
+        // that. The problem is that LAND_LISTINGS is shared by two modules with
+        // incompatible vocabularies:
+        //
+        //   land-actions   pending_verification → verified / rejected → deleted
+        //                  public view queries status = 'verified'
+        //   farm-nation    creates as "available"; purchase requires "available"
+        //
+        // So a listing is visible in one module or purchasable in the other,
+        // never both. Restoring "available" here is right for a listing that
+        // came through farm-nation — which is the only kind that can reach this
+        // path, since a "verified" listing cannot be purchased in the first
+        // place. The underlying split is recorded in
+        // docs/audit/atomic-money-migration.md and needs a decision, not a
+        // patch.
         if (requestData?.propertyId) {
             await db.collection(COLLECTIONS.LAND_LISTINGS).doc(requestData.propertyId).update({
                 status: "available",
