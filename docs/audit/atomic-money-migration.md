@@ -657,7 +657,7 @@ refund from three, dispute resolution from two. It attempts each in turn and
 stops on the first win. Race-safe, because once any attempt succeeds the row
 holds the target status and every other attempt fails against all of them.
 
-## Remaining runTransaction sites: 94, and a way to prioritise them
+## Remaining runTransaction sites: 90, and a way to prioritise them
 
 Converting file by file has diminishing returns — most of the remaining sites
 change a status nobody pays against. The ones worth reading first are those
@@ -672,7 +672,6 @@ By that measure, the unconverted files with the most money in them are:
 | File | Why it is on the list |
 |---|---|
 | `cooperative/_admin.ts` | admin-side contribution and withdrawal handling |
-| `cooperative/_loans.ts` | loan disbursement and repayment |
 | `actions/export.ts`, `export-payment.ts` | export investment payments |
 | `actions/order-management.ts` | order state and seller earnings |
 | `actions/disputes.ts` | dispute payouts |
@@ -812,6 +811,87 @@ bug and a lost payment, but somebody has to run the refund.
 `increment_within_ceiling` treats a missing ceiling as unbounded. Events created
 without `maxParticipants` must keep accepting registrations; refusing them would
 break every uncapped session on the platform.
+
+## Fixed: cooperative/_loans.ts — a lost repayment, and a duplicate one
+
+Four wrappers, two of them hiding money defects.
+
+### submitRepaymentAction lost concurrent repayments
+
+```js
+const newPaidAmount = (installmentData.paidAmount || 0) + data.amount;
+transaction.update(installmentRef, { paidAmount: newPaidAmount, ... });
+```
+
+Read in JavaScript, added in JavaScript, written back as an absolute value —
+the exact shape migration `010` exists for, inside a wrapper that takes no lock.
+Two repayments landing together both read the same `paidAmount` and the second
+write overwrote the first. **The member paid twice and was credited once.**
+
+`paidAmount` moves by `FieldValue.increment` now, which applies the addition in
+SQL.
+
+The status beside it is still derived from a read, so two *different* references
+paid at the same moment can leave the label one payment behind. That is
+deliberate: the amount stays correct, and the next payment — or the
+all-instalments sweep at the end of the action — corrects the label. Money
+first, labels best-effort. The reverse ordering is what lost the payment.
+
+### submitRepaymentAction had no idempotency at all
+
+Nothing claimed `data.paymentReference`. The same Paystack reference submitted
+twice — a retried webhook, a double-clicked button, a reloaded confirmation
+page — recorded the payment twice and credited the instalment twice. This is
+rule 2 of this document, unimplemented on a path that takes a payment reference
+as an argument.
+
+`claimPaymentOnce` now gates the whole action, and a duplicate returns success
+without writing, per rule 3.
+
+The claim records `status: "loan_repayment"`, not `"completed"`. These
+`processed_payments` rows did not exist before this change, so writing them as
+completed would have moved reported revenue as a side effect of an idempotency
+fix. Whether loan repayments *should* count toward revenue is a real question,
+and not one an idempotency fix gets to answer silently.
+
+### disburseLoanAction was a check-then-write
+
+Read the status, compare to `approved`, write `disbursed`, with no lock. Two
+admins clicking Disburse together both wrote — two audit entries and two "Funds
+Disbursed" notifications for one loan. Claimed now.
+
+### The three disbursement paths do not agree, and this needs a decision
+
+Converting `disburseLoanAction` surfaced something a patch cannot fix. Three
+code paths move a loan in `LOAN_APPLICATIONS` to `disbursed`, and each has a
+different idea of whether that means money moved:
+
+| Path | Reached from | What it pays |
+|---|---|---|
+| `admin.ts` → `_approveLoanApplication` | admin portal | **Paystack transfer to the borrower's bank**, on final approval |
+| `cooperative/_loans.ts` → `disburseLoanAction` | `/admin/cooperatives/loans` | **nothing** — records the status only |
+| `loan-actions.ts` → `disburseLoan` | no UI caller | **credits the borrower's wallet** |
+
+They share one status field, so they interlock: whichever runs first takes the
+`approved → disbursed` transition and the others refuse. That interlock is not
+new — the old check-then-write refused on the same condition, less reliably —
+but it means the borrower's money depends on which button an admin happened to
+press.
+
+The combination to worry about is `admin.ts` approving with a Paystack transfer
+and `loan-actions.ts` then crediting the wallet: a bank transfer and a wallet
+credit for one loan. `disburseLoan` has no UI caller today, which is the only
+reason this is a latent problem rather than a live one — but an exported server
+action is reachable whether or not a page calls it.
+
+**This wants a product decision, not a refactor:** does disbursement pay to the
+bank, to the wallet, or is it a bookkeeping status recorded after a manual
+transfer? Once that is settled, two of these three should stop existing.
+
+### Proving it
+
+`src/__tests__/unit/cooperative-loan-repayment.test.ts` — 8 tests, **6 fail**
+against the pre-fix code. The two that pass either way assert a negative.
 
 ## Fixed: loan-actions.ts — a third approval door, and two money races
 
@@ -973,7 +1053,7 @@ can be ruled out.
 | 2 | `src/app/actions/marketplace/_escrow_actions.ts` | Release and refund converted; 2 non-money transitions remain. |
 | 4 | `src/app/actions/marketplace/_actions.ts` | |
 | 0 | `src/app/actions/loan-actions.ts` | Converted. Dual-control bypass, double disbursement and repayment overdraft all fixed — see above. |
-| 4 | `src/app/actions/cooperative/_loans.ts` | |
+| 0 | `src/app/actions/cooperative/_loans.ts` | Converted. Lost repayment and missing idempotency fixed — see above. |
 | 4 | `src/app/actions/cooperative/_admin.ts` | |
 | 3 | `src/app/actions/wave/_admin.ts` | |
 | 3 | `src/app/actions/marketplace/_payment.ts` | Payment claim and stock reservation converted; 3 order-creation transitions remain. |

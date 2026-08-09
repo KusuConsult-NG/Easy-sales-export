@@ -6,6 +6,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
+import { claimPaymentOnce } from "@/lib/wallet-ledger";
 import { needsDualControl } from "@/lib/loan-approval-policy";
 import { Timestamp } from "@/lib/firestore-compat";
 import { createAdminAuditLog } from "@/lib/audit-log";
@@ -155,18 +156,27 @@ export async function submitLoanApplicationAction(formData: {
             appliedAt: FieldValue.serverTimestamp(),
         };
 
-        // ATOMIC TRANSACTION: Double-Lending & Eligibility Verification
-        const docRef = await db.runTransaction(async (transaction) => {
+        // The label said ATOMIC TRANSACTION. It was neither: the adapter queues
+        // the writes and flushes them after the callback returns, with no
+        // isolation and no rollback.
+        //
+        // The double-lending and eligibility reads below are advisory, and were
+        // advisory inside the wrapper too — two applications submitted together
+        // both read an empty result and both create a pending row. Closing that
+        // needs a uniqueness constraint on a member's open applications. It is
+        // bounded: a pending application disburses nothing until an approval,
+        // and approval is claimed.
+        const docRef = await (async () => {
             // 1. Double-lending verification
             const generalLoansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
                 .where("userId", "==", formData.userId)
                 .where("status", "in", ["pending", "reviewing", "approved", "partially_approved", "disbursed"]);
-            const generalLoansSnap = await transaction.get(generalLoansQuery);
+            const generalLoansSnap = await generalLoansQuery.get();
 
             const coopLoansQuery = db.collection(COLLECTIONS.COOPERATIVE_LOANS)
                 .where("memberId", "==", formData.userId)
                 .where("status", "in", ["pending", "reviewing", "approved", "partially_approved", "disbursed"]);
-            const coopLoansSnap = await transaction.get(coopLoansQuery);
+            const coopLoansSnap = await coopLoansQuery.get();
 
             if (!generalLoansSnap.empty || !coopLoansSnap.empty) {
                 throw new Error("Active or pending loan application already exists platform-wide.");
@@ -176,7 +186,7 @@ export async function submitLoanApplicationAction(formData: {
             const activeLoansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
                 .where("userId", "==", formData.userId)
                 .where("status", "in", ["approved", "disbursed"]);
-            const activeLoansSnap = await transaction.get(activeLoansQuery);
+            const activeLoansSnap = await activeLoansQuery.get();
 
             const currentLoanBalance = activeLoansSnap.docs.reduce((acc, doc) => {
                 const data = doc.data();
@@ -194,9 +204,9 @@ export async function submitLoanApplicationAction(formData: {
             }
 
             const newDocRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc();
-            transaction.set(newDocRef, application);
+            await newDocRef.set(application);
             return newDocRef;
-        });
+        })();
 
         await createAdminAuditLog({
             action: "loan_applied",
@@ -638,9 +648,13 @@ export async function approveLoanAction(
         const effectiveAdminId = session.user.id;
         const appRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(applicationId);
 
-        // Transactional Locking to prevent Double Lending
-        const txResult = await db.runTransaction(async (transaction) => {
-            const appDoc = await transaction.get(appRef);
+        // "Transactional Locking to prevent Double Lending" was the label, and
+        // it locked nothing. These are pre-checks, and the comment below the
+        // block already said they are advisory — the wrapper only made them
+        // look protected. What prevents a double approval is the claim further
+        // down, not this.
+        const txResult = await (async () => {
+            const appDoc = await appRef.get();
 
             if (!appDoc.exists) {
                 throw new Error("Application not found");
@@ -660,12 +674,12 @@ export async function approveLoanAction(
             const otherGeneralLoansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
                 .where("userId", "==", appData.userId)
                 .where("status", "in", ["pending", "reviewing", "approved", "partially_approved", "disbursed"]);
-            const otherGeneralLoansSnap = await transaction.get(otherGeneralLoansQuery);
+            const otherGeneralLoansSnap = await otherGeneralLoansQuery.get();
 
             const otherCoopLoansQuery = db.collection(COLLECTIONS.COOPERATIVE_LOANS)
                 .where("memberId", "==", appData.userId)
                 .where("status", "in", ["pending", "reviewing", "approved", "partially_approved", "disbursed"]);
-            const otherCoopLoansSnap = await transaction.get(otherCoopLoansQuery);
+            const otherCoopLoansSnap = await otherCoopLoansQuery.get();
 
             const otherGeneralLoansCount = otherGeneralLoansSnap.docs.filter(doc => doc.id !== applicationId).length;
             const otherCoopLoansCount = otherCoopLoansSnap.docs.filter(doc => doc.id !== applicationId).length;
@@ -682,7 +696,7 @@ export async function approveLoanAction(
             }
 
             return { appData };
-        });
+        })();
 
         // ── APPROVAL ─────────────────────────────────────────────────────────
         //
@@ -874,26 +888,40 @@ export async function disburseLoanAction(
         const effectiveAdminId = session.user.id;
         const appRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(applicationId);
 
-        // Transactional execution
-        await db.runTransaction(async (transaction) => {
-            const appDoc = await transaction.get(appRef);
-
-            if (!appDoc.exists) {
-                throw new Error("Application not found");
-            }
-
-            const appData = appDoc.data() as LoanApplication;
-
-            if (appData.status !== "approved") {
-                throw new Error(appData.status === "disbursed" ? "Loan already disbursed" : "Loan must be approved before disbursement");
-            }
-
-            transaction.update(appRef, {
-                status: "disbursed",
-                disbursedAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
-            });
+        // Read the status, compare it to "approved", write "disbursed" — inside
+        // runTransaction, which takes no lock. Two admins clicking Disburse
+        // together both read "approved" and both wrote, producing two audit
+        // entries and two "Funds Disbursed" notifications for one loan.
+        //
+        // Claimed now, so exactly one wins.
+        //
+        // NOTE: this function moves no money, and that is not an oversight of
+        // this change — it never did. See the note in
+        // docs/audit/atomic-money-migration.md about the three ways this
+        // codebase disburses a loan, which do not agree with one another.
+        const disburseClaim = await claimStatusTransitionFromAny({
+            collection: COLLECTIONS.LOAN_APPLICATIONS,
+            id: applicationId,
+            fromAny: ["approved"],
+            to: "disbursed",
+            patch: {
+                disbursedAt: new Date().toISOString(),
+                disbursedBy: effectiveAdminId,
+                updatedAt: new Date().toISOString(),
+            },
         });
+
+        if (!disburseClaim.claimed) {
+            return {
+                success: false as const,
+                error: disburseClaim.status === null
+                    ? "Application not found"
+                    : disburseClaim.status === "disbursed"
+                        ? "Loan already disbursed"
+                        : "Loan must be approved before disbursement",
+                data: null,
+            };
+        }
 
         // Audit & Notification (Outside transaction to avoid side effects if transaction retries, though strictly audit should be ideally consistent. 
         // For Firestore, it's okay to do this after success since we can't easily roll back external API calls, but Audit Log is another DB write.
@@ -1129,8 +1157,50 @@ export async function submitRepaymentAction(data: {
         let calculatedStatus: "pending" | "paid" | "overdue" | "partial" = "pending";
         let finalInstallmentData: any = null;
 
-        await db.runTransaction(async (transaction) => {
-            const installmentDoc = await transaction.get(installmentRef);
+        // WHAT WAS WRONG HERE
+        // -------------------
+        // Two defects, both about money rather than status.
+        //
+        // 1. LOST UPDATE. `newPaidAmount = (paidAmount || 0) + amount` was
+        //    computed in JavaScript and written back as an absolute value,
+        //    inside runTransaction, which takes no lock. Two repayments landing
+        //    together both read the same paidAmount and the second write
+        //    overwrote the first: the member paid twice and was credited once.
+        //    This is the exact shape migration 010 exists for.
+        //
+        // 2. NO IDEMPOTENCY. Nothing claimed data.paymentReference, so
+        //    submitting the same Paystack reference twice — a retried webhook,
+        //    a double-clicked form, a reloaded confirmation page — recorded the
+        //    payment twice and credited the instalment twice.
+        //
+        // The reference is claimed first, then the instalment is credited with
+        // FieldValue.increment, which applies the addition in SQL.
+        const claim = await claimPaymentOnce({
+            reference: data.paymentReference,
+            userId: data.userId,
+            amount: data.amount,
+            type: "loan_repayment",
+            source: "cooperative",
+            // NOT "completed": platform_revenue_totals() sums completed rows as
+            // revenue, and these rows never used to exist at all. Recording them
+            // as completed would change reported revenue as a side effect of an
+            // idempotency fix, which is not this change's business.
+            status: "loan_repayment",
+            metadata: { loanId: data.loanId, installmentId: data.installmentId },
+        });
+
+        if (!claim.claimed) {
+            // Already applied. A success, not an error — see the rules in
+            // src/lib/wallet-ledger.ts.
+            logger.warn("[submitRepaymentAction] duplicate payment reference ignored", {
+                reference: data.paymentReference,
+                loanId: data.loanId,
+            });
+            return { error: null, success: true as const, penalty: 0, data: null };
+        }
+
+        {
+            const installmentDoc = await installmentRef.get();
             if (!installmentDoc.exists) {
                 throw new Error("Installment not found");
             }
@@ -1138,7 +1208,6 @@ export async function submitRepaymentAction(data: {
             const installmentData = installmentDoc.data() as Record<string, any>;
             const dueDate = (installmentData.dueDate as Timestamp).toDate();
 
-            // Check if already paid inside transaction
             if (installmentData.status === "paid") {
                 throw new Error("Installment already fully paid");
             }
@@ -1167,18 +1236,23 @@ export async function submitRepaymentAction(data: {
                 daysOverdue
             };
 
-            // Update installment
-            transaction.update(installmentRef, {
-                paidAmount: newPaidAmount,
+            // paidAmount moves by increment, never by writing a total computed
+            // in JavaScript. The status beside it IS still derived from a read,
+            // so two DIFFERENT references paid at the same moment can leave it
+            // one payment behind — the amount stays correct, and the next
+            // payment or the sweep below corrects the label. Money first,
+            // labels best-effort: the reverse is what lost the payment.
+            await installmentRef.update({
+                paidAmount: FieldValue.increment(data.amount),
                 status: calculatedStatus,
                 paidAt: calculatedStatus === "paid" ? FieldValue.serverTimestamp() : installmentData.paidAt || null,
                 penaltyAmount: penalty,
                 daysOverdue: daysOverdue,
             });
 
-            // Create payment record (Atomic add)
+            // Create payment record
             const paymentRef = db.collection(COLLECTIONS.LOAN_PAYMENTS).doc();
-            transaction.set(paymentRef, {
+            await paymentRef.set({
                 loanId: data.loanId,
                 installmentId: data.installmentId,
                 userId: data.userId,
@@ -1187,20 +1261,7 @@ export async function submitRepaymentAction(data: {
                 penaltyPaid: penalty > 0 ? Math.min(data.amount, penalty) : 0,
                 paidAt: FieldValue.serverTimestamp(),
             });
-
-            // Check if loan is fully repaid
-            // This reads ALL siblings. It might be expensive but necessary for consistency.
-            // Alternatively, we can check this OUTSIDE the transaction if we accept eventual consistency for "repaid" status,
-            // but strict financial audits prefer strong consistency.
-            // However, querying inside a transaction requires all reads before writes.
-            // We can't query "all loan_repayments" easily inside this specific document lock unless we lock them all.
-            // Compromise: We check for loan repayment completion AFTER this transaction in a separate check or optimistic update.
-            // But waiting is safer. Let's do a simple check: if this was the LAST unpaid installment.
-
-            // To properly handle "Locking the entire loan schedule", we would need to read all installments.
-            // For now, updating the installment safely is the P0. Updating the Loan Status can be done optimistically or in a secondary step
-            // as it doesn't risk "money loss", just "status lag".
-        });
+        }
 
         // Post-transaction: Check if all installments are paid to update Loan Status
         // This is safe to run after because even if it races, the worst case is the loan status updates to 'repaid' twice.
