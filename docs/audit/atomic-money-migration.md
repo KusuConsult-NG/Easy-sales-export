@@ -460,6 +460,41 @@ By that measure, the unconverted files with the most money in them are:
 Everything else is a status change with no money attached to it, and can be
 converted opportunistically when the file is touched for another reason.
 
+## Fixed: the LAND_LISTINGS vocabulary split
+
+Two modules shared one collection without agreeing what a status meant:
+
+| Module | Creates | Approves as | Public view queries |
+|---|---|---|---|
+| `land-actions` | `pending_verification` | `verified` / `rejected` | `status = 'verified'` |
+| `farm-nation` | `available` | — | (no filter at all) |
+
+An admin-verified land listing could not be bought through farm-nation, because
+purchase required exactly `"available"`. A farm-nation property never appeared
+in the verified land view. **Half the inventory was unreachable from each side.**
+
+Worse, farm-nation's browse applied **no status filter whatsoever**, so buyers
+were shown listings awaiting verification, ones an admin had explicitly
+rejected, and soft-deleted ones — and could start a purchase that failed at the
+end.
+
+`src/lib/land-listing-status.ts` is now the single definition. It treats
+`verified` and `available` as synonyms rather than renaming either, which avoids
+a data migration over live listings — and a migration here would be the risky
+kind, because the two modules would disagree while it ran.
+
+Three changes follow from it:
+
+- **Browse** filters to purchasable listings.
+- **Purchase** accepts either spelling.
+- **Cancellation** restores the status the listing was reserved *from*, recorded
+  at reservation time via `claimStatusTransitionFromAny({ recordPreviousAs })`.
+  Hardcoding `"available"` — which an earlier fix did — silently drops an
+  admin-approved listing out of the public land view.
+
+If the vocabularies are ever genuinely unified, that file is the only place that
+has to change.
+
 ## Not yet migrated
 
 Ordered by `runTransaction` count. Presence here is not proof of a live defect —

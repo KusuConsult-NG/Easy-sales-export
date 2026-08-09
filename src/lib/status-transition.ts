@@ -94,8 +94,17 @@ export async function claimStatusTransitionFromAny(params: {
     fromAny: string[];
     to: string;
     patch?: Record<string, any>;
+    /**
+     * Field to record the status this transition came from.
+     *
+     * With several possible starting states, the caller usually cannot tell
+     * afterwards which one won — and needs to, if the transition is ever
+     * reversed. A land listing reserved from `verified` must go back to
+     * `verified`, not to whichever value the code happens to hardcode.
+     */
+    recordPreviousAs?: string;
 }): Promise<TransitionResult> {
-    const { collection, id, fromAny, to, patch } = params;
+    const { collection, id, fromAny, to, patch, recordPreviousAs } = params;
 
     if (fromAny.length === 0) {
         throw new Error("claimStatusTransitionFromAny: fromAny must not be empty");
@@ -104,7 +113,11 @@ export async function claimStatusTransitionFromAny(params: {
     let last: TransitionResult = { claimed: false, status: null };
 
     for (const from of fromAny) {
-        last = await claimStatusTransition({ collection, id, from, to, patch });
+        const attemptPatch = recordPreviousAs
+            ? { ...(patch ?? {}), [recordPreviousAs]: from }
+            : patch;
+
+        last = await claimStatusTransition({ collection, id, from, to, patch: attemptPatch });
         if (last.claimed) return last;
         // A missing record will not become present on the next attempt.
         if (last.status === null) return last;
