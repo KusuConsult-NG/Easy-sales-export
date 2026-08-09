@@ -165,6 +165,36 @@ one-line rollback at the bottom of the migration to hand. Production is a
 different database with real row volumes; staging proves the mechanism, not the
 data.
 
+
+### The cron endpoints were never scheduled
+
+Found 2026-08-09, while tracing why eight paid cooperative registrations were
+never fulfilled.
+
+`src/app/api/cron/` contains four endpoints written to run on a schedule.
+**Nothing scheduled them.** There is no `cron` block in `railway.json`, no
+`vercel.json`, and no workflow that called them. They existed as HTTP endpoints
+that nothing invoked.
+
+| Endpoint | What its absence meant |
+|---|---|
+| `reconcile-paystack` | The safety net for payments the webhook missed. It is what would have caught the eight unfulfilled registrations. |
+| `release-escrow` | Escrow auto-release. Without it a seller is paid only when the buyer explicitly confirms delivery; otherwise funds sit in escrow indefinitely. |
+| `process-email-queue` | Queued mail sent only when something else happens to drain the queue. |
+| `gdpr-purge` | Data retention — a legal obligation rather than a convenience. |
+
+`.github/workflows/scheduled-jobs.yml` now invokes all four. **It does nothing
+until two repository secrets are set:** `CRON_SECRET` (matching what the app
+checks) and `PRODUCTION_URL`. Until they are, every run fails loudly at a
+preflight step rather than silently no-opping — a scheduler that quietly does
+nothing is how this went unnoticed.
+
+Note what this does NOT settle: whether the Paystack webhook is reaching
+`/api/webhooks/paystack` at all. No `processed_payments` row in 30 days carries
+`claimedAt`, which only that route writes. The reconciliation job makes the
+webhook's absence survivable; it does not explain it. That still wants checking
+in the Paystack dashboard.
+
 ### Atomic money operations
 `runTransaction` reads, then replays writes sequentially, with no locking and no
 rollback. Two requests arriving together can both pass an "already processed?"
