@@ -8,7 +8,8 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { claimStatusTransition } from "@/lib/status-transition";
+import { claimStatusTransition, claimStatusTransitionFromAny } from "@/lib/status-transition";
+import { PURCHASABLE_STATUSES, isPurchasable, isBrowsable, statusAfterCancellation } from "@/lib/land-listing-status";
 import { isValidState, isValidLGA, normalizeLocation } from "@/lib/locations";
 import { invalidateUserCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { serializeDoc, serializeDocs, serializeValue } from "@/lib/firestore-serialize";
@@ -102,6 +103,13 @@ async function _getPropertiesAction(filters?: {
         let properties = serializeDocs<Property>(snapshot.docs);
 
         // Apply filters (Client-side for now as Firestore is limited)
+        // Only show listings that can actually be bought.
+        //
+        // There was no status filter here at all, so buyers were shown listings
+        // awaiting verification, ones an admin had explicitly rejected, and
+        // soft-deleted ones — and could start a purchase that then failed.
+        properties = properties.filter((p) => isBrowsable(p.status));
+
         if (filters) { 
             if (filters.search) {
                 const searchLower = filters.search.toLowerCase();
@@ -493,7 +501,10 @@ async function _initiatePropertyPurchaseAction(
         }
 
         const property = propertyDoc.data() as Property;
-        if (property.status !== "available") { 
+        // "verified" and "available" both mean approved and for sale — see
+        // src/lib/land-listing-status.ts. Requiring only "available" made every
+        // admin-verified land listing unbuyable.
+        if (!isPurchasable(property.status)) { 
             return { success: false as const, error: "Property is no longer available", data: null, meta: null };
         }
 
@@ -528,12 +539,17 @@ async function _initiatePropertyPurchaseAction(
         }
         const propData = propSnapPre.data() as Property;
 
-        const claim = await claimStatusTransition({
+        const claim = await claimStatusTransitionFromAny({
             collection: COLLECTIONS.LAND_LISTINGS,
             id: propertyId,
-            from: "available",
+            fromAny: [...PURCHASABLE_STATUSES],
             to: "pending",
             patch: { pendingBuyerId: session.user.id, pendingSince: new Date().toISOString() },
+            // Records which status the listing was reserved FROM, so cancelling
+            // can put it back rather than guessing. A listing reserved from
+            // "verified" must return to "verified" or it drops out of the
+            // public land view.
+            recordPreviousAs: "previousStatus",
         });
 
         if (!claim.claimed) {
@@ -703,9 +719,13 @@ async function _cancelPurchaseRequestAction(requestId: string): Promise<ActionRe
         // docs/audit/atomic-money-migration.md and needs a decision, not a
         // patch.
         if (requestData?.propertyId) {
-            await db.collection(COLLECTIONS.LAND_LISTINGS).doc(requestData.propertyId).update({
-                status: "available",
+            const listingRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(requestData.propertyId);
+            const listingSnap = await listingRef.get();
+
+            await listingRef.update({
+                status: statusAfterCancellation(listingSnap.data()?.previousStatus),
                 pendingBuyerId: null,
+                previousStatus: null,
                 updatedAt: FieldValue.serverTimestamp(),
             });
         }
