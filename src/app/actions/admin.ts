@@ -20,6 +20,7 @@ import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { claimStatusTransition, claimStatusTransitionFromAny } from "@/lib/status-transition";
+import { needsDualControl } from "@/lib/loan-approval-policy";
 import { createAdminAuditLog, logAdminAction } from "@/lib/audit-log";
 import { serializeDoc, serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { normalizeAggressive } from "@/lib/canonical/normalizer";
@@ -1092,10 +1093,13 @@ async function _approveLoanApplication(
         //    approving together both read an empty chain, so one approval was
         //    silently overwritten; two checkers both passed and BOTH reached
         //    the payout.
-        const MAKER_CHECKER_THRESHOLD = 1000000;
-        const needsDualControl = loanData.amount >= MAKER_CHECKER_THRESHOLD;
+        // The threshold used to be declared here, and again in
+        // cooperative/_loans.ts, and not at all in loan-actions.ts — which is
+        // how /loans/approve ended up approving ₦10m loans on one signature.
+        // It lives in src/lib/loan-approval-policy.ts now.
+        const requiresDualControl = needsDualControl(loanData.amount);
 
-        if (needsDualControl && !approvalChain.firstApprover) {
+        if (requiresDualControl && !approvalChain.firstApprover) {
             // First approval. Claiming the transition is what stops two admins
             // both becoming the maker.
             const makerClaim = await claimStatusTransitionFromAny({
@@ -1139,7 +1143,7 @@ async function _approveLoanApplication(
             };
         }
 
-        if (needsDualControl) {
+        if (requiresDualControl) {
             // Second approval. The self-approval check is safe to read here:
             // firstApprover is only ever written by the claim above, which also
             // moved the status to partially_approved, so it cannot change under
@@ -1157,13 +1161,13 @@ async function _approveLoanApplication(
         const finalClaim = await claimStatusTransitionFromAny({
             collection: COLLECTIONS.LOAN_APPLICATIONS,
             id: applicationId,
-            fromAny: needsDualControl ? ["partially_approved"] : ["pending", "reviewing"],
+            fromAny: requiresDualControl ? ["partially_approved"] : ["pending", "reviewing"],
             to: "approved",
             patch: {
                 reviewedBy: adminId,
                 reviewedAt: nowIso,
                 updatedAt: nowIso,
-                ...(needsDualControl
+                ...(requiresDualControl
                     ? {
                         // Written whole because the CAS patch shallow-merges,
                         // so a nested update would drop the maker's record.
@@ -1192,7 +1196,7 @@ async function _approveLoanApplication(
             userId: adminId,
             targetId: applicationId,
             targetType: "application",
-            metadata: { amount: loanData.amount, role: needsDualControl ? "Checker" : "Approver" },
+            metadata: { amount: loanData.amount, role: requiresDualControl ? "Checker" : "Approver" },
         });
 
         // --- DISBURSEMENT (Outside Transaction) ---

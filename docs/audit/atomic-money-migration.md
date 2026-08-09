@@ -43,8 +43,12 @@ Four rules:
 4. **Anything that is not money coming in must not record status `completed`.**
    `global-aggregation.ts` sums `processed_payments` rows with
    `status == "completed"` as revenue. Debits record `wallet_debit`
-   automatically; refunds must pass `status: "refund"` explicitly. Getting this
-   wrong inflates reported revenue rather than breaking anything visibly.
+   automatically; refunds must pass `status: "refund"` explicitly, and platform
+   money paid out to a user — a loan disbursement — must pass
+   `status: "disbursement"`. Getting this wrong inflates reported revenue rather
+   than breaking anything visibly. A credit is not the same thing as income:
+   `creditWalletOnce` is the right call for a disbursement, `"completed"` is
+   the wrong status for one.
 
 ## Done
 
@@ -653,7 +657,7 @@ refund from three, dispute resolution from two. It attempts each in turn and
 stops on the first win. Race-safe, because once any attempt succeeds the row
 holds the target status and every other attempt fails against all of them.
 
-## Remaining runTransaction sites: 98, and a way to prioritise them
+## Remaining runTransaction sites: 94, and a way to prioritise them
 
 Converting file by file has diminishing returns — most of the remaining sites
 change a status nobody pays against. The ones worth reading first are those
@@ -809,6 +813,100 @@ bug and a lost payment, but somebody has to run the refund.
 without `maxParticipants` must keep accepting registrations; refusing them would
 break every uncapped session on the platform.
 
+## Fixed: loan-actions.ts — a third approval door, and two money races
+
+`loan-actions.ts` was next on the priority list below. It is not a wrapper job:
+three of its four `runTransaction` blocks were live defects.
+
+### Dual control did not apply to /loans/approve at all
+
+Three actions approve a loan by writing `status: "approved"` to
+`LOAN_APPLICATIONS`:
+
+| Action | Guard before this change |
+|---|---|
+| `admin.ts` → `_approveLoanApplication` | `cooperatives:approve_loans`, two admins above the threshold |
+| `cooperative/_loans.ts` → `approveLoanAction` | `isAdmin`, two admins above the threshold |
+| `loan-actions.ts` → `approveLoanApplication` | **`roles.includes('admin')`, and nothing else** |
+
+The third is reached from `src/app/loans/approve/page.tsx`. One admin could
+approve a loan of any size through it while the same loan needed two admins
+through either of the others. The maker-checker fix went into two doors of
+three, and the untouched one was the one with the weakest permission check.
+
+Each of the two fixed paths declared its own
+`const MAKER_CHECKER_THRESHOLD = 1000000`. Duplicating the rule is what let the
+third path drift away from it, so the threshold now lives in
+`src/lib/loan-approval-policy.ts` and all three import it. `needsDualControl`
+treats a missing or unparseable amount as requiring two approvers — an approval
+path that cannot tell how much money is involved is the last place to assume the
+cheaper answer.
+
+### The three races
+
+| Path | What it did | Now |
+|---|---|---|
+| `approveLoanApplication` | read status, compared to `pending`, wrote `approved` | `claimStatusTransitionFromAny`, maker branch returns before anything is approved |
+| `disburseLoan` | read status, compared to `approved`, then **credited the wallet** | claim `approved → disbursed`, then `creditWalletOnce` keyed on the loan id |
+| `processLoanRepaymentAction` | read `wallet.balance`, checked sufficiency, decremented | `debitWalletLocked` |
+
+`disburseLoan` is the one that paid real money twice: two disbursements arriving
+together both read `approved`, both passed, and both credited the borrower. It
+now has two independent gates — the status claim, and the reference claim inside
+`credit_wallet_once` — either of which alone is sufficient.
+
+Order matters and is deliberate: status first, money second. A crash between
+them leaves a loan marked disbursed that was never paid, which an admin can see
+and correct. The reverse leaves money out with the loan still `approved`, which
+invites a second disbursement of a loan that was already paid.
+
+`debitWalletLocked`, not `debitWalletOnce`, for repayment: a repayment has no
+stable key. A borrower may legitimately pay ₦5,000 twice, and inventing a
+reference per attempt would either block the second payment or provide
+idempotency in name only. What that path needs is the row lock.
+
+### A disbursement is not revenue
+
+`creditWalletOnce` defaults to recording `status: "completed"` on the
+`processed_payments` row, and `platform_revenue_totals()` sums exactly those
+rows as revenue. A loan disbursement credits a wallet but is platform money
+going **out**, so recording it as completed would have inflated reported revenue
+by every loan disbursed. It is written as `status: "disbursement"`, and the union
+on `creditWalletOnce` grew that third value. The column is free `TEXT`, so this
+needed no migration.
+
+This is rule 4 at the top of this file catching something real. It is worth
+re-reading before converting any path that credits a wallet without a customer
+having paid.
+
+### Two smaller things fixed in passing
+
+- **Repayment completion was measured against the wrong number.** `isFullRepayment`
+  compared a single instalment to the loan total, so a loan settled in two half
+  payments stayed `disbursed` for ever even though `repaidAmount` had reached the
+  full amount. It compares `repaidAmount + amount` now.
+- **The disbursement ledger id used `loanId.substring(0, 8)`.** Two loans sharing
+  an 8-character prefix would overwrite each other's ledger row. It uses the whole
+  id.
+
+### Still not a guard
+
+`submitLoanApplication`'s double-lending check has the same shape as
+`_applyForLoanAction`: two applications submitted together both read an empty
+result and both create a pending row. Unchanged, and recorded here for the same
+reason — it needs a uniqueness constraint on a borrower's open applications, and
+a pending application disburses nothing until an approval that is now claimed.
+
+### Proving it
+
+`src/__tests__/unit/loan-actions-money-paths.test.ts` — 15 tests, run against the
+pre-fix code first, where **11 fail**. The four that pass either way assert a
+negative (nothing was called) and hold under the old code for a different reason;
+they guard against regression rather than proving the fix. The ones that matter —
+a high-value loan not being approved on one signature, the credit being keyed on
+the loan id, the disbursement not being recorded as revenue — all fail before and
+pass after.
+
 ## Dropped: the transaction wrappers in cooperative/_actions.ts
 
 The same conversion as the payment fulfilment paths, for the four remaining
@@ -874,7 +972,7 @@ can be ruled out.
 | 4 | `src/app/actions/vendor-settings.ts` | |
 | 2 | `src/app/actions/marketplace/_escrow_actions.ts` | Release and refund converted; 2 non-money transitions remain. |
 | 4 | `src/app/actions/marketplace/_actions.ts` | |
-| 4 | `src/app/actions/loan-actions.ts` | |
+| 0 | `src/app/actions/loan-actions.ts` | Converted. Dual-control bypass, double disbursement and repayment overdraft all fixed — see above. |
 | 4 | `src/app/actions/cooperative/_loans.ts` | |
 | 4 | `src/app/actions/cooperative/_admin.ts` | |
 | 3 | `src/app/actions/wave/_admin.ts` | |

@@ -6,6 +6,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
+import { needsDualControl } from "@/lib/loan-approval-policy";
 import { Timestamp } from "@/lib/firestore-compat";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { calculateRepaymentSchedule, isEligibleForLoan, getTierInterestRate } from "@/lib/cooperative-tiers";
@@ -703,10 +704,11 @@ export async function approveLoanAction(
         const adminName = session.user.name || session.user.email;
         const nowIso = new Date().toISOString();
 
-        const MAKER_CHECKER_THRESHOLD = 1000000;
-        const needsDualControl = loan.amount >= MAKER_CHECKER_THRESHOLD;
+        // Shared with admin.ts and loan-actions.ts — see
+        // src/lib/loan-approval-policy.ts for why it is not declared here.
+        const requiresDualControl = needsDualControl(loan.amount);
 
-        if (needsDualControl && !approvalChain.firstApprover) {
+        if (requiresDualControl && !approvalChain.firstApprover) {
             const makerClaim = await claimStatusTransitionFromAny({
                 collection: COLLECTIONS.LOAN_APPLICATIONS,
                 id: applicationId,
@@ -732,7 +734,7 @@ export async function approveLoanAction(
                 };
             }
         } else {
-            if (needsDualControl && approvalChain.firstApprover === effectiveAdminId) {
+            if (requiresDualControl && approvalChain.firstApprover === effectiveAdminId) {
                 return {
                     success: false as const,
                     error: "You cannot verify your own approval. Another admin is required.",
@@ -743,13 +745,13 @@ export async function approveLoanAction(
             const finalClaim = await claimStatusTransitionFromAny({
                 collection: COLLECTIONS.LOAN_APPLICATIONS,
                 id: applicationId,
-                fromAny: needsDualControl ? ["partially_approved"] : ["pending", "reviewing"],
+                fromAny: requiresDualControl ? ["partially_approved"] : ["pending", "reviewing"],
                 to: "approved",
                 patch: {
                     reviewedBy: effectiveAdminId,
                     reviewedAt: nowIso,
                     updatedAt: nowIso,
-                    ...(needsDualControl
+                    ...(requiresDualControl
                         ? {
                             // Written whole because the CAS patch shallow-merges.
                             approvalChain: {

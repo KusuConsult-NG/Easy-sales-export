@@ -58,11 +58,18 @@ export async function creditWalletOnce(params: {
     /**
      * Payment status recorded on the processed_payments row.
      *
-     * Leave as "completed" for real money in. Use "refund" — or anything other
-     * than "completed" — when returning money, because global-aggregation sums
-     * completed rows as revenue and a refund is not revenue.
+     * Leave as "completed" for real money in. Use anything else when the credit
+     * is not revenue, because platform_revenue_totals() sums rows whose
+     * raw_data->>'status' is 'completed':
+     *
+     *   - "refund"       — money returned to a user
+     *   - "disbursement" — platform money paid OUT to a user, e.g. a loan.
+     *                      It credits their wallet, so it is a credit; it is
+     *                      the opposite of income, so it must not be summed.
+     *
+     * The column is free TEXT, so adding a value here needs no migration.
      */
-    status?: "completed" | "refund";
+    status?: "completed" | "refund" | "disbursement";
 }): Promise<CreditResult> {
     const { reference, userId, amount, paymentType, source, metadata, status } = params;
 
