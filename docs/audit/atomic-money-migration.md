@@ -657,7 +657,7 @@ refund from three, dispute resolution from two. It attempts each in turn and
 stops on the first win. Race-safe, because once any attempt succeeds the row
 holds the target status and every other attempt fails against all of them.
 
-## Remaining runTransaction sites: 86, and a way to prioritise them
+## Remaining runTransaction sites: 82, and a way to prioritise them
 
 Converting file by file has diminishing returns — most of the remaining sites
 change a status nobody pays against. The ones worth reading first are those
@@ -671,7 +671,6 @@ By that measure, the unconverted files with the most money in them are:
 
 | File | Why it is on the list |
 |---|---|
-| `actions/export.ts`, `export-payment.ts` | export investment payments |
 | `actions/order-management.ts` | order state and seller earnings |
 | `actions/disputes.ts` | dispute payouts |
 | `wave/_admin.ts` | WAVE earnings administration |
@@ -810,6 +809,96 @@ bug and a lost payment, but somebody has to run the refund.
 `increment_within_ceiling` treats a missing ceiling as unbounded. Events created
 without `maxParticipants` must keep accepting registrations; refusing them would
 break every uncapped session on the platform.
+
+## Fixed: the export module — a lost investment, and a status the client erased
+
+`export.ts` and `export-payment.ts`. Every one of these is the client-side half
+of a payment the Paystack webhook also fulfils, and each decided whether to run
+by reading `processed_payments` and writing the marker **after** fulfilment. The
+early-return guards were labelled "SECURITY FIX #1: Double-payment protection"
+and "✅ FIX: If webhook already processed this payment"; they caught a webhook
+that had already *finished*, and nothing else. Two deliveries in flight together
+both read an absent row.
+
+All three now claim the reference first. The pre-check reads are gone — keeping
+them would leave the read half of a check-then-write sitting above the claim,
+which is how they were read as protection in the first place.
+
+### verifyInvestmentPayment lost concurrent investors
+
+The funding counters were absolute writes computed in JavaScript:
+
+```js
+fundedAmount: currentFunding + amountInNaira,
+spotsFilled:  spotsFilled + 1,
+```
+
+Not `FieldValue.increment` — so migration `010` could not save these; it only
+fixes the sentinel, and the sentinel was never used. Two investors funding one
+window at the same moment each wrote their own total. **One investment vanished
+from the window's funding while the investor's money had been taken and their
+record marked active.**
+
+The overfunding guard beside it read the total, compared, and wrote, with no
+lock, so two investments that each fit under the goal but together exceed it
+both passed.
+
+`increment_within_ceiling` (migration `015`) closes both in one statement: it
+locks the row, checks the ceiling held on that same record, and increments only
+if the result still fits.
+
+**One trap worth remembering.** The ceiling field name is passed in, and a
+record with no ceiling recorded is deliberately treated as *unbounded*. Export
+windows store the goal under `fundingGoal` **or** `goal` depending on when they
+were written, so hardcoding either name would have silently uncapped half the
+windows. The field is chosen from the record.
+
+### verifyExportInvestment was erasing the webhook's revenue status
+
+The webhook writes `processed_payments` with `status: "completed"`, which
+`platform_revenue_totals()` sums as revenue. This path wrote the same document
+with **no status at all** — and `set()` is an upsert, so it overwrote the
+webhook's row and silently removed that payment from the revenue figure.
+
+Claiming fixes it three ways at once: exactly one path fulfils, the row is
+written once, and the status survives. The overfunding branch from the webhook
+path is mirrored here so that whichever side wins, an investment beyond the goal
+is recorded `overfunded_review` and kept out of revenue rather than counted.
+
+### verifyExportOrderPayment could oversell the catalog
+
+Stock came off with `FieldValue.increment(-quantityMT)` per item — atomic since
+`010`, but unbounded, so an order for more than the catalog held drove
+`availableQuantity` negative. A per-item loop also leaves the earlier items
+decremented when a later one falls short.
+
+`decrement_many_or_fail` (`015`) locks every row, checks them all, then writes,
+in id order so concurrent orders cannot deadlock. When stock is short the buyer
+has already been charged — the payment is claimed and will not retry — so the
+order is marked `cancelled_out_of_stock` / `paid_awaiting_refund` with the
+amount and reason recorded, and logged at error level. Findable rather than
+silent, which is the same treatment the marketplace path already had.
+
+**The refund still needs an operational follow-up.** Nothing processes these.
+
+### Still not a guard: the export window idempotency key
+
+`_createExportWindowAction` reads `idempotency_keys`, creates the window, and
+writes the key at the end. Two submissions carrying the same key both read
+"absent" and both create a window. Unchanged here, because closing it needs an
+insert-if-absent against `idempotency_keys` — the shape `claim_payment_once`
+uses for `processed_payments` — and that is a **new migration**, so it belongs
+in its own change rather than smuggled into this one. `platform.ts:201` has the
+identical pattern and would use the same primitive.
+
+No money moves on that path: the window is created `pending` and nothing is
+charged, so a duplicate costs a stray record rather than a stray payment.
+
+### Proving it
+
+`src/__tests__/unit/export-payment-paths.test.ts` — 11 tests, **8 fail** against
+the pre-fix code. The three that pass either way assert that nothing happens
+when the claim is lost, which the old code satisfies by a different route.
 
 ## Verified in PRODUCTION, 2026-08-09
 
@@ -1162,8 +1251,8 @@ can be ruled out.
 | 3 | `src/app/actions/academy/_admin.ts` | |
 | 2 | `src/app/actions/order-management.ts` | |
 | 2 | `src/app/actions/marketplace/_buyer.ts` | |
-| 2 | `src/app/actions/export.ts` | |
-| 2 | `src/app/actions/export-payment.ts` | |
+| 0 | `src/app/actions/export.ts` | Converted. Client/webhook double fulfilment and the erased revenue status fixed — see above. |
+| 0 | `src/app/actions/export-payment.ts` | Converted. Lost investment and catalog oversell fixed — see above. |
 | 2 | `src/app/actions/disputes.ts` | |
 | 2 | `src/app/actions/cooperative/_payment.ts` | |
 | 2 | `src/app/actions/academy/_payment.ts` | |
