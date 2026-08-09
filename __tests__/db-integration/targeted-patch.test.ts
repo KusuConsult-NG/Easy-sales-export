@@ -211,3 +211,65 @@ maybeDescribe("targeted document writes, against real Postgres", () => {
         });
     });
 });
+
+/**
+ * set(..., { merge: true }) must deep-merge nested maps.
+ *
+ * Appended after the fact because this is the failure that mattered most in
+ * production: a cooperative payment writes
+ *
+ *   { serviceRegistrations: { cooperatives: {...} } }
+ *
+ * through set(merge). Replacing that object rather than merging into it wiped
+ * the same user's `wave` and `academy` registrations — so paying for one module
+ * silently revoked access to another.
+ */
+maybeDescribe("set(merge) preserves sibling registrations", () => {
+    const uid = `${TEST_PREFIX}merge-user`;
+
+    async function seedUser() {
+        await supabaseAdmin.from("users").upsert({
+            id: uid,
+            email: `${uid}@example.com`,
+            raw_data: {
+                id: uid,
+                email: `${uid}@example.com`,
+                serviceRegistrations: {
+                    wave: { status: "approved" },
+                    academy: { status: "approved" },
+                },
+            },
+        });
+    }
+
+    afterAll(async () => {
+        await supabaseAdmin.from("users").delete().like("id", `${TEST_PREFIX}%`);
+    });
+
+    it("does not wipe wave and academy when cooperative is written", async () => {
+        await seedUser();
+
+        await db.collection(COLLECTIONS.USERS).doc(uid).set(
+            { serviceRegistrations: { cooperatives: { status: "active" } } },
+            { merge: true },
+        );
+
+        const snap = await db.collection(COLLECTIONS.USERS).doc(uid).get();
+        const sr = snap.data()?.serviceRegistrations ?? {};
+
+        expect(sr.cooperatives?.status).toBe("active");
+        expect(sr.wave?.status).toBe("approved");      // must survive
+        expect(sr.academy?.status).toBe("approved");   // must survive
+    });
+
+    it("still replaces on update(), which is the other half of the contract", async () => {
+        await seedUser();
+
+        await db.collection(COLLECTIONS.USERS).doc(uid).update({
+            serviceRegistrations: { cooperatives: { status: "active" } },
+        });
+
+        const snap = await db.collection(COLLECTIONS.USERS).doc(uid).get();
+        expect(Object.keys(snap.data()?.serviceRegistrations ?? {})).toEqual(["cooperatives"]);
+    });
+});

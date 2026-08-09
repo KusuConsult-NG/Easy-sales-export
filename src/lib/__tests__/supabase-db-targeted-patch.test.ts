@@ -152,6 +152,69 @@ describe("dotted paths", () => {
     });
 });
 
+describe("set(merge) deep-merges nested maps", () => {
+    // Firestore distinguishes these two and the adapter did not:
+    //
+    //   update({a:{b:1}})                REPLACES a
+    //   set({a:{b:1}}, {merge:true})     MERGES b into a
+    //
+    // Both replaced, so a cooperative payment writing
+    // { serviceRegistrations: { cooperatives: {...} } } through set(merge)
+    // wiped the same user's wave and academy registrations. Paying for one
+    // module silently revoked another.
+
+    it("sends nested maps as paths, not as a replacing top-level object", async () => {
+        const ref = new SupabaseDocumentReference("users", "user-1");
+        await ref.set(
+            { serviceRegistrations: { cooperatives: { status: "active" } } },
+            { merge: true },
+        );
+
+        const call = patchCall();
+        // The whole object must NOT be in the shallow patch.
+        expect(call![1].p_patch).not.toHaveProperty("serviceRegistrations");
+        // Each leaf is its own path, which is what a deep merge is.
+        expect(call![1].p_paths).toEqual({
+            "serviceRegistrations.cooperatives.status": "active",
+        });
+    });
+
+    it("flattens several levels", async () => {
+        const ref = new SupabaseDocumentReference("users", "user-1");
+        await ref.set({ a: { b: { c: 1, d: 2 } } }, { merge: true });
+
+        expect(patchCall()![1].p_paths).toEqual({ "a.b.c": 1, "a.b.d": 2 });
+    });
+
+    it("treats an array as a leaf, because merge replaces arrays", async () => {
+        const ref = new SupabaseDocumentReference("users", "user-1");
+        await ref.set({ profile: { tags: ["x", "y"] } }, { merge: true });
+
+        expect(patchCall()![1].p_paths).toEqual({ "profile.tags": ["x", "y"] });
+    });
+
+    it("ignores an empty object instead of wiping what is there", async () => {
+        // Merging an empty map changes nothing in Firestore. Sending it would
+        // shallow-merge {} over the existing object and erase it — the exact
+        // failure this whole change exists to stop.
+        const ref = new SupabaseDocumentReference("users", "user-1");
+        await ref.set({ profile: {}, keep: 1 }, { merge: true });
+
+        const call = patchCall();
+        expect(call![1].p_patch).toEqual({ keep: 1 });
+        expect(call![1].p_paths).toEqual({});
+    });
+
+    it("leaves update() replacing, which is its correct behaviour", async () => {
+        // The counterpart. update() must NOT deep-merge.
+        const ref = new SupabaseDocumentReference("users", "user-1");
+        await ref.update({ profile: { name: "Grace" } });
+
+        expect(patchCall()![1].p_patch).toEqual({ profile: { name: "Grace" } });
+        expect(patchCall()![1].p_paths).toEqual({});
+    });
+});
+
 describe("FieldValue.delete", () => {
     it("actually removes the field", async () => {
         // This never worked. The patch simply omitted the key, and

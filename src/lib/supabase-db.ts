@@ -497,6 +497,53 @@ function applyPatchInJs(
 }
 
 /**
+ * Flattens nested plain objects into dotted paths, for set(..., { merge: true }).
+ *
+ * Firestore distinguishes two things this adapter was treating identically:
+ *
+ *   update({ a: { b: 1 } })                 REPLACES a
+ *   set({ a: { b: 1 } }, { merge: true })   MERGES b into a, keeping a's siblings
+ *
+ * Both were replacing, because the value went into the top-level patch and
+ * merge_raw_data / apply_document_patch shallow-merge at the top level.
+ *
+ * The damage is concrete. A cooperative payment writes:
+ *
+ *   { serviceRegistrations: { cooperatives: {...} } }
+ *
+ * through set(merge). Replacing that object wipes the same user's `wave` and
+ * `academy` registrations — so paying for one module silently revokes another.
+ *
+ * Flattening to `serviceRegistrations.cooperatives.status` makes each leaf its
+ * own jsonb_set, which is what a deep merge is. Arrays and dates are leaves:
+ * Firestore replaces arrays on merge rather than combining them.
+ */
+function flattenForMerge(
+    value: any,
+    prefix: string,
+    out: Record<string, any>,
+): void {
+    const isPlainObject =
+        value !== null &&
+        typeof value === 'object' &&
+        !Array.isArray(value) &&
+        !(value instanceof Date) &&
+        typeof value.toDate !== 'function' &&
+        !getFieldValueType(value);
+
+    // An empty object carries no leaves, so it has to be written as itself or
+    // the write disappears.
+    if (!isPlainObject || Object.keys(value).length === 0) {
+        out[prefix] = value;
+        return;
+    }
+
+    for (const [k, v] of Object.entries(value)) {
+        flattenForMerge(v, `${prefix}.${k}`, out);
+    }
+}
+
+/**
  * Builds a patch containing ONLY the fields a write actually changes.
  *
  * processWriteData returns `{ ...existingData, ...changes }` — the whole
@@ -1226,7 +1273,30 @@ export class SupabaseDocumentReference {
 
             if (Object.keys(rest).length > 0) {
                 const { patch, paths, deletes } = buildWritePatch(rest, base);
-                await supabasePartialUpdate(this._collection, this.id, patch, { paths, deletes });
+
+                // set(merge) deep-merges nested maps; update() replaces them.
+                // Flattening the patch's nested objects into dotted paths is
+                // what makes the difference — see flattenForMerge.
+                const mergedPaths: Record<string, any> = { ...paths };
+                const flatPatch: Record<string, any> = {};
+                for (const [k, v] of Object.entries(patch)) {
+                    const isPlainObject =
+                        v !== null && typeof v === 'object' && !Array.isArray(v) &&
+                        !(v instanceof Date) && typeof (v as any).toDate !== 'function';
+                    if (isPlainObject) {
+                        // Merging an empty map changes nothing, so it is skipped
+                        // rather than written. Sending it would shallow-merge
+                        // `{}` over the existing object and wipe it — the exact
+                        // failure this function exists to stop.
+                        if (Object.keys(v as object).length === 0) continue;
+                        flattenForMerge(v, k, mergedPaths);
+                    } else {
+                        flatPatch[k] = v;
+                    }
+                }
+
+                await supabasePartialUpdate(this._collection, this.id, flatPatch,
+                    { paths: mergedPaths, deletes });
             }
 
             if (Object.keys(increments).length > 0) {
