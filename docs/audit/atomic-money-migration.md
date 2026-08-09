@@ -657,25 +657,38 @@ refund from three, dispute resolution from two. It attempts each in turn and
 stops on the first win. Race-safe, because once any attempt succeeds the row
 holds the target status and every other attempt fails against all of them.
 
-## Remaining runTransaction sites: 78, and a way to prioritise them
+## Remaining runTransaction sites: 72 — and the money-carrying list is clear
 
-Converting file by file has diminishing returns — most of the remaining sites
-change a status nobody pays against. The ones worth reading first are those
-whose file shows both money signals and guard signals:
+**Every file on the priority list has now been converted.** The list was built
+by looking for files showing both money signals and guard signals:
 
 ```
 grep -c "increment(\|balance\|amount\|PROCESSED_PAYMENTS\|payout\|escrow" <file>
 ```
 
-By that measure, the unconverted files with the most money in them are:
-
-| File | Why it is on the list |
+| File | Status |
 |---|---|
-| `wave/_admin.ts` | WAVE earnings administration |
-| `academy/_payment.ts`, `farm-nation-payment.ts` | module payment fulfilment |
+| `infrastructure/payments/service.ts` | done, except `processExportInvestment` (see below) |
+| `cooperative/_actions.ts`, `_loans.ts`, `_admin.ts` | done |
+| `loan-actions.ts` | done |
+| `export.ts`, `export-payment.ts` | done |
+| `order-management.ts`, `disputes.ts` | done |
+| `wave/_admin.ts` | done |
+| `academy/_payment.ts`, `farm-nation-payment.ts` | done |
+| `marketplace/_escrow.ts`, `_escrow_actions.ts`, `_payment.ts` | money paths done; status-only transitions remain |
 
-Everything else is a status change with no money attached to it, and can be
-converted opportunistically when the file is touched for another reason.
+**What this does and does not mean.** The 72 remaining sites are status changes
+with no balance behind them — they can be converted opportunistically when a
+file is touched for another reason, and a wrapper around a single write costs
+nothing but clarity. What it does *not* mean is that no unguarded
+check-then-write remains: this migration found several in files nobody had
+flagged, and the grep above only finds money *vocabulary*, not money *paths*. A
+status field that some other module pays against will not show up in it.
+
+The two known gaps that need a decision rather than a conversion are recorded
+below: `processExportInvestment`'s status-before-branch problem, and the
+idempotency-key checks in `_createExportWindowAction` and `platform.ts:201`
+that need a new migration.
 
 ## Fixed: the LAND_LISTINGS vocabulary split
 
@@ -807,6 +820,68 @@ bug and a lost payment, but somebody has to run the refund.
 `increment_within_ceiling` treats a missing ceiling as unbounded. Events created
 without `maxParticipants` must keep accepting registrations; refusing them would
 break every uncapped session on the platform.
+
+## Fixed: the remaining module payment paths
+
+`wave/_admin.ts`, `academy/_payment.ts`, `farm-nation-payment.ts` — six sites,
+which clears every file on the priority list below.
+
+### The WAVE withdrawal handler locked nothing
+
+Labelled `PHASE 1: ATOMIC STATE TRANSITION & LOCKING`, and its approve branch
+carried the comment *"Lock for processing to prevent double-payouts"*. Neither
+was true: all three branches read the status, compared it, and wrote, inside a
+wrapper that takes no lock.
+
+Two of the three move money:
+
+| Branch | What two concurrent calls did |
+|---|---|
+| `reject` | restored `waveEarningsBalance` **twice** — the member's earnings grew by the withdrawn amount for free |
+| `approve` | moved the request into the state the automated payout runs from, twice — two payouts of one request |
+
+Each transition is claimed now, which is the locking the comment promised.
+Claim first, then move the balance: a crash between the two leaves a rejected
+withdrawal whose funds have not been returned, which is visible and
+correctable, where restoring first would let a lost claim restore twice.
+
+### The WAVE application verdicts raced each other
+
+Approve and reject read the same two statuses (`pending`, `under_review`) and
+write opposite answers. An approval and a rejection landing together both
+passed, so the applicant was granted `wave_participant` **and** marked
+rejected. Same shape as the cooperative withdrawal pair.
+
+### Academy and farm nation fulfilled payments the webhook already took
+
+Both callbacks decided whether to fulfil by reading `processed_payments` and
+writing the marker afterwards — the same client/webhook double fulfilment fixed
+in the export module. Both claim first now.
+
+`academy/_payment.ts` also incremented a course's `students` count by reading
+it, adding one in JavaScript, and writing the total back, so two enrolments
+landing together left the course one student short in its tally.
+
+**A pre-check that was doing two jobs.** The academy read that returned early on
+an existing marker also synced the enrolment document, so a user whose webhook
+landed first is not told "verification failed" after paying. That second job is
+real and is kept — moved onto the `!claim.claimed` branch, which knows for
+certain the payment was already applied rather than inferring it from a racy
+read. Deleting the whole block would have reintroduced a user-visible bug while
+fixing a concurrency one.
+
+### Where "completed" is the right status
+
+Academy enrolment, academy registration and the farm-nation escrow payment are
+all **money in**, so the default `status: "completed"` is correct for them and
+they keep it. That is worth stating explicitly next to the four paths in this
+document that must NOT use it — the rule is "not everything is revenue", not
+"nothing is".
+
+### Proving it
+
+`src/__tests__/unit/module-payment-paths.test.ts` — 10 tests, **8 fail** against
+the pre-fix code.
 
 ## Fixed: order completion and dispute resolution each paid twice
 
@@ -1330,7 +1405,7 @@ can be ruled out.
 | 0 | `src/app/actions/loan-actions.ts` | Converted. Dual-control bypass, double disbursement and repayment overdraft all fixed — see above. |
 | 0 | `src/app/actions/cooperative/_loans.ts` | Converted. Lost repayment and missing idempotency fixed — see above. |
 | 0 | `src/app/actions/cooperative/_admin.ts` | Converted. Approve/reject withdrawal race fixed — see above. |
-| 3 | `src/app/actions/wave/_admin.ts` | |
+| 0 | `src/app/actions/wave/_admin.ts` | Converted. Double earnings restore and double payout lock fixed — see above. |
 | 3 | `src/app/actions/marketplace/_payment.ts` | Payment claim and stock reservation converted; 3 order-creation transitions remain. |
 | 3 | `src/app/actions/academy/_admin.ts` | |
 | 0 | `src/app/actions/order-management.ts` | Converted. Double seller payout and double restock fixed — see above. |
@@ -1339,7 +1414,7 @@ can be ruled out.
 | 0 | `src/app/actions/export-payment.ts` | Converted. Lost investment and catalog oversell fixed — see above. |
 | 0 | `src/app/actions/disputes.ts` | Converted. Double dispute payout fixed — see above. |
 | 2 | `src/app/actions/cooperative/_payment.ts` | |
-| 2 | `src/app/actions/academy/_payment.ts` | |
+| 0 | `src/app/actions/academy/_payment.ts` | Converted. Client/webhook double fulfilment and lost student count fixed. |
 
 Refresh the list with:
 

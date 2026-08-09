@@ -8,6 +8,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { claimPaymentOnce } from "@/lib/wallet-ledger";
 import { rateLimit } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
@@ -152,34 +153,16 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
         if (!rateLimitResult.success) { return { success: false as const, error: "Too many payment verification attempts. Please try again later."};
         }
 
-        // 🔒 SECURITY FIX #1: Double-payment protection
-        const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
-        const existingPayment = await processedRef.get();
-
-        // ✅ FIX: If webhook already processed this payment, return success not an error.
-        // Users saw "verification failed" after paying because the webhook fires first.
-        // ROOT CAUSE #2 FIX: Also sync enrollment doc so status checks don't fall through.
-        if (existingPayment.exists) {
-            logger.info(`[verifyEnrollmentPaymentAction] Payment ${reference} already processed — syncing enrollment status and returning success.`);
-            try {
-                const processedData = existingPayment.data();
-                const courseId = processedData?.courseId;
-                if (courseId && session.user.id) {
-                    const enrollmentId = `${session.user.id}_${courseId}`;
-                    await db.collection(COLLECTIONS.ACADEMY_ENROLLMENTS ?? "academy_enrollments").doc(enrollmentId).set({
-                        userId: session.user.id,
-                        courseId,
-                        status: "active",
-                        paymentStatus: "completed",
-                        paymentReference: reference,
-                        enrolledAt: FieldValue.serverTimestamp(),
-                    }, { merge: true });
-                }
-            } catch (syncErr: unknown) {
-                logger.warn(`[verifyEnrollmentPaymentAction] Enrollment sync failed (non-fatal): ${String(syncErr)}`);
-            }
-            return { error: null, success: true as const, data: null };
-        }
+        // The "SECURITY FIX #1: Double-payment protection" read that used to sit
+        // here returned early when the marker existed. It was the read half of a
+        // check-then-write whose write ran after fulfilment, so it caught a
+        // webhook that had already FINISHED and nothing else.
+        //
+        // It also did something useful, which is kept: when the webhook got
+        // there first the enrolment doc was synced so the user is not told
+        // "verification failed" after paying. That now hangs off the claim
+        // result, which knows for certain whether the payment was already
+        // applied — see the `!claim.claimed` branch below.
 
         // Verify payment with Paystack
         const paymentData = await verifyPaystackPayment(reference);
@@ -215,10 +198,46 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
             }
         }
 
-        // 🔒 SECURITY FIX #4: Use Firestore transaction for atomicity
-        await db.runTransaction(async (transaction) => { // Update enrollment status
+        // "SECURITY FIX #4: Use Firestore transaction for atomicity" provided
+        // no atomicity, and the marker it wrote at the end was the second half
+        // of a check-then-write whose first half ran ~60 lines above. The
+        // webhook and this callback could both pass that read and both fulfil.
+        //
+        // Claimed first now. The status stays "completed" because an academy
+        // enrolment IS money in — this is one of the few paths where the
+        // revenue default is the correct one.
+        const claim = await claimPaymentOnce({
+            reference,
+            userId: session.user.id,
+            amount: amountInNaira,
+            type: "academy_enrollment",
+            source: "client_verify",
+            metadata: { courseId: metadata.courseId, enrollmentId },
+        });
+
+        if (!claim.claimed) {
+            // Already applied, by the webhook or by an earlier delivery. Sync
+            // the enrolment doc so the user is not told verification failed
+            // after paying, then report success — a duplicate is a success.
+            logger.info(`[verifyEnrollmentPaymentAction] Payment ${reference} already claimed — syncing enrollment status.`);
+            try {
+                await db.collection(COLLECTIONS.ACADEMY_ENROLLMENTS ?? "academy_enrollments").doc(enrollmentId).set({
+                    userId: session.user.id,
+                    courseId: metadata.courseId,
+                    status: "active",
+                    paymentStatus: "completed",
+                    paymentReference: reference,
+                    enrolledAt: FieldValue.serverTimestamp(),
+                }, { merge: true });
+            } catch (syncErr: unknown) {
+                logger.warn(`[verifyEnrollmentPaymentAction] Enrollment sync failed (non-fatal): ${String(syncErr)}`);
+            }
+            return { error: null, success: true as const, data: null };
+        }
+
+        {
             const enrollmentRef = db.collection(COLLECTIONS.ENROLLMENTS).doc(enrollmentId);
-            transaction.update(enrollmentRef, {
+            await enrollmentRef.update({
                 status: "active",
                 // ✅ FIX: Use "completed" consistently — all status checks use === "completed".
                 // The old value "paid" caused gate checks in _actions.ts:208 and :346 to always fail.
@@ -226,28 +245,19 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
                 paymentVerifiedAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp() });
 
-            // Increment course student count
-            // ✅ FIX: Query from active 'ACADEMY_COURSES' collection instead of legacy 'COURSES'.
+            // Increment course student count.
+            //
+            // This read `students`, added one in JavaScript and wrote the total
+            // back, so two enrolments landing together both read the same count
+            // and the second overwrote the first — a course silently lost a
+            // student from its tally. FieldValue.increment applies the addition
+            // in SQL (migration 010), and needs no read at all.
             const courseRef = db.collection(COLLECTIONS.ACADEMY_COURSES).doc(metadata.courseId);
-            const courseSnap = await transaction.get(courseRef);
-            if (courseSnap.exists) { const cData = courseSnap.data();
-                if (cData) {
-                    const currentStudents = cData.students || 0;
-                    transaction.update(courseRef, {
-                        students: currentStudents + 1 });
-                }
-            }
+            await courseRef.update({
+                students: FieldValue.increment(1) });
 
-            // Mark payment as processed
-            transaction.set(processedRef, {
-                processedAt: FieldValue.serverTimestamp(),
-                userId: session.user.id,
-                amount: amountInNaira,
-                type: "academy_enrollment",
-                // ✅ FIX: status field required so the fallback query in _checkAcademyPaymentStatusAction works.
-                status: "completed",
-                reference });
-        });
+            // (The processed_payments row is written by claimPaymentOnce above.)
+        }
 
         return { error: null, success: true as const, data: null };
     } catch (error: any) { // 🔒 SECURITY FIX #2: Sanitized error logging
@@ -387,21 +397,37 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<ActionRes
             return { success: true, error: null, data: null };
         }
 
-        // 🔒 ATOMIC TRANSACTION: Update user and record ledger entries
+        // The re-read of processedRef inside the wrapper was labelled "Another
+        // concurrent call processed it" — and it was the one guard here that
+        // looked like it addressed concurrency while addressing none of it. The
+        // read took no lock and the marker was written after the work, so two
+        // concurrent calls both saw an absent row and both fulfilled: the user
+        // was granted the academy role twice and two ledger rows were written
+        // under the same reference.
+        //
+        // claimPaymentOnce settles it in Postgres. status stays "completed"
+        // because an academy registration fee IS revenue.
         let hasApp = false;
-        await db.runTransaction(async (transaction) => {
-            // ── READS FIRST ───────────────────────────────────────────
-            const tProcessedDoc = await transaction.get(processedRef);
-            if (tProcessedDoc.exists) {
-                // Another concurrent call processed it — return gracefully
-                return;
-            }
+        const claim = await claimPaymentOnce({
+            reference,
+            userId: session.user.id,
+            amount: paidAmount,
+            type: "academy_registration",
+            source: "client_verify",
+            metadata: { plan: metadata.plan || "foundation" },
+        });
 
+        if (!claim.claimed) {
+            logger.info(`[verifyAcademyPaymentAction] Payment ${reference} already claimed — nothing to do.`);
+            return { success: true, error: null, data: null };
+        }
+
+        {
             const appQuery = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
                 .where("userId", "==", session.user.id)
                 .orderBy("submittedAt", "desc")
                 .limit(1);
-            const appSnap = await transaction.get(appQuery);
+            const appSnap = await appQuery.get();
 
             // ── WRITES SECOND ──────────────────────────────────────────
             // Update user registration status
@@ -426,22 +452,13 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<ActionRes
             }
 
             // Update user registration status
-            transaction.update(db.collection(COLLECTIONS.USERS).doc(session.user.id), userUpdate);
+            await db.collection(COLLECTIONS.USERS).doc(session.user.id).update(userUpdate);
 
-            // Mark payment as processed
-            transaction.set(processedRef, {
-                processedAt: FieldValue.serverTimestamp(),
-                userId: session.user.id,
-                amount: paidAmount,
-                type: "academy_registration",
-                plan: metadata.plan || "foundation",
-                status: "completed",
-                reference,
-            });
+            // (The processed_payments row is written by claimPaymentOnce above.)
 
             // Update matching application if it exists
             if (hasApp && appDoc) {
-                transaction.update(appDoc.ref, {
+                await appDoc.ref.update({
                     status: "approved",
                     paymentStatus: "completed",
                     paymentAmount: paidAmount,
@@ -452,9 +469,10 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<ActionRes
                 });
             }
 
-            // Global Ledger Record
+            // Ledger row last — a crash leaves the member registered without a
+            // duplicate ledger entry rather than the reverse.
             const globalTxRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(reference);
-            transaction.set(globalTxRef, {
+            await globalTxRef.set({
                 id: reference,
                 userId: session.user.id,
                 type: "academy_registration",
@@ -466,7 +484,7 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<ActionRes
                 reference,
                 description: "Academy registration fee"
             });
-        });
+        }
 
         // Invalidate cache if auto-approved
         try {

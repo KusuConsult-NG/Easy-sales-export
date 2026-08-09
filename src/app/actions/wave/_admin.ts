@@ -12,6 +12,7 @@ import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { getLogisticsProvider } from "@/lib/logistics";
 import { WaveApplicationReviewSchema } from "@/lib/schemas";
 import { createAdminAuditLog } from "@/lib/audit-log";
+import { claimStatusTransition, claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { getCached, setCache } from "@/lib/redis";
 import { sendWaveApplicationEmail } from "@/lib/email-notifications";
 import { paystackPayout } from "@/lib/paystack-transfer";
@@ -642,39 +643,55 @@ async function _approveWaveApplicationAction(
 
         let targetUserId: string | undefined;
 
-        await db.runTransaction(async (transaction) => {
+        // Approve and reject read the same two statuses and write opposite
+        // answers, inside runTransaction, which takes no lock. An approval and
+        // a rejection landing together both passed, so the applicant was
+        // granted the wave_participant role AND marked rejected. Claimed now,
+        // so exactly one verdict lands.
+        await (async () => {
             const appRef = db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId);
-            const appDoc = await transaction.get(appRef);
+            const appDoc = await appRef.get();
 
             if (!appDoc.exists) throw new Error("Application not found");
             const appData = appDoc.data();
-            const currentStatus = appData?.status || "pending";
-            if (currentStatus !== "pending" && currentStatus !== "under_review") {
-                throw new Error("Application is not in a reviewable state");
-            }
             targetUserId = appData?.userId;
 
             let userDoc = null;
             let userRef = null;
             if (targetUserId) {
                 userRef = db.collection(COLLECTIONS.USERS).doc(targetUserId);
-                userDoc = await transaction.get(userRef);
+                userDoc = await userRef.get();
             }
 
-            transaction.update(appRef, {
-                status: "approved",
-                approvedAt: FieldValue.serverTimestamp(),
-                approvedBy: session.user.id,
-                reviewedAt: FieldValue.serverTimestamp(),
-                reviewedBy: session.user.id,
-                approvalTimestamp: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
-                _version: FieldValue.increment(1),
+            const nowIso = new Date().toISOString();
+            const claim = await claimStatusTransitionFromAny({
+                collection: COLLECTIONS.WAVE_APPLICATIONS,
+                id: applicationId,
+                fromAny: ["pending", "under_review"],
+                to: "approved",
+                patch: {
+                    approvedAt: nowIso,
+                    approvedBy: session.user.id,
+                    reviewedAt: nowIso,
+                    reviewedBy: session.user.id,
+                    approvalTimestamp: nowIso,
+                    updatedAt: nowIso,
+                },
             });
+
+            if (!claim.claimed) {
+                throw new Error(claim.status === null
+                    ? "Application not found"
+                    : "Application is not in a reviewable state");
+            }
+
+            // _version is bumped separately: the CAS patch is JSONB and does not
+            // resolve FieldValue sentinels.
+            await appRef.update({ _version: FieldValue.increment(1) });
 
             if (targetUserId && userRef) {
                 if (!userDoc || !userDoc.exists) {
-                    transaction.set(userRef, {
+                    await userRef.set({
                         uid: targetUserId,
                         email: appData?.email || appData?.userEmail || "",
                         fullName: [appData?.firstName, appData?.otherNames, appData?.surname].filter(Boolean).join(" ").trim() || "WAVE Participant",
@@ -732,11 +749,11 @@ async function _approveWaveApplicationAction(
                     };
                 }
 
-                transaction.update(userRef, updates);
+                await userRef.update(updates);
 
                 // Create/Update Wave Member Record
                 const memberRef = db.collection(COLLECTIONS.WAVE_MEMBERS).doc(targetUserId);
-                transaction.set(memberRef, {
+                await memberRef.set({
                     active: true,
                     enrolledAt: FieldValue.serverTimestamp(),
                     applicationId: applicationId,
@@ -744,7 +761,7 @@ async function _approveWaveApplicationAction(
                     _version: FieldValue.increment(1),
                 }, { merge: true });
             }
-        });
+        })();
 
         // Audit Log
         await createAdminAuditLog({
@@ -823,32 +840,43 @@ async function _rejectWaveApplicationAction(
 
         let targetUserId: string | undefined;
 
-        await db.runTransaction(async (transaction) => {
+        // Claimed for the same reason as the approval path: the two verdicts
+        // raced each other, not just themselves.
+        await (async () => {
             const appRef = db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId);
-            const appDoc = await transaction.get(appRef);
+            const appDoc = await appRef.get();
 
             if (!appDoc.exists) throw new Error("Application not found");
             const appData = appDoc.data();
-            const currentStatus = appData?.status || "pending";
-            if (currentStatus !== "pending" && currentStatus !== "under_review") {
-                throw new Error("Application is not in a reviewable state");
-            }
             targetUserId = appData?.userId;
 
-            transaction.update(appRef, {
-                status: "rejected",
-                rejectionReason: reason,
-                rejectedAt: FieldValue.serverTimestamp(),
-                rejectedBy: session.user.id,
-                reviewedAt: FieldValue.serverTimestamp(),
-                reviewedBy: session.user.id,
-                updatedAt: FieldValue.serverTimestamp(),
-                _version: FieldValue.increment(1),
+            const nowIso = new Date().toISOString();
+            const claim = await claimStatusTransitionFromAny({
+                collection: COLLECTIONS.WAVE_APPLICATIONS,
+                id: applicationId,
+                fromAny: ["pending", "under_review"],
+                to: "rejected",
+                patch: {
+                    rejectionReason: reason,
+                    rejectedAt: nowIso,
+                    rejectedBy: session.user.id,
+                    reviewedAt: nowIso,
+                    reviewedBy: session.user.id,
+                    updatedAt: nowIso,
+                },
             });
+
+            if (!claim.claimed) {
+                throw new Error(claim.status === null
+                    ? "Application not found"
+                    : "Application is not in a reviewable state");
+            }
+
+            await appRef.update({ _version: FieldValue.increment(1) });
 
             if (targetUserId) {
                 const userRef = db.collection(COLLECTIONS.USERS).doc(targetUserId);
-                transaction.update(userRef, {
+                await userRef.update({
                     "serviceRegistrations.wave.status": "rejected",
                     "serviceRegistrations.wave.rejectedAt": FieldValue.serverTimestamp(),
                     waveStatus: "rejected",
@@ -856,7 +884,7 @@ async function _rejectWaveApplicationAction(
                     _version: FieldValue.increment(1),
                 });
             }
-        });
+        })();
 
         // Audit Log
         await createAdminAuditLog({
@@ -1455,79 +1483,117 @@ async function _processWaveWithdrawalAction(data: {
 
         let withdrawalData: any = null;
 
-        // PHASE 1: ATOMIC STATE TRANSITION & LOCKING
-        await db.runTransaction(async (tx) => {
-            const snap = await tx.get(ref);
-            if (!snap.exists) throw new Error("Withdrawal not found");
-            withdrawalData = snap.data();
-            const currentStatus = withdrawalData.status;
+        // PHASE 1: STATE TRANSITION
+        //
+        // This was labelled "ATOMIC STATE TRANSITION & LOCKING", and the approve
+        // branch's own comment said "Lock for processing to prevent
+        // double-payouts". Neither was true: every branch read the status,
+        // compared it, and wrote — inside runTransaction, which takes no lock.
+        //
+        // Two of the three branches move money:
+        //
+        //   reject   restores waveEarningsBalance. Two rejections of one
+        //            withdrawal both read "pending" and both restored it, so the
+        //            member's earnings grew by the withdrawn amount twice.
+        //   approve  moves the request into the state the automated payout runs
+        //            from, so two approvals set up two payouts of one request.
+        //
+        // Each transition is claimed now, which is the locking the comment
+        // promised. Claim FIRST, then move the balance: a crash between the two
+        // leaves a rejected withdrawal whose funds have not been returned —
+        // visible and correctable — where restoring first would let a lost
+        // claim restore twice.
+        const snap = await ref.get();
+        if (!snap.exists) throw new Error("Withdrawal not found");
+        withdrawalData = snap.data();
 
-            if (action === "complete") {
-                if (currentStatus !== "approved_pending_payout" && currentStatus !== "approved") {
-                    throw new Error("Can only complete approved withdrawals");
-                }
-                tx.update(ref, {
-                    status: "completed",
+        const nowIso = new Date().toISOString();
+        const userRef = db.collection(COLLECTIONS.USERS).doc(withdrawalData.userId);
+        const walletTxnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc(withdrawalId);
+
+        if (action === "complete") {
+            const claim = await claimStatusTransitionFromAny({
+                collection: COLLECTIONS.WAVE_WITHDRAWALS,
+                id: withdrawalId,
+                fromAny: ["approved_pending_payout", "approved"],
+                to: "completed",
+                patch: {
                     completedBy: session.user.id,
-                    completedAt: FieldValue.serverTimestamp(),
+                    completedAt: nowIso,
                     ...(adminNotes ? { adminNotes } : {}),
                     ...(transactionReference ? { transactionReference } : {}),
-                    updatedAt: FieldValue.serverTimestamp(),
-                });
+                    updatedAt: nowIso,
+                },
+            });
 
-                // Clear the lock on user doc
-                const userRef = db.collection(COLLECTIONS.USERS).doc(withdrawalData.userId);
-                tx.update(userRef, {
-                    'serviceRegistrations.wave.hasPendingWithdrawal': false,
-                    updatedAt: FieldValue.serverTimestamp()
-                });
-
-                // Update Wallet Transaction
-                const walletTxnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc(withdrawalId);
-                tx.update(walletTxnRef, {
-                    status: "completed",
-                    updatedAt: FieldValue.serverTimestamp()
-                });
-            } else if (action === "reject") {
-                if (currentStatus !== "pending") {
-                    throw new Error("Only pending withdrawals can be rejected");
-                }
-                tx.update(ref, {
-                    status: "rejected",
-                    processedBy: session.user.id,
-                    processedAt: FieldValue.serverTimestamp(),
-                    ...(adminNotes ? { adminNotes } : {}),
-                    updatedAt: FieldValue.serverTimestamp(),
-                });
-
-                // Clear the lock on user doc AND restore the balance
-                const userRef = db.collection(COLLECTIONS.USERS).doc(withdrawalData.userId);
-                tx.update(userRef, {
-                    'serviceRegistrations.wave.hasPendingWithdrawal': false,
-                    'serviceRegistrations.wave.waveEarningsBalance': FieldValue.increment(withdrawalData.amount),
-                    updatedAt: FieldValue.serverTimestamp()
-                });
-
-                // Update Wallet Transaction
-                const walletTxnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc(withdrawalId);
-                tx.update(walletTxnRef, {
-                    status: "rejected",
-                    updatedAt: FieldValue.serverTimestamp()
-                });
-            } else if (action === "approve") {
-                if (currentStatus !== "pending") {
-                    throw new Error("Only pending withdrawals can be approved");
-                }
-                // Lock for processing to prevent double-payouts
-                tx.update(ref, {
-                    status: "approved_processing",
-                    processedBy: session.user.id,
-                    processedAt: FieldValue.serverTimestamp(),
-                    adminNotes: (adminNotes ? adminNotes + " - " : "") + "Locking for automated payout...",
-                    updatedAt: FieldValue.serverTimestamp(),
-                });
+            if (!claim.claimed) {
+                throw new Error(claim.status === null
+                    ? "Withdrawal not found"
+                    : "Can only complete approved withdrawals");
             }
-        });
+
+            // Clear the lock on user doc
+            await userRef.update({
+                'serviceRegistrations.wave.hasPendingWithdrawal': false,
+                updatedAt: FieldValue.serverTimestamp()
+            });
+
+            await walletTxnRef.update({
+                status: "completed",
+                updatedAt: FieldValue.serverTimestamp()
+            });
+        } else if (action === "reject") {
+            const claim = await claimStatusTransition({
+                collection: COLLECTIONS.WAVE_WITHDRAWALS,
+                id: withdrawalId,
+                from: "pending",
+                to: "rejected",
+                patch: {
+                    processedBy: session.user.id,
+                    processedAt: nowIso,
+                    ...(adminNotes ? { adminNotes } : {}),
+                    updatedAt: nowIso,
+                },
+            });
+
+            if (!claim.claimed) {
+                throw new Error(claim.status === null
+                    ? "Withdrawal not found"
+                    : "Only pending withdrawals can be rejected");
+            }
+
+            // Clear the lock on user doc AND restore the balance
+            await userRef.update({
+                'serviceRegistrations.wave.hasPendingWithdrawal': false,
+                'serviceRegistrations.wave.waveEarningsBalance': FieldValue.increment(withdrawalData.amount),
+                updatedAt: FieldValue.serverTimestamp()
+            });
+
+            await walletTxnRef.update({
+                status: "rejected",
+                updatedAt: FieldValue.serverTimestamp()
+            });
+        } else if (action === "approve") {
+            // The real lock for processing, this time.
+            const claim = await claimStatusTransition({
+                collection: COLLECTIONS.WAVE_WITHDRAWALS,
+                id: withdrawalId,
+                from: "pending",
+                to: "approved_processing",
+                patch: {
+                    processedBy: session.user.id,
+                    processedAt: nowIso,
+                    adminNotes: (adminNotes ? adminNotes + " - " : "") + "Locking for automated payout...",
+                    updatedAt: nowIso,
+                },
+            });
+
+            if (!claim.claimed) {
+                throw new Error(claim.status === null
+                    ? "Withdrawal not found"
+                    : "Only pending withdrawals can be approved");
+            }
+        }
 
         // AUDIT LOG (First Phase)
         await createAdminAuditLog({
