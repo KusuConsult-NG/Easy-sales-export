@@ -43,6 +43,7 @@ const MIGRATIONS_DIR = "supabase/migrations";
 const EXPECTED = [
     { n: "002", why: "jsonb merge helper used by the adapter's partial updates" },
     { n: "003", why: "atomic profile sync" },
+    { n: "018", why: "jsonb_set_deep — MUST come before 010/016/017, which call it" },
     { n: "005", why: "wallet credit/debit — superseded in part by 011" },
     { n: "006", why: "keeps wallet debits out of the revenue total" },
     { n: "007", why: "compare-and-swap for status transitions" },
@@ -161,6 +162,7 @@ SELECT proname
     'decrement_many_or_fail',
     'apply_array_ops',
     'apply_document_patch',
+    'jsonb_set_deep',
     'increment_within_ceiling',
     'enforce_member_active_on_paid'
  )
