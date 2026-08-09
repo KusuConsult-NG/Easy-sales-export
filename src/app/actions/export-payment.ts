@@ -11,6 +11,7 @@ import { Timestamp } from "@/lib/firestore-compat";
 import { getBaseUrl } from "@/lib/server-utils";
 import { getExchangeRates } from "@/lib/system-settings";
 import { writeGuard, PaymentStatusWriteSchema } from "@/lib/write-guard";
+import { claimPaymentOnce, decrementManyOrFail, incrementWithinCeiling } from "@/lib/wallet-ledger";
 
 // Helper function to convert Naira to Kobo (Paystack uses kobo)
 function nairaToKobo(naira: number): number { return Math.round(naira * 100); }
@@ -131,17 +132,13 @@ export async function verifyExportOrderPaymentAction(reference: string) { try {
         if (!session?.user) { return { error: "Authentication required", success: false as const, meta: null };
         }
 
-        // Double-payment protection
-        const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
-        const existingPayment = await processedRef.get();
-
-        // ✅ FIX: If webhook already processed this payment, return success not an error.
-        if (existingPayment.exists) {
-            logger.info(`[verifyExportOrderPaymentAction] Payment ${reference} already processed — returning success.`);
-            const orderQuery = await db.collection(COLLECTIONS.EXPORT_ORDERS)
-                .where("paymentReference", "==", reference).limit(1).get();
-            return { error: null, success: true as const, meta: null, data: { orderId: orderQuery.empty ? reference : orderQuery.docs[0].id } };
-        }
+        // The "double-payment protection" that used to sit here read
+        // processed_payments and returned early if the row existed. That read
+        // was the first half of a check-then-write whose second half ran after
+        // fulfilment, so it protected against a webhook that had ALREADY
+        // finished and against nothing else. claimPaymentOnce below is the
+        // whole gate now, and it is decided by Postgres rather than by this
+        // read.
 
         // Verify payment with Paystack
         const paymentData = await verifyPaystackPayment(reference);
@@ -174,9 +171,75 @@ export async function verifyExportOrderPaymentAction(reference: string) { try {
         const orderDoc = orderQuery.docs[0];
         const orderData = orderDoc.data();
 
-        await db.runTransaction(async (transaction) => { // Update order status
+        // The processed-payment check above read the marker and the write below
+        // set it, with the whole fulfilment in between — so two deliveries of
+        // one payment (the webhook and the buyer landing on this callback) both
+        // read "not processed" and both fulfilled, decrementing catalog stock
+        // twice for one order. Claimed first now, then fulfilled.
+        const claim = await claimPaymentOnce({
+            reference,
+            userId: session.user.id,
+            amount: amountInNaira,
+            type: "export_buyer_order",
+            source: "client_verify",
+            metadata: { orderId: orderData.orderId },
+        });
+
+        if (!claim.claimed) {
+            logger.info(`[verifyExportOrderPaymentAction] Payment ${reference} already claimed — nothing to do.`);
+            return {
+                error: null,
+                success: true as const,
+                meta: null,
+                data: { orderId: orderData.orderId },
+            } as any;
+        }
+
+        {
+            // Stock first, and all-or-nothing. FieldValue.increment(-qty) is
+            // atomic but unbounded, so an order for more than the catalog holds
+            // drove availableQuantity negative — and a per-item loop would
+            // leave the earlier items decremented when a later one fell short.
+            // decrement_many_or_fail (015) locks every row, checks them all,
+            // then writes, in id order so concurrent orders cannot deadlock.
+            const stock = await decrementManyOrFail(
+                (orderData.items || []).map((item: any) => ({
+                    collection: COLLECTIONS.EXPORT_CATALOG,
+                    id: item.productId,
+                    field: "availableQuantity",
+                    amount: item.quantityMT,
+                }))
+            );
+
+            if (!stock.ok) {
+                // The payment is already claimed, so this will not retry. The
+                // buyer has been charged for stock that is not there, which
+                // somebody has to refund — log loudly enough to be found.
+                logger.error("[verifyExportOrderPaymentAction] PAID BUT OUT OF STOCK — refund required", {
+                    reference,
+                    orderId: orderData.orderId,
+                    failedProductId: stock.failedId,
+                    reason: stock.reason,
+                });
+
+                const orderRef = db.collection(COLLECTIONS.EXPORT_ORDERS).doc(orderDoc.id);
+                await orderRef.update({
+                    status: "cancelled_out_of_stock",
+                    paymentStatus: "paid_awaiting_refund",
+                    refundReason: `Insufficient catalog stock for product ${stock.failedId}`,
+                    refundAmount: amountInNaira,
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+
+                return {
+                    error: "This order could not be fulfilled: one of the products is no longer available in the quantity ordered. You have been charged and a refund is being arranged.",
+                    success: false as const,
+                    meta: null,
+                };
+            }
+
             const orderRef = db.collection(COLLECTIONS.EXPORT_ORDERS).doc(orderDoc.id);
-            transaction.update(orderRef, writeGuard(
+            await orderRef.update(writeGuard(
                 PaymentStatusWriteSchema.partial(),
                 {
                     status: "processing",
@@ -187,16 +250,11 @@ export async function verifyExportOrderPaymentAction(reference: string) { try {
                 'export-payment/verifyExportOrderPayment'
             ));
 
-            // Mark payment as processed
-            transaction.set(processedRef, { processedAt: FieldValue.serverTimestamp(),
-                userId: session.user.id,
-                amount: amountInNaira,
-                type: "export_buyer_order",
-                reference });
+            // (The processed_payments row is written by claimPaymentOnce above.)
 
-            // Global Ledger Record
+            // Global Ledger Record — last, deliberately.
             const globalTxRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(reference);
-            transaction.set(globalTxRef, {
+            await globalTxRef.set({
                 id: reference,
                 userId: session.user.id,
                 type: "export_order",
@@ -208,16 +266,7 @@ export async function verifyExportOrderPaymentAction(reference: string) { try {
                 reference,
                 description: `Export Order #${orderData.orderId}`
             });
-            
-            // Decrement global catalog stock
-            for (const item of orderData.items) {
-                const productRef = db.collection(COLLECTIONS.EXPORT_CATALOG).doc(item.productId);
-                transaction.update(productRef, { 
-                    availableQuantity: FieldValue.increment(-item.quantityMT),
-                    updatedAt: FieldValue.serverTimestamp()
-                });
-            }
-        });
+        }
 
         // Notify Admins
         try {
@@ -356,17 +405,11 @@ export async function verifyInvestmentPaymentAction(reference: string) { try {
         if (!session?.user) { return { error: "Authentication required", success: false as const, meta: null };
         }
 
-        // 🔒 SECURITY FIX #1: Double-payment protection
-        const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
-        const existingPayment = await processedRef.get();
-
-        // ✅ FIX: If webhook already processed this payment, return success not an error.
-        if (existingPayment.exists) {
-            logger.info(`[verifyInvestmentPaymentAction] Payment ${reference} already processed — returning success.`);
-            const invQuery = await db.collection(COLLECTIONS.EXPORT_INVESTMENTS)
-                .where("paymentReference", "==", reference).limit(1).get();
-            return { error: null, success: true as const, meta: null, data: { investmentId: invQuery.empty ? reference : invQuery.docs[0].id } };
-        }
+        // "SECURITY FIX #1: Double-payment protection" read processed_payments
+        // and returned early if the row existed, while the row itself was
+        // written after fulfilment. It caught a webhook that had already
+        // FINISHED, and nothing else — two deliveries in flight together both
+        // read an absent row. claimPaymentOnce below is the whole gate now.
 
         // Verify payment with Paystack
         const paymentData = await verifyPaystackPayment(reference);
@@ -409,10 +452,94 @@ export async function verifyInvestmentPaymentAction(reference: string) { try {
         const investmentDoc = investmentQuery.docs[0];
         const investmentData = investmentDoc.data();
 
-        // 🔒 SECURITY FIX #4: Use Firestore transaction for atomicity
-        await db.runTransaction(async (transaction) => { // Update investment status
+        // WHAT WAS WRONG HERE
+        // -------------------
+        // Labelled "SECURITY FIX #4: Use Firestore transaction for atomicity".
+        // The wrapper provided no atomicity, and underneath it were two real
+        // defects on the window's funding total.
+        //
+        // 1. LOST UPDATE. The funding counters were ABSOLUTE writes computed in
+        //    JavaScript from a value read moments earlier:
+        //
+        //        fundedAmount: currentFunding + amountInNaira,
+        //        spotsFilled:  spotsFilled + 1,
+        //
+        //    Two investors funding one window at the same time both read the
+        //    same currentFunding and each wrote their own total. One
+        //    investment vanished from the window's funding while the investor's
+        //    money had been taken and their record marked active. Note these
+        //    were not even FieldValue.increment — migration 010 could not help
+        //    a write that never used the sentinel.
+        //
+        // 2. THE OVERFUNDING GUARD WAS NOT A GUARD. It read currentFunding,
+        //    compared currentFunding + amount to the goal, and then wrote —
+        //    with no lock. Two investments that each fit under the goal but
+        //    together exceed it both passed.
+        //
+        // increment_within_ceiling (migration 015) fixes both in one statement:
+        // it locks the row, checks the ceiling held on that same record, and
+        // increments only if the result still fits.
+        const claim = await claimPaymentOnce({
+            reference,
+            userId: session.user.id,
+            amount: amountInNaira,
+            type: "export_investment",
+            source: "client_verify",
+            metadata: { windowId, investmentId: investmentDoc.id },
+        });
+
+        if (!claim.claimed) {
+            // The webhook got here first. A duplicate delivery is a success.
+            logger.info(`[verifyInvestmentPaymentAction] Payment ${reference} already claimed — nothing to do.`);
+            return {
+                error: null,
+                success: true as const,
+                data: { investmentId: investmentDoc.id },
+                meta: null,
+            };
+        }
+
+        {
+            const windowRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(windowId);
+            const windowSnap = await windowRef.get();
+
+            if (!windowSnap.exists) { throw new Error("Export window not found");
+            }
+
+            const windowData = windowSnap.data();
+
+            // Which field holds the ceiling depends on when the window was
+            // written — both vocabularies exist in the data. Passing the wrong
+            // name would leave the window UNBOUNDED, because a record with no
+            // ceiling recorded is deliberately treated as uncapped.
+            const ceilingField = windowData?.fundingGoal !== undefined ? "fundingGoal" : "goal";
+            const fundingGoal = windowData?.fundingGoal ?? windowData?.goal ?? 0;
+
+            const raised = await incrementWithinCeiling({
+                collection: COLLECTIONS.EXPORT_WINDOWS,
+                id: windowId,
+                field: "fundedAmount",
+                amount: amountInNaira,
+                ceilingField,
+            });
+
+            if (!raised.ok) {
+                throw new Error(`Investment rejected: Funding goal exceeded. Goal: ₦${Number(fundingGoal).toLocaleString()}. Amount: ₦${amountInNaira.toLocaleString()}`);
+            }
+
+            // The remaining counters carry no ceiling, so a plain atomic
+            // increment is enough. currentFunding duplicates fundedAmount and
+            // is kept in step deliberately — both names are read elsewhere.
+            await windowRef.update({
+                spotsFilled: FieldValue.increment(1),
+                participantsCount: FieldValue.increment(1),
+                currentFunding: FieldValue.increment(amountInNaira),
+                investorCount: FieldValue.increment(1),
+                updatedAt: FieldValue.serverTimestamp()
+            });
+
             const investmentRef = db.collection(COLLECTIONS.EXPORT_INVESTMENTS).doc(investmentDoc.id);
-            transaction.update(investmentRef, writeGuard(
+            await investmentRef.update(writeGuard(
                 PaymentStatusWriteSchema.partial(),
                 {
                     status: "active",
@@ -423,52 +550,19 @@ export async function verifyInvestmentPaymentAction(reference: string) { try {
                 'export-payment/verifyInvestmentPayment'
             ));
 
-            // Update export window funding
-            const windowRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(windowId);
-            const windowSnap = await transaction.get(windowRef);
-
-            if (!windowSnap.exists) { throw new Error("Export window not found");
-            }
-
-            const windowData = windowSnap.data();
-            const currentFunding = windowData?.fundedAmount || windowData?.currentFunding || 0;
-            const fundingGoal = windowData?.fundingGoal || windowData?.goal || 0;
-            const spotsFilled = windowData?.spotsFilled || windowData?.investorCount || 0;
-
-            // 🔒 SECURITY FIX: Prevent Over-funding
-            // If fundingGoal is set (greater than 0), ensure we don't exceed it.
-            if (fundingGoal > 0 && (currentFunding + amountInNaira > fundingGoal)) {
-                throw new Error(`Investment rejected: Funding goal exceeded. Current: ₦${currentFunding.toLocaleString()}, Goal: ₦${fundingGoal.toLocaleString()}. Amount: ₦${amountInNaira.toLocaleString()}`);
-                // In a real system, we might auto-refund here or mark as "overpaid_pending_refund"
-            }
-
-            transaction.update(windowRef, { 
-                fundedAmount: currentFunding + amountInNaira,
-                spotsFilled: spotsFilled + 1,
-                participantsCount: spotsFilled + 1,
-                currentFunding: currentFunding + amountInNaira,
-                investorCount: spotsFilled + 1,
-                updatedAt: FieldValue.serverTimestamp() 
-            });
-
-            // Update or create investor portfolio
+            // Update or create investor portfolio. These totals were absolute
+            // writes too, with the same lost-update shape.
             const portfolioId = session.user.id || "";
             const portfolioRef = db.collection(COLLECTIONS.INVESTOR_PORTFOLIOS).doc(portfolioId);
-            const portfolioSnap = await transaction.get(portfolioRef);
+            const portfolioSnap = await portfolioRef.get();
 
-            if (portfolioSnap.exists) { const pData = portfolioSnap.data();
-                if (pData) {
-                    const currentInvested = pData.totalInvested || 0;
-                    const currentReturns = pData.totalExpectedReturns || 0;
-                    const activeCount = pData.activeInvestments || 0;
-
-                    transaction.update(portfolioRef, {
-                        totalInvested: currentInvested + amountInNaira,
-                        totalExpectedReturns: currentReturns + (investmentData?.expectedReturn || 0),
-                        activeInvestments: activeCount + 1,
-                        updatedAt: FieldValue.serverTimestamp() });
-                }
-            } else { transaction.set(portfolioRef, {
+            if (portfolioSnap.exists) {
+                await portfolioRef.update({
+                    totalInvested: FieldValue.increment(amountInNaira),
+                    totalExpectedReturns: FieldValue.increment(investmentData?.expectedReturn || 0),
+                    activeInvestments: FieldValue.increment(1),
+                    updatedAt: FieldValue.serverTimestamp() });
+            } else { await portfolioRef.set({
                     investorId: session.user.id,
                     investorEmail: session.user.email,
                     totalInvested: amountInNaira,
@@ -480,16 +574,13 @@ export async function verifyInvestmentPaymentAction(reference: string) { try {
                     updatedAt: FieldValue.serverTimestamp() });
             }
 
-            // Mark payment as processed
-            transaction.set(processedRef, { processedAt: FieldValue.serverTimestamp(),
-                userId: session.user.id,
-                amount: amountInNaira,
-                type: "export_investment",
-                reference });
+            // (The processed_payments row is written by claimPaymentOnce above.
+            //  Writing it here as well is what put the marker AFTER the work.)
 
-            // Global Ledger Record
+            // Global Ledger Record — last, so a crash leaves the investment
+            // recorded without a duplicate ledger entry rather than the reverse.
             const globalTxRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(reference);
-            transaction.set(globalTxRef, {
+            await globalTxRef.set({
                 id: reference,
                 userId: session.user.id,
                 type: "export_investment",
@@ -501,7 +592,7 @@ export async function verifyInvestmentPaymentAction(reference: string) { try {
                 reference,
                 description: `Export Investment - ${metadata.windowTitle}`
             });
-        });
+        }
 
         return {
             error: null,

@@ -9,6 +9,7 @@ import { checkModuleAccess } from "@/lib/module-access-check";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { z } from "zod";
 import { createAdminAuditLog } from "@/lib/audit-log";
+import { claimPaymentOnce } from "@/lib/wallet-ledger";
 import { revalidatePath } from "next/cache";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
 import { serializeDoc, serializeDocs, serializeValue } from "@/lib/firestore-serialize";
@@ -122,9 +123,20 @@ export async function createExportWindowAction(
 
         let finalOrderId = "";
 
-        await db.runTransaction(async (transaction) => { // 0. Idempotency Check
+        // The idempotency key here is NOT a guard, and was not one inside the
+        // wrapper either: it reads the key, and writes it at the end, with the
+        // window creation in between. Two submissions carrying the same key
+        // both read "absent" and both create an export window.
+        //
+        // Closing it needs an insert-if-absent against idempotency_keys — the
+        // shape claim_payment_once uses for processed_payments — which is a new
+        // migration and so a separate change. Recorded in
+        // docs/audit/atomic-money-migration.md. No money moves here: the window
+        // is created with status "pending" and nothing is charged, so the cost
+        // of the duplicate is a stray record rather than a stray payment.
+        await (async () => {
             const idempotencyRef = db.collection(COLLECTIONS.IDEMPOTENCY_KEYS).doc(idempotencyKey);
-            const idempotencyDoc = await transaction.get(idempotencyRef);
+            const idempotencyDoc = await idempotencyRef.get();
 
             if (idempotencyDoc.exists) {
                 throw new Error("Duplicate transaction detected. Please wait.");
@@ -132,7 +144,7 @@ export async function createExportWindowAction(
 
             // 1. Check if user is verified (KYC)
             const userRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
-            const userDoc = await transaction.get(userRef);
+            const userDoc = await userRef.get();
             const userData = userDoc.data();
 
             if (!userData?.isVerified) { throw new Error("Compliance Error: You must complete KYC verification to create Export Windows.");
@@ -158,7 +170,7 @@ export async function createExportWindowAction(
 
             // Save to Firestore
             const exportWindowRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc();
-            transaction.set(exportWindowRef, { orderId,
+            await exportWindowRef.set({ orderId,
                 commodity: validatedData.commodity,
                 quantity: validatedData.quantity,
                 amount: validatedData.amount,
@@ -172,10 +184,10 @@ export async function createExportWindowAction(
                 updatedAt: FieldValue.serverTimestamp() });
 
             // 3. Lock Key
-            transaction.set(idempotencyRef, { userId: session.user.id,
+            await idempotencyRef.set({ userId: session.user.id,
                 action: "create_export_window",
                 createdAt: FieldValue.serverTimestamp() });
-        });
+        })();
 
         revalidatePath("/export");
         revalidatePath("/dashboard/export");
@@ -922,14 +934,84 @@ export async function verifyExportInvestmentAction(reference: string): Promise<
 
         if (userId !== session.user.id) return { success: false as const, error: "User mismatch"};
 
-        // Check already processed
-        const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
-        const processedDoc = await processedRef.get();
-        if (processedDoc.exists) return { success: false as const, error: "Payment already processed"};
+        // WHAT WAS WRONG HERE
+        // -------------------
+        // This is the client-side half of the same payment the Paystack webhook
+        // fulfils in infrastructure/payments/service.ts. Both wrote
+        // processed_payments.doc(reference), and both decided whether to run by
+        // reading it first — so a webhook arriving while the buyer sat on this
+        // callback page had both paths pass the check and both fulfil: two
+        // EXPORT_SLOTS rows and the window funded twice for one payment.
+        //
+        // Worse, `set()` on that document is an upsert. The webhook writes
+        // `status: "completed"`, which platform_revenue_totals() sums as
+        // revenue; this path wrote no status at all and OVERWROTE the webhook's
+        // row, silently removing that payment from the revenue figure.
+        //
+        // Claiming the reference fixes all three: exactly one path fulfils, the
+        // row is written once, and the status survives.
+        //
+        // The overfunding check is copied from the webhook path so that
+        // whichever side wins, an investment beyond the funding goal is routed
+        // to review rather than counted. It is an advisory read — two
+        // investments that each fit but together exceed the goal can still both
+        // pass, exactly as on the webhook side. That race is recorded in
+        // docs/audit/atomic-money-migration.md and wants a decision, not a
+        // patch smuggled in here.
+        const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
+        const exportSnap = await exportRef.get();
+        const exportWindow = exportSnap.data();
 
-        await db.runTransaction(async (t) => { // 1. Create Investment Record (Slot)
+        if (!exportSnap.exists || !exportWindow) {
+            return { success: false as const, error: "Export window not found" };
+        }
+
+        const fundingGoal = exportWindow.fundingGoal ?? exportWindow.goal ?? 0;
+        const currentFunded = exportWindow.fundedAmount ?? exportWindow.currentFunding ?? 0;
+        const overfunded = fundingGoal > 0 && currentFunded + amount > fundingGoal;
+
+        const claim = await claimPaymentOnce({
+            reference,
+            userId,
+            amount,
+            type: "export_investment",
+            source: "client_verify",
+            // Not "completed" when overfunded: global-aggregation must not count
+            // a payment that is being held for review as revenue.
+            status: overfunded ? "overfunded_review" : "completed",
+            metadata: { exportId },
+        });
+
+        if (!claim.claimed) {
+            return { success: false as const, error: "Payment already processed" };
+        }
+
+        if (overfunded) {
+            await db.collection(COLLECTIONS.FAILED_PAYMENTS).doc(reference).set({
+                reference,
+                type: "export_investment",
+                userId,
+                exportId,
+                amount,
+                status: "overfunded_review",
+                gatewayResponse: "Investment exceeds export window funding goal",
+                failedAt: FieldValue.serverTimestamp(),
+            }, { merge: true });
+
+            logger.warn("[verifyExportInvestmentAction] investment exceeds funding goal — routed to review", {
+                reference, exportId, amount, fundingGoal, currentFunded,
+            });
+
+            return {
+                success: false as const,
+                error: "This investment exceeds the window's remaining funding goal and has been sent for review. You have been charged and will be contacted.",
+            };
+        }
+
+        {
+            // 1. Create Investment Record (Slot)
             const slotRef = db.collection(COLLECTIONS.EXPORT_SLOTS).doc();
-            t.set(slotRef, {
+            await slotRef.set({
                 userId,
                 exportId,
                 amount,
@@ -937,29 +1019,19 @@ export async function verifyExportInvestmentAction(reference: string): Promise<
                 paymentReference: reference,
                 purchaseDate: FieldValue.serverTimestamp(),
                 createdAt: FieldValue.serverTimestamp(),
-                roi: "15-20%", // Should fetch from window
-                expectedReturn: amount * 1.20, // Simplified logic
+                roi: exportWindow.roiPercentage || exportWindow.roi || "15-20%",
+                expectedReturn: amount * (exportWindow.returnMultiplier ?? exportWindow.expectedReturnMultiplier ?? 1.20),
+                source: "client_verify",
             });
 
             // 2. Update Export Window Stats
-            const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
-            t.update(exportRef, { spotsFilled: FieldValue.increment(1),
+            await exportRef.update({ spotsFilled: FieldValue.increment(1),
                 fundedAmount: FieldValue.increment(amount),
                 updatedAt: FieldValue.serverTimestamp()
             });
 
-            // 3. Mark Payment Processed
-            t.set(processedRef, { reference,
-                type: "export_investment",
-                userId,
-                exportId,
-                amount,
-                processedAt: FieldValue.serverTimestamp()
-            });
-
-            // 4. Create Audit Log (Manual since inside transaction we need to be careful with side effects, 
-            // but audit log helper is outside tx usually. Let's do it after.)
-        });
+            // (The processed_payments row is written by claimPaymentOnce above.)
+        }
 
         await createAdminAuditLog({ action: "export_investment",
             userId,
