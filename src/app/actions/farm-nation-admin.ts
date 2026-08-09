@@ -5,6 +5,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { claimStatusTransition } from "@/lib/status-transition";
 import { isAdmin } from "@/lib/admin-permissions";
 import { serializeDocs, serializeDoc } from "@/lib/firestore-serialize";
 import { FieldValue } from "@/lib/firestore-compat";
@@ -887,21 +888,47 @@ async function _releaseFarmNationEscrowAction(transactionId: string): Promise<Ac
 
         const txRef = db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).doc(transactionId);
         
-        await db.runTransaction(async (tx) => {
-            const txDoc = await tx.get(txRef);
+        // Escrow release transfers a property and queues a payout, off a
+        // check-then-write that took no lock. Two admins releasing the same
+        // escrow both read "held"/"payment_confirmed" and both proceeded.
+        //
+        // The payout row is keyed on the transaction id, so it could not
+        // duplicate — but the ownership transfer and the escrow release both
+        // ran twice, and nothing recorded that they had.
+        const releaseClaim = await claimStatusTransition({
+            collection: COLLECTIONS.FARM_NATION_TRANSACTIONS,
+            id: transactionId,
+            from: "payment_confirmed",
+            to: "completed",
+            patch: {
+                escrowStatus: "released",
+                escrowReleasedAt: new Date().toISOString(),
+                escrowReleasedBy: session.user.id,
+                updatedAt: new Date().toISOString(),
+            },
+        });
+
+        if (!releaseClaim.claimed) {
+            return {
+                success: false,
+                error: releaseClaim.status === null
+                    ? "Transaction not found"
+                    : "Transaction is not in a valid state for escrow release",
+                data: null,
+            };
+        }
+
+        await (async () => {
+            const txDoc = await txRef.get();
             if (!txDoc.exists) throw new Error("Transaction not found");
             const txData = txDoc.data()!;
 
-            if (txData.escrowStatus !== "held" || txData.status !== "payment_confirmed") {
-                throw new Error("Transaction is not in a valid state for escrow release");
-            }
-
             const propertyRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(txData.propertyId);
-            const propertyDoc = await tx.get(propertyRef);
+            const propertyDoc = await propertyRef.get();
             if (!propertyDoc.exists) throw new Error("Property not found");
 
             const isLease = propertyDoc.data()?.type === "lease";
-            tx.update(propertyRef, {
+            await propertyRef.update({
                 status: isLease ? "leased" : "sold",
                 ownerId: txData.buyerId,
                 ownerEmail: txData.buyerEmail,
@@ -913,17 +940,14 @@ async function _releaseFarmNationEscrowAction(transactionId: string): Promise<Ac
                 _version: FieldValue.increment(1)
             });
 
-            tx.update(txRef, {
-                status: "completed",
-                escrowStatus: "released",
-                escrowReleasedAt: FieldValue.serverTimestamp(),
-                escrowReleasedBy: session.user.id,
-                updatedAt: FieldValue.serverTimestamp(),
+            // Status and escrowStatus are written by the claim above; only the
+            // version bump the CAS patch cannot carry remains.
+            await txRef.update({
                 _version: FieldValue.increment(1)
             });
 
             const payoutRef = db.collection("farm_nation_payouts").doc(transactionId);
-            tx.set(payoutRef, {
+            await payoutRef.set({
                 transactionId,
                 propertyId: txData.propertyId,
                 sellerId: txData.sellerId,
@@ -933,7 +957,7 @@ async function _releaseFarmNationEscrowAction(transactionId: string): Promise<Ac
                 updatedAt: FieldValue.serverTimestamp(),
                 _version: 0
             });
-        });
+        })();
 
         return { 
             success: true, 

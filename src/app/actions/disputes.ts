@@ -6,6 +6,8 @@
 
 import { requireSession, isAdmin } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
+import { claimStatusTransitionFromAny } from "@/lib/status-transition";
+import { creditWalletOnce } from "@/lib/wallet-ledger";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Dispute, Order, DisputeReason, DisputeResolution } from "@/lib/types/marketplace";
@@ -107,16 +109,42 @@ async function _createDisputeAction(params: { orderId: string;
         const disputeRef = db.collection(COLLECTIONS.DISPUTES).doc();
         const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
 
-        await db.runTransaction(async (tx) => { const freshOrderDoc = await tx.get(orderRef);
-            if (!freshOrderDoc.exists) throw new Error("Order not found");
+        // "Order already has an active dispute" was a check-then-write with no
+        // lock: two disputes raised on one order both read a non-disputed
+        // status and both created a DISPUTES row, leaving the order pointing at
+        // whichever wrote its disputeId last and an orphan dispute nobody
+        // resolves. Claiming the order's transition into "disputed" is what
+        // makes that one dispute per order.
+        const freshOrderDoc = await orderRef.get();
+        if (!freshOrderDoc.exists) throw new Error("Order not found");
+        const freshOrder = freshOrderDoc.data() as Order;
 
-            const freshOrder = freshOrderDoc.data() as Order;
-            if (freshOrder.status === "disputed") {
-                throw new Error("Order already has an active dispute");
-            }
-            if (freshOrder.status === "completed" || freshOrder.status === "cancelled") { throw new Error("Cannot dispute completed or cancelled orders");
-            }
+        const disputeClaim = await claimStatusTransitionFromAny({
+            collection: COLLECTIONS.MARKETPLACE_ORDERS,
+            id: orderId,
+            fromAny: [
+                "pending_payment", "payment_received", "confirmed",
+                "processing", "shipped", "delivered",
+            ],
+            to: "disputed",
+            patch: {
+                disputeId: disputeRef.id,
+                updatedAt: new Date().toISOString(),
+            },
+            // So the resolution path can put the order back where it came from
+            // rather than guessing.
+            recordPreviousAs: "statusBeforeDispute",
+        });
 
+        if (!disputeClaim.claimed) {
+            throw new Error(disputeClaim.status === null
+                ? "Order not found"
+                : disputeClaim.status === "disputed"
+                    ? "Order already has an active dispute"
+                    : "Cannot dispute completed or cancelled orders");
+        }
+
+        {
             const disputeData: Partial<Dispute> = { orderId,
                 buyerId: userId,
                 sellerId: freshOrder.sellerId,
@@ -128,12 +156,9 @@ async function _createDisputeAction(params: { orderId: string;
                 createdAt: FieldValue.serverTimestamp() as any,
                 updatedAt: FieldValue.serverTimestamp() as any };
 
-            tx.set(disputeRef, disputeData);
-            tx.update(orderRef, { status: "disputed",
-                disputeId: disputeRef.id,
-                updatedAt: FieldValue.serverTimestamp(),
-                _version: FieldValue.increment(1) });
-        });
+            await disputeRef.set(disputeData);
+            await orderRef.update({ _version: FieldValue.increment(1) });
+        }
 
         return { error: null, success: true as const, data: null };
     } catch (error) { logger.error("Create dispute error:", {
@@ -444,31 +469,77 @@ async function _updateDisputeStatusAction(
 
         const disputeRef = db.collection(COLLECTIONS.DISPUTES).doc(disputeId);
 
-        await db.runTransaction(async (tx) => {
-            const freshDisputeDoc = await tx.get(disputeRef);
-            if (!freshDisputeDoc.exists) throw new Error("Dispute not found");
+        // WHAT WAS WRONG HERE
+        // -------------------
+        // Two status checks — the dispute's and the escrow's — read inside
+        // runTransaction, which takes no lock, and the money moved off the back
+        // of them. Two admins resolving one dispute together both read
+        // "disputed"/"funded", both passed, and both credited the beneficiary's
+        // wallet. The escrow paid out twice.
+        //
+        // The ESCROW transition is the one claimed, not the dispute's. It is
+        // the record the money hangs off, it is shared with the release and
+        // refund paths that were already fixed, and claiming it means those
+        // paths and this one cannot both pay for the same escrow either.
+        const freshDisputeDoc = await disputeRef.get();
+        if (!freshDisputeDoc.exists) throw new Error("Dispute not found");
 
-            const freshDispute = freshDisputeDoc.data() as Dispute;
-            if (freshDispute.status === "resolved" || freshDispute.status === "closed") {
-                throw new Error(`Dispute is already '${freshDispute.status}'`);
-            }
+        const freshDispute = freshDisputeDoc.data() as Dispute;
+        if (freshDispute.status === "resolved" || freshDispute.status === "closed") {
+            throw new Error(`Dispute is already '${freshDispute.status}'`);
+        }
 
-            const freshEscrowDoc = await tx.get(escrowRef);
-            if (!freshEscrowDoc.exists) throw new Error("Escrow transaction not found");
-            const freshEscrow = freshEscrowDoc.data();
-            if (!freshEscrow) throw new Error("Escrow transaction data not found");
+        const freshEscrowDoc = await escrowRef.get();
+        if (!freshEscrowDoc.exists) throw new Error("Escrow transaction not found");
+        const freshEscrow = freshEscrowDoc.data();
+        if (!freshEscrow) throw new Error("Escrow transaction data not found");
 
-            const status = freshEscrow.status;
-            if (status !== "funded" && status !== "disputed" && status !== "pending") {
-                throw new Error(`Escrow is already ${status} and cannot be resolved.`);
-            }
+        const targetId = resolution === "release_seller" ? freshDispute.sellerId : freshDispute.buyerId;
+        if (!targetId) throw new Error("Target beneficiary ID not found on dispute");
 
-            // Read wallet document before performing any transaction writes
-            const targetId = resolution === "release_seller" ? freshDispute.sellerId : freshDispute.buyerId;
-            if (!targetId) throw new Error("Target beneficiary ID not found on dispute");
+        const escrowAmount = freshEscrow.amount ?? dispute.refundAmount ?? freshDispute.refundAmount ?? 0;
+        const finalEscrowStatus = resolution === "release_seller" ? "released" : "refunded";
+        const nowIso = new Date().toISOString();
 
-            const walletRef = db.collection(COLLECTIONS.WALLETS).doc(targetId);
-            const walletSnap = await tx.get(walletRef);
+        const escrowClaim = await claimStatusTransitionFromAny({
+            collection: COLLECTIONS.ESCROW_TRANSACTIONS,
+            id: escrowId,
+            fromAny: ["funded", "disputed", "pending"],
+            to: finalEscrowStatus,
+            patch: {
+                releasedBy: userId,
+                [resolution === "release_seller" ? "releasedAt" : "refundedAt"]: nowIso,
+                updatedAt: nowIso,
+            },
+        });
+
+        if (!escrowClaim.claimed) {
+            throw new Error(escrowClaim.status === null
+                ? "Escrow transaction not found"
+                : `Escrow is already ${escrowClaim.status} and cannot be resolved.`);
+        }
+
+        {
+            // Money first, now that exactly one caller is here. creditWalletOnce
+            // keyed on the escrow id: the balance moves in SQL, and the
+            // reference makes a second attempt a no-op even if the claim above
+            // were somehow bypassed.
+            //
+            // status is NOT "completed" — this is money leaving escrow to a
+            // user, not revenue arriving, and platform_revenue_totals() sums
+            // completed rows.
+            const credit = await creditWalletOnce({
+                reference: `DISPUTE-RES-${disputeId}`,
+                userId: targetId,
+                amount: escrowAmount,
+                paymentType: resolution === "release_seller" ? "dispute_payout" : "dispute_refund",
+                source: "escrow",
+                status: resolution === "release_seller" ? "disbursement" : "refund",
+                metadata: { disputeId, escrowId, orderId: freshDispute.orderId },
+            });
+
+            const balanceAfter = credit.balance;
+            const balanceBefore = credit.claimed ? balanceAfter - escrowAmount : balanceAfter;
 
             const updateData: Record<string, unknown> = { status: "resolved",
                 resolution,
@@ -481,7 +552,7 @@ async function _updateDisputeStatusAction(
             if (refundAmount !== undefined) { updateData.refundAmount = refundAmount;
             }
 
-            tx.update(disputeRef, updateData);
+            await disputeRef.update(updateData);
 
             if (freshDispute.orderId) { const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(freshDispute.orderId);
                 let newOrderStatus: string;
@@ -492,75 +563,55 @@ async function _updateDisputeStatusAction(
                 } else { newOrderStatus = "completed";
                 }
 
-                tx.update(orderRef, { status: newOrderStatus,
+                await orderRef.update({ status: newOrderStatus,
                     updatedAt: FieldValue.serverTimestamp(),
                     _version: FieldValue.increment(1) });
             }
 
-            // Update Escrow status atomically
-            const finalEscrowStatus = resolution === "release_seller" ? "released" : "refunded";
-            tx.update(escrowRef, {
-                status: finalEscrowStatus,
-                releasedBy: userId,
-                [resolution === "release_seller" ? "releasedAt" : "refundedAt"]: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
-                _version: FieldValue.increment(1)
-            });
-
-            // Credit the target user's wallet balance atomically using the pre-fetched walletSnap
-            const escrowAmount = freshEscrow.amount ?? dispute.refundAmount ?? freshDispute.refundAmount ?? 0;
-            let balanceBefore = 0;
-
-            if (!walletSnap.exists) {
-                tx.set(walletRef, {
+            // Ledger rows last, and only for the caller that moved the money.
+            if (credit.claimed) {
+                // Record transaction in target's wallet_transactions history.
+                // The id is derived from the dispute rather than auto-generated,
+                // so a retry cannot leave two credit records for one resolution.
+                const targetTxnId = `DISPUTE-RES-${disputeId}`;
+                const targetTxnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc(targetTxnId);
+                await targetTxnRef.set({
+                    id: targetTxnId,
+                    walletId: targetId,
                     userId: targetId,
-                    balance: escrowAmount,
-                    currency: "NGN",
+                    type: resolution === "release_seller" ? "funding" : "refund",
+                    amount: escrowAmount,
+                    balanceBefore,
+                    balanceAfter,
+                    reference: escrowId,
+                    orderId: freshDispute.orderId || undefined,
+                    description: `Dispute Resolution (${resolution}) for order #${freshDispute.orderId || disputeId}`,
+                    status: "completed",
                     createdAt: FieldValue.serverTimestamp(),
                     updatedAt: FieldValue.serverTimestamp()
                 });
+
+                // Write the global ledger record under DISPUTE-RES-${disputeId}
+                const txId = `DISPUTE-RES-${disputeId}`;
+                const txRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(txId);
+                await txRef.set({
+                    id: txId,
+                    userId: targetId,
+                    type: resolution === "release_seller" ? "dispute_payout" : "dispute_refund",
+                    module: "escrow",
+                    amount: escrowAmount,
+                    currency: "NGN",
+                    status: "completed",
+                    date: FieldValue.serverTimestamp(),
+                    reference: escrowId,
+                    description: `Dispute Resolution (${resolution}) for "${freshEscrow.productName || 'Marketplace Order'}"`
+                });
             } else {
-                balanceBefore = walletSnap.data()?.balance || 0;
-                tx.update(walletRef, {
-                    balance: FieldValue.increment(escrowAmount),
-                    updatedAt: FieldValue.serverTimestamp()
+                logger.warn("[resolveDisputeAction] wallet credit was already claimed; ledger rows left untouched", {
+                    disputeId, escrowId, targetId,
                 });
             }
-
-            // Record transaction in target's wallet_transactions history
-            const targetTxnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc();
-            tx.set(targetTxnRef, {
-                id: targetTxnRef.id,
-                walletId: targetId,
-                userId: targetId,
-                type: resolution === "release_seller" ? "funding" : "refund",
-                amount: escrowAmount,
-                balanceBefore,
-                balanceAfter: balanceBefore + escrowAmount,
-                reference: escrowId,
-                orderId: freshDispute.orderId || undefined,
-                description: `Dispute Resolution (${resolution}) for order #${freshDispute.orderId || disputeId}`,
-                status: "completed",
-                createdAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp()
-            });
-
-            // Write the global ledger record under DISPUTE-RES-${disputeId}
-            const txId = `DISPUTE-RES-${disputeId}`;
-            const txRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(txId);
-            tx.set(txRef, {
-                id: txId,
-                userId: targetId,
-                type: resolution === "release_seller" ? "dispute_payout" : "dispute_refund",
-                module: "escrow",
-                amount: escrowAmount,
-                currency: "NGN",
-                status: "completed",
-                date: FieldValue.serverTimestamp(),
-                reference: escrowId,
-                description: `Dispute Resolution (${resolution}) for "${freshEscrow.productName || 'Marketplace Order'}"`
-            });
-        });
+        }
 
         // Post-transaction notifications (non-fatal)
         try {

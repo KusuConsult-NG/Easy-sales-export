@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/session-guard";
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { claimStatusTransition } from "@/lib/status-transition";
 import { logger } from "@/lib/logger";
 import { FieldValue } from "@/lib/firestore-compat";
 import { isAdmin } from "@/lib/admin-permissions";
@@ -40,22 +41,39 @@ export async function PATCH(request: NextRequest) {
         }
 
         const data = snap.data();
-        if (data?.status !== "approved_pending_payout") {
+        const userId = data?.userId;
+
+        // Read the status, compare it, then write — with no lock and no
+        // wrapper, which is why the runTransaction sweep never saw this one.
+        // Two admins marking the same payout completed both passed the check
+        // and both wrote, so the audit trail records two different admins as
+        // the one who completed it and the second overwrites the first's
+        // transactionReference — the reference for a real bank transfer.
+        const nowIso = new Date().toISOString();
+        const claim = await claimStatusTransition({
+            collection: COLLECTIONS.COOPERATIVE_WITHDRAWALS,
+            id: withdrawalId,
+            from: "approved_pending_payout",
+            to: "completed",
+            patch: {
+                completedBy: session.user.id,
+                completedAt: nowIso,
+                ...(transactionReference ? { transactionReference } : {}),
+                updatedAt: nowIso,
+            },
+        });
+
+        if (!claim.claimed) {
             return NextResponse.json(
-                { success: false, error: `Cannot mark completed: current status is "${data?.status}"` },
+                {
+                    success: false,
+                    error: claim.status === null
+                        ? "Withdrawal not found"
+                        : `Cannot mark completed: current status is "${claim.status}"`,
+                },
                 { status: 409 }
             );
         }
-
-        const userId = data?.userId;
-
-        await ref.update({
-            status: "completed",
-            completedBy: session.user.id,
-            completedAt: FieldValue.serverTimestamp(),
-            ...(transactionReference ? { transactionReference } : {}),
-            updatedAt: FieldValue.serverTimestamp(),
-        });
 
         if (userId) {
             try {

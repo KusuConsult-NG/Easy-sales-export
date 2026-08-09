@@ -9,6 +9,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { rateLimit } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
+import { claimPaymentOnce } from "@/lib/wallet-ledger";
 import { getBaseUrl } from "@/lib/server-utils";
 
 const paymentLimiter = rateLimit(rateLimitConfig.payment);
@@ -149,19 +150,10 @@ async function _verifyPropertyPaymentAction(reference: string): Promise<ActionRe
             return { success: false, error: "Too many payment verification attempts. Please try again later.", data: null };
         }
 
-        // 🔒 SECURITY FIX #1: Double-payment protection
-        const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
-        const existingPayment = await processedRef.get();
-
-        // ✅ FIX: If webhook already processed this payment, return success not an error.
-        if (existingPayment.exists) {
-            logger.info(`[verifyPropertyPaymentAction] Payment ${reference} already processed — returning success.`);
-            // Find the property from metadata so we can return its ID
-            const txQuery = await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS)
-                .where("paymentReference", "==", reference).limit(1).get();
-            const propertyId = txQuery.empty ? "" : txQuery.docs[0].data()?.propertyId || "";
-            return { success: true, error: null, data: { propertyId, message: "Payment successful! Your funds are held securely in escrow." } };
-        }
+        // The "SECURITY FIX #1: Double-payment protection" read that used to
+        // sit here returned early when the marker existed, while the marker
+        // itself was written after fulfilment — so it caught a webhook that had
+        // already FINISHED and nothing else. claimPaymentOnce below is the gate.
 
         // Verify payment with Paystack
         const paymentData = await verifyPaystackPayment(reference);
@@ -187,40 +179,59 @@ async function _verifyPropertyPaymentAction(reference: string): Promise<ActionRe
         const propertyRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(propertyId);
         let amountInNaira = 0;
 
-        await db.runTransaction(async (tx) => { 
-            const freshPropertyDoc = await tx.get(propertyRef);
+        // The marker was written "inside the transaction for full atomicity",
+        // which the wrapper did not provide: the adapter queues the writes and
+        // flushes them afterwards, so two deliveries of this payment both
+        // reached the writes and both recorded the purchase, the ledger row and
+        // the payment record.
+        //
+        // Claimed first now. The escrow payment IS money in, so the default
+        // "completed" status is the correct one here.
+        amountInNaira = paymentData.data.amount / 100;
+
+        const claim = await claimPaymentOnce({
+            reference,
+            userId: session.user.id,
+            amount: amountInNaira,
+            type: "farm_nation_escrow",
+            source: "client_verify",
+            metadata: { propertyId },
+        });
+
+        if (!claim.claimed) {
+            logger.info(`[verifyFarmNationPayment] Payment ${reference} already claimed — nothing to do.`);
+            return {
+                success: true,
+                error: null,
+                data: { propertyId, amount: amountInNaira },
+            } as any;
+        }
+
+        {
+            const freshPropertyDoc = await propertyRef.get();
             if (!freshPropertyDoc.exists) {
                 throw new Error("Property not found");
             }
 
             const freshData = freshPropertyDoc.data()!;
-            amountInNaira = paymentData.data.amount / 100;
 
             if (freshData.status !== "pending_escrow") {
                 throw new Error(`Property is not in pending escrow state (status: ${freshData.status}).`);
             }
 
             // Transfer ownership later, just lock it in escrow
-            const updatedData = { 
+            const updatedData = {
                 status: "pending_escrow", // Wait for admin to release C of O
                 escrowHeldAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp() 
+                updatedAt: FieldValue.serverTimestamp()
             };
-            tx.update(propertyRef, updatedData);
+            await propertyRef.update(updatedData);
 
-            // Mark payment as processed inside the transaction for full atomicity
-            const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
-            tx.set(processedRef, { 
-                processedAt: FieldValue.serverTimestamp(),
-                userId: session.user.id,
-                amount: amountInNaira,
-                type: "farm_nation_escrow",
-                reference 
-            });
+            // (The processed_payments row is written by claimPaymentOnce above.)
 
             // Global Ledger Record
             const globalTxRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(reference);
-            tx.set(globalTxRef, {
+            await globalTxRef.set({
                 id: reference,
                 userId: session.user.id,
                 type: "property_purchase",
@@ -236,7 +247,7 @@ async function _verifyPropertyPaymentAction(reference: string): Promise<ActionRe
             // Log direct Paystack payment in the payments collection
             const paymentId = `PAY-${reference}`;
             const paymentRef = db.collection(COLLECTIONS.PAYMENTS).doc(paymentId);
-            tx.set(paymentRef, {
+            await paymentRef.set({
                 id: paymentId,
                 userId: session.user.id,
                 userEmail: session.user.email || "",
@@ -261,14 +272,14 @@ async function _verifyPropertyPaymentAction(reference: string): Promise<ActionRe
 
             if (!purchaseQuery.empty) { 
                 const purchaseRef = db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).doc(purchaseQuery.docs[0].id);
-                tx.update(purchaseRef, {
+                await purchaseRef.update({
                     status: "payment_confirmed",
                     escrowStatus: "held",
                     paymentVerifiedAt: FieldValue.serverTimestamp(),
                     updatedAt: FieldValue.serverTimestamp() 
                 });
             }
-        });
+        }
 
         return {
             success: true,
