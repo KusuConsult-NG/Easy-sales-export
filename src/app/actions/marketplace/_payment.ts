@@ -7,6 +7,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { revalidatePath } from "next/cache";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { claimPaymentOnce } from "@/lib/wallet-ledger";
 import { getPlatformFees } from "@/lib/system-settings";
 import { rateLimit } from "@/lib/rate-limiter";
 import { rateLimitConfig } from "@/lib/rate-limits.config";
@@ -353,9 +354,13 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
         const existingPayment = await processedRef.get();
 
-        // ✅ FIX: If the Paystack webhook already processed this payment (fires before user
-        // is redirected back), return SUCCESS instead of an error. The order IS live.
-        // Before this fix, users saw "Payment verification failed" even after being charged.
+        // Fast path: the webhook usually finishes before the user is redirected
+        // back, so return SUCCESS rather than an error — the order IS live, and
+        // users used to see "Payment verification failed" after being charged.
+        //
+        // This is a read with no lock, so it cannot catch the two arriving at
+        // once. claimPaymentOnce below is the actual gate; this only saves a
+        // Paystack round trip in the common case.
         if (existingPayment.exists) {
             // Find the order to return its ID to the UI
             const orderQuery = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
@@ -427,6 +432,41 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
 
         const lowStockProducts: { sellerId: string; title: string; qty: number; isFlashSale: boolean; id: string }[] = [];
 
+        // Claim the payment before fulfilling the order.
+        //
+        // The check above reads processedRef outside any transaction, and the
+        // marker is written inside it — so two callers both pass and both
+        // fulfil: stock decremented twice, escrow created twice, seller credited
+        // twice.
+        //
+        // This is not hypothetical here. The comment on that check says the
+        // Paystack webhook "fires before user is redirected back", so the two
+        // paths are known to overlap; only the sequential case was handled.
+        const claim = await claimPaymentOnce({
+            reference,
+            userId,
+            amount: amountInNaira,
+            type: "marketplace_order",
+            source: "order_verification",
+            metadata: { orderId: orderDoc.id },
+        });
+
+        if (!claim.claimed) {
+            // The fast path above catches the common case, where the webhook
+            // finished before the user was redirected back. This catches the
+            // one it cannot: both arriving at once. Same answer to the user —
+            // the order is live and they have been charged once.
+            logger.info(`[Marketplace] Payment ${reference} already processed; order is live.`);
+            return {
+                error: null,
+                success: true as const,
+                data: {
+                    orderId: orderData.orderId || orderDoc.id,
+                    message: "Order payment successful!",
+                },
+            };
+        }
+
         await db.runTransaction(async (transaction) => { 
             const items = orderData.items || [];
 
@@ -457,14 +497,9 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
                 _version: FieldValue.increment(1) 
             });
 
-            // 3. Mark payment as processed
-            transaction.set(processedRef, { 
-                processedAt: FieldValue.serverTimestamp(),
-                userId: userId,
-                amount: amountInNaira,
-                type: "marketplace_order",
-                reference 
-            });
+            // 3. (The processed_payments row is written by claimPaymentOnce
+            //     above. Writing it here as well is what put the marker AFTER
+            //     the fulfilment, so a duplicate could fulfil twice.)
 
             // 4. Decrement Inventory
             for (const { ref, doc, item } of productSnapshots) { 
