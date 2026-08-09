@@ -9,7 +9,7 @@ import { checkModuleAccess } from "@/lib/module-access-check";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { z } from "zod";
 import { createAdminAuditLog } from "@/lib/audit-log";
-import { claimPaymentOnce } from "@/lib/wallet-ledger";
+import { claimIdempotencyKey, claimPaymentOnce } from "@/lib/wallet-ledger";
 import { revalidatePath } from "next/cache";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
 import { serializeDoc, serializeDocs, serializeValue } from "@/lib/firestore-serialize";
@@ -123,25 +123,21 @@ export async function createExportWindowAction(
 
         let finalOrderId = "";
 
-        // The idempotency key here is NOT a guard, and was not one inside the
-        // wrapper either: it reads the key, and writes it at the end, with the
-        // window creation in between. Two submissions carrying the same key
-        // both read "absent" and both create an export window.
-        //
-        // Closing it needs an insert-if-absent against idempotency_keys — the
-        // shape claim_payment_once uses for processed_payments — which is a new
-        // migration and so a separate change. Recorded in
-        // docs/audit/atomic-money-migration.md. No money moves here: the window
-        // is created with status "pending" and nothing is charged, so the cost
-        // of the duplicate is a stray record rather than a stray payment.
+        // The idempotency key used to be read here and written at the end, with
+        // the window creation in between, so two submissions carrying the same
+        // key both read "absent" and both created a window. It is claimed now —
+        // insert-if-absent, decided by Postgres. See migration 019.
+        const keyClaim = await claimIdempotencyKey({
+            key: idempotencyKey,
+            userId: session.user.id,
+            action: "create_export_window",
+        });
+
+        if (!keyClaim.claimed) {
+            return { error: "Duplicate transaction detected. Please wait.", success: false as const, data: null };
+        }
+
         await (async () => {
-            const idempotencyRef = db.collection(COLLECTIONS.IDEMPOTENCY_KEYS).doc(idempotencyKey);
-            const idempotencyDoc = await idempotencyRef.get();
-
-            if (idempotencyDoc.exists) {
-                throw new Error("Duplicate transaction detected. Please wait.");
-            }
-
             // 1. Check if user is verified (KYC)
             const userRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
             const userDoc = await userRef.get();
@@ -183,10 +179,7 @@ export async function createExportWindowAction(
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp() });
 
-            // 3. Lock Key
-            await idempotencyRef.set({ userId: session.user.id,
-                action: "create_export_window",
-                createdAt: FieldValue.serverTimestamp() });
+            // (The idempotency key row is written by claimIdempotencyKey above.)
         })();
 
         revalidatePath("/export");

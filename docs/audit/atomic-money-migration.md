@@ -657,7 +657,7 @@ refund from three, dispute resolution from two. It attempts each in turn and
 stops on the first win. Race-safe, because once any attempt succeeds the row
 holds the target status and every other attempt fails against all of them.
 
-## Remaining runTransaction sites: 69 — and the money-carrying list is clear
+## Remaining runTransaction sites: 67 — and the money-carrying list is clear
 
 **Every file on the priority list has now been converted.** The list was built
 by looking for files showing both money signals and guard signals:
@@ -677,7 +677,7 @@ grep -c "increment(\|balance\|amount\|PROCESSED_PAYMENTS\|payout\|escrow" <file>
 | `academy/_payment.ts`, `farm-nation-payment.ts` | done |
 | `marketplace/_escrow.ts`, `_escrow_actions.ts`, `_payment.ts` | money paths done; status-only transitions remain |
 
-**What this does and does not mean.** The 69 remaining sites are status changes
+**What this does and does not mean.** The 67 remaining sites are status changes
 with no balance behind them — they can be converted opportunistically when a
 file is touched for another reason, and a wrapper around a single write costs
 nothing but clarity. What it does *not* mean is that no unguarded
@@ -685,10 +685,9 @@ check-then-write remains: this migration found several in files nobody had
 flagged, and the grep above only finds money *vocabulary*, not money *paths*. A
 status field that some other module pays against will not show up in it.
 
-The two known gaps that need a decision rather than a conversion are recorded
-below: `processExportInvestment`'s status-before-branch problem, and the
-idempotency-key checks in `_createExportWindowAction` and `platform.ts:201`
-that need a new migration.
+One known gap still needs a decision rather than a conversion:
+`processExportInvestment`'s status-before-branch problem, recorded below. The
+idempotency-key checks are fixed, and needed migration `019`.
 
 ## Fixed: the LAND_LISTINGS vocabulary split
 
@@ -820,6 +819,65 @@ bug and a lost payment, but somebody has to run the refund.
 `increment_within_ceiling` treats a missing ceiling as unbounded. Events created
 without `maxParticipants` must keep accepting registrations; refusing them would
 break every uncapped session on the platform.
+
+## Fixed: the idempotency keys that were not guards — needs migration 019
+
+**This is the first change in this migration that requires a NEW migration to be
+applied before it is deployed.** `supabase/migrations/019_claim_idempotency_key.sql`
+must be applied to production first; without it, both actions below throw.
+
+Two actions took an `idempotencyKey` from a form and checked it like this:
+
+```js
+const doc = await idempotencyRef.get();
+if (doc.exists) throw new Error("Duplicate transaction detected.");
+... do the work ...
+idempotencyRef.set({ ... });          // the key is written LAST
+```
+
+The read takes no lock and the key is written after the work, so two
+submissions carrying the same key both read "absent" and both proceeded. The
+key made the duplicate look impossible without preventing it.
+
+### platform.ts locked a member's savings twice
+
+`submitWithdrawalAction` is the one that mattered, and it carried **two**
+defects:
+
+1. The idempotency key above — a double submission locked the funds twice.
+2. `savingsBalance` was read, compared to the amount, and then decremented.
+   The same overdraft shape already fixed on `_submitWithdrawalAction` and WAVE
+   earnings, still open here.
+
+The key is claimed first, then the debit is taken through `debitJsonbBalance`
+under a row lock.
+
+**The minimum-balance floor is still advisory.** Two withdrawals that each
+leave ₦5,000 behind can together dip under it. What the debit now guarantees is
+that the balance cannot go NEGATIVE, which is the part that was losing money.
+Closing the floor race properly needs a debit primitive that takes a floor —
+recorded here rather than invented in passing, because `debit_jsonb_balance`
+checks `balance >= amount` and nothing more.
+
+### export.ts created duplicate windows
+
+`_createExportWindowAction` had the same key pattern. No money moves — the
+window is created `pending` and nothing is charged — so a duplicate cost a
+stray record. Claimed now for consistency and because the next person to add a
+charge to that path should not have to notice.
+
+### Proving it
+
+`src/__tests__/unit/idempotency-key-claims.test.ts` — 7 tests, **3 fail**
+against the pre-fix code.
+
+Only 3, and the reason is worth recording rather than dressing up: the jest
+harness cannot tell WHICH document a `transaction.get` targeted, so a fixture
+that makes any document exist makes the idempotency key exist too, and the
+pre-fix code short-circuits on its own check before reaching any write. Four
+of the seven are therefore vacuous against the old code. The three that fail
+are the substantive ones — that the key is claimed, with the right action, and
+that the debit goes through the locked primitive.
 
 ## Fixed: the check-then-writes the priority list could not see
 

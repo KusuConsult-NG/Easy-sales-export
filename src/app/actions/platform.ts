@@ -9,6 +9,7 @@ import { waveApplicationSchema,
     academyEnrollmentSchema,
     withdrawalSchema } from "@/lib/schemas";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { claimIdempotencyKey, debitJsonbBalance } from "@/lib/wallet-ledger";
 import { ZodError } from "zod";
 import { revalidatePath } from "next/cache";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
@@ -196,67 +197,95 @@ export async function submitWithdrawalAction(
         // Generate withdrawal request ID
         const withdrawalId = `WD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
-        // Transactional execution for Financial Integrity
-        await db.runTransaction(async (transaction) => { // 0. Idempotency Check
-            const idempotencyRef = db.collection(COLLECTIONS.IDEMPOTENCY_KEYS).doc(idempotencyKey);
-            const idempotencyDoc = await transaction.get(idempotencyRef);
-
-            if (idempotencyDoc.exists) {
-                throw new Error("Duplicate transaction detected. Please wait.");
-            }
-
-            // CORRECT PATTERN: Use Root Collection for members (Standardized)
-            const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(session.user.id);
-            const memberDoc = await transaction.get(memberRef);
-
-            if (!memberDoc.exists) { throw new Error("You are not a member of any cooperative");
-            }
-
-            const memberData = memberDoc.data();
-
-            // Validate that the user belongs to the target cooperative
-            if (memberData?.cooperativeId !== validatedData.cooperativeId) { throw new Error("Membership mismatch: You do not belong to this cooperative");
-            }
-
-            // Use 'savingsBalance' as per schema, fallback to 'balance' if legacy
-            const currentBalance = memberData?.savingsBalance || memberData?.balance || 0;
-
-            // Check if user has sufficient balance
-            if (currentBalance < validatedData.amount) {
-                throw new Error(`Insufficient balance. Available: ₦${currentBalance.toLocaleString()}`);
-            }
-
-            // Check minimum balance requirement
-            const MIN_BALANCE = 5000;
-            if (currentBalance - validatedData.amount < MIN_BALANCE) {
-                throw new Error(`You must maintain a minimum balance of ₦${MIN_BALANCE.toLocaleString()}`);
-            }
-
-            // 1. Lock Funds (Decrement Balance immediately)
-            // Use 'savingsBalance' to be consistent with cooperative.ts
-            transaction.update(memberRef, { savingsBalance: FieldValue.increment(-validatedData.amount),
-                lockedBalance: FieldValue.increment(validatedData.amount),
-                updatedAt: FieldValue.serverTimestamp() });
-
-            // 2. Create Withdrawal Request
-            const withdrawalRef = db.collection(COLLECTIONS.WITHDRAWALS).doc(withdrawalId);
-            transaction.set(withdrawalRef, { userId: session.user.id,
-                cooperativeId: validatedData.cooperativeId,
-                amount: validatedData.amount,
-                accountNumber: validatedData.accountNumber,
-                accountName: validatedData.accountName,
-                bankName: validatedData.bankName,
-                reason: validatedData.reason,
-                status: "pending", // pending | approved | rejected | completed
-                requestDate: FieldValue.serverTimestamp(),
-                createdAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp() });
-
-            // 3. Lock Key
-            transaction.set(idempotencyRef, { userId: session.user.id,
-                action: "submit_withdrawal",
-                createdAt: FieldValue.serverTimestamp() });
+        // WHAT WAS WRONG HERE
+        // -------------------
+        // Two defects, both on a path that locks a member's savings.
+        //
+        // 1. The idempotency key was read at the top and written at the BOTTOM,
+        //    with the fund lock in between. Two submissions carrying the same
+        //    key both read "absent" and both proceeded, so the member's savings
+        //    were locked TWICE for one request. The key made the duplicate look
+        //    impossible without preventing it.
+        //
+        // 2. The balance was read, compared to the amount, and then decremented
+        //    — inside runTransaction, which takes no lock. The same overdraft
+        //    shape already fixed on _submitWithdrawalAction and WAVE earnings.
+        //
+        // The key is claimed first, then the debit is taken under a row lock.
+        const keyClaim = await claimIdempotencyKey({
+            key: idempotencyKey,
+            userId: session.user.id,
+            action: "submit_withdrawal",
         });
+
+        if (!keyClaim.claimed) {
+            return { error: "Duplicate transaction detected. Please wait.", success: false as const };
+        }
+
+        // CORRECT PATTERN: Use Root Collection for members (Standardized)
+        const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(session.user.id);
+        const memberDoc = await memberRef.get();
+
+        if (!memberDoc.exists) { throw new Error("You are not a member of any cooperative");
+        }
+
+        const memberData = memberDoc.data();
+
+        // Validate that the user belongs to the target cooperative
+        if (memberData?.cooperativeId !== validatedData.cooperativeId) { throw new Error("Membership mismatch: You do not belong to this cooperative");
+        }
+
+        // Use 'savingsBalance' as per schema, fallback to 'balance' if legacy
+        const currentBalance = memberData?.savingsBalance || memberData?.balance || 0;
+
+        // The minimum-balance rule is a policy floor, and this read is still
+        // advisory: two withdrawals that each leave 5,000 behind can together
+        // dip under it. What the debit below guarantees is that the balance
+        // cannot go NEGATIVE, which is the part that was losing money. Closing
+        // the floor race too would need a debit primitive that takes a floor —
+        // recorded in docs/audit/atomic-money-migration.md rather than invented
+        // here.
+        const MIN_BALANCE = 5000;
+        if (currentBalance - validatedData.amount < MIN_BALANCE) {
+            throw new Error(`You must maintain a minimum balance of ₦${MIN_BALANCE.toLocaleString()}`);
+        }
+
+        // 1. Lock Funds — debited under a row lock, not read-check-write.
+        const debit = await debitJsonbBalance({
+            table: "cooperative_members",
+            id: session.user.id,
+            field: "savingsBalance",
+            amount: validatedData.amount,
+        });
+
+        if (!debit.ok) {
+            return {
+                error: debit.reason === "insufficient_funds"
+                    ? `Insufficient balance. Available: ₦${Number(debit.balance).toLocaleString()}`
+                    : "You are not a member of any cooperative",
+                success: false as const,
+            };
+        }
+
+        await memberRef.update({
+            lockedBalance: FieldValue.increment(validatedData.amount),
+            updatedAt: FieldValue.serverTimestamp() });
+
+        // 2. Create Withdrawal Request
+        const withdrawalRef = db.collection(COLLECTIONS.WITHDRAWALS).doc(withdrawalId);
+        await withdrawalRef.set({ userId: session.user.id,
+            cooperativeId: validatedData.cooperativeId,
+            amount: validatedData.amount,
+            accountNumber: validatedData.accountNumber,
+            accountName: validatedData.accountName,
+            bankName: validatedData.bankName,
+            reason: validatedData.reason,
+            status: "pending", // pending | approved | rejected | completed
+            requestDate: FieldValue.serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp() });
+
+        // (The idempotency key row is written by claimIdempotencyKey above.)
 
         revalidatePath("/cooperatives");
         revalidatePath("/dashboard/cooperatives");

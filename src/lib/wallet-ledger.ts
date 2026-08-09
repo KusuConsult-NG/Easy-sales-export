@@ -391,3 +391,56 @@ export async function incrementWithinCeiling(params: {
 
     return { ok: Boolean(row.ok), value: Number(row.value ?? 0), reason: row.reason ?? null };
 }
+
+export interface IdempotencyClaim {
+    /** True when this call claimed the key and should do the work. */
+    claimed: boolean;
+    /** When the winning caller claimed it; null when unknown. */
+    heldAt: string | null;
+}
+
+/**
+ * Claim a client-supplied idempotency key, exactly once.
+ *
+ * For actions that take an `idempotencyKey` from a form and must not run twice
+ * for it — a withdrawal request, creating an export window. The pattern this
+ * replaces read the key, did the work, then wrote the key LAST, so two
+ * submissions carrying the same key both read "absent" and both proceeded.
+ *
+ * Claim FIRST, then do the work. On `claimed: false`, stop.
+ *
+ * This is not a transaction around what follows. A caller that claims and then
+ * fails leaves the key held and cannot retry with it — deliberate, and the same
+ * trade-off `claimPaymentOnce` documents. Clients generate a fresh key per
+ * attempt, so a genuine retry is unaffected.
+ *
+ * See supabase/migrations/019_claim_idempotency_key.sql.
+ */
+export async function claimIdempotencyKey(params: {
+    key: string;
+    userId?: string;
+    action?: string;
+    /** Defaults to the idempotency_keys collection. */
+    collection?: string;
+}): Promise<IdempotencyClaim> {
+    const { key, userId, action, collection } = params;
+
+    if (!key) throw new Error("claimIdempotencyKey: key is required");
+
+    const { data, error } = await supabaseAdmin.rpc("claim_idempotency_key", {
+        p_key: key,
+        p_user_id: userId ?? null,
+        p_action: action ?? null,
+        p_collection: collection ?? "idempotency_keys",
+    });
+
+    if (error) {
+        logger.error("[wallet-ledger] claim_idempotency_key failed", { key, action, error });
+        throw new Error(`Idempotency claim failed: ${error.message}`);
+    }
+
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) throw new Error("Idempotency claim returned no result");
+
+    return { claimed: Boolean(row.claimed), heldAt: row.held_at ?? null };
+}
