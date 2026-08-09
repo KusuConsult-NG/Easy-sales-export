@@ -66,6 +66,12 @@ jobs:
     needs: final-validate
     runs-on: ubuntu-latest
 
+    # The default GITHUB_TOKEN is read-only, so `git push origin <tag>` came
+    # back 403 "Permission to ... denied to github-actions[bot]" and the deploy
+    # job was skipped. Tagging is the only step here that writes to the repo.
+    permissions:
+      contents: write
+
     steps:
       - uses: actions/checkout@v4
         with:
