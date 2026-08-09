@@ -458,6 +458,163 @@ function splitIncrements(data: Record<string, any>): {
 }
 
 /**
+ * Removes the paths owned by an atomic operation from a patch.
+ *
+ * processWriteData returns `{ ...existingData, ...changes }` — the WHOLE
+ * document, not just the changed fields. That is deliberate: merge_raw_data
+ * does a shallow `raw_data || patch`, so a nested change has to carry its
+ * whole top-level object or the siblings are dropped.
+ *
+ * It also means the patch carries a stale copy of every field the atomic
+ * functions are about to update. Writing that first would undo a concurrent
+ * writer's change moments before applying our own on top — which is precisely
+ * the race the SQL functions exist to prevent. The value must reach the
+ * database only once, from the function that changes it.
+ *
+ * Dotted paths are removed at their exact position so their siblings survive.
+ */
+function stripAtomicPaths(patch: Record<string, any>, paths: string[]): void {
+    for (const path of paths) {
+        if (!path.includes('.')) {
+            delete patch[path];
+            continue;
+        }
+
+        const parts = path.split('.');
+        let cur: any = patch;
+        for (let i = 0; i < parts.length - 1; i++) {
+            if (cur == null || typeof cur !== 'object') { cur = null; break; }
+            cur = cur[parts[i]];
+        }
+        if (cur && typeof cur === 'object') delete cur[parts[parts.length - 1]];
+    }
+}
+
+/**
+ * Separates arrayUnion / arrayRemove entries from the rest of a write.
+ *
+ * Same reason as splitIncrements: resolving these in JavaScript reads the
+ * array, appends to the value it just read, and writes it back. Two concurrent
+ * writers each keep their own element and lose the other's.
+ *
+ * 33 of the call sites are `roles: FieldValue.arrayUnion(...)` on users, which
+ * is what every module-access check reads — so a lost element is a paying user
+ * with no access to the module they just paid for. See
+ * supabase/migrations/016_atomic_array_ops.sql.
+ */
+function splitArrayOps(data: Record<string, any>): {
+    arrayOps: Record<string, { union?: any[]; remove?: any[] }>;
+    rest: Record<string, any>;
+} {
+    const arrayOps: Record<string, { union?: any[]; remove?: any[] }> = {};
+    const rest: Record<string, any> = {};
+
+    for (const [key, value] of Object.entries(data)) {
+        const fvType = getFieldValueType(value);
+        const elements = (value as any)?._elements;
+
+        if ((fvType === 'FieldValue.arrayUnion' || fvType === 'FieldValue.arrayRemove')
+            && Array.isArray(elements)) {
+            const op = fvType === 'FieldValue.arrayUnion' ? 'union' : 'remove';
+            arrayOps[key] = { ...(arrayOps[key] ?? {}), [op]: elements };
+            continue;
+        }
+
+        // A sentinel with no _elements is a caller bug or an unrecognised
+        // shape. Fall through to the old path rather than dropping the field.
+        rest[key] = value;
+    }
+
+    return { arrayOps, rest };
+}
+
+/**
+ * Applies array operations atomically in the database.
+ *
+ * Splits them into native typed columns and raw_data paths for the same reason
+ * applyIncrements does — `roles` is a real TEXT[] column on `users` AND a key
+ * inside raw_data, and the application reads the raw_data copy. Migration 016
+ * derives the column from the new raw_data value so the two cannot drift.
+ *
+ * Falls back to the previous read-modify-write when the RPC is unavailable —
+ * migration 016 not yet applied, or the mocked adapter under test. The fallback
+ * is not atomic, and says so, but it keeps writes working rather than failing.
+ */
+async function applyArrayOps(
+    collection: string,
+    id: string,
+    arrayOps: Record<string, { union?: any[]; remove?: any[] }>,
+    existing: Record<string, any>,
+): Promise<void> {
+    const tableName = getTableName(collection);
+    const nativeCols = NATIVE_COLUMNS[tableName] || [];
+    const fieldMap = FIELD_TO_COLUMN[tableName] || {};
+
+    const nativeOps: Record<string, { union?: any[]; remove?: any[] }> = {};
+    const jsonOps: Record<string, { union?: any[]; remove?: any[] }> = {};
+
+    for (const [field, ops] of Object.entries(arrayOps)) {
+        // Dotted paths always live in raw_data — a native column has no dots.
+        // A native column is also only usable when every element is a string,
+        // since these columns are TEXT[]; anything else goes to raw_data alone
+        // rather than being refused by the database.
+        const everyElementIsText = [...(ops.union ?? []), ...(ops.remove ?? [])]
+            .every(el => typeof el === 'string');
+
+        if (!field.includes('.') && everyElementIsText) {
+            const column = fieldMap[field] ?? field;
+            if (nativeCols.includes(column)) {
+                nativeOps[column] = ops;
+                continue;
+            }
+        }
+        jsonOps[field] = ops;
+    }
+
+    try {
+        const { error } = await supabaseAdmin.rpc('apply_array_ops', {
+            p_table: tableName,
+            p_id: id,
+            p_collection: tableName === 'document_collections' ? collection : null,
+            p_native: nativeOps,
+            p_json: jsonOps,
+        });
+
+        if (!error) return;
+
+        logger.warn(
+            `[supabase-db] apply_array_ops RPC unavailable for ${collection}/${id} ` +
+            `(${error.message}); falling back to a NON-ATOMIC array update. ` +
+            `Apply supabase/migrations/016_atomic_array_ops.sql to fix this.`
+        );
+    } catch (err: any) {
+        logger.warn(
+            `[supabase-db] apply_array_ops RPC threw for ${collection}/${id} ` +
+            `(${err?.message}); falling back to a NON-ATOMIC array update.`
+        );
+    }
+
+    // Fallback: the old behaviour. Concurrent writes can still be lost here.
+    const patch: Record<string, any> = {};
+    for (const [field, ops] of Object.entries(arrayOps)) {
+        let current = getNestedValue(existing, field);
+        current = Array.isArray(current) ? [...current] : [];
+
+        for (const el of ops.union ?? []) {
+            const elStr = JSON.stringify(el);
+            if (!current.some((a: any) => JSON.stringify(a) === elStr)) current.push(el);
+        }
+        if (ops.remove?.length) {
+            const removeSet = ops.remove.map((e: any) => JSON.stringify(e));
+            current = current.filter((a: any) => !removeSet.includes(JSON.stringify(a)));
+        }
+        patch[field] = current;
+    }
+
+    await supabasePartialUpdate(collection, id, patch);
+}
+
+/**
  * Applies increments atomically in the database.
  *
  * Splits them into native typed columns and raw_data paths, because both exist:
@@ -937,6 +1094,42 @@ export class SupabaseDocumentReference {
             exists = snap.exists;
             base = snap.data() ?? {};
         }
+        // A merging set() over an EXISTING document is the same race as
+        // update(): processWriteData resolves increment/arrayUnion/arrayRemove
+        // against `base`, which is a value we just read, and a concurrent
+        // writer's change is overwritten.
+        //
+        // This path is not incidental. The cooperative membership grant runs
+        // through `transaction.set(userRef, ..., { merge: true })`, so fixing
+        // update() alone would have left the paid-member role still dropping.
+        // Migration 010 left this gap for increments too; both are closed here.
+        //
+        // When the document does NOT exist there is nothing to race against and
+        // the upsert below needs concrete values, so the sentinels are resolved
+        // in JavaScript exactly as before.
+        if (options?.merge && exists) {
+            const { increments, rest: afterIncrements } = splitIncrements(data);
+            const { arrayOps, rest } = splitArrayOps(afterIncrements);
+
+            if (Object.keys(rest).length > 0) {
+                const processedRest = processWriteData(rest, base, true);
+                stripAtomicPaths(processedRest, [...Object.keys(increments), ...Object.keys(arrayOps)]);
+                if (!processedRest.id) processedRest.id = this.id;
+                await supabasePartialUpdate(this._collection, this.id, processedRest);
+            }
+
+            if (Object.keys(increments).length > 0) {
+                await applyIncrements(this._collection, this.id, increments, base);
+            }
+
+            if (Object.keys(arrayOps).length > 0) {
+                await applyArrayOps(this._collection, this.id, arrayOps, base);
+            }
+
+            await invalidateCacheForCollection(this._collection, this.id);
+            return;
+        }
+
         const processed = processWriteData(data, base, !!options?.merge);
         if (!processed.id) processed.id = this.id;
 
@@ -961,7 +1154,12 @@ export class SupabaseDocumentReference {
         // overwrote the first, silently losing one — on seller payouts, loan
         // repayments and savings balances among others. See
         // supabase/migrations/010_atomic_increments.sql.
-        const { increments, rest } = splitIncrements(data);
+        //
+        // Array operations are pulled out for the same reason — see
+        // supabase/migrations/016_atomic_array_ops.sql. 010 fixed increment
+        // only, and `roles: FieldValue.arrayUnion(...)` kept losing writes.
+        const { increments, rest: afterIncrements } = splitIncrements(data);
+        const { arrayOps, rest } = splitArrayOps(afterIncrements);
 
         const snap = await this.get();
         const existing = snap.data() ?? {};
@@ -979,6 +1177,7 @@ export class SupabaseDocumentReference {
         // Non-increment fields keep the existing behaviour exactly.
         if (Object.keys(rest).length > 0) {
             const processed = processWriteData(rest, existing, true);
+            stripAtomicPaths(processed, [...Object.keys(increments), ...Object.keys(arrayOps)]);
             if (!processed.id) processed.id = this.id;
             // Use partial update (not full upsert) so only changed fields overwrite raw_data.
             // This prevents wiping out fields like serviceRegistrations, kyc, etc.
@@ -988,6 +1187,10 @@ export class SupabaseDocumentReference {
 
         if (Object.keys(increments).length > 0) {
             await applyIncrements(this._collection, this.id, increments, existing);
+        }
+
+        if (Object.keys(arrayOps).length > 0) {
+            await applyArrayOps(this._collection, this.id, arrayOps, existing);
         }
 
         await invalidateCacheForCollection(this._collection, this.id);

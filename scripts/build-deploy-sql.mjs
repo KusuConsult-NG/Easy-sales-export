@@ -54,6 +54,7 @@ const EXPECTED = [
     { n: "013", why: "locked debit for raw_data balances" },
     { n: "014", why: "extends 013 to nested paths — MUST come after 013" },
     { n: "015", why: "bounded counters — MUST ship with the code that guards stock and capacity" },
+    { n: "016", why: "atomic arrayUnion/arrayRemove — MUST ship with the adapter change that calls it" },
     { n: "004", why: "row-level security — LAST, and in a low-traffic window" },
 ];
 
@@ -157,6 +158,7 @@ SELECT proname
     'platform_revenue_totals',
     'debit_jsonb_balance',
     'decrement_many_or_fail',
+    'apply_array_ops',
     'increment_within_ceiling',
     'enforce_member_active_on_paid'
  )
