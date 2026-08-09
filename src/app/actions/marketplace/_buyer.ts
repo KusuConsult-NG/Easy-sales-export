@@ -6,6 +6,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Product, Order, ProductCategory } from "@/lib/types/marketplace";
 import { withSafeAction } from "@/lib/safe-action";
 import { FieldValue } from "@/lib/firestore-compat";
+import { claimStatusTransition } from "@/lib/status-transition";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import type { ActionResponse } from "@/lib/safe-action";
 import { ProductSchema } from "@/lib/validations/marketplace";
@@ -301,48 +302,79 @@ async function _cancelOrderAction(orderId: string): Promise<ActionResponse<{ suc
             return { success: false as const, error: "Unauthorized", data: null };
         }
 
-        if (orderData?.status !== "pending_payment") {
-            return { success: false as const, error: "Only pending orders can be cancelled", data: null };
-        }
-
         const items = orderData.items || [];
         const escrowQuery = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("orderId", "==", orderId).get();
 
-        await db.runTransaction(async (transaction) => {
+        // WHAT WAS WRONG HERE
+        // -------------------
+        // Two defects stacked on one another, and the second is the nastier.
+        //
+        // 1. `status !== "pending_payment"` was a check-then-write with no
+        //    lock, and what followed puts stock BACK. Two cancellations of one
+        //    order both passed and both restocked.
+        //
+        // 2. The restock was an ABSOLUTE write — `currentQty + item.quantity`,
+        //    computed in JavaScript from a value read moments earlier. That
+        //    does not merely double on a concurrent cancel: it erases any
+        //    OTHER write to availableQuantity in between. A buyer purchasing
+        //    the same product while this ran had their decrement overwritten,
+        //    so the stock the shop thinks it holds is higher than it is, and
+        //    the next purchase oversells.
+        //
+        // The transition is claimed, and the restock is an increment applied in
+        // SQL. Note this is a different bug from the identical-looking restock
+        // in order-management.ts, which at least used FieldValue.increment.
+        const cancelClaim = await claimStatusTransition({
+            collection: COLLECTIONS.MARKETPLACE_ORDERS,
+            id: orderId,
+            from: "pending_payment",
+            to: "cancelled",
+            patch: {
+                paymentStatus: "cancelled",
+                updatedAt: new Date().toISOString(),
+            },
+        });
+
+        if (!cancelClaim.claimed) {
+            return {
+                success: false as const,
+                error: cancelClaim.status === null
+                    ? "Order not found"
+                    : "Only pending orders can be cancelled",
+                data: null,
+            };
+        }
+
+        await (async () => {
             // 1. Revert product quantities
             for (const item of items) {
                 if (item.productId && item.quantity) {
                     const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(item.productId);
-                    const productDoc = await transaction.get(productRef);
-                    if (productDoc.exists) {
-                        const productData = productDoc.data();
-                        const currentQty = productData?.availableQuantity || 0;
-                        transaction.update(productRef, {
-                            availableQuantity: currentQty + item.quantity,
-                            _version: FieldValue.increment(1),
-                            updatedAt: FieldValue.serverTimestamp()
-                        });
-                    }
+                    await productRef.update({
+                        availableQuantity: FieldValue.increment(item.quantity),
+                        _version: FieldValue.increment(1),
+                        updatedAt: FieldValue.serverTimestamp()
+                    });
                 }
             }
 
-            // 2. Update order status -> cancelled
-            transaction.update(orderRef, {
-                status: "cancelled",
-                paymentStatus: "cancelled",
-                updatedAt: FieldValue.serverTimestamp(),
+            // 2. Order status is already written by the claim above.
+            await orderRef.update({
                 _version: FieldValue.increment(1)
             });
 
             // 3. Update escrow transactions status -> cancelled
-            escrowQuery.docs.forEach(doc => {
-                transaction.update(doc.ref, {
+            //
+            // for...of, not forEach: these writes are awaited now, and an async
+            // forEach callback would fire them without waiting.
+            for (const doc of escrowQuery.docs) {
+                await doc.ref.update({
                     status: "cancelled",
                     updatedAt: FieldValue.serverTimestamp(),
                     _version: FieldValue.increment(1)
                 });
-            });
-        });
+            }
+        })();
 
         // 4. Trigger notification
         const primarySellerId = items[0]?.sellerId;

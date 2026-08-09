@@ -657,7 +657,7 @@ refund from three, dispute resolution from two. It attempts each in turn and
 stops on the first win. Race-safe, because once any attempt succeeds the row
 holds the target status and every other attempt fails against all of them.
 
-## Remaining runTransaction sites: 72 — and the money-carrying list is clear
+## Remaining runTransaction sites: 69 — and the money-carrying list is clear
 
 **Every file on the priority list has now been converted.** The list was built
 by looking for files showing both money signals and guard signals:
@@ -677,7 +677,7 @@ grep -c "increment(\|balance\|amount\|PROCESSED_PAYMENTS\|payout\|escrow" <file>
 | `academy/_payment.ts`, `farm-nation-payment.ts` | done |
 | `marketplace/_escrow.ts`, `_escrow_actions.ts`, `_payment.ts` | money paths done; status-only transitions remain |
 
-**What this does and does not mean.** The 72 remaining sites are status changes
+**What this does and does not mean.** The 69 remaining sites are status changes
 with no balance behind them — they can be converted opportunistically when a
 file is touched for another reason, and a wrapper around a single write costs
 nothing but clarity. What it does *not* mean is that no unguarded
@@ -820,6 +820,80 @@ bug and a lost payment, but somebody has to run the refund.
 `increment_within_ceiling` treats a missing ceiling as unbounded. Events created
 without `maxParticipants` must keep accepting registrations; refusing them would
 break every uncapped session on the platform.
+
+## Fixed: the check-then-writes the priority list could not see
+
+Written immediately after the priority table was emptied, because an empty
+table invites the wrong conclusion. Two targeted sweeps over the whole of
+`src/` found four more defects, one of them a security hole.
+
+**The sweeps.** The priority list was built by grepping files for money
+*vocabulary* — `increment(`, `balance`, `amount`, `payout`, `escrow`. That
+finds files that talk about money. It does not find a status field some other
+module pays against, and it does not find a lost update written as plain
+arithmetic. These do:
+
+```
+# 1. absolute writes: a field set to a previously-read value plus something
+grep -rnE "^\s+[a-zA-Z_]+: *\(?[a-zA-Z_]*([Cc]urrent|[Ee]xisting|[Pp]rev|[Oo]ld|[Tt]otal)[A-Za-z]* *(\|\| *0)? *\)? *\+ " src/
+
+# 2. status guards: a `.status !==` compare, then a write of that same status
+#    within ~40 lines, with no claimStatusTransition between them
+```
+
+Neither is a substitute for reading the code — both produced false positives
+(payment-gateway status checks, cache-sync flags) — but both found real bugs
+that four passes over this codebase had missed.
+
+### A FOURTH door onto loan approval
+
+`src/app/api/admin/cooperative/approve-loan/route.ts` writes
+`status: "approved"` to `LOAN_APPLICATIONS` behind `isAdmin()` **and nothing
+else**. The migration notes above describe closing "the third door"; there were
+four. This one is an API route rather than a server action, which is why
+reading the actions did not surface it.
+
+It also incremented the member's `loanBalance` off the unguarded check, so two
+approvals arriving together both read `"pending"` and both incremented — **the
+member was recorded as owing twice what they had borrowed.**
+
+Now uses the shared `needsDualControl` policy and claims the transition, like
+the other three.
+
+### A restock that erased other people's writes
+
+`marketplace/_buyer.ts` → `cancelOrderAction` restocked with
+`availableQuantity: currentQty + item.quantity` — an absolute write computed
+from a value read moments earlier.
+
+This is worse than the same-shaped restock in `order-management.ts`, which at
+least used `FieldValue.increment`. An absolute write does not merely double on
+a concurrent cancel: it **erases any other write to `availableQuantity` in
+between**, including a concurrent purchase's decrement. The shop then believes
+it holds more stock than it does, and the next purchase oversells.
+
+### A payout completion with no wrapper at all
+
+`api/admin/cooperative/mark-withdrawal-completed` had no `runTransaction`, which
+is exactly why every sweep of this migration missed it: it read the status,
+compared it, and wrote, in plain sequential code. Two admins completing one
+payout both passed, and the second overwrote the first's
+`transactionReference` — the reference for a real bank transfer.
+
+**A wrapper is not the disease.** Its absence is not health, and this file is
+the proof.
+
+### Escrow release on a property
+
+`farm-nation-admin.ts` transferred property ownership and queued a payout off an
+unguarded check. The payout row is keyed on the transaction id so it could not
+duplicate, but the ownership transfer and the escrow release both ran twice with
+nothing recording that they had.
+
+### Proving it
+
+`src/__tests__/unit/unguarded-check-then-writes.test.ts` — 9 tests, **8 fail**
+against the pre-fix code.
 
 ## Fixed: the remaining module payment paths
 
