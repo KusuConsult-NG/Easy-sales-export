@@ -448,7 +448,6 @@ By that measure, the unconverted files with the most money in them are:
 
 | File | Why it is on the list |
 |---|---|
-| `marketplace/_payment.ts` | order payment fulfilment |
 | `cooperative/_admin.ts` | admin-side contribution and withdrawal handling |
 | `cooperative/_loans.ts` | loan disbursement and repayment |
 | `actions/export.ts`, `export-payment.ts` | export investment payments |
@@ -494,6 +493,54 @@ Three changes follow from it:
 
 If the vocabularies are ever genuinely unified, that file is the only place that
 has to change.
+
+## Fixed: marketplace order payment could fulfil twice
+
+`_verifyOrderPaymentAction` read the payment marker outside any transaction and
+wrote it inside one, so two callers both passed and both fulfilled: stock
+decremented twice, escrow created twice, seller credited twice.
+
+The code already knew the two paths overlap. The comment on that check reads:
+
+> the Paystack webhook already processed this payment (fires before user is
+> redirected back)
+
+Only the sequential case was handled — the webhook finishing *first*. Both
+arriving at once was not.
+
+The early check stays, because it does something the claim does not: it returns
+the human-facing order number and saves a Paystack round trip in the common
+case. It is now documented as a fast path rather than a guard, with
+`claimPaymentOnce` as the actual gate.
+
+## NOT fixed: stock can still be oversold across DIFFERENT orders
+
+Within one payment, the claim now means inventory is decremented once. But two
+*different* orders for the last unit still race:
+
+```js
+if (currentQty >= item.quantity) {
+    transaction.update(ref, { availableQuantity: FieldValue.increment(-item.quantity) });
+} else {
+    throw new Error(`Insufficient stock for product: ${item.productTitle}`);
+}
+```
+
+The check takes no lock, so both pass and stock goes negative. Migration `010`
+makes this worse rather than better, as it did for escrow and cooperative
+savings: the decrements used to lose one another, which hid the oversell.
+
+This needs the same **conditional decrement** primitive as training capacity
+(#28) — change a counter only while it stays within a bound, in one statement:
+
+```sql
+UPDATE ... SET available = available - :qty
+ WHERE available >= :qty
+RETURNING available;
+```
+
+That is now the second caller waiting on it — marketplace stock and training
+capacity — so it is worth building rather than deferring again.
 
 ## Not yet migrated
 
