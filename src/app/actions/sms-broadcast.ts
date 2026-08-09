@@ -108,8 +108,11 @@ async function resolvePhoneStates(
     };
 
     // 1. Primary: users
+    // .all(): a broadcast that reaches the first 5,000 of ~41,000 recipients and
+    // reports success is worse than one that takes longer.
     const usersStream = db.collection(COLLECTIONS.USERS)
         .select("phone", "phoneNumber", "kyc", "stateOfOrigin", "state", "address")
+        .all()
         .get();
     for (const d of (await usersStream).docs) {
         const u: any = d.data();
@@ -214,7 +217,7 @@ async function collectSmsRecipients(
             }
 
             // 1. Primary: root users collection
-            const usersStream = db.collection(COLLECTIONS.USERS).select("stateOfOrigin", "state", "address", "phone", "phoneNumber", "kyc", "fullName", "name").get();
+            const usersStream = db.collection(COLLECTIONS.USERS).select("stateOfOrigin", "state", "address", "phone", "phoneNumber", "kyc", "fullName", "name").all().get();
             const seenUserIds = new Set<string>();
             for (const d of (await usersStream).docs) {
                 if (excludeIds.has(d.id)) continue;

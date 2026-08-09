@@ -41,7 +41,7 @@ export async function runServiceRegistrationRecoveryAction(): Promise<{ success:
         // 1. Get all users
         // Note: For very large databases, this should be paginated. 
         // For current scale, we'll process in chunks if possible, but start with a full sweep.
-        const usersSnap = await db.collection(COLLECTIONS.USERS).get();
+        const usersSnap = await db.collection(COLLECTIONS.USERS).all().get();
         stats.totalUsersProcessed = usersSnap.size;
 
         for (const userDoc of usersSnap.docs) {

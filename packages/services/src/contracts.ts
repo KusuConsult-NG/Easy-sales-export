@@ -59,6 +59,12 @@ export interface AnalyticsData {
         totalRevenue: number;
         monthlyRevenue: number;
         totalTransactions: number;
+        /**
+         * False when revenue could not be determined from Paystack or the
+         * database. Render "unavailable" rather than totalRevenue when this is
+         * false — a confident zero is indistinguishable from a day with no sales.
+         */
+        revenueAvailable: boolean;
         pendingApprovals: number;
         recentActivityCount: number;
     };

@@ -131,10 +131,18 @@ export default function AdminDashboardPage() {
         },
         {
             label: (dateRange.from || dateRange.to) ? "Revenue in Range" : "Total Revenue",
-            value: `₦${(stats.platformOverview.totalRevenue ?? 0).toLocaleString()}`,
+            // "Unavailable" rather than ₦0 when neither Paystack nor the
+            // database could answer. A zero here is a real business figure; an
+            // outage rendered as ₦0 is indistinguishable from a day with no
+            // sales, and reads as though the platform earned nothing.
+            value: stats.platformOverview.revenueAvailable === false
+                ? "Unavailable"
+                : `₦${(stats.platformOverview.totalRevenue ?? 0).toLocaleString()}`,
             icon: DollarSign,
             color: "purple",
-            change: (dateRange.from || dateRange.to) ? "Payments in selected period" : "Based on transaction volume",
+            change: stats.platformOverview.revenueAvailable === false
+                ? "Could not reach Paystack or the database — retry shortly"
+                : (dateRange.from || dateRange.to) ? "Payments in selected period" : "Based on transaction volume",
             href: "/admin/finance",
         },
         {

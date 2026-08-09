@@ -14,6 +14,7 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { debitJsonbBalance, incrementWithinCeiling } from "@/lib/wallet-ledger";
 import { z } from "zod";
 import { strictNameSchema, strictEmailSchema, strictPhoneSchema } from "@/lib/schemas";
 import { Resend } from "resend";
@@ -1227,29 +1228,37 @@ async function _registerForTrainingAction(
 
         const eventRef = db.collection(COLLECTIONS.WAVE_TRAINING_EVENTS).doc(eventId);
 
-        await db.runTransaction(async (transaction) => {
-            const eventDoc = await transaction.get(eventRef);
-            if (!eventDoc.exists) {
-                throw new Error("Event not found");
-            }
+        // Take the seat before recording the registration.
+        //
+        // The capacity check ran inside runTransaction, which takes no lock, so
+        // two people claiming the last seat both read the same count, both
+        // passed, and both registered — someone arrives at a session with no
+        // place. Migration 010 made that worse rather than better: the
+        // increments used to lose one another, which hid the overshoot.
+        //
+        // An event with no maxParticipants recorded is treated as unbounded,
+        // so uncapped sessions keep working.
+        const seat = await incrementWithinCeiling({
+            collection: COLLECTIONS.WAVE_TRAINING_EVENTS,
+            id: eventId,
+            field: "currentParticipants",
+            amount: 1,
+            ceilingField: "maxParticipants",
+        });
 
-            const event = eventDoc.data() as WaveTrainingEvent;
+        if (!seat.ok) {
+            return {
+                success: false as const,
+                error: seat.reason === "at_capacity" ? "Event is full" : "Event not found",
+                data: null,
+            };
+        }
 
-            if (event.currentParticipants >= event.maxParticipants) {
-                throw new Error("Event is full");
-            }
-
-            const registrationRef = db.collection(COLLECTIONS.WAVE_TRAINING_REGISTRATIONS).doc();
-            transaction.set(registrationRef, {
-                userId,
-                eventId,
-                registeredAt: FieldValue.serverTimestamp(),
-                attended: false
-            });
-
-            transaction.update(eventRef, {
-                currentParticipants: FieldValue.increment(1)
-            });
+        await db.collection(COLLECTIONS.WAVE_TRAINING_REGISTRATIONS).add({
+            userId,
+            eventId,
+            registeredAt: FieldValue.serverTimestamp(),
+            attended: false
         });
 
         await createAdminAuditLog({
@@ -1317,16 +1326,35 @@ async function _withdrawEarningsAction(
         const walletTxnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc(withdrawalId);
 
         // PHASE 2: ATOMIC RESERVATION
+        // Debit the earnings under a row lock, before recording anything.
+        //
+        // The sufficiency check above happens outside any transaction — it reads
+        // a snapshot, releases it, and the decrement happens later. Two
+        // withdrawals submitted at once both passed against the same snapshot
+        // and both debited. The hasPendingWithdrawal flag was meant to prevent
+        // that and could not: it was a check-then-write inside the same
+        // lock-free transaction.
+        //
+        // Taking the money first means the second request is refused for
+        // insufficient funds, which is the honest answer — the first one has it.
+        const debit = await debitJsonbBalance({
+            table: "users",
+            id: userId,
+            field: "serviceRegistrations.wave.waveEarningsBalance",
+            amount,
+        });
+
+        if (!debit.ok) {
+            return {
+                success: false as const,
+                error: debit.reason === "insufficient_funds"
+                    ? "Insufficient available balance"
+                    : "WAVE earnings record not found",
+                data: null,
+            };
+        }
+
         await db.runTransaction(async (transaction) => {
-            const userSnap = await transaction.get(userRef);
-            const userData = userSnap.data();
-
-            // Check if there is already a pending request
-            const hasPending = userData?.serviceRegistrations?.wave?.hasPendingWithdrawal;
-            if (hasPending) {
-                throw new Error("You already have a pending withdrawal request. Please wait for it to be processed.");
-            }
-
             // Create WAVE Withdrawal Record
             transaction.set(withdrawalRef, {
                 withdrawalId,
@@ -1356,10 +1384,10 @@ async function _withdrawEarningsAction(
                 _version: 0
             });
 
-            // Set Lock Flag and Debit Balance on User Document
+            // Set the pending flag. The balance was already debited above,
+            // under a lock — decrementing it here as well would take it twice.
             transaction.update(userRef, {
                 'serviceRegistrations.wave.hasPendingWithdrawal': true,
-                'serviceRegistrations.wave.waveEarningsBalance': FieldValue.increment(-amount),
                 'serviceRegistrations.wave.lastWithdrawalRequestedAt': FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp()
             });

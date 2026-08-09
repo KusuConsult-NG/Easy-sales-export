@@ -13,6 +13,7 @@ import { requireSession } from "@/lib/session-guard";
 import { logAuditAction } from "@/app/actions/audit";
 import { invalidateUserCache, invalidateCooperativeCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { debitJsonbBalance } from "@/lib/wallet-ledger";
 import { COOPERATIVE_CONFIG } from "@/lib/constants";
 import { NIGERIAN_LOCATIONS } from "@/lib/locations";
 import { contributionSchema,
@@ -765,22 +766,40 @@ async function _submitWithdrawalAction(
         } catch (e) { return { error: "Invalid bank account details", success: false as const, data: null };
         }
 
-        await db.runTransaction(async (transaction) => { // Verify membership and balance
-            const membershipsRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
-            const membershipDoc = await transaction.get(membershipsRef.doc(userId));
-            if (!membershipDoc.exists || membershipDoc.data()?.membershipStatus !== "active") {
-                throw new Error("You are not an active cooperative member");
-            }
+        // Membership must be active before any money moves.
+        const membershipSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
+        if (!membershipSnap.exists || membershipSnap.data()?.membershipStatus !== "active") {
+            return { success: false as const, error: "You are not an active cooperative member", data: null };
+        }
 
-            const currentBalance = membershipDoc.data()?.savingsBalance || 0;
-            if (amount > currentBalance) { throw new Error("Insufficient savings balance");
-            }
+        // Reserve the funds under a row lock.
+        //
+        // This read savingsBalance, compared it to the amount, and then
+        // decremented — all inside runTransaction, which takes no lock. Two
+        // withdrawals submitted at once both read the same balance, both passed
+        // the check, and both deducted, taking a member's savings negative.
+        //
+        // Migration 010 made that worse rather than better: the increments used
+        // to lose one another, which accidentally hid the overdraft. Once they
+        // apply correctly, both deductions land.
+        const debit = await debitJsonbBalance({
+            table: "cooperative_members",
+            id: userId,
+            field: "savingsBalance",
+            amount,
+        });
 
-            // Deduct funds IMMEDIATELY (Escrow pattern)
-            transaction.update(membershipDoc.ref, { savingsBalance: FieldValue.increment(-amount),
-                updatedAt: FieldValue.serverTimestamp()
-            });
+        if (!debit.ok) {
+            return {
+                success: false as const,
+                error: debit.reason === "insufficient_funds"
+                    ? "Insufficient savings balance"
+                    : "You are not an active cooperative member",
+                data: null,
+            };
+        }
 
+        await db.runTransaction(async (transaction) => {
             // Create withdrawal request
             const withdrawalRef = db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).doc();
             transaction.set(withdrawalRef, { userId,
@@ -1275,29 +1294,40 @@ async function _createFixedSavingsAction(
         if (amount <= 0) { return { error: "Amount must be positive", success: false as const, data: null };
         }
 
-        // Transactional execution
-        await db.runTransaction(async (transaction) => { // Check wallet/savings balance to ensure they have funds to lock
-            const membershipsRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
-            const membershipSnapshot = await transaction.get(
-                membershipsRef.where("userId", "==", userId)
-            );
+        const membershipSnapshot = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+            .where("userId", "==", userId)
+            .limit(1)
+            .get();
 
-            if (membershipSnapshot.empty) {
-                throw new Error("Membership not found");
-            }
+        if (membershipSnapshot.empty) {
+            return { success: false as const, error: "Membership not found", data: null };
+        }
 
-            const membershipDoc = membershipSnapshot.docs[0];
-            const membershipRef = membershipDoc.ref;
+        const membershipId = membershipSnapshot.docs[0].id;
 
-            const currentSavings = membershipDoc.data().savingsBalance || 0;
+        // Lock the savings before creating the plan.
+        //
+        // Same read-check-write as the withdrawal path: two plans created at
+        // once both read the same savings balance, both passed the sufficiency
+        // check, and both deducted — locking away more than the member had.
+        const debit = await debitJsonbBalance({
+            table: "cooperative_members",
+            id: membershipId,
+            field: "savingsBalance",
+            amount,
+        });
 
-            if (currentSavings < amount) { throw new Error("Insufficient savings balance to create this fixed savings plan");
-            }
+        if (!debit.ok) {
+            return {
+                success: false as const,
+                error: debit.reason === "insufficient_funds"
+                    ? "Insufficient savings balance to create this fixed savings plan"
+                    : "Membership not found",
+                data: null,
+            };
+        }
 
-            // Deduct from main savings
-            transaction.update(membershipRef, { savingsBalance: FieldValue.increment(-amount)
-            });
-
+        await db.runTransaction(async (transaction) => {
             // Create Fixed Savings Record
             const fixedSavingsRef = db.collection(COLLECTIONS.COOPERATIVE_FIXED_SAVINGS).doc();
             transaction.set(fixedSavingsRef, { memberId: userId,

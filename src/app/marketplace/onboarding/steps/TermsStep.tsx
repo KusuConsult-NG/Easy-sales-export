@@ -125,11 +125,21 @@ export default function TermsStep({ accepted, onChange, onNext, onBack, isFinalS
                 <div className="text-center text-sm text-slate-600">
                     <p>
                         Read the full{" "}
-                        <a href="#" className="text-green-600 hover:text-green-700 font-medium">
+                        <a
+                            href="/terms"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-green-600 hover:text-green-700 font-medium"
+                        >
                             Terms of Service
                         </a>
                         {" "}and{" "}
-                        <a href="#" className="text-green-600 hover:text-green-700 font-medium">
+                        <a
+                            href="/privacy"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-green-600 hover:text-green-700 font-medium"
+                        >
                             Privacy Policy
                         </a>
                     </p>

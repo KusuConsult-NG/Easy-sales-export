@@ -8,6 +8,8 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { claimStatusTransition, claimStatusTransitionFromAny } from "@/lib/status-transition";
+import { PURCHASABLE_STATUSES, isPurchasable, isBrowsable, statusAfterCancellation } from "@/lib/land-listing-status";
 import { isValidState, isValidLGA, normalizeLocation } from "@/lib/locations";
 import { invalidateUserCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { serializeDoc, serializeDocs, serializeValue } from "@/lib/firestore-serialize";
@@ -101,6 +103,13 @@ async function _getPropertiesAction(filters?: {
         let properties = serializeDocs<Property>(snapshot.docs);
 
         // Apply filters (Client-side for now as Firestore is limited)
+        // Only show listings that can actually be bought.
+        //
+        // There was no status filter here at all, so buyers were shown listings
+        // awaiting verification, ones an admin had explicitly rejected, and
+        // soft-deleted ones — and could start a purchase that then failed.
+        properties = properties.filter((p) => isBrowsable(p.status));
+
         if (filters) { 
             if (filters.search) {
                 const searchLower = filters.search.toLowerCase();
@@ -492,7 +501,10 @@ async function _initiatePropertyPurchaseAction(
         }
 
         const property = propertyDoc.data() as Property;
-        if (property.status !== "available") { 
+        // "verified" and "available" both mean approved and for sale — see
+        // src/lib/land-listing-status.ts. Requiring only "available" made every
+        // admin-verified land listing unbuyable.
+        if (!isPurchasable(property.status)) { 
             return { success: false as const, error: "Property is no longer available", data: null, meta: null };
         }
 
@@ -510,14 +522,46 @@ async function _initiatePropertyPurchaseAction(
             return { success: false as const, error: "Cooperative membership required. Please complete your cooperative registration.", data: null, meta: null };
         }
 
-        // ── EXECUTE PURCHASE IN A TRANSACTION ──────
-        await db.runTransaction(async (transaction) => {
-            const propSnap = await transaction.get(propertyRef);
-            if (!propSnap.exists) throw new Error("Property not found");
-            
-            const propData = propSnap.data() as Property;
-            if (propData.status !== "available") throw new Error("Property is no longer available");
+        // ── CLAIM THE PROPERTY, THEN RECORD THE PURCHASE ──────
+        //
+        // The availability check used to live inside runTransaction, which
+        // takes no lock. Two buyers requesting the same property at once both
+        // read "available", both created a purchase request, and both marked it
+        // pending — the same property sold twice, with two buyers each expecting
+        // to pay for it.
+        //
+        // Claiming available → pending is the reservation: exactly one buyer
+        // wins, and the loser is told it has gone rather than being taken to
+        // payment for something they cannot have.
+        const propSnapPre = await propertyRef.get();
+        if (!propSnapPre.exists) {
+            return { success: false as const, error: "Property not found", data: null, meta: null };
+        }
+        const propData = propSnapPre.data() as Property;
 
+        const claim = await claimStatusTransitionFromAny({
+            collection: COLLECTIONS.LAND_LISTINGS,
+            id: propertyId,
+            fromAny: [...PURCHASABLE_STATUSES],
+            to: "pending",
+            patch: { pendingBuyerId: session.user.id, pendingSince: new Date().toISOString() },
+            // Records which status the listing was reserved FROM, so cancelling
+            // can put it back rather than guessing. A listing reserved from
+            // "verified" must return to "verified" or it drops out of the
+            // public land view.
+            recordPreviousAs: "previousStatus",
+        });
+
+        if (!claim.claimed) {
+            return {
+                success: false as const,
+                error: "Property is no longer available",
+                data: null,
+                meta: null,
+            };
+        }
+
+        await db.runTransaction(async (transaction) => {
             // Create purchase request record
             const purchaseRequestRef = db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).doc();
             transaction.set(purchaseRequestRef, { 
@@ -540,11 +584,9 @@ async function _initiatePropertyPurchaseAction(
                 updatedAt: FieldValue.serverTimestamp() 
             });
 
-            // Mark property as pending
-            transaction.update(propertyRef, { 
-                status: "pending",
-                updatedAt: FieldValue.serverTimestamp() 
-            });
+            // (The property was already moved to "pending" by the claim above.
+            //  Setting it here as well is what put the reservation AFTER the
+            //  purchase request, so two buyers could both get that far.)
         });
 
         return { error: null, success: true as const, meta: null, data: null };
@@ -633,32 +675,60 @@ async function _cancelPurchaseRequestAction(requestId: string): Promise<ActionRe
             return { success: false as const, error: "Can only cancel pending payment requests", data: null, meta: null };
         }
 
-        // ── EXECUTE CANCELLATION IN A TRANSACTION ──────
-        await db.runTransaction(async (transaction) => {
-            const reqSnap = await transaction.get(requestRef);
-            if (!reqSnap.exists) throw new Error("Purchase request not found");
-            
-            const reqData = reqSnap.data();
-            if (reqData?.buyerId !== session.user.id) throw new Error("Unauthorized");
-            if (reqData?.status !== "pending_payment") throw new Error("Can only cancel pending payment requests");
-
-            // Update request status
-            transaction.update(requestRef, { 
-                status: "cancelled",
-                escrowStatus: "refunded",
-                cancelledAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp() 
-            });
-
-            // Mark property as available again
-            if (reqData?.propertyId) { 
-                const pRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(reqData.propertyId);
-                transaction.update(pRef, {
-                    status: "verified",
-                    updatedAt: FieldValue.serverTimestamp() 
-                });
-            }
+        // ── CLAIM THE CANCELLATION, THEN RELEASE THE PROPERTY ──────
+        //
+        // Claiming means two simultaneous cancellations cannot both release the
+        // property — which, now that the reservation happens up front, would
+        // otherwise free a listing another buyer had already claimed.
+        const cancelClaim = await claimStatusTransition({
+            collection: COLLECTIONS.FARM_NATION_TRANSACTIONS,
+            id: requestId,
+            from: "pending_payment",
+            to: "cancelled",
+            patch: { escrowStatus: "refunded", cancelledAt: new Date().toISOString() },
         });
+
+        if (!cancelClaim.claimed) {
+            return {
+                success: false as const,
+                error: "Can only cancel pending payment requests",
+                data: null,
+                meta: null,
+            };
+        }
+
+        // Return the property to the pool.
+        //
+        // This used to set "verified", which left the listing unbuyable:
+        // purchasing requires "available", so no buyer could claim it again.
+        //
+        // "verified" is NOT an invalid status — it is the land module's
+        // admin-approved state, and getVerifiedLandListings queries exactly
+        // that. The problem is that LAND_LISTINGS is shared by two modules with
+        // incompatible vocabularies:
+        //
+        //   land-actions   pending_verification → verified / rejected → deleted
+        //                  public view queries status = 'verified'
+        //   farm-nation    creates as "available"; purchase requires "available"
+        //
+        // So a listing is visible in one module or purchasable in the other,
+        // never both. Restoring "available" here is right for a listing that
+        // came through farm-nation — which is the only kind that can reach this
+        // path, since a "verified" listing cannot be purchased in the first
+        // place. The underlying split is recorded in
+        // docs/audit/atomic-money-migration.md and needs a decision, not a
+        // patch.
+        if (requestData?.propertyId) {
+            const listingRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(requestData.propertyId);
+            const listingSnap = await listingRef.get();
+
+            await listingRef.update({
+                status: statusAfterCancellation(listingSnap.data()?.previousStatus),
+                pendingBuyerId: null,
+                previousStatus: null,
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+        }
 
         return { error: null, success: true as const, meta: null, data: null };
     } catch (error: any) { 

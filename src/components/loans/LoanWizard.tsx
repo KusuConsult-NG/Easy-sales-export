@@ -15,6 +15,8 @@ import {
     CheckCircle
 } from "lucide-react";
 import { loanApplicationSchema, type LoanApplicationData } from "@/lib/validations/loan";
+import DocumentUpload from "@/components/shared/DocumentUpload";
+import { uploadDocumentAction } from "@/app/actions/upload";
 import { BUSINESS_LOAN_MONTHLY_RATE, MIN_TERM_MONTHS, MAX_TERM_MONTHS } from "@/lib/loan-terms";
 import { LoanPurpose } from "@/types/strict";
 
@@ -31,9 +33,28 @@ interface LoanWizardProps {
     onCancel?: () => void;
 }
 
+/**
+ * Documents a loan application may carry.
+ *
+ * `type` matches the union in loanApplicationSchema. Only the ID is required —
+ * the schema asks for at least one document, and demanding a full set would
+ * block applicants who have the essentials to hand.
+ */
+const REQUIRED_DOCUMENTS: Array<{
+    type: "id" | "business_reg" | "financial_statement" | "other";
+    label: string;
+    required: boolean;
+}> = [
+    { type: "id", label: "Government-issued ID", required: true },
+    { type: "business_reg", label: "Business registration (CAC certificate)", required: false },
+    { type: "financial_statement", label: "Recent financial statement or bank statement", required: false },
+];
+
 export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
     const [currentStep, setCurrentStep] = useState(1);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [uploading, setUploading] = useState<string[]>([]);
+    const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
 
     const methods = useForm<LoanApplicationData>({
         resolver: zodResolver(loanApplicationSchema as any),
@@ -53,17 +74,72 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                 yearsInOperation: 0,
                 annualRevenue: 0,
             },
-            documents: [
-                {
-                    name: "dummy_id.pdf",
-                    url: "https://example.com/dummy_id.pdf",
-                    type: "id"
-                }
-            ],
+            // Empty by design. This used to default to a hardcoded
+            // "dummy_id.pdf" pointing at example.com, which satisfied the
+            // schema's "at least one document" rule — so every application ever
+            // submitted referenced a document that did not exist, and step 4
+            // had no way to replace it.
+            documents: [],
         },
     });
 
-    const { register, formState: { errors }, trigger, getValues, watch } = methods;
+    const { register, formState: { errors }, trigger, getValues, watch, setValue } = methods;
+
+    const uploadedDocuments = watch("documents") ?? [];
+
+    /**
+     * Uploads a file and records the returned URL on the form.
+     *
+     * The file goes through uploadDocumentAction, which validates it and stores
+     * it in Cloudinary. It previously went nowhere: step 4 was never built, and
+     * the form defaulted to a hardcoded dummy_id.pdf that satisfied the
+     * schema's "at least one document" rule.
+     */
+    async function handleDocumentUpload(
+        docType: "id" | "business_reg" | "financial_statement" | "other",
+        file: File
+    ) {
+        setUploadErrors((prev) => {
+            const next = { ...prev };
+            delete next[docType];
+            return next;
+        });
+        setUploading((prev) => [...prev, docType]);
+
+        try {
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("fileName", file.name);
+            formData.append("mimeType", file.type);
+            formData.append("documentType", `loan_${docType}`);
+
+            const result = await uploadDocumentAction(formData);
+
+            if (!result.success || !result.url) {
+                setUploadErrors((prev) => ({
+                    ...prev,
+                    [docType]: result.success ? "Upload returned no file location." : result.error,
+                }));
+                return;
+            }
+
+            // Replace any earlier upload of the same type rather than stacking
+            // duplicates, so re-uploading a corrected file does the obvious thing.
+            const current = (getValues("documents") ?? []).filter((d: any) => d.type !== docType);
+            setValue(
+                "documents",
+                [...current, { name: file.name, url: result.url, type: docType }],
+                { shouldValidate: true }
+            );
+        } catch (err) {
+            setUploadErrors((prev) => ({
+                ...prev,
+                [docType]: err instanceof Error ? err.message : "Upload failed. Please try again.",
+            }));
+        } finally {
+            setUploading((prev) => prev.filter((t) => t !== docType));
+        }
+    }
 
     const nextStep = async () => {
         // Validate current step fields before proceeding
@@ -370,12 +446,56 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                                     <h3 className="text-2xl font-bold text-slate-900 mb-4">
                                         Upload Documents
                                     </h3>
-                                    <div className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center">
-                                        <Upload className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-                                        <p className="text-slate-600">
-                                            Document upload functionality - integrate with your file upload service
-                                        </p>
+                                    <p className="text-sm text-slate-600 -mt-2">
+                                        Provide at least one document. Accepted: JPG, PNG or PDF, up to 5MB each.
+                                    </p>
+
+                                    <div className="grid gap-5">
+                                        {REQUIRED_DOCUMENTS.map((doc) => (
+                                            <DocumentUpload
+                                                key={doc.type}
+                                                label={doc.label}
+                                                accept="image/jpeg,image/png,application/pdf"
+                                                maxSize={5}
+                                                required={doc.required}
+                                                error={uploadErrors[doc.type]}
+                                                onUpload={(file) => handleDocumentUpload(doc.type, file)}
+                                            />
+                                        ))}
                                     </div>
+
+                                    {uploading.length > 0 && (
+                                        <p className="text-sm text-slate-500">
+                                            Uploading {uploading.length} file
+                                            {uploading.length > 1 ? "s" : ""}…
+                                        </p>
+                                    )}
+
+                                    {uploadedDocuments.length > 0 && (
+                                        <div className="rounded-xl border border-slate-200 p-4">
+                                            <p className="text-sm font-medium text-slate-900 mb-2">
+                                                Uploaded ({uploadedDocuments.length})
+                                            </p>
+                                            <ul className="space-y-1">
+                                                {uploadedDocuments.map((d) => (
+                                                    <li
+                                                        key={d.url}
+                                                        className="flex items-center gap-2 text-sm text-slate-600"
+                                                    >
+                                                        <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
+                                                        <span className="truncate">{d.name}</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+
+                                    {errors.documents && (
+                                        <p className="text-sm text-red-600">
+                                            {errors.documents.message ??
+                                                "Please upload at least one document."}
+                                        </p>
+                                    )}
                                 </div>
                             )}
 

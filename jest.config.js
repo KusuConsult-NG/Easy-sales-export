@@ -39,6 +39,11 @@ const customJestConfig = {
     testPathIgnorePatterns: [
         '/node_modules/',
         '/.next/',
+        // ── Real-Postgres integration tests ───────────────────────────────────
+        // These deliberately bypass the global supabase-db mock and talk to a
+        // staging database. They have their own config and setup.
+        // Run them with: npm run test:db
+        '/__tests__/db-integration/',
         // ── Playwright e2e specs ───────────────────────────────────────────────
         // These files import @playwright/test which Jest cannot resolve.
         // Run them with: npx playwright test
