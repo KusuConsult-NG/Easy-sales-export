@@ -689,46 +689,58 @@ async function _makeContributionAction(
 
         const membershipDoc = membershipSnapshot.docs[0];
 
-        // Atomic transaction: Record contribution + update both balances in one commit.
-        // Without this, two concurrent contributions can both read the old balance
-        // before either write lands, causing double-counting in cooperative totals.
-        await db.runTransaction(async (t) => { // Re-read membership inside transaction for consistency
-            const freshMembership = await t.get(membershipDoc.ref);
-            if (!freshMembership.exists) throw new Error("Membership not found");
+        // The comment here used to claim this was one atomic commit, and that
+        // without it two concurrent contributions would double-count. Neither
+        // was true: the adapter queues the writes and flushes them one by one
+        // after the callback returns, so there was no isolation and no rollback.
+        // The re-read of the membership inside the wrapper was protected by
+        // nothing — the query four lines above already returned this document —
+        // so it is gone rather than left there looking like a guard.
+        //
+        // The double-counting it worried about is handled by the primitive, not
+        // the wrapper: FieldValue.increment applies the addition in SQL
+        // (migration 010), so concurrent contributions cannot lose one another.
+        //
+        // The balance moves FIRST and the ledger rows are written LAST, so a
+        // crash part-way leaves the member credited without a receipt rather
+        // than a receipt with no credit.
+        const txRef = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc();
 
-            const txRef = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc();
-            t.set(txRef, {
-                userId,
-                cooperativeId,
-                type,
-                amount,
-                date: FieldValue.serverTimestamp(),
-                status: "completed",
-                description: type === "savings" ? "Savings contribution" : "Loan repayment"
+        if (type === "savings") {
+            await membershipDoc.ref.update({
+                savingsBalance: FieldValue.increment(amount)
             });
-
-            // Universal ledger sync
-            t.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(txRef.id), { id: txRef.id,
-                userId,
-                type: type,
-                module: "cooperative",
-                amount: amount,
-                currency: "NGN",
-                status: "completed",
-                date: FieldValue.serverTimestamp(),
-                reference: txRef.id,
-                description: type === "savings" ? "Savings contribution" : "Loan repayment"
+            await db.collection(COLLECTIONS.COOPERATIVES).doc(cooperativeId).update({
+                totalSavings: FieldValue.increment(amount)
             });
+        } else {
+            await membershipDoc.ref.update({
+                loanBalance: FieldValue.increment(-amount)
+            });
+        }
 
-            if (type === "savings") { t.update(membershipDoc.ref, {
-                    savingsBalance: FieldValue.increment(amount)
-                });
-                t.update(db.collection(COLLECTIONS.COOPERATIVES).doc(cooperativeId), { totalSavings: FieldValue.increment(amount)
-                });
-            } else { t.update(membershipDoc.ref, {
-                    loanBalance: FieldValue.increment(-amount)
-                });
-            }
+        // Ledger rows last — see the ordering note above.
+        await txRef.set({
+            userId,
+            cooperativeId,
+            type,
+            amount,
+            date: FieldValue.serverTimestamp(),
+            status: "completed",
+            description: type === "savings" ? "Savings contribution" : "Loan repayment"
+        });
+
+        // Universal ledger sync
+        await db.collection(COLLECTIONS.TRANSACTIONS).doc(txRef.id).set({ id: txRef.id,
+            userId,
+            type: type,
+            module: "cooperative",
+            amount: amount,
+            currency: "NGN",
+            status: "completed",
+            date: FieldValue.serverTimestamp(),
+            reference: txRef.id,
+            description: type === "savings" ? "Savings contribution" : "Loan repayment"
         });
 
         revalidatePath("/cooperatives");
@@ -799,26 +811,28 @@ async function _submitWithdrawalAction(
             };
         }
 
-        await db.runTransaction(async (transaction) => {
-            // Create withdrawal request
-            const withdrawalRef = db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).doc();
-            transaction.set(withdrawalRef, { userId,
-                amount,
-                reason: reason || "Standard Withdrawal",
-                bankAccount,
-                status: "pending",
-                requestedAt: FieldValue.serverTimestamp(),
-                createdAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp()
-            });
-            // Log audit
-            await logAuditAction(
-                "withdrawal_requested",
-                withdrawalRef.id,
-                "withdrawal",
-                { amount, reason }
-            );
+        // The funds are already reserved by the debit above, which is the only
+        // thing here that took a lock. Wrapping the two writes below in
+        // runTransaction gave them nothing — the adapter flushes them one by one
+        // regardless — so they are written in order: the request row first, then
+        // its audit entry.
+        const withdrawalRef = db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).doc();
+        await withdrawalRef.set({ userId,
+            amount,
+            reason: reason || "Standard Withdrawal",
+            bankAccount,
+            status: "pending",
+            requestedAt: FieldValue.serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp()
         });
+        // Log audit
+        await logAuditAction(
+            "withdrawal_requested",
+            withdrawalRef.id,
+            "withdrawal",
+            { amount, reason }
+        );
 
         revalidatePath("/cooperatives/withdrawals");
         return { error: null,  success: true as const,
@@ -1182,70 +1196,79 @@ async function _applyForLoanAction(
         }
         const { productId, amount, purpose } = parsed.data;
 
-        await db.runTransaction(async (t) => { // Verify membership and eligibility
-            const membershipsRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
-            const membershipSnapshot = await t.get(membershipsRef.where("userId", "==", userId));
+        // The eligibility reads below used to sit inside runTransaction, which
+        // takes no lock. It never made them a guard, and dropping the wrapper
+        // does not weaken anything: two applications submitted at once both read
+        // an empty "active loans" result and both create a pending application,
+        // exactly as they did before. Closing that needs a uniqueness constraint
+        // on the member's open applications, not a wrapper — see the note in
+        // docs/audit/atomic-money-migration.md.
+        //
+        // Nothing here moves money. A pending application disburses nothing
+        // until an admin approves it, and that path has its own dual-control
+        // guard (commit #37).
+        const membershipsRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
+        const membershipSnapshot = await membershipsRef.where("userId", "==", userId).get();
 
-            if (membershipSnapshot.empty) {
-                throw new Error("You must be a cooperative member to apply for a loan");
-            }
+        if (membershipSnapshot.empty) {
+            throw new Error("You must be a cooperative member to apply for a loan");
+        }
 
-            const membershipDoc = membershipSnapshot.docs[0];
-            const membershipData = membershipDoc.data();
+        const membershipDoc = membershipSnapshot.docs[0];
+        const membershipData = membershipDoc.data();
 
-            // 1. Check for active/pending loans in both collections (Double-lending protection)
-            const loansRef = db.collection(COLLECTIONS.COOPERATIVE_LOANS);
-            const activeCoopLoansQuery = loansRef
-                .where("memberId", "==", userId)
-                .where("status", "in", ["pending", "reviewing", "approved", "partially_approved", "disbursed"]);
-            const activeCoopLoansSnap = await t.get(activeCoopLoansQuery);
+        // 1. Check for active/pending loans in both collections (Double-lending protection)
+        const loansRef = db.collection(COLLECTIONS.COOPERATIVE_LOANS);
+        const activeCoopLoansQuery = loansRef
+            .where("memberId", "==", userId)
+            .where("status", "in", ["pending", "reviewing", "approved", "partially_approved", "disbursed"]);
+        const activeCoopLoansSnap = await activeCoopLoansQuery.get();
 
-            const activeGeneralLoansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
-                .where("userId", "==", userId)
-                .where("status", "in", ["pending", "reviewing", "approved", "partially_approved", "disbursed"]);
-            const activeGeneralLoansSnap = await t.get(activeGeneralLoansQuery);
+        const activeGeneralLoansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
+            .where("userId", "==", userId)
+            .where("status", "in", ["pending", "reviewing", "approved", "partially_approved", "disbursed"]);
+        const activeGeneralLoansSnap = await activeGeneralLoansQuery.get();
 
-            if (!activeCoopLoansSnap.empty || !activeGeneralLoansSnap.empty) {
-                throw new Error("Active or pending loan application already exists platform-wide.");
-            }
+        if (!activeCoopLoansSnap.empty || !activeGeneralLoansSnap.empty) {
+            throw new Error("Active or pending loan application already exists platform-wide.");
+        }
 
-            // 2. Check Loan Limit (e.g., 3x Savings Balance)
-            const savingsBalance = membershipData.savingsBalance || 0;
-            const maxLoanAmount = savingsBalance * 3;
+        // 2. Check Loan Limit (e.g., 3x Savings Balance)
+        const savingsBalance = membershipData.savingsBalance || 0;
+        const maxLoanAmount = savingsBalance * 3;
 
-            if (amount > maxLoanAmount) {
-                throw new Error(`Loan amount exceeds your limit of ₦${maxLoanAmount.toLocaleString()} (3x Savings)`);
-            }
+        if (amount > maxLoanAmount) {
+            throw new Error(`Loan amount exceeds your limit of ₦${maxLoanAmount.toLocaleString()} (3x Savings)`);
+        }
 
-            // 3. Get Loan Product Details (Simulated/fetched)
-            let interestRate = 5; // Default 5%
-            let durationMonths = 6;
+        // 3. Get Loan Product Details (Simulated/fetched)
+        let interestRate = 5; // Default 5%
+        let durationMonths = 6;
 
-            const productDoc = await t.get(db.collection(COLLECTIONS.COOPERATIVE_LOAN_PRODUCTS).doc(productId));
-            if (productDoc.exists) { const prod = productDoc.data()!;
-                interestRate = prod.interestRate;
-                durationMonths = prod.durationMonths;
-            }
+        const productDoc = await db.collection(COLLECTIONS.COOPERATIVE_LOAN_PRODUCTS).doc(productId).get();
+        if (productDoc.exists) { const prod = productDoc.data()!;
+            interestRate = prod.interestRate;
+            durationMonths = prod.durationMonths;
+        }
 
-            const interestAmount = amount * (interestRate / 100);
-            const totalRepayment = amount + interestAmount;
-            const monthlyPayment = totalRepayment / durationMonths;
+        const interestAmount = amount * (interestRate / 100);
+        const totalRepayment = amount + interestAmount;
+        const monthlyPayment = totalRepayment / durationMonths;
 
-            // Create Loan Application
-            const newLoanRef = loansRef.doc();
-            t.set(newLoanRef, { memberId: userId,
-                productId,
-                amount,
-                purpose,
-                interestAmount,
-                totalRepayment,
-                monthlyPayment,
-                durationMonths,
-                status: "pending",
-                appliedAt: FieldValue.serverTimestamp(),
-                createdAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp() });
-        });
+        // Create Loan Application
+        const newLoanRef = loansRef.doc();
+        await newLoanRef.set({ memberId: userId,
+            productId,
+            amount,
+            purpose,
+            interestAmount,
+            totalRepayment,
+            monthlyPayment,
+            durationMonths,
+            status: "pending",
+            appliedAt: FieldValue.serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp() });
 
         try {
             await invalidateCooperativeCache(userId);
@@ -1327,17 +1350,16 @@ async function _createFixedSavingsAction(
             };
         }
 
-        await db.runTransaction(async (transaction) => {
-            // Create Fixed Savings Record
-            const fixedSavingsRef = db.collection(COLLECTIONS.COOPERATIVE_FIXED_SAVINGS).doc();
-            transaction.set(fixedSavingsRef, { memberId: userId,
-                amount,
-                durationMonths,
-                startDate: FieldValue.serverTimestamp(),
-                status: "active",
-                interestRate: 14, // 14% p.a.
-                createdAt: FieldValue.serverTimestamp() });
-        });
+        // Create Fixed Savings Record. This is a single write; the
+        // runTransaction wrapper around it bought nothing at all.
+        const fixedSavingsRef = db.collection(COLLECTIONS.COOPERATIVE_FIXED_SAVINGS).doc();
+        await fixedSavingsRef.set({ memberId: userId,
+            amount,
+            durationMonths,
+            startDate: FieldValue.serverTimestamp(),
+            status: "active",
+            interestRate: 14, // 14% p.a.
+            createdAt: FieldValue.serverTimestamp() });
 
         return { error: null, success: true as const, data: { message: "Fixed savings plan created" }  };
     } catch (error) { logger.error("Fixed savings creation failed:", {
