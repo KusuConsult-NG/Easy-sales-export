@@ -213,40 +213,111 @@ payment (`pending → funded`), requesting release, creating a dispute, and
 escalating a dispute. A double-apply there duplicates notifications and audit
 entries rather than money, so they were left rather than expanding a money PR.
 
-## arrayUnion and arrayRemove are still NOT atomic — 38 call sites
+## Fixed: arrayUnion and arrayRemove were not atomic — 38 call sites
 
 Found 2026-08-08 while converting `academy/_actions.ts`. Same class as the
 `FieldValue.increment` bug, and **not** fixed by the change that fixed that one.
+Fixed by migration `016`.
 
-`splitIncrements` in `supabase-db.ts` pulls only `FieldValue.increment` out of a
-write. `arrayUnion` and `arrayRemove` still go through `resolveFieldValue`,
-which reads the existing array, modifies it in JavaScript, and writes the whole
-array back:
+`splitIncrements` pulled only `FieldValue.increment` out of a write. `arrayUnion`
+and `arrayRemove` still went through `resolveFieldValue`, which read the existing
+array, modified it in JavaScript, and wrote the whole array back:
 
 ```js
 case 'FieldValue.arrayUnion': {
     const arr = Array.isArray(existing) ? [...existing] : [];
     ...
-    return arr;
+    return arr;                      // computed from a stale read
 }
 ```
 
-Two concurrent `arrayUnion` calls on the same field read the same array and the
-second write overwrites the first, so one element is silently lost. 38 call
-sites.
+Two concurrent calls read the same array and the second write overwrote the
+first, so one element was silently lost.
 
-A concrete example in the same file: completing a lesson does
-`progress.completedLessons.push(lessonId)` and writes the array back. A learner
-finishing two lessons quickly can lose one, and the "optimistic locking" guard
-above it does not help — it compares `_version` inside `runTransaction`, which
-takes no lock, so both callers read the same version and both pass.
+**Why this one is worse than the increment equivalent.** 33 of the ~38 sites are
+the same line:
 
-**The fix is the same shape as migration 010:** extend `splitIncrements` to
-carry array operations, and apply them in SQL with `jsonb` array append and
-remove. It depends on that change landing first — PR #13, still open.
+```js
+roles: FieldValue.arrayUnion("<some_role>")
+```
 
-Recorded rather than fixed because fixing half of a class and calling it done is
-what produced this gap in the first place.
+on the users collection — and `roles` is what every module-access check reads. A
+user who joins two modules at once, or a webhook and a server action landing
+together, keeps one role and loses the other. They are a paying cooperative
+member with no cooperative access, and nothing errored.
+
+It also explains a specific complaint: a fix that "keeps breaking". Re-granting
+the role works, right up until the next concurrent write drops it again.
+
+### Three things had to be fixed, not one
+
+**1. The adapter path.** `splitArrayOps` pulls the sentinels out and
+`apply_array_ops` applies them in one UPDATE.
+
+**2. `set(..., { merge: true })`, not just `update()`.** The cooperative
+membership grant runs through `transaction.set(userRef, ..., { merge: true })`.
+Fixing `update()` alone would have left the paid-member role — the most
+expensive one to lose — still dropping. Migration 010 left this same gap for
+increments; it is closed now too.
+
+**3. The stale-value clobber, which defeated the whole fix.** `processWriteData`
+returns `{ ...existingData, ...changes }` — the WHOLE document, not just the
+changed fields. That is deliberate: `merge_raw_data` does a shallow
+`raw_data || patch`, so a nested change has to carry its whole top-level object
+or the siblings are dropped.
+
+But it meant the patch carried a stale copy of the very field the atomic
+function was about to change. The sequence was: write the whole stale document
+(undoing a concurrent writer), then apply our own element on top. The SQL
+function is only atomic if the value reaches the database **once**, so
+`stripAtomicPaths` removes those paths from the patch. Dotted paths are removed
+at their exact position, so their siblings survive.
+
+This was silently undermining migration 010's increments as well.
+
+### The dual-storage trap, again
+
+`roles` is BOTH a native `TEXT[]` column on `users` and a key inside `raw_data`.
+Reads prefer `raw_data`; `.where()` filters use the column. Updating one alone is
+exactly how the wallet fix in 005/006 ended up invisible to the application and
+needed 011 to correct it.
+
+So `apply_array_ops` derives the column FROM the new `raw_data` value rather than
+computing it separately — one expression, two destinations, no way for them to
+disagree. The integration tests assert on both.
+
+### One deliberate behaviour change
+
+Element equality is now JSONB equality rather than `JSON.stringify` comparison.
+JSONB normalises key order, so `{"a":1,"b":2}` and `{"b":2,"a":1}` are now
+correctly treated as the same element where they previously were not. That is a
+fix, but it is a behaviour change worth knowing about.
+
+## NOT fixed: every update() writes the whole document back
+
+Found while fixing the above, and larger than it.
+
+`processWriteData(data, existing, true)` starts from `{ ...existingData }`, so
+**every** `update()` sends the entire document it just read — not only the
+fields being changed. Two concurrent updates to completely unrelated fields
+therefore clobber one another: whoever writes second reverts the other's change.
+
+This is not specific to arrays or counters. It applies to every field in every
+collection, and it is a strong candidate for the "fixes that keep breaking"
+reports — a value is corrected, and an unrelated concurrent write reverts it
+using a snapshot taken moments earlier.
+
+`stripAtomicPaths` removes only the paths the atomic functions own, which is
+what stops it defeating 010 and 016. The general case is untouched.
+
+Fixing it properly means the patch carries only changed fields, which requires
+`merge_raw_data` to deep-merge rather than `raw_data || patch` — otherwise a
+nested change drops its siblings. That is a change to the write path used by
+every table and every write, so it wants its own PR and its own staging
+concurrency check.
+
+Recorded rather than attempted here, for the same reason the array bug was
+recorded rather than half-fixed the first time.
 
 ## Fixed: farm-nation property double sale
 
