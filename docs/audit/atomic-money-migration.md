@@ -293,31 +293,78 @@ JSONB normalises key order, so `{"a":1,"b":2}` and `{"b":2,"a":1}` are now
 correctly treated as the same element where they previously were not. That is a
 fix, but it is a behaviour change worth knowing about.
 
-## NOT fixed: every update() writes the whole document back
+## Fixed: every update() wrote the whole document back
 
-Found while fixing the above, and larger than it.
+Found while fixing the array bug, and larger than it. Fixed by migration `017`.
 
-`processWriteData(data, existing, true)` starts from `{ ...existingData }`, so
-**every** `update()` sends the entire document it just read — not only the
-fields being changed. Two concurrent updates to completely unrelated fields
-therefore clobber one another: whoever writes second reverts the other's change.
+`processWriteData(data, existing, true)` started from `{ ...existingData }`, so
+**every** `update()` sent the entire document it had just read:
 
-This is not specific to arrays or counters. It applies to every field in every
-collection, and it is a strong candidate for the "fixes that keep breaking"
-reports — a value is corrected, and an unrelated concurrent write reverts it
-using a snapshot taken moments earlier.
+```js
+await ref.update({ keep: 2 })
+// patch actually sent:
+// {"id":"u1","keep":2,"doomed":"x","profile":{...}, ...everything else}
+```
 
-`stripAtomicPaths` removes only the paths the atomic functions own, which is
-what stops it defeating 010 and 016. The general case is untouched.
+Two concurrent updates to completely unrelated fields therefore clobbered one
+another. Whoever wrote second reverted the other's change, using a snapshot
+taken moments earlier, and nothing errored.
 
-Fixing it properly means the patch carries only changed fields, which requires
-`merge_raw_data` to deep-merge rather than `raw_data || patch` — otherwise a
-nested change drops its siblings. That is a change to the write path used by
-every table and every write, so it wants its own PR and its own staging
-concurrency check.
+This is not a money bug, an array bug or a counter bug. It is every field in
+every collection — and it is the most plausible general mechanism behind the
+report that fixes "keep breaking": a value is corrected, and an unrelated
+concurrent write reverts it.
 
-Recorded rather than attempted here, for the same reason the array bug was
-recorded rather than half-fixed the first time.
+It was also silently undermining migrations `010` and `016`, because the stale
+copy of a counter or array rode along in that patch.
+
+### Why the whole document was being sent
+
+`merge_raw_data` (002) does `raw_data || p_patch` — a SHALLOW merge. A nested
+change like `{"a.b.c": 1}` therefore had to carry the whole `a` object, or `a`'s
+other keys would be dropped. Sending everything was the simplest way to be
+correct, and it *was* correct. It just was not concurrent.
+
+### The fix: three shapes, because Firestore has three
+
+A single shallow merge cannot express what Firestore distinguishes, so
+`buildWritePatch` splits a write into:
+
+| Shape | Example | Semantics |
+|---|---|---|
+| `patch` | `update({a: {x: 1}})` | top-level, shallow-merged — **replaces** `a` |
+| `paths` | `update({"a.b": 1})` | `jsonb_set` — leaves `a`'s siblings alone |
+| `deletes` | `update({a: FieldValue.delete()})` | removes the key |
+
+`apply_document_patch` applies them in that order in one statement, deletes last
+so an explicit delete wins.
+
+### FieldValue.delete never worked
+
+Worth stating plainly, because it looked like it did. Deleting a field produced a
+patch with the key simply **absent** — and `raw_data || patch` only adds and
+replaces. It never removes.
+
+So `FieldValue.delete()` has been a silent no-op on this path for as long as it
+has existed. Every field anyone believed they had removed is still there. `017`
+is the first version that actually deletes.
+
+### Degradation
+
+The adapter prefers `apply_document_patch`, falls back to `merge_raw_data` for a
+plain patch, and falls back to a JavaScript read-merge-write for anything
+`merge_raw_data` cannot express. A delete is never sent to `merge_raw_data`,
+because it would report success and remove nothing — the exact silent failure
+being fixed.
+
+### Still not concurrent
+
+One thing this does NOT fix: `arrayUnion` nested **inside** an object, as in
+`update({profile: {tags: FieldValue.arrayUnion("x")}})`. `splitArrayOps` only
+inspects top-level keys, so that still resolves in JavaScript. Firestore
+semantics say the assignment replaces `profile` wholesale anyway, so the array
+op is questionable there to begin with — but it is not atomic, and it is worth
+knowing.
 
 ## Fixed: farm-nation property double sale
 

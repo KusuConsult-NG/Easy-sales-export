@@ -158,7 +158,7 @@ describe("array-op routing", () => {
         // The array op goes to the RPC; isVerified goes through merge_raw_data.
         expect(arrayCall()![1].p_native).toEqual({ roles: { union: ["seller"] } });
 
-        const mergeCall = mockRpc.mock.calls.find((c) => c[0] === "merge_raw_data");
+        const mergeCall = mockRpc.mock.calls.find((c) => c[0] === "apply_document_patch");
         expect(mergeCall![1].p_patch).toHaveProperty("isVerified", true);
         expect(mergeCall![1].p_patch).not.toHaveProperty("roles");
     });
@@ -186,18 +186,17 @@ describe("array-op routing", () => {
 });
 
 describe("the stale-value clobber", () => {
-    // processWriteData returns the WHOLE document, not just the changed fields,
-    // because merge_raw_data shallow-merges and a nested change must carry its
-    // top-level object. That meant every write also carried a stale copy of the
-    // field the atomic function was about to change — writing it first would
-    // undo a concurrent writer, then apply our own change on top. The SQL
-    // function is only atomic if the value reaches the database once.
+    // The write used to carry the WHOLE document, so it also carried a stale
+    // copy of the field the atomic function was about to change: write the
+    // stale document, undoing a concurrent writer, then apply our own change on
+    // top. The SQL function is only atomic if the value reaches the database
+    // once. buildWritePatch now sends only what changed (migration 017).
 
     it("does not write a stale array back alongside the atomic op", async () => {
         const ref = new SupabaseDocumentReference("users", "user-1");
         await ref.update({ roles: FieldValue.arrayUnion("seller"), isVerified: true });
 
-        const mergeCall = mockRpc.mock.calls.find((c) => c[0] === "merge_raw_data");
+        const mergeCall = mockRpc.mock.calls.find((c) => c[0] === "apply_document_patch");
         expect(mergeCall![1].p_patch).not.toHaveProperty("roles");
     });
 
@@ -206,23 +205,22 @@ describe("the stale-value clobber", () => {
         const ref = new SupabaseDocumentReference("users", "user-1");
         await ref.update({ loginCount: FieldValue.increment(1), isVerified: true });
 
-        const mergeCall = mockRpc.mock.calls.find((c) => c[0] === "merge_raw_data");
+        const mergeCall = mockRpc.mock.calls.find((c) => c[0] === "apply_document_patch");
         expect(mergeCall![1].p_patch).not.toHaveProperty("loginCount");
     });
 
-    it("strips a dotted path without dropping its siblings", async () => {
-        // The reason paths are removed at their exact position rather than by
-        // top-level key. Deleting the whole parent would wipe every sibling
-        // field the shallow merge is responsible for carrying.
+    it("sends a dotted path as a path, not as its whole parent object", async () => {
+        // The sibling that must survive. Carrying the whole `profile` object
+        // would revert a concurrent change to any other field inside it.
         const ref = new SupabaseDocumentReference("users", "user-1");
         await ref.update({
             "profile.badges": FieldValue.arrayUnion("early"),
             "profile.displayName": "Ada",
         });
 
-        const mergeCall = mockRpc.mock.calls.find((c) => c[0] === "merge_raw_data");
-        expect(mergeCall![1].p_patch.profile).toHaveProperty("displayName", "Ada");
-        expect(mergeCall![1].p_patch.profile).not.toHaveProperty("badges");
+        const call = mockRpc.mock.calls.find((c) => c[0] === "apply_document_patch");
+        expect(call![1].p_paths).toEqual({ "profile.displayName": "Ada" });
+        expect(call![1].p_patch).not.toHaveProperty("profile");
     });
 });
 

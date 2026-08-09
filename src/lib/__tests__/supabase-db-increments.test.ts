@@ -138,9 +138,12 @@ describe("increment routing", () => {
         // The increment goes to SQL; the plain field takes the normal path and
         // must not be dropped on the way.
         expect(incrementCall()![1].p_native).toEqual({ balance: 100 });
-        const merge = mockRpc.mock.calls.find((c) => c[0] === "merge_raw_data");
+        const merge = mockRpc.mock.calls.find((c) => c[0] === "apply_document_patch");
         expect(merge).toBeDefined();
         expect(merge![1].p_patch.status).toBe("active");
+        // And ONLY that field — the counter must reach the database once, from
+        // apply_increments. See migration 017.
+        expect(merge![1].p_patch).not.toHaveProperty("balance");
     });
 
     it("makes no increment call when the update has none", async () => {
@@ -164,7 +167,7 @@ describe("fallback when the migration is not applied", () => {
 
         // Falls back to the old read-modify-write: 100 read + 50 = 150.
         // Not atomic, but a write that happens beats a write that vanishes.
-        const merge = mockRpc.mock.calls.find((c) => c[0] === "merge_raw_data");
+        const merge = mockRpc.mock.calls.find((c) => c[0] === "apply_document_patch");
         expect(merge).toBeDefined();
         expect(merge![1].p_patch.balance).toBe(150);
     });
