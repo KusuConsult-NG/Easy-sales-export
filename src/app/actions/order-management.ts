@@ -10,6 +10,7 @@ import { hasRole } from "@/lib/role-utils";
 import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { paystackPayout } from "@/lib/paystack-transfer";
+import { claimStatusTransition, claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { getLogisticsProvider } from "@/lib/logistics";
@@ -96,7 +97,8 @@ async function _updateOrderStatusAction(
             escrowDocs = escrowQuery.docs;
         }
 
-        await db.runTransaction(async (transaction) => { const currentOrderDoc = await transaction.get(orderRef);
+        await (async () => {
+            const currentOrderDoc = await orderRef.get();
             if (!currentOrderDoc.exists) throw new Error("Order not found");
             const currentOrder = currentOrderDoc.data() as Order;
 
@@ -128,25 +130,68 @@ async function _updateOrderStatusAction(
                 updateData.deliveredAt = FieldValue.serverTimestamp();
                 // Synchronize escrow transaction status to "delivered" so the auto-release cron picks it up
                 for (const escrowDoc of escrowDocs) {
-                    transaction.update(escrowDoc.ref, {
+                    await escrowDoc.ref.update({
                         status: "delivered",
                         updatedAt: FieldValue.serverTimestamp()
                     });
                 }
             }
 
-            if (newStatus === "cancelled" && currentOrder.status !== "cancelled") { const items = currentOrder.items || [];
+            if (newStatus === "cancelled") {
+                // `newStatus === "cancelled" && currentOrder.status !== "cancelled"`
+                // was a check-then-write with no lock, and what followed it put
+                // stock BACK. Two cancellations of one order both read a
+                // non-cancelled status and both restocked, so the seller's
+                // availableQuantity gained the order's quantity twice —
+                // inventory conjured out of a double click — and `orders` was
+                // decremented twice.
+                //
+                // Claimed from every status a live order can hold, so exactly
+                // one caller restocks. "cancelled" is deliberately absent from
+                // the list: an order already cancelled must not be restocked
+                // again, which is the whole point.
+                const cancelClaim = await claimStatusTransitionFromAny({
+                    collection: COLLECTIONS.MARKETPLACE_ORDERS,
+                    id: orderId,
+                    fromAny: [
+                        "pending_payment", "payment_received", "confirmed",
+                        "processing", "shipped", "delivered", "disputed",
+                    ],
+                    to: "cancelled",
+                    patch: {
+                        updatedAt: new Date().toISOString(),
+                        ...(finalTrackingNumber ? { trackingNumber: finalTrackingNumber } : {}),
+                    },
+                });
+
+                if (!cancelClaim.claimed) {
+                    throw new Error(cancelClaim.status === null
+                        ? "Order not found"
+                        : cancelClaim.status === "cancelled"
+                            ? "This order has already been cancelled"
+                            : `Order cannot be cancelled from status '${cancelClaim.status}'`);
+                }
+
+                const items = currentOrder.items || [];
                 for (const item of items) {
                     const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(item.productId);
-                    transaction.update(productRef, {
+                    await productRef.update({
                         availableQuantity: FieldValue.increment(item.quantity),
                         orders: FieldValue.increment(-1),
                         _version: FieldValue.increment(1) });
                 }
+
+                // The status is already written by the claim; only the fields
+                // it could not carry remain.
+                await orderRef.update({
+                    _version: FieldValue.increment(1),
+                    ...(updateData.sellerId ? { sellerId: updateData.sellerId } : {}),
+                });
+                return;
             }
 
-            transaction.update(orderRef, updateData);
-        });
+            await orderRef.update(updateData);
+        })();
 
         return { error: null, success: true as const, data: { message: "Order status updated successfully" } };
     } catch (error) { logger.error("Update order status error:", { 
@@ -204,40 +249,76 @@ async function _confirmDeliveryAction(orderId: string) { let sessionResult;
         const userId = session.user.id;
         const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
 
-        const result = await db.runTransaction(async (transaction) => { const currentOrderDoc = await transaction.get(orderRef);
-            if (!currentOrderDoc.exists) throw new Error("Order not found");
-            const currentOrder = currentOrderDoc.data() as Order;
+        // WHAT WAS WRONG HERE
+        // -------------------
+        // `if (currentOrder.status !== "delivered") throw` read the status and
+        // the write below changed it — inside runTransaction, which takes no
+        // lock. Everything this function does hangs off that check, and the
+        // last of those things is a **Paystack transfer to the seller**, made
+        // after the block returns.
+        //
+        // So a buyer double-clicking Confirm Delivery, or two tabs submitting
+        // together, had both calls read "delivered" and both proceed: the
+        // seller was PAID TWICE out of the business's money, credited twice in
+        // WAVE earnings, and given two wallet_transactions rows. The escrow was
+        // released twice for good measure.
+        //
+        // Same defect as the wallet withdrawal state machine, with the same
+        // fix: the transition is claimed, so exactly one caller reaches the
+        // payout.
+        const currentOrderDoc = await orderRef.get();
+        if (!currentOrderDoc.exists) throw new Error("Order not found");
+        const currentOrder = currentOrderDoc.data() as Order;
 
-            if (currentOrder.buyerId !== userId) throw new Error("Unauthorized");
-            if (currentOrder.status !== "delivered") throw new Error("Order must be delivered first");
+        // Authorisation before the claim: a caller who may not confirm this
+        // order must not be able to consume the transition.
+        if (currentOrder.buyerId !== userId) throw new Error("Unauthorized");
 
-            transaction.update(orderRef, {
+        const nowIso = new Date().toISOString();
+        const confirmClaim = await claimStatusTransition({
+            collection: COLLECTIONS.MARKETPLACE_ORDERS,
+            id: orderId,
+            from: "delivered",
+            to: "completed",
+            patch: {
                 buyerConfirmed: true,
-                buyerConfirmedAt: FieldValue.serverTimestamp(),
-                status: "completed",
-                updatedAt: FieldValue.serverTimestamp(),
-                _version: FieldValue.increment(1) });
+                buyerConfirmedAt: nowIso,
+                updatedAt: nowIso,
+            },
+        });
 
+        if (!confirmClaim.claimed) {
+            throw new Error(confirmClaim.status === null
+                ? "Order not found"
+                : confirmClaim.status === "completed"
+                    ? "This order has already been confirmed"
+                    : "Order must be delivered first");
+        }
+
+        // _version is bumped separately: the CAS patch is written as JSONB and
+        // does not resolve FieldValue sentinels, so an increment placed inside
+        // it would be stored as an object rather than applied.
+        await orderRef.update({ _version: FieldValue.increment(1) });
+
+        const result = await (async () => {
             const sellerId = currentOrder.sellerId || (Array.isArray(currentOrder.sellerIds) ? currentOrder.sellerIds[0] : undefined);
-            if (sellerId) {
-                const escrowId = `ESC-${orderId}-${sellerId.substring(0, 5)}`;
-                const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId);
-                const escrowDoc = await transaction.get(escrowRef);
-                if (escrowDoc.exists) {
-                    transaction.update(escrowRef, {
-                        status: "released",
-                        releasedAt: FieldValue.serverTimestamp(),
-                        releasedBy: userId,
-                        updatedAt: FieldValue.serverTimestamp(),
-                        _version: FieldValue.increment(1)
-                    });
-                }
-            }
-
             if (!sellerId) throw new Error("Seller ID not found on order");
 
+            const escrowId = `ESC-${orderId}-${sellerId.substring(0, 5)}`;
+            const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId);
+            const escrowDoc = await escrowRef.get();
+            if (escrowDoc.exists) {
+                await escrowRef.update({
+                    status: "released",
+                    releasedAt: FieldValue.serverTimestamp(),
+                    releasedBy: userId,
+                    updatedAt: FieldValue.serverTimestamp(),
+                    _version: FieldValue.increment(1)
+                });
+            }
+
             const sellerRef = db.collection(COLLECTIONS.USERS).doc(sellerId);
-            const sellerDoc = await transaction.get(sellerRef);
+            const sellerDoc = await sellerRef.get();
             const sellerData = sellerDoc.data();
 
             let sellerAmount = 0;
@@ -256,17 +337,23 @@ async function _confirmDeliveryAction(orderId: string) { let sessionResult;
             if (isWaveMember) {
                 const waveCommissionRate = 0.05; // 5% as per wave.ts
                 const earningsAmount = Math.floor(currentOrder.totalAmount * waveCommissionRate);
-                
+
                 // Increment persistent balance on user doc
-                transaction.update(sellerRef, {
+                await sellerRef.update({
                     'serviceRegistrations.wave.waveEarningsBalance': FieldValue.increment(earningsAmount),
                     updatedAt: FieldValue.serverTimestamp()
                 });
 
-                // Create Wallet Transaction for the credit record
-                const txnId = `WAVE-CR-${orderId}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
+                // Create Wallet Transaction for the credit record.
+                //
+                // The id was `WAVE-CR-${orderId}-${Math.random()...}`, so every
+                // call produced a different document and a retry could not
+                // overwrite its own earlier row — it just added another. Derived
+                // from the order id now, which is stable: one order, one credit
+                // record, whatever happens above it.
+                const txnId = `WAVE-CR-${orderId}`;
                 const txnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc(txnId);
-                transaction.set(txnRef, {
+                await txnRef.set({
                     walletId: sellerId,
                     userId: sellerId,
                     type: "credit",
@@ -282,7 +369,7 @@ async function _confirmDeliveryAction(orderId: string) { let sessionResult;
             }
 
             return { sellerAmount, sellerData, currentOrder };
-        });
+        })();
 
         if (result.sellerAmount > 0) { try {
                 const bankDetails = result.sellerData;

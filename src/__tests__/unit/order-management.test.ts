@@ -183,13 +183,17 @@ describe('updateOrderStatusAction Unit Tests', () => {
         }));
 
         // Reset the mock call counts
-        (global as any).mockFirestoreTxUpdate.mockClear();
+        (global as any).mockFirestoreUpdate.mockClear();
 
         const result = await updateOrderStatusAction("order-5", "shipped");
 
         expect(result.success).toBe(true);
-        expect((global as any).mockFirestoreTxUpdate).toHaveBeenCalledWith(
-            expect.any(Object),
+        // Asserted on the direct-write spy rather than the transaction one:
+        // the runTransaction wrapper is gone (it never provided atomicity), so
+        // the write lands through orderRef.update(). The behaviour under test —
+        // self-healing sellerId from sellerIds — is unchanged.
+        expect((global as any).mockFirestoreUpdate).toHaveBeenCalledWith(
+            expect.anything(),
             expect.objectContaining({
                 sellerId: "seller-1",
                 status: "shipped"

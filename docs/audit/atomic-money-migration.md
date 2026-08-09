@@ -657,7 +657,7 @@ refund from three, dispute resolution from two. It attempts each in turn and
 stops on the first win. Race-safe, because once any attempt succeeds the row
 holds the target status and every other attempt fails against all of them.
 
-## Remaining runTransaction sites: 82, and a way to prioritise them
+## Remaining runTransaction sites: 78, and a way to prioritise them
 
 Converting file by file has diminishing returns — most of the remaining sites
 change a status nobody pays against. The ones worth reading first are those
@@ -671,8 +671,6 @@ By that measure, the unconverted files with the most money in them are:
 
 | File | Why it is on the list |
 |---|---|
-| `actions/order-management.ts` | order state and seller earnings |
-| `actions/disputes.ts` | dispute payouts |
 | `wave/_admin.ts` | WAVE earnings administration |
 | `academy/_payment.ts`, `farm-nation-payment.ts` | module payment fulfilment |
 
@@ -809,6 +807,92 @@ bug and a lost payment, but somebody has to run the refund.
 `increment_within_ceiling` treats a missing ceiling as unbounded. Events created
 without `maxParticipants` must keep accepting registrations; refusing them would
 break every uncapped session on the platform.
+
+## Fixed: order completion and dispute resolution each paid twice
+
+The two highest-severity findings of the migration so far, because both end in
+money leaving the business rather than a number being wrong.
+
+### Confirm Delivery paid the seller twice
+
+`_confirmDeliveryAction` checked `status !== "delivered"` and threw, then wrote
+`"completed"` — inside `runTransaction`, which takes no lock. Everything the
+function does hangs off that check, and the last of those things is a **Paystack
+transfer to the seller**, made after the block returns.
+
+A buyer double-clicking Confirm Delivery, or two tabs submitting together, had
+both calls read `"delivered"` and both proceed:
+
+- the seller was **paid twice** by bank transfer
+- WAVE earnings were credited twice
+- two `wallet_transactions` rows were written
+- the escrow was released twice
+
+The transition is claimed now, so exactly one caller reaches the payout.
+Authorisation runs before the claim: a caller who may not confirm the order must
+not be able to consume the transition.
+
+The WAVE credit record's id was `WAVE-CR-${orderId}-${Math.random()...}`, so a
+retry could not overwrite its own earlier row — it just added another. Derived
+from the order id now.
+
+### Dispute resolution credited the beneficiary twice
+
+`_updateDisputeStatusAction` read the dispute's status and the escrow's status
+and moved money off the back of both. Two admins resolving one dispute together
+both passed and both credited the wallet.
+
+**The escrow transition is the one claimed, not the dispute's.** It is the record
+the money hangs off, and it is shared with the release and refund paths fixed
+earlier — so claiming it means those paths and this one cannot both pay out for
+the same escrow either. Claiming the dispute would have left that door open.
+
+The credit goes through `creditWalletOnce` keyed on the dispute id, recorded as
+`disbursement` or `refund` rather than `completed`: money leaving escrow to a
+user is not revenue.
+
+### Cancelling an order restocked it twice
+
+`newStatus === "cancelled" && currentOrder.status !== "cancelled"` was a
+check-then-write, and what followed put stock **back**. Two cancellations both
+read a non-cancelled status and both restocked, so `availableQuantity` gained
+the order's quantity twice — inventory conjured out of a double click — and
+`orders` was decremented twice.
+
+Claimed from every status a live order can hold. `"cancelled"` is deliberately
+absent from that list: an order already cancelled must not restock again, which
+is the whole point.
+
+### One dispute per order
+
+`_createDisputeAction`'s "Order already has an active dispute" had the same
+shape: two disputes raised together both read a non-disputed status and both
+created a `DISPUTES` row, leaving the order pointing at whichever wrote its
+`disputeId` last and an orphan dispute nobody resolves. The claim records
+`statusBeforeDispute` so resolution can put the order back where it came from
+rather than guessing.
+
+### A note on the CAS patch
+
+`claim_status_transition` writes its patch as JSONB and does **not** resolve
+`FieldValue` sentinels. An increment placed inside the patch is stored as an
+object rather than applied. `_version` bumps are therefore issued as a separate
+`update()` after a successful claim. Worth remembering for every future
+conversion — it fails silently, by writing a plausible-looking object.
+
+### Proving it
+
+`src/__tests__/unit/order-dispute-payouts.test.ts` — 11 tests, **10 fail**
+against the pre-fix code.
+
+Two pre-existing tests had to be updated, and neither indicates a behaviour
+change: `order-management.test.ts` asserted on the transaction spy rather than
+the direct-write spy, and `disputes.test.ts` needed the claim primitive stubbed
+because dispute creation now calls it. The second also had to switch from a
+static `import` to `await import(...)` — with a static import the `jest.mock`
+factory was not applied and the *real* primitive ran, reaching for Postgres and
+failing with `fetch failed`. Every suite in this migration uses the dynamic form
+for that reason.
 
 ## Fixed: the export module — a lost investment, and a status the client erased
 
@@ -1249,11 +1333,11 @@ can be ruled out.
 | 3 | `src/app/actions/wave/_admin.ts` | |
 | 3 | `src/app/actions/marketplace/_payment.ts` | Payment claim and stock reservation converted; 3 order-creation transitions remain. |
 | 3 | `src/app/actions/academy/_admin.ts` | |
-| 2 | `src/app/actions/order-management.ts` | |
+| 0 | `src/app/actions/order-management.ts` | Converted. Double seller payout and double restock fixed — see above. |
 | 2 | `src/app/actions/marketplace/_buyer.ts` | |
 | 0 | `src/app/actions/export.ts` | Converted. Client/webhook double fulfilment and the erased revenue status fixed — see above. |
 | 0 | `src/app/actions/export-payment.ts` | Converted. Lost investment and catalog oversell fixed — see above. |
-| 2 | `src/app/actions/disputes.ts` | |
+| 0 | `src/app/actions/disputes.ts` | Converted. Double dispute payout fixed — see above. |
 | 2 | `src/app/actions/cooperative/_payment.ts` | |
 | 2 | `src/app/actions/academy/_payment.ts` | |
 

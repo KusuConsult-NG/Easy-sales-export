@@ -3,11 +3,20 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import { createDisputeAction } from '@/app/actions/disputes';
+
+// Raising a dispute now CLAIMS the order's transition into "disputed" instead
+// of reading the status and writing it, so the primitive has to be stubbed —
+// the real one would go to Postgres.
+const mockClaimFromAny = jest.fn() as jest.Mock<any>;
+jest.mock('@/lib/status-transition', () => ({
+    claimStatusTransition: jest.fn(),
+    claimStatusTransitionFromAny: (...args: any[]) => mockClaimFromAny(...args),
+}));
 
 describe('createDisputeAction Unit Tests', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        mockClaimFromAny.mockResolvedValue({ claimed: true, status: 'disputed' });
 
         // Mock requireSession to resolve successfully with buyer session
         (global as any).mockRequireSession.mockImplementation(() => Promise.resolve({
@@ -57,6 +66,7 @@ describe('createDisputeAction Unit Tests', () => {
     });
 
     it('should fail if evidenceUrls array is missing or empty', async () => {
+        const { createDisputeAction } = await import('@/app/actions/disputes');
         const result = await createDisputeAction({
             orderId: "order-id",
             reason: "wrong_item",
@@ -69,6 +79,7 @@ describe('createDisputeAction Unit Tests', () => {
     });
 
     it('should succeed/progress to transaction if evidenceUrls is provided', async () => {
+        const { createDisputeAction } = await import('@/app/actions/disputes');
         const result = await createDisputeAction({
             orderId: "order-id",
             reason: "wrong_item",
