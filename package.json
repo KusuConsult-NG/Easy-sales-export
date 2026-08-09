@@ -41,7 +41,8 @@
     "verify:sync": "tsx scripts/verify-sync.ts",
     "repair:schemas": "tsx scripts/repair-schemas.ts",
     "prepare": "husky",
-    "test:db": "jest --config jest.config.db.js --runInBand"
+    "test:db": "jest --config jest.config.db.js --runInBand",
+    "build:deploy-sql": "node scripts/build-deploy-sql.mjs --out deploy.sql"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",
@@ -125,11 +126,11 @@
   },
   "lint-staged": {
     "*.{ts,tsx}": [
-      "eslint --fix --max-warnings=0",
+      "eslint --fix --max-warnings=0 --no-warn-ignored",
       "bash -c 'npx tsc --noEmit --project tsconfig.json'"
     ],
     "*.{js,mjs,cjs}": [
-      "eslint --fix --max-warnings=0"
+      "eslint --fix --max-warnings=0 --no-warn-ignored"
     ]
   }
 }
