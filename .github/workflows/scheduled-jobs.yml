@@ -1,0 +1,126 @@
+name: Scheduled Jobs
+
+# WHY THIS EXISTS
+# ---------------
+# src/app/api/cron/ contains four endpoints that are written to run on a
+# schedule and were never scheduled by anything. There is no `cron` block in
+# railway.json, no vercel.json, and no other workflow that calls them. They have
+# existed as HTTP endpoints that nothing invokes.
+#
+# The consequences were not theoretical:
+#
+#   reconcile-paystack   The safety net for payments the webhook missed. Eight
+#                        cooperative registrations paid between 2026-07-21 and
+#                        2026-08-08 were never fulfilled and had to be repaired
+#                        by hand. This job is what would have caught them.
+#
+#   release-escrow       Escrow auto-release. Without it a seller is only ever
+#                        paid when the buyer explicitly confirms delivery, so
+#                        funds sit in escrow indefinitely when they do not.
+#
+#   process-email-queue  Queued mail is only sent when something else happens to
+#                        drain the queue.
+#
+#   gdpr-purge           Data retention. This one is a legal obligation, not a
+#                        convenience.
+#
+# GitHub's scheduler is best-effort and can be delayed under load, which is
+# acceptable for all four: every one of them is idempotent and catch-up by
+# design, so a late or skipped run costs latency rather than correctness.
+#
+# REQUIRED SECRETS — this workflow does nothing until both are set:
+#   CRON_SECRET     must equal the CRON_SECRET the running app checks
+#   PRODUCTION_URL  base URL, no trailing slash, e.g. https://app.example.com
+#
+# Until then every run fails loudly at the preflight step rather than silently
+# doing nothing — a scheduler that quietly no-ops is how this situation arose.
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'   # process-email-queue  — every 15 minutes
+    - cron: '17 * * * *'     # release-escrow       — hourly, off the hour
+    - cron: '43 */6 * * *'   # reconcile-paystack   — every 6 hours
+    - cron: '0 3 * * *'      # gdpr-purge           — daily at 03:00 UTC
+  workflow_dispatch:
+    inputs:
+      job:
+        description: 'Which job to run now'
+        required: true
+        type: choice
+        options:
+          - process-email-queue
+          - release-escrow
+          - reconcile-paystack
+          - gdpr-purge
+
+# The offsets (:17, :43) keep these off the top of the hour, when GitHub's
+# scheduler is most contended and delays are longest.
+
+jobs:
+  preflight:
+    name: Check required secrets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail loudly if the schedule cannot work
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+        run: |
+          missing=0
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::CRON_SECRET is not set. Every scheduled job will 401."
+            missing=1
+          fi
+          if [ -z "$PRODUCTION_URL" ]; then
+            echo "::error::PRODUCTION_URL is not set. There is nothing to call."
+            missing=1
+          fi
+          [ "$missing" -eq 0 ] || exit 1
+          echo "Secrets present."
+
+  run-job:
+    name: Invoke cron endpoint
+    needs: preflight
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve which endpoint this run is for
+        id: which
+        run: |
+          case "${{ github.event.schedule }}" in
+            '*/15 * * * *') echo "path=process-email-queue" >> "$GITHUB_OUTPUT" ;;
+            '17 * * * *')   echo "path=release-escrow"      >> "$GITHUB_OUTPUT" ;;
+            '43 */6 * * *') echo "path=reconcile-paystack"  >> "$GITHUB_OUTPUT" ;;
+            '0 3 * * *')    echo "path=gdpr-purge"          >> "$GITHUB_OUTPUT" ;;
+            *)              echo "path=${{ inputs.job }}"   >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Call it
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+          JOB_PATH: ${{ steps.which.outputs.path }}
+        run: |
+          if [ -z "$JOB_PATH" ]; then
+            echo "::error::Could not resolve a job for this trigger."
+            exit 1
+          fi
+
+          echo "Invoking /api/cron/$JOB_PATH"
+
+          # -sS so curl is quiet but still reports errors; --max-time because a
+          # hung request must not hold a runner for six hours.
+          http_code=$(curl -sS -o /tmp/body.json -w '%{http_code}' \
+            --max-time 600 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$PRODUCTION_URL/api/cron/$JOB_PATH")
+
+          echo "HTTP $http_code"
+          # The body is the job's own report. Print it — a scheduled job whose
+          # output nobody can see is barely better than one that never runs.
+          head -c 4000 /tmp/body.json || true
+          echo
+
+          if [ "$http_code" -ge 400 ]; then
+            echo "::error::/api/cron/$JOB_PATH returned HTTP $http_code"
+            exit 1
+          fi
