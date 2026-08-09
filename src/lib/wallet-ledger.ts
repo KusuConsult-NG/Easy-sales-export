@@ -296,3 +296,91 @@ export async function debitJsonbBalance(params: {
         reason: (row.reason ?? null) as DebitFailure | null,
     };
 }
+
+export interface BoundedCounterResult {
+    ok: boolean;
+    /** The counter after the call, where one counter was changed. */
+    value?: number;
+    /** For a multi-item decrement, the item that could not afford the change. */
+    failedId?: string | null;
+    reason: string | null;
+}
+
+/**
+ * Decrements several counters, or none of them.
+ *
+ * For marketplace stock, where one order spans several products. Every row is
+ * locked and checked before any is written, so a shortfall on the last item
+ * leaves the earlier ones untouched — which a per-item loop would not.
+ *
+ * Rows are locked in id order inside the function, so two orders containing the
+ * same products in different sequences cannot deadlock.
+ *
+ * See supabase/migrations/015_bounded_counters.sql.
+ */
+export async function decrementManyOrFail(
+    items: Array<{ collection: string; id: string; field: string; amount: number }>
+): Promise<BoundedCounterResult> {
+    if (items.length === 0) return { ok: true, failedId: null, reason: null };
+
+    for (const item of items) {
+        if (!Number.isFinite(item.amount) || item.amount <= 0) {
+            throw new Error(`decrementManyOrFail: amount must be positive for ${item.id}`);
+        }
+    }
+
+    const { data, error } = await supabaseAdmin.rpc("decrement_many_or_fail", { p_items: items });
+
+    if (error) {
+        logger.error("[wallet-ledger] decrement_many_or_fail failed", { count: items.length, error });
+        throw new Error(`Stock decrement failed: ${error.message}`);
+    }
+
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) throw new Error("Stock decrement returned no result");
+
+    return {
+        ok: Boolean(row.ok),
+        failedId: row.failed_id ?? null,
+        reason: row.reason ?? null,
+    };
+}
+
+/**
+ * Raises a counter only while it stays within a ceiling held on the same record.
+ *
+ * For capacity: `currentParticipants` may rise only within `maxParticipants`.
+ * A record with no ceiling recorded is treated as unbounded, so events without
+ * a cap keep working.
+ */
+export async function incrementWithinCeiling(params: {
+    collection: string;
+    id: string;
+    field: string;
+    amount: number;
+    ceilingField: string;
+}): Promise<BoundedCounterResult> {
+    const { collection, id, field, amount, ceilingField } = params;
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+        throw new Error(`incrementWithinCeiling: amount must be positive, got ${amount}`);
+    }
+
+    const { data, error } = await supabaseAdmin.rpc("increment_within_ceiling", {
+        p_collection: collection,
+        p_id: id,
+        p_field: field,
+        p_amount: amount,
+        p_ceiling_field: ceilingField,
+    });
+
+    if (error) {
+        logger.error("[wallet-ledger] increment_within_ceiling failed", { collection, id, error });
+        throw new Error(`Capacity increment failed: ${error.message}`);
+    }
+
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) throw new Error("Capacity increment returned no result");
+
+    return { ok: Boolean(row.ok), value: Number(row.value ?? 0), reason: row.reason ?? null };
+}

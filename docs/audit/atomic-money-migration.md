@@ -513,34 +513,82 @@ the human-facing order number and saves a Paystack round trip in the common
 case. It is now documented as a fast path rather than a guard, with
 `claimPaymentOnce` as the actual gate.
 
-## NOT fixed: stock can still be oversold across DIFFERENT orders
+## Fixed: stock oversold across DIFFERENT orders, and training capacity
 
-Within one payment, the claim now means inventory is decremented once. But two
-*different* orders for the last unit still race:
+Both had the same shape — check a bound, then change a counter, with no lock in
+between:
 
 ```js
+// marketplace stock
 if (currentQty >= item.quantity) {
     transaction.update(ref, { availableQuantity: FieldValue.increment(-item.quantity) });
 } else {
     throw new Error(`Insufficient stock for product: ${item.productTitle}`);
 }
+
+// training capacity
+if (event.currentParticipants >= event.maxParticipants) throw new Error("Event is full");
+transaction.update(eventRef, { currentParticipants: FieldValue.increment(1) });
 ```
 
-The check takes no lock, so both pass and stock goes negative. Migration `010`
-makes this worse rather than better, as it did for escrow and cooperative
-savings: the decrements used to lose one another, which hid the oversell.
+Two buyers took the last unit and both passed; two people took the last seat and
+both registered. Migration `010` made both worse rather than better, as it did
+for escrow and cooperative savings: the increments used to lose one another,
+which hid the overshoot.
 
-This needs the same **conditional decrement** primitive as training capacity
-(#28) — change a counter only while it stays within a bound, in one statement:
+Migration `015` adds the two primitives.
 
-```sql
-UPDATE ... SET available = available - :qty
- WHERE available >= :qty
-RETURNING available;
-```
+### Why not `debit_jsonb_balance` (013/014)
 
-That is now the second caller waiting on it — marketplace stock and training
-capacity — so it is worth building rather than deferring again.
+It already does exactly this for a single field, and capacity nearly fits — but
+it enforces a floor, not a ceiling against a value held in another field.
+
+Stock is the harder case: an order decrements **several** products and must be
+all-or-nothing. Calling a single-item function per product would leave the first
+items decremented when the third turns out to be short — worse than the
+behaviour it replaced, where a throw meant the queued writes never landed at
+all. So `decrement_many_or_fail` takes the whole order, locks every row **in id
+order** (two orders listing the same products in opposite sequence would
+otherwise deadlock), checks them all, and only then writes.
+
+### The order of operations in `_payment.ts`
+
+Stock is now reserved **after** `claimPaymentOnce` and **before** the fulfilment
+transaction. That ordering is deliberate:
+
+- After the claim, because the claim is what makes the whole path idempotent.
+  Reserving first would let a retry decrement a second time.
+- Before the transaction, because the transaction takes no lock and cannot be
+  where the decision is made.
+
+The in-transaction decrement was **removed**, not left alongside — keeping both
+would take stock twice. The reads in that transaction run after the reservation,
+so `availableQuantity` there is already the post-decrement figure, which is what
+the low-stock alert should report.
+
+### The gap this exposed, and closed
+
+If stock is short *after* the payment is claimed, the buyer has paid for
+something that cannot ship. The old code threw inside the transaction and
+returned a generic error — and because the reference was already claimed, a
+retry took the "already processed" path and told the buyer their order was live.
+Real money, no order, no trace.
+
+Nothing is decremented in that case (015 is all-or-nothing), so the only thing
+outstanding is the refund. The order is now marked
+`paymentStatus: "paid_awaiting_refund"` / `status: "cancelled_out_of_stock"`
+with the amount and reason recorded, and the buyer is told they have been
+charged and a refund is coming.
+
+**This still needs an operational follow-up:** nothing yet *processes* those
+refunds. They are findable rather than silent, which is the difference between a
+bug and a lost payment, but somebody has to run the refund.
+
+### Uncapped events
+
+`increment_within_ceiling` treats a missing ceiling as unbounded. Events created
+without `maxParticipants` must keep accepting registrations; refusing them would
+break every uncapped session on the platform.
 
 ## Not yet migrated
 
@@ -555,7 +603,7 @@ can be ruled out.
 | 4 | `src/app/actions/marketplace/_escrow.ts` | Both money paths converted; 4 non-money status transitions remain — see below. |
 | 6 | `src/app/actions/academy/_actions.ts` | Payment claim converted; 6 non-payment transitions remain. |
 | 4 | `src/app/actions/farm-nation.ts` | Property reservation and cancellation converted; 4 non-inventory transitions remain. |
-| 4 | `src/app/actions/wave/_actions.ts` | Earnings withdrawal converted. Training capacity NOT fixed — see below. |
+| 4 | `src/app/actions/wave/_actions.ts` | Earnings withdrawal and training capacity converted; 4 non-money transitions remain. |
 | 5 | `src/app/actions/wallet.ts` | Remaining non-balance transactions (withdrawal request, admin decisions). |
 | 3 | `src/app/actions/cooperative/_actions.ts` | Both overdraft paths converted; 3 non-money transitions remain. |
 | 4 | `src/app/actions/vendor-settings.ts` | |
@@ -565,7 +613,7 @@ can be ruled out.
 | 4 | `src/app/actions/cooperative/_loans.ts` | |
 | 4 | `src/app/actions/cooperative/_admin.ts` | |
 | 3 | `src/app/actions/wave/_admin.ts` | |
-| 3 | `src/app/actions/marketplace/_payment.ts` | |
+| 3 | `src/app/actions/marketplace/_payment.ts` | Payment claim and stock reservation converted; 3 order-creation transitions remain. |
 | 3 | `src/app/actions/academy/_admin.ts` | |
 | 2 | `src/app/actions/order-management.ts` | |
 | 2 | `src/app/actions/marketplace/_buyer.ts` | |
