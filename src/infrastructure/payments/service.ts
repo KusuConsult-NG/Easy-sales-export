@@ -95,10 +95,10 @@ export async function processMarketplaceOrder(reference: string, amount: number,
         return;
     }
 
-    const result = await db.runTransaction(async (transaction) => {
+    const result = await (async () => {
         const buyerId = buyerIdForClaim;
         const walletRef = db.collection(COLLECTIONS.WALLETS).doc(buyerId);
-        const walletSnap = await transaction.get(walletRef);
+        const walletSnap = await walletRef.get();
         // Display only: the balanced pair of wallet_transactions rows below is
         // net zero, and no wallet balance is changed by this function.
         let currentBalance = 0;
@@ -111,7 +111,7 @@ export async function processMarketplaceOrder(reference: string, amount: number,
         const paymentTimestamp = paidAt ? Timestamp.fromDate(paidAt) : FieldValue.serverTimestamp();
 
         // 1. Update Order
-        transaction.update(orderRef, {
+        await orderRef.update({
             paymentStatus: "escrow_held",
             status: "processing",
             paymentVerifiedAt: paymentTimestamp,
@@ -125,7 +125,7 @@ export async function processMarketplaceOrder(reference: string, amount: number,
         //    fulfilment rather than before it.)
 
         // 2b. Write to Unified Ledger
-        transaction.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(reference), {
+        await db.collection(COLLECTIONS.TRANSACTIONS).doc(reference).set({
             id: reference,
             userId: buyerId,
             type: "marketplace_order",
@@ -155,7 +155,11 @@ export async function processMarketplaceOrder(reference: string, amount: number,
             sellerTotals[sellerId] = (sellerTotals[sellerId] || 0) + deliveryFeePerSeller;
         });
 
-        Object.entries(sellerTotals).forEach(([sellerId, totalAmount]) => {
+        // for...of, not forEach: these writes are awaited now, and an async
+        // forEach callback would fire them without waiting — the escrow rows
+        // would race the rest of fulfilment and their failures would be
+        // unobservable.
+        for (const [sellerId, totalAmount] of Object.entries(sellerTotals)) {
             const escrowId = `ESC-${orderData.orderId}-${sellerId.substring(0, 5)}`;
             const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId);
 
@@ -170,7 +174,7 @@ export async function processMarketplaceOrder(reference: string, amount: number,
                 .map((item: any) => productDetails[item.productId]?.description || "")
                 .filter(Boolean);
 
-            transaction.set(escrowRef, {
+            await escrowRef.set({
                 id: escrowId,
                 orderId: orderData.orderId,
                 buyerId: orderData.buyerId,
@@ -189,12 +193,12 @@ export async function processMarketplaceOrder(reference: string, amount: number,
                 updatedAt: FieldValue.serverTimestamp(),
                 paidAt: FieldValue.serverTimestamp(),
             });
-        });
+        }
 
         // 4. Log the direct Paystack payment in the payments collection
         const paymentId = `PAY-${orderData.orderId || orderDoc.id}`;
         const paymentRef = db.collection(COLLECTIONS.PAYMENTS).doc(paymentId);
-        transaction.set(paymentRef, {
+        await paymentRef.set({
             id: paymentId,
             userId: buyerId,
             userEmail: buyerEmail,
@@ -214,7 +218,7 @@ export async function processMarketplaceOrder(reference: string, amount: number,
 
         // 5. Log a balanced pair of transactions in wallet_transactions
         if (!walletSnap.exists) {
-            transaction.set(walletRef, {
+            await walletRef.set({
                 userId: buyerId,
                 balance: 0,
                 currency: "NGN",
@@ -222,7 +226,7 @@ export async function processMarketplaceOrder(reference: string, amount: number,
                 updatedAt: FieldValue.serverTimestamp()
             });
         } else {
-            transaction.update(walletRef, {
+            await walletRef.update({
                 updatedAt: FieldValue.serverTimestamp()
             });
         }
@@ -231,7 +235,7 @@ export async function processMarketplaceOrder(reference: string, amount: number,
         const purchaseTxnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc();
 
         // Funding txn (credit)
-        transaction.set(fundingTxnRef, {
+        await fundingTxnRef.set({
             id: fundingTxnRef.id,
             walletId: buyerId,
             userId: buyerId,
@@ -247,7 +251,7 @@ export async function processMarketplaceOrder(reference: string, amount: number,
         });
 
         // Purchase txn (debit)
-        transaction.set(purchaseTxnRef, {
+        await purchaseTxnRef.set({
             id: purchaseTxnRef.id,
             walletId: buyerId,
             userId: buyerId,
@@ -263,7 +267,7 @@ export async function processMarketplaceOrder(reference: string, amount: number,
         });
 
         return { success: true };
-    });
+    })();
 
     if (!result?.success) {
         // The reference is already claimed, so this will not be retried
@@ -497,19 +501,29 @@ export async function processCooperativeRegistration(reference: string, amount: 
         return;
     }
 
-    const result = await db.runTransaction(async (transaction) => {
-        const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
-
+    // Fulfilment, in dependency order.
+    //
+    // This was wrapped in runTransaction, which gave it nothing: the adapter
+    // queues the writes and flushes them one by one after the callback returns.
+    // There is no isolation and no rollback — a failure part-way through leaves
+    // the earlier writes applied either way. The wrapper only made that harder
+    // to see, and made the reads inside it look protected when they are not.
+    //
+    // The payment is already claimed above, so this runs exactly once. What the
+    // ordering below buys is the safest partial state if fulfilment dies
+    // half-way: the ledger rows are written LAST, so a crash leaves a member
+    // recorded without a duplicate ledger entry rather than the reverse.
+    const result = await (async () => {
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
         const transactionRef = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc();
 
         const paymentTimestamp = paidAt ? Timestamp.fromDate(paidAt) : FieldValue.serverTimestamp();
 
         // Check if onboarding was already submitted
-        const memberDoc = await transaction.get(memberRef);
+        const memberDoc = await memberRef.get();
         const onboardingCompleted = memberDoc.exists && memberDoc.data()?.onboardingCompleted === true;
 
-        transaction.set(memberRef, {
+        await memberRef.set({
             userId,
             paymentStatus: "completed",
             paymentReference: reference,
@@ -542,10 +556,12 @@ export async function processCooperativeRegistration(reference: string, amount: 
 
         // FIX: Use set(merge:true) instead of update() so this never throws for
         // new users whose USERS doc doesn't yet have a serviceRegistrations field.
-        transaction.set(userRef, normalizeUserDoc(userUpdatePayload), { merge: true });
+        // set(merge) deep-merges nested maps, so writing the cooperatives
+        // segment no longer replaces the user's wave and academy registrations.
+        await userRef.set(normalizeUserDoc(userUpdatePayload), { merge: true });
 
-        // Create transaction fee record
-        transaction.set(transactionRef, {
+        // Ledger rows last — see the ordering note above.
+        await transactionRef.set({
             userId,
             cooperativeId: "default",
             type: "registration_fee",
@@ -559,7 +575,7 @@ export async function processCooperativeRegistration(reference: string, amount: 
         // (The processed_payments row is written by claimPaymentOnce above.
         //  Writing it here as well is what put the marker AFTER the work.)
 
-        transaction.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(reference), {
+        await db.collection(COLLECTIONS.TRANSACTIONS).doc(reference).set({
             id: reference,
             userId,
             type: "cooperative_registration",
@@ -573,7 +589,7 @@ export async function processCooperativeRegistration(reference: string, amount: 
         });
 
         return { success: true };
-    });
+    })();
 
     if (!result?.success) {
         // The reference is already claimed, so this will not be retried
@@ -656,7 +672,7 @@ export async function processAcademyRegistration(reference: string, amount: numb
         return;
     }
 
-    const result = await db.runTransaction(async (transaction) => {
+    const result = await (async () => {
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
 
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
@@ -664,7 +680,7 @@ export async function processAcademyRegistration(reference: string, amount: numb
         const paymentTimestamp = paidAt ? Timestamp.fromDate(paidAt) : FieldValue.serverTimestamp();
 
         if (appDoc) {
-            transaction.update(appDoc.ref, {
+            await appDoc.ref.update({
                 status: "approved",
                 paymentStatus: "completed",
                 paymentAmount: amount,
@@ -698,12 +714,12 @@ export async function processAcademyRegistration(reference: string, amount: numb
         }
 
         // DISEASE 2 FIX: normalizeUserDoc ensures academy key is canonical.
-        transaction.set(userRef, normalizeUserDoc(userUpdatePayload), { merge: true });
+        await userRef.set(normalizeUserDoc(userUpdatePayload), { merge: true });
 
         // (The processed_payments row is written by claimPaymentOnce above.
         //  Writing it here as well is what put the marker AFTER the work.)
 
-        transaction.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(reference), {
+        await db.collection(COLLECTIONS.TRANSACTIONS).doc(reference).set({
             id: reference,
             userId,
             type: "academy_registration",
@@ -717,7 +733,7 @@ export async function processAcademyRegistration(reference: string, amount: numb
         });
 
         return { success: true };
-    });
+    })();
 
     if (!result?.success) {
         // The reference is already claimed, so this will not be retried
@@ -773,7 +789,7 @@ export async function processFarmNationRegistration(reference: string, amount: n
         return;
     }
 
-    const result = await db.runTransaction(async (transaction) => {
+    const result = await (async () => {
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
 
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
@@ -782,7 +798,7 @@ export async function processFarmNationRegistration(reference: string, amount: n
 
         // DISEASE 2 FIX: normalizeUserDoc mirrors farm_nation→farmNation so both keys
         // are always in sync.
-        transaction.set(userRef, normalizeUserDoc({
+        await userRef.set(normalizeUserDoc({
             serviceRegistrations: {
                 farm_nation: {
                     paymentStatus: "completed",
@@ -797,7 +813,7 @@ export async function processFarmNationRegistration(reference: string, amount: n
         // (The processed_payments row is written by claimPaymentOnce above.
         //  Writing it here as well is what put the marker AFTER the work.)
 
-        transaction.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(reference), {
+        await db.collection(COLLECTIONS.TRANSACTIONS).doc(reference).set({
             id: reference,
             userId,
             type: "farm_nation_registration",
@@ -811,7 +827,7 @@ export async function processFarmNationRegistration(reference: string, amount: n
         });
 
         return { success: true };
-    });
+    })();
 
     if (!result?.success) {
         // The reference is already claimed, so this will not be retried
@@ -850,7 +866,7 @@ export async function processWaveRegistration(reference: string, amount: number,
         return;
     }
 
-    const result = await db.runTransaction(async (transaction) => {
+    const result = await (async () => {
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
 
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
@@ -858,7 +874,7 @@ export async function processWaveRegistration(reference: string, amount: number,
         const paymentTimestamp = paidAt ? Timestamp.fromDate(paidAt) : FieldValue.serverTimestamp();
 
         // DISEASE 2 FIX: normalizeUserDoc mirrors wave key and ensures canonical form.
-        transaction.set(userRef, normalizeUserDoc({
+        await userRef.set(normalizeUserDoc({
             serviceRegistrations: {
                 wave: {
                     paymentStatus: "completed",
@@ -873,7 +889,7 @@ export async function processWaveRegistration(reference: string, amount: number,
         // (The processed_payments row is written by claimPaymentOnce above.
         //  Writing it here as well is what put the marker AFTER the work.)
 
-        transaction.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(reference), {
+        await db.collection(COLLECTIONS.TRANSACTIONS).doc(reference).set({
             id: reference,
             userId,
             type: "wave_registration",
@@ -887,7 +903,7 @@ export async function processWaveRegistration(reference: string, amount: number,
         });
 
         return { success: true };
-    });
+    })();
 
     if (!result?.success) {
         // The reference is already claimed, so this will not be retried
@@ -940,8 +956,8 @@ export async function processCooperativeContribution(reference: string, amount: 
         return;
     }
 
-    const result = await db.runTransaction(async (transaction) => {
-        const memberDoc = await transaction.get(memberRef);
+    const result = await (async () => {
+        const memberDoc = await memberRef.get();
         if (!memberDoc.exists) {
             throw new Error(`Cooperative member record not found for user: ${activeUserId}`);
         }
@@ -959,7 +975,7 @@ export async function processCooperativeContribution(reference: string, amount: 
         // so a contribution landing at the same time as any other write to the
         // member record lost one of them. FieldValue.increment applies the
         // addition in SQL (migration 010).
-        transaction.update(memberRef, {
+        await memberRef.update({
             totalContributions: FieldValue.increment(amount),
             savingsBalance: FieldValue.increment(amount),
             tier: newTier,
@@ -972,7 +988,7 @@ export async function processCooperativeContribution(reference: string, amount: 
         //  Writing it here as well is what put the marker AFTER the work.)
 
         // 3. Write to Unified Ledger
-        transaction.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(reference), {
+        await db.collection(COLLECTIONS.TRANSACTIONS).doc(reference).set({
             id: reference,
             userId: activeUserId,
             type: "contribution",
@@ -987,7 +1003,7 @@ export async function processCooperativeContribution(reference: string, amount: 
 
         // 4. Cooperative Ledger write
         const coopTxRef = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc();
-        transaction.set(coopTxRef, {
+        await coopTxRef.set({
             userId: activeUserId,
             cooperativeId,
             type: "contribution",
@@ -999,7 +1015,7 @@ export async function processCooperativeContribution(reference: string, amount: 
         });
 
         return { success: true };
-    });
+    })();
 
     if (!result?.success) {
         // The reference is already claimed, so this will not be retried

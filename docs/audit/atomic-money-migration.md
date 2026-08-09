@@ -818,7 +818,7 @@ can be ruled out.
 | Count | File | Notes |
 |---|---|---|
 | 7 | `src/app/actions/admin.ts` | Withdrawal payout converted. Loan approval NOT converted — see the security note below. |
-| 1 | `src/infrastructure/payments/service.ts` | 6 of 7 converted. Only `processExportInvestment` remains — see below. |
+| 1 | `src/infrastructure/payments/service.ts` | All fulfilment paths converted; only `processExportInvestment` keeps its wrapper — see below. |
 | 4 | `src/app/actions/marketplace/_escrow.ts` | Both money paths converted; 4 non-money status transitions remain — see below. |
 | 6 | `src/app/actions/academy/_actions.ts` | Payment claim converted; 6 non-payment transitions remain. |
 | 4 | `src/app/actions/farm-nation.ts` | Property reservation and cancellation converted; 4 non-inventory transitions remain. |
