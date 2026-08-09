@@ -653,7 +653,7 @@ refund from three, dispute resolution from two. It attempts each in turn and
 stops on the first win. Race-safe, because once any attempt succeeds the row
 holds the target status and every other attempt fails against all of them.
 
-## Remaining runTransaction sites: 108, and a way to prioritise them
+## Remaining runTransaction sites: 98, and a way to prioritise them
 
 Converting file by file has diminishing returns — most of the remaining sites
 change a status nobody pays against. The ones worth reading first are those
@@ -809,6 +809,52 @@ bug and a lost payment, but somebody has to run the refund.
 without `maxParticipants` must keep accepting registrations; refusing them would
 break every uncapped session on the platform.
 
+## Dropped: the transaction wrappers in cooperative/_actions.ts
+
+The same conversion as the payment fulfilment paths, for the four remaining
+wrappers in the member-facing cooperative actions:
+
+| Path | What was inside the wrapper |
+|---|---|
+| `_makeContributionAction` | contribution row, unified ledger row, savings/loan balance increments |
+| `_submitWithdrawalAction` | withdrawal request row and its audit entry |
+| `_applyForLoanAction` | eligibility reads and the loan application row |
+| `_createFixedSavingsAction` | one write |
+
+None of them lost a guarantee, because none had one: the adapter queues the
+writes and flushes them one at a time after the callback returns.
+
+Two things are worth recording beyond the mechanical change.
+
+**`_makeContributionAction` wrote its ledger rows before the balance moved.**
+It now increments `savingsBalance` (or decrements `loanBalance`) first and
+writes both ledger rows last, so a crash part-way leaves the member credited
+without a receipt rather than a receipt with no credit. Its comment claimed the
+wrapper prevented two concurrent contributions double-counting the cooperative
+total. It never did — what prevents that is `FieldValue.increment` applying the
+addition in SQL (migration 010). The re-read of the membership inside the
+wrapper was protected by nothing and is gone; the query immediately above it
+already returned that document.
+
+**`_applyForLoanAction`'s double-lending check is still not a guard.** It reads
+the member's open applications in `COOPERATIVE_LOANS` and `LOAN_APPLICATIONS`
+and refuses if either is non-empty. That check took no lock inside the wrapper
+and takes none without it: two applications submitted together both read an
+empty result and both create a pending row. Closing it needs a uniqueness
+constraint on a member's open applications, not a wrapper. It is bounded — a
+pending application disburses nothing until an admin approves it, and that path
+has its own dual-control guard — so it is recorded here rather than patched.
+
+### `_updateMembershipAction` keeps its wrapper
+
+The last wrapper in the file is a read-check-write on `_version`: re-read the
+member, refuse if the version moved, write with the version bumped, all inside
+`runQueryWithRetry`. The wrapper does not make it atomic, but the retry loop
+around it is the file's only optimistic-concurrency mechanism, and replacing it
+means a compare-and-set at the SQL level (the shape `versionedUpdate` already
+uses in `vendor-settings.ts`). Like `processExportInvestment`, it wants a
+decision rather than a mechanical conversion.
+
 ## Not yet migrated
 
 Ordered by `runTransaction` count. Presence here is not proof of a live defect —
@@ -824,7 +870,7 @@ can be ruled out.
 | 4 | `src/app/actions/farm-nation.ts` | Property reservation and cancellation converted; 4 non-inventory transitions remain. |
 | 4 | `src/app/actions/wave/_actions.ts` | Earnings withdrawal and training capacity converted; 4 non-money transitions remain. |
 | 5 | `src/app/actions/wallet.ts` | Remaining non-balance transactions (withdrawal request, admin decisions). |
-| 3 | `src/app/actions/cooperative/_actions.ts` | Both overdraft paths converted; 3 non-money transitions remain. |
+| 1 | `src/app/actions/cooperative/_actions.ts` | Both overdraft paths converted. Four wrappers dropped (contribution, withdrawal request, loan application, fixed savings). Only `_updateMembershipAction`'s version guard remains — see below. |
 | 4 | `src/app/actions/vendor-settings.ts` | |
 | 2 | `src/app/actions/marketplace/_escrow_actions.ts` | Release and refund converted; 2 non-money transitions remain. |
 | 4 | `src/app/actions/marketplace/_actions.ts` | |
