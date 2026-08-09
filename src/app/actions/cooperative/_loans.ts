@@ -5,6 +5,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
+import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { Timestamp } from "@/lib/firestore-compat";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { calculateRepaymentSchedule, isEligibleForLoan, getTierInterestRate } from "@/lib/cooperative-tiers";
@@ -637,7 +638,7 @@ export async function approveLoanAction(
         const appRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(applicationId);
 
         // Transactional Locking to prevent Double Lending
-        await db.runTransaction(async (transaction) => {
+        const txResult = await db.runTransaction(async (transaction) => {
             const appDoc = await transaction.get(appRef);
 
             if (!appDoc.exists) {
@@ -679,47 +680,99 @@ export async function approveLoanAction(
                 throw new Error(`This loan exceeds maximum limit of ₦${maxLoan.toLocaleString()}.`);
             }
 
-            // High-Value Maker-Checker Logic
-            const MAKER_CHECKER_THRESHOLD = 1000000;
-            if (appData.amount >= MAKER_CHECKER_THRESHOLD) {
-                const approvalChain = (appData as any).approvalChain || {};
-
-                if (!approvalChain.firstApprover) {
-                    // First Approval (Maker)
-                    transaction.update(appRef, {
-                        approvalChain: {
-                            firstApprover: effectiveAdminId,
-                            firstApprovalAt: FieldValue.serverTimestamp(),
-                            firstApproverName: session.user.name || session.user.email
-                        },
-                        status: "partially_approved",
-                        updatedAt: FieldValue.serverTimestamp(),
-                    });
-                } else {
-                    // Second Approval (Checker)
-                    if (approvalChain.firstApprover === effectiveAdminId) {
-                        throw new Error("Security Violation: You cannot verify your own approval. Another admin is required.");
-                    }
-                    transaction.update(appRef, {
-                        "approvalChain.secondApprover": effectiveAdminId,
-                        "approvalChain.secondApprovalAt": FieldValue.serverTimestamp(),
-                        "approvalChain.secondApproverName": session.user.name || session.user.email,
-                        status: "approved",
-                        reviewedAt: FieldValue.serverTimestamp(),
-                        reviewedBy: effectiveAdminId,
-                        updatedAt: FieldValue.serverTimestamp()
-                    });
-                }
-            } else {
-                // Regular approval (no Maker-Checker needed for low value)
-                transaction.update(appRef, {
-                    status: "approved",
-                    reviewedAt: FieldValue.serverTimestamp(),
-                    reviewedBy: effectiveAdminId,
-                    updatedAt: FieldValue.serverTimestamp()
-                });
-            }
+            return { appData };
         });
+
+        // ── APPROVAL ─────────────────────────────────────────────────────────
+        //
+        // The checks above ran inside runTransaction, which takes no lock, so
+        // they are advisory. The transition itself is claimed, which is what
+        // makes dual control hold:
+        //
+        //   - `if (!approvalChain.firstApprover)` let two admins approving at
+        //     the same moment both become the maker, and the second write
+        //     silently replaced the first — one admin's approval simply vanished
+        //     from the record.
+        //   - the self-approval check let two checkers both pass and both write
+        //     `approved`.
+        //
+        // Same defect as admin.ts, minus the disbursement — no money moves in
+        // this function, which is the only reason it was less severe.
+        const loan = txResult.appData as any;
+        const approvalChain = loan.approvalChain || {};
+        const adminName = session.user.name || session.user.email;
+        const nowIso = new Date().toISOString();
+
+        const MAKER_CHECKER_THRESHOLD = 1000000;
+        const needsDualControl = loan.amount >= MAKER_CHECKER_THRESHOLD;
+
+        if (needsDualControl && !approvalChain.firstApprover) {
+            const makerClaim = await claimStatusTransitionFromAny({
+                collection: COLLECTIONS.LOAN_APPLICATIONS,
+                id: applicationId,
+                fromAny: ["pending", "reviewing"],
+                to: "partially_approved",
+                patch: {
+                    approvalChain: {
+                        firstApprover: effectiveAdminId,
+                        firstApprovalAt: nowIso,
+                        firstApproverName: adminName,
+                    },
+                    updatedAt: nowIso,
+                },
+            });
+
+            if (!makerClaim.claimed) {
+                return {
+                    success: false as const,
+                    error: makerClaim.status === null
+                        ? "Loan application not found"
+                        : `This application is already ${makerClaim.status}.`,
+                    data: null,
+                };
+            }
+        } else {
+            if (needsDualControl && approvalChain.firstApprover === effectiveAdminId) {
+                return {
+                    success: false as const,
+                    error: "You cannot verify your own approval. Another admin is required.",
+                    data: null,
+                };
+            }
+
+            const finalClaim = await claimStatusTransitionFromAny({
+                collection: COLLECTIONS.LOAN_APPLICATIONS,
+                id: applicationId,
+                fromAny: needsDualControl ? ["partially_approved"] : ["pending", "reviewing"],
+                to: "approved",
+                patch: {
+                    reviewedBy: effectiveAdminId,
+                    reviewedAt: nowIso,
+                    updatedAt: nowIso,
+                    ...(needsDualControl
+                        ? {
+                            // Written whole because the CAS patch shallow-merges.
+                            approvalChain: {
+                                ...approvalChain,
+                                secondApprover: effectiveAdminId,
+                                secondApprovalAt: nowIso,
+                                secondApproverName: adminName,
+                            },
+                        }
+                        : {}),
+                },
+            });
+
+            if (!finalClaim.claimed) {
+                return {
+                    success: false as const,
+                    error: finalClaim.status === null
+                        ? "Loan application not found"
+                        : `This application is already ${finalClaim.status}.`,
+                    data: null,
+                };
+            }
+        }
 
         // Fetch fresh data for audit log
         const updatedAppDoc = await appRef.get();

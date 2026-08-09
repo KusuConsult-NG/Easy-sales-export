@@ -465,35 +465,85 @@ user twice.
 Now claims `pending → payout_initiated` first. The collection is tracked through
 the three-way lookup so the claim targets the right one.
 
-## NOT converted: loan approval is a dual-control, and the race defeats it
+## Fixed: loan approval dual-control was bypassed entirely
 
-`_approveLoanApplication` implements maker/checker: a first admin approves
-(`pending → partially_approved`), a second must be a *different* admin, enforced
-by
+Two defects. The race was documented earlier; the first one below was found
+while fixing it, and it is much worse.
+
+### 1. The maker's own approval disbursed the loan
+
+The first-approval branch returned `makerApproval: true` — and **nothing checked
+it** before the Paystack payout. The `return` that should have stopped there was
+missing; the orphaned indentation on the audit-log call is where it used to be.
 
 ```js
-if (approvalChain.firstApprover === session.user.id) {
-    throw new Error("Security Violation: You cannot verify your own approval.");
+if (!approvalChain.firstApprover) {
+    ...
+    return { error: null, success: true, makerApproval: true, loanData };   // returns from the TRANSACTION
 }
+...
+});                                                    // <- transaction ends
+
+// nothing inspects makerApproval
+
+// --- DISBURSEMENT (Outside Transaction) ---
+const disbResult = await paystackPayout(...)           // <- money leaves
 ```
 
-That check reads `approvalChain` inside `runTransaction`, which takes no lock.
-Two admins approving simultaneously both read an empty chain, both write
-themselves as `firstApprover`, and the second overwrites the first. The control
-that requires two distinct approvers can be defeated by concurrency rather than
-by intent.
+So one admin approving a loan of ₦1,000,000 or more paid it out on their own.
+The disbursement then set the status to `disbursed`, which made the second
+approver's attempt hit the "already processed" early return — so the second
+approval could never happen and the audit trail recorded a single approver.
 
-**This was deliberately left alone.** It is a security control on lending, not
-only a money movement, and the correct fix is not the one-line claim used
-elsewhere: the first approval could claim `pending → partially_approved`, but
-the second approval writes no status change and needs a compare-and-swap on the
-approval chain itself. Getting it wrong either blocks legitimate approvals or
-weakens a dual-control safeguard, and it deserves its own change with its own
-review rather than being appended to a batch.
+Dual control never took place. The threshold was decorative.
 
-There is also double-lending verification in the same transaction — querying for
-other active loans — which has the same staleness problem: two applications
-approved at once can each fail to see the other.
+### 2. Both checks ran inside runTransaction, which takes no lock
+
+`if (!approvalChain.firstApprover)` and the self-approval check are
+check-then-write:
+
+- Two admins approving at the same moment both read an empty chain, both wrote
+  themselves as maker, and one approval was silently replaced.
+- Two checkers both passed the "not your own approval" test and **both** reached
+  the payout.
+
+### The fix
+
+Every path now claims its transition, so exactly one caller proceeds:
+
+| Step | Claim |
+|---|---|
+| First approval (≥ threshold) | `pending`/`reviewing` → `partially_approved` |
+| Second approval | `partially_approved` → `approved` |
+| Approval below threshold | `pending`/`reviewing` → `approved` |
+
+Only the winner of the final claim reaches disbursement, and a first approval
+returns before it — that return is the one that was missing.
+
+The self-approval check stays a plain read, which is safe here: `firstApprover`
+is only written by the maker claim, and that claim also moves the status to
+`partially_approved`, so it cannot change underneath the checker.
+
+The checker's patch writes the **whole** `approvalChain` object, because the CAS
+patch shallow-merges — writing only `secondApprover` would drop the maker's
+record.
+
+`versionedUpdate` is gone from this path. It re-read the document inside
+`runTransaction` to compare `_version`, which takes no lock, so two callers read
+the same version and both passed. The `version` parameter is kept for the call
+signature and documented as unused.
+
+### The same shape in cooperative/_loans.ts
+
+`approveLoanAction` had defect 2 but not defect 1 — it performs no disbursement,
+which is the only reason it was less severe. Converted to the same claims.
+
+### Proving it
+
+The tests were run against the pre-fix code first: 8 of 9 fail, including
+"does not disburse on the first approval". A test that passes either way would
+have proved nothing. The ninth passes both ways — sequential self-approval was
+already blocked; only the concurrent case was not.
 
 ## Fixed: cooperative savings could be overdrawn
 
