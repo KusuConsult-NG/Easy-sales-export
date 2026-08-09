@@ -227,7 +227,12 @@ BEGIN
         RETURN; -- nothing to do
     END IF;
 
-    v_sets := v_sets || 'updated_at = NOW()';
+    -- Cast required. An untyped literal makes Postgres resolve || as
+    -- array-concat-array and try to parse the string as TEXT[], which fails
+    -- with "malformed array literal". The format() appends above are typed
+    -- TEXT and so were unaffected, which is why this went unnoticed: the
+    -- function errored only once it had something to write.
+    v_sets := v_sets || 'updated_at = NOW()'::TEXT;
 
     IF p_table = 'document_collections' THEN
         v_sql := format(
