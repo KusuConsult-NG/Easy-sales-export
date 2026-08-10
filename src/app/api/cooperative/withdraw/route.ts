@@ -6,7 +6,7 @@ import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
-import { debitJsonbBalance } from "@/lib/wallet-ledger";
+import { debitJsonbBalanceWithFloor } from "@/lib/wallet-ledger";
 import { rateLimit, getClientIp, createRateLimitResponse } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 
@@ -73,34 +73,30 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Check available balance.
+        // Eligibility is decided by the debit below, not by any read here.
         //
-        // This read `totalContributions`, which is a CUMULATIVE LIFETIME TOTAL:
-        // it is incremented on every contribution (cooperative/_payment.ts) and
-        // feeds calculateUserTier, and nothing in src/ ever decrements it. A
-        // member who contributed ₦100,000 and has already withdrawn ₦90,000
-        // still reported ₦100,000 here and could withdraw against money that was
-        // already gone. That was not a race — it was wrong on every call.
+        // TWO defects used to live at this point in the function, and both are
+        // now the primitive's job:
         //
-        // savingsBalance is the spendable figure, and is what every other
-        // withdrawal door debits.
-        const savingsBalance = membershipData.savingsBalance || 0;
-        const minimumBalance = 5000; // Minimum ₦5,000 must remain
-
-        // The floor is a policy rule and this read is advisory: two withdrawals
-        // that each leave ₦5,000 behind can together dip under it. The debit
-        // below is what guarantees the balance cannot go negative. Same caveat
-        // as platform.ts; closing the floor race needs a debit primitive that
-        // takes a floor.
-        if (savingsBalance - amount < minimumBalance) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: `Insufficient balance. You must maintain a minimum balance of ₦${minimumBalance.toLocaleString()}. Available for withdrawal: ₦${Math.max(0, savingsBalance - minimumBalance).toLocaleString()}`
-                },
-                { status: 400 }
-            );
-        }
+        // 1. It read `totalContributions` — a CUMULATIVE LIFETIME TOTAL,
+        //    incremented on every contribution (cooperative/_payment.ts), read
+        //    by calculateUserTier, and decremented nowhere in src/. A member who
+        //    contributed ₦100,000 and had already withdrawn ₦90,000 still
+        //    reported ₦100,000 here and could withdraw against money that was
+        //    gone. Not a race: wrong on every call. `savingsBalance` is the
+        //    spendable figure.
+        //
+        // 2. The minimum-balance rule was checked with a plain read, which takes
+        //    no lock, so two withdrawals that each leave ₦5,000 behind could
+        //    together dip under it. debitJsonbBalance could not close that — it
+        //    enforces "not negative" and nothing more.
+        //
+        // debit_jsonb_balance_with_floor (migration 020) applies the balance
+        // check and the floor under the same lock as the deduction, so none of
+        // the three can be separated. No advisory read is kept as a fast path:
+        // leaving the read half of a check-then-write above the primitive is
+        // exactly how these came to be mistaken for guards.
+        const MINIMUM_BALANCE = 5000; // Minimum ₦5,000 must remain
 
         // Check for existing pending withdrawal requests (Admin SDK)
         const existingWithdrawalsSnapshot = await db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS)
@@ -130,23 +126,26 @@ export async function POST(request: NextRequest) {
         // by an amount that had never been debited — the member's savings grew
         // by the full withdrawal amount, out of nothing. That is the reason this
         // is a money defect rather than a bookkeeping one.
-        const debit = await debitJsonbBalance({
+        const debit = await debitJsonbBalanceWithFloor({
             table: "cooperative_members",
             id: userId,
             field: "savingsBalance",
             amount,
+            floor: MINIMUM_BALANCE,
         });
 
         if (!debit.ok) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: debit.reason === "insufficient_funds"
+            // below_floor is not insufficient_funds. The member HAS the money;
+            // they are not allowed to take all of it, and saying "insufficient
+            // funds" to someone with a healthy balance would be false.
+            const message =
+                debit.reason === "below_floor"
+                    ? `You must maintain a minimum balance of ₦${MINIMUM_BALANCE.toLocaleString()}. Available for withdrawal: ₦${Math.max(0, Number(debit.balance) - MINIMUM_BALANCE).toLocaleString()}`
+                    : debit.reason === "insufficient_funds"
                         ? `Insufficient balance. Available: ₦${Number(debit.balance).toLocaleString()}`
-                        : 'You must be a cooperative member to request withdrawal'
-                },
-                { status: 400 }
-            );
+                        : 'You must be a cooperative member to request withdrawal';
+
+            return NextResponse.json({ success: false, message }, { status: 400 });
         }
 
         const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);

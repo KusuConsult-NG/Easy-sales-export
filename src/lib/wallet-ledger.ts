@@ -444,3 +444,135 @@ export async function claimIdempotencyKey(params: {
 
     return { claimed: Boolean(row.claimed), heldAt: row.held_at ?? null };
 }
+
+/** Reason a floored debit was refused. `below_floor` is not `insufficient_funds`. */
+export type FlooredDebitFailure = DebitFailure | "below_floor";
+
+export interface FlooredDebitResult {
+    ok: boolean;
+    /** Balance AFTER a successful debit; the current balance on refusal. */
+    balance: number;
+    reason: FlooredDebitFailure | null;
+}
+
+/**
+ * Debit a raw_data balance under a row lock, refusing to take it below a floor.
+ *
+ * `debitJsonbBalance` enforces "not negative" and nothing more, which is the
+ * right rule where there is no policy minimum. Where there IS one, checking it
+ * with a plain read leaves a race: two withdrawals that each leave the floor
+ * intact can together dip under it. This applies the floor under the same lock
+ * as the debit.
+ *
+ * `below_floor` is deliberately distinct from `insufficient_funds`: the member
+ * has the money, they are just not allowed to take all of it, and telling them
+ * "insufficient funds" would be false.
+ *
+ * Requires migration 020.
+ */
+export async function debitJsonbBalanceWithFloor(params: {
+    table: string;
+    id: string;
+    field: string;
+    amount: number;
+    floor: number;
+    /** Required when the collection lives in document_collections. */
+    collection?: string;
+}): Promise<FlooredDebitResult> {
+    const { table, id, field, amount, floor, collection } = params;
+
+    if (!id) throw new Error("debitJsonbBalanceWithFloor: id is required");
+    if (!field) throw new Error("debitJsonbBalanceWithFloor: field is required");
+    if (!Number.isFinite(amount) || amount <= 0) {
+        throw new Error(`debitJsonbBalanceWithFloor: amount must be positive, got ${amount}`);
+    }
+    if (!Number.isFinite(floor) || floor < 0) {
+        throw new Error(`debitJsonbBalanceWithFloor: floor must be >= 0, got ${floor}`);
+    }
+
+    const { data, error } = await supabaseAdmin.rpc("debit_jsonb_balance_with_floor", {
+        p_table: table,
+        p_id: id,
+        p_field: field,
+        p_amount: amount,
+        p_floor: floor,
+        p_collection: collection ?? null,
+    });
+
+    if (error) {
+        logger.error("[wallet-ledger] debit_jsonb_balance_with_floor failed", { table, id, field, error });
+        throw new Error(`Floored balance debit failed: ${error.message}`);
+    }
+
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) throw new Error("Floored balance debit returned no result");
+
+    return {
+        ok: Boolean(row.ok),
+        balance: Number(row.balance ?? 0),
+        reason: (row.reason ?? null) as FlooredDebitFailure | null,
+    };
+}
+
+export interface VersionClaimResult {
+    /** True when this caller made the change. */
+    claimed: boolean;
+    /**
+     * The version now on the row: the NEW one on success, the CURRENT one on a
+     * lost claim, and `null` when the record does not exist.
+     *
+     * `null` is a DIFFERENT failure from a lost claim. Confusing the two turns a
+     * missing record into a spurious "someone else edited this".
+     */
+    version: number | null;
+}
+
+/**
+ * Compare-and-swap on `_version` — optimistic locking that actually locks.
+ *
+ * `versionedUpdate` in src/lib/optimistic-locking.ts reads the version inside
+ * `runTransaction`, compares it and writes. That wrapper takes no lock, so two
+ * callers read the same version, both pass the comparison and both write — the
+ * exact failure optimistic locking exists to prevent.
+ *
+ * The patch is applied as JSONB and FieldValue sentinels are NOT resolved, the
+ * same caveat `claimStatusTransition` carries: an increment placed in the patch
+ * is stored as an object rather than applied. Issue those separately after a
+ * successful claim.
+ *
+ * Requires migration 020.
+ */
+export async function claimVersionedUpdate(params: {
+    table: string;
+    id: string;
+    /** The version the caller expects. `undefined`/`null` asserts nothing but still locks. */
+    expectedVersion?: number | null;
+    patch?: Record<string, any>;
+    /** Required when the collection lives in document_collections. */
+    collection?: string;
+}): Promise<VersionClaimResult> {
+    const { table, id, expectedVersion, patch, collection } = params;
+
+    if (!id) throw new Error("claimVersionedUpdate: id is required");
+
+    const { data, error } = await supabaseAdmin.rpc("claim_versioned_update", {
+        p_table: table,
+        p_id: id,
+        p_expected: expectedVersion ?? null,
+        p_patch: patch ?? {},
+        p_collection: collection ?? null,
+    });
+
+    if (error) {
+        logger.error("[wallet-ledger] claim_versioned_update failed", { table, id, error });
+        throw new Error(`Versioned update failed: ${error.message}`);
+    }
+
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) throw new Error("Versioned update returned no result");
+
+    return {
+        claimed: Boolean(row.claimed),
+        version: row.version === null || row.version === undefined ? null : Number(row.version),
+    };
+}

@@ -31,11 +31,13 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 
 const mockClaimIdempotencyKey = jest.fn() as jest.Mock<any>;
 const mockDebitJsonbBalance = jest.fn() as jest.Mock<any>;
+const mockDebitWithFloor = jest.fn() as jest.Mock<any>;
 const mockClaimPaymentOnce = jest.fn() as jest.Mock<any>;
 
 jest.mock('@/lib/wallet-ledger', () => ({
     claimIdempotencyKey: (...args: any[]) => mockClaimIdempotencyKey(...args),
     debitJsonbBalance: (...args: any[]) => mockDebitJsonbBalance(...args),
+    debitJsonbBalanceWithFloor: (...args: any[]) => mockDebitWithFloor(...args),
     claimPaymentOnce: (...args: any[]) => mockClaimPaymentOnce(...args),
 }));
 
@@ -71,6 +73,7 @@ describe('submitWithdrawalAction — the key that locked funds twice', () => {
         setSession('member-1');
         mockClaimIdempotencyKey.mockResolvedValue({ claimed: true, heldAt: null });
         mockDebitJsonbBalance.mockResolvedValue({ ok: true, balance: 80_000, reason: null });
+        mockDebitWithFloor.mockResolvedValue({ ok: true, balance: 80_000, reason: null });
         setDocs({ cooperativeId: 'coop-1', savingsBalance: 100_000 });
     });
 
@@ -84,6 +87,7 @@ describe('submitWithdrawalAction — the key that locked funds twice', () => {
 
         expect(result.success).toBe(false);
         expect(mockDebitJsonbBalance).not.toHaveBeenCalled();
+        expect(mockDebitWithFloor).not.toHaveBeenCalled();
         expect((global as any).mockFirestoreUpdate).not.toHaveBeenCalled();
     });
 
@@ -101,16 +105,20 @@ describe('submitWithdrawalAction — the key that locked funds twice', () => {
         const { submitWithdrawalAction } = await import('@/app/actions/platform');
         await submitWithdrawalAction({} as any, withdrawalForm());
 
-        expect(mockDebitJsonbBalance).toHaveBeenCalledWith({
+        // The floor moved INTO the debit (migration 020). It used to be a
+        // plain read above this call, which took no lock — two withdrawals that
+        // each left the minimum behind could together dip under it.
+        expect(mockDebitWithFloor).toHaveBeenCalledWith({
             table: 'cooperative_members',
             id: 'member-1',
             field: 'savingsBalance',
             amount: 20_000,
+            floor: 5000,
         });
     });
 
     it('creates no withdrawal request when the debit is refused', async () => {
-        mockDebitJsonbBalance.mockResolvedValue({ ok: false, balance: 100, reason: 'insufficient_funds' });
+        mockDebitWithFloor.mockResolvedValue({ ok: false, balance: 100, reason: 'insufficient_funds' });
 
         const { submitWithdrawalAction } = await import('@/app/actions/platform');
         const result: any = await submitWithdrawalAction({} as any, withdrawalForm());
@@ -124,12 +132,28 @@ describe('submitWithdrawalAction — the key that locked funds twice', () => {
         expect((global as any).mockFirestoreTxSet).not.toHaveBeenCalled();
     });
 
-    it('still enforces the minimum balance before claiming a debit', async () => {
+    it('still enforces the minimum balance, now inside the locked debit', async () => {
         // 100,000 balance, 96,000 requested leaves 4,000 — under the 5,000 floor.
+        //
+        // This used to assert the debit was never REACHED, because an advisory
+        // read refused first. That read took no lock, so two withdrawals each
+        // leaving 5,000 behind could together dip under the floor. The floor is
+        // now a parameter of the debit (migration 020), so the correct
+        // assertion is that it is passed and honoured — not that the debit is
+        // skipped. The rule is enforced in a strictly stronger place.
+        mockDebitWithFloor.mockResolvedValue({ ok: false, balance: 100_000, reason: 'below_floor' });
+
         const { submitWithdrawalAction } = await import('@/app/actions/platform');
         const result: any = await submitWithdrawalAction({} as any, withdrawalForm({ amount: '96000' }));
 
         expect(result.success).toBe(false);
+        expect(mockDebitWithFloor).toHaveBeenCalledWith(
+            expect.objectContaining({ amount: 96_000, floor: 5000 })
+        );
+        // below_floor must not be reported as insufficient funds: the member
+        // has the money and is simply not allowed to take all of it.
+        expect(result.error).toContain('minimum balance');
+        // The unfloored primitive must not be used on this path at all.
         expect(mockDebitJsonbBalance).not.toHaveBeenCalled();
     });
 });
