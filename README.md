@@ -2,6 +2,10 @@
 
 This repository contains the Next.js hub application for the **Easy Sales Export** platform. It operates as a monorepo leveraging npm workspaces for modular package distribution.
 
+> **Picking this up, or coming back to it?** Start with
+> [`docs/NEXT-STEPS.md`](docs/NEXT-STEPS.md) — one page, in order, with what is
+> blocked on what. The detailed findings behind it live in `docs/audit/`.
+
 ---
 
 ## 1. Directory Structure & Architecture
