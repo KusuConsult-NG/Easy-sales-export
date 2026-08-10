@@ -251,10 +251,45 @@ export async function GET(request: NextRequest) {
             }
         });
 
-        // A stranded claim counts toward the alarm as much as a missing
-        // artefact does. Reporting it without counting it would let a run with
-        // stranded payments report "ok".
-        totalUnfulfilled += stranded.length;
+        // Orders charged for stock that turned out not to be there.
+        //
+        // Both stock-reservation paths mark an order paymentStatus
+        // "paid_awaiting_refund" / status "cancelled_out_of_stock" when the
+        // reservation fails after the payment is already claimed. The comment
+        // beside each says the same thing: "this still needs an operational
+        // follow-up — nothing yet PROCESSES those refunds."
+        //
+        // Nothing surfaced them either, which is the half that made them easy to
+        // forget: the money is owed, the order carries the reason and the
+        // amount, and no job ever mentioned it again. This does not issue the
+        // refund — moving money back out belongs behind a human, the same
+        // reasoning that keeps this whole route alerting rather than auto-
+        // healing. It makes the debt impossible to miss.
+        const refundsOwed: Array<Record<string, any>> = [];
+
+        for (const col of [COLLECTIONS.MARKETPLACE_ORDERS, COLLECTIONS.EXPORT_ORDERS]) {
+            const snap = await db.collection(col).get();
+            snap.docs.forEach((d: any) => {
+                const data = d.data() ?? {};
+                if (data.paymentStatus !== "paid_awaiting_refund") return;
+                refundsOwed.push({
+                    collection: col,
+                    orderId: data.orderId || d.id,
+                    userId: data.buyerId || data.userId || "",
+                    amount: data.refundAmount ?? data.paidAmount ?? null,
+                    reason: data.refundReason || data.status || "",
+                });
+            });
+        }
+
+        const refundTotal = refundsOwed.reduce(
+            (sum, r) => sum + (Number(r.amount) || 0), 0
+        );
+
+        // Both of these count toward the alarm as much as a missing artefact
+        // does. Reporting either without counting it would let a run with
+        // stranded payments, or with money owed to buyers, report "ok".
+        totalUnfulfilled += stranded.length + refundsOwed.length;
 
         const body = {
             status: totalUnfulfilled > 0 ? "unfulfilled_payments_found" : "ok",
@@ -272,6 +307,15 @@ export async function GET(request: NextRequest) {
                 })),
                 ...(stranded.length > MAX_LISTED
                     ? { truncated: stranded.length - MAX_LISTED }
+                    : {}),
+            },
+            refundsOwed: {
+                count: refundsOwed.length,
+                totalAmount: refundTotal,
+                meaning: "buyer was charged, stock was not there — refund owed and NOT yet issued",
+                orders: refundsOwed.slice(0, MAX_LISTED),
+                ...(refundsOwed.length > MAX_LISTED
+                    ? { truncated: refundsOwed.length - MAX_LISTED }
                     : {}),
             },
             notChecked: uncheckedTypes,

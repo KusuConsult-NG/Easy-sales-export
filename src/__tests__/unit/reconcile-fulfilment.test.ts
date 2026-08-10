@@ -239,6 +239,50 @@ describe('reconcile-fulfilment', () => {
         expect(body.strandedClaims.count).toBe(0);
     });
 
+    it('surfaces an order charged for stock that was not there', async () => {
+        // Both stock-reservation paths mark an order paid_awaiting_refund when
+        // the reservation fails after the payment is claimed, and the comment
+        // beside each says nothing yet PROCESSES those refunds. Nothing
+        // surfaced them either — the money was owed and no job mentioned it.
+        COLLECTION_DATA['processedPayments'] = [];
+        COLLECTION_DATA['marketplaceOrders'] = [{
+            id: 'ord-1',
+            data: {
+                orderId: 'ORD-1',
+                buyerId: 'buyer-1',
+                paymentStatus: 'paid_awaiting_refund',
+                status: 'cancelled_out_of_stock',
+                refundAmount: 12_500,
+                refundReason: 'Insufficient stock for Yam Tubers',
+            },
+        }];
+
+        const { GET } = await import('@/app/api/cron/reconcile-fulfilment/route');
+        const body = await (await GET(req())).json();
+
+        expect(body.refundsOwed.count).toBe(1);
+        expect(body.refundsOwed.totalAmount).toBe(12_500);
+        expect(body.refundsOwed.orders[0].orderId).toBe('ORD-1');
+        // Must count toward the alarm: money owed to a buyer is not an "ok" run.
+        expect(body.totalUnfulfilled).toBe(1);
+        expect(body.status).toBe('unfulfilled_payments_found');
+    });
+
+    it('reports no refunds owed when no order is awaiting one', async () => {
+        // Vacuity guard: a collection-name typo would report 0 either way.
+        COLLECTION_DATA['processedPayments'] = [];
+        COLLECTION_DATA['marketplaceOrders'] = [{
+            id: 'ord-2',
+            data: { orderId: 'ORD-2', buyerId: 'b2', paymentStatus: 'escrow_held' },
+        }];
+
+        const { GET } = await import('@/app/api/cron/reconcile-fulfilment/route');
+        const body = await (await GET(req())).json();
+
+        expect(body.refundsOwed.count).toBe(0);
+        expect(body.status).toBe('ok');
+    });
+
     it('refuses an unauthenticated call', async () => {
         const { GET } = await import('@/app/api/cron/reconcile-fulfilment/route');
         const res = await GET(req('https://x/api/cron/reconcile-fulfilment', null));
