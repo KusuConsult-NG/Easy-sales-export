@@ -662,3 +662,6 @@ operational or needs a decision — see the Status table above, plus:
 - ~~Apply migrations 020 and 021 before deploying this.~~ **Done 2026-08-10**, along with 019 which had been missing since the day before. See `atomic-money-migration.md`.
 - **Issuing** refunds (as opposed to surfacing them) needs the Paystack refund
   API integrated by someone who can test it against their sandbox.
+- **Migration 022 is measured and declined** (2026-08-10) — the tables are far
+  too small for the indexes to be used. See `performance-2026-08-10.md` §2. It
+  is annotated DO NOT APPLY at the top of the file.
