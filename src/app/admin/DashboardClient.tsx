@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { logger } from '@/lib/logger';
 import { motion } from "framer-motion";
 import Link from "next/link";
@@ -19,8 +20,26 @@ import {
 import type { AnalyticsData, ModuleRegistrationStats } from "@/app/actions/admin-analytics";
 import RegistrationPieChart from "@/components/admin/RegistrationPieChart";
 import UserSegmentsChart from "@/components/admin/UserSegmentsChart";
-import AnalyticsCharts from "@/components/admin/AnalyticsCharts";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
+
+// AnalyticsCharts is the only chart on this page that pulls in recharts, and it
+// was the one component still imported statically. admin/analytics/page.tsx
+// already loaded it through dynamic(); this page did not, so the dashboard —
+// far the more frequently visited of the two — paid ~337 KB of recharts in its
+// initial bundle for a chart below the fold.
+//
+// Same shape as four of the six defects in integrity-sweep-2026-08-10.md: a fix
+// applied to one copy of a path and not the other. It is not a concurrency-only
+// pattern.
+//
+// ssr:false matches the other three call sites — recharts measures the DOM, so
+// server rendering it produces markup the client immediately discards.
+const AnalyticsCharts = dynamic(() => import("@/components/admin/AnalyticsCharts"), {
+    ssr: false,
+    loading: () => (
+        <div className="h-72 w-full animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
+    ),
+});
 
 export default function AdminDashboardPage() {
     const [stats, setStats] = useState<AnalyticsData | null>(null);

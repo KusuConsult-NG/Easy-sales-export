@@ -80,6 +80,18 @@ resident in more than one place.
 the other. It is worth noticing that the pattern is not specific to
 concurrency work.
 
+**FIXED, and measured** by building twice and reading
+`.next/server/app/admin/page_client-reference-manifest.js` each time:
+
+| `/admin` initial JS | Chunks | Total | recharts |
+|---|---|---|---|
+| before | 16 | **900 KB** | 338 + 38 + 21 KB |
+| after | 13 | **506 KB** | none |
+
+**394 KB removed, 44% of the route's initial JavaScript.** Larger than the
+~337 KB this section originally estimated: recharts was spread across three
+chunks, not one.
+
 ### 1b. `framer-motion` is static in 11 route files
 
 `loans/page`, `land/verify/page`, `loans/success`, `loans/approve`,
@@ -218,12 +230,29 @@ that looks complete is how 'the report is missing rows' bugs reach production."*
 The warning fires — once per collection, into logs nobody is reading, on a job
 that has never been scheduled in production.
 
-**Fix:** `.all()` on each, which is what it exists for (`UNBOUNDED_CEILING` is
-500,000 and logs an *error* when hit rather than truncating quietly). For
-`PROCESSED_PAYMENTS`, filter by date in the query instead of reading everything
-and discarding in JavaScript.
+**FIXED.** All seven use `.all()`, which raises the ceiling to 500,000 and logs
+an *error* when hit rather than truncating quietly. Four also use `.select()` to
+fetch only the fields the check reads.
 
-I introduced the seventh instance today, in the `refundsOwed` scan. Same fix.
+**One thing I planned and did not do.** The first draft pushed the date window
+into the `PROCESSED_PAYMENTS` query as `.where("processedAt", ">=", cutoff)`.
+That would have been a regression: the JavaScript filter deliberately KEEPS rows
+with no `processedAt` — *"undated: check it rather than skip it"* — and a SQL
+`>=` drops exactly those, which are the rows most likely to be malformed and
+worth looking at. `processedAt` is also written as a server timestamp on some
+paths and an ISO string on others, so the comparison would not have been sound
+across both. The filter stays in JavaScript, and the reason is now a comment.
+
+**And the ceiling is no longer only a log line.** `.all()` reports an error into
+logs — and this entire defect was hidden by a warning in logs nobody read, on a
+job that has never been scheduled. Each check now returns whether its scan was
+truncated, the response carries `incompleteScans`, and the status becomes
+`incomplete_scan` rather than `ok`. A reconciler running against a partial view
+must not be able to report clean: every "unfulfilled" for a truncated type is a
+possible false positive, and every fulfilled one a possible false negative.
+
+I introduced the seventh instance today, in the `refundsOwed` scan. Same fix,
+plus the filter pushed into the query where it is safe to do so.
 
 ---
 
@@ -250,16 +279,35 @@ a collection that grows with every conversation ever created — and serially,
 because the `await` is inside the loop. The result is identical every iteration:
 it should be fetched once before the loop.
 
-### `forensics.ts:41` — serial read per user
+**FIXED.** The query is hoisted above the loop and indexed into a
+`Map<memberId, conversationId>`, so the per-member lookup is a map read. Cost
+goes from O(members × conversations) to O(conversations) once.
+
+A second read went with it. Inside the `if (!conversationId)` branch sat a
+`USERS` read feeding a `convData` object that was **assigned and never
+referenced** — `startConversation` resolves participant details itself. One round
+trip per new member, for an object that was discarded.
+
+### `forensics.ts:41` and `:69` — serial reads
 
 ```js
 for (const user of authUsers) {
     const doc = await db.collection(COLLECTIONS.USERS).doc(user.uid).get();
 ```
 
-One round trip per auth user, serially. Against 41,105 users this does not
-complete in any reasonable time. Admin-only, so low blast radius, but the tool
-does not work at current data volume.
+**CORRECTION.** An earlier draft of this section said this "does not complete in
+any reasonable time" against 41,105 users. That was wrong: the scan is bounded by
+`listUsers(100)` and, for the products check below it, `.limit(200)`. It is
+~300 serial round trips, not 41,000 — slow, not broken. The corrected claim is
+the one to act on, and the original overstated it by two orders of magnitude.
+
+The products check has a second problem the user loop does not: it re-reads the
+same seller once per product, so a seller with 40 listings costs 40 identical
+round trips.
+
+Both are the chunked `FieldPath.documentId() in [...]` shape `admin.ts` already
+uses for hydration. **FIXED** — 300 serial round trips become ~10 concurrent
+queries, and the products check now de-duplicates sellers before reading.
 
 ---
 
@@ -321,6 +369,29 @@ Railway this is image size and cold-start, not per-request latency. §2 and §3
 affect every request; this affects deploys.
 
 ---
+
+## Status
+
+| | Finding | State |
+|---|---|---|
+| §1a | recharts static on the admin dashboard | **fixed** — 900 KB → 506 KB measured |
+| §1b | `framer-motion` static in 11 files | open — needs a design decision |
+| §2 | JSONB filters seq-scan | **migration 022 written** — apply after `EXPLAIN ANALYZE` |
+| §3 | reconciler truncates at 5,000 rows | **fixed** — `.all()`, plus `incompleteScans` in the response |
+| §4 | `messages.ts` O(N×M), `forensics.ts` serial | **fixed** |
+| §5 | 399 unlimited scans | open — a project, not a patch |
+| §6 | 197 MB server output | open — needs `ANALYZE=true` and is deploy cost, not request cost |
+
+**Migration 022 is written but its value is unverified.** The mechanism is
+certain; the magnitude is not, and it cannot be established from the repository.
+Run the `EXPLAIN ANALYZE` in the migration header against production or a
+comparably loaded database *before* applying. If a table is small enough that the
+planner prefers a sequential scan anyway, drop that index rather than leaving it:
+an unused index is write cost with no read benefit.
+
+It is also the only migration in this repo with **no `BEGIN`/`COMMIT`**, because
+`CREATE INDEX CONCURRENTLY` cannot run inside a transaction. Adding them will
+make it fail.
 
 ## Priority
 
