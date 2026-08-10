@@ -366,9 +366,11 @@ async function _releaseEscrowFunds(
         if (escrowAmount <= 0) return { success: false as const, error: "Invalid transaction amount" };
 
         const orderId = data.orderId;
-        const orderEscrowsQuery = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
-            .where("orderId", "==", orderId)
-            .get();
+
+        // The order's sibling escrows are deliberately NOT read here. A snapshot
+        // taken before the claim answers "were they released before I started?",
+        // which is the wrong question and is what left multi-seller orders stuck
+        // at "delivered". The read happens after the claim, at step 5.
 
         // Claim the release before creating a payout or crediting anyone.
         //
@@ -466,8 +468,33 @@ async function _releaseEscrowFunds(
             });
 
             // 5. Update Order Status if all escrows for this order are released
-            const otherEscrows = orderEscrowsQuery.docs.filter(d => d.id !== transactionId);
-            const allOthersReleased = otherEscrows.every(d => d.data().status === "released");
+            //
+            // WHY THIS RE-READS INSTEAD OF USING orderEscrowsQuery
+            // ----------------------------------------------------
+            // orderEscrowsQuery is fetched near the top of this function, BEFORE
+            // the release is claimed. Using it here asks "were the sibling
+            // escrows released before I started?", which is not the question.
+            //
+            // On a multi-seller order with two escrows released at the same
+            // time, both callers held a snapshot taken before either claim. Each
+            // saw the other as unreleased, so NEITHER completed the order: every
+            // seller was paid and the order sat at "delivered" indefinitely —
+            // where disputes.ts still permits a dispute, because it only refuses
+            // "completed" and "cancelled". An order whose sellers have all been
+            // paid remaining disputable is the part that costs money.
+            //
+            // Re-reading after the claim closes it, and not only narrows it.
+            // Each caller reads strictly after its own claim commits, so for any
+            // two callers the later read follows both claims — whoever reads
+            // last sees every release and completes the order.
+            const freshEscrows = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
+                .where("orderId", "==", orderId)
+                .get();
+
+            const allOthersReleased = freshEscrows.docs
+                .filter(d => d.id !== transactionId)
+                .every(d => d.data().status === "released");
+
             if (allOthersReleased) {
                 const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
                 tx.update(orderRef, {
