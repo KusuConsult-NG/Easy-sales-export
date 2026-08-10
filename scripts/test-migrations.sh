@@ -1,0 +1,160 @@
+#!/usr/bin/env bash
+#
+# Apply every migration to a THROWAWAY Postgres and assert the money functions
+# behave — including the concurrency properties the jest suites cannot reach.
+#
+# WHY THIS EXISTS
+# ---------------
+# Until now there was no way to run a migration before pasting it into the
+# Supabase SQL Editor of a live project. The cost of that showed up twice on
+# 2026-08-10:
+#
+#   * 021 inserted a loan into cooperative_loans filling only raw_data, leaving
+#     the native `status` and `amount` columns NULL. The adapter routes
+#     .where('status', ...) to the COLUMN, so every loan created through it
+#     would have been invisible to the admin approval queue — the guard working
+#     perfectly while the loan disappeared. Caught by reading, not by testing,
+#     and only because something else had already gone wrong.
+#
+#   * The consolidated deploy file silently omitted four migrations, because the
+#     builder checked "expected but absent" and never "present but unlisted".
+#
+# Neither is the kind of thing a unit test with a mocked database can see. Both
+# are trivial for a real one.
+#
+# WHAT IT DOES NOT DO
+# -------------------
+# It does not test the application. It answers two questions: do the migrations
+# apply in order against a clean schema, and do the functions they create behave
+# as their headers claim — including under concurrency, which is the whole point
+# of most of them and is exactly what a mocked adapter cannot show you.
+#
+# It does not run 004 (row-level security) or 022 (CREATE INDEX CONCURRENTLY).
+# 004 makes every subsequent assertion return zero rows, which would look like a
+# failure of the thing under test rather than of the harness. 022 cannot run
+# inside a transaction block and is applied separately in production too.
+#
+# USAGE
+#   ./scripts/test-migrations.sh
+#
+# Requires a local postgres (brew install postgresql@16). It never touches a
+# remote database: it initdb's a fresh cluster in a temp directory, runs on a
+# non-default port, and removes it on exit.
+
+set -uo pipefail
+
+PGBIN="${PGBIN:-/usr/local/opt/postgresql@16/bin}"
+[ -x "$PGBIN/psql" ] || PGBIN=/opt/homebrew/opt/postgresql@16/bin
+if [ ! -x "$PGBIN/psql" ]; then
+    echo "postgres not found. brew install postgresql@16, or set PGBIN." >&2
+    exit 1
+fi
+
+PORT="${PGPORT_TEST:-55432}"
+PGDATA_DIR="$(mktemp -d)/pgdata"
+SOCK="$(mktemp -d)"
+DB=migrationtest
+
+cleanup() {
+    "$PGBIN/pg_ctl" -D "$PGDATA_DIR" stop -m immediate >/dev/null 2>&1
+    rm -rf "$PGDATA_DIR" "$SOCK"
+}
+trap cleanup EXIT
+
+Q() { "$PGBIN/psql" -h "$SOCK" -p "$PORT" -U postgres -d "$DB" -t -A -c "$1"; }
+
+pass=0
+fail=0
+check() { # check <label> <expected> <actual>
+    if [ "$2" = "$3" ]; then
+        printf "  ok    %s\n" "$1"; pass=$((pass+1))
+    else
+        printf "  FAIL  %s\n        expected: %s\n        actual:   %s\n" "$1" "$2" "$3"; fail=$((fail+1))
+    fi
+}
+
+echo "== starting throwaway postgres on port $PORT"
+"$PGBIN/initdb" -D "$PGDATA_DIR" -U postgres --auth=trust >/dev/null 2>&1 || { echo "initdb failed"; exit 1; }
+"$PGBIN/pg_ctl" -D "$PGDATA_DIR" -o "-p $PORT -k $SOCK -c listen_addresses=''" -l "$PGDATA_DIR/log" start >/dev/null 2>&1
+for _ in $(seq 1 30); do "$PGBIN/pg_isready" -h "$SOCK" -p "$PORT" >/dev/null 2>&1 && break; sleep 1; done
+"$PGBIN/psql" -h "$SOCK" -p "$PORT" -U postgres -q -c "CREATE DATABASE $DB;" >/dev/null || exit 1
+
+echo "== applying schema.sql"
+"$PGBIN/psql" -h "$SOCK" -p "$PORT" -U postgres -d "$DB" -v ON_ERROR_STOP=1 -q -f supabase/schema.sql >/dev/null || {
+    echo "  FAIL  schema.sql did not apply"; exit 1; }
+
+echo "== applying migrations, in the order build-deploy-sql.mjs defines"
+# The order comes from that script rather than being repeated here, so the two
+# cannot drift. 004 is skipped: see the header.
+while read -r f; do
+    case "$f" in 004_*) continue;; esac
+    out=$("$PGBIN/psql" -h "$SOCK" -p "$PORT" -U postgres -d "$DB" -v ON_ERROR_STOP=1 -q -f "supabase/migrations/$f" 2>&1)
+    if [ $? -eq 0 ]; then printf "  ok    %s\n" "$f"; pass=$((pass+1))
+    else printf "  FAIL  %s\n%s\n" "$f" "$out"; fail=$((fail+1)); fi
+done < <(node scripts/build-deploy-sql.mjs --order)
+
+echo "== 020  debit_jsonb_balance_with_floor"
+Q "INSERT INTO cooperative_members (id, raw_data) VALUES ('m1','{\"savingsBalance\":10000}');" >/dev/null
+check "refuses a debit that would breach the floor" "f|10000|below_floor" \
+      "$(Q "SELECT * FROM debit_jsonb_balance_with_floor('cooperative_members','m1','savingsBalance',6000,5000);")"
+check "allows a debit landing exactly on the floor" "t|5000|" \
+      "$(Q "SELECT * FROM debit_jsonb_balance_with_floor('cooperative_members','m1','savingsBalance',5000,5000);")"
+# below_floor and insufficient_funds must stay distinct: the member HAS the
+# money in one case and does not in the other, and telling them the wrong one is
+# a lie either way.
+check "reports insufficient_funds, not below_floor, when short" "f|5000|insufficient_funds" \
+      "$(Q "SELECT * FROM debit_jsonb_balance_with_floor('cooperative_members','m1','savingsBalance',99999,5000);")"
+
+echo "== 020  claim_versioned_update"
+check "first caller claims"            "t|1" "$(Q "SELECT * FROM claim_versioned_update('cooperative_members','m1',0,'{\"note\":\"first\"}');")"
+check "stale caller is refused"        "f|1" "$(Q "SELECT * FROM claim_versioned_update('cooperative_members','m1',0,'{\"note\":\"second\"}');")"
+check "the loser's patch did not land" "first" "$(Q "SELECT raw_data->>'note' FROM cooperative_members WHERE id='m1';")"
+# A missing record is a DIFFERENT failure from a lost claim. Confusing them
+# tells a user to refresh and retry something that is not there.
+check "missing record returns a null version" "f|" "$(Q "SELECT * FROM claim_versioned_update('cooperative_members','nope',0);")"
+
+echo "== 021  claim_single_open_loan_application"
+check "first application is inserted" "t|" \
+      "$(Q "SELECT * FROM claim_single_open_loan_application('u1','L1','cooperative_loans','{\"memberId\":\"u1\",\"status\":\"pending\",\"amount\":1000}');")"
+# THE regression check. Filling only raw_data leaves these NULL, and the adapter
+# routes .where('status', ...) to the column — so the loan exists and the
+# approval queue cannot see it.
+check "native columns are populated from the row" "pending|1000.00" \
+      "$(Q "SELECT status||'|'||amount FROM cooperative_loans WHERE id='L1';")"
+check "an open coop loan blocks a general application" "f|L1" \
+      "$(Q "SELECT * FROM claim_single_open_loan_application('u1','L2','document_collections','{\"userId\":\"u1\",\"status\":\"pending\"}','loan_applications');")"
+check "a different borrower is unaffected" "t|" \
+      "$(Q "SELECT * FROM claim_single_open_loan_application('u2','L3','cooperative_loans','{\"memberId\":\"u2\",\"status\":\"pending\",\"amount\":50}');")"
+
+echo "== concurrency — the property the jest suites cannot reach"
+# Two sessions, the second starting while the first holds its lock. If the
+# locking works the second BLOCKS and then sees the first's effect. Under the
+# code these functions replace, both proceeded.
+Q "INSERT INTO cooperative_members (id, raw_data) VALUES ('r1','{\"savingsBalance\":1000}');" >/dev/null
+(
+  "$PGBIN/psql" -h "$SOCK" -p "$PORT" -U postgres -d "$DB" -t -A >/dev/null 2>&1 <<EOF
+BEGIN;
+SELECT * FROM debit_jsonb_balance_with_floor('cooperative_members','r1','savingsBalance',600,0);
+SELECT pg_sleep(3);
+COMMIT;
+EOF
+) &
+sleep 1
+t0=$(date +%s)
+# `SELECT ok, reason` and not `ok||'|'||reason`: concatenating a boolean to
+# text renders it "false", while the tuple output of a boolean column is "f".
+# The first draft asserted against the wrong one.
+b=$(Q "SELECT ok, COALESCE(reason,'') FROM debit_jsonb_balance_with_floor('cooperative_members','r1','savingsBalance',600,0);")
+t1=$(date +%s)
+wait
+check "second debit is refused rather than overdrawing" "f|insufficient_funds" "$b"
+check "balance is 400, not -200"                        "400" "$(Q "SELECT raw_data->>'savingsBalance' FROM cooperative_members WHERE id='r1';")"
+if [ $((t1-t0)) -ge 2 ]; then
+    printf "  ok    second session BLOCKED on the row lock (%ss)\n" "$((t1-t0))"; pass=$((pass+1))
+else
+    printf "  FAIL  second session did not block (%ss) — the lock is not holding\n" "$((t1-t0))"; fail=$((fail+1))
+fi
+
+echo
+echo "== $pass passed, $fail failed"
+[ "$fail" -eq 0 ] || exit 1
