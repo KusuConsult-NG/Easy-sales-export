@@ -256,7 +256,7 @@ export default function VillageMarketSellerHubPage() {
     const [addProductEventId, setAddProductEventId] = useState<string | null>(null);
 
     useEffect(() => {
-        if (status === "unauthenticated") router.push("/auth/signin");
+        if (status === "unauthenticated") router.push("/auth/login");
     }, [status, router]);
 
     async function load() {

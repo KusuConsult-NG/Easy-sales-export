@@ -126,7 +126,7 @@ export default function LoansPage() {
                                 completed: membershipStatus === "pending",
                                 action: membershipStatus === "not_member" ? {
                                     label: "Start Registration",
-                                    href: "/cooperatives/register"
+                                    href: "/cooperatives/onboarding"
                                 } : undefined
                             },
                             {
@@ -156,7 +156,7 @@ export default function LoansPage() {
                         ]}
                         primaryAction={membershipStatus === "not_member" ? {
                             label: "Get Started - Join Cooperative",
-                            href: "/cooperatives/register"
+                            href: "/cooperatives/onboarding"
                         } : undefined}
                     />
                 </div>

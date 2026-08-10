@@ -162,7 +162,7 @@ export default function FixedSavingsPage() {
                                 completed: membershipStatus === "pending",
                                 action: membershipStatus === "not_member" ? {
                                     label: "Start Registration",
-                                    href: "/cooperatives/register"
+                                    href: "/cooperatives/onboarding"
                                 } : undefined
                             },
                             {
@@ -186,7 +186,7 @@ export default function FixedSavingsPage() {
                         ]}
                         primaryAction={membershipStatus === "not_member" ? {
                             label: "Get Started - Join Cooperative",
-                            href: "/cooperatives/register"
+                            href: "/cooperatives/onboarding"
                         } : undefined}
                     />
                 </div>

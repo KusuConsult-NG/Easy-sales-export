@@ -40,7 +40,7 @@ export default function MarketplaceSidebar() {
 
     async function handleLogout() {
         await signOut({ redirect: false });
-        router.push('/marketplace/login');
+        router.push('/auth/login?module=marketplace');
     };
 
     const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
