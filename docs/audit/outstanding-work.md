@@ -3,8 +3,27 @@
 Everything still to be done, and who is blocking each item.
 Written to be handed to a developer as-is.
 
-Last updated after 18 commits of fixes. Type-check clean, 331 tests passing,
-production build succeeding.
+Last updated 2026-08-10. Type-check clean, **664 tests passing**, production
+build succeeding.
+
+**Everything below is on `main` and none of it is running.** Production serves a
+build from 2026-07-23. That single fact outranks every item in this document:
+the work is done, merged and unavailable to users. See §0.
+
+## 0. The critical path, in order
+
+Nothing else in this file matters until these are done, and the order is not
+cosmetic — steps 3 and 4 are actively harmful if run against the July build.
+
+| # | Step | Why the order |
+|---|---|---|
+| 1 | **Rotate the Paystack `sk_live_` key** and update Railway **in the same sitting** | Public in git history since 2026-04-16. The old key dies the moment it is rotated, so a gap between the two means an outage. |
+| 2 | **Deploy.** Confirm `/api/health` reports a new `buildTime` | Everything below assumes the new code is live. Verify rather than assume — this is exactly how three weeks of fixes came to be merged and not running. |
+| 3 | **Apply RLS migration `004`** | Browser readers moved to server actions on 2026-08-07, *after* the live build. Applied against the July build, RLS returns **empty rows silently** — a paying member reads as a non-member, with nothing in the log. |
+| 4 | **Set `CRON_SECRET` and `PRODUCTION_URL`** | `release-escrow`'s double-credit fix landed 2026-08-08. Enabling the scheduler before that ships **pays sellers twice**. |
+
+Migrations `019`, `020` and `021` are already applied. `022` was measured and
+declined — see `performance-2026-08-10.md`.
 
 ---
 
@@ -77,6 +96,24 @@ and savings are annual, so anyone moving between the two will feel like one of
 them must be wrong. It is not. For scale, had savings been monthly, ₦1,000,000
 over 12 months would pay ₦1,680,000 rather than ₦140,000 — which is why this
 was confirmed rather than inferred.
+
+### Marketplace payout — RESOLVED 2026-08-10: wallet credit at 100%
+
+Sellers are paid the **full amount as a wallet credit** when an admin releases
+the escrow. The 2.5% commission and the Paystack bank-transfer route in
+`confirmDeliveryAction` are a **rejected** model — do not wire that function up.
+
+Accepted consequence: **no commission is taken on marketplace sales.** If that
+is ever revisited, it belongs on `releaseEscrowFunds`, and two questions the old
+code never answered come with it: where the withheld percentage goes (it
+credited nobody), and whether it is recorded as revenue. See
+`marketplace-payout-2026-08-10.md`.
+
+### Repaying a loan from savings — RESOLVED 2026-08-10: the ₦5,000 floor applies
+
+A member may not repay themselves below the minimum balance. Built, and the
+floor is now shared with the withdrawal route via `src/lib/cooperative-limits.ts`
+rather than declared separately in each.
 
 ### `interestRate` means different things on different records
 
@@ -226,8 +263,13 @@ WHERE p.raw_data->>'type' = 'cooperative_membership_registration'
 ```
 
 ...and equivalently for marketplace orders (an order at `escrow_held`), academy
-enrolments, export investments and farm-nation purchases. That job does not
-exist. It is the one that would have caught this, and would catch the next one.
+enrolments, export investments and farm-nation purchases.
+
+**Built 2026-08-10** — `src/app/api/cron/reconcile-fulfilment/route.ts`. It
+scans each payment type for the artefact that payment should have produced, and
+reports `incompleteScans` and `refundsOwed` rather than reporting a clean run it
+cannot vouch for. Like everything else here it is **not live**: the endpoint
+returns 404 on production, because production is the July build.
 
 The good news from the same run: 215 Paystack transactions and zero unrecorded,
 so the client-callback path has been recording payments reliably even with the
@@ -299,6 +341,32 @@ worst offenders in production.
   Works only if the account is configured for it — worth confirming.
 - **`COLLECTIONS` is defined twice** (`lib/types/firestore.ts` and
   `packages/config`), 117 constants duplicated. They currently agree.
+
+### Tests that report coverage they do not have
+
+The single most useful thing a new maintainer could know about this suite.
+
+**Five assertions were found vacuous on 2026-08-10 alone** — each looked like it
+was checking something, passed, and would have passed against the defect it named:
+
+| What made it vacuous | Where |
+|---|---|
+| Read the mock's first argument (`docId`) instead of the patch | WAVE earnings credit |
+| `data()` resolved lazily, so a *pre*-claim snapshot returned *post*-claim values | escrow order completion |
+| Fixture gave every session `roles: ['admin']`, so the "stranger" was an admin | cooperative loan repayment |
+| Detector required an `Action` suffix, hiding a live implementation | escrow lifecycle audit |
+| Import counting defeated by barrel files | UI-wiring audit |
+
+**Every one was caught by reverting the fix and re-running, never by reading the
+test.** So: on any money path, prove the test fails against the old code before
+trusting it. A companion positive assertion — "and it *does* happen in the good
+case" — catches most of these for the cost of one extra `it()`.
+
+`action-security-audit.test.ts` has the same weakness at a larger scale. It
+checks that an action *file* imports `requireSession`, which is file-level: a
+file can import the guard and contain functions that never call it. That is
+precisely how the vendor IDOR defects survived it. A per-function check is worth
+building.
 
 ---
 
