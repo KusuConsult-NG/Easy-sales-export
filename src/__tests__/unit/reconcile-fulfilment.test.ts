@@ -131,17 +131,39 @@ describe('reconcile-fulfilment', () => {
 
     it('names the payment types it did NOT check', async () => {
         // A reconciler that silently ignores a type reads as an all-clear.
+        // academy_registration IS checked now, so it must NOT appear here —
+        // this test is what would catch a type quietly falling out of coverage.
         COLLECTION_DATA['processedPayments'] = [
             payment('w-1', 'wallet_funding', 'user-1'),
             payment('w-2', 'wallet_funding', 'user-2'),
-            payment('a-1', 'academy_registration', 'user-3'),
+            payment('c-1', 'contribution', 'user-3'),
         ];
 
         const { GET } = await import('@/app/api/cron/reconcile-fulfilment/route');
         const body = await (await GET(req())).json();
 
-        expect(body.notChecked).toMatchObject({ wallet_funding: 2, academy_registration: 1 });
+        expect(body.notChecked).toMatchObject({ wallet_funding: 2, contribution: 1 });
+        expect(body.notChecked.academy_registration).toBeUndefined();
         expect(body.status).toBe('ok');
+    });
+
+    it('finds an academy registration that never granted access', async () => {
+        COLLECTION_DATA['processedPayments'] = [
+            payment('ac-ok', 'academy_registration', 'student-ok'),
+            payment('ac-bad', 'academy_registration', 'student-bad'),
+        ];
+        COLLECTION_DATA['users'] = [
+            { id: 'student-ok', data: { serviceRegistrations: { academy: { paymentStatus: 'completed' } } } },
+            { id: 'student-bad', data: { roles: [] } },
+        ];
+
+        const { GET } = await import('@/app/api/cron/reconcile-fulfilment/route');
+        const body = await (await GET(req())).json();
+
+        const acad = body.byType['academy_registration'];
+        expect(acad.checked).toBe(2);
+        expect(acad.unfulfilled).toBe(1);
+        expect(acad.references[0]).toMatchObject({ reference: 'ac-bad' });
     });
 
     it('ignores payments outside the window', async () => {

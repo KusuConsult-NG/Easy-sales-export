@@ -68,6 +68,28 @@ interface Check {
 
 const CHECKS: Check[] = [
     {
+        // Added after a manual sweep found one such payment that the original
+        // four checks did not cover. Academy fulfilment lives on the USERS
+        // document rather than in a collection of its own, so this check reads
+        // users and asks whether the academy registration was recorded.
+        paymentType: "academy_registration",
+        artefact: "serviceRegistrations.academy.paymentStatus = completed on the payer",
+        keyFor: (p) => p.userId,
+        fulfilledKeys: async () => {
+            const snap = await db.collection(COLLECTIONS.USERS).get();
+            const keys = new Set<string>();
+            snap.docs.forEach((d: any) => {
+                const data = d.data() ?? {};
+                const academy = data?.serviceRegistrations?.academy;
+                const roles = Array.isArray(data?.roles) ? data.roles : [];
+                if (academy?.paymentStatus === "completed" || roles.includes("academy_participant")) {
+                    keys.add(d.id);
+                }
+            });
+            return keys;
+        },
+    },
+    {
         paymentType: "cooperative_membership_registration",
         artefact: "a cooperative_members row for the payer",
         keyFor: (p) => p.userId,
