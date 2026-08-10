@@ -576,3 +576,64 @@ export async function claimVersionedUpdate(params: {
         version: row.version === null || row.version === undefined ? null : Number(row.version),
     };
 }
+
+export interface LoanApplicationClaim {
+    /** True when the application row was inserted. */
+    claimed: boolean;
+    /** The open application that blocked it, when `claimed` is false. */
+    existingId: string | null;
+}
+
+/**
+ * Insert a loan application only if the borrower has no open one, anywhere.
+ *
+ * The check this replaces read both loan collections and refused if either was
+ * non-empty — with no lock, so two applications submitted together both saw an
+ * empty result and both inserted.
+ *
+ * It could not be fixed with a row lock, because the thing being guarded is the
+ * ABSENCE of rows: there is nothing to lock. `claim_single_open_loan_application`
+ * takes a per-borrower advisory lock and does the check AND the insert inside
+ * one transaction, so a second caller for the same borrower blocks and then
+ * sees the row the first one wrote. Different borrowers never contend.
+ *
+ * The guard spans BOTH collections in both directions: an open cooperative loan
+ * blocks a general application and vice versa, which is what the original reads
+ * intended.
+ *
+ * Requires migration 021.
+ */
+export async function claimSingleOpenLoanApplication(params: {
+    userId: string;
+    /** Document id for the new application row. */
+    id: string;
+    /** 'cooperative_loans' or 'document_collections'. */
+    table: string;
+    /** The application row, as it should be stored. */
+    row: Record<string, any>;
+    /** Required when `table` is 'document_collections'. */
+    collection?: string;
+}): Promise<LoanApplicationClaim> {
+    const { userId, id, table, row, collection } = params;
+
+    if (!userId) throw new Error("claimSingleOpenLoanApplication: userId is required");
+    if (!id) throw new Error("claimSingleOpenLoanApplication: id is required");
+
+    const { data, error } = await supabaseAdmin.rpc("claim_single_open_loan_application", {
+        p_user_id: userId,
+        p_id: id,
+        p_target_table: table,
+        p_row: row,
+        p_target_collection: collection ?? null,
+    });
+
+    if (error) {
+        logger.error("[wallet-ledger] claim_single_open_loan_application failed", { userId, id, table, error });
+        throw new Error(`Loan application claim failed: ${error.message}`);
+    }
+
+    const r = Array.isArray(data) ? data[0] : data;
+    if (!r) throw new Error("Loan application claim returned no result");
+
+    return { claimed: Boolean(r.claimed), existingId: r.existing_id ?? null };
+}
