@@ -82,6 +82,18 @@ const EXCLUDED = [
 ];
 
 const args = process.argv.slice(2);
+
+// --order prints the application order, one migration number per line, for
+// scripts that need to apply the files individually rather than as one blob.
+// scripts/test-migrations.sh uses it so the order cannot drift from this file.
+if (args.includes("--order")) {
+    const list = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(".sql"));
+    for (const step of EXPECTED) {
+        const f = list.find((x) => x.startsWith(`${step.n}_`));
+        if (f) console.log(f);
+    }
+    process.exit(0);
+}
 const outIdx = args.indexOf("--out");
 const outFile = outIdx >= 0 ? args[outIdx + 1] : null;
 const skipRls = args.includes("--skip-rls");

@@ -41,6 +41,7 @@
     "verify:sync": "tsx scripts/verify-sync.ts",
     "repair:schemas": "tsx scripts/repair-schemas.ts",
     "prepare": "husky",
+    "test:migrations": "bash scripts/test-migrations.sh",
     "test:db": "jest --config jest.config.db.js --runInBand",
     "build:deploy-sql": "node scripts/build-deploy-sql.mjs --out deploy.sql"
   },
