@@ -4,6 +4,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from '@/lib/logger';
 import { requireAdmin } from "@/lib/require-admin";
 import { claimStatusTransition } from "@/lib/status-transition";
+import { claimPaymentOnce } from "@/lib/wallet-ledger";
 import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { createAdminAuditLog, logAdminFinancialAction } from "@/lib/audit-log";
@@ -103,6 +104,29 @@ async function _createEscrowAction(data: { buyerId: string;
         if (!session?.user?.id || session.user.id !== data.buyerId) { return { success: false as const, error: "Unauthorized", data: null };
         }
 
+        // Validate at RUNTIME. The parameter type is TypeScript and is erased
+        // at the wire — this is a server action, so `amount` arrives as whatever
+        // the caller sent. A negative or non-finite amount cannot be funded
+        // (confirmEscrowPayment compares it against what Paystack actually
+        // charged), but it can be CREATED, and release credits the seller
+        // `escrowData.amount`.
+        if (!Number.isFinite(data.amount) || data.amount <= 0) {
+            return { success: false as const, error: "Invalid escrow amount", data: null };
+        }
+        if (!data.sellerId || data.sellerId === data.buyerId) {
+            return { success: false as const, error: "Invalid seller", data: null };
+        }
+
+        // NOTE ON THE ORDERING BELOW, which is load-bearing.
+        //
+        // `...data` is spread FIRST and the security-relevant fields are set
+        // AFTER, so a caller who sends `status: "funded"` has it overwritten.
+        // Reversing these lines would turn this into a privilege escalation:
+        // an escrow could be created already funded, without payment.
+        //
+        // Fourteen sites in this codebase spread caller data into a write and
+        // every one of them is safe for exactly this reason. That is a property
+        // of field order in an object literal, which is a thin thing to rest on.
         const escrow: Omit<EscrowTransaction, "id"> & { _version: number } = { ...data,
             participants: [data.buyerId, data.sellerId],
             status: "pending",
@@ -164,7 +188,17 @@ async function _confirmEscrowPaymentAction(
     | { success: false; error: string; data?: null; meta?: any }
 > { let sessionResult;
     try {
-        sessionResult = await requireSession().catch(() => null);
+        // The session is REQUIRED, and its failure is no longer swallowed.
+        //
+        // This read `requireSession().catch(() => null)`, so an authentication
+        // failure produced null and execution carried on. Combined with the
+        // missing ownership check below, that made this endpoint effectively
+        // unauthenticated — on a function that marks escrow as funded.
+        sessionResult = await requireSession();
+        if (!sessionResult?.session?.user?.id) {
+            return { success: false as const, error: "Authentication required" };
+        }
+        const callerId = sessionResult.session.user.id;
 
         let paystackData: Awaited<ReturnType<typeof verifyPaystackPayment>>;
         try {
@@ -193,28 +227,75 @@ async function _confirmEscrowPaymentAction(
             };
         }
 
-        const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId);
-        let escrowData: EscrowTransaction | null = null;
+        // Only the buyer may confirm their own escrow.
+        //
+        // escrowId came from the caller and was never checked against them.
+        // _createEscrowAction in this same file has always compared
+        // `session.user.id !== data.buyerId`; this function did not.
+        if (escrowDoc.buyerId !== callerId) {
+            logger.warn(`[confirmEscrowPayment] ${callerId} attempted to confirm escrow ${escrowId} owned by ${escrowDoc.buyerId}`);
+            return { success: false as const, error: "Unauthorized" };
+        }
 
-        await db.runTransaction(async (tx) => {
-            const escrowDoc2 = await tx.get(escrowRef);
-            if (!escrowDoc2.exists) throw new Error("Escrow transaction not found");
-
-            const data = escrowDoc2.data() as EscrowTransaction;
-            if (data.status !== "pending") {
-                throw new Error(
-                    `Invalid state transition: expected 'pending', got '${data.status}'`
-                );
-            }
-
-            escrowData = data;
-
-            tx.update(escrowRef, { status: "funded",
-                paymentReference,
-                paidAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
-                _version: FieldValue.increment(1) });
+        // Claim the payment reference. ONE reference funds ONE escrow.
+        //
+        // Nothing claimed it before. The only checks were "Paystack says this
+        // reference succeeded" and "the amount matches within ₦1" — so a single
+        // real payment could be replayed to fund any number of DIFFERENT escrows
+        // of that amount. The platform would believe N escrows were funded
+        // having received the money once, and escrow release pays sellers out of
+        // that belief.
+        //
+        // The status is "escrow_funding", not "completed": this records that a
+        // payment was applied to an escrow, and platform_revenue_totals() sums
+        // completed rows as revenue. Money moving into escrow is not revenue.
+        const claim = await claimPaymentOnce({
+            reference: paymentReference,
+            userId: callerId,
+            amount: paidAmountNaira,
+            type: "escrow_funding",
+            source: "escrow_confirm",
+            status: "escrow_funding",
+            metadata: { escrowId },
         });
+
+        if (!claim.claimed) {
+            logger.warn(`[confirmEscrowPayment] reference ${paymentReference} already used; refusing to fund ${escrowId}`);
+            return { success: false as const, error: "This payment has already been applied" };
+        }
+
+        const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId);
+
+        // pending -> funded as a claim, not a read-then-write.
+        //
+        // The check that was here compared data.status inside runTransaction,
+        // which takes no lock — the shape atomic-money-migration.md documents
+        // throughout. It listed this transition as deliberately unconverted
+        // because "a double-apply duplicates notifications rather than money".
+        // That reasoning held only while the reference was unclaimed and the
+        // caller unverified; with both fixed it costs nothing to make it a claim.
+        const statusClaim = await claimStatusTransition({
+            collection: COLLECTIONS.ESCROW_TRANSACTIONS,
+            id: escrowId,
+            from: "pending",
+            to: "funded",
+            patch: {
+                paymentReference,
+                paidAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+            },
+        });
+
+        if (!statusClaim.claimed) {
+            return {
+                success: false as const,
+                error: statusClaim.status === null
+                    ? "Escrow transaction not found"
+                    : `Invalid state transition: expected 'pending', got '${statusClaim.status}'`,
+            };
+        }
+
+        const escrowData: EscrowTransaction | null = escrowDoc;
 
         if (escrowData) { const tx = escrowData as EscrowTransaction;
 

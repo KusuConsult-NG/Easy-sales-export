@@ -196,9 +196,22 @@ jest.mock('@/lib/cache-invalidation', () => ({
 
 // Mock Audit Log
 global.mockCreateAdminAuditLog = jest.fn(() => Promise.resolve());
+// The mock must cover the module's whole USED export surface.
+//
+// It listed two of them. logAdminFinancialAction (escrow, payments) and
+// logAuditAction (11 files) were absent, so they were `undefined` at call time
+// and threw — inside the try/catch those callers wrap everything in, which
+// turned a harness gap into "the action returned an error" and looked like a
+// defect in the code under test. Same shape as the missing collection().add().
 jest.mock('@/lib/audit-log', () => ({
     createAdminAuditLog: (payload) => global.mockCreateAdminAuditLog(payload),
+    createAuditLog: (payload) => global.mockCreateAdminAuditLog(payload),
     logAdminAction: jest.fn(),
+    logAuditAction: jest.fn(),
+    logFinancialAction: jest.fn(),
+    logAdminFinancialAction: jest.fn(),
+    getSeverityForAction: jest.fn(() => 'info'),
+    getSecurityContextFromHeaders: jest.fn(() => ({})),
 }));
 
 // Mock Session Guard

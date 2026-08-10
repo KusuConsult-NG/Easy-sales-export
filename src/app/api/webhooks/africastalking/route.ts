@@ -10,12 +10,20 @@ export async function POST(req: Request) {
         const providedSecret = url.searchParams.get("secret");
         const expectedSecret = process.env.AT_WEBHOOK_SECRET;
 
-        // Secret validation (configured in Africa's Talking Callback URL, e.g. /api/webhooks/africastalking?secret=...)
-        if (expectedSecret) {
-            if (!providedSecret || providedSecret !== expectedSecret) {
-                logger.warn("[africastalking-webhook] Unauthorized webhook attempt. Missing or invalid secret.");
-                return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-            }
+        // Fail CLOSED when the secret is not configured.
+        //
+        // This was `if (expectedSecret) { ...check... }`, so a deployment that
+        // forgot AT_WEBHOOK_SECRET accepted every unauthenticated POST silently.
+        // An unset secret is a misconfiguration, not permission to skip the
+        // check, and the endpoint should refuse rather than quietly open.
+        if (!expectedSecret) {
+            logger.error("[africastalking-webhook] AT_WEBHOOK_SECRET is not set — refusing to process.");
+            return NextResponse.json({ success: false, error: "Configuration Error" }, { status: 500 });
+        }
+
+        if (!providedSecret || providedSecret !== expectedSecret) {
+            logger.warn("[africastalking-webhook] Unauthorized webhook attempt. Missing or invalid secret.");
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
 
         const contentType = req.headers.get("content-type") || "";
