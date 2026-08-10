@@ -46,6 +46,7 @@ global.mockFirestoreUpdate = jest.fn();
 global.mockFirestoreTxGet = jest.fn();
 global.mockFirestoreTxUpdate = jest.fn();
 global.mockFirestoreTxSet = jest.fn();
+global.mockFirestoreAdd = jest.fn();
 
 jest.mock('@/lib/firebase-admin', () => {
     const mockDb = {
@@ -61,6 +62,13 @@ jest.mock('@/lib/firebase-admin', () => {
             };
             const queryObj = {
                 doc: docObj,
+                // A collection().add() had no stub at all, so every action that
+                // creates a document this way threw before reaching its later
+                // writes — which silently made some assertions vacuous.
+                add: (data) => {
+                    global.mockFirestoreAdd(name, data);
+                    return Promise.resolve({ id: 'mock-generated-id' });
+                },
                 where: () => queryObj,
                 orderBy: () => queryObj,
                 limit: () => queryObj,
@@ -115,6 +123,13 @@ jest.mock('@/lib/supabase-db', () => {
             };
             const queryObj = {
                 doc: docObj,
+                // A collection().add() had no stub at all, so every action that
+                // creates a document this way threw before reaching its later
+                // writes — which silently made some assertions vacuous.
+                add: (data) => {
+                    global.mockFirestoreAdd(name, data);
+                    return Promise.resolve({ id: 'mock-generated-id' });
+                },
                 where: () => queryObj,
                 orderBy: () => queryObj,
                 limit: () => queryObj,

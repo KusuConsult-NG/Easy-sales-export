@@ -1,8 +1,8 @@
 # Integrity sweep, 2026-08-10 — findings
 
-Extends the work in `atomic-money-migration.md`. Six findings; F1, F2, F3 and F6
-are fixed, F4 and F5 are open, and two questions need a decision rather than a
-patch. See the status table at the bottom.
+Extends the work in `atomic-money-migration.md`. Six findings; F1–F4 and F6 are
+fixed, F5 remains open, and two questions need a decision rather than a patch.
+See the status table at the bottom.
 
 That document ends with the priority table emptied and warns why an empty table
 is not the same as a clean codebase: the sweeps that built it grepped for money
@@ -296,7 +296,7 @@ the new branch, not evidence about the old one.
 
 ---
 
-## F4 — Export bookings can overbook a window
+## F4 — Export window volume: two doors, neither bounded
 
 `src/app/actions/export-booking.ts:39` and `:61`
 
@@ -319,13 +319,65 @@ one another, which hid the overshoot.
 
 **Live** — called from `BookingWizard.tsx:126` and `BookingModal.tsx:37`.
 
-**Fix:** `incrementWithinCeiling` (migration `015`), which already exists and is
-already used against export windows in `export-payment.ts:205`. Note the trap
-recorded there: the ceiling field is passed in because windows store the goal
-under `fundingGoal` **or** `goal` depending on when they were written. The
-ceiling here is a third name, `targetVolume` — worth confirming it is populated
-on every window, since `increment_within_ceiling` treats a missing ceiling as
-deliberately unbounded and would silently uncap the lot.
+### A second door, and it was the worse one
+
+`src/app/actions/export-aggregation.ts:125` — `bookExportSlotAction`, found while
+checking whether `targetVolume` was a reliable ceiling:
+
+```js
+if (windowData.currentVolume + data.volume > windowData.targetVolume) { return ...; }
+...
+await windowRef.update({ currentVolume: windowData.currentVolume + data.volume });
+```
+
+Same check-then-write on the same counter, but the write is **absolute**, not
+`FieldValue.increment`. Migration `010` therefore cannot help it, and the damage
+is not confined to overbooking: an absolute write from a stale read **erases any
+other write to `currentVolume` in between — including the other door's
+increment**. The window then believes less volume is taken than really is, and
+the next booking oversells further. Same shape as F1 and the `_buyer.ts`
+restock.
+
+No `.tsx` caller today, but it is an exported server action.
+
+### What was changed
+
+**FIXED, both doors.** Each reserves through `incrementWithinCeiling`
+(migration `015`) before writing its booking or slot. Reserve-first is
+deliberate: the loser is told the volume is gone rather than left holding a
+booking against capacity that does not exist — the same ordering as the
+farm-nation property reservation.
+
+On the ceiling-name question raised above: `targetVolume` is a **single
+vocabulary** here, unlike the `fundingGoal`/`goal` split in `export-payment.ts`.
+`export-aggregation.ts:58` creates every window with `targetVolume` and
+`currentVolume: 0`. Windows with no `targetVolume` do exist — `admin.ts:936`
+treats a missing one as "not crowdfunded" — and `increment_within_ceiling`
+leaves those unbounded. **That matches the old behaviour rather than changing
+it:** `quantity > (undefined - currentVolume)` is `quantity > NaN`, which is
+false, so those windows already accepted every booking.
+
+`src/__tests__/unit/export-volume-overbooking.test.ts` — 11 tests, **8 fail
+against the pre-fix code**. Of the three that pass, two are deliberate vacuity
+guards (asserting the booking/slot collection *is* reached on the happy path, so
+the at-capacity assertions cannot pass by a name typo) and one asserts a closed
+window is still refused.
+
+### A harness gap this exposed
+
+`jest.setup.js` had **no stub for `collection().add()`**, so every action that
+creates a document that way threw before reaching its later writes. Two of the
+tests above passed against the pre-fix code purely because of it — the
+`currentVolume` write was never reached, so "never raises currentVolume itself"
+held for the wrong reason.
+
+`add` is now stubbed in both mock blocks, recording through a new
+`mockFirestoreAdd` global. The pre-fix failure count went from 5 to 8 as a
+result: three assertions that looked fine were measuring nothing. All 24 unit
+suites (256 tests) pass with the change.
+
+Worth knowing generally: any older suite asserting on an action that uses
+`collection().add()` was exercising its error path, not its success path.
 
 ---
 
@@ -382,7 +434,7 @@ harmless.
 | F1 | fixed-savings fix on the unused door | **fixed** |
 | F2 | withdrawal reservation contract | **fixed** — `fix-withdrawal-reservation-contract` |
 | F3 | cooperative registration never claims | **fixed** |
-| F4 | export bookings overbook | open |
+| F4 | export bookings overbook (two doors) | **fixed** |
 | F5 | 2 of 3 order paths oversell stock | open |
 | F6 | `_withdrawal.ts` third door overdraft | **fixed** — same branch |
 | — | `apply-loan` lifetime-total gating | needs a business decision |
@@ -390,10 +442,7 @@ harmless.
 
 ## Suggested order for what remains
 
-1. **F4** — live, one-line primitive swap; confirm `targetVolume` is populated on
-   every window first, since `increment_within_ceiling` treats a missing ceiling
-   as deliberately unbounded.
-2. **F5** — opportunistic; no UI caller today.
+1. **F5** — the only finding still open. Opportunistic; no UI caller today.
 
 F1, F2 and F5 are all one shape: **a path that was fixed in one copy and left in
 another.** Worth a standing check when closing any of these — search for a
