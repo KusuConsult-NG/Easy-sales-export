@@ -104,6 +104,29 @@ async function _createEscrowAction(data: { buyerId: string;
         if (!session?.user?.id || session.user.id !== data.buyerId) { return { success: false as const, error: "Unauthorized", data: null };
         }
 
+        // Validate at RUNTIME. The parameter type is TypeScript and is erased
+        // at the wire — this is a server action, so `amount` arrives as whatever
+        // the caller sent. A negative or non-finite amount cannot be funded
+        // (confirmEscrowPayment compares it against what Paystack actually
+        // charged), but it can be CREATED, and release credits the seller
+        // `escrowData.amount`.
+        if (!Number.isFinite(data.amount) || data.amount <= 0) {
+            return { success: false as const, error: "Invalid escrow amount", data: null };
+        }
+        if (!data.sellerId || data.sellerId === data.buyerId) {
+            return { success: false as const, error: "Invalid seller", data: null };
+        }
+
+        // NOTE ON THE ORDERING BELOW, which is load-bearing.
+        //
+        // `...data` is spread FIRST and the security-relevant fields are set
+        // AFTER, so a caller who sends `status: "funded"` has it overwritten.
+        // Reversing these lines would turn this into a privilege escalation:
+        // an escrow could be created already funded, without payment.
+        //
+        // Fourteen sites in this codebase spread caller data into a write and
+        // every one of them is safe for exactly this reason. That is a property
+        // of field order in an object literal, which is a thin thing to rest on.
         const escrow: Omit<EscrowTransaction, "id"> & { _version: number } = { ...data,
             participants: [data.buyerId, data.sellerId],
             status: "pending",
