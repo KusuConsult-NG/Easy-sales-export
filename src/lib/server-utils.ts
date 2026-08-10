@@ -13,8 +13,20 @@ export async function getBaseUrl() {
     if (host) {
         return `${protocol}://${host}`;
     }
-    
-    return process.env.NEXT_PUBLIC_APP_URL || "https://easysalesexport.com";
+
+    // The apex domain does NOT serve this app — it is a redirector that answers
+    // GET / with a 301 and rejects POST with 405. Anything built from it and
+    // then POSTed to (a Paystack callback_url, an auth callback) fails, because
+    // non-browser clients do not follow redirects.
+    //
+    // That is not hypothetical: the Paystack webhook was configured on the apex
+    // and every delivery was dropped with a 405, which is why fulfilment fell
+    // entirely to the client callback and 297 memberships had to be repaired.
+    //
+    // The host header above is the normal path and already yields www. This is
+    // the fallback for when there is no request context, and it must not hand
+    // back a host that cannot serve a POST.
+    return process.env.NEXT_PUBLIC_APP_URL || "https://www.easysalesexport.com";
 }
 
 /**
@@ -24,7 +36,8 @@ export async function getBaseUrl() {
 export function getModuleDomain(slug: string) {
     const isDev = process.env.NODE_ENV === "development";
     const useSubdomains = process.env.USE_SUBDOMAINS === "true";
-    const mainAppUrl = process.env.NEXT_PUBLIC_APP_URL || "https://easysalesexport.com";
+    // www, not the apex — see the note in getBaseUrl above.
+    const mainAppUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.easysalesexport.com";
 
     if (isDev || !useSubdomains) {
         return mainAppUrl;
