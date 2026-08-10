@@ -1,0 +1,344 @@
+# Integrity sweep, 2026-08-10 — findings
+
+Extends the work in `atomic-money-migration.md`. Findings only; no code changed.
+
+That document ends with the priority table emptied and warns why an empty table
+is not the same as a clean codebase: the sweeps that built it grepped for money
+*vocabulary* and for `runTransaction`, so they cannot see a money path that uses
+neither. Every finding below sits in exactly that blind spot.
+
+## How these were found
+
+Three sweeps that had not been run before, aimed at the new primitives being
+**misused or bypassed** rather than absent:
+
+| Sweep | Question | Result |
+|---|---|---|
+| A | Is a claim's return value ever discarded? | clean — see below |
+| B | Is any idempotency reference unstable across retries (rule 2)? | clean |
+| C | Bound check followed by `FieldValue.increment` of the checked field | **F4**, plus one minor |
+| D | Claim result bound but never inspected | **clean — all 126 call sites inspect it** |
+| E | `creditWalletOnce` status correct per rule 4 (revenue) | **clean — all 4 sites correct** |
+| F | Balance moved outside `wallet-ledger` | clean — all 7 sites are behind a claim and dual-synced by 010 |
+| G | API routes touching money with no claim primitive | **F1, F2, F3** |
+
+Sweep G is the one that paid. `atomic-money-migration.md` already records why —
+the fourth loan-approval door was an API route, and `mark-withdrawal-completed`
+had no wrapper at all ("a wrapper is not the disease; its absence is not
+health"). Both sweeps in that document still keyed off server actions.
+
+The clean results are worth as much as the findings: rules 2, 3 and 4 hold
+everywhere they apply, and no claim in the codebase is decorative. What is
+missing is claims that were never added to a *second* copy of a path.
+
+---
+
+## F1 — The fixed-savings fix went into the door nobody uses
+
+`src/app/api/cooperative/create-fixed-savings/route.ts:80`
+
+`atomic-money-migration.md` records `_createFixedSavingsAction` as fixed: it
+takes the debit through `debitJsonbBalance` under a row lock
+(`cooperative/_actions.ts:1336`, `field: "savingsBalance"`).
+
+**The UI does not call it.** `cooperatives/(member)/fixed-savings/page.tsx`
+posts to this API route, and `createFixedSavingsAction` has no caller outside
+its own re-export in `cooperative/index.ts`. The fixed path is dead code; the
+live path is this one, unchanged:
+
+```js
+const currentBalance = userData.savingsBalance || 0;
+if (currentBalance < amount) { throw new Error("Insufficient savings balance..."); }
+transaction.update(memberRef, {
+    savingsBalance: currentBalance - amount,      // absolute write
+    ...
+});
+```
+
+Two defects, and the second is the worse one:
+
+1. **Overdraft.** Read, check, write inside `runTransaction`, which takes no
+   lock. Two plans created together both pass against the same balance. This is
+   the exact defect migration `013` exists for.
+2. **An absolute write, not `FieldValue.increment`.** So `010` cannot save it —
+   `010` only fixes the sentinel, and no sentinel is used. Per the same finding
+   in `marketplace/_buyer.ts`, an absolute write does not merely double: it
+   **erases any concurrent write to `savingsBalance`**, including a
+   contribution's credit landing at the same moment. The member's contribution
+   disappears and nothing errors.
+
+**Fix:** call `debitJsonbBalance` exactly as `_actions.ts:1336` does. Better,
+delete the route and point the page at the server action that was already
+fixed — two doors onto one balance is what caused this.
+
+---
+
+## F2 — The withdrawal reservation contract, broken three different ways
+
+**FIXED in `fix-withdrawal-reservation-contract`.** Escalated after writing the
+first draft of this section: what looked like one eligibility bug turned out to
+be four doors disagreeing about a contract, one of which creates money.
+
+### The contract
+
+`cooperative/_admin.ts` is the only consumer, and it assumes exactly this:
+
+| Moment | savingsBalance | lockedBalance |
+|---|---|---|
+| request | `− amount` | `+ amount` |
+| reject (`:1232`) | `+ amount` | `− amount` |
+| approve (`:1081`) | — | `− amount` |
+
+### What each door actually did
+
+| Door | savings | locked | Consequence on reject |
+|---|---|---|---|
+| `platform.ts` `submitWithdrawalAction` | debited ✓ | `+` ✓ | correct — writes to `WITHDRAWALS`, a different collection |
+| `cooperative/_withdrawal.ts` | read-check-write ✗ | `+` ✓ | overdraft at request time (**F6**) |
+| `cooperative/_actions.ts` `_submitWithdrawalAction` | debited ✓ | **absent** ✗ | savings restored correctly, `lockedBalance` driven **negative** |
+| `api/cooperative/withdraw/route.ts` | **absent** ✗ | **absent** ✗ | **savings credited by an amount never debited** |
+
+The last row is the money defect. A withdrawal requested through that route
+reserved nothing at all; when an admin rejected it, `_admin.ts:1232` credited
+`savingsBalance += amount` to return funds that had never left. The member's
+savings grew by the full withdrawal amount, out of nothing, and `lockedBalance`
+went negative in the same write. Nothing errored, and the request looks
+completely ordinary in the admin queue.
+
+### F6 — `cooperative/_withdrawal.ts` was a third door onto savingsBalance
+
+Found while mapping the above. It read `savingsBalance`, compared it to the
+amount, and decremented — inside `runTransaction`, which takes no lock. The
+overdraft defect already fixed on `_submitWithdrawalAction` and `platform.ts`,
+still open on a third copy. The file appears nowhere in
+`atomic-money-migration.md`.
+
+### The eligibility bug (the original F2)
+
+`src/app/api/cooperative/withdraw/route.ts:76`
+`src/app/api/cooperative/apply-loan/route.ts:82`
+
+Both read:
+
+```js
+const totalSavings = membershipData.totalContributions || 0;
+```
+
+`totalContributions` is a **cumulative lifetime total**. It is incremented on
+every contribution (`cooperative/_payment.ts:136`) and feeds
+`calculateUserTier`. Nothing decrements it anywhere in `src/` — verified: no
+`increment(-`, no `- amount`, no `-=` against that field exists.
+
+The spendable balance is `savingsBalance`, which is what every fixed path
+debits.
+
+So a member who contributed ₦100,000 and has already withdrawn ₦90,000 still
+reports `totalContributions = 100,000`, and this route authorises another
+withdrawal of up to ₦95,000 against money that is gone.
+
+**This is not a race.** It has no concurrency precondition and fires on every
+single call. It is the only finding here that is wrong sequentially, which is
+why it belongs at the top of the list despite the routes having no UI caller
+today — an exported HTTP endpoint is reachable whether or not a page calls it.
+
+Two smaller things in the same file, both secondary to the above:
+
+- The withdrawal request **reserves nothing.** `_submitWithdrawalAction` debits
+  `savingsBalance` at request time; this route creates a `pending` row and
+  leaves the funds spendable.
+- "You already have a pending withdrawal request" is a check-then-write on an
+  unlocked read — two requests submitted together both read empty and both
+  create. That check is currently the only thing standing in for the missing
+  reservation.
+
+### What was changed
+
+- `api/cooperative/withdraw/route.ts` — gates on `savingsBalance`, reserves
+  through `debitJsonbBalance`, then increments `lockedBalance`. Debit before
+  lock, deliberately: the debit is the step that can legitimately fail, and
+  locking first would reserve funds that were never taken. `currentBalance` /
+  `balanceAfterWithdrawal` on the request row are now derived from the debit's
+  own post-write figure rather than a pre-read, so they agree with what
+  happened.
+- `cooperative/_actions.ts` — added the missing `lockedBalance` increment.
+- `cooperative/_withdrawal.ts` — converted to `debitJsonbBalance`; the
+  in-transaction decrement was **removed**, not left alongside, since keeping
+  both would take the money twice.
+
+`src/__tests__/unit/withdrawal-reservation-contract.test.ts` — 9 tests, **8 fail
+against the pre-fix code** (verified by stashing the source changes and
+re-running). The one that passes either way asserts a negative — "locks nothing
+when the debit is refused" — which the old code satisfies by never locking
+anything at all. It guards against regression rather than proving the fix.
+
+### Still open in this finding
+
+`apply-loan/route.ts:82` gates loan eligibility on the same lifetime figure.
+**Left unchanged deliberately** — for a loan, assessing against lifetime
+contributions is a defensible business rule in a way it can never be for a
+withdrawal, and this is a policy question rather than a defect. If it is the
+intended rule it should say so; if it is not, it is the same fix as above.
+Needs the business owner's answer, not a patch.
+
+---
+
+## F3 — Cooperative registration verification still does not claim
+
+`src/app/api/cooperative/verify-payment/route.ts:152`
+
+The client-side half of the payment whose webhook half **does** claim:
+`processCooperativeRegistration` calls `claimPaymentOnce` and honours
+`claim.claimed` (`infrastructure/payments/service.ts:491`).
+
+This route instead reads `processed_payments`, re-reads it inside
+`runTransaction`, and writes the marker afterwards:
+
+```js
+await db.runTransaction(async (transaction) => {
+    const tProcessedDoc = await transaction.get(processedRef);
+    if (tProcessedDoc.exists) { return; }        // takes no lock
+    ...
+    transaction.set(processedRef, { ... status: "completed", ... });   // blind set
+});
+```
+
+This is precisely the shape `atomic-money-migration.md` describes fixing in
+export, academy and farm-nation — "decided whether to fulfil by reading
+`processed_payments` and writing the marker afterwards" — left in place on the
+cooperative registration path.
+
+**Severity is lower than the equivalents, and it is worth being exact about
+why.** Every write in the transaction is keyed on the reference or the user id
+(`processedRef`, `TRANSACTIONS/{reference}`, `COOPERATIVE_TRANSACTIONS/{reference}`,
+the membership doc at `{userId}`), and `roles` moves by `arrayUnion`, atomic
+since `016`. So a concurrent double-run is largely idempotent by construction.
+No money is duplicated.
+
+What is actually wrong:
+
+- `transaction.set(processedRef, ...)` **overwrites the row the webhook
+  claimed**, including the `claimedAt` marker. That marker is the only evidence
+  the webhook ran — and `outstanding-work.md` records that the absence of
+  `claimedAt` across 30 days of rows is the open question about whether the
+  webhook is firing at all. This route is capable of erasing that evidence.
+- It is the last unclaimed fulfilment path of the set, so the invariant "every
+  payment path claims before fulfilling" is not yet true, and the next person to
+  add a balance change here inherits an unguarded path that looks guarded.
+
+**This is the path of the original incident** — the eight paid cooperative
+registrations that were never fulfilled, and it is live
+(`cooperatives/payment/callback/page.tsx`). That does not make it the cause;
+the reconciler work (#54, #56) already covers detection. It does mean it is the
+one to bring in line first.
+
+**Fix:** `claimPaymentOnce` first, mirroring the academy conversion — including
+keeping the existing early-return sync work on the `!claim.claimed` branch. That
+block does a second job (syncing the membership and user docs so a user whose
+webhook landed first is not told "verification failed"), and deleting it would
+reintroduce a user-visible bug while fixing a concurrency one.
+
+---
+
+## F4 — Export bookings can overbook a window
+
+`src/app/actions/export-booking.ts:39` and `:61`
+
+```js
+const availableVolume = windowData.targetVolume - windowData.currentVolume;
+if (data.quantity > availableVolume) { return { error: `Only ${availableVolume}kg available` }; }
+...
+await windowRef.update({ currentVolume: FieldValue.increment(data.quantity) });
+```
+
+Check a ceiling, then raise a counter — with **no transaction at all**, which
+is why every sweep in `atomic-money-migration.md` missed the file. It appears
+nowhere in that document's tables, because those are ordered by
+`runTransaction` count and this file has none.
+
+Two bookings for the remaining volume both pass and the window goes over
+`targetVolume`. Migration `010` made this worse rather than better, the same way
+it did for escrow, cooperative savings and stock: the increments used to lose
+one another, which hid the overshoot.
+
+**Live** — called from `BookingWizard.tsx:126` and `BookingModal.tsx:37`.
+
+**Fix:** `incrementWithinCeiling` (migration `015`), which already exists and is
+already used against export windows in `export-payment.ts:205`. Note the trap
+recorded there: the ceiling field is passed in because windows store the goal
+under `fundingGoal` **or** `goal` depending on when they were written. The
+ceiling here is a third name, `targetVolume` — worth confirming it is populated
+on every window, since `increment_within_ceiling` treats a missing ceiling as
+deliberately unbounded and would silently uncap the lot.
+
+---
+
+## F5 — Two of three marketplace order paths still oversell stock
+
+`src/app/actions/marketplace/_payment.ts:825` (bank transfer)
+`src/app/actions/marketplace/_payment.ts:978` (payment on delivery)
+
+The Paystack path in the same file was fixed and carries a long comment
+explaining why (`:470–487`, `decrementManyOrFail`, all-or-nothing, migration
+`015`). Its two siblings kept the pre-fix shape verbatim:
+
+```js
+if (currentQty < item.quantity) { throw new Error(`Insufficient stock...`); }
+...
+transaction.update(productRef, { availableQuantity: FieldValue.increment(-item.quantity) });
+```
+
+`atomic-money-migration.md` lists this file as "payment claim and stock
+reservation converted; 3 order-creation transitions remain" — classifying the
+remainder as status-only. Two of the three decrement real inventory against an
+unlocked bound check, which is the oversell defect, not a status transition.
+
+Also inherited: the per-item loop is not all-or-nothing, so a three-item order
+short on the third item leaves the first two decremented — the specific reason
+`decrement_many_or_fail` takes the whole order.
+
+**Lower priority than F1–F4:** neither action has a `.tsx` caller today, and no
+money is taken at order time, so an oversell here produces an order that cannot
+ship rather than a payment with nothing behind it. It still corrupts
+`availableQuantity`, which is shared with the Paystack path, so the damage is
+not confined to these two doors.
+
+**Fix:** `decrementManyOrFail`, as at `:487`. The out-of-stock branch is simpler
+than the Paystack one — nothing has been charged, so the order is refused rather
+than marked `paid_awaiting_refund`.
+
+---
+
+## Minor
+
+`src/app/api/cron/process-email-queue/route.ts:89`/`:110` — `if (attempts >= maxAttempts)`
+then `attempts: FieldValue.increment(1)`, unlocked. Two overlapping cron runs can
+push a message past its retry cap. Not money; bounded by the cap being exceeded
+by one or two. Recorded so the next reader does not have to re-derive that it is
+harmless.
+
+---
+
+## Status
+
+| | Finding | State |
+|---|---|---|
+| F1 | fixed-savings fix on the unused door | open |
+| F2 | withdrawal reservation contract | **fixed** — `fix-withdrawal-reservation-contract` |
+| F3 | cooperative registration never claims | open |
+| F4 | export bookings overbook | open |
+| F5 | 2 of 3 order paths oversell stock | open |
+| F6 | `_withdrawal.ts` third door overdraft | **fixed** — same branch |
+| — | `apply-loan` lifetime-total gating | needs a business decision |
+
+## Suggested order for what remains
+
+1. **F1** — live path, silently erases contributions, and the fix already exists
+   three files away.
+2. **F3** — closes the last unclaimed fulfilment path and stops `claimedAt`
+   being overwritten while that signal is still being investigated.
+3. **F4** — live, one-line primitive swap, confirm `targetVolume` first.
+4. **F5** — opportunistic; no UI caller today.
+
+F1, F2 and F5 are all one shape: **a path that was fixed in one copy and left in
+another.** Worth a standing check when closing any of these — search for a
+second door before calling a defect fixed.
