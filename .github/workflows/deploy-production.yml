@@ -92,17 +92,106 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Trigger Railway Production Deployment
+      # This step used to be a bare `curl -sS` whose exit status was the only
+      # thing gating the job. A GraphQL error is returned as HTTP 200 with an
+      # `errors` array in the body, so curl exited 0, the step went green, and
+      # the next step printed "=== PRODUCTION DEPLOYMENT ===" for a deploy that
+      # never happened.
+      #
+      # That is exactly what occurred on 2026-08-09 for v1.2.0: Railway replied
+      # {"errors":[{"message":"Problem processing request"}]} and the workflow
+      # reported success. It was caught by polling production by hand, which is
+      # not a control.
+      #
+      # WHAT THIS STEP NOW ASSERTS
+      #   1. the Railway credentials are actually present
+      #   2. the HTTP status is 2xx
+      #   3. the body carries no `errors` array
+      #   4. a deployment id came back
+      #
+      # WHAT IT STILL DOES NOT ASSERT: that the build succeeded and the new
+      # revision is serving traffic. Railway accepting a trigger is not the same
+      # as production having changed. Verify that separately — see the note at
+      # the end of this file.
+      - name: Check Railway credentials are present
+        env:
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+          RAILWAY_PRODUCTION_SERVICE_ID: ${{ secrets.RAILWAY_PRODUCTION_SERVICE_ID }}
         run: |
-          curl -sS -X POST \
-            -H "Authorization: Bearer ${{ secrets.RAILWAY_API_TOKEN }}" \
+          missing=0
+          if [ -z "$RAILWAY_API_TOKEN" ]; then
+            echo "::error::RAILWAY_API_TOKEN is empty. Nothing can be deployed."
+            missing=1
+          fi
+          if [ -z "$RAILWAY_PRODUCTION_SERVICE_ID" ]; then
+            echo "::error::RAILWAY_PRODUCTION_SERVICE_ID is empty. Railway will reject the mutation."
+            missing=1
+          fi
+          [ "$missing" -eq 0 ] || exit 1
+          echo "Railway credentials present."
+
+      - name: Trigger Railway Production Deployment
+        env:
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+          RAILWAY_PRODUCTION_SERVICE_ID: ${{ secrets.RAILWAY_PRODUCTION_SERVICE_ID }}
+        run: |
+          set -o pipefail
+
+          # Built with jq. `tojson` emits the id already quoted and escaped, so
+          # the QUERY SHAPE is byte-identical to the interpolated form that has
+          # been deploying successfully, while an id containing a quote is
+          # escaped rather than producing malformed JSON.
+          #
+          # Switching to GraphQL variables would be tidier and is deliberately
+          # NOT done: this endpoint is not somewhere to discover a wire-format
+          # incompatibility during a release.
+          payload=$(jq -nc --arg sid "$RAILWAY_PRODUCTION_SERVICE_ID" \
+            '{query: ("mutation { deploymentTrigger(input: { serviceId: " + ($sid|tojson) + " }) { id } }")}')
+
+          http_code=$(curl -sS -o /tmp/railway.json -w '%{http_code}' \
+            --max-time 60 \
+            -X POST \
+            -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
+            -H "Content-Type: application/json" \
             "https://backboard.railway.app/graphql/v2" \
-            --data '{"query":"mutation { deploymentTrigger(input: { serviceId: \"${{ secrets.RAILWAY_PRODUCTION_SERVICE_ID }}\" }) { id } }"}'
+            --data "$payload")
+
+          echo "HTTP $http_code"
+          # Printed so a failure is diagnosable from the log alone. The body
+          # carries no credentials.
+          cat /tmp/railway.json || true
+          echo
+
+          if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
+            echo "::error::Railway returned HTTP $http_code — deployment NOT triggered."
+            exit 1
+          fi
+
+          if jq -e '.errors' /tmp/railway.json >/dev/null 2>&1; then
+            echo "::error::Railway returned a GraphQL error — deployment NOT triggered."
+            jq -r '.errors[]?.message // "unknown error"' /tmp/railway.json | sed 's/^/::error::/'
+            exit 1
+          fi
+
+          deployment_id=$(jq -r '.data.deploymentTrigger.id // empty' /tmp/railway.json)
+          if [ -z "$deployment_id" ]; then
+            echo "::error::Railway accepted the request but returned no deployment id — treating as NOT triggered."
+            exit 1
+          fi
+
+          echo "DEPLOYMENT_ID=$deployment_id" >> "$GITHUB_ENV"
+          echo "Railway accepted the trigger. Deployment id: $deployment_id"
 
       - name: Log deployment event
         run: |
-          echo "=== PRODUCTION DEPLOYMENT ==="
-          echo "Version: ${{ github.event.inputs.release_version }}"
-          echo "Deployed by: ${{ github.actor }}"
-          echo "Timestamp: $(date -u)"
-          echo "============================="
+          echo "=== PRODUCTION DEPLOYMENT TRIGGERED ==="
+          echo "Version:       ${{ github.event.inputs.release_version }}"
+          echo "Commit:        ${{ github.sha }}"
+          echo "Deployment id: $DEPLOYMENT_ID"
+          echo "Triggered by:  ${{ github.actor }}"
+          echo "Timestamp:     $(date -u)"
+          echo ""
+          echo "TRIGGERED is not DEPLOYED. Confirm the new revision is serving"
+          echo "before believing this: check the Railway dashboard, or probe a"
+          echo "route that only exists in this release."
+          echo "======================================="
