@@ -57,7 +57,28 @@ const EXPECTED = [
     { n: "015", why: "bounded counters — MUST ship with the code that guards stock and capacity" },
     { n: "016", why: "atomic arrayUnion/arrayRemove — MUST ship with the adapter change that calls it" },
     { n: "017", why: "targeted patches — makes every write send only changed fields; also the first working FieldValue.delete" },
+    { n: "019", why: "claim an idempotency key — platform.ts and export.ts throw without it" },
+    { n: "020", why: "floored debit + versioned CAS — the withdrawal floor and every versionedUpdate caller" },
+    { n: "021", why: "one open loan application per borrower (advisory lock)" },
     { n: "004", why: "row-level security — LAST, and in a low-traffic window" },
+];
+
+/**
+ * Migrations deliberately NOT in the consolidated file, and why.
+ *
+ * This list exists so that "not in EXPECTED" can mean "somebody forgot" rather
+ * than "it is handled elsewhere". Without it the check below could not tell the
+ * two apart, and would have to let both through.
+ */
+const EXCLUDED = [
+    {
+        n: "022",
+        why: "CREATE INDEX CONCURRENTLY cannot run inside a transaction block, and " +
+             "every other migration here opens one. Concatenating it would fail — or " +
+             "worse, take an ACCESS EXCLUSIVE lock on live tables if the CONCURRENTLY " +
+             "were dropped to make it fit. Apply it on its own, and only after the " +
+             "EXPLAIN ANALYZE in its header shows the indexes are worth having.",
+    },
 ];
 
 const args = process.argv.slice(2);
@@ -82,6 +103,36 @@ for (const step of EXPECTED) {
         continue;
     }
     chosen.push({ ...step, file });
+}
+
+// The check that was not here.
+//
+// The loop above finds migrations EXPECTED but absent. It could not find the
+// opposite — a migration present on disk that nobody added to EXPECTED — so
+// four of them (019-022) were silently dropped from the consolidated file while
+// the code on main called the functions they create. A guard that checks one
+// direction only is how that happens.
+const accountedFor = new Set([
+    ...EXPECTED.map((e) => e.n),
+    ...EXCLUDED.map((e) => e.n),
+]);
+const unaccounted = available
+    .map((f) => f.slice(0, f.indexOf("_")))
+    .filter((n) => /^\d+$/.test(n) && !accountedFor.has(n))
+    .sort();
+
+if (unaccounted.length > 0) {
+    console.error("\n[build-deploy-sql] REFUSING TO BUILD — migrations on disk that this script does not know about:\n");
+    for (const n of unaccounted) {
+        console.error(`  ${n}  ${findMigration(n)}`);
+    }
+    console.error(
+        "\nAdd each to EXPECTED (with its ordering reason) or to EXCLUDED (with why\n" +
+        "it is applied separately). Dropping it silently is what this check exists\n" +
+        "to prevent: the generated file would look complete and be missing the\n" +
+        "functions the application calls.\n"
+    );
+    process.exit(1);
 }
 
 if (missing.length > 0) {
@@ -145,7 +196,11 @@ const verification = `
 -- VERIFICATION — run this after the statements above.
 -- ============================================================================
 
--- 1. Every function should be listed. Expect 9 rows.
+-- 1. Every function should be listed. Expect 19 rows.
+--
+--    The count said 9 while the list held 16, and the list itself was missing
+--    everything from 019 onward — so a database lacking the functions the
+--    application calls would still have "passed" this step.
 SELECT proname
   FROM pg_proc
  WHERE proname IN (
@@ -164,7 +219,11 @@ SELECT proname
     'apply_document_patch',
     'jsonb_set_deep',
     'increment_within_ceiling',
-    'enforce_member_active_on_paid'
+    'enforce_member_active_on_paid',
+    'claim_idempotency_key',
+    'debit_jsonb_balance_with_floor',
+    'claim_versioned_update',
+    'claim_single_open_loan_application'
  )
  ORDER BY proname;
 
