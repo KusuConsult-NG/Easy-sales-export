@@ -1,3 +1,44 @@
+-- ============================================================================
+-- MEASURED 2026-08-10 — DO NOT APPLY. The numbers do not support it.
+-- ============================================================================
+--
+-- The header below argues these indexes are needed. The mechanism it describes
+-- is real: EXPLAIN ANALYZE against production confirms the seq scan and the
+-- filter, exactly as predicted --
+--
+--   Seq Scan on cooperative_members  (cost=0.00..521.47 rows=9 ...)
+--     Filter: ((raw_data ->> 'membershipStatus') = 'active')
+--
+-- The magnitude is what the header said was unverified, and measuring it says
+-- no:
+--
+--   document_collections   18,534 rows   (already indexed on collection_name)
+--   processed_payments      1,229 rows
+--   cooperative_members     ~1,830 rows  (the query matched 1,754 of them — 96%)
+--
+-- Postgres will sequential-scan tables this size whatever indexes exist, and it
+-- is right to. The membershipStatus query returns 96% of its table; an index
+-- scan would be slower than the seq scan it would replace. Creating these would
+-- cost write throughput and disk on every insert and update, and buy nothing.
+--
+-- ONE THING THE MEASUREMENT DID SHOW, which an index would half-fix:
+--   the planner estimated 9 rows and got 1,754 — out by 195x, because there are
+--   no statistics for an expression like raw_data->>'field'. That mis-estimate
+--   will produce bad plans once these tables are joined at size. If that starts
+--   happening, an expression index fixes the STATISTICS even when it is never
+--   scanned. Not a reason to apply this today.
+--
+-- AND ONE THING IT SHOWED THAT NO INDEX FIXES:
+--   598 ms to scan ~1,830 rows. That is roughly 0.3 ms per row on a small
+--   table. The likely cause is large JSONB being detoasted by SELECT *, or
+--   shared-tier I/O. Selecting fewer columns is the fix; indexing is not.
+--
+-- RE-MEASURE, DO NOT ASSUME. Apply this only when the EXPLAIN ANALYZE in the
+-- header shows a seq scan over a LARGE table returning a SMALL fraction of it.
+-- A reasonable trigger is document_collections passing ~100,000 rows, or any
+-- single collection_name passing ~50,000.
+-- ============================================================================
+
 -- Migration: 022_jsonb_expression_indexes.sql
 --
 -- Make filtered JSONB reads use an index instead of scanning the table.

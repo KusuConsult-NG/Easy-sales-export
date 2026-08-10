@@ -105,7 +105,43 @@ acted on: replacing it is a design decision, not a performance patch.
 
 ---
 
-## 2. Every JSONB filter is a sequential scan — the headline
+## 2. Every JSONB filter is a sequential scan — MEASURED, and it does not matter
+
+> **Resolved 2026-08-10 by measuring it. Migration 022 should NOT be applied.**
+>
+> This section was the headline of the audit and it was half right. The
+> mechanism is confirmed — `EXPLAIN ANALYZE` against production shows the seq
+> scan and the `raw_data ->> 'field'` filter exactly as described below. What it
+> got wrong was the size of the problem, which the section itself flagged as
+> unverified:
+>
+> | Table | Rows |
+> |---|---|
+> | `document_collections` | 18,534 (already indexed on `collection_name`) |
+> | `processed_payments` | 1,229 |
+> | `cooperative_members` | ~1,830 — the query matched 1,754 of them, **96%** |
+>
+> Postgres sequential-scans tables this size whatever indexes exist, and it is
+> right to. A query returning 96% of its table cannot be improved by an index.
+> The nine indexes would cost write throughput on every insert and buy nothing.
+>
+> **Two things the measurement found that the audit had not:**
+>
+> The planner estimated 9 rows and got 1,754 — out by **195×**, because there
+> are no statistics for an expression. That will produce bad plans once these
+> tables are joined at size, and an expression index fixes the *statistics* even
+> when never scanned. A better argument for 022 than the one below, and still
+> not a reason to apply it today.
+>
+> And **598 ms to scan ~1,830 rows** — about 0.3 ms per row on a tiny table.
+> That is large JSONB being detoasted by `SELECT *`, or shared-tier I/O. No
+> index touches it. Selecting fewer columns would.
+>
+> Re-measure rather than assume: the trigger is `document_collections` passing
+> ~100,000 rows, or any single `collection_name` passing ~50,000.
+
+### The original analysis, kept because the mechanism is real
+
 
 **`schema.sql` defines 23 indexes, including GIN on `raw_data` for all 9 tables.**
 That looks like coverage. It is not, and the reason is exact.
@@ -376,7 +412,7 @@ affect every request; this affects deploys.
 |---|---|---|
 | §1a | recharts static on the admin dashboard | **fixed** — 900 KB → 506 KB measured |
 | §1b | `framer-motion` static in 11 files | open — needs a design decision |
-| §2 | JSONB filters seq-scan | **migration 022 written** — apply after `EXPLAIN ANALYZE` |
+| §2 | JSONB filters seq-scan | **measured — declined.** Tables too small; 022 must NOT be applied |
 | §3 | reconciler truncates at 5,000 rows | **fixed** — `.all()`, plus `incompleteScans` in the response |
 | §4 | `messages.ts` O(N×M), `forensics.ts` serial | **fixed** |
 | §5 | 399 unlimited scans | open — a project, not a patch |
