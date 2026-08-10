@@ -240,6 +240,31 @@ export const getBuyerOrdersAction = withFlexibleSafeAction("getBuyerOrdersAction
 /**
  * Confirm delivery (buyer only)
  */
+/**
+ * DO NOT WIRE THIS UP. It implements a payout model that was rejected.
+ *
+ * It pays a seller by Paystack BANK TRANSFER for 97.5% of the order, withholding
+ * a 2.5% platform commission, and credits WAVE earnings.
+ *
+ * The decision (2026-08-10) is that marketplace sellers are paid the FULL amount
+ * as a WALLET credit. That is `releaseEscrowFunds`: reached from three admin
+ * escrow pages, and it completes the order itself. Sellers then withdraw through
+ * /dashboard/wallet, an admin approves, and Paystack pays out — so the money
+ * still reaches a bank account, one step later and at 100%.
+ *
+ * This has had no caller for some time. It is kept rather than deleted because
+ * it is the only implementation of commission-on-sale and of WAVE
+ * earnings-on-sale, both of which the business may want built properly later.
+ * Neither has ever run.
+ *
+ * The hazard is that this is an exported server action named exactly what a
+ * "Confirm Delivery" button would reach for. Wiring it up would move sellers
+ * onto a different payout model at a different amount, silently. It cannot
+ * double-pay an escrow the admin already released — that is claimed — but it can
+ * pay the wrong way on an escrow nobody has released yet.
+ *
+ * See docs/audit/marketplace-payout-2026-08-10.md.
+ */
 async function _confirmDeliveryAction(orderId: string) { let sessionResult;
     try {
         sessionResult = await requireSession();
