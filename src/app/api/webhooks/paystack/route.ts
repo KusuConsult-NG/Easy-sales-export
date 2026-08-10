@@ -8,6 +8,20 @@ import { logger } from "@/lib/logger";
 import { generateAndSendWhatsAppInvite } from "@/lib/whatsapp-invites";
 
 import { processMarketplaceOrder, processExportInvestment, processCooperativeRegistration, processAcademyRegistration, processCooperativeContribution } from "@/infrastructure/payments/service";
+import { claimPaymentOnce } from "@/lib/wallet-ledger";
+
+/**
+ * Types this route dispatches. Anything else is recorded as unhandled rather
+ * than dropped — kept next to the dispatch below so the two cannot drift.
+ */
+const HANDLED_TYPES = new Set([
+    "marketplace_order",
+    "export_investment",
+    "cooperative_membership_registration",
+    "academy_registration",
+    "contribution",
+    "wallet_funding",
+]);
 
 // Force dynamic since we read headers
 export const dynamic = 'force-dynamic';
@@ -59,25 +73,28 @@ export async function POST(req: NextRequest) {
 
             const paidAtDate = data.paid_at ? new Date(data.paid_at) : undefined;
 
-            // Atomically claim payment reference in database to prevent concurrent double-processing
-            const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
-            try {
-                await processedRef.create({
-                    reference,
-                    type,
-                    userId,
-                    amount: amountPaidv,
-                    status: "processing",
-                    claimedAt: FieldValue.serverTimestamp(),
-                    source: "webhook",
-                });
-            } catch (claimErr: any) {
-                if (claimErr?.code === "ALREADY_EXISTS" || claimErr?.message?.includes("already exists")) {
-                    logger.info(`[Paystack Webhook] Payment ${reference} already claimed or processed.`);
-                    return NextResponse.json({ message: "Already processed" }, { status: 200 });
-                }
-                throw claimErr;
-            }
+            // THE CLAIM BELONGS TO THE HANDLER, NOT TO THIS ROUTE.
+            //
+            // This used to pre-claim the reference here:
+            //
+            //     await processedRef.create({ status: "processing", ... });
+            //
+            // and every handler it then calls claims the SAME reference with
+            // claimPaymentOnce, which is INSERT ... ON CONFLICT DO NOTHING on
+            // processed_payments.id. The row already existed, so every handler
+            // got claimed: false, logged "already processed", and returned
+            // WITHOUT FULFILLING. The route then marked the row completed and
+            // returned 200 to Paystack.
+            //
+            // Net effect: every webhook-delivered payment recorded as completed
+            // and nothing granted. It was invisible only because the webhook
+            // URL pointed at a host that rejects POST with 405, so no delivery
+            // ever arrived. Correcting the URL would have activated it.
+            //
+            // There is no pre-claim now. Each handler claims the reference
+            // itself, exactly once, and that claim is the idempotency gate —
+            // a duplicate delivery makes the handler return early, and this
+            // route still answers 200.
 
             // Route based on Payment Type
             // NOTE: Must await each handler — Paystack expects 200 only after full commit.
@@ -106,11 +123,27 @@ export async function POST(req: NextRequest) {
                     }
                 }
 
-                // Update claim record to completed status
-                await processedRef.update({
-                    status: type ? "completed" : "unhandled_type",
-                    processedAt: FieldValue.serverTimestamp(),
-                });
+                // No status write here either. The handlers own the row they
+                // claimed, and overwriting it is not harmless: processExportInvestment
+                // deliberately records "overfunded_review" to keep an overfunded
+                // payment OUT of the revenue total, and a blanket "completed"
+                // would put it back in.
+                //
+                // A type this route does not handle still needs a record, or an
+                // unknown payment vanishes silently. It is claimed explicitly,
+                // with a status that is NOT "completed" so it is not summed as
+                // revenue, and logged loudly enough to be found.
+                if (!type || !HANDLED_TYPES.has(type)) {
+                    logger.error(`[Paystack Webhook] Unhandled payment type for ${reference}`, { type });
+                    await claimPaymentOnce({
+                        reference,
+                        userId,
+                        amount: amountPaidv,
+                        type: type || "unknown",
+                        source: "webhook",
+                        status: "unhandled_type",
+                    });
+                }
             } catch (processingError: any) {
                 logger.error(`[Paystack Webhook] Processing failed for ${reference}:`, processingError);
                 // Return 500 so Paystack retries the webhook delivery.
