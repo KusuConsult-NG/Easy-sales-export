@@ -7,6 +7,28 @@ on:
     branches: [ main ]
 
 jobs:
+  # Runs before anything else, and on its own, because a leaked credential is not
+  # a build failure — it is an incident, and the sooner it is visible the smaller
+  # it is.
+  #
+  # A live Paystack secret key sat in scripts/force-sync.js from 2026-04-16 to
+  # 2026-07-15 in a PUBLIC repository. Deleting the file did not remove it from
+  # history. Nothing in CI looked, so nothing said anything for four months.
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth: 0 is the point. A shallow clone only sees the tip, and the
+      # leak that prompted this was in history with a clean working tree.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan the full history for credentials
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
+
   build-and-test:
     runs-on: ubuntu-latest
     steps:

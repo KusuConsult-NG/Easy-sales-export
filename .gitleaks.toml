@@ -1,0 +1,87 @@
+# Secret scanning configuration.
+#
+# WHY THIS EXISTS
+# ---------------
+# A live Paystack secret key was committed in scripts/force-sync.js on
+# 2026-04-16 and removed from the working tree on 2026-07-15. Deleting the file
+# did not remove it from history, and this repository is PUBLIC — so the key was
+# readable by anyone for just under four months. Nothing in CI looked for it, so
+# nothing said anything.
+#
+# The scan runs over full history (fetch-depth: 0 in ci.yml), because the tree
+# was clean the whole time and only the history was not.
+
+[extend]
+useDefault = true
+
+# ── Allowlist ────────────────────────────────────────────────────────────────
+#
+# Kept deliberately narrow. Every entry below is a value that CANNOT grant
+# access to anything, and each says why. A broad allowlist is how a scanner
+# stops being worth running — the failure mode is that people learn to ignore
+# it, which is worse than not having it.
+
+[allowlist]
+description = "Values that are structurally secret-shaped but grant nothing"
+
+paths = [
+    # Placeholder templates, checked in so the real files can be gitignored.
+    '''service-account\.json\.example''',
+    '''\.env\.sentry\.example''',
+]
+
+regexes = [
+    # Test fixtures. Real Paystack keys are 40+ hex characters after the
+    # prefix; these are obviously short and only ever reach a mocked fetch.
+    '''sk_test_x''',
+    '''sk_test_webhook_secret''',
+
+    # Firebase Web API keys (AIza…) are PUBLIC BY DESIGN — they are shipped in
+    # the client bundle and identify the project, they do not authorise it.
+    # Security comes from Firebase rules and, for Maps, from an HTTP-referrer
+    # restriction in the Google Cloud console. Flagging them trains people to
+    # dismiss the scanner.
+    #
+    # NOT allowlisted, and deliberately: FIREBASE_PRIVATE_KEY / any
+    # service-account key. Those are genuinely secret.
+    '''AIza[0-9A-Za-z_-]{35}''',
+]
+
+# ── Triaged historical findings ──────────────────────────────────────────────
+#
+# Every commit below has been read and classified. They are allowlisted so CI
+# fails on NEW leaks rather than being permanently red about old ones — a
+# scanner that always fails is a scanner nobody reads.
+#
+# ROTATION, not allowlisting, is what resolves the one real leak here. The entry
+# is present so the check is green; the credential still has to be replaced.
+commits = [
+    # ── THE REAL ONE ──
+    # Paystack sk_live_ (gitleaks labels it stripe-access-token; same prefix
+    # shape). Committed 2026-04-16, removed from the tree 2026-07-15, PUBLIC
+    # repository throughout. REQUIRES ROTATION — see
+    # docs/audit/secret-exposure-2026-08-10.md.
+    "c767ff8e576c968623e4ca57b7392bb252949bed",  # scripts/force-sync.js
+
+    # ── One dummy key, many files ──
+    # All of these are the SAME RSA key: the Firebase emulator placeholder that
+    # lived in firebase-admin.ts. Verified by fingerprinting every distinct
+    # private-key body in history — there is exactly one, and it authorises
+    # nothing. Removed from HEAD; it generates an ephemeral key at runtime now.
+    "2f1c566071b886665deb29cd6c24aff5068c51ca",  # src/lib/firebase-admin.ts
+    "638b7ef38f4c928d816ca980ca478a091bb61613",  # test-admin.js
+    "40516fb27dc3577fa918890db0d792d66ed36d33",  # scripts/verify-wave-member.js
+
+    # ── False positives, read and dismissed ──
+    "b0fe92555a28ff8ca29d005a98c3b4c710032010",  # doc example: "apikey: YOUR-ANON-KEY"
+    "42104e00e327a79d5da35defff7623eb3dc8c649",  # test fixture: 'test_api_key_12345'
+    "bed50716b4191be80fee507105a80a85c3911e98",  # firebase-debug.log — emulator output
+    "5c350d3c3e6ce14e6859bb14db5bebbb7a9e8637",  # setup script, placeholder values
+]
+
+# ── A note on what this does NOT do ──────────────────────────────────────────
+#
+# It cannot un-leak anything. The key that prompted it was exposed the moment it
+# was pushed, and rewriting history would not have helped: anyone could already
+# have copied it. ROTATION is the fix for a leaked credential; this file only
+# shortens the window for the next one.
