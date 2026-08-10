@@ -16,6 +16,7 @@ import {
 import { formatCurrency } from "@/lib/utils";
 import { getMembershipAction } from "@/app/actions/cooperative";
 import { getUserLoanApplicationsAction, getRepaymentScheduleAction } from "@/app/actions/cooperative";
+import RepayFromSavingsModal from "@/components/loans/RepayFromSavingsModal";
 
 // Helper to convert FieldValue | Timestamp to Date
 function toDate(value: any): Date {
@@ -30,6 +31,12 @@ export default function MyLoansPage() {
     const [membership, setMembership] = useState<any>(null);
     const [loans, setLoans] = useState<any[]>([]);
     const [error, setError] = useState<string | null>(null);
+    const [repayTarget, setRepayTarget] = useState<{
+        loanId: string;
+        installmentId: string;
+        installmentNumber: number;
+        amountDue: number;
+    } | null>(null);
 
     useEffect(() => {
         loadLoans();
@@ -75,6 +82,11 @@ export default function MyLoansPage() {
                                 })),
                                 nextPaymentDate: nextPayment ? nextPayment.dueDate : null,
                                 nextPaymentAmount: nextPayment ? nextPayment.totalAmount - nextPayment.paidAmount : 0,
+                                // The instalment id was dropped by the mapping
+                                // above, which is why nothing on this page could
+                                // ever name the instalment being paid.
+                                nextInstallmentId: nextPayment ? nextPayment.id : null,
+                                nextInstallmentNumber: nextPayment ? nextPayment.installmentNumber : null,
                                 startDate: toDate(loan.disbursedAt || loan.appliedAt),
                                 interestRate: loan.interestRate,
                                 duration: loan.durationMonths
@@ -88,6 +100,11 @@ export default function MyLoansPage() {
                             repaymentSchedule: [],
                             nextPaymentDate: null,
                             nextPaymentAmount: loan.monthlyPayment || 0,
+                            // No schedule was loaded, so there is no instalment
+                            // to name and the repay button stays hidden rather
+                            // than submitting against a guess.
+                            nextInstallmentId: null,
+                            nextInstallmentNumber: null,
                             startDate: toDate(loan.disbursedAt) || toDate(loan.appliedAt) || new Date(),
                             interestRate: loan.interestRate,
                             duration: loan.durationMonths
@@ -240,12 +257,30 @@ export default function MyLoansPage() {
                                                     {formatDate(loan.nextPaymentDate)} - {formatCurrency(loan.nextPaymentAmount)}
                                                 </p>
                                             </div>
-                                            <Link
-                                                href="/cooperatives/payment"
-                                                className="px-4 py-2 bg-yellow-600 text-white font-semibold rounded-lg hover:bg-yellow-700 transition"
-                                            >
-                                                Pay Now
-                                            </Link>
+                                            {/*
+                                              * This was a Link to /cooperatives/payment — the
+                                              * membership REGISTRATION FEE page. A borrower
+                                              * pressing the only repayment button on the page
+                                              * was sent to a different payment entirely.
+                                              *
+                                              * Hidden rather than disabled when the schedule
+                                              * did not load: there is no instalment to name,
+                                              * and a button that cannot say what it is paying
+                                              * should not be offered.
+                                              */}
+                                            {loan.nextInstallmentId && (
+                                                <button
+                                                    onClick={() => setRepayTarget({
+                                                        loanId: loan.id,
+                                                        installmentId: loan.nextInstallmentId,
+                                                        installmentNumber: loan.nextInstallmentNumber ?? 1,
+                                                        amountDue: loan.nextPaymentAmount,
+                                                    })}
+                                                    className="px-4 py-2 bg-yellow-600 text-white font-semibold rounded-lg hover:bg-yellow-700 transition"
+                                                >
+                                                    Repay from Savings
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
 
@@ -313,6 +348,22 @@ export default function MyLoansPage() {
                     </div>
                 )}
             </div>
+
+            {repayTarget && membership && (
+                <RepayFromSavingsModal
+                    loanId={repayTarget.loanId}
+                    installmentId={repayTarget.installmentId}
+                    installmentNumber={repayTarget.installmentNumber}
+                    amountDue={repayTarget.amountDue}
+                    userId={membership.id}
+                    savingsBalance={Number(membership.savingsBalance || 0)}
+                    onClose={() => setRepayTarget(null)}
+                    // Reload rather than patching state: the savings balance and
+                    // the instalment both moved, and the server is the only
+                    // place that knows what they moved to.
+                    onRepaid={loadLoans}
+                />
+            )}
         </div>
     );
 }

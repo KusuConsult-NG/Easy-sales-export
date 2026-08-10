@@ -81,6 +81,7 @@ export {
     disburseLoanAction,
     getRepaymentScheduleAction,
     submitRepaymentAction,
+    repayLoanFromSavingsAction,
     getRepaymentHistoryAction,
 } from "./_loans";
 

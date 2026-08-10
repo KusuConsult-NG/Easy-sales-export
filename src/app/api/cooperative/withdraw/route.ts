@@ -7,6 +7,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
 import { debitJsonbBalanceWithFloor } from "@/lib/wallet-ledger";
+import { COOPERATIVE_MINIMUM_BALANCE } from "@/lib/cooperative-limits";
 import { rateLimit, getClientIp, createRateLimitResponse } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 
@@ -96,7 +97,10 @@ export async function POST(request: NextRequest) {
         // the three can be separated. No advisory read is kept as a fast path:
         // leaving the read half of a check-then-write above the primitive is
         // exactly how these came to be mistaken for guards.
-        const MINIMUM_BALANCE = 5000; // Minimum ₦5,000 must remain
+        // Shared with the loan-repayment-from-savings path, which reduces the
+        // same balance and must refuse at the same point. See
+        // src/lib/cooperative-limits.ts.
+        const MINIMUM_BALANCE = COOPERATIVE_MINIMUM_BALANCE;
 
         // Check for existing pending withdrawal requests (Admin SDK)
         const existingWithdrawalsSnapshot = await db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS)

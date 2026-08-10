@@ -6,7 +6,12 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
-import { claimPaymentOnce } from "@/lib/wallet-ledger";
+import { claimPaymentOnce, claimIdempotencyKey, debitJsonbBalanceWithFloor } from "@/lib/wallet-ledger";
+import {
+    COOPERATIVE_MINIMUM_BALANCE,
+    formatMinimumBalance,
+    availableAboveFloor,
+} from "@/lib/cooperative-limits";
 import { needsDualControl } from "@/lib/loan-approval-policy";
 import { Timestamp } from "@/lib/firestore-compat";
 import { createAdminAuditLog } from "@/lib/audit-log";
@@ -1318,6 +1323,182 @@ export async function submitRepaymentAction(data: {
     } catch (error: any) {
         logger.error("Repayment submission error:", error);
         return { success: false as const, error: error.message || "Failed to submit repayment" , data: null };
+    }
+}
+
+/**
+ * Repay a loan instalment out of cooperative savings.
+ *
+ * The other two repayment routes take money from somewhere else:
+ * `submitRepaymentAction` records a bank transfer that already arrived, and
+ * `processLoanRepaymentAction` debits the WALLET. Cooperative savings is
+ * `savingsBalance` on `cooperative_members` — a third pot, and until now no
+ * path reduced it for a loan.
+ *
+ * THE MINIMUM BALANCE APPLIES
+ * ---------------------------
+ * A member may not repay themselves below the ₦5,000 floor, the same rule the
+ * withdrawal route enforces. Both now read it from `cooperative-limits.ts`
+ * rather than each declaring its own 5000, because a floor that exists twice is
+ * a floor that will eventually differ in one place.
+ *
+ * WHY THE STEPS ARE IN THIS ORDER
+ * -------------------------------
+ * There is no transaction spanning "take from savings" and "credit the loan" —
+ * `runTransaction` in this codebase takes no lock. So the order is the design,
+ * and the two orders fail differently:
+ *
+ *   debit, then claim   two concurrent submissions BOTH debit and only one
+ *                       credits. The member pays twice for one instalment.
+ *
+ *   claim, then debit   the second submission loses the claim and returns
+ *                       before touching the money. Nobody is charged twice.
+ *
+ * So the idempotency key is claimed first, and it gates everything after it.
+ *
+ * The cost of that choice: if the debit then fails, the key is spent and no
+ * primitive here releases it. That failure is almost entirely "you would go
+ * below the floor", so the floor is checked by an ordinary read BEFORE anything
+ * is claimed. That read is not the guard — `debitJsonbBalanceWithFloor` applies
+ * the real one under a row lock — it exists so the ordinary refusal happens
+ * while the operation is still free to retry.
+ *
+ * If a member does hit the narrow race, an admin can still record the payment
+ * through the Record Repayment modal with a different reference.
+ */
+export async function repayLoanFromSavingsAction(data: {
+    loanId: string;
+    installmentId: string;
+    userId: string;
+    amount: number;
+}): Promise<
+    | { success: true; error: null; data: { debited: number; savingsBalance: number } | null }
+    | { success: false; error: string; data: null }
+> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) {
+            return { success: false as const, error: "Authentication required", data: null };
+        }
+        const { session } = sessionResult;
+
+        // Self OR admin, the same idiom as submitRepaymentAction. The borrower
+        // check is kept: a member must not spend somebody else's savings.
+        const isActingAdmin = isAdmin(session?.user?.roles);
+        if (!session?.user?.id || (session.user.id !== data.userId && !isActingAdmin)) {
+            return { success: false as const, error: "Unauthorized", data: null };
+        }
+
+        if (!Number.isFinite(data.amount) || data.amount <= 0) {
+            return { success: false as const, error: "Invalid repayment amount", data: null };
+        }
+
+        // Pre-flight, not a guard. See the note above on why this read exists.
+        const memberDoc = await db
+            .collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+            .doc(data.userId)
+            .get();
+
+        if (!memberDoc.exists) {
+            return { success: false as const, error: "You must be a cooperative member", data: null };
+        }
+
+        const currentBalance = Number(memberDoc.data()?.savingsBalance || 0);
+        if (currentBalance - data.amount < COOPERATIVE_MINIMUM_BALANCE) {
+            return {
+                success: false as const,
+                error: `You must keep a minimum balance of ${formatMinimumBalance()}. Available for repayment: ₦${availableAboveFloor(currentBalance).toLocaleString()}`,
+                data: null,
+            };
+        }
+
+        // Deterministic in the instalment and the amount, so a double-click or a
+        // resubmitted form is the same key rather than a second repayment.
+        // Rule 2 in wallet-ledger.ts: a reference that varies per attempt is not
+        // an idempotency key.
+        const reference = `SAV-${data.loanId}-${data.installmentId}-${Math.round(data.amount * 100)}`;
+
+        const gate = await claimIdempotencyKey({
+            key: reference,
+            userId: data.userId,
+            action: "loan_repayment_from_savings",
+        });
+
+        if (!gate.claimed) {
+            // Already processed. A success, not an error — rule 3.
+            logger.warn("[repayLoanFromSavingsAction] duplicate repayment ignored", {
+                reference, loanId: data.loanId,
+            });
+            return { error: null, success: true as const, data: null };
+        }
+
+        const debit = await debitJsonbBalanceWithFloor({
+            table: "cooperative_members",
+            id: data.userId,
+            field: "savingsBalance",
+            amount: data.amount,
+            floor: COOPERATIVE_MINIMUM_BALANCE,
+        });
+
+        if (!debit.ok) {
+            // below_floor is not insufficient_funds. The member has the money and
+            // is not permitted to use all of it; telling someone with a healthy
+            // balance that they have insufficient funds would simply be false.
+            const message =
+                debit.reason === "below_floor"
+                    ? `You must keep a minimum balance of ${formatMinimumBalance()}. Available for repayment: ₦${availableAboveFloor(Number(debit.balance)).toLocaleString()}`
+                    : debit.reason === "insufficient_funds"
+                        ? `Insufficient savings. Available: ₦${Number(debit.balance).toLocaleString()}`
+                        : "You must be a cooperative member";
+
+            logger.error("[repayLoanFromSavingsAction] debit refused after key was claimed", {
+                reference, reason: debit.reason, loanId: data.loanId,
+            });
+            return { success: false as const, error: message, data: null };
+        }
+
+        // The money has left savings. Credit the instalment.
+        //
+        // submitRepaymentAction claims `reference` again through
+        // claimPaymentOnce — a different table from the idempotency key, so this
+        // is not a repeat of the gate above. It is what puts the repayment in
+        // processed_payments where every other repayment is recorded, so the two
+        // collection routes stay reconcilable against one another.
+        const recorded = await submitRepaymentAction({
+            loanId: data.loanId,
+            installmentId: data.installmentId,
+            userId: data.userId,
+            amount: data.amount,
+            paymentReference: reference,
+        });
+
+        if (!recorded.success) {
+            // Savings were debited and the instalment was not credited. Nothing
+            // here can put the money back, so it is logged at error with the
+            // reference an admin needs to settle it by hand.
+            logger.error("[repayLoanFromSavingsAction] SAVINGS DEBITED BUT INSTALMENT NOT CREDITED", {
+                reference,
+                loanId: data.loanId,
+                installmentId: data.installmentId,
+                userId: data.userId,
+                amount: data.amount,
+                cause: recorded.error,
+            });
+            return {
+                success: false as const,
+                error: "Your savings were debited but the repayment could not be recorded. Please contact support with reference " + reference,
+                data: null,
+            };
+        }
+
+        return {
+            error: null,
+            success: true as const,
+            data: { debited: data.amount, savingsBalance: Number(debit.balance) },
+        };
+    } catch (error: any) {
+        logger.error("Repay from savings error:", error);
+        return { success: false as const, error: error.message || "Failed to repay from savings", data: null };
     }
 }
 
