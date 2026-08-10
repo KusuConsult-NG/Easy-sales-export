@@ -60,7 +60,7 @@ export default function CooperativeWidget() {
                     Join the cooperative to start saving and access loans
                 </p>
                 <Link
-                    href="/cooperatives/register"
+                    href="/cooperatives/onboarding"
                     className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition text-sm"
                 >
                     Join Cooperative

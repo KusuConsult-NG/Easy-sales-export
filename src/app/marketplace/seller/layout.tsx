@@ -20,7 +20,7 @@ export default async function SellerLayout({ children }: { children: React.React
 
     // 2. Ensure session is valid
     if (!sessionResult.session) {
-        redirect("/marketplace/login");
+        redirect("/auth/login");
     }
 
     const { session } = sessionResult;
@@ -107,7 +107,7 @@ export default async function SellerLayout({ children }: { children: React.React
         }
     } catch (error) {
         logger.error("Seller access check error:", error);
-        redirectPath = "/marketplace/login";
+        redirectPath = "/auth/login";
     }
 
     if (redirectPath) {

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { signOut } from "next-auth/react";
 import { Users, CheckCircle, XCircle, Loader2, Edit, Shield, FileCheck, FileX, SlidersHorizontal, X, MapPin, Download, Layers, Home, CreditCard, FileText } from "lucide-react";
 import { toggleUserVerificationAction, toggleUserKycVerificationAction, updateUserRolesAction, getUsersAction, manualAcademyEnrollmentAction, updateUserGenderAction, editApplicationAction } from "@/app/actions/admin";
 import Modal from "@/components/ui/Modal";
@@ -555,12 +556,13 @@ export default function AdminUsersPage() {
                             Your session may not have the correct admin roles. Please <strong>sign out and sign back in</strong> to refresh your permissions.
                         </p>
                     </div>
-                    <a
-                        href="/auth/signout"
+                    <button
+                        type="button"
+                        onClick={() => signOut({ callbackUrl: "/auth/login" })}
                         className="shrink-0 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-lg transition text-center"
                     >
                         Sign Out &amp; Refresh
-                    </a>
+                    </button>
                 </div>
             )}
 

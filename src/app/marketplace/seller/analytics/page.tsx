@@ -206,7 +206,7 @@ export default function SellerAnalyticsPage() {
                                 Add New Product
                             </Link>
                             <Link
-                                href="/settings/profile"
+                                href="/profile"
                                 className="bg-green-700 bg-opacity-50 text-white text-center py-3 rounded-lg font-bold hover:bg-opacity-70 transition-colors border border-green-400"
                             >
                                 Optimize Profile

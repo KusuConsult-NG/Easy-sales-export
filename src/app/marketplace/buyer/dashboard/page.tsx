@@ -201,7 +201,7 @@ export default function BuyerDashboard() {
                         </Link>
 
                         <Link
-                            href="/marketplace/cart"
+                            href="/marketplace/checkout"
                             className="bg-linear-to-br from-orange-600 to-amber-600 text-white rounded-xl p-6 hover:shadow-lg transition-shadow"
                         >
                             <ShoppingCart className="w-8 h-8 mb-3" />

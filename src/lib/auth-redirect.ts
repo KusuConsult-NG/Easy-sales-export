@@ -10,11 +10,11 @@
  * 
  * @param pathname - The current pathname (e.g., "/marketplace/onboarding")
  * @param type - The auth type: 'login' or 'register'
- * @returns The module-specific auth path (e.g., "/marketplace/login")
+ * @returns The auth path with a module query param (e.g., "/auth/login?module=marketplace")
  * 
  * @example
- * getModuleAuthUrl("/marketplace/onboarding", "login") // "/marketplace/login"
- * getModuleAuthUrl("/cooperatives/dashboard", "login") // "/cooperatives/login"
+ * getModuleAuthUrl("/marketplace/onboarding", "login") // "/auth/login?module=marketplace"
+ * getModuleAuthUrl("/cooperatives/dashboard", "login") // "/auth/login?module=cooperatives"
  * getModuleAuthUrl("/dashboard", "login") // "/auth/login" (fallback)
  */
 export function getModuleAuthUrl(pathname: string, type: 'login' | 'register'): string {

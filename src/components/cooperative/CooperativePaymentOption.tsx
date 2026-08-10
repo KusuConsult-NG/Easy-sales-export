@@ -103,7 +103,7 @@ export default function CooperativePaymentOption({
                         💡 Join the cooperative to unlock credit for marketplace purchases!
                     </p>
                     <a
-                        href="/cooperatives/register"
+                        href="/cooperatives/onboarding"
                         className="text-blue-600 font-semibold hover:underline text-sm"
                     >
                         Learn More →
