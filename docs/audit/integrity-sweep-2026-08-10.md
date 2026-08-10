@@ -1,8 +1,13 @@
 # Integrity sweep, 2026-08-10 — findings
 
-Extends the work in `atomic-money-migration.md`. Six findings, **all fixed**.
+Extends the work in `atomic-money-migration.md`.
+
+**Round 1** (below) — six findings from fresh sweeps, all fixed.
+**Round 2** (at the bottom) — the recorded-but-open list from both audit
+documents, cleared, plus one live breakage found while writing fixtures.
+
 Two questions remain that need a decision rather than a patch. See the status
-table at the bottom.
+table.
 
 That document ends with the priority table emptied and warns why an empty table
 is not the same as a clean codebase: the sweeps that built it grepped for money
@@ -481,3 +486,179 @@ F1, F2 and F5 are all one shape: **a path that was fixed in one copy and left in
 another.** Worth a standing check when closing any of these — search for a
 second door before calling a defect fixed. F3 is the same shape seen from the
 other side: two copies that both existed, where only one had been converted.
+
+---
+
+# Round 2 — clearing the recorded-but-open list
+
+Everything above was found by sweeping. This round works the *other* list: the
+items `atomic-money-migration.md` and `outstanding-work.md` had already
+identified and deliberately left, each with a reason. Those reasons were sound,
+and each needed something that did not exist yet.
+
+Requires **migrations 020 and 021**, both of which must be applied to production
+before this deploys. Neither alters a table, column, row or index; both are inert
+until code calls them.
+
+## R1 — processExportInvestment, the conversion that was not mechanical
+
+The migration doc left this one on purpose. It writes the marker with two
+statuses — `completed` normally, `overfunded_review` when the investment exceeds
+the goal — and `platform_revenue_totals()` sums exactly the `completed` rows.
+Claiming first means choosing a status before the branch has run, and claiming as
+`completed` would have started counting overfunded payments as revenue: a
+behaviour change smuggled inside an idempotency fix.
+
+**Resolved as a two-step write.** Claim as `pending_fulfilment`, which is not
+revenue, then promote once the branch resolves.
+
+The second race it recorded is closed at the same time: the overfunding guard
+read `fundedAmount`, compared, and wrote, with no lock, so two investments that
+each fit under the goal but together exceed it both passed.
+`incrementWithinCeiling` applies both in one statement, with the ceiling field
+chosen from the record (`fundingGoal` **or** `goal`).
+
+`fundedAmount` is dropped from the stats update — the ceiling call already raised
+it, and incrementing again would double-count.
+
+**The new failure mode, and what catches it.** A crash between claim and
+promotion strands the row at `pending_fulfilment`. That is the safe direction —
+under-counted, not over-counted — but every artefact check in
+`reconcile-fulfilment` filters to `status === "completed"`, so a stranded row
+would have been invisible to all of them. The reconciler now reports
+`strandedClaims` **and counts them toward `totalUnfulfilled`**: a payment claimed
+and never fulfilled needs no artefact lookup to be a problem, and reporting it
+without counting it would let such a run report "ok".
+
+## R2 — the refunds nothing was processing, or surfacing
+
+Both stock-reservation paths mark an order `paid_awaiting_refund` when the
+reservation fails after the payment is claimed, and the comment beside each says
+nothing yet *processes* those refunds. True — and issuing one belongs behind a
+human, the same reasoning that keeps the reconciler alerting rather than
+auto-healing.
+
+Nothing **surfaced** them either, which is the half that made them forgettable.
+`reconcile-fulfilment` now reports `refundsOwed` across marketplace and export
+orders — count, total, and the affected orders — counted toward the alarm.
+
+Issuing the refund needs Paystack's refund API, which this codebase does not call
+anywhere today. That should be its own change, by someone able to exercise it
+against Paystack's sandbox.
+
+## R3 — the minimum-balance floor was advisory (migration 020)
+
+`platform.ts` and `api/cooperative/withdraw` enforced a ₦5,000 floor with a plain
+read above the debit, and both comments said what that meant: two withdrawals
+that each leave ₦5,000 behind can together dip under it. `debitJsonbBalance`
+could not close it — it checks `balance >= amount` and nothing more.
+
+`debit_jsonb_balance_with_floor` applies the floor under the same lock as the
+deduction. A **separate function**, not a floor parameter added to the existing
+one: adding a DEFAULTed parameter creates a new signature and leaves the old one
+resolvable, which is the trap this document already records under "`proname`
+alone proves nothing about version".
+
+`below_floor` is deliberately distinct from `insufficient_funds`, and both call
+sites report it distinctly. The member HAS the money and is not allowed to take
+all of it; "insufficient funds" would be false.
+
+## R4 — optimistic locking did not lock (migration 020)
+
+`versionedUpdate` read `_version` inside `runTransaction`, compared it, and
+wrote. That wrapper takes no lock, so two callers read the same version, both
+passed, and both wrote — the second silently reverting the first from a snapshot
+taken moments earlier. Precisely the failure the mechanism exists to prevent,
+which is why `loan-actions.ts` dropped the helper rather than trust it. Five
+other sites kept it, and kept the false guarantee.
+
+`claim_versioned_update` is the compare-and-swap. **The fix is one change, not
+six**: rewriting the helper moves `vendor-settings.ts` (4 sites), `admin.ts` and
+`_updateMembershipAction` onto it without touching them — the same shape as
+`splitIncrements` fixing 142 call sites at once.
+
+The `transaction` parameter is kept and documented as unused. Passing the write
+to it would be *actively wrong*: it would put the write back on the unlocked
+replay path the rewrite exists to leave. There is a test asserting the
+transaction is never touched.
+
+`version === null` means the record does not exist, a different failure from a
+lost claim. Confusing them tells a user to refresh and retry something that is
+not there.
+
+## R5 — one open loan application per borrower (migration 021)
+
+Recorded twice in the migration doc and left both times, correctly: "Closing it
+needs a uniqueness constraint on a borrower's open applications, not a wrapper."
+
+**Why a row lock cannot fix it.** The thing being guarded is the ABSENCE of rows,
+so `FOR UPDATE` has nothing to hold. This is a phantom, not a lost update.
+
+**Why a partial unique index does not fit.** The rule spans two tables —
+`cooperative_loans` and `document_collections` filtered to `loan_applications` —
+and no index spans both. Worse, `CREATE UNIQUE INDEX` fails outright if existing
+data already violates it, and the defect being fixed is exactly what would have
+produced duplicates. A migration that cannot be applied until production is
+cleaned is one that does not get applied.
+
+`claim_single_open_loan_application` takes a **per-borrower advisory lock** and
+does the check and the insert inside one function, so the lock covers both. A
+second caller for the same borrower blocks, then sees the row the first wrote.
+Per-borrower, so different borrowers never contend; xact-scoped, so it releases
+on error and cannot leak. It imposes no precondition on existing data — a
+borrower with duplicates simply cannot add a third.
+
+Note the two borrower fields: `COOPERATIVE_LOANS` keys on `memberId`,
+`LOAN_APPLICATIONS` on `userId`. Getting that wrong makes the guard match
+nothing, which is indistinguishable from working.
+
+## R6 — two cooperative forms failed on every submission
+
+**Not on any list.** Found while writing fixtures for R5: both actions refused a
+valid payload. A test that cannot construct a passing input is telling you
+something about the code, not the fixture.
+
+`makeContributionAction` and `applyForLoanAction` validate through
+`parseFormData` → `formDataToObject`, which does no conversion — every FormData
+value arrives as a **string**. Both schemas declared `amount: z.number()`, and
+Zod does not coerce by default, so the parse failed every time with
+`expected number, received string`.
+
+There is no input that could satisfy it. The check was **unsatisfiable, not
+strict**: making a cooperative contribution and applying for a cooperative loan
+were broken 100% of the time, and the member saw a validation error on a
+correctly filled form. No race, no concurrency precondition — the same class as
+the "breaking things daily" list in `outstanding-work.md`.
+
+The fix is two parts. `z.coerce.number()` makes a numeric string parse, and is
+backward compatible: callers holding a real number (react-hook-form via
+`zodResolver`) pass through untouched. Coercion alone is not enough —
+`Number("₦10,000")` is `NaN` and the field is currency-formatted in the UI. The
+loan path already stripped formatting; the contribution path did not, and would
+have kept failing for formatted amounts, looking like the fix had half worked.
+
+**Worth generalising from.** Two of this round's six items were found by trying
+to write a test rather than by reading code, and both were invisible to every
+sweep in these documents. A grep finds a shape; only execution finds a rule that
+nothing can satisfy.
+
+## Verification
+
+| Suite | Pre-fix |
+|---|---|
+| `export-investment-two-step-claim` | 6 of 7 fail |
+| `floored-debit-and-versioned-cas` | 6 of 6 fail |
+| `cooperative-form-coercion` | 4 of 6 fail |
+| `reconcile-fulfilment` (+4 tests) | new coverage |
+| `single-open-loan-application` | 6 tests |
+
+**29 unit suites / 295 tests pass. `tsc --noEmit` clean.**
+
+## What is left after this round
+
+No item from either audit document remains open as code. What remains is
+operational or needs a decision — see the Status table above, plus:
+
+- **Apply migrations 020 and 021** before deploying this.
+- **Issuing** refunds (as opposed to surfacing them) needs the Paystack refund
+  API integrated by someone who can test it against their sandbox.

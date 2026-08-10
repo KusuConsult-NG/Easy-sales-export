@@ -181,7 +181,7 @@ export async function GET(request: NextRequest) {
         // filters in JavaScript rather than SQL — the volume is a few hundred.
         const paymentsSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS).get();
 
-        const payments = paymentsSnap.docs
+        const allInWindow = paymentsSnap.docs
             .map((d: any) => {
                 const data = d.data() ?? {};
                 return {
@@ -193,11 +193,26 @@ export async function GET(request: NextRequest) {
                 };
             })
             .filter((p: any) => {
-                if (p.status !== "completed") return false;
                 if (!p.processedAt) return true; // undated: check it rather than skip it
                 const t = new Date(p.processedAt);
                 return isNaN(t.getTime()) ? true : t >= cutoff;
             });
+
+        const payments = allInWindow.filter((p: any) => p.status === "completed");
+
+        // Payments claimed but never promoted to a final status.
+        //
+        // processExportInvestment claims as "pending_fulfilment" and promotes to
+        // "completed" or "overfunded_review" once the overfunding branch
+        // resolves — a two-step write, because the status cannot be known before
+        // the branch runs. A crash between the two leaves the row stranded here.
+        //
+        // The artefact checks below only look at "completed" rows, so a stranded
+        // row would be invisible to every one of them. It is reported separately
+        // instead: a payment that was claimed and never fulfilled is the
+        // strongest signal this job can produce — it needs no artefact lookup to
+        // know something is wrong.
+        const stranded = allInWindow.filter((p: any) => p.status === "pending_fulfilment");
 
         const results: Record<string, any> = {};
         let totalUnfulfilled = 0;
@@ -236,12 +251,73 @@ export async function GET(request: NextRequest) {
             }
         });
 
+        // Orders charged for stock that turned out not to be there.
+        //
+        // Both stock-reservation paths mark an order paymentStatus
+        // "paid_awaiting_refund" / status "cancelled_out_of_stock" when the
+        // reservation fails after the payment is already claimed. The comment
+        // beside each says the same thing: "this still needs an operational
+        // follow-up — nothing yet PROCESSES those refunds."
+        //
+        // Nothing surfaced them either, which is the half that made them easy to
+        // forget: the money is owed, the order carries the reason and the
+        // amount, and no job ever mentioned it again. This does not issue the
+        // refund — moving money back out belongs behind a human, the same
+        // reasoning that keeps this whole route alerting rather than auto-
+        // healing. It makes the debt impossible to miss.
+        const refundsOwed: Array<Record<string, any>> = [];
+
+        for (const col of [COLLECTIONS.MARKETPLACE_ORDERS, COLLECTIONS.EXPORT_ORDERS]) {
+            const snap = await db.collection(col).get();
+            snap.docs.forEach((d: any) => {
+                const data = d.data() ?? {};
+                if (data.paymentStatus !== "paid_awaiting_refund") return;
+                refundsOwed.push({
+                    collection: col,
+                    orderId: data.orderId || d.id,
+                    userId: data.buyerId || data.userId || "",
+                    amount: data.refundAmount ?? data.paidAmount ?? null,
+                    reason: data.refundReason || data.status || "",
+                });
+            });
+        }
+
+        const refundTotal = refundsOwed.reduce(
+            (sum, r) => sum + (Number(r.amount) || 0), 0
+        );
+
+        // Both of these count toward the alarm as much as a missing artefact
+        // does. Reporting either without counting it would let a run with
+        // stranded payments, or with money owed to buyers, report "ok".
+        totalUnfulfilled += stranded.length + refundsOwed.length;
+
         const body = {
             status: totalUnfulfilled > 0 ? "unfulfilled_payments_found" : "ok",
             windowDays: days,
             paymentsInWindow: payments.length,
             totalUnfulfilled,
             byType: results,
+            strandedClaims: {
+                count: stranded.length,
+                meaning: "claimed as pending_fulfilment and never promoted — fulfilment died part-way",
+                references: stranded.slice(0, MAX_LISTED).map((p: any) => ({
+                    reference: p.reference,
+                    userId: p.userId,
+                    type: p.type,
+                })),
+                ...(stranded.length > MAX_LISTED
+                    ? { truncated: stranded.length - MAX_LISTED }
+                    : {}),
+            },
+            refundsOwed: {
+                count: refundsOwed.length,
+                totalAmount: refundTotal,
+                meaning: "buyer was charged, stock was not there — refund owed and NOT yet issued",
+                orders: refundsOwed.slice(0, MAX_LISTED),
+                ...(refundsOwed.length > MAX_LISTED
+                    ? { truncated: refundsOwed.length - MAX_LISTED }
+                    : {}),
+            },
             notChecked: uncheckedTypes,
             runAt: startedAt.toISOString(),
             durationMs: Date.now() - startedAt.getTime(),

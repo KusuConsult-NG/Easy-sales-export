@@ -40,9 +40,11 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 
 const mockDebit = jest.fn() as jest.Mock<any>;
+const mockDebitWithFloor = jest.fn() as jest.Mock<any>;
 
 jest.mock('@/lib/wallet-ledger', () => ({
     debitJsonbBalance: (...args: any[]) => mockDebit(...args),
+    debitJsonbBalanceWithFloor: (...args: any[]) => mockDebitWithFloor(...args),
     creditWalletOnce: jest.fn(),
     debitWalletOnce: jest.fn(),
     debitWalletLocked: jest.fn(),
@@ -109,7 +111,7 @@ describe('api/cooperative/withdraw — eligibility is the spendable balance', ()
         jest.clearAllMocks();
         setSession('member-1');
         setMember(drainedMember());
-        mockDebit.mockResolvedValue({ ok: true, balance: 1_000, reason: null });
+        mockDebitWithFloor.mockResolvedValue({ ok: true, balance: 1_000, reason: null });
     });
 
     async function post(body: Record<string, any>) {
@@ -128,24 +130,48 @@ describe('api/cooperative/withdraw — eligibility is the spendable balance', ()
         // THE test for the non-race half. totalContributions is 100,000, so the
         // old check (100,000 - 50,000 >= 5,000) passed happily. savingsBalance
         // is 6,000, so this must be refused: the other 94,000 is already gone.
+        //
+        // The refusal now comes from the primitive rather than a pre-read — the
+        // advisory check was removed when the floor moved into the debit
+        // (migration 020). So the assertion is that the request is refused and
+        // nothing is reserved, NOT that the debit was skipped: the route no
+        // longer decides eligibility for itself, which is the point.
+        mockDebitWithFloor.mockResolvedValue({ ok: false, balance: 6_000, reason: 'insufficient_funds' });
+
         const res: any = await post(validBody);
 
         expect(res.status).toBe(400);
-        // Nothing may be reserved for a request that should not exist.
-        expect(mockDebit).not.toHaveBeenCalled();
         expect(updateFor('lockedBalance')).toBeUndefined();
     });
 
-    it('reserves against savingsBalance, not totalContributions', async () => {
+    it('reserves against savingsBalance, with the floor applied under the lock', async () => {
         await post({ ...validBody, amount: 1_000 });
 
-        expect(mockDebit).toHaveBeenCalledTimes(1);
-        expect(mockDebit).toHaveBeenCalledWith(expect.objectContaining({
+        expect(mockDebitWithFloor).toHaveBeenCalledTimes(1);
+        expect(mockDebitWithFloor).toHaveBeenCalledWith(expect.objectContaining({
             table: 'cooperative_members',
             id: 'member-1',
             field: 'savingsBalance',
             amount: 1_000,
+            // The floor used to be a plain read above this call. Two
+            // withdrawals each leaving ₦5,000 behind could together dip under
+            // it, because a read takes no lock.
+            floor: 5000,
         }));
+        // The unfloored primitive must not be used on a path that has a floor.
+        expect(mockDebit).not.toHaveBeenCalled();
+    });
+
+    it('reports a floor refusal as a floor, not as insufficient funds', async () => {
+        // The member HAS the money and is simply not allowed to take all of it.
+        mockDebitWithFloor.mockResolvedValue({ ok: false, balance: 6_000, reason: 'below_floor' });
+
+        const res: any = await post({ ...validBody, amount: 2_000 });
+        const body = await res.json();
+
+        expect(res.status).toBe(400);
+        expect(body.message).toContain('minimum balance');
+        expect(body.message).not.toContain('Insufficient balance');
     });
 
     it('locks the reserved funds, so a later reject nets to zero', async () => {
@@ -162,7 +188,7 @@ describe('api/cooperative/withdraw — eligibility is the spendable balance', ()
     });
 
     it('locks nothing when the reservation is refused', async () => {
-        mockDebit.mockResolvedValue({ ok: false, balance: 200, reason: 'insufficient_funds' });
+        mockDebitWithFloor.mockResolvedValue({ ok: false, balance: 200, reason: 'insufficient_funds' });
 
         const res: any = await post({ ...validBody, amount: 1_000 });
 
@@ -174,7 +200,7 @@ describe('api/cooperative/withdraw — eligibility is the spendable balance', ()
         // Ordering is the guard against a crash between the two. Locking first
         // would reserve funds that were never taken.
         const order: string[] = [];
-        mockDebit.mockImplementation(() => {
+        mockDebitWithFloor.mockImplementation(() => {
             order.push('debit');
             return Promise.resolve({ ok: true, balance: 1_000, reason: null });
         });

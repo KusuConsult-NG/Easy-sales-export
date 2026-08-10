@@ -163,9 +163,26 @@ jest.mock('@/lib/supabase-db', () => {
             return cb(tx);
         }
     };
+    // Mirrors DEDICATED_TABLE_MAP in src/lib/supabase-db.ts. Anything not
+    // listed falls back to the generic document_collections table, which is
+    // what the real routing does — optimistic-locking.ts depends on that
+    // distinction to decide whether a collection name must accompany the id.
+    const DEDICATED = {
+        'users': 'users',
+        'cooperative_members': 'cooperative_members',
+        'cooperative_loans': 'cooperative_loans',
+        'transactions': 'transactions',
+        'processedPayments': 'processed_payments',
+        'processed_payments': 'processed_payments',
+        'marketplaceOrders': 'marketplace_orders',
+        'marketplace_orders': 'marketplace_orders',
+        'wallets': 'wallets',
+        'academy_applications': 'academy_applications',
+    };
     return {
         supabaseDb: mockDb,
         getAdminDb: () => mockDb,
+        getTableName: (collection) => DEDICATED[collection] || 'document_collections',
     };
 });
 

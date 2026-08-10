@@ -13,7 +13,7 @@ import { requireSession } from "@/lib/session-guard";
 import { logAuditAction } from "@/app/actions/audit";
 import { invalidateUserCache, invalidateCooperativeCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { debitJsonbBalance } from "@/lib/wallet-ledger";
+import { debitJsonbBalance, claimSingleOpenLoanApplication } from "@/lib/wallet-ledger";
 import { COOPERATIVE_CONFIG } from "@/lib/constants";
 import { NIGERIAN_LOCATIONS } from "@/lib/locations";
 import { contributionSchema,
@@ -667,8 +667,21 @@ async function _makeContributionAction(
 
         const userId = session.user.id;
 
-        // DISEASE 6 FIX: parseFormData binding
-        const parsed = parseFormData(contributionSchema, formData);
+        // Strip currency formatting before validating.
+        //
+        // contributionSchema now coerces, which fixes the string-vs-number
+        // rejection that broke every contribution. Coercion alone is not
+        // enough for a formatted amount though: Number("₦10,000") is NaN, and
+        // the amount field is currency-formatted in the UI. The loan path
+        // already did this; this one did not, which would have left a subset of
+        // submissions failing after the coercion fix and looked like the bug
+        // was only half-fixed.
+        const contribAmount = parseCurrencyStringToFloat(formData.get("amount") as string);
+        const contribFd = new FormData();
+        for (const [k, v] of formData.entries()) contribFd.append(k, v);
+        contribFd.set("amount", isNaN(contribAmount) ? "0" : String(contribAmount));
+
+        const parsed = parseFormData(contributionSchema, contribFd);
         if (!parsed.success) {
             return { error: parsed.error ?? "Validation failed", success: false as const, data: null };
         }
@@ -1214,17 +1227,18 @@ async function _applyForLoanAction(
         }
         const { productId, amount, purpose } = parsed.data;
 
-        // The eligibility reads below used to sit inside runTransaction, which
-        // takes no lock. It never made them a guard, and dropping the wrapper
-        // does not weaken anything: two applications submitted at once both read
-        // an empty "active loans" result and both create a pending application,
-        // exactly as they did before. Closing that needs a uniqueness constraint
-        // on the member's open applications, not a wrapper — see the note in
-        // docs/audit/atomic-money-migration.md.
+        // The double-lending guard is now the insert itself — see the claim at
+        // the end of this function.
         //
-        // Nothing here moves money. A pending application disburses nothing
-        // until an admin approves it, and that path has its own dual-control
-        // guard (commit #37).
+        // It used to be a pair of reads here: query both loan collections for
+        // open applications and refuse if either was non-empty. Those reads took
+        // no lock (originally inside runTransaction, which does not provide one),
+        // so two applications submitted together both saw an empty result and
+        // both created a pending row.
+        //
+        // A row lock could not fix it, because the thing being guarded is the
+        // ABSENCE of rows — there is nothing to lock. Migration 021 does the
+        // check and the insert under a per-borrower advisory lock instead.
         const membershipsRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
         const membershipSnapshot = await membershipsRef.where("userId", "==", userId).get();
 
@@ -1235,21 +1249,7 @@ async function _applyForLoanAction(
         const membershipDoc = membershipSnapshot.docs[0];
         const membershipData = membershipDoc.data();
 
-        // 1. Check for active/pending loans in both collections (Double-lending protection)
         const loansRef = db.collection(COLLECTIONS.COOPERATIVE_LOANS);
-        const activeCoopLoansQuery = loansRef
-            .where("memberId", "==", userId)
-            .where("status", "in", ["pending", "reviewing", "approved", "partially_approved", "disbursed"]);
-        const activeCoopLoansSnap = await activeCoopLoansQuery.get();
-
-        const activeGeneralLoansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
-            .where("userId", "==", userId)
-            .where("status", "in", ["pending", "reviewing", "approved", "partially_approved", "disbursed"]);
-        const activeGeneralLoansSnap = await activeGeneralLoansQuery.get();
-
-        if (!activeCoopLoansSnap.empty || !activeGeneralLoansSnap.empty) {
-            throw new Error("Active or pending loan application already exists platform-wide.");
-        }
 
         // 2. Check Loan Limit (e.g., 3x Savings Balance)
         const savingsBalance = membershipData.savingsBalance || 0;
@@ -1273,20 +1273,43 @@ async function _applyForLoanAction(
         const totalRepayment = amount + interestAmount;
         const monthlyPayment = totalRepayment / durationMonths;
 
-        // Create Loan Application
+        // Create the loan application, and let the insert be the guard.
+        //
+        // The claim refuses if the borrower has an open application in EITHER
+        // collection, checked under a per-borrower advisory lock held across
+        // the check and the insert. Two applications submitted together now
+        // serialise: the second sees the first one's row and is refused.
+        //
+        // Timestamps are literal here rather than FieldValue.serverTimestamp():
+        // the row is passed to Postgres as JSONB and sentinels are not resolved,
+        // the same caveat claim_status_transition carries. created_at/updated_at
+        // are set by the function itself.
         const newLoanRef = loansRef.doc();
-        await newLoanRef.set({ memberId: userId,
-            productId,
-            amount,
-            purpose,
-            interestAmount,
-            totalRepayment,
-            monthlyPayment,
-            durationMonths,
-            status: "pending",
-            appliedAt: FieldValue.serverTimestamp(),
-            createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp() });
+        const nowIso = new Date().toISOString();
+
+        const claim = await claimSingleOpenLoanApplication({
+            userId,
+            id: newLoanRef.id,
+            table: "cooperative_loans",
+            row: {
+                memberId: userId,
+                productId,
+                amount,
+                purpose,
+                interestAmount,
+                totalRepayment,
+                monthlyPayment,
+                durationMonths,
+                status: "pending",
+                appliedAt: nowIso,
+                createdAt: nowIso,
+                updatedAt: nowIso,
+            },
+        });
+
+        if (!claim.claimed) {
+            throw new Error("Active or pending loan application already exists platform-wide.");
+        }
 
         try {
             await invalidateCooperativeCache(userId);

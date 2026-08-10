@@ -104,7 +104,17 @@ export type CooperativeMembershipRecord = {
 
 export const contributionSchema = z.object({
     cooperativeId: z.string().min(1, "Cooperative ID is required"),
-    amount: z.number().positive("Amount must be greater than 0"),
+    // z.coerce, not z.number.
+    //
+    // This schema is fed by parseFormData, and FormData values are ALWAYS
+    // strings — formDataToObject does no conversion. A bare z.number() therefore
+    // rejected every submission with "expected number, received string", so
+    // making a contribution failed 100% of the time. The user saw a validation
+    // error on a form they had filled in correctly.
+    //
+    // Callers that already hold a real number (react-hook-form via zodResolver)
+    // are unaffected: coerce passes numbers through untouched.
+    amount: z.coerce.number().positive("Amount must be greater than 0"),
     type: z.enum(["savings", "loan_repayment"], {
         message: "Please select contribution type",
     }),
@@ -169,7 +179,9 @@ export type LoanProduct = {
 
 export const loanApplicationSchema = z.object({
     productId: z.string().min(1, "Please select a loan product"),
-    amount: z.number().positive("Loan amount is required"),
+    // z.coerce — same defect as contributionSchema above. Applying for a
+    // cooperative loan failed on every attempt.
+    amount: z.coerce.number().positive("Loan amount is required"),
     purpose: z.string().min(10, "Please describe the purpose"),
 });
 

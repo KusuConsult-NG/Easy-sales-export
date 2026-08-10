@@ -120,7 +120,7 @@ const UNBOUNDED_CEILING = Math.max(
 const _unknownCollectionsWarned = new Set<string>();
 const _limitReachedWarned = new Set<string>();
 
-function getTableName(collection: string): string {
+export function getTableName(collection: string): string {
     if (collection in DEDICATED_TABLE_MAP) {
         return DEDICATED_TABLE_MAP[collection];
     }

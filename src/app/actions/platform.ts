@@ -9,7 +9,7 @@ import { waveApplicationSchema,
     academyEnrollmentSchema,
     withdrawalSchema } from "@/lib/schemas";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { claimIdempotencyKey, debitJsonbBalance } from "@/lib/wallet-ledger";
+import { claimIdempotencyKey, debitJsonbBalanceWithFloor } from "@/lib/wallet-ledger";
 import { ZodError } from "zod";
 import { revalidatePath } from "next/cache";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
@@ -238,31 +238,37 @@ export async function submitWithdrawalAction(
         // Use 'savingsBalance' as per schema, fallback to 'balance' if legacy
         const currentBalance = memberData?.savingsBalance || memberData?.balance || 0;
 
-        // The minimum-balance rule is a policy floor, and this read is still
-        // advisory: two withdrawals that each leave 5,000 behind can together
-        // dip under it. What the debit below guarantees is that the balance
-        // cannot go NEGATIVE, which is the part that was losing money. Closing
-        // the floor race too would need a debit primitive that takes a floor —
-        // recorded in docs/audit/atomic-money-migration.md rather than invented
-        // here.
+        // The minimum-balance rule is a policy floor, and it is now applied
+        // under the same lock as the debit.
+        //
+        // It used to be a plain read above the debit, and the comment here said
+        // so: two withdrawals that each leave 5,000 behind can together dip
+        // under it, because a read takes no lock. debitJsonbBalance could not
+        // close that gap — it checks `balance >= amount` and nothing else, so it
+        // guaranteed only that the balance could not go NEGATIVE.
+        //
+        // debit_jsonb_balance_with_floor (migration 020) is the primitive that
+        // note asked for. The advisory read is gone rather than kept alongside.
         const MIN_BALANCE = 5000;
-        if (currentBalance - validatedData.amount < MIN_BALANCE) {
-            throw new Error(`You must maintain a minimum balance of ₦${MIN_BALANCE.toLocaleString()}`);
-        }
 
-        // 1. Lock Funds — debited under a row lock, not read-check-write.
-        const debit = await debitJsonbBalance({
+        // 1. Lock Funds — debited under a row lock, floor included.
+        const debit = await debitJsonbBalanceWithFloor({
             table: "cooperative_members",
             id: session.user.id,
             field: "savingsBalance",
             amount: validatedData.amount,
+            floor: MIN_BALANCE,
         });
 
         if (!debit.ok) {
+            // below_floor is not insufficient_funds: the member has the money
+            // and is simply not allowed to take all of it.
             return {
-                error: debit.reason === "insufficient_funds"
-                    ? `Insufficient balance. Available: ₦${Number(debit.balance).toLocaleString()}`
-                    : "You are not a member of any cooperative",
+                error: debit.reason === "below_floor"
+                    ? `You must maintain a minimum balance of ₦${MIN_BALANCE.toLocaleString()}`
+                    : debit.reason === "insufficient_funds"
+                        ? `Insufficient balance. Available: ₦${Number(debit.balance).toLocaleString()}`
+                        : "You are not a member of any cooperative",
                 success: false as const,
             };
         }

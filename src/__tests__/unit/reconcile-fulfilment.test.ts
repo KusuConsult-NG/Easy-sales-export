@@ -204,6 +204,85 @@ describe('reconcile-fulfilment', () => {
         expect(body.paymentsInWindow).toBe(0);
     });
 
+    it('reports a claim stranded at pending_fulfilment', async () => {
+        // processExportInvestment claims as "pending_fulfilment" and promotes to
+        // "completed" or "overfunded_review" once the overfunding branch
+        // resolves — it cannot know the status before the branch runs. A crash
+        // between the two leaves the row here.
+        //
+        // Every artefact check above filters to status === "completed", so a
+        // stranded row would be invisible to all of them. It needs no artefact
+        // lookup to be a problem: the payment was claimed and never fulfilled.
+        const p = payment('exp-stranded', 'export_investment', 'investor-1');
+        p.data.status = 'pending_fulfilment';
+        COLLECTION_DATA['processedPayments'] = [p];
+
+        const { GET } = await import('@/app/api/cron/reconcile-fulfilment/route');
+        const body = await (await GET(req())).json();
+
+        expect(body.strandedClaims.count).toBe(1);
+        expect(body.strandedClaims.references[0].reference).toBe('exp-stranded');
+        // Must count toward the alarm, not merely be listed beside it —
+        // otherwise a run with stranded payments still reports "ok".
+        expect(body.totalUnfulfilled).toBe(1);
+        expect(body.status).toBe('unfulfilled_payments_found');
+    });
+
+    it('reports no stranded claims when every row reached a final status', async () => {
+        // Vacuity guard for the test above.
+        const p = payment('exp-ok', 'export_investment', 'investor-2');
+        COLLECTION_DATA['processedPayments'] = [p];
+
+        const { GET } = await import('@/app/api/cron/reconcile-fulfilment/route');
+        const body = await (await GET(req())).json();
+
+        expect(body.strandedClaims.count).toBe(0);
+    });
+
+    it('surfaces an order charged for stock that was not there', async () => {
+        // Both stock-reservation paths mark an order paid_awaiting_refund when
+        // the reservation fails after the payment is claimed, and the comment
+        // beside each says nothing yet PROCESSES those refunds. Nothing
+        // surfaced them either — the money was owed and no job mentioned it.
+        COLLECTION_DATA['processedPayments'] = [];
+        COLLECTION_DATA['marketplaceOrders'] = [{
+            id: 'ord-1',
+            data: {
+                orderId: 'ORD-1',
+                buyerId: 'buyer-1',
+                paymentStatus: 'paid_awaiting_refund',
+                status: 'cancelled_out_of_stock',
+                refundAmount: 12_500,
+                refundReason: 'Insufficient stock for Yam Tubers',
+            },
+        }];
+
+        const { GET } = await import('@/app/api/cron/reconcile-fulfilment/route');
+        const body = await (await GET(req())).json();
+
+        expect(body.refundsOwed.count).toBe(1);
+        expect(body.refundsOwed.totalAmount).toBe(12_500);
+        expect(body.refundsOwed.orders[0].orderId).toBe('ORD-1');
+        // Must count toward the alarm: money owed to a buyer is not an "ok" run.
+        expect(body.totalUnfulfilled).toBe(1);
+        expect(body.status).toBe('unfulfilled_payments_found');
+    });
+
+    it('reports no refunds owed when no order is awaiting one', async () => {
+        // Vacuity guard: a collection-name typo would report 0 either way.
+        COLLECTION_DATA['processedPayments'] = [];
+        COLLECTION_DATA['marketplaceOrders'] = [{
+            id: 'ord-2',
+            data: { orderId: 'ORD-2', buyerId: 'b2', paymentStatus: 'escrow_held' },
+        }];
+
+        const { GET } = await import('@/app/api/cron/reconcile-fulfilment/route');
+        const body = await (await GET(req())).json();
+
+        expect(body.refundsOwed.count).toBe(0);
+        expect(body.status).toBe('ok');
+    });
+
     it('refuses an unauthenticated call', async () => {
         const { GET } = await import('@/app/api/cron/reconcile-fulfilment/route');
         const res = await GET(req('https://x/api/cron/reconcile-fulfilment', null));

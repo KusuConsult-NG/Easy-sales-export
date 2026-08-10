@@ -17,7 +17,7 @@ import { requireSession } from "@/lib/session-guard";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import { logger } from "@/lib/logger";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
-import { creditWalletOnce, debitWalletLocked } from "@/lib/wallet-ledger";
+import { creditWalletOnce, debitWalletLocked, claimSingleOpenLoanApplication } from "@/lib/wallet-ledger";
 import { needsDualControl } from "@/lib/loan-approval-policy";
 
 /**
@@ -35,28 +35,17 @@ export async function submitLoanApplication(
         // the adapter queues writes and flushes them one at a time after the
         // callback returns, with no isolation and no rollback.
         //
-        // The double-lending check below is advisory, and was advisory inside
-        // the wrapper too — two applications submitted together both read an
-        // empty result and both create a pending row. Closing that needs a
-        // uniqueness constraint on a borrower's open applications, not a
-        // wrapper. It is bounded: a pending application disburses nothing until
-        // it is approved, and approval is claimed (see approveLoanApplication).
+        // The double-lending check is now the insert itself.
+        //
+        // It used to be a pair of reads: query both loan collections for open
+        // applications and refuse if either was non-empty. Neither read took a
+        // lock — inside the wrapper or out of it — so two applications submitted
+        // together both saw an empty result and both created a pending row.
+        //
+        // A row lock could not close it, because the thing being guarded is the
+        // ABSENCE of rows: there is nothing to lock. Migration 021 does the
+        // check and the insert together under a per-borrower advisory lock.
         const result = await (async () => {
-            // Double-lending verification
-            const generalLoansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
-                .where("userId", "==", session.user.id)
-                .where("status", "in", ["pending", "reviewing", "approved", "partially_approved", "disbursed"]);
-            const generalLoansSnap = await generalLoansQuery.get();
-
-            const coopLoansQuery = db.collection(COLLECTIONS.COOPERATIVE_LOANS)
-                .where("memberId", "==", session.user.id)
-                .where("status", "in", ["pending", "reviewing", "approved", "partially_approved", "disbursed"]);
-            const coopLoansSnap = await coopLoansQuery.get();
-
-            if (!generalLoansSnap.empty || !coopLoansSnap.empty) {
-                throw new Error("Active or pending loan application already exists platform-wide.");
-            }
-
             // Repayment terms are computed and stored at application time.
             //
             // Applications were previously saved with an amount and a term but
@@ -67,23 +56,43 @@ export async function submitLoanApplication(
             const terms = calculateRepaymentTerms(validated.amount, validated.repaymentPeriod);
 
             const loanRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc();
-            await loanRef.set({
-                ...validated,
+
+            // Timestamps are literal ISO strings, not FieldValue sentinels: the
+            // row goes to Postgres as JSONB and sentinels are not resolved there
+            // — the same caveat claim_status_transition carries. It fails
+            // silently by storing a plausible-looking object, so it is worth
+            // stating. created_at/updated_at are set by the function.
+            const nowIso = new Date().toISOString();
+
+            const claim = await claimSingleOpenLoanApplication({
                 userId: session.user.id,
-                status: LoanStatus.PENDING,
-                guarantorVerified: true, // General loans have no guarantor and are pre-verified
-                // interestRate is a MONTHLY percentage. See src/lib/loan-terms.ts —
-                // treating it as annual is a defect this codebase has already had.
-                interestRate: terms.interestRate,
-                monthlyPayment: terms.monthlyPayment,
-                totalRepayment: terms.totalRepayment,
-                totalInterest: terms.totalInterest,
-                appliedAt: FieldValue.serverTimestamp(),
-                createdAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
-                approvedBy: null,
-                approvedAt: null,
-                rejectionReason: null });
+                id: loanRef.id,
+                table: "document_collections",
+                collection: COLLECTIONS.LOAN_APPLICATIONS,
+                row: {
+                    ...validated,
+                    userId: session.user.id,
+                    status: LoanStatus.PENDING,
+                    guarantorVerified: true, // General loans have no guarantor and are pre-verified
+                    // interestRate is a MONTHLY percentage. See src/lib/loan-terms.ts —
+                    // treating it as annual is a defect this codebase has already had.
+                    interestRate: terms.interestRate,
+                    monthlyPayment: terms.monthlyPayment,
+                    totalRepayment: terms.totalRepayment,
+                    totalInterest: terms.totalInterest,
+                    appliedAt: nowIso,
+                    createdAt: nowIso,
+                    updatedAt: nowIso,
+                    approvedBy: null,
+                    approvedAt: null,
+                    rejectionReason: null,
+                },
+            });
+
+            if (!claim.claimed) {
+                throw new Error("Active or pending loan application already exists platform-wide.");
+            }
+
             return { loanId: loanRef.id };
         })();
 

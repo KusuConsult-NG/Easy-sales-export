@@ -239,11 +239,26 @@ Note what this does NOT settle: whether the Paystack webhook is reaching
 webhook's absence survivable; it does not explain it. That still wants checking
 in the Paystack dashboard.
 
-### Atomic money operations
+### Atomic money operations — COMPLETE as of 2026-08-10
 `runTransaction` reads, then replays writes sequentially, with no locking and no
 rollback. Two requests arriving together can both pass an "already processed?"
 check and both credit the same wallet — reloading a payment confirmation page
-twice is enough to attempt it. Roughly 30 money-handling call sites share this.
+twice is enough to attempt it. Roughly 30 money-handling call sites shared this.
+
+Every one is converted. `docs/audit/integrity-sweep-2026-08-10.md` closes the
+last of them, including the items both audit documents had recorded and
+deliberately left. **Migrations 020 and 021 must be applied to production**
+alongside 019.
+
+Two things found in that sweep are worth carrying forward:
+
+- Four of the defects were **a path fixed in one copy and left in another**, and
+  in three cases the fixed copy was the one nothing calls. Search for a second
+  door before calling a defect fixed.
+- Two were found by trying to write a test, not by reading code — including two
+  cooperative forms whose validation **no input could satisfy**, so contributions
+  and loan applications failed 100% of the time. A grep finds a shape; only
+  execution finds a rule that nothing can satisfy.
 
 Fix: one Postgres function per money-moving flow, claiming the reference and
 applying the balance change in a single statement.
