@@ -69,7 +69,15 @@ async function _getVendorOrdersAction(filters?: { status?: VendorOrder["status"]
         if (!session?.user?.id) { return { success: false as const, error: "Unauthorized", data: null };
         }
 
-        let query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).where("vendorId", "==", session.user.id);
+        // sellerIds, not vendorId.
+        //
+        // Nothing writes `vendorId` to a marketplace order — orders carry
+        // `sellerId` and `sellerIds` (marketplace/_payment.ts). This query
+        // therefore matched nothing, so a vendor's order list was permanently
+        // empty and had been for as long as the field name has been wrong. Not
+        // a security defect; a feature that silently did not work.
+        let query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
+            .where("sellerIds", "array-contains", session.user.id);
 
         if (filters?.status) { query = query.where("status", "==", filters.status);
         }
@@ -107,7 +115,35 @@ async function _updateVendorOrderStatusAction(
 
         const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
 
-        await withOptimisticLock<VendorOrder>(orderRef, _version, (transaction) => { const updateData: any = {
+        // Only the statuses a vendor may set, checked at RUNTIME.
+        //
+        // `status: VendorOrder["status"]` is a TypeScript annotation and nothing
+        // more. This is a server action, so the argument crosses the wire from a
+        // client and the type is erased — any string reached transaction.update.
+        // MARKETPLACE_ORDERS status drives fulfilment and escrow, and the
+        // integrity work went to some trouble to make every transition a claim;
+        // this path wrote it directly.
+        const VENDOR_SETTABLE: ReadonlyArray<string> = ["processing", "shipped", "in_transit", "delivered"];
+        if (!VENDOR_SETTABLE.includes(status as string)) {
+            return { success: false as const, error: "Invalid order status", data: null };
+        }
+
+        await withOptimisticLock<VendorOrder>(orderRef, _version, (transaction, currentData: any) => {
+            // Verify ownership.
+            //
+            // orderId arrived from the caller unchecked, so any authenticated
+            // user could set the status of ANY marketplace order.
+            //
+            // The field is sellerIds/sellerId, NOT vendorId: nothing ever writes
+            // vendorId to a marketplace order — see the note on
+            // _getVendorOrdersAction, which queries a field that does not exist.
+            const sellerIds: string[] = Array.isArray(currentData?.sellerIds) ? currentData.sellerIds : [];
+            const owns = sellerIds.includes(session.user.id) || currentData?.sellerId === session.user.id;
+            if (!owns) {
+                throw new Error("Unauthorized");
+            }
+
+            const updateData: any = {
                 status,
                 updatedAt: FieldValue.serverTimestamp(),
                 _version: FieldValue.increment(1) };
@@ -195,7 +231,22 @@ async function _updateVendorProductInventoryAction(
         const productRef = db.collection(COLLECTIONS.VENDOR_PRODUCTS).doc(productId);
         let updatedStock = 0;
 
-        await withOptimisticLock<VendorProduct>(productRef, _version, (transaction, currentData) => { const currentStock = currentData.stock || 0;
+        await withOptimisticLock<VendorProduct>(productRef, _version, (transaction, currentData) => {
+            // Verify ownership.
+            //
+            // productId arrives from the caller and was used unchecked, so any
+            // authenticated user could set ANY vendor's stock — zero it to take a
+            // competitor's listing offline, or inflate it to force overselling.
+            // session.user.id was referenced only when writing the audit row,
+            // which records who did it without ever deciding whether they may.
+            //
+            // _deleteVendorProductAction in this same file has always had this
+            // check. Three of the four writers here did not.
+            if (currentData?.vendorId !== session.user.id) {
+                throw new Error("Unauthorized");
+            }
+
+            const currentStock = currentData.stock || 0;
             let newStock = currentStock;
 
             switch (operation) {
@@ -257,7 +308,15 @@ async function _toggleVendorProductStatusAction(
 
         let newStatus: VendorProduct["status"] = "active";
 
-        await withOptimisticLock<VendorProduct>(productRef, _version, (transaction, currentData) => { const currentStatus = currentData.status;
+        await withOptimisticLock<VendorProduct>(productRef, _version, (transaction, currentData) => {
+            // Verify ownership — same defect as the inventory writer above.
+            // Without it, any authenticated user could deactivate any vendor's
+            // product and remove it from the marketplace.
+            if (currentData?.vendorId !== session.user.id) {
+                throw new Error("Unauthorized");
+            }
+
+            const currentStatus = currentData.status;
             newStatus = currentStatus === "active" ? "inactive" : "active";
 
             transaction.update(productRef, {
