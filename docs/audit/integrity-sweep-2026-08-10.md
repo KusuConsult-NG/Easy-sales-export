@@ -67,9 +67,35 @@ Two defects, and the second is the worse one:
    contribution's credit landing at the same moment. The member's contribution
    disappears and nothing errors.
 
-**Fix:** call `debitJsonbBalance` exactly as `_actions.ts:1336` does. Better,
-delete the route and point the page at the server action that was already
-fixed — two doors onto one balance is what caused this.
+### What was changed
+
+**FIXED.** The route takes the debit through `debitJsonbBalance` and the
+`runTransaction` wrapper is gone — it queued two writes that the adapter
+flushes one at a time regardless, so it was buying nothing. The refusal message
+now quotes the balance the debit actually saw rather than the pre-read, which
+under concurrency is not the number that caused the refusal.
+
+`src/__tests__/unit/fixed-savings-overdraft.test.ts` — 5 tests, **4 fail against
+the pre-fix code**. The fifth asserts the plan is still created on the happy
+path, which the old code also did; regression cover, not evidence.
+
+### The consolidation was NOT done, deliberately
+
+The obvious tidy-up is to delete the route and point the page at the server
+action. It was left alone because the two are not the same operation:
+
+| | `_createFixedSavingsAction` | this route |
+|---|---|---|
+| plan collection | `COOPERATIVE_FIXED_SAVINGS` | `FIXED_SAVINGS_PLANS` |
+| membership lookup | `where("userId","==",…).limit(1)` | `.doc(userId)` |
+| ledger row | none | writes `TRANSACTIONS` |
+| stores | rate only | rate, `projectedProfit`, `maturityDate` |
+
+They write to **different collections**, so plans created through the two doors
+are invisible to each other, and whichever screen reads one will not see the
+other's. That is a data question — which collection holds the real plans, and
+whether anything must be migrated — not something to settle inside a
+concurrency fix. Recorded here as its own item.
 
 ---
 
@@ -322,22 +348,21 @@ harmless.
 
 | | Finding | State |
 |---|---|---|
-| F1 | fixed-savings fix on the unused door | open |
+| F1 | fixed-savings fix on the unused door | **fixed** |
 | F2 | withdrawal reservation contract | **fixed** — `fix-withdrawal-reservation-contract` |
 | F3 | cooperative registration never claims | open |
 | F4 | export bookings overbook | open |
 | F5 | 2 of 3 order paths oversell stock | open |
 | F6 | `_withdrawal.ts` third door overdraft | **fixed** — same branch |
 | — | `apply-loan` lifetime-total gating | needs a business decision |
+| — | fixed-savings plans split across two collections | needs a data decision |
 
 ## Suggested order for what remains
 
-1. **F1** — live path, silently erases contributions, and the fix already exists
-   three files away.
-2. **F3** — closes the last unclaimed fulfilment path and stops `claimedAt`
+1. **F3** — closes the last unclaimed fulfilment path and stops `claimedAt`
    being overwritten while that signal is still being investigated.
-3. **F4** — live, one-line primitive swap, confirm `targetVolume` first.
-4. **F5** — opportunistic; no UI caller today.
+2. **F4** — live, one-line primitive swap, confirm `targetVolume` first.
+3. **F5** — opportunistic; no UI caller today.
 
 F1, F2 and F5 are all one shape: **a path that was fixed in one copy and left in
 another.** Worth a standing check when closing any of these — search for a
