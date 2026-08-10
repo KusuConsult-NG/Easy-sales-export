@@ -307,14 +307,45 @@ async function _confirmDeliveryAction(orderId: string) { let sessionResult;
             const escrowId = `ESC-${orderId}-${sellerId.substring(0, 5)}`;
             const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId);
             const escrowDoc = await escrowRef.get();
+
+            // WHY THIS IS A CLAIM AND NOT AN UPDATE
+            // -------------------------------------
+            // Two different code paths release an escrow and pay the seller:
+            // this one, and `releaseEscrowFunds`, which an admin triggers from
+            // the escrow pages. They pay by different means — that one credits
+            // the in-platform wallet, this one sends a real bank transfer — so
+            // running both pays the seller twice out of two different pots.
+            //
+            // `releaseEscrowFunds` claims the transition. This did not: it read
+            // `exists` and then wrote "released" blindly, so an escrow the admin
+            // had already released would be released a second time and the
+            // seller paid again. The order-level claim above does not help —
+            // it guards a different row, so it stops this function running
+            // twice but not the admin path having run first.
+            //
+            // Same fromAny list as `releaseEscrowFunds`, deliberately: the two
+            // paths must agree on which states a release is valid from, or one
+            // of them can pay out of a state the other refuses.
+            let escrowAlreadyReleased = false;
             if (escrowDoc.exists) {
-                await escrowRef.update({
-                    status: "released",
-                    releasedAt: FieldValue.serverTimestamp(),
-                    releasedBy: userId,
-                    updatedAt: FieldValue.serverTimestamp(),
-                    _version: FieldValue.increment(1)
+                const escrowClaim = await claimStatusTransitionFromAny({
+                    collection: COLLECTIONS.ESCROW_TRANSACTIONS,
+                    id: escrowId,
+                    fromAny: ["delivered", "disputed", "funded"],
+                    to: "released",
+                    patch: { releasedBy: userId, releasedAt: new Date().toISOString() },
                 });
+
+                if (!escrowClaim.claimed) {
+                    // Losing the claim means somebody else already released this
+                    // escrow and the seller has been paid. The order still
+                    // completes — that part is done and correct — but nothing
+                    // below this point may move money again.
+                    escrowAlreadyReleased = true;
+                    logger.warn("Escrow already released; skipping seller payout", {
+                        orderId, escrowId, escrowStatus: escrowClaim.status,
+                    });
+                }
             }
 
             const sellerRef = db.collection(COLLECTIONS.USERS).doc(sellerId);
@@ -328,13 +359,16 @@ async function _confirmDeliveryAction(orderId: string) { let sessionResult;
                 isWaveMember = true;
             }
 
-            if (sellerData?.bankAccountNumber && sellerData?.bankCode) {
+            // `escrowAlreadyReleased` gates both money movements below. Leaving
+            // sellerAmount at 0 is what stops the Paystack transfer, since the
+            // caller guards on `sellerAmount > 0`.
+            if (!escrowAlreadyReleased && sellerData?.bankAccountNumber && sellerData?.bankCode) {
                 const platformCommissionRate = 0.025;
                 sellerAmount = Math.floor(currentOrder.totalAmount * (1 - platformCommissionRate));
             }
 
             // PHASE 2: WAVE LEDGER SYNC (IF APPLICABLE)
-            if (isWaveMember) {
+            if (isWaveMember && !escrowAlreadyReleased) {
                 const waveCommissionRate = 0.05; // 5% as per wave.ts
                 const earningsAmount = Math.floor(currentOrder.totalAmount * waveCommissionRate);
 
