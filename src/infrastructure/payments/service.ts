@@ -7,7 +7,7 @@ import { generateAndSendWhatsAppInvite } from "@/lib/whatsapp-invites";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { ACADEMY_CONFIG } from "@/lib/constants";
 import { normalizeUserDoc } from "@/lib/schema-normalizer";
-import { claimPaymentOnce } from "@/lib/wallet-ledger";
+import { claimPaymentOnce, incrementWithinCeiling } from "@/lib/wallet-ledger";
 
 /**
  * Handle Marketplace Order Fulfillment
@@ -342,112 +342,147 @@ export async function processExportInvestment(reference: string, amount: number,
 
     const expectedReturn = parseFloat((amount * returnMultiplier).toFixed(2));
 
-    const result = await db.runTransaction(async (t) => {
-        const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
-        const processedSnap = await t.get(processedRef);
+    // Claim the reference before fulfilling, with a NEUTRAL status.
+    //
+    // This path was the one conversion the atomic-money migration deliberately
+    // left alone, because it is not mechanical: it writes the marker with two
+    // different statuses — "completed" normally, "overfunded_review" when the
+    // investment would exceed the funding goal — and platform_revenue_totals()
+    // sums exactly the "completed" rows as revenue. Claiming first means
+    // choosing a status before the overfunding branch has run.
+    //
+    // Resolved as a two-step write: claim as "pending_fulfilment", which is NOT
+    // revenue, then promote to the real status once the branch resolves. The
+    // alternative — claiming as "completed" — would have started counting
+    // overfunded payments as revenue, a behaviour change smuggled inside an
+    // idempotency fix.
+    //
+    // A crash between the claim and the promotion leaves the row at
+    // "pending_fulfilment": under-counted rather than over-counted, which is the
+    // safe direction, and visible. reconcile-fulfilment reports those rows
+    // explicitly — a claimed payment that never fulfilled is exactly what that
+    // job exists to surface.
+    const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
 
-        if (processedSnap.exists) {
-            logger.info(`[Paystack Fulfillment] Export Investment ${reference} already processed.`);
-            return { alreadyProcessed: true };
-        }
-
-        const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
-        const freshExport = await t.get(exportRef);
-        const freshExportData = freshExport.data();
-
-        if (!freshExport.exists || !freshExportData) {
-            throw new Error(`Export window ${exportId} not found`);
-        }
-
-        const fundingGoal = freshExportData.fundingGoal || freshExportData.goal || 0;
-        const currentFunded = freshExportData.fundedAmount || 0;
-
-        const paymentTimestamp = paidAt ? Timestamp.fromDate(paidAt) : FieldValue.serverTimestamp();
-
-        if (currentFunded + amount > fundingGoal) {
-            // Overfunded! Route to manual review/audit queue
-            t.set(db.collection(COLLECTIONS.FAILED_PAYMENTS).doc(reference), {
-                reference,
-                type: "export_investment",
-                userId,
-                exportId,
-                amount,
-                status: "overfunded_review",
-                gatewayResponse: "Investment exceeds export window funding goal",
-                failedAt: paymentTimestamp,
-            }, { merge: true });
-
-            t.set(processedRef, {
-                reference,
-                type: "export_investment",
-                userId,
-                exportId,
-                amount,
-                processedAt: paymentTimestamp,
-                status: "overfunded_review",
-                source: "webhook"
-            });
-
-            return { success: true, overfunded: true };
-        }
-
-        const slotRef = db.collection(COLLECTIONS.EXPORT_SLOTS).doc();
-
-        t.set(slotRef, {
-            userId,
-            exportId,
-            amount,
-            status: "active",
-            paymentReference: reference,
-            purchaseDate: paymentTimestamp,
-            createdAt: paymentTimestamp,
-            roi: roiLabel,
-            returnMultiplier,
-            expectedReturn,
-            source: "webhook"
-        });
-
-        // 2. Update Export Window Stats
-        t.update(exportRef, {
-            spotsFilled: FieldValue.increment(1),
-            fundedAmount: FieldValue.increment(amount),
-            investorCount: FieldValue.increment(1),
-            currentFunding: FieldValue.increment(amount),
-            updatedAt: FieldValue.serverTimestamp()
-        });
-
-        // 3. Mark Payment Processed (Legacy)
-        t.set(processedRef, {
-            reference,
-            type: "export_investment",
-            userId,
-            exportId,
-            amount,
-            processedAt: paymentTimestamp,
-            status: "completed",
-            source: "webhook"
-        });
-
-        // 3b. Write to Unified Ledger
-        t.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(reference), {
-            id: reference,
-            userId,
-            type: "export_investment",
-            module: "export",
-            amount: amount,
-            currency: "NGN",
-            status: "completed",
-            date: paymentTimestamp,
-            reference,
-            description: "Export window investment"
-        });
-
-        return { success: true };
+    const claim = await claimPaymentOnce({
+        reference,
+        userId,
+        amount,
+        type: "export_investment",
+        source: "webhook",
+        status: "pending_fulfilment",
+        metadata: { exportId },
     });
 
-    if (result && result.alreadyProcessed) {
+    if (!claim.claimed) {
+        logger.info(`[Paystack Fulfillment] Export Investment ${reference} already processed.`);
         return;
     }
+
+    const paymentTimestamp = paidAt ? Timestamp.fromDate(paidAt) : FieldValue.serverTimestamp();
+    const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
+
+    // Raise fundedAmount only while it stays within the goal, in one statement.
+    //
+    // The guard this replaces read fundedAmount, compared
+    // `currentFunded + amount > fundingGoal`, and wrote — with no lock. Two
+    // investments that each fit under the goal but together exceed it both
+    // passed. FieldValue.increment made the total correct (migration 010) but
+    // could not enforce the ceiling.
+    //
+    // The ceiling field name is chosen from the record: windows store the goal
+    // under `fundingGoal` OR `goal` depending on when they were written, and
+    // hardcoding either would silently uncap half of them, since
+    // increment_within_ceiling treats a missing ceiling as unbounded.
+    const ceilingField = exportData.fundingGoal !== undefined ? "fundingGoal" : "goal";
+
+    const funded = await incrementWithinCeiling({
+        collection: COLLECTIONS.EXPORT_WINDOWS,
+        id: exportId,
+        field: "fundedAmount",
+        amount,
+        ceilingField,
+    });
+
+    if (!funded.ok) {
+        // Overfunded, or the window vanished. Route to manual review and promote
+        // the claimed row to the status that keeps it OUT of revenue.
+        await db.collection(COLLECTIONS.FAILED_PAYMENTS).doc(reference).set({
+            reference,
+            type: "export_investment",
+            userId,
+            exportId,
+            amount,
+            status: "overfunded_review",
+            gatewayResponse: funded.reason === "not_found"
+                ? "Export window not found when applying investment"
+                : "Investment exceeds export window funding goal",
+            failedAt: paymentTimestamp,
+        }, { merge: true });
+
+        await processedRef.update({
+            status: "overfunded_review",
+            exportId,
+            processedAt: paymentTimestamp,
+        });
+
+        logger.warn(`[Paystack Fulfillment] Export Investment ${reference} not applied: ${funded.reason}`);
+        return;
+    }
+
+    // Fulfilment. The reference is claimed and the funding is applied, so this
+    // runs exactly once. The runTransaction wrapper that used to be here bought
+    // nothing — the adapter queues the writes and flushes them one at a time
+    // after the callback returns, with no isolation and no rollback.
+    const slotRef = db.collection(COLLECTIONS.EXPORT_SLOTS).doc();
+
+    await slotRef.set({
+        userId,
+        exportId,
+        amount,
+        status: "active",
+        paymentReference: reference,
+        purchaseDate: paymentTimestamp,
+        createdAt: paymentTimestamp,
+        roi: roiLabel,
+        returnMultiplier,
+        expectedReturn,
+        source: "webhook"
+    });
+
+    // Export window stats. fundedAmount is deliberately absent: it was already
+    // raised by incrementWithinCeiling above, and incrementing it again here
+    // would double-count the investment.
+    await exportRef.update({
+        spotsFilled: FieldValue.increment(1),
+        investorCount: FieldValue.increment(1),
+        currentFunding: FieldValue.increment(amount),
+        updatedAt: FieldValue.serverTimestamp()
+    });
+
+    // Promote the claimed row to its real status. This is the second half of
+    // the two-step write described above, and the point at which the payment
+    // starts counting as revenue.
+    await processedRef.update({
+        status: "completed",
+        exportId,
+        processedAt: paymentTimestamp,
+    });
+
+    // Unified ledger, written last: a crash part-way leaves an investor with a
+    // slot and no ledger row rather than a ledger row and no slot.
+    await db.collection(COLLECTIONS.TRANSACTIONS).doc(reference).set({
+        id: reference,
+        userId,
+        type: "export_investment",
+        module: "export",
+        amount: amount,
+        currency: "NGN",
+        status: "completed",
+        date: paymentTimestamp,
+        reference,
+        description: "Export window investment"
+    });
 
     logger.info(`[Paystack Webhook] Successfully processed Export Investment for ${exportId} by ${userId}`);
 }
