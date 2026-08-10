@@ -659,6 +659,6 @@ nothing can satisfy.
 No item from either audit document remains open as code. What remains is
 operational or needs a decision — see the Status table above, plus:
 
-- **Apply migrations 020 and 021** before deploying this.
+- ~~Apply migrations 020 and 021 before deploying this.~~ **Done 2026-08-10**, along with 019 which had been missing since the day before. See `atomic-money-migration.md`.
 - **Issuing** refunds (as opposed to surfacing them) needs the Paystack refund
   API integrated by someone who can test it against their sandbox.

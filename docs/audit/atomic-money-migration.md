@@ -1197,6 +1197,51 @@ charged, so a duplicate costs a stray record rather than a stray payment.
 the pre-fix code. The three that pass either way assert that nothing happens
 when the claim is lost, which the old code satisfies by a different route.
 
+## Applied to PRODUCTION, 2026-08-10 — 019, 020, 021
+
+`claim_idempotency_key` (019), `debit_jsonb_balance_with_floor` and
+`claim_versioned_update` (020), and `claim_single_open_loan_application` (021)
+now exist in the production database. Confirmed by `pg_proc`:
+
+```
+claim_idempotency_key
+claim_single_open_loan_application
+claim_versioned_update
+debit_jsonb_balance_with_floor
+```
+
+**019 had been missing since 2026-08-09.** The code calling it merged at 23:47
+that night, three minutes AFTER the last successful deploy at 23:44 — so
+production never ran it, and nothing broke. Had a deploy gone out in between,
+`platform.ts submitWithdrawalAction` and `export.ts _createExportWindowAction`
+would have thrown on every call. That margin was luck, not design.
+
+**022 is deliberately NOT applied.** Run the `EXPLAIN ANALYZE` in its header
+first: the mechanism is certain but the magnitude is not, and an index the
+planner ignores is write cost for nothing. It is also the only migration here
+with no `BEGIN`/`COMMIT`, because `CREATE INDEX CONCURRENTLY` cannot run inside
+a transaction.
+
+### What applying this took, and what it changed
+
+Two attempts failed before one worked, and neither failure was in the SQL.
+`npm run test:migrations` (added the same day) replays all 19 migrations
+against a throwaway Postgres and asserts the functions behave — including the
+concurrency properties every "verified on staging" note in this document
+records as a manual two-terminal check. All 33 assertions pass.
+
+Running it also caught a defect in 021 before it reached production: the INSERT
+filled only `raw_data`, leaving the native `status` and `amount` columns NULL.
+The adapter routes `.where('status', ...)` to the COLUMN, so every loan created
+through it would have been invisible to the admin approval queue — the guard
+working perfectly while the loan disappeared. Fixed in #66, and the harness now
+carries the regression check.
+
+The lesson is narrow and worth keeping: **every migration in this document was
+written, reviewed and applied without ever being run anywhere first.** That is
+now possible, and it should be the default before anything is pasted into a
+live project.
+
 ## Verified in PRODUCTION, 2026-08-09
 
 Everything above this line was only ever checked on staging. The production
