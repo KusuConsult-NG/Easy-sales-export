@@ -1142,7 +1142,19 @@ export async function submitRepaymentAction(data: {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
-        if (!session?.user?.id || session.user.id !== data.userId) {
+        // Self OR admin, matching _getRepaymentScheduleAction above and the rest
+        // of this file.
+        //
+        // It was self-only, which meant nobody could record a repayment except
+        // the borrower — and repayments arrive as bank transfers that an admin
+        // reconciles by hand. The action existed, was hardened, and could not be
+        // reached by the only person who needed it.
+        //
+        // The borrower check is kept, not replaced: a member submitting their
+        // own reference still works, and a member cannot record a repayment
+        // against somebody else's loan.
+        const isActingAdmin = isAdmin(session?.user?.roles);
+        if (!session?.user?.id || (session.user.id !== data.userId && !isActingAdmin)) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
 

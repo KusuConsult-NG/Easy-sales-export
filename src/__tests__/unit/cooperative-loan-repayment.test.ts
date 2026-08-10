@@ -45,9 +45,10 @@ jest.mock('@/app/actions/notifications', () => ({
     createNotificationAction: (...args: any[]) => mockCreateNotification(...args),
 }));
 
-function setSession(id: string) {
+function setSession(id: string, roles: string[] = ['admin']) {
     (global as any).mockRequireSession.mockImplementation(() => Promise.resolve({
-        session: { user: { id, name: id, email: `${id}@example.com`, roles: ['admin'] } },
+        session: { user: { id, name: id, email: `${id}@example.com`, roles },
+        },
         error: null,
     }));
 }
@@ -156,7 +157,13 @@ describe('submitRepaymentAction', () => {
     });
 
     it('refuses a repayment submitted for somebody else', async () => {
-        setSession('not-the-member');
+        // roles: [] matters. submitRepaymentAction now allows self OR admin,
+        // because repayments arrive as bank transfers an admin reconciles by
+        // hand and the action was previously unreachable by the only person who
+        // needed it. This fixture defaults every session to ['admin'], so
+        // without the empty roles here the "stranger" would BE an admin and the
+        // test would assert nothing.
+        setSession('not-the-member', []);
 
         const { submitRepaymentAction } = await import('@/app/actions/cooperative/_loans');
         const result = await submitRepaymentAction({

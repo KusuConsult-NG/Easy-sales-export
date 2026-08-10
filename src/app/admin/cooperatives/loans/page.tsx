@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { logger } from '@/lib/logger';
 import {
     DollarSign, CheckCircle, XCircle, Clock,
-    Search, Eye, FileText, Download
+    Search, Eye, FileText, Download, Banknote
 } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import { formatCurrency } from "@/lib/utils";
@@ -12,6 +12,7 @@ import { useAdminData } from "@/hooks/useAdminData";
 import { getAdminLoanApplicationsAction, getAdminLoanStatsAction, getAdminLoanApplicationsExportAction } from "@/app/actions/cooperative";
 import { Loader2 } from "lucide-react";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
+import RecordRepaymentModal from "@/components/admin/RecordRepaymentModal";
 import { formatLocalDate } from "@/lib/date-utils";
 
 type LoanApplication = {
@@ -47,6 +48,9 @@ type FilterType = "all" | "pending" | "approved" | "rejected";
 
 export default function AdminLoansPage() {
     const { showToast } = useToast();
+    // The loan currently being reconciled, or null. Repayments arrive as bank
+    // transfers and are recorded by hand — see RecordRepaymentModal.
+    const [repaymentFor, setRepaymentFor] = useState<LoanApplication | null>(null);
     const [filterStatus, setFilterStatus] = useState<FilterType>("all");
     const [dateRange, setDateRange] = useState<DateRange>({ from: "", to: "" });
     const {
@@ -383,6 +387,15 @@ export default function AdminLoansPage() {
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-3">
+                                                {(app.status === "disbursed" || app.status === "active") && (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); setRepaymentFor(app); }}
+                                                        className="text-slate-400 hover:text-green-600 transition p-1.5 hover:bg-green-50 rounded"
+                                                        title="Record Repayment"
+                                                    >
+                                                        <Banknote className="w-4 h-4" />
+                                                    </button>
+                                                )}
                                                 {app.status === "pending" && (
                                                     <>
                                                         <button
@@ -565,6 +578,16 @@ export default function AdminLoansPage() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {repaymentFor && (
+                <RecordRepaymentModal
+                    loanId={repaymentFor.id}
+                    borrowerId={repaymentFor.userId}
+                    borrowerName={repaymentFor.userName || repaymentFor.userEmail || "Member"}
+                    onClose={() => setRepaymentFor(null)}
+                    onRecorded={loadApplications}
+                />
             )}
         </div>
     );
