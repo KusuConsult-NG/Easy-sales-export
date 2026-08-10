@@ -815,39 +815,63 @@ async function _createBankTransferOrderAction(
 
         const lowStockProducts: { sellerId: string; title: string; qty: number; isFlashSale: boolean; id: string }[] = [];
 
+        // Reserve stock across every product in the order, atomically.
+        //
+        // The decrement below used to sit behind `if (currentQty < quantity)`
+        // inside runTransaction, which takes no lock — so two DIFFERENT orders
+        // for the last unit both passed and stock went negative. The Paystack
+        // path in this same file was converted; these two order-creation paths
+        // were classified as status-only transitions and left, but they move
+        // real inventory. See docs/audit/integrity-sweep-2026-08-10.md (F5).
+        //
+        // All-or-nothing matters here: the per-item loop would leave the first
+        // items decremented when the third turns out to be short. See migration
+        // 015.
+        const stock = await decrementManyOrFail(validatedItems.map((item: any) => ({
+            collection: item.isFlashSale ? COLLECTIONS.FLASH_SALE_PRODUCTS : COLLECTIONS.PRODUCTS,
+            id: item.productId,
+            field: "availableQuantity",
+            amount: item.quantity,
+        })));
+
+        if (!stock.ok) {
+            // Simpler than the Paystack path's equivalent: nothing has been
+            // charged at this point, so the order is refused outright rather
+            // than recorded as paid_awaiting_refund. Nothing was decremented
+            // either — 015 is all-or-nothing.
+            const shortItem = validatedItems.find((i: any) => i.productId === stock.failedId);
+            return {
+                success: false as const,
+                error: stock.reason === "not_found"
+                    ? "A product in your cart is no longer available"
+                    : `Insufficient stock for ${shortItem?.productTitle ?? "a product in your cart"}`,
+                data: null,
+            };
+        }
+
         await db.runTransaction(async (transaction) => {
+            // Inventory is already decremented by the reservation above.
+            //
+            // Do NOT decrement here as well — keeping both would take stock
+            // twice. These reads run after the reservation, so
+            // availableQuantity is the post-decrement figure, which is what the
+            // low-stock alert should report.
             for (const item of validatedItems) {
                 const col = item.isFlashSale ? COLLECTIONS.FLASH_SALE_PRODUCTS : COLLECTIONS.PRODUCTS;
                 const productRef = db.collection(col).doc(item.productId);
-                const productDoc = await transaction.get(productRef);
-                if (productDoc.exists) {
-                    const currentQty = productDoc.data()?.availableQuantity || 0;
-                    if (currentQty < item.quantity) {
-                        throw new Error(`Insufficient stock for product ID: ${item.productId}`);
-                    }
-                } else {
-                    throw new Error(`Product not found ID: ${item.productId}`);
-                }
-            }
-
-            for (const item of validatedItems) { 
-                const col = item.isFlashSale ? COLLECTIONS.FLASH_SALE_PRODUCTS : COLLECTIONS.PRODUCTS;
-                const productRef = db.collection(col).doc(item.productId);
                 const doc = await transaction.get(productRef);
-                const currentQty = doc.data()?.availableQuantity || 0;
-                const newQty = currentQty - item.quantity;
+                const remainingQty = doc.data()?.availableQuantity || 0;
 
                 transaction.update(productRef, {
-                    availableQuantity: FieldValue.increment(-item.quantity),
                     orders: FieldValue.increment(1),
-                    _version: FieldValue.increment(1) 
+                    _version: FieldValue.increment(1)
                 });
 
-                if (newQty <= 5) {
+                if (remainingQty <= 5) {
                     lowStockProducts.push({
                         sellerId: doc.data()?.sellerId || item.sellerId,
                         title: doc.data()?.title || item.productTitle,
-                        qty: newQty,
+                        qty: remainingQty,
                         isFlashSale: !!item.isFlashSale,
                         id: item.productId
                     });
@@ -855,7 +879,7 @@ async function _createBankTransferOrderAction(
             }
 
             const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
-            transaction.set(orderRef, { 
+            transaction.set(orderRef, {
                 sellerIds,
                 sellerId: sellerIds[0] || "",
                 orderId,
@@ -968,39 +992,51 @@ async function _createPaymentOnDeliveryOrderAction(
 
         const lowStockProducts: { sellerId: string; title: string; qty: number; isFlashSale: boolean; id: string }[] = [];
 
+        // Reserve stock atomically, before the order exists. Same conversion as
+        // the bank-transfer path above and the Paystack path earlier in this
+        // file: the check-then-decrement this replaces took no lock, so two
+        // different orders for the last unit both passed.
+        const stock = await decrementManyOrFail(validatedItems.map((item: any) => ({
+            collection: item.isFlashSale ? COLLECTIONS.FLASH_SALE_PRODUCTS : COLLECTIONS.PRODUCTS,
+            id: item.productId,
+            field: "availableQuantity",
+            amount: item.quantity,
+        })));
+
+        if (!stock.ok) {
+            // Nothing charged on this path either — payment happens on
+            // delivery — so refuse outright. 015 is all-or-nothing, so nothing
+            // was decremented.
+            const shortItem = validatedItems.find((i: any) => i.productId === stock.failedId);
+            return {
+                success: false as const,
+                error: stock.reason === "not_found"
+                    ? "A product in your cart is no longer available"
+                    : `Insufficient stock for ${shortItem?.productTitle ?? "a product in your cart"}`,
+                data: null,
+            };
+        }
+
         await db.runTransaction(async (transaction) => {
+            // Inventory already decremented by the reservation above; do NOT
+            // decrement again. The reads below run after it, so
+            // availableQuantity is the post-decrement figure.
             for (const item of validatedItems) {
                 const col = item.isFlashSale ? COLLECTIONS.FLASH_SALE_PRODUCTS : COLLECTIONS.PRODUCTS;
                 const productRef = db.collection(col).doc(item.productId);
-                const productDoc = await transaction.get(productRef);
-                if (productDoc.exists) {
-                    const currentQty = productDoc.data()?.availableQuantity || 0;
-                    if (currentQty < item.quantity) {
-                        throw new Error(`Insufficient stock for product ID: ${item.productId}`);
-                    }
-                } else {
-                    throw new Error(`Product not found ID: ${item.productId}`);
-                }
-            }
-
-            for (const item of validatedItems) { 
-                const col = item.isFlashSale ? COLLECTIONS.FLASH_SALE_PRODUCTS : COLLECTIONS.PRODUCTS;
-                const productRef = db.collection(col).doc(item.productId);
                 const doc = await transaction.get(productRef);
-                const currentQty = doc.data()?.availableQuantity || 0;
-                const newQty = currentQty - item.quantity;
+                const remainingQty = doc.data()?.availableQuantity || 0;
 
                 transaction.update(productRef, {
-                    availableQuantity: FieldValue.increment(-item.quantity),
                     orders: FieldValue.increment(1),
-                    _version: FieldValue.increment(1) 
+                    _version: FieldValue.increment(1)
                 });
 
-                if (newQty <= 5) {
+                if (remainingQty <= 5) {
                     lowStockProducts.push({
                         sellerId: doc.data()?.sellerId || item.sellerId,
                         title: doc.data()?.title || item.productTitle,
-                        qty: newQty,
+                        qty: remainingQty,
                         isFlashSale: !!item.isFlashSale,
                         id: item.productId
                     });
@@ -1008,7 +1044,7 @@ async function _createPaymentOnDeliveryOrderAction(
             }
 
             const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
-            transaction.set(orderRef, { 
+            transaction.set(orderRef, {
                 orderId,
                 buyerId: session.user.id,
                 buyerPhone,

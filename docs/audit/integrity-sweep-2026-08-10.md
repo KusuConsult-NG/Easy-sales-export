@@ -1,8 +1,8 @@
 # Integrity sweep, 2026-08-10 — findings
 
-Extends the work in `atomic-money-migration.md`. Six findings; F1–F4 and F6 are
-fixed, F5 remains open, and two questions need a decision rather than a patch.
-See the status table at the bottom.
+Extends the work in `atomic-money-migration.md`. Six findings, **all fixed**.
+Two questions remain that need a decision rather than a patch. See the status
+table at the bottom.
 
 That document ends with the priority table emptied and warns why an empty table
 is not the same as a clean codebase: the sweeps that built it grepped for money
@@ -411,9 +411,25 @@ ship rather than a payment with nothing behind it. It still corrupts
 `availableQuantity`, which is shared with the Paystack path, so the damage is
 not confined to these two doors.
 
-**Fix:** `decrementManyOrFail`, as at `:487`. The out-of-stock branch is simpler
-than the Paystack one — nothing has been charged, so the order is refused rather
-than marked `paid_awaiting_refund`.
+### What was changed
+
+**FIXED, both paths.** Each reserves the whole order through
+`decrementManyOrFail` before the order row is written, exactly as `:487` does.
+The in-transaction decrement was **removed**, not left alongside — keeping both
+would take stock twice. The reads that remain in the transaction run after the
+reservation, so `availableQuantity` there is the post-decrement figure, which is
+what the low-stock alert should report; the `orders` and `_version` increments
+stay where they were.
+
+The out-of-stock branch is simpler than the Paystack one: nothing has been
+charged on either path, so the order is refused outright rather than recorded as
+`paid_awaiting_refund`. `not_found` and `insufficient` are reported differently —
+a withdrawn product and a sold-out one are not the same thing to a buyer.
+
+`src/__tests__/unit/marketplace-order-stock-reservation.test.ts` — 9 tests,
+**8 fail against the pre-fix code**. The one that passes asserts the
+payment-on-delivery seller check still runs before anything is reserved, which
+the old code also enforced.
 
 ---
 
@@ -435,14 +451,31 @@ harmless.
 | F2 | withdrawal reservation contract | **fixed** — `fix-withdrawal-reservation-contract` |
 | F3 | cooperative registration never claims | **fixed** |
 | F4 | export bookings overbook (two doors) | **fixed** |
-| F5 | 2 of 3 order paths oversell stock | open |
+| F5 | 2 of 3 order paths oversell stock | **fixed** |
 | F6 | `_withdrawal.ts` third door overdraft | **fixed** — same branch |
 | — | `apply-loan` lifetime-total gating | needs a business decision |
 | — | fixed-savings plans split across two collections | needs a data decision |
 
-## Suggested order for what remains
+## What is left
 
-1. **F5** — the only finding still open. Opportunistic; no UI caller today.
+Nothing in this document is open as code. Two items need an answer, not a patch:
+
+- **`apply-loan/route.ts:82`** gates loan eligibility on `totalContributions`,
+  the lifetime figure. For a loan that is a defensible business rule in a way it
+  never is for a withdrawal, so it was left alone. If it is the intended rule it
+  should say so deliberately; if it is not, it is the same one-line fix as the
+  withdrawal route.
+- **Fixed-savings plans are split across two collections** —
+  `COOPERATIVE_FIXED_SAVINGS` and `FIXED_SAVINGS_PLANS` — so plans created
+  through the two doors are invisible to each other. Which one is canonical, and
+  whether anything needs migrating, is a data question.
+
+One thing found along the way that is worth its own look: closing the
+`collection().add()` gap in `jest.setup.js` (see F4) means **any older suite
+asserting on an action that creates documents that way was exercising its error
+path, not its success path.** Nothing broke when the stub was added — 25 suites,
+265 tests pass — but those assertions were weaker than they read, and no audit
+of which ones has been done.
 
 F1, F2 and F5 are all one shape: **a path that was fixed in one copy and left in
 another.** Worth a standing check when closing any of these — search for a
