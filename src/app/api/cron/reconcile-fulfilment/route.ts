@@ -61,7 +61,7 @@ interface Check {
      * than querying per payment — a 30-day window is a few hundred payments and
      * a per-payment query would be a few hundred round trips.
      */
-    fulfilledKeys: () => Promise<Set<string>>;
+    fulfilledKeys: () => Promise<{ keys: Set<string>; truncated: boolean }>;
     /** How to derive this payment's key for lookup in that Set. */
     keyFor: (payment: { reference: string; userId: string }) => string;
 }
@@ -76,7 +76,16 @@ const CHECKS: Check[] = [
         artefact: "serviceRegistrations.academy.paymentStatus = completed on the payer",
         keyFor: (p) => p.userId,
         fulfilledKeys: async () => {
-            const snap = await db.collection(COLLECTIONS.USERS).get();
+            // .all(), not .get(): a plain .get() stops at DEFAULT_QUERY_LIMIT
+            // (5,000) and returns a short result that looks complete. USERS is
+            // ~41,000 rows, so this check was building its fulfilled-set from an
+            // eighth of the table and reporting every academy payment outside
+            // that slice as unfulfilled. .select() narrows the payload to the
+            // two fields actually read.
+            const snap = await db.collection(COLLECTIONS.USERS)
+                .select("serviceRegistrations", "roles")
+                .all()
+                .get();
             const keys = new Set<string>();
             snap.docs.forEach((d: any) => {
                 const data = d.data() ?? {};
@@ -86,7 +95,7 @@ const CHECKS: Check[] = [
                     keys.add(d.id);
                 }
             });
-            return keys;
+            return { keys, truncated: snap.truncated };
         },
     },
     {
@@ -94,14 +103,14 @@ const CHECKS: Check[] = [
         artefact: "a cooperative_members row for the payer",
         keyFor: (p) => p.userId,
         fulfilledKeys: async () => {
-            const snap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).get();
+            const snap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).all().get();
             const keys = new Set<string>();
             snap.docs.forEach((d: any) => {
                 keys.add(d.id);
                 const uid = d.data()?.userId;
                 if (uid) keys.add(uid);
             });
-            return keys;
+            return { keys, truncated: snap.truncated };
         },
     },
     {
@@ -109,7 +118,10 @@ const CHECKS: Check[] = [
         artefact: "a marketplaceOrders row past pending_payment",
         keyFor: (p) => p.reference,
         fulfilledKeys: async () => {
-            const snap = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).get();
+            const snap = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
+                .select("paymentReference", "paymentStatus")
+                .all()
+                .get();
             const keys = new Set<string>();
             snap.docs.forEach((d: any) => {
                 const data = d.data() ?? {};
@@ -120,7 +132,7 @@ const CHECKS: Check[] = [
                     keys.add(ref);
                 }
             });
-            return keys;
+            return { keys, truncated: snap.truncated };
         },
     },
     {
@@ -128,13 +140,16 @@ const CHECKS: Check[] = [
         artefact: "an export_slots row carrying the payment reference",
         keyFor: (p) => p.reference,
         fulfilledKeys: async () => {
-            const snap = await db.collection(COLLECTIONS.EXPORT_SLOTS).get();
+            const snap = await db.collection(COLLECTIONS.EXPORT_SLOTS)
+                .select("paymentReference")
+                .all()
+                .get();
             const keys = new Set<string>();
             snap.docs.forEach((d: any) => {
                 const ref = d.data()?.paymentReference;
                 if (ref) keys.add(ref);
             });
-            return keys;
+            return { keys, truncated: snap.truncated };
         },
     },
     {
@@ -142,7 +157,10 @@ const CHECKS: Check[] = [
         artefact: "a farm_nation_transactions row at payment_confirmed or beyond",
         keyFor: (p) => p.reference,
         fulfilledKeys: async () => {
-            const snap = await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).get();
+            const snap = await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS)
+                .select("paymentReference", "status")
+                .all()
+                .get();
             const keys = new Set<string>();
             snap.docs.forEach((d: any) => {
                 const data = d.data() ?? {};
@@ -151,7 +169,7 @@ const CHECKS: Check[] = [
                     keys.add(ref);
                 }
             });
-            return keys;
+            return { keys, truncated: snap.truncated };
         },
     },
 ];
@@ -179,7 +197,18 @@ export async function GET(request: NextRequest) {
 
         // Completed payments in the window. `status` lives in raw_data, so this
         // filters in JavaScript rather than SQL — the volume is a few hundred.
-        const paymentsSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS).get();
+        // .all(), not .get(). This reads every payment and filters by date in
+        // JavaScript, so a plain .get() truncated at 5,000 rows BEFORE the window
+        // filter ran — and the rows dropped were arbitrary, not the oldest.
+        //
+        // The date filter is deliberately NOT pushed into the query. The JS
+        // filter below keeps rows with no processedAt ("undated: check it rather
+        // than skip it"), and a SQL `processedAt >= cutoff` would drop exactly
+        // those — the ones most likely to be malformed and worth looking at.
+        // `processedAt` is also written as a server timestamp on some paths and
+        // an ISO string on others, so a string comparison would not be sound
+        // across both.
+        const paymentsSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS).all().get();
 
         const allInWindow = paymentsSnap.docs
             .map((d: any) => {
@@ -217,6 +246,17 @@ export async function GET(request: NextRequest) {
         const results: Record<string, any> = {};
         let totalUnfulfilled = 0;
 
+        // Which scans came back INCOMPLETE.
+        //
+        // Every scan below uses .all(), which raises the ceiling to 500,000 and
+        // logs an error rather than truncating quietly. That error goes to logs,
+        // and the defect this route exists to catch was itself hidden by a
+        // warning in logs nobody read. So it is reported in the response too: a
+        // reconciler running against a partial view must not be able to say
+        // "ok". An incomplete artefact scan makes every "unfulfilled" result for
+        // that type a possible false positive.
+        const incompleteScans: string[] = [];
+
         for (const check of CHECKS) {
             const forType = payments.filter((p: any) => p.type === check.paymentType);
             if (forType.length === 0) {
@@ -224,7 +264,8 @@ export async function GET(request: NextRequest) {
                 continue;
             }
 
-            const fulfilled = await check.fulfilledKeys();
+            const { keys: fulfilled, truncated } = await check.fulfilledKeys();
+            if (truncated) incompleteScans.push(check.paymentType);
             const missing = forType.filter((p: any) => !fulfilled.has(check.keyFor(p)));
 
             totalUnfulfilled += missing.length;
@@ -268,7 +309,13 @@ export async function GET(request: NextRequest) {
         const refundsOwed: Array<Record<string, any>> = [];
 
         for (const col of [COLLECTIONS.MARKETPLACE_ORDERS, COLLECTIONS.EXPORT_ORDERS]) {
-            const snap = await db.collection(col).get();
+            // .all(): this scan was added with a plain .get() and carried the
+            // same truncation as the checks above — a refund owed on an order
+            // past the 5,000th row would never have been reported.
+            const snap = await db.collection(col)
+                .where("paymentStatus", "==", "paid_awaiting_refund")
+                .all()
+                .get();
             snap.docs.forEach((d: any) => {
                 const data = d.data() ?? {};
                 if (data.paymentStatus !== "paid_awaiting_refund") return;
@@ -292,7 +339,14 @@ export async function GET(request: NextRequest) {
         totalUnfulfilled += stranded.length + refundsOwed.length;
 
         const body = {
-            status: totalUnfulfilled > 0 ? "unfulfilled_payments_found" : "ok",
+            // An incomplete scan cannot report "ok". Every "unfulfilled" result
+            // for a truncated type is a possible false positive, and every
+            // fulfilled one a possible false negative — the answer is unknown,
+            // not clean.
+            status: incompleteScans.length > 0
+                ? "incomplete_scan"
+                : totalUnfulfilled > 0 ? "unfulfilled_payments_found" : "ok",
+            incompleteScans,
             windowDays: days,
             paymentsInWindow: payments.length,
             totalUnfulfilled,

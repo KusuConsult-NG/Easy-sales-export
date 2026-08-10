@@ -477,52 +477,49 @@ export async function broadcastToCooperativeMembersAction(
         const adminName = session.user.name || "Easy Sales Export Admin";
         const adminEmail = session.user.email || "";
 
+        // The admin's existing direct conversations, fetched ONCE.
+        //
+        // This query used to sit inside the loop below, so broadcasting to N
+        // members ran N full scans of the conversations collection — serially,
+        // because the await was inside the loop — and every one returned the
+        // same rows. The result does not depend on `memberUid`; only the
+        // JavaScript filter did. That made the cost O(members × conversations)
+        // for a lookup that is O(conversations) once.
+        //
+        // Indexed by the other participant, so the per-member lookup below is a
+        // map read rather than a scan.
+        const directConversationByMember = new Map<string, string>();
+        {
+            const existingSnap = await db.collection(COLLECTIONS.CONVERSATIONS)
+                .where("participants", "array-contains", adminId)
+                .all()
+                .get();
+
+            for (const doc of existingSnap.docs) {
+                const conv = doc.data();
+                const participants: string[] = Array.isArray(conv.participants) ? conv.participants : [];
+                // Same predicate as before: a two-party conversation with no
+                // product or order attached is the broadcast thread.
+                if (participants.length !== 2 || conv.productId || conv.orderId) continue;
+                const other = participants.find((p: string) => p !== adminId);
+                // First match wins, matching the original `break`.
+                if (other && !directConversationByMember.has(other)) {
+                    directConversationByMember.set(other, doc.id);
+                }
+            }
+        }
+
         for (const memberUid of memberUids) {
             try {
-                let conversationId: string | null = null;
-                const existingSnap = await db.collection(COLLECTIONS.CONVERSATIONS)
-                    .where("participants", "array-contains", adminId)
-                    .get();
-
-                for (const doc of existingSnap.docs) {
-                    const conv = doc.data();
-                    if (
-                        conv.participants.includes(memberUid) &&
-                        conv.participants.length === 2 &&
-                        !conv.productId &&
-                        !conv.orderId
-                    ) {
-                        conversationId = doc.id;
-                        break;
-                    }
-                }
+                let conversationId: string | null = directConversationByMember.get(memberUid) ?? null;
 
                 if (!conversationId) {
-                    const memberDoc = await db.collection(COLLECTIONS.USERS).doc(memberUid).get();
-                    const memberData = memberDoc.data() || {};
-
-                    const convData = {
-                        participants: [adminId, memberUid],
-                        participantDetails: {
-                            [adminId]: {
-                                uid: adminId,
-                                name: adminName,
-                                email: adminEmail,
-                                lastRead: null,
-                            },
-                            [memberUid]: {
-                                uid: memberUid,
-                                name: memberData.fullName || memberData.email || "Member",
-                                email: memberData.email || "",
-                                lastRead: null,
-                            },
-                        },
-                        lastMessage: null,
-                        context: "cooperative_broadcast",
-                        createdAt: new Date(),
-                        updatedAt: new Date(),
-                    };
-
+                    // A USERS read and a `convData` object used to be built here.
+                    // Nothing consumed either: `convData` was assigned and never
+                    // referenced, and `startConversation` takes the member id and
+                    // resolves the participant details itself. So the read cost
+                    // one round trip per new member to populate an object that
+                    // was discarded. Removing it changes no behaviour.
                     conversationId = await messagingService.startConversation(
                         adminId,
                         adminName,

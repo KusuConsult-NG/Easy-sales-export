@@ -2,6 +2,7 @@
 
 import { adminAuth } from "@/lib/firebase-admin";
 import { supabaseDb as db } from "@/lib/supabase-db";
+import { FieldPath } from "@/lib/firestore-compat";
 import { logger } from "@/lib/logger";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
@@ -38,11 +39,27 @@ export async function runForensicScanAction(): Promise<
             const authUsers = listUsersResult.users;
             const ghostUserIds: string[] = [];
 
-            for (const user of authUsers) {
-                const doc = await db.collection(COLLECTIONS.USERS).doc(user.uid).get();
-                if (!doc.exists) {
-                    ghostUserIds.push(user.uid);
-                }
+            // Batched, not one read per user.
+            //
+            // This was a serial `.doc(uid).get()` inside the loop: 100 round
+            // trips, each waiting for the last. The same chunked
+            // FieldPath.documentId() `in` query that admin.ts uses for hydration
+            // does it in 4 concurrent queries.
+            const authUserIds = authUsers.map((u: any) => u.uid);
+            const existingIds = new Set<string>();
+            const idChunks: string[][] = [];
+            for (let i = 0; i < authUserIds.length; i += 30) {
+                idChunks.push(authUserIds.slice(i, i + 30));
+            }
+            const snaps = await Promise.all(
+                idChunks.map(chunk =>
+                    db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get()
+                )
+            );
+            snaps.forEach(snap => snap.docs.forEach((d: any) => existingIds.add(d.id)));
+
+            for (const uid of authUserIds) {
+                if (!existingIds.has(uid)) ghostUserIds.push(uid);
             }
 
             results.push({
@@ -63,13 +80,30 @@ export async function runForensicScanAction(): Promise<
         try { const productsSnapshot = await db.collection(COLLECTIONS.PRODUCTS).limit(200).get(); // Sample check
             const orphanedProductIds: string[] = [];
 
+            // Batched, and de-duplicated: the serial version re-read the same
+            // seller once per product, so a seller with 40 listings cost 40
+            // identical round trips.
+            const sellerIds = [...new Set(
+                productsSnapshot.docs.map((d: any) => d.data().sellerId).filter(Boolean)
+            )] as string[];
+            const liveSellers = new Set<string>();
+            const sellerChunks: string[][] = [];
+            for (let i = 0; i < sellerIds.length; i += 30) {
+                sellerChunks.push(sellerIds.slice(i, i + 30));
+            }
+            const sellerSnaps = await Promise.all(
+                sellerChunks.map(chunk =>
+                    db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get()
+                )
+            );
+            sellerSnaps.forEach(snap => snap.docs.forEach((d: any) => {
+                if (!d.data()?.deleted) liveSellers.add(d.id);
+            }));
+
             for (const doc of productsSnapshot.docs) {
                 const sellerId = doc.data().sellerId;
-                if (sellerId) {
-                    const sellerDoc = await db.collection(COLLECTIONS.USERS).doc(sellerId).get();
-                    if (!sellerDoc.exists || sellerDoc.data()?.deleted) {
-                        orphanedProductIds.push(doc.id);
-                    }
+                if (sellerId && !liveSellers.has(sellerId)) {
+                    orphanedProductIds.push(doc.id);
                 }
             }
 

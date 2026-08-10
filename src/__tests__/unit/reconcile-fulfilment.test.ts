@@ -24,17 +24,34 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 /** Per-collection fixtures: collection name -> docs. */
 let COLLECTION_DATA: Record<string, Array<{ id: string; data: Record<string, any> }>> = {};
 
+/** Collections whose scan should report itself as truncated. */
+let TRUNCATED: Set<string> = new Set();
+
 jest.mock('@/lib/supabase-db', () => ({
     supabaseDb: {
-        collection: (name: string) => ({
-            get: async () => ({
-                docs: (COLLECTION_DATA[name] || []).map((d) => ({
-                    id: d.id,
-                    data: () => d.data,
-                })),
-                empty: (COLLECTION_DATA[name] || []).length === 0,
-            }),
-        }),
+        // A chainable stub: the route now uses .select(...).all().get() and
+        // .where(...).all().get(), and the snapshot carries `truncated`. A stub
+        // that only had .get() made every one of these throw.
+        collection: (name: string) => {
+            const filters: Array<[string, string, any]> = [];
+            const q: any = {
+                select: () => q,
+                all: () => q,
+                where: (f: string, op: string, v: any) => { filters.push([f, op, v]); return q; },
+                get: async () => {
+                    let rows = COLLECTION_DATA[name] || [];
+                    for (const [f, op, v] of filters) {
+                        if (op === '==') rows = rows.filter((d) => (d.data as any)[f] === v);
+                    }
+                    return {
+                        docs: rows.map((d) => ({ id: d.id, data: () => d.data })),
+                        empty: rows.length === 0,
+                        truncated: TRUNCATED.has(name),
+                    };
+                },
+            };
+            return q;
+        },
     },
 }));
 
@@ -64,6 +81,7 @@ describe('reconcile-fulfilment', () => {
         jest.resetModules();
         process.env.CRON_SECRET = SECRET;
         COLLECTION_DATA = {};
+        TRUNCATED = new Set();
     });
 
     it('finds a registration that was paid but never produced a membership', async () => {
@@ -280,6 +298,48 @@ describe('reconcile-fulfilment', () => {
         const body = await (await GET(req())).json();
 
         expect(body.refundsOwed.count).toBe(0);
+        expect(body.status).toBe('ok');
+    });
+
+    it('refuses to report ok when an artefact scan came back incomplete', async () => {
+        // THE test for the truncation defect. Every artefact scan used a plain
+        // .get(), which stops at DEFAULT_QUERY_LIMIT (5,000) and returns a short
+        // result that looks complete. USERS is ~41,000 rows, so the academy
+        // check was building its fulfilled-set from an eighth of the table and
+        // reporting every payment outside that slice as unfulfilled.
+        //
+        // The scans use .all() now. This asserts the remaining case: if even
+        // that hits its ceiling, the run must not be able to say "ok", because
+        // the answer is unknown rather than clean.
+        COLLECTION_DATA['processedPayments'] = [
+            payment('ac-1', 'academy_registration', 'student-1'),
+        ];
+        COLLECTION_DATA['users'] = [
+            { id: 'student-1', data: { serviceRegistrations: { academy: { paymentStatus: 'completed' } } } },
+        ];
+        TRUNCATED = new Set(['users']);
+
+        const { GET } = await import('@/app/api/cron/reconcile-fulfilment/route');
+        const body = await (await GET(req())).json();
+
+        expect(body.status).toBe('incomplete_scan');
+        expect(body.incompleteScans).toContain('academy_registration');
+    });
+
+    it('reports no incomplete scans when every scan was complete', async () => {
+        // Vacuity guard: without this, the assertion above would pass even if
+        // incompleteScans were populated unconditionally.
+        COLLECTION_DATA['processedPayments'] = [
+            payment('ac-2', 'academy_registration', 'student-2'),
+        ];
+        COLLECTION_DATA['users'] = [
+            { id: 'student-2', data: { serviceRegistrations: { academy: { paymentStatus: 'completed' } } } },
+        ];
+
+        const { GET } = await import('@/app/api/cron/reconcile-fulfilment/route');
+        const body = await (await GET(req())).json();
+
+        expect(body.incompleteScans).toEqual([]);
         expect(body.status).toBe('ok');
     });
 
