@@ -1,6 +1,8 @@
 # Integrity sweep, 2026-08-10 — findings
 
-Extends the work in `atomic-money-migration.md`. Findings only; no code changed.
+Extends the work in `atomic-money-migration.md`. Six findings; F1, F2, F3 and F6
+are fixed, F4 and F5 are open, and two questions need a decision rather than a
+patch. See the status table at the bottom.
 
 That document ends with the priority table emptied and warns why an empty table
 is not the same as a clean codebase: the sweeps that built it grepped for money
@@ -257,11 +259,40 @@ registrations that were never fulfilled, and it is live
 the reconciler work (#54, #56) already covers detection. It does mean it is the
 one to bring in line first.
 
-**Fix:** `claimPaymentOnce` first, mirroring the academy conversion — including
-keeping the existing early-return sync work on the `!claim.claimed` branch. That
-block does a second job (syncing the membership and user docs so a user whose
-webhook landed first is not told "verification failed"), and deleting it would
-reintroduce a user-visible bug while fixing a concurrency one.
+### What was changed
+
+**FIXED.** `claimPaymentOnce` first, mirroring the academy conversion:
+
+- The claim runs **after** Paystack confirms and the amount is checked, so an
+  abandoned or underpaid transaction never consumes the reference.
+- `status` is left at its default `"completed"` — this is money in, and rule 4
+  runs both ways. Four paths in `atomic-money-migration.md` must *not* record
+  `completed`; this is not one of them, and overriding it would quietly drop the
+  registration fee out of `platform_revenue_totals()`.
+- `source: "client_verify"`, matching the academy path, so the two halves are
+  distinguishable in `processed_payments`.
+- **The `processed_payments` write is gone.** `claimPaymentOnce` owns that row.
+  The blind `set()` was the actual defect.
+- The `processedDoc.exists` pre-check is deleted — it was the read half of the
+  check-then-write, and leaving it above the claim is how it came to be read as
+  protection. The membership fast path **stays**, now documented as a fast path
+  rather than a guard: it saves a Paystack round trip for a user re-landing on
+  the callback page.
+- Its sync work moved onto the `!claim.claimed` branch, which knows for certain
+  the payment was applied rather than inferring it from a racy read. Deleting it
+  wholesale would have reintroduced a user-visible bug (a user whose webhook
+  landed first being told "verification failed" after paying) while fixing a
+  concurrency one.
+- The `runTransaction` wrapper is gone; it queued writes the adapter flushes one
+  at a time regardless. Ledger rows are written last, matching the webhook
+  handler's ordering.
+
+`src/__tests__/unit/cooperative-registration-claim.test.ts` — 8 tests, **5 fail
+against the pre-fix code**. The three that pass do so for a different reason
+rather than by agreement: with no claim primitive in the old code the
+lost-claim scenarios cannot be set up at all, so it reaches the same assertions
+through its `processedDoc.exists` early return. They are regression cover for
+the new branch, not evidence about the old one.
 
 ---
 
@@ -350,7 +381,7 @@ harmless.
 |---|---|---|
 | F1 | fixed-savings fix on the unused door | **fixed** |
 | F2 | withdrawal reservation contract | **fixed** — `fix-withdrawal-reservation-contract` |
-| F3 | cooperative registration never claims | open |
+| F3 | cooperative registration never claims | **fixed** |
 | F4 | export bookings overbook | open |
 | F5 | 2 of 3 order paths oversell stock | open |
 | F6 | `_withdrawal.ts` third door overdraft | **fixed** — same branch |
@@ -359,11 +390,12 @@ harmless.
 
 ## Suggested order for what remains
 
-1. **F3** — closes the last unclaimed fulfilment path and stops `claimedAt`
-   being overwritten while that signal is still being investigated.
-2. **F4** — live, one-line primitive swap, confirm `targetVolume` first.
-3. **F5** — opportunistic; no UI caller today.
+1. **F4** — live, one-line primitive swap; confirm `targetVolume` is populated on
+   every window first, since `increment_within_ceiling` treats a missing ceiling
+   as deliberately unbounded.
+2. **F5** — opportunistic; no UI caller today.
 
 F1, F2 and F5 are all one shape: **a path that was fixed in one copy and left in
 another.** Worth a standing check when closing any of these — search for a
-second door before calling a defect fixed.
+second door before calling a defect fixed. F3 is the same shape seen from the
+other side: two copies that both existed, where only one had been converted.
