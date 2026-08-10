@@ -44,8 +44,12 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
             }
         } else {
-            logger.warn("[Resend Webhook] RESEND_WEBHOOK_SECRET is not set — bypassing signature validation.");
-            body = JSON.parse(payloadText);
+            // Fail CLOSED. This used to log a warning and then parse the payload
+            // anyway, which means the only thing standing between an attacker
+            // and forged email events was a log line nobody reads. An unset
+            // secret is a misconfiguration, not consent to skip verification.
+            logger.error("[Resend Webhook] RESEND_WEBHOOK_SECRET is not set — refusing to process.");
+            return NextResponse.json({ error: "Configuration Error" }, { status: 500 });
         }
 
         // Basic validation of the Resend webhook payload
