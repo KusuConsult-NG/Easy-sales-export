@@ -128,8 +128,33 @@ BEGIN
     END IF;
 
     IF p_target_table = 'cooperative_loans' THEN
-        INSERT INTO cooperative_loans (id, raw_data, created_at, updated_at)
-        VALUES (p_id, p_row, NOW(), NOW());
+        -- Native columns are DERIVED from p_row, not passed separately.
+        --
+        -- cooperative_loans carries native `status` and `amount` columns, and
+        -- the adapter routes .where('status', ...) to the COLUMN rather than to
+        -- raw_data (NATIVE_COLUMNS in supabase-db.ts). An insert that filled
+        -- only raw_data would leave both NULL, so a loan created here would be
+        -- invisible to the admin approval queue: the row exists, the member is
+        -- told they applied, and nobody ever sees it. That is the dual-storage
+        -- trap docs/audit/atomic-money-migration.md records for `roles`.
+        --
+        -- Deriving them from the same JSONB the row is built from means there is
+        -- one expression and two destinations, with no way for them to disagree
+        -- — the approach apply_array_ops uses for exactly this reason.
+        --
+        -- user_id is deliberately NOT set: these rows key the borrower as
+        -- `memberId`, and FIELD_TO_COLUMN maps only `userId` to user_id. It was
+        -- NULL on this path before this migration existed, and making it
+        -- non-NULL here would be a behaviour change smuggled into a lock fix.
+        INSERT INTO cooperative_loans (id, raw_data, status, amount, created_at, updated_at)
+        VALUES (
+            p_id,
+            p_row,
+            p_row ->> 'status',
+            (p_row ->> 'amount')::numeric,
+            NOW(),
+            NOW()
+        );
     ELSE
         INSERT INTO document_collections (id, collection_name, raw_data, created_at, updated_at)
         VALUES (p_id, p_target_collection, p_row, NOW(), NOW());
@@ -173,6 +198,13 @@ COMMIT;
 --           -- code both read an empty result and both inserted.
 --   Tab A:  COMMIT;
 --           -- B then returns claimed = false, existing_id = 't-loan-3'
+--
+-- Native columns must be populated, not just raw_data:
+--   SELECT id, status, amount, raw_data->>'status' AS raw_status
+--     FROM cooperative_loans WHERE id = 't-loan-1';
+--   -- expect status = 'pending' and amount = 1000 in the COLUMNS, matching
+--   -- raw_data. If the columns are NULL the loan is invisible to
+--   -- .where('status', ...), which routes to the column.
 --
 --   DELETE FROM cooperative_loans WHERE id IN ('t-loan-1','t-loan-3','t-loan-4');
 --   DELETE FROM document_collections WHERE id = 't-loan-2';
