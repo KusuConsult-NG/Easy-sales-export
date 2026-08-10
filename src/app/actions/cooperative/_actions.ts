@@ -811,6 +811,24 @@ async function _submitWithdrawalAction(
             };
         }
 
+        // Move the reserved funds into lockedBalance.
+        //
+        // The debit above only took the money OUT of savingsBalance. The admin
+        // side of this flow assumes it also went somewhere: rejecting a request
+        // does `savingsBalance += amount, lockedBalance -= amount`
+        // (cooperative/_admin.ts), and approving does `lockedBalance -= amount`.
+        // Without this increment the reject restored the savings correctly but
+        // drove lockedBalance NEGATIVE by the amount, permanently, on every
+        // request submitted through this door.
+        //
+        // Ordering: after the debit, never before. The debit is the step that
+        // can legitimately fail on insufficient funds; incrementing first would
+        // lock funds that were never taken.
+        await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).update({
+            lockedBalance: FieldValue.increment(amount),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
         // The funds are already reserved by the debit above, which is the only
         // thing here that took a lock. Wrapping the two writes below in
         // runTransaction gave them nothing — the adapter flushes them one by one

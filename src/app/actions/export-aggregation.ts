@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { createAdminAuditLog } from "@/lib/audit-log";
+import { incrementWithinCeiling } from "@/lib/wallet-ledger";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { requireAdmin } from "@/lib/require-admin";
 import { requireSession } from "@/lib/session-guard";
@@ -122,7 +123,44 @@ export async function bookExportSlotAction(data: { windowId: string;
         if (new Date() > new Date(windowData.endDate)) { return { success: false as const, data: null, error: "Export window has expired", meta: null };
         }
 
-        if (windowData.currentVolume + data.volume > windowData.targetVolume) { return { success: false as const, data: null, meta: null, error: `Only ${windowData.targetVolume - windowData.currentVolume }kg available` };
+        // Reserve the volume under a row lock, BEFORE the slot is written.
+        //
+        // This is the second door onto currentVolume — export-booking.ts
+        // createBookingAction is the other — and it was the worse of the two.
+        // It checked the ceiling and then wrote:
+        //
+        //     currentVolume: windowData.currentVolume + data.volume
+        //
+        // an ABSOLUTE write computed from a read taken moments earlier, not
+        // FieldValue.increment. Migration 010 cannot help that: 010 only makes
+        // the sentinel atomic, and no sentinel was used. An absolute write does
+        // not merely overbook on a concurrent booking — it ERASES any other
+        // write to currentVolume in between, including the other door's
+        // increment. The window then believes less volume is taken than really
+        // is, and the next booking oversells further.
+        //
+        // Reserve first, write the slot second: the loser is told the volume is
+        // gone rather than holding a slot against capacity that does not exist.
+        const reserved = await incrementWithinCeiling({
+            collection: COLLECTIONS.EXPORT_WINDOWS,
+            id: data.windowId,
+            field: "currentVolume",
+            amount: data.volume,
+            ceilingField: "targetVolume",
+        });
+
+        if (!reserved.ok) {
+            const available = reserved.reason === "at_capacity"
+                ? Math.max(0, Number(windowData.targetVolume ?? 0) - Number(reserved.value ?? 0))
+                : 0;
+            return {
+                success: false as const,
+                data: null,
+                meta: null,
+                error: reserved.reason === "at_capacity"
+                    ? `Only ${available}kg available`
+                    : "Export window not found",
+            };
         }
 
         const totalCost = data.volume * windowData.slotPrice;
@@ -138,9 +176,7 @@ export async function bookExportSlotAction(data: { windowId: string;
 
         const slotRef = await db.collection(COLLECTIONS.EXPORT_SLOTS).add(slot);
 
-        // Update window volume
-        await windowRef.update({ currentVolume: windowData.currentVolume + data.volume,
-            updatedAt: FieldValue.serverTimestamp() });
+        await windowRef.update({ updatedAt: FieldValue.serverTimestamp() });
 
         await createAdminAuditLog({ action: "user_update",
             userId: data.userId,

@@ -6,6 +6,7 @@ import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
+import { debitJsonbBalance } from "@/lib/wallet-ledger";
 import { rateLimit, getClientIp, createRateLimitResponse } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 
@@ -72,15 +73,30 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Check available balance
-        const totalSavings = membershipData.totalContributions || 0;
+        // Check available balance.
+        //
+        // This read `totalContributions`, which is a CUMULATIVE LIFETIME TOTAL:
+        // it is incremented on every contribution (cooperative/_payment.ts) and
+        // feeds calculateUserTier, and nothing in src/ ever decrements it. A
+        // member who contributed ₦100,000 and has already withdrawn ₦90,000
+        // still reported ₦100,000 here and could withdraw against money that was
+        // already gone. That was not a race — it was wrong on every call.
+        //
+        // savingsBalance is the spendable figure, and is what every other
+        // withdrawal door debits.
+        const savingsBalance = membershipData.savingsBalance || 0;
         const minimumBalance = 5000; // Minimum ₦5,000 must remain
 
-        if (totalSavings - amount < minimumBalance) {
+        // The floor is a policy rule and this read is advisory: two withdrawals
+        // that each leave ₦5,000 behind can together dip under it. The debit
+        // below is what guarantees the balance cannot go negative. Same caveat
+        // as platform.ts; closing the floor race needs a debit primitive that
+        // takes a floor.
+        if (savingsBalance - amount < minimumBalance) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: `Insufficient balance. You must maintain a minimum balance of ₦${minimumBalance.toLocaleString()}. Available for withdrawal: ₦${Math.max(0, totalSavings - minimumBalance).toLocaleString()}`
+                    message: `Insufficient balance. You must maintain a minimum balance of ₦${minimumBalance.toLocaleString()}. Available for withdrawal: ₦${Math.max(0, savingsBalance - minimumBalance).toLocaleString()}`
                 },
                 { status: 400 }
             );
@@ -102,6 +118,43 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // Reserve the funds under a row lock, BEFORE the request row exists.
+        //
+        // This route previously reserved nothing at all. That left it out of
+        // step with the admin side of the flow, which assumes the money was
+        // moved savingsBalance -> lockedBalance at request time: rejecting does
+        // `savingsBalance += amount, lockedBalance -= amount`, and approving
+        // does `lockedBalance -= amount` (cooperative/_admin.ts).
+        //
+        // So a request submitted here and then REJECTED credited savingsBalance
+        // by an amount that had never been debited — the member's savings grew
+        // by the full withdrawal amount, out of nothing. That is the reason this
+        // is a money defect rather than a bookkeeping one.
+        const debit = await debitJsonbBalance({
+            table: "cooperative_members",
+            id: userId,
+            field: "savingsBalance",
+            amount,
+        });
+
+        if (!debit.ok) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: debit.reason === "insufficient_funds"
+                        ? `Insufficient balance. Available: ₦${Number(debit.balance).toLocaleString()}`
+                        : 'You must be a cooperative member to request withdrawal'
+                },
+                { status: 400 }
+            );
+        }
+
+        const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
+        await memberRef.update({
+            lockedBalance: FieldValue.increment(amount),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
         // Create withdrawal request (Admin SDK with server timestamps)
         const withdrawalRef = db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).doc();
         const withdrawalData = {
@@ -118,8 +171,10 @@ export async function POST(request: NextRequest) {
             status: 'pending',
             requestedAt: FieldValue.serverTimestamp(),
             createdAt: FieldValue.serverTimestamp(),
-            currentBalance: totalSavings,
-            balanceAfterWithdrawal: totalSavings - amount,
+            // Recorded from the debit's own post-write figure rather than the
+            // pre-read, so these agree with what actually happened.
+            currentBalance: Number(debit.balance) + amount,
+            balanceAfterWithdrawal: Number(debit.balance),
         };
 
         await withdrawalRef.set(withdrawalData);

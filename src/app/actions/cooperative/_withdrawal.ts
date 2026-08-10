@@ -11,6 +11,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from '@/lib/types/firestore';
 import { FieldValue } from "@/lib/firestore-compat";
 import { createAdminAuditLog } from '@/lib/audit-log';
+import { debitJsonbBalance } from "@/lib/wallet-ledger";
 import { revalidatePath } from 'next/cache';
 
 interface WithdrawalRequestData { amount: number;
@@ -43,41 +44,64 @@ async function _submitWithdrawalRequestAction(
 
         const validatedData = validation.data;
 
-        await db.runTransaction(async (transaction) => { const membershipRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
-            const membershipDoc = await transaction.get(membershipRef);
+        const membershipRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
+        const membershipDoc = await membershipRef.get();
 
-            if (!membershipDoc.exists) {
-                throw new Error('You are not a member of any cooperative');
-            }
+        if (!membershipDoc.exists) {
+            throw new Error('You are not a member of any cooperative');
+        }
 
-            const membership = membershipDoc.data()!;
-            const availableBalance = membership.savingsBalance || 0;
+        const membership = membershipDoc.data()!;
 
-            if (validatedData.amount > availableBalance) {
-                throw new Error(`Insufficient balance. Available: ₦${availableBalance.toLocaleString()}`);
-            }
-
-            transaction.update(membershipRef, { savingsBalance: FieldValue.increment(-validatedData.amount),
-                lockedBalance: FieldValue.increment(validatedData.amount),
-                updatedAt: FieldValue.serverTimestamp(),
-                _version: FieldValue.increment(1) });
-
-            const withdrawalRef = db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).doc();
-            transaction.set(withdrawalRef, { userId,
-                userEmail,
-                userName: session.user.name || userEmail,
-                cooperativeId: membership.cooperativeId || "default",
-                amount: validatedData.amount,
-                bankName: validatedData.bankName,
-                accountNumber: validatedData.accountNumber,
-                accountName: validatedData.accountName,
-                reason: validatedData.reason || 'Personal withdrawal',
-                status: 'pending',
-                _version: 0,
-                requestedAt: FieldValue.serverTimestamp(),
-                createdAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp() });
+        // Reserve the funds under a row lock.
+        //
+        // This read savingsBalance, compared it to the amount and then
+        // decremented, inside runTransaction — which takes no lock. Two
+        // withdrawals submitted together both passed against the same balance
+        // and both deducted, taking a member's savings negative. Migration 010
+        // made that worse rather than better: the decrements used to lose one
+        // another, which accidentally hid the overdraft.
+        //
+        // Same conversion as _submitWithdrawalAction in _actions.ts and
+        // submitWithdrawalAction in platform.ts. This was the third door onto
+        // the same balance; see docs/audit/integrity-sweep-2026-08-10.md.
+        const debit = await debitJsonbBalance({
+            table: "cooperative_members",
+            id: userId,
+            field: "savingsBalance",
+            amount: validatedData.amount,
         });
+
+        if (!debit.ok) {
+            throw new Error(debit.reason === "insufficient_funds"
+                ? `Insufficient balance. Available: ₦${Number(debit.balance).toLocaleString()}`
+                : 'You are not a member of any cooperative');
+        }
+
+        // Move the reserved funds into lockedBalance. The admin approve/reject
+        // paths both decrement it, so a request that never incremented it drives
+        // the field negative.
+        await membershipRef.update({
+            lockedBalance: FieldValue.increment(validatedData.amount),
+            updatedAt: FieldValue.serverTimestamp(),
+            _version: FieldValue.increment(1),
+        });
+
+        const withdrawalRef = db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).doc();
+        await withdrawalRef.set({ userId,
+            userEmail,
+            userName: session.user.name || userEmail,
+            cooperativeId: membership.cooperativeId || "default",
+            amount: validatedData.amount,
+            bankName: validatedData.bankName,
+            accountNumber: validatedData.accountNumber,
+            accountName: validatedData.accountName,
+            reason: validatedData.reason || 'Personal withdrawal',
+            status: 'pending',
+            _version: 0,
+            requestedAt: FieldValue.serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp() });
 
         await createAdminAuditLog({
             action: 'payment_initiated',
