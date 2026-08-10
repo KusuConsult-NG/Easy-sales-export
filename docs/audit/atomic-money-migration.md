@@ -810,9 +810,12 @@ outstanding is the refund. The order is now marked
 with the amount and reason recorded, and the buyer is told they have been
 charged and a refund is coming.
 
-**This still needs an operational follow-up:** nothing yet *processes* those
-refunds. They are findable rather than silent, which is the difference between a
-bug and a lost payment, but somebody has to run the refund.
+**Nothing yet *processes* those refunds** — that is still true, and issuing one
+belongs behind a human. What changed on 2026-08-10 is that nothing SURFACED them
+either: `reconcile-fulfilment` now reports `refundsOwed` across marketplace and
+export orders, with the amount, and counts them toward `totalUnfulfilled` so a
+run with money owed cannot report "ok". Findable in principle is not the same as
+found.
 
 ### Uncapped events
 
@@ -852,8 +855,11 @@ defects:
 The key is claimed first, then the debit is taken through `debitJsonbBalance`
 under a row lock.
 
-**The minimum-balance floor is still advisory.** Two withdrawals that each
-leave ₦5,000 behind can together dip under it. What the debit now guarantees is
+**The minimum-balance floor was advisory — FIXED 2026-08-10 by migration 020.**
+`debit_jsonb_balance_with_floor` applies the floor under the same lock as the
+debit, and `below_floor` is reported distinctly from `insufficient_funds`. The
+description below is what was wrong: two withdrawals that each
+leave ₦5,000 behind could together dip under it. What the debit now guarantees is
 that the balance cannot go NEGATIVE, which is the part that was losing money.
 Closing the floor race properly needs a debit primitive that takes a floor —
 recorded here rather than invented in passing, because `debit_jsonb_balance`
@@ -1451,7 +1457,11 @@ having paid.
   an 8-character prefix would overwrite each other's ledger row. It uses the whole
   id.
 
-### Still not a guard
+### Still not a guard — FIXED 2026-08-10 (migration 021)
+
+Both are guards now. The check and the insert happen inside one function under a
+per-borrower advisory lock, because the thing being guarded is the ABSENCE of
+rows and a row lock has nothing to hold. What was wrong:
 
 `submitLoanApplication`'s double-lending check has the same shape as
 `_applyForLoanAction`: two applications submitted together both read an empty
@@ -1496,7 +1506,8 @@ addition in SQL (migration 010). The re-read of the membership inside the
 wrapper was protected by nothing and is gone; the query immediately above it
 already returned that document.
 
-**`_applyForLoanAction`'s double-lending check is still not a guard.** It reads
+**`_applyForLoanAction`'s double-lending check was not a guard — FIXED 2026-08-10
+by migration 021.** What was wrong: It reads
 the member's open applications in `COOPERATIVE_LOANS` and `LOAN_APPLICATIONS`
 and refuses if either is non-empty. That check took no lock inside the wrapper
 and takes none without it: two applications submitted together both read an
@@ -1505,7 +1516,12 @@ constraint on a member's open applications, not a wrapper. It is bounded — a
 pending application disburses nothing until an admin approves it, and that path
 has its own dual-control guard — so it is recorded here rather than patched.
 
-### `_updateMembershipAction` keeps its wrapper
+### `_updateMembershipAction` keeps its wrapper — version guard FIXED 2026-08-10
+
+`versionedUpdate` now goes through `claim_versioned_update` (migration 020), a
+real compare-and-swap, so this path and the five other `versionedUpdate` callers
+are guarded without being touched. The wrapper itself is still there; what
+follows describes why the guard inside it was not one.
 
 The last wrapper in the file is a read-check-write on `_version`: re-read the
 member, refuse if the version moved, write with the version bumped, all inside
@@ -1554,7 +1570,17 @@ Refresh the list with:
 grep -rln "runTransaction" src/ | grep -v "supabase-db.ts\|__tests__\|shims/"
 ```
 
-## processExportInvestment — deliberately not converted
+## processExportInvestment — RESOLVED 2026-08-10 (was: deliberately not converted)
+
+**The two-step claim below is now implemented.** It claims as
+`pending_fulfilment` (not revenue), then promotes to `completed` or
+`overfunded_review` once the branch resolves. The overfunding race is closed too,
+by `incrementWithinCeiling`. A crash between the two strands the row at
+`pending_fulfilment`, and `reconcile-fulfilment` reports those explicitly — its
+artefact checks only look at `completed`, so a stranded row would otherwise be
+invisible. The original reasoning is kept below because it is why the conversion
+was not mechanical.
+
 
 The other six sites in `infrastructure/payments/service.ts` now claim the
 payment reference before fulfilling. This one does not, because it is not a
