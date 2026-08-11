@@ -4,11 +4,30 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { Resend } from "resend";
 import { COMPANY_INFO } from "@/lib/constants";
+import { rateLimit, getClientIp, createRateLimitResponse } from '@/lib/rate-limiter';
+import { rateLimitConfig } from '@/lib/rate-limits.config';
+
+/**
+ * This endpoint is unauthenticated and it SENDS EMAIL through Resend. Without a
+ * limit it is a spam relay pointed at the company's own domain, a way to burn
+ * the Resend quota, and a bill.
+ *
+ * The limit is per IP and deliberately generous — see the contactForm entry in
+ * rate-limits.config.ts. Nigerian mobile networks use CGNAT heavily, so a limit
+ * tuned as though an IP were a person would lock out real users sharing a
+ * carrier NAT.
+ */
+const contactLimiter = rateLimit(rateLimitConfig.contactForm);
 
 
 
 export async function POST(request: NextRequest) {
     try {
+        const rateLimitResult = await contactLimiter.check(getClientIp(request));
+        if (!rateLimitResult.success) {
+            return createRateLimitResponse(rateLimitResult);
+        }
+
         const body = await request.json();
         const { name, email, subject, message } = body;
 
