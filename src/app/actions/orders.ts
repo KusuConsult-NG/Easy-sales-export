@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { decrementManyOrFail } from "@/lib/wallet-ledger";
 import type { Order, Product } from "@/lib/types/marketplace";
 
 import { getPlatformFees } from "@/lib/system-settings";
@@ -46,7 +47,52 @@ async function _createOrderAction(
 
         const userId = session.user.id;
         const fees = await getPlatformFees();
-        
+
+        // WHAT WAS WRONG HERE
+        // -------------------
+        // Stock was checked and written inside runTransaction:
+        //
+        //     if (product.availableQuantity < item.quantity) throw "OUT OF STOCK";
+        //     ...
+        //     transaction.update(ref, {
+        //         availableQuantity: product.availableQuantity - item.quantity,
+        //     });
+        //
+        // runTransaction in this codebase takes no lock — it replays queued
+        // writes after the callback returns. So two buyers ordering the last
+        // unit both read availableQuantity 1, both pass the check, and both
+        // write 0. Two orders, one unit: overselling.
+        //
+        // decrementManyOrFail (migration 015) applies the check and the
+        // decrement in one statement, and is all-or-nothing across items — the
+        // per-item alternative leaves the first products decremented when the
+        // third turns out to be short.
+        //
+        // marketplace/_payment.ts was converted to this primitive earlier. This
+        // path was not: one copy of a path fixed and its sibling left, which is
+        // the shape this codebase keeps producing.
+        //
+        // Reserved BEFORE the order rows are written, so a failure here creates
+        // nothing.
+        const reservation = await decrementManyOrFail(
+            items.map((item) => ({
+                collection: COLLECTIONS.PRODUCTS,
+                id: item.productId,
+                field: "availableQuantity",
+                amount: item.quantity,
+            }))
+        );
+
+        if (!reservation.ok) {
+            return {
+                success: false as const,
+                error: reservation.reason === "insufficient"
+                    ? "One of the items is out of stock or does not have enough units remaining."
+                    : "Could not reserve stock for this order.",
+                data: null,
+            };
+        }
+
         return await db.runTransaction(async (transaction) => { const productRefs = items.map(item => db.collection(COLLECTIONS.PRODUCTS).doc(item.productId));
             const productDocs = await Promise.all(productRefs.map(ref => transaction.get(ref)));
 
@@ -62,8 +108,11 @@ async function _createOrderAction(
 
                 const product = productDoc.data() as Product;
 
-                if (product.availableQuantity < item.quantity) {
-                    throw new Error(`OUT OF STOCK: "${product.title}" has only ${product.availableQuantity} units remaining.`);
+                // Kept for the message, not as the guard. The reservation above
+                // already decided; this read cannot be authoritative because it
+                // happens after it.
+                if (product.availableQuantity < 0) {
+                    throw new Error(`OUT OF STOCK: "${product.title}" is no longer available.`);
                 }
 
                 const tier = product.pricingTiers.find(t => t.type === item.tierType);
@@ -79,7 +128,10 @@ async function _createOrderAction(
                 const so = sellerOrders.get(sellerId)!;
                 so.subtotal += totalPrice;
 
-                transaction.update(productRefs[i], { availableQuantity: product.availableQuantity - item.quantity,
+                // Stock was already reserved atomically above. Only the version
+                // and timestamp move here — writing availableQuantity again
+                // would reintroduce the lost update it was reserved to avoid.
+                transaction.update(productRefs[i], {
                     _version: FieldValue.increment(1),
                     updatedAt: FieldValue.serverTimestamp() });
 
