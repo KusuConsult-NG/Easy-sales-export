@@ -68,22 +68,39 @@ async function _createLandListingAction(data: {
     category?: string;
     soilType?: string;
     waterSource?: string;
-}): Promise<ActionResponse<{ listingId: string }>> { 
+}): Promise<ActionResponse<{ listingId: string }>> {
     try {
+        // This action had no session guard at all, and took ownerId as a
+        // parameter — so a listing could be created in anyone's name, and the
+        // audit row below recorded the nominated owner rather than the actor.
+        //
+        // The owner is taken from the session now. The parameter is still
+        // accepted so existing callers compile, and deliberately ignored.
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) {
+            return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
+        }
+        const { session } = sessionResult;
+        const ownerId = session.user.id;
+
         const listing: Omit<LandListing, "id"> = {
             ...data,
+            // After the spread, so a caller-supplied ownerId cannot survive.
+            ownerId,
+            ownerName: session.user.name || data.ownerName,
+            ownerEmail: session.user.email || data.ownerEmail,
             images: [],
             documents: [],
             status: "draft",
             createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp() 
+            updatedAt: FieldValue.serverTimestamp()
         };
 
         const docRef = await db.collection(COLLECTIONS.LAND_LISTINGS).add(listing);
 
-        await createAdminAuditLog({ 
+        await createAdminAuditLog({
             action: "user_update",
-            userId: data.ownerId,
+            userId: ownerId,
             targetId: docRef.id,
             targetType: "land_listing_creation" 
         });
@@ -106,6 +123,25 @@ async function _submitForVerificationAction(
     ownerId: string
 ): Promise<ActionResponse<null>> { 
     try {
+        // WHAT WAS WRONG HERE
+        // -------------------
+        // There was no session guard, and the ownership check was:
+        //
+        //     if (listingData.ownerId !== ownerId)   // ownerId is a PARAMETER
+        //
+        // It compared the record's owner against a value the caller supplied.
+        // Pass the real owner's id — which is readable from the listing itself,
+        // since getPropertyByIdAction is public — and the check passes.
+        //
+        // That is worse than having no check, because it reads as one. The
+        // function directly below this, _verifyLandListingAction, has always
+        // called requireSession: the guard was on the sibling and not on this.
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) {
+            return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
+        }
+        const { session } = sessionResult;
+
         const listingRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(listingId);
         const listingDoc = await listingRef.get();
 
@@ -115,7 +151,9 @@ async function _submitForVerificationAction(
 
         const listingData = listingDoc.data() as LandListing;
 
-        if (listingData.ownerId !== ownerId) { 
+        // Compared against the SESSION now. The ownerId parameter is retained
+        // for call-site compatibility and is not trusted.
+        if (listingData.ownerId !== session.user.id && !isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized", data: null };
         }
 
@@ -460,12 +498,25 @@ async function _submitLandListingAction(data: {
     availableForLease?: boolean;
     type?: "sale" | "rent" | "lease";
     escrowAvailable?: boolean;
-}): Promise<ActionResponse<{ listingId: string }>> { 
+}): Promise<ActionResponse<{ listingId: string }>> {
     try {
+        // The live one — /land/submit and farm-nation/list-land both call it.
+        // It had no session guard and took ownerId from the request, so a
+        // listing could be published in anyone's name.
+        //
+        // Both callers already pass `session.user.id` from the client session,
+        // so reading it server-side changes nothing they do; it only makes the
+        // value trustworthy.
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) {
+            return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
+        }
+        const { session } = sessionResult;
+
         const listing: any = {
-            ownerId: data.ownerId,
-            ownerName: data.ownerName,
-            ownerEmail: data.ownerEmail,
+            ownerId: session.user.id,
+            ownerName: session.user.name || data.ownerName,
+            ownerEmail: session.user.email || data.ownerEmail,
             title: data.title,
             description: data.description,
             location: data.location,
@@ -565,20 +616,49 @@ async function _submitLandInquiryAction(data: {
     buyerEmail: string;
     buyerPhone: string;
     message: string; 
-}): Promise<ActionResponse<null>> { 
+}): Promise<ActionResponse<null>> {
     try {
+        // Left PUBLIC on purpose — someone enquiring about land should not need
+        // an account first, and that is a product decision rather than an
+        // oversight.
+        //
+        // What was wrong is narrower: `listingOwnerId` and `listingTitle` came
+        // from the caller and were passed straight into createNotificationAction.
+        // So this was an open endpoint for sending a notification to ANY user,
+        // with an attacker-chosen title and body — a phishing primitive wearing
+        // the platform's own branding.
+        //
+        // Both are read from the listing now. The listing must also exist, which
+        // it never had to before.
+        const listingSnap = await db.collection(COLLECTIONS.LAND_LISTINGS).doc(data.listingId).get();
+        if (!listingSnap.exists) {
+            return { success: false, error: "Listing not found", data: null };
+        }
+        const listing = listingSnap.data() as LandListing;
+
+        const listingOwnerId = listing.ownerId;
+        const listingTitle = listing.title;
+
+        if (!listingOwnerId) {
+            return { success: false, error: "This listing has no owner to contact", data: null };
+        }
+
         const inquiryRef = await db.collection(COLLECTIONS.LAND_INQUIRIES).add({
             ...data,
+            // After the spread: the caller's values are recorded nowhere.
+            listingOwnerId,
+            listingTitle,
             status: "pending",
             createdAt: FieldValue.serverTimestamp(),
             read: false
         });
 
         await createNotificationAction({
-            userId: data.listingOwnerId,
+            // The listing's owner, not the caller's nominee.
+            userId: listingOwnerId,
             type: "info",
             title: "New Land Inquiry",
-            message: `You have a new inquiry for "${data.listingTitle}" from ${data.buyerName}.`,
+            message: `You have a new inquiry for "${listingTitle}" from ${data.buyerName}.`,
             link: `/farm-nation/inquiries/${inquiryRef.id}`,
             linkText: "View Inquiry" 
         });
@@ -589,7 +669,7 @@ async function _submitLandInquiryAction(data: {
             userEmail: data.buyerEmail,
             targetId: inquiryRef.id,
             targetType: "land_inquiry",
-            details: `Inquiry for ${data.listingTitle}` 
+            details: `Inquiry for ${listingTitle}` 
         });
 
         return { success: true, error: null, data: null };

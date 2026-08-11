@@ -7,7 +7,8 @@
     "Most entries are public reads (product and course listings, banners) or",
     "pre-auth flows (login, register, password reset), which are correct.",
     "Some are not, and have not been individually triaged. Do not read presence",
-    "in this list as a judgement that the action is safe."
+    "in this list as a judgement that the action is safe.",
+    "land-listings.ts::submitLandInquiryAction stays: enquiring about land is deliberately public. It no longer trusts the caller for listingOwnerId or listingTitle, which is what made it a notification-forgery endpoint."
   ],
   "unguarded": [
     "app/actions/academy/_actions.ts::autoEnrollPaidUser",
@@ -41,12 +42,9 @@
     "app/actions/land-actions.ts::getLandListing",
     "app/actions/land-actions.ts::getLandListings",
     "app/actions/land-actions.ts::getVerifiedLandListings",
-    "app/actions/land-listings.ts::createLandListingAction",
     "app/actions/land-listings.ts::getPropertyByIdAction",
     "app/actions/land-listings.ts::searchLandListingsAction",
-    "app/actions/land-listings.ts::submitForVerificationAction",
     "app/actions/land-listings.ts::submitLandInquiryAction",
-    "app/actions/land-listings.ts::submitLandListingAction",
     "app/actions/marketplace/_actions.ts::getMarketplaceProductsAction",
     "app/actions/marketplace/_actions.ts::getProductByIdAction",
     "app/actions/marketplace/_actions.ts::getRecommendedProductsAction",
