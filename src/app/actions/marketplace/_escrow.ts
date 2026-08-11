@@ -67,6 +67,21 @@ export interface Dispute { id?: string;
     initiatedBy: "buyer" | "seller";
     initiatorId: string;
     respondentId: string;
+    /**
+     * The parties, copied from the escrow when the dispute is raised.
+     *
+     * These are not decoration. Dispute resolution (actions/disputes.ts) reads
+     * `sellerId` / `buyerId` off the dispute to decide who gets paid, and throws
+     * "Target beneficiary ID not found on dispute" when they are absent.
+     *
+     * This interface did not declare them and this file did not write them, so
+     * every dispute raised from the escrow page was unresolvable. The type that
+     * resolution uses — the Dispute in src/types/index.ts — has always declared
+     * both. Two types with one name, disagreeing about which fields exist, and
+     * the writer happened to use the shorter one.
+     */
+    buyerId?: string;
+    sellerId?: string;
     reason: string;
     evidence: string[];
     status: "open" | "under_review" | "resolved" | "closed";
@@ -583,6 +598,45 @@ async function _createDisputeAction(data: { escrowId: string;
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
         const { session } = sessionResult;
 
+        // WHAT WAS WRONG HERE
+        // -------------------
+        // `session` was destructured and then never used. Every identity in the
+        // dispute came from the caller: escrowId, initiatorId, respondentId.
+        // Nothing checked that the caller had any connection to the escrow.
+        //
+        // So any authenticated user could open a dispute on ANY funded escrow —
+        // moving it to "disputed" — and attribute it to whoever they named. The
+        // audit row recorded `userId: data.initiatorId`, so it logged the person
+        // the caller nominated rather than the person who acted.
+        //
+        // This is the vendor-ownership defect exactly: the session is
+        // established and then used for nothing, so authentication stands in for
+        // authorisation.
+        //
+        // The identities are now DERIVED rather than accepted. There is no
+        // version of this where the caller says who they are, so there is
+        // nothing left to forge.
+        const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(data.escrowId);
+        const escrowSnap = await escrowRef.get();
+        if (!escrowSnap.exists) {
+            return { success: false as const, error: "Escrow transaction not found" };
+        }
+
+        const escrow = escrowSnap.data() as EscrowTransaction;
+        const callerId = session.user.id;
+
+        const isBuyer = escrow.buyerId === callerId;
+        const isSeller = escrow.sellerId === callerId;
+
+        if (!isBuyer && !isSeller) {
+            return { success: false as const, error: "Unauthorized" };
+        }
+
+        // Taken from the escrow, never from the request.
+        const initiatedBy: "buyer" | "seller" = isBuyer ? "buyer" : "seller";
+        const initiatorId = callerId;
+        const respondentId = isBuyer ? escrow.sellerId : escrow.buyerId;
+
         const existingQuery = db.collection(COLLECTIONS.DISPUTES)
             .where("escrowId", "==", data.escrowId)
             .where("status", "in", ["open", "under_review"]);
@@ -591,7 +645,6 @@ async function _createDisputeAction(data: { escrowId: string;
         if (!existing.empty) { return { success: false as const, error: "An active dispute already exists for this transaction"};
         }
 
-        const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(data.escrowId);
         const disputeRef = db.collection(COLLECTIONS.DISPUTES).doc();
 
         let escrowSnapData: EscrowTransaction | null = null;
@@ -609,7 +662,26 @@ async function _createDisputeAction(data: { escrowId: string;
 
             escrowSnapData = escrowData;
 
+            // The derived identities are written AFTER the spread, so a
+            // forged initiatorId or respondentId in the request cannot survive
+            // into the stored dispute. Field order is doing real work here —
+            // reversed, this reintroduces the whole defect. That fragility is
+            // the mass-assignment caveat recorded in
+            // security-review-2026-08-10.md.
             const dispute: Omit<Dispute, "id"> & { _version: number } = { ...data,
+                initiatedBy,
+                initiatorId,
+                respondentId,
+                // The parties as the ESCROW records them.
+                //
+                // Dispute resolution reads freshDispute.sellerId / buyerId and
+                // throws "Target beneficiary ID not found on dispute" when they
+                // are missing. Disputes created here carried neither, so every
+                // dispute raised from the escrow page was UNRESOLVABLE — an
+                // admin could neither release nor refund it. Money was not
+                // misdirected; it was stuck.
+                buyerId: escrowData.buyerId,
+                sellerId: escrowData.sellerId,
                 evidence: [],
                 status: "open",
                 _version: 0,
@@ -623,18 +695,18 @@ async function _createDisputeAction(data: { escrowId: string;
         });
 
         await createAdminAuditLog({ action: "dispute_created",
-            userId: data.initiatorId,
+            userId: initiatorId,
             targetId: disputeRef.id,
             targetType: "dispute",
             metadata: {
                 escrowId: data.escrowId,
-                initiatedBy: data.initiatedBy } });
+                initiatedBy: initiatedBy } });
 
         if (escrowSnapData) {
             const tx = escrowSnapData as EscrowTransaction;
 
             await createNotificationAction({
-                userId: data.respondentId,
+                userId: respondentId,
                 type: "dispute",
                 title: "Dispute Raised",
                 message: `A dispute has been opened for escrow transaction "${tx.productName}". Our team will review the case.`,
@@ -642,7 +714,7 @@ async function _createDisputeAction(data: { escrowId: string;
                 linkText: "View Dispute" }).catch((e) => logger.error("[createDisputeAction] Respondent notification failed:", e));
 
             await createNotificationAction({
-                userId: data.initiatorId,
+                userId: initiatorId,
                 type: "dispute",
                 title: "Dispute Submitted",
                 message: `Your dispute for "${tx.productName}" has been submitted. Our admin team will review and respond within 2–5 business days.`,

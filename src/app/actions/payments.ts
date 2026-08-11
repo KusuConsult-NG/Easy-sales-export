@@ -7,7 +7,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { logAdminFinancialAction, createAdminAuditLog } from "@/lib/audit-log";
 import { serializeDocs, serializeDoc } from "@/lib/firestore-serialize";
-import { requireSession } from "@/lib/session-guard";
+import { requireSession, isAdmin } from "@/lib/session-guard";
 import { ActionResponse } from "@/lib/safe-action";
 
 /**
@@ -44,6 +44,25 @@ export async function createPaymentRecordAction(data: { userId: string;
     metadata?: Record<string, any>; }): Promise<ActionResponse<any>> { try {
         const sessionResult = await requireSession();
         if (sessionResult.error) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
+
+        // The session was established and then never consulted. `userId`,
+        // `amount`, `paymentReference` and `purpose` all arrived from the
+        // caller, so any authenticated user could file a payment record against
+        // anybody, for any amount — and the audit row below recorded it under
+        // the named user rather than the actual one.
+        //
+        // This action currently has no caller, so nothing was exploited. It is
+        // guarded rather than deleted because a payment writer that trusts a
+        // caller-supplied identity is worth neutralising wherever it sits, and
+        // the fix is smaller than the argument for removing it.
+        //
+        // Admins keep the ability to record a payment on someone's behalf —
+        // that is the reconciliation case that submitRepaymentAction exists for.
+        const callerId = sessionResult.session?.user?.id;
+        const actingAsAdmin = isAdmin(sessionResult.session?.user?.roles);
+        if (!callerId || (callerId !== data.userId && !actingAsAdmin)) {
+            return { success: false, error: "Unauthorized", data: null };
+        }
 
         const payment: Omit<PaymentRecord, "id"> = { ...data,
             status: "pending",
