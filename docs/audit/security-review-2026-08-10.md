@@ -82,9 +82,24 @@ const escrow = { ...data,              // caller-supplied
 ```
 
 Reverse those two lines and it becomes privilege escalation — an escrow created
-already funded, without payment. Fourteen sites depend on this, and nothing
-enforces it. A schema validation layer (the codebase already uses Zod elsewhere)
-would make the property structural rather than incidental.
+already funded, without payment. Fourteen sites depend on this.
+
+**ENFORCED 2026-08-11.** `mass-assignment.test.ts` fails the build when a
+security-relevant field is assigned before a caller-controlled spread in the
+same object literal. The live count is zero, so it starts green and only ever
+fails on a regression.
+
+It restricts to spreads rooted in a function PARAMETER, which matters: a first
+pass flagged thirteen sites, and the worst two were a conditional spread of
+server timestamps and a spread of a document loaded from the database. Neither
+is reachable by a caller. Narrowing took 13 to 0, and 0 is the correct answer
+that the noisier version would have buried.
+
+Verified end to end by reversing the two lines in the real `_createEscrowAction`
+and confirming the gate names the file, the line, and both fields.
+
+Zod would still be a better answer — this enforces the ordering rather than
+removing the need for it.
 
 `_createEscrowAction` now validates `amount` and `sellerId` at runtime, because
 the parameter type is TypeScript and is erased at the wire.
