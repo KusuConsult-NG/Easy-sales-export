@@ -105,7 +105,7 @@ export default function VendorDashboardPage() {
                         <p className="text-slate-600">Manage your products and sales</p>
                     </div>
                     <Link
-                        href="/vendor/products/new"
+                        href="/marketplace/sell"
                         className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition"
                     >
                         <Package className="w-4 h-4" />

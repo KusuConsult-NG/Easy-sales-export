@@ -8,7 +8,8 @@
     "pre-auth flows (login, register, password reset), which are correct.",
     "Some are not, and have not been individually triaged. Do not read presence",
     "in this list as a judgement that the action is safe.",
-    "land-listings.ts::submitLandInquiryAction stays: enquiring about land is deliberately public. It no longer trusts the caller for listingOwnerId or listingTitle, which is what made it a notification-forgery endpoint."
+    "land-listings.ts::submitLandInquiryAction stays: enquiring about land is deliberately public. It no longer trusts the caller for listingOwnerId or listingTitle, which is what made it a notification-forgery endpoint.",
+    "2026-08-11: the remaining entries were triaged against the collections they touch. What is left is public listings (products, courses, banners, land), pre-auth flows (login, register, password reset), and callbacks whose credential is the reference itself (wallet/verify, whatsapp-invite). None returns another user's record keyed on a caller-supplied id \u2014 that was the class, and it is now empty."
   ],
   "unguarded": [
     "app/actions/academy/_actions.ts::autoEnrollPaidUser",
@@ -25,8 +26,6 @@
     "app/actions/auth.ts::preValidateLoginAction",
     "app/actions/auth.ts::registerAction",
     "app/actions/broadcast.ts::getBroadcastHistoryAction",
-    "app/actions/certificates.ts::checkOnboardingStatusAction",
-    "app/actions/certificates.ts::getUserCertificatesAction",
     "app/actions/cms.ts::getActiveAnnouncementsAction",
     "app/actions/cms.ts::getActiveBannersAction",
     "app/actions/cooperative/_actions.ts::validateCooperativeInviteAction",
@@ -59,7 +58,6 @@
     "app/actions/notifications.ts::createNotificationAction",
     "app/actions/password-reset.ts::resetPasswordAction",
     "app/actions/password-reset.ts::sendResetEmailAction",
-    "app/actions/payments.ts::getPaymentByReferenceAction",
     "app/actions/resource-actions.ts::getResourcesAction",
     "app/actions/reviews.ts::getProductReviewsAction",
     "app/actions/reviews.ts::getSellerRatingAction",
