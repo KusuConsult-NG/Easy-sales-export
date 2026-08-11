@@ -112,6 +112,18 @@ export async function getUserPaymentHistoryAction(userId: string): Promise<Payme
 export async function getPaymentByReferenceAction(
     paymentReference: string
 ): Promise<PaymentRecord | null> { try {
+        // This returned a full PaymentRecord — userId, userEmail, amount,
+        // purpose, metadata — to anyone holding a reference, with no session at
+        // all. Payment references are not secrets: they appear in Paystack
+        // callback URLs, in receipts, and in emails.
+        //
+        // The record is now returned only to the person it belongs to, or an
+        // admin. A caller who is not entitled to it gets null rather than an
+        // error, so the endpoint does not confirm which references exist.
+        const sessionResult = await requireSession();
+        const session = sessionResult.session;
+        if (!session?.user?.id) return null;
+
         const snapshot = await db.collection(COLLECTIONS.PAYMENTS)
             .where("paymentReference", "==", paymentReference)
             .get();
@@ -120,7 +132,12 @@ export async function getPaymentByReferenceAction(
             return null;
         }
 
-        return serializeDoc<PaymentRecord>(snapshot.docs[0].id, snapshot.docs[0].data());
+        const record = serializeDoc<PaymentRecord>(snapshot.docs[0].id, snapshot.docs[0].data());
+        if (record?.userId !== session.user.id && !isAdmin(session.user.roles)) {
+            return null;
+        }
+
+        return record;
     } catch (error) { logger.error("Failed to fetch payment:", error);
         return null;
     }

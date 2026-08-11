@@ -349,7 +349,7 @@ export default function FarmNationDashboard() {
                                 <ArrowRight className="w-4 h-4 text-slate-400 group-hover:translate-x-1 transition-transform" />
                             </Link>
                             <Link
-                                href="/farm-nation/my-transactions"
+                                href="/farm-nation/my-purchases"
                                 className="group flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition"
                             >
                                 <div className="flex items-center gap-3">

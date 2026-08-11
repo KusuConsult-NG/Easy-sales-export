@@ -3,7 +3,7 @@
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { requireSession } from "@/lib/session-guard";
+import { requireSession, isAdmin } from "@/lib/session-guard";
 import { FieldValue } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { serializeDocs } from "@/lib/firestore-serialize";
@@ -94,6 +94,20 @@ export async function uploadCertificateAction(
  * Get user certificates
  */
 export async function getUserCertificatesAction(userId: string): Promise<Certificate[]> { try {
+        // Was unauthenticated and took the userId from the caller, so anyone
+        // could read anyone's certificates. User ids are not secret — they
+        // appear as ownerId on public land listings, among other places.
+        //
+        // No caller today, but a dead export is still a reachable server
+        // action. Guarded rather than deleted, matching createPaymentRecordAction.
+        //
+        // Public *verification* of a certificate is a separate, deliberate
+        // endpoint: /api/academy/verify/[certificateId].
+        const sessionResult = await requireSession();
+        const session = sessionResult.session;
+        if (!session?.user?.id) return [];
+        if (session.user.id !== userId && !isAdmin(session.user.roles)) return [];
+
         const q = db.collection(COLLECTIONS.CERTIFICATES).where("userId", "==", userId);
         const snapshot = await q.get();
 
@@ -196,6 +210,13 @@ export async function completeOnboardingAction(userId: string): Promise<
  * Check if user has completed onboarding
  */
 export async function checkOnboardingStatusAction(userId: string): Promise<boolean> { try {
+        // Same shape: an unauthenticated read of another user's record, keyed
+        // on a caller-supplied id.
+        const sessionResult = await requireSession();
+        const session = sessionResult.session;
+        if (!session?.user?.id) return false;
+        if (session.user.id !== userId && !isAdmin(session.user.roles)) return false;
+
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
         const userDoc = await userRef.get();
 

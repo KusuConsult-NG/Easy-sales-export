@@ -88,7 +88,7 @@ export default function ActivityFeed() {
                     Recent Activity
                 </h3>
                 <a
-                    href="/activity"
+                    href="/dashboard/notifications"
                     className="text-sm font-semibold text-primary hover:underline flex items-center gap-1"
                 >
                     View All
