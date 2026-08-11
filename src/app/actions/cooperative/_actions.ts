@@ -1,6 +1,7 @@
 "use server";
 
 import { supabaseDb as db } from "@/lib/supabase-db";
+import { isPaymentBypassAccount } from "@/lib/payment-bypass";
 import { runQueryWithRetry } from "@/lib/firestore-utils";
 import { normalizeUserUpdate } from "@/lib/schema-normalizer";
 import { logger } from '@/lib/logger';
@@ -49,7 +50,7 @@ import { parseCurrencyStringToFloat } from "@/lib/utils";
  */
 
 async function autoProvisionZereCooperative(userId: string, email: string) {
-    if (email !== "zeredogo@gmail.com") return;
+    if (!isPaymentBypassAccount(email)) return;
     
     try {
         const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
@@ -198,8 +199,8 @@ async function _initiateCooperativePaymentAction(
 
         const userId = session.user.id;
         
-        // Unified Bypass for zeredogo@gmail.com
-        if (session.user.email === "zeredogo@gmail.com") {
+        // Payment bypass — see src/lib/payment-bypass.ts for who and why.
+        if (isPaymentBypassAccount(session.user.email)) {
             await autoProvisionZereCooperative(userId, session.user.email);
             return {
                 error: null,
@@ -891,7 +892,7 @@ async function _getMembershipAction(): Promise<GetMembershipState> { try {
         const userData = userDoc.exists ? userDoc.data() : null;
 
         // Auto-provision bypass
-        if (session.user.email === "zeredogo@gmail.com") {
+        if (isPaymentBypassAccount(session.user.email)) {
             await autoProvisionZereCooperative(userId, session.user.email);
         } else if (userData) {
             await autoProvisionLegacyCooperative(userId, userData);
@@ -1014,7 +1015,7 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
         if (!sessionResult.session) return null;
         const { session } = sessionResult;
 
-        if (session.user.email === "zeredogo@gmail.com") {
+        if (isPaymentBypassAccount(session.user.email)) {
             await autoProvisionZereCooperative(session.user.id, session.user.email);
             return "approved";
         }
@@ -1142,7 +1143,7 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
                 memberDocData.paymentStatus !== 'completed' && 
                 !isLegacy && 
                 !isApprovedOrActive && 
-                session.user.email !== "zeredogo@gmail.com"
+                !isPaymentBypassAccount(session.user.email)
             ) {
                 return 'payment_required';
             }

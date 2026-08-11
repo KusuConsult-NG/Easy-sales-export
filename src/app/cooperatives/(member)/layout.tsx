@@ -5,6 +5,7 @@
  */
 
 import { cookies, headers } from "next/headers";
+import { isPaymentBypassAccount } from "@/lib/payment-bypass";
 import { logger } from '@/lib/logger';
 import { redirect } from "next/navigation";
 import { checkModuleAccess } from "@/lib/module-access-check";
@@ -99,7 +100,7 @@ async function CooperativeLayoutContent({ children }: { children: React.ReactNod
                                memberData.lastName === "undefined"
                            ) && 
                                session.user.email !== "cooperativeuser02@gmail.com" &&
-                               session.user.email !== "zeredogo@gmail.com";
+                               !isPaymentBypassAccount(session.user.email);
 
             if (isCorrupted) {
 
