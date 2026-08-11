@@ -109,6 +109,27 @@ export async function bookExportSlotAction(data: { windowId: string;
         const sessionResult = await requireSession();
         if (sessionResult.error) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
 
+        // WHAT WAS WRONG HERE
+        // -------------------
+        // requireSession() was called and the result never used again. The slot
+        // was booked for `data.userId` — a caller-supplied id — so any
+        // authenticated user could book an export slot in anyone's name, and
+        // the audit row and notification below both named the nominated user
+        // rather than the actor.
+        //
+        // Authentication standing in for authorisation: the same defect as the
+        // vendor writers, _createDisputeAction, and the land listings.
+        //
+        // Every use in this function is replaced, not just the first. Fixing
+        // one copy and leaving its siblings is how this class keeps surviving —
+        // it is the mistake made in _submitLandListingAction earlier today,
+        // where the write was corrected and the audit log and notification were
+        // left reading the request.
+        const bookingUserId = sessionResult.session?.user?.id;
+        if (!bookingUserId) {
+            return { success: false as const, error: "Authentication required", data: null };
+        }
+
         const windowRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(data.windowId);
         const windowDoc = await windowRef.get();
 
@@ -166,7 +187,7 @@ export async function bookExportSlotAction(data: { windowId: string;
         const totalCost = data.volume * windowData.slotPrice;
 
         const slot: Omit<ExportSlot, "id"> = { windowId: data.windowId,
-            userId: data.userId,
+            userId: bookingUserId,
             userEmail: data.userEmail,
             fullName: data.fullName,
             volume: data.volume,
@@ -179,7 +200,7 @@ export async function bookExportSlotAction(data: { windowId: string;
         await windowRef.update({ updatedAt: FieldValue.serverTimestamp() });
 
         await createAdminAuditLog({ action: "user_update",
-            userId: data.userId,
+            userId: bookingUserId,
             targetId: slotRef.id,
             targetType: "export_slot_booking",
             metadata: {

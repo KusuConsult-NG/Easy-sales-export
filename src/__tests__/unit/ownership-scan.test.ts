@@ -132,9 +132,18 @@ describe('what it cannot see — each of these was a false positive worth readin
         expect(found).toContain('completeCourse'); // flagged, but correct code
     });
 
-    it('membership tested with .includes rather than a comparison', async () => {
-        // addFlashSaleProductAction. `participantIds.includes(userId)` is a
-        // call, not a binary expression, so the comparison rule never fires.
+    it('membership tested with .includes — no longer a false positive', async () => {
+        // addFlashSaleProductAction. This USED to be reported: `.includes()` is
+        // a call, not a binary expression, so the comparison rule never fired.
+        //
+        // It is now cleared for a different and better reason — the write is
+        // `sellerId: userId` where userId came from the session, which settles
+        // ownership by construction. The `.includes()` blindness is still
+        // there; it just stopped mattering here.
+        //
+        // Recorded as a change of behaviour rather than deleted, because the
+        // original limitation is real and the next reader should know which
+        // rule is doing the work.
         const found = scan(`
             "use server";
             export async function addProduct(data: { eventId: string; title: string }) {
@@ -147,7 +156,109 @@ describe('what it cannot see — each of these was a false positive worth readin
             }
         `);
 
-        expect(found).toContain('addProduct'); // flagged, but correct code
+        expect(found).not.toContain('addProduct');
+    });
+
+    it('still cannot see membership when the write carries no identity field', async () => {
+        // The `.includes()` limitation, isolated. Ownership is enforced and the
+        // scanner cannot tell, because nothing in the write names the caller.
+        const found = scan(`
+            "use server";
+            export async function archiveEvent(data: { eventId: string }) {
+                const { session } = await requireSession();
+                const event = await db.collection("events").doc(data.eventId).get();
+                if (!(event.data().organiserIds || []).includes(session.user.id)) {
+                    return { error: "Not an organiser" };
+                }
+                await db.collection("events").doc(data.eventId).update({ archived: true });
+            }
+        `);
+
+        expect(found).toContain('archiveEvent'); // flagged, but correct code
+    });
+});
+
+describe('corrections made after it missed a real bug', () => {
+    it('does not treat a ceiling guard as an ownership guard', async () => {
+        // THE correction. bookExportSlotAction authenticated, ignored the
+        // session, and booked an export slot for a caller-supplied userId — and
+        // was invisible here because it calls incrementWithinCeiling, which was
+        // wrongly on the owner-aware list.
+        //
+        // incrementWithinCeiling enforces a CEILING. It does not know who the
+        // caller is, so it is no evidence that ownership was checked.
+        const found = scan(`
+            "use server";
+            export async function bookSlot(data: { windowId: string; userId: string }) {
+                const { session } = await requireSession();
+                await incrementWithinCeiling({ id: data.windowId, ceiling: 100 });
+                await db.collection("slots").add({ userId: data.userId });
+            }
+        `);
+
+        expect(found).toContain('bookSlot');
+    });
+
+    it('accepts ownership established by construction', async () => {
+        // `ownerId: session.user.id` cannot be forged, so there is nothing left
+        // to compare. Requiring a comparison flagged every correct writer.
+        const found = scan(`
+            "use server";
+            export async function createThing(data: { ownerId: string; title: string }) {
+                const { session } = await requireSession();
+                await db.collection("things").add({ ...data, ownerId: session.user.id });
+            }
+        `);
+
+        expect(found).not.toContain('createThing');
+    });
+
+    it('follows a session-derived local into the identity field', async () => {
+        // bookExportSlotAction was fixed with a local, not a direct reference,
+        // and kept being reported until this was handled.
+        const found = scan(`
+            "use server";
+            export async function bookSlot(data: { windowId: string; userId: string }) {
+                const sessionResult = await requireSession();
+                const bookingUserId = sessionResult.session?.user?.id;
+                await db.collection("slots").add({ windowId: data.windowId, userId: bookingUserId });
+            }
+        `);
+
+        expect(found).not.toContain('bookSlot');
+    });
+
+    it('handles the shorthand property form', async () => {
+        // `{ ownerId }` is a different AST node from `{ ownerId: x }`, and was
+        // missed entirely — _createLandListingAction stayed flagged after it had
+        // been fixed.
+        const found = scan(`
+            "use server";
+            export async function createThing(data: { title: string }) {
+                const { session } = await requireSession();
+                const ownerId = session.user.id;
+                await db.collection("things").add({ ...data, ownerId });
+            }
+        `);
+
+        expect(found).not.toContain('createThing');
+    });
+
+    it('still flags the vendor case, where the session only stamps an audit row', async () => {
+        // Vacuity guard for all four above. Recording WHO acted is not deciding
+        // whether they MAY, and widening the rule must not lose that.
+        const found = scan(`
+            "use server";
+            export async function zeroStock(productId: string) {
+                const { session } = await requireSession();
+                await db.collection("products").doc(productId).update({
+                    stock: 0,
+                    updatedBy: session.user.id,
+                });
+            }
+        `);
+
+        expect(found).toContain('zeroStock');
     });
 });
 
