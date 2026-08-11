@@ -114,17 +114,68 @@ types it does not check.
   and is still not applied to production. Until it is, the browser's public key
   can read and write every table. **This remains the largest unaddressed
   exposure in the system**, and it is configuration rather than code.
-- **Session and cookie handling** beyond confirming MFA sets `httpOnly` and
-  `secure`. NextAuth configuration, session lifetime, and fixation were not
-  reviewed.
-- **File upload validation** — type, size and content checks on the upload
-  routes.
+- ~~**Session and cookie handling**~~ — REVIEWED 2026-08-11, see below.
+- ~~**File upload validation**~~ — FIXED 2026-08-11. `/api/upload` validated the
+  Content-Type the *client* declared. `storage-admin.ts` had always read the
+  magic bytes and failed closed, but only the marketplace path used it. The
+  generic route behind `MasterUploader` — the one most uploads take — now calls
+  the same validator.
 - **The remaining ~18 IDOR candidates** from the detector sweep. Those triaged
   were admin actions using idioms the detector did not recognise; the rest were
   not individually read.
-- **Dependency vulnerabilities** — no `npm audit` review.
+- ~~**Dependency vulnerabilities**~~ — CLEARED 2026-08-11. 24 advisories, 2
+  critical and 9 high, down to 13 with **zero critical and zero high**. Both
+  criticals were in the auth stack, including *"configuration errors can cause
+  existence-based auth checks to fail open"* — and this codebase guards with
+  `if (!sessionResult.session)` in roughly a hundred places.
 - **Authorisation on server actions generally.** `action-security-audit.test.ts`
   enforces that action *files* import `requireSession`. It is file-level, so a
   file can import the guard and contain functions that never call it — which is
   exactly how the vendor defects survived. A per-function check would be worth
   building.
+
+
+## Session, cookies and transport — reviewed 2026-08-11
+
+Checked against the running production site rather than the source alone, since
+the two can disagree and only one of them serves users.
+
+| Checked | Result |
+|---|---|
+| **Session lifetime** | JWT, `maxAge` 8 hours, `updateAge` 1 hour. Appropriate for a platform holding money. |
+| **Cookie flags** | `httpOnly`, `secure`, `sameSite: lax`. Live response confirms the `__Host-` and `__Secure-` prefixes, which also proves `NODE_ENV=production` really is set in the container — `secure` keys off it. |
+| **CSRF** | `__Host-authjs.csrf-token` present and correctly prefixed. |
+| **Session fixation** | Not applicable in the classic sense: the JWT strategy issues a fresh token at sign-in rather than promoting an anonymous session. |
+| **HSTS** | `max-age=63072000; includeSubDomains; preload`. Two years, preloaded. |
+| **Clickjacking** | `x-frame-options: DENY` *and* `frame-ancestors 'none'`. |
+| **MIME sniffing** | `x-content-type-options: nosniff`. |
+| **Admin route protection** | `/admin/layout.tsx` requires a session and checks `isAdmin`. The two admin-capable pages outside that tree — `/loans/approve` and `/escrow` — are cosmetic only: every action they call re-checks the role server-side, and the list actions return empty for non-admins. |
+
+### The one real weakness: `script-src 'unsafe-inline'`
+
+Everything above is in good order. This is not.
+
+`'unsafe-inline'` in `script-src` removes most of what CSP is for. The XSS review
+found three `dangerouslySetInnerHTML` sites and judged them safe — but "safe"
+there means *no injection was found*, and CSP exists for the injection nobody
+found.
+
+Three inline scripts in `src/app/layout.tsx` are why it is there: a theme
+no-flash guard, and two JSON-LD blocks. `<script type="application/ld+json">` is
+still governed by `script-src`.
+
+**The fix is nonces**, and it is not a small change:
+
+1. the CSP is a static header in `next.config.ts`, and a nonce must be per
+   request — so it has to move into `src/middleware.ts`
+2. all three scripts must read that nonce via `headers()`
+3. the static `script-src` must then drop `'unsafe-inline'`
+
+**Deliberately not done here.** `src/middleware.ts` is the file that gates every
+protected route, and the failure modes are a white screen (no script runs) or a
+broken login — neither of which a build or a unit test detects. It needs a
+browser against a running instance, which is not available while the deploy is
+blocked.
+
+Worth doing on the first working deploy, and cheap to verify once there is one:
+load any page and check the console for CSP violations.
