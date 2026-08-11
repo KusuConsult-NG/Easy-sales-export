@@ -18,6 +18,7 @@
  */
 
 import { hasAppAccess, type AppIdentifier } from "@/lib/role-app-mapping";
+import { isPaymentBypassAccount } from "@/lib/payment-bypass";
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { UserRole } from "@/lib/types/roles";
@@ -76,10 +77,10 @@ export async function checkModuleAccess(
 
         const userData = userDoc.data()!;
 
-        // Unified Bypass for zeredogo@gmail.com
-        if (userData.email === "zeredogo@gmail.com") {
+        // Payment bypass — see src/lib/payment-bypass.ts for who and why.
+        if (isPaymentBypassAccount(userData.email)) {
             if (app === "cooperatives" || app === "academy") {
-                logger.info(`[ModuleAccess] Unified bypass for zeredogo@gmail.com on '${app}'`);
+                logger.info(`[ModuleAccess] payment bypass applied on '${app}'`);
                 return true;
             }
         }

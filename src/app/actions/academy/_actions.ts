@@ -1,6 +1,7 @@
 "use server";
 
 import { supabaseDb as db } from "@/lib/supabase-db";
+import { isPaymentBypassAccount } from "@/lib/payment-bypass";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
@@ -19,7 +20,7 @@ import { AcademyApplicationInputSchema, AcademyApplicationInput } from "@/lib/va
 import { ACADEMY_CONFIG } from "@/lib/constants";
 
 async function autoProvisionZereAcademy(userId: string, email: string) {
-    if (email !== "zeredogo@gmail.com") return;
+    if (!isPaymentBypassAccount(email)) return;
     
     try {
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);

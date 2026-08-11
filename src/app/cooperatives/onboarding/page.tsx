@@ -1,4 +1,5 @@
 import { requireHubRegistration } from "@/lib/hub-guard";
+import { isPaymentBypassAccount } from "@/lib/payment-bypass";
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { redirect } from "next/navigation";
@@ -39,7 +40,7 @@ export default async function CooperativeOnboardingPage(
     const { session } = sessionResult;
 
     let paymentStatus = "pending";
-    if (session.user.email === "zeredogo@gmail.com") {
+    if (isPaymentBypassAccount(session.user.email)) {
         paymentStatus = "completed";
     } else {
         try {

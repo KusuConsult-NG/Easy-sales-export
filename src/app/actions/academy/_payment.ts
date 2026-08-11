@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { isPaymentBypassAccount } from "@/lib/payment-bypass";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { initializePaystackPayment, verifyPaystackPayment } from "@/lib/paystack-server";
@@ -21,7 +22,7 @@ const paymentLimiter = rateLimit(rateLimitConfig.payment);
 function nairaToKobo(naira: number): number { return Math.round(naira * 100); }
 
 async function autoProvisionZereAcademy(userId: string, email: string) {
-    if (email !== "zeredogo@gmail.com") return;
+    if (!isPaymentBypassAccount(email)) return;
     
     try {
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
@@ -284,8 +285,8 @@ async function _initiateAcademyPaymentAction(plan: "foundation" | "standard" | "
 
         const userId = session.user.id;
 
-        // Unified Bypass for zeredogo@gmail.com
-        if (session.user.email === "zeredogo@gmail.com") {
+        // Payment bypass — see src/lib/payment-bypass.ts for who and why.
+        if (isPaymentBypassAccount(session.user.email)) {
             await autoProvisionZereAcademy(userId, session.user.email);
             return { error: null, success: true as const, data: { paymentUrl: "/academy/dashboard" } };
         }
@@ -519,8 +520,8 @@ async function _checkAcademyPaymentStatusAction(): Promise<ActionResponse<any>> 
         const { session } = sessionResult;
         if (!session?.user?.id) return { error: null, success: true as const, data: "unpaid" };
 
-        // Unified Bypass for zeredogo@gmail.com
-        if (session.user.email === "zeredogo@gmail.com") {
+        // Payment bypass — see src/lib/payment-bypass.ts for who and why.
+        if (isPaymentBypassAccount(session.user.email)) {
             await autoProvisionZereAcademy(session.user.id, session.user.email);
             return { error: null, success: true as const, data: "paid" };
         }
