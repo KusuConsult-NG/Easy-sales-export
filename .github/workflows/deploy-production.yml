@@ -1,5 +1,10 @@
 name: Deploy — Production (Manual Gate)
 
+# The repo default is already read-only, but an org-level change would
+# silently widen every workflow. Declared here so it cannot.
+permissions:
+  contents: read
+
 on:
   workflow_dispatch:
     inputs:

@@ -42,6 +42,11 @@ name: Scheduled Jobs
 # Until then every run fails loudly at the preflight step rather than silently
 # doing nothing — a scheduler that quietly no-ops is how this situation arose.
 
+# The repo default is already read-only, but an org-level change would
+# silently widen every workflow. Declared here so it cannot.
+permissions:
+  contents: read
+
 on:
   schedule:
     - cron: '*/15 * * * *'   # process-email-queue  — every 15 minutes
