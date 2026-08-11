@@ -83,10 +83,49 @@ jest.mock('@/lib/firebase-admin', () => {
                 get: () => global.mockFirestoreGet(name),
                 count: () => ({
                     get: () => global.mockFirestoreGet(name + "_count")
-                })
+                }),
+
+                // ── Chainable methods the real adapter has and the mock did not
+                //
+                // Every one of these threw `x is not a function` when a test
+                // reached it. Most callers wrap their work in try/catch, so the
+                // throw was swallowed and the action returned a generic failure
+                // — leaving assertions that could never fail.
+                //
+                // That is not hypothetical: three such gaps surfaced by accident
+                // in a single day (collection().add(), docRef.set(),
+                // batch.delete()). These were found by diffing the adapter's
+                // method surface against this file instead of waiting for the
+                // next test to trip over one.
+                //
+                // Usage in src at the time of writing: .select() 96 call sites,
+                // query .all() 34, .getAll() 17.
+                select: () => queryObj,
+                offset: () => queryObj,
+                startAt: () => queryObj,
+                endAt: () => queryObj,
+                endBefore: () => queryObj,
+
+                // .all() bypasses the default row cap. It returns the same shape
+                // as .get(), so tests that stub mockFirestoreGet keep working
+                // without knowing which one the code under test chose.
+                all: () => global.mockFirestoreGet(name),
+
+                aggregate: () => ({
+                    get: () => global.mockFirestoreGet(name + "_aggregate")
+                }),
+                create: (data) => {
+                    global.mockFirestoreAdd(name, data);
+                    return Promise.resolve({ id: 'mock-generated-id' });
+                }
             };
             return queryObj;
         },
+        // db.getAll(...refs) reads several documents at once. Unmocked, any
+        // action using it threw before its first assertion.
+        getAll: (...refs) => Promise.all(
+            refs.flat().map((r) => global.mockFirestoreGet(r && r.id ? r.id : 'getAll'))
+        ),
         batch: () => {
             global.mockFirestoreBatch();
             return {
@@ -146,7 +185,41 @@ jest.mock('@/lib/supabase-db', () => {
                 get: () => global.mockFirestoreGet(name),
                 count: () => ({
                     get: () => global.mockFirestoreGet(name + "_count")
-                })
+                }),
+
+                // ── Chainable methods the real adapter has and the mock did not
+                //
+                // Every one of these threw `x is not a function` when a test
+                // reached it. Most callers wrap their work in try/catch, so the
+                // throw was swallowed and the action returned a generic failure
+                // — leaving assertions that could never fail.
+                //
+                // That is not hypothetical: three such gaps surfaced by accident
+                // in a single day (collection().add(), docRef.set(),
+                // batch.delete()). These were found by diffing the adapter's
+                // method surface against this file instead of waiting for the
+                // next test to trip over one.
+                //
+                // Usage in src at the time of writing: .select() 96 call sites,
+                // query .all() 34, .getAll() 17.
+                select: () => queryObj,
+                offset: () => queryObj,
+                startAt: () => queryObj,
+                endAt: () => queryObj,
+                endBefore: () => queryObj,
+
+                // .all() bypasses the default row cap. It returns the same shape
+                // as .get(), so tests that stub mockFirestoreGet keep working
+                // without knowing which one the code under test chose.
+                all: () => global.mockFirestoreGet(name),
+
+                aggregate: () => ({
+                    get: () => global.mockFirestoreGet(name + "_aggregate")
+                }),
+                create: (data) => {
+                    global.mockFirestoreAdd(name, data);
+                    return Promise.resolve({ id: 'mock-generated-id' });
+                }
             };
             return queryObj;
         },
