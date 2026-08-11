@@ -57,12 +57,23 @@ const WRITE_CALLS = new Set([
     "update", "set", "delete", "add", "create", "commit",
 ]);
 
-/** Claim primitives that take the owner explicitly and enforce it in SQL. */
+/**
+ * Claim primitives that take the OWNER explicitly and enforce it in SQL.
+ *
+ * Narrower than it first was, and the correction came from a bug this scanner
+ * failed to report. `bookExportSlotAction` authenticated, ignored the session,
+ * and booked a slot for a caller-supplied userId — and was invisible here
+ * because it calls `incrementWithinCeiling`, which was on this list.
+ *
+ * incrementWithinCeiling enforces a CEILING. decrementManyOrFail enforces
+ * STOCK. claimVersionedUpdate enforces a VERSION. claimIdempotencyKey enforces
+ * a KEY. None of them knows who the caller is, so none of them is evidence that
+ * ownership was checked. Only primitives that take a user id belong here.
+ */
 const OWNER_AWARE_PRIMITIVES = new Set([
     "debitWalletOnce", "debitWalletLocked", "debitJsonbBalance",
     "debitJsonbBalanceWithFloor", "creditWalletOnce", "claimPaymentOnce",
-    "claimIdempotencyKey", "claimVersionedUpdate", "decrementManyOrFail",
-    "incrementWithinCeiling", "claimSingleOpenLoanApplication",
+    "claimSingleOpenLoanApplication",
 ]);
 
 export interface OwnershipLead {
@@ -107,8 +118,51 @@ function looksLikeIdentityComparison(node: ts.BinaryExpression): boolean {
     return /\b(userid|session|uid|ownerid|sellerid|buyerid|memberid|createdby)\b/.test(text);
 }
 
+/**
+ * Names holding a session-derived value, resolved to a fixed point.
+ *
+ * Needed because ownership is often established through a local:
+ *
+ *     const bookingUserId = sessionResult.session?.user?.id;
+ *     ...
+ *     userId: bookingUserId
+ *
+ * Matching only the literal text "session" missed those, which is why
+ * bookExportSlotAction still appeared after it had been fixed.
+ */
+function sessionDerived(fn: ts.Node): Set<string> {
+    const names = new Set<string>(["session", "sessionResult"]);
+    let changed = true;
+    while (changed) {
+        changed = false;
+        const visit = (n: ts.Node) => {
+            if (ts.isVariableDeclaration(n) && n.initializer) {
+                const init = n.initializer.getText();
+                const hit = /\bsession\b/i.test(init) ||
+                    [...names].some((v) => new RegExp(`\\b${v}\\b`).test(init));
+                if (hit) {
+                    if (ts.isIdentifier(n.name) && !names.has(n.name.text)) {
+                        names.add(n.name.text); changed = true;
+                    }
+                    if (ts.isObjectBindingPattern(n.name)) {
+                        for (const el of n.name.elements) {
+                            if (ts.isIdentifier(el.name) && !names.has(el.name.text)) {
+                                names.add(el.name.text); changed = true;
+                            }
+                        }
+                    }
+                }
+            }
+            ts.forEachChild(n, visit);
+        };
+        ts.forEachChild(fn, visit);
+    }
+    return names;
+}
+
 function analyseFunction(node: ts.Node, source: ts.SourceFile): FnFacts {
     const facts: FnFacts = { guarded: false, writes: false, decides: false, takesId: false };
+    const fromSession = sessionDerived(node);
 
     // Does it take an id-ish parameter? A function with no caller-supplied
     // identifier has nothing to confuse.
@@ -141,6 +195,33 @@ function analyseFunction(node: ts.Node, source: ts.SourceFile): FnFacts {
             }
         }
         if (ts.isBinaryExpression(n) && looksLikeIdentityComparison(n)) {
+            facts.decides = true;
+        }
+
+        // Assigning a session value INTO an identity field decides ownership by
+        // construction — `ownerId: session.user.id` cannot be forged, so there
+        // is nothing left to compare.
+        //
+        // This is deliberately narrow. The vendor writers also referenced
+        // session.user.id, but only as `updatedBy` on an audit row: recording
+        // who acted without deciding whether they may. So the field being
+        // assigned has to be an IDENTITY field on the record, not any field
+        // that happens to receive the session.
+        const IDENTITY_FIELD_NAME = /^(userid|ownerid|sellerid|buyerid|memberid|initiatorid|createdby)$/i;
+
+        if (ts.isPropertyAssignment(n) && ts.isIdentifier(n.name) &&
+            IDENTITY_FIELD_NAME.test(n.name.text)) {
+            const init = n.initializer.getText();
+            const root = init.split(/[^\w$]/)[0];
+            if (/\bsession\b/i.test(init) || fromSession.has(root)) facts.decides = true;
+        }
+
+        // `{ ownerId }` where ownerId came from the session. Shorthand is a
+        // different node type and was missed entirely, so _createLandListingAction
+        // still appeared after being fixed.
+        if (ts.isShorthandPropertyAssignment(n) &&
+            IDENTITY_FIELD_NAME.test(n.name.text) &&
+            fromSession.has(n.name.text)) {
             facts.decides = true;
         }
 

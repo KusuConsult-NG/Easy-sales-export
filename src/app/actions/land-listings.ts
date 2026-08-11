@@ -545,10 +545,18 @@ async function _submitLandListingAction(data: {
         const docRef = await db.collection(COLLECTIONS.LAND_LISTINGS).add(listing);
 
         // Create audit log
+        //
+        // session.user.id, not data.ownerId. The listing above was fixed to
+        // take its owner from the session, and this was left reading the
+        // request — so the audit row still recorded the nominated user as the
+        // actor, and the notification below still went to them.
+        //
+        // One copy of a path fixed and its siblings missed, inside a single
+        // function. Exactly the shape this codebase keeps producing.
         await createAdminAuditLog({ 
             action: "user_update",
-            userId: data.ownerId,
-            userEmail: data.ownerEmail,
+            userId: session.user.id,
+            userEmail: session.user.email || data.ownerEmail,
             targetId: docRef.id,
             targetType: "land_listing",
             metadata: {
@@ -560,9 +568,9 @@ async function _submitLandListingAction(data: {
             details: `Land listing submitted: ${data.title}` 
         });
 
-        // Notify user
+        // Notify user — the one who actually submitted it.
         await createNotificationAction({
-            userId: data.ownerId,
+            userId: session.user.id,
             type: "info",
             title: "Land Listing Submitted",
             message: `Your land listing "${data.title}" has been submitted for verification.`,
