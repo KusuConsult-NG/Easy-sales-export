@@ -305,11 +305,38 @@ Two things found in that sweep are worth carrying forward:
 Fix: one Postgres function per money-moving flow, claiming the reference and
 applying the balance change in a single statement.
 
-### Client bundle size
-12 MB of JavaScript, with single chunks up to 469 KB, and 188 MB of server
-output. Splitting the heavy libraries — PDF rendering, charts, maps, QR scanning
-— so they load only on the pages that use them. This is the second half of the
-slowness.
+### ~~Client bundle size~~ — MEASURED 2026-08-11, nothing to do
+
+This previously read: *"12 MB of JavaScript, with single chunks up to 469 KB…
+Splitting the heavy libraries — PDF rendering, charts, maps, QR scanning — so
+they load only on the pages that use them. This is the second half of the
+slowness."*
+
+**The splitting is already done, and the 12 MB is a number no user downloads.**
+It is the sum of every chunk across 361 routes. Measure with
+`node scripts/measure-bundle.mjs`:
+
+| | gzip |
+|---|---|
+| Baseline every user pays, on any page | **289 KB** |
+| Heaviest route-specific chunk (QR scanner) | 115 KB |
+| PDF generation, charts, maps, image capture | own chunks, load only where used |
+
+The 289 KB is React, the Next App Router client and Sentry's browser SDK —
+framework floor, not application weight. Removing `replayIntegration` was tried
+and changed it by **nothing**, because Sentry already loads Replay separately.
+
+The trap worth remembering is `lucide-react`: **432 KB across 252 chunks, never
+more than 9 KB in any single one.** It tree-shakes, so each route pays only for
+its own icons. A per-package total is not a download size, and optimising that
+figure would have been optimising an illusion.
+
+`jspdf` has one static import — in `src/app/api/id-card/pdf/route.ts`, which is
+a server route and never reaches the browser.
+
+If page weight is ever suspected again, measure first: the script prints what a
+user actually receives, and Next 16 no longer reports per-route sizes in the
+build output.
 
 ### Per-screen pagination
 415 of 516 database reads specify no limit. A default cap now stops any single
