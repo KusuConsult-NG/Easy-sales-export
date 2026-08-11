@@ -48,7 +48,20 @@ async function _initializePropertyPaymentAction(
             return { success: false, error: "Zoning compliance declaration must be accepted to proceed with property purchase", data: null };
         }
 
-        // Validate amount
+        // WHAT WAS WRONG HERE
+        // -------------------
+        // `amount` is a caller-supplied parameter and the only check on it was
+        // `< 10000`. The property document is loaded a few lines below — its
+        // status and its owner are both checked — and `propertyData.price` was
+        // never read.
+        //
+        // So the Paystack charge, `propertyPrice` and `escrowAmount` were all
+        // whatever the caller asked for, and verifyPropertyPaymentAction
+        // compared the paid sum to nothing. Anyone could buy any verified
+        // property for ₦10,000.
+        //
+        // The listed price is authoritative now. The `amount` parameter is kept
+        // so the signature does not change and is deliberately ignored.
         if (amount < 10000) { 
             return { success: false, error: "Minimum property purchase is ₦10,000", data: null };
         }
@@ -62,6 +75,31 @@ async function _initializePropertyPaymentAction(
         }
 
         const propertyData = propertyDoc.data()!;
+
+        // The price the seller listed, not the price the buyer proposed.
+        const listedPrice = Number(propertyData.price || 0);
+
+        // The seller and the title come from the LISTING, not the request.
+        //
+        // `sellerId` and `propertyTitle` were parameters, written into the
+        // Paystack metadata and from there into the escrow record — where
+        // verifyPropertyPaymentAction reads `metadata.sellerId ||
+        // freshData.ownerId`, so the caller's value wins and the real owner is
+        // only a fallback.
+        //
+        // A buyer could therefore name THEMSELVES as the seller of someone
+        // else's land and be recorded as the party the escrow is owed to. The
+        // "you cannot purchase your own property" check above compares against
+        // propertyData.ownerId and does not notice.
+        const listingSellerId = String(propertyData.ownerId || "");
+        const listingTitle = String(propertyData.title || propertyTitle || "Property");
+
+        if (!listingSellerId) {
+            return { success: false, error: "This property has no owner on record and cannot be purchased.", data: null };
+        }
+        if (!Number.isFinite(listedPrice) || listedPrice <= 0) {
+            return { success: false, error: "This property has no price set and cannot be purchased.", data: null };
+        }
 
         if (propertyData.status !== "verified") { 
             return { success: false, error: "Property is no longer available", data: null };
@@ -78,12 +116,12 @@ async function _initializePropertyPaymentAction(
         // Initialize payment with Paystack
         const { authorizationUrl, reference } = await initializePaystackPayment(
             session.user.email || "",
-            nairaToKobo(amount),
+            nairaToKobo(listedPrice),
             {
                 userId: session.user.id,
                 propertyId,
-                propertyTitle,
-                sellerId,
+                propertyTitle: listingTitle,
+                sellerId: listingSellerId,
                 type: "property_purchase",
                 callback_url: callbackUrl 
             },
@@ -95,18 +133,18 @@ async function _initializePropertyPaymentAction(
         await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).doc(purchaseId).set({ 
             id: purchaseId,
             propertyId,
-            propertyName: propertyTitle,
-            propertyPrice: amount,
+            propertyName: listingTitle,
+            propertyPrice: listedPrice,
             propertyType: propertyData.category || "land",
             buyerId: session.user.id,
             buyerName: buyerInfo.fullName,
             buyerEmail: buyerInfo.email,
             buyerPhone: buyerInfo.phone,
             purpose: buyerInfo.purpose,
-            sellerId,
+            sellerId: listingSellerId,
             sellerName: propertyData.ownerName,
             status: "pending_payment",
-            escrowAmount: amount,
+            escrowAmount: listedPrice,
             escrowStatus: "pending",
             paymentReference: reference,
             zoningComplianceDeclarationAccepted: true,
@@ -219,6 +257,26 @@ async function _verifyPropertyPaymentAction(reference: string): Promise<ActionRe
                 throw new Error(`Property is not in pending escrow state (status: ${freshData.status}).`);
             }
 
+            // The paid sum must cover the listed price.
+            //
+            // Nothing compared them before: this route trusted that whatever
+            // Paystack collected was the right amount, and the amount had been
+            // chosen by the buyer at initialisation. Charging the listed price
+            // above fixes the normal flow; this fixes the flow where a payment
+            // reference arrives from anywhere else.
+            //
+            // ₦1 of tolerance, matching confirmWalletFundingAction and the
+            // cooperative contribution path.
+            const listedPrice = Number(freshData.price || 0);
+            if (Number.isFinite(listedPrice) && listedPrice > 0 && amountInNaira + 1 < listedPrice) {
+                logger.error("[FarmNationPayment] Underpayment for property", {
+                    propertyId, paid: amountInNaira, listed: listedPrice, reference,
+                });
+                throw new Error(
+                    `Payment of ₦${amountInNaira.toLocaleString()} does not cover the property price of ₦${listedPrice.toLocaleString()}.`
+                );
+            }
+
             // Transfer ownership later, just lock it in escrow
             const updatedData = {
                 status: "pending_escrow", // Wait for admin to release C of O
@@ -260,8 +318,8 @@ async function _verifyPropertyPaymentAction(reference: string): Promise<ActionRe
                 relatedId: propertyId,
                 initiatedAt: freshData.createdAt || FieldValue.serverTimestamp(),
                 completedAt: FieldValue.serverTimestamp(),
-                sellerId: metadata.sellerId || freshData.ownerId || "",
-                participants: [session.user.id, metadata.sellerId || freshData.ownerId || ""].filter(Boolean)
+                sellerId: String(freshData.ownerId || metadata.sellerId || ""),
+                participants: [session.user.id, String(freshData.ownerId || metadata.sellerId || "")].filter(Boolean)
             });
 
             // Update purchase record
