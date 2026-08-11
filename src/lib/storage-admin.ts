@@ -33,7 +33,7 @@ const ALLOWED_MIMES = [
  * swallowed every error except its own, so a `file-type` import failure
  * silently disabled content validation. Detection failures now fail closed.
  */
-async function assertAllowedFileType(buffer: Buffer, fileName: string): Promise<void> {
+export async function assertAllowedFileType(buffer: Buffer, fileName: string): Promise<void> {
     let detectedMime: string | undefined;
 
     try {
