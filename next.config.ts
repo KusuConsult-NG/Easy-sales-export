@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import withBundleAnalyzer from '@next/bundle-analyzer';
+import { buildCsp } from './src/lib/csp';
 import { withSentryConfig } from '@sentry/nextjs';
 
 const nextConfig: NextConfig = {
@@ -145,21 +146,15 @@ const nextConfig: NextConfig = {
           },
           {
             key: 'Content-Security-Policy',
-            value: [
-              "default-src 'self'",
-              `script-src 'self'${process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : ""} 'unsafe-inline' https://js.paystack.co https://www.googletagmanager.com https://meet.jit.si https://maps.googleapis.com`,
-              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-              "img-src 'self' data: https: blob:",
-              "font-src 'self' data: https://fonts.gstatic.com",
-              `connect-src 'self' ${process.env.NODE_ENV === 'development' ? "http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*" : ""} https://*.firebaseio.com https://firebaseinstallations.googleapis.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.paystack.co https://api.cloudinary.com wss://*.firebaseio.com https://firebasestorage.googleapis.com https://storage.googleapis.com https://*.jit.si wss://*.jit.si https://maps.googleapis.com https://maps.google.com`,
-              "frame-src 'self' https://js.paystack.co https://checkout.paystack.com https://www.youtube.com https://youtube.com https://firebasestorage.googleapis.com https://docs.google.com https://*.jit.si",
-              "media-src 'self' https://firebasestorage.googleapis.com https://storage.googleapis.com blob:",
-              "object-src 'none'",
-              "base-uri 'self'",
-              "form-action 'self'",
-              "frame-ancestors 'none'",
-              ...(process.env.NODE_ENV === 'development' ? [] : ["upgrade-insecure-requests"])
-            ].join('; ')
+            // Nonce-free FALLBACK only. The real policy is set per request by
+            // src/middleware.ts, which can mint a nonce and therefore drops
+            // script-src 'unsafe-inline'. This covers any response the
+            // middleware does not touch.
+            //
+            // Both call buildCsp(), so the host allow-lists cannot drift apart
+            // — two copies of a security rule is the defect that has recurred
+            // all week.
+            value: buildCsp({ isDev: process.env.NODE_ENV === 'development' })
           }
         ]
       }
