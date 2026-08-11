@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { withRateLimit } from "@/lib/rate-limit";
+import { assertAllowedFileType } from "@/lib/storage-admin";
 
 /**
  * POST - Generic File Upload via Cloudinary
@@ -87,7 +88,39 @@ async function uploadHandler(request: NextRequest) {
 
         // Convert file to buffer for Cloudinary
         const buffer = Buffer.from(await file.arrayBuffer());
-        
+
+        // The check above tests `file.type`, which is the Content-Type the
+        // CLIENT wrote into the multipart body. It is a claim, not a fact —
+        // arbitrary bytes can be posted as "image/png".
+        //
+        // src/lib/storage-admin.ts has always read the magic bytes and failed
+        // closed, and the marketplace product path goes through it. This route —
+        // the generic one behind MasterUploader, and so the one most uploads
+        // actually use — did not. The stricter check was on the less-travelled
+        // path: the same shape as the vendor writers and the escrow confirm.
+        //
+        // It matters here specifically because a PDF is uploaded to Cloudinary
+        // as `raw`, and the stored public_id keeps the caller's extension. A
+        // file declared application/pdf and named .html is then served as HTML
+        // from the business's own Cloudinary account.
+        //
+        // Caught here rather than left to the outer handler, which reports every
+        // failure as an unexpected 500. A rejected file is a client error.
+        try {
+            await assertAllowedFileType(buffer, file.name || "upload");
+        } catch (validationError: any) {
+            logger.warn("[upload] content validation rejected a file", {
+                userId: session.user.id,
+                declaredType: file.type,
+                fileName: file.name,
+                reason: validationError?.message,
+            });
+            return NextResponse.json(
+                { success: false, error: "This file's contents do not match an allowed file type." },
+                { status: 400 }
+            );
+        }
+
         // Build public_id with correct file extension at the end (required by Cloudinary raw uploads like PDFs)
         const userId = session.user.id;
         const timestamp = Math.floor(Date.now() / 1000);
