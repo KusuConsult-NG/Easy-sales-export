@@ -29,6 +29,69 @@ async function _deleteUserAccountAction(): Promise<ActionResponse<null>> { try {
         if (!userSnap.exists) { return { success: false as const, error: "User profile not found.", data: null };
         }
 
+        // WHAT WAS MISSING HERE
+        // ---------------------
+        // Nothing checked whether the account still held money or owed any.
+        // The batch below calls `delete()` on the WALLET document outright, so
+        // deleting an account with a balance destroyed it silently, leaving no
+        // record of what was owed to whom. An outstanding cooperative loan
+        // survived while the borrower's name and contact details were scrubbed,
+        // which is worse than either outcome alone.
+        //
+        // Erasure is a right, not an escape hatch: NDPR does not require a
+        // controller to forget a debt or forfeit a balance. It requires the
+        // personal data to go once the relationship is settled.
+        //
+        // So the obligations are checked first and the user is told exactly
+        // what is blocking, rather than being refused with a generic error or
+        // — far worse — succeeding and losing their money.
+        const blockers: string[] = [];
+
+        const walletSnap = await db.collection(COLLECTIONS.WALLETS).doc(userId).get();
+        const walletBalance = Number(walletSnap.data()?.balance || 0);
+        if (walletBalance > 0) {
+            blockers.push(`a wallet balance of ₦${walletBalance.toLocaleString()}`);
+        }
+
+        const memberSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
+        const savings = Number(memberSnap.data()?.savingsBalance || 0);
+        const locked = Number(memberSnap.data()?.lockedBalance || 0);
+        if (savings > 0) blockers.push(`₦${savings.toLocaleString()} in cooperative savings`);
+        if (locked > 0) blockers.push(`₦${locked.toLocaleString()} locked in a pending withdrawal`);
+
+        const loansSnap = await db.collection(COLLECTIONS.COOPERATIVE_LOANS)
+            .where("userId", "==", userId)
+            .get();
+        const openLoans = loansSnap.docs.filter((d) =>
+            ["disbursed", "active", "approved"].includes(String(d.data()?.status))
+        );
+        if (openLoans.length > 0) {
+            blockers.push(`${openLoans.length} outstanding loan${openLoans.length > 1 ? "s" : ""}`);
+        }
+
+        // Escrow is checked on both sides: as buyer their money is held, as
+        // seller they are owed it. Either way the account cannot go yet.
+        const escrowSnap = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
+            .where("participants", "array-contains", userId)
+            .get();
+        const liveEscrows = escrowSnap.docs.filter((d) =>
+            ["funded", "delivered", "disputed"].includes(String(d.data()?.status))
+        );
+        if (liveEscrows.length > 0) {
+            blockers.push(`${liveEscrows.length} escrow transaction${liveEscrows.length > 1 ? "s" : ""} still in progress`);
+        }
+
+        if (blockers.length > 0) {
+            return {
+                success: false as const,
+                error:
+                    "Your account cannot be deleted yet because it still has " +
+                    blockers.join(", ") +
+                    ". Please withdraw your funds and settle any outstanding items first, then try again — or contact support if you need help.",
+                data: null,
+            };
+        }
+
         // Delete related KYC verifications
         const kycSnap = await db.collection(COLLECTIONS.KYC_VERIFICATIONS).where("userId", "==", userId).get();
         const batch = db.batch();

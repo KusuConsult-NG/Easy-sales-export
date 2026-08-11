@@ -51,6 +51,9 @@ global.mockFirestoreAdd = jest.fn();
 // nothing, so any assertion about a document written with .set() was vacuous.
 // Same defect as the missing add() stub noted below it.
 global.mockFirestoreSet = jest.fn();
+// batch.delete() had no stub at all, so any action deleting documents in a
+// batch threw `batch.delete is not a function` and its later writes never ran.
+global.mockFirestoreBatchDelete = jest.fn();
 
 jest.mock('@/lib/firebase-admin', () => {
     const mockDb = {
@@ -88,6 +91,8 @@ jest.mock('@/lib/firebase-admin', () => {
             global.mockFirestoreBatch();
             return {
                 update: (ref, fields) => global.mockFirestoreBatchUpdate(ref, fields),
+                delete: (ref) => global.mockFirestoreBatchDelete(ref),
+                set: (ref, data) => global.mockFirestoreSet(ref, data),
                 commit: () => global.mockFirestoreBatchCommit(),
             };
         },
@@ -149,6 +154,8 @@ jest.mock('@/lib/supabase-db', () => {
             global.mockFirestoreBatch();
             return {
                 update: (ref, fields) => global.mockFirestoreBatchUpdate(ref, fields),
+                delete: (ref) => global.mockFirestoreBatchDelete(ref),
+                set: (ref, data) => global.mockFirestoreSet(ref, data),
                 commit: () => global.mockFirestoreBatchCommit(),
             };
         },
