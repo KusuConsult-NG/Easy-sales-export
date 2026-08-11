@@ -25,3 +25,11 @@ scripts
 !sentry.client.config.ts
 !sentry.edge.config.ts
 !sentry.server.config.ts
+
+# Environment files must never leave this machine. .dockerignore already keeps
+# them out of the build context, so the image was never at risk — but the CLI
+# uploads the directory before Docker sees it, and there is no reason for local
+# secrets to reach a build server at all.
+.env
+.env.*
+!.env.example
