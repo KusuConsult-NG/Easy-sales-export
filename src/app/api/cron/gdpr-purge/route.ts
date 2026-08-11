@@ -26,12 +26,26 @@ export async function GET(request: NextRequest) {
         const authHeader = request.headers.get("Authorization");
         const cronSecret = process.env.CRON_SECRET;
 
-        // Skip validation only in local dev if CRON_SECRET is not set
-        if (process.env.NODE_ENV === "production" || cronSecret) {
-            if (authHeader !== `Bearer ${cronSecret}`) {
-                logger.warn("Unauthorized attempt to trigger GDPR cron");
-                return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-            }
+        // WHAT WAS WRONG HERE
+        // -------------------
+        // The gate read "validate in production, or whenever a secret exists",
+        // which sounds safe and is not. With CRON_SECRET unset in production it
+        // still entered the branch — and compared against the literal string
+        // "Bearer undefined", which any caller can send.
+        //
+        // This route DELETES user accounts and scrubs PII. It is the last route
+        // in the codebase that should have an accidental public trigger.
+        //
+        // No secret now means no run, in every environment. A destructive job
+        // that cannot authenticate its caller must not guess.
+        if (!cronSecret) {
+            logger.error("[gdpr-purge] CRON_SECRET is not configured; refusing to run");
+            return NextResponse.json({ error: "CRON_SECRET not configured" }, { status: 500 });
+        }
+
+        if (authHeader !== `Bearer ${cronSecret}`) {
+            logger.warn("Unauthorized attempt to trigger GDPR cron");
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
         logger.info("Initializing GDPR Retention Sweep...");

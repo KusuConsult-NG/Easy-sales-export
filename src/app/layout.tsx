@@ -1,5 +1,7 @@
 
+import { headers } from "next/headers";
 import { Inter } from "next/font/google";
+import { NONCE_HEADER } from "@/lib/csp";
 import "./globals.css";
 import { ClientLayout } from "@/components/layout/ClientLayout";
 import { validateProductionSecrets, checkForExposedKeys } from "@/lib/security-checks";
@@ -84,11 +86,19 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Set by src/middleware.ts on the request headers. Reading it here is what
+  // lets the inline scripts below carry a nonce the browser will accept.
+  //
+  // Falls back to undefined rather than throwing: a response the middleware did
+  // not touch gets the nonce-free CSP from next.config.ts, and an undefined
+  // nonce attribute is simply omitted by React.
+  const nonce = (await headers()).get(NONCE_HEADER) ?? undefined;
+
   const organizationJsonLd = {
     "@context": "https://schema.org",
     "@type": "Organization",
@@ -133,7 +143,17 @@ export default function RootLayout({
   return (
     <html lang="en-NG" suppressHydrationWarning>
       <head>
+        {/*
+          * All three inline scripts carry the per-request nonce set by
+          * src/middleware.ts. Without it they are blocked, because the CSP no
+          * longer allows script-src 'unsafe-inline'.
+          *
+          * The JSON-LD blocks need it as much as the theme guard does:
+          * <script type="application/ld+json"> is still governed by script-src,
+          * even though the browser never executes it.
+          */}
         <script
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: `
               (function() {
@@ -150,10 +170,12 @@ export default function RootLayout({
           }}
         />
         <script
+          nonce={nonce}
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
         />
         <script
+          nonce={nonce}
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
         />

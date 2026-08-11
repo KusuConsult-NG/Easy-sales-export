@@ -23,8 +23,32 @@ const ESCROW_AUTO_RELEASE_DAYS = 7;
 export async function GET(req: NextRequest) {
     try {
         // 🔒 Verify Cron Secret
+        //
+        // WHAT WAS WRONG HERE
+        // -------------------
+        // This was:
+        //
+        //     if (authHeader !== `Bearer ${process.env.CRON_SECRET}`)
+        //
+        // With CRON_SECRET unset, the template produces the literal string
+        // "Bearer undefined" — so anyone sending `Authorization: Bearer
+        // undefined` matched it and the route ran. The secret is NOT currently
+        // configured, which is the state this would have shipped in.
+        //
+        // This route releases escrow funds: it pays sellers. An open trigger
+        // for it is an open trigger for payouts.
+        //
+        // process-email-queue, reconcile-paystack and reconcile-fulfilment all
+        // already refuse when the secret is missing. Two of five did not — the
+        // same shape as the vendor writers and the escrow confirm.
+        const cronSecret = process.env.CRON_SECRET;
+        if (!cronSecret) {
+            logger.error('[release-escrow] CRON_SECRET is not configured; refusing to run');
+            return NextResponse.json({ error: 'CRON_SECRET not configured' }, { status: 500 });
+        }
+
         const authHeader = req.headers.get('authorization');
-        if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+        if (authHeader !== `Bearer ${cronSecret}`) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 

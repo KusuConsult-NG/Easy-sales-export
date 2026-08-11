@@ -1,6 +1,7 @@
 import NextAuth from "next-auth";
 import { authConfig } from "@/lib/auth.config";
 import { NextResponse } from "next/server";
+import { buildCsp, generateNonce, NONCE_HEADER } from "@/lib/csp";
 import { isSharedDomainPath, isProtectedPath } from "@/lib/route-manifest";
 
 /**
@@ -124,12 +125,28 @@ const authMiddleware = auth((req: any) => {
     requestHeaders.set("x-url", req.url);
     requestHeaders.set("x-invoke-path", pathname);
 
+    // A per-request nonce, so the CSP can drop script-src 'unsafe-inline'.
+    //
+    // It goes on the REQUEST headers so the root layout can read it with
+    // headers() and stamp it onto its three inline scripts, and on the RESPONSE
+    // header so the browser accepts them. Both are required; either alone gives
+    // a page whose scripts are blocked.
+    //
+    // The policy itself lives in src/lib/csp.ts and is shared with the static
+    // fallback in next.config.ts, so the two allow-lists cannot drift.
+    const nonce = generateNonce();
+    requestHeaders.set(NONCE_HEADER, nonce);
+
     const response = NextResponse.next({
         request: {
             headers: requestHeaders,
         },
     });
     response.headers.set("x-app-version", process.env.NEXT_PUBLIC_APP_VERSION || "1.1.0");
+    response.headers.set(
+        "Content-Security-Policy",
+        buildCsp({ nonce, isDev: process.env.NODE_ENV === "development" })
+    );
 
     // ── 2. Domain Rewrite Logic (Module Silos) ─────────────────────────────────
     const normalizedHostname = hostname.replace(/^www\./, "");
