@@ -59,11 +59,28 @@ async function _deleteUserAccountAction(): Promise<ActionResponse<null>> { try {
         if (savings > 0) blockers.push(`₦${savings.toLocaleString()} in cooperative savings`);
         if (locked > 0) blockers.push(`₦${locked.toLocaleString()} locked in a pending withdrawal`);
 
-        const loansSnap = await db.collection(COLLECTIONS.COOPERATIVE_LOANS)
-            .where("userId", "==", userId)
-            .get();
-        const openLoans = loansSnap.docs.filter((d) =>
-            ["disbursed", "active", "approved"].includes(String(d.data()?.status))
+        // BOTH loan collections, with the field each one actually uses.
+        //
+        // The first version of this guard queried only COOPERATIVE_LOANS, and
+        // queried it by `userId`. Cooperative loans are CREATED in
+        // LOAN_APPLICATIONS (see _loans.ts), and COOPERATIVE_LOANS keys on
+        // `memberId` — so it looked in the wrong collection with the wrong
+        // field and would have matched nothing. A borrower with an outstanding
+        // loan would have passed the guard and been scrubbed while owing money:
+        // exactly the defect this exists to prevent, inside the guard itself.
+        //
+        // _loans.ts checks both collections for the same reason. The status set
+        // is anything not settled — a repaid or rejected loan must not block
+        // erasure for ever.
+        const UNSETTLED = ["pending", "reviewing", "approved", "partially_approved", "disbursed", "active"];
+
+        const [generalLoans, coopLoans] = await Promise.all([
+            db.collection(COLLECTIONS.LOAN_APPLICATIONS).where("userId", "==", userId).get(),
+            db.collection(COLLECTIONS.COOPERATIVE_LOANS).where("memberId", "==", userId).get(),
+        ]);
+
+        const openLoans = [...generalLoans.docs, ...coopLoans.docs].filter((d) =>
+            UNSETTLED.includes(String(d.data()?.status))
         );
         if (openLoans.length > 0) {
             blockers.push(`${openLoans.length} outstanding loan${openLoans.length > 1 ? "s" : ""}`);

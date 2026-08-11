@@ -52,7 +52,9 @@ function setSession(id: string | null) {
  */
 function setState({
     wallet = 0, savings = 0, locked = 0,
-    loanStatuses = [] as string[], escrowStatuses = [] as string[],
+    loanStatuses = [] as string[],          // in LOAN_APPLICATIONS, keyed userId
+    coopLoanStatuses = [] as string[],       // in COOPERATIVE_LOANS, keyed memberId
+    escrowStatuses = [] as string[],
 } = {}) {
     // The harness calls mockFirestoreCollection(name) before .doc(), and
     // mockFirestoreGet(docId) for a doc read — so a doc read carries the ID, not
@@ -66,9 +68,21 @@ function setState({
         const where = lastCollection || key;
         if (where === 'wallets') return Promise.resolve({ exists: true, data: () => ({ balance: wallet }), docs: [], empty: false });
         if (where === 'cooperative_members') return Promise.resolve({ exists: true, data: () => ({ savingsBalance: savings, lockedBalance: locked }), docs: [], empty: false });
-        if (where === 'cooperative_loans') return Promise.resolve({
+        // The two loan collections are stubbed SEPARATELY and deliberately.
+        //
+        // The first version returned the same docs for whichever collection was
+        // asked, so the test and the code agreed on the wrong one: the guard
+        // queried COOPERATIVE_LOANS by `userId`, but cooperative loans are
+        // created in LOAN_APPLICATIONS and COOPERATIVE_LOANS keys on `memberId`.
+        // It matched nothing in production and everything in the test.
+        if (where === 'loan_applications') return Promise.resolve({
             exists: true, empty: loanStatuses.length === 0,
-            docs: loanStatuses.map((status, i) => ({ id: `loan-${i}`, data: () => ({ status }) })),
+            docs: loanStatuses.map((status, i) => ({ id: `app-${i}`, data: () => ({ status }) })),
+            data: () => ({}),
+        });
+        if (where === 'cooperative_loans') return Promise.resolve({
+            exists: true, empty: coopLoanStatuses.length === 0,
+            docs: coopLoanStatuses.map((status, i) => ({ id: `loan-${i}`, data: () => ({ status }) })),
             data: () => ({}),
         });
         if (where === 'escrow_transactions') return Promise.resolve({
@@ -127,10 +141,24 @@ describe('deleteUserAccountAction — obligations', () => {
         expect(String(r.error)).toMatch(/locked/i);
     });
 
-    it('refuses while a loan is outstanding', async () => {
-        // Scrubbing the borrower's name while the debt survives is worse than
-        // either outcome alone.
+    it('refuses while a loan is outstanding in LOAN_APPLICATIONS', async () => {
+        // Where cooperative loans are actually created. Scrubbing the
+        // borrower's name while the debt survives is worse than either outcome
+        // alone.
         setState({ loanStatuses: ['disbursed'] });
+
+        const r: any = await deleteAccount();
+
+        expect(r.success).toBe(false);
+        expect(String(r.error)).toMatch(/outstanding loan/i);
+        expect(scrubbed()).toBe(false);
+    });
+
+    it('refuses while a loan is outstanding in COOPERATIVE_LOANS', async () => {
+        // The other collection, keyed on memberId rather than userId. Checking
+        // one and not the other is how the first version of this guard let a
+        // borrower through.
+        setState({ coopLoanStatuses: ['approved'] });
 
         const r: any = await deleteAccount();
 
@@ -164,7 +192,7 @@ describe('deleteUserAccountAction — obligations', () => {
 
     it('ignores settled loans and closed escrows', async () => {
         // A repaid loan and a released escrow must not block erasure forever.
-        setState({ loanStatuses: ['repaid', 'rejected'], escrowStatuses: ['released', 'refunded'] });
+        setState({ loanStatuses: ['repaid'], coopLoanStatuses: ['rejected'], escrowStatuses: ['released', 'refunded'] });
 
         const r: any = await deleteAccount();
 

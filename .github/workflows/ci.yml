@@ -68,6 +68,15 @@ jobs:
       - name: Production Build
         run: npm run build
         env:
+          # The Dockerfile that builds production sets this and CI did not, so
+          # CI ran the same build with the default V8 heap and died with
+          # "Aborted (core dumped)", exit 134 — an out-of-memory, not a code
+          # failure. Every run since 2026-08-11T14:25Z failed this way.
+          #
+          # A CI build that cannot complete is worse than no CI build: it fails
+          # for a reason unrelated to the change, so the signal is discarded and
+          # a real regression would land unnoticed behind it.
+          NODE_OPTIONS: --max-old-space-size=4096
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
           SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key
