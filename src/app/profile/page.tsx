@@ -13,6 +13,7 @@ import { useToast } from "@/contexts/ToastContext";
 
 import { getUserProfileAction, updateUserProfileAction, updateNotificationPreferencesAction } from "@/app/actions/profile";
 import { changePasswordAction } from "@/app/actions/auth";
+import DeleteAccountSection from "@/components/profile/DeleteAccountSection";
 import { signOut } from "next-auth/react";
 import { useSessionExpiry } from "@/hooks/useSessionExpiry";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -960,6 +961,13 @@ export default function ProfilePage() {
                     </div>
                 </div>
             )}
+
+            {/*
+              * deleteUserAccountAction was written, correct and NDPR-shaped, and
+              * had no caller — so the right to erasure existed in the codebase
+              * and not for any actual person.
+              */}
+            <DeleteAccountSection />
         </div>
     );
 }
