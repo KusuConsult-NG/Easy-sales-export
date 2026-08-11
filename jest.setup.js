@@ -47,6 +47,10 @@ global.mockFirestoreTxGet = jest.fn();
 global.mockFirestoreTxUpdate = jest.fn();
 global.mockFirestoreTxSet = jest.fn();
 global.mockFirestoreAdd = jest.fn();
+// docRef.set() existed as `() => Promise.resolve()` — it succeeded and recorded
+// nothing, so any assertion about a document written with .set() was vacuous.
+// Same defect as the missing add() stub noted below it.
+global.mockFirestoreSet = jest.fn();
 
 jest.mock('@/lib/firebase-admin', () => {
     const mockDb = {
@@ -57,7 +61,7 @@ jest.mock('@/lib/firebase-admin', () => {
                 return {
                     get: () => global.mockFirestoreGet(id),
                     update: (fields) => global.mockFirestoreUpdate(id, fields),
-                    set: (data) => Promise.resolve(),
+                    set: (data) => { global.mockFirestoreSet(id, data); return Promise.resolve(); },
                 };
             };
             const queryObj = {
@@ -118,7 +122,7 @@ jest.mock('@/lib/supabase-db', () => {
                 return {
                     get: () => global.mockFirestoreGet(id),
                     update: (fields) => global.mockFirestoreUpdate(id, fields),
-                    set: (data) => Promise.resolve(),
+                    set: (data) => { global.mockFirestoreSet(id, data); return Promise.resolve(); },
                 };
             };
             const queryObj = {

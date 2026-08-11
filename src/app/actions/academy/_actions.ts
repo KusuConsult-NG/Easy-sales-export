@@ -1430,8 +1430,32 @@ export interface EnrolledCourseWithDetails {
  * Auto-enroll paid Academy learners in all courses eligible under their tier.
  */
 export async function autoEnrollPaidUser(userId: string, userPlan: string) {
-    if (!userId || !userPlan) return;
-    const plan = userPlan.toLowerCase();
+    // WHAT WAS WRONG HERE
+    // -------------------
+    // This file is "use server", so every export is a reachable server action —
+    // and this one is re-exported through academy/index.ts as well. It took BOTH
+    // the user and their plan from the caller, with no session guard.
+    //
+    // So `autoEnrollPaidUser(myOwnId, "elite")` enrolled the caller in every
+    // elite course. A paid-content bypass, reachable directly.
+    //
+    // Its two legitimate callers — the academy dashboard route and
+    // getAcademyDashboardAction — both derive the id and plan from the session
+    // and check isPaid first. That protected the CALL SITES and did nothing for
+    // the function, which is independently addressable.
+    //
+    // Both values are now taken from the session. The parameters are kept so
+    // existing callers compile, and are deliberately ignored: they were passing
+    // session-derived values anyway, so nothing legitimate changes.
+    const sessionResult = await requireSession();
+    if (!sessionResult.session?.user?.id) return;
+
+    const sessionUser = sessionResult.session.user as any;
+    const resolvedUserId = sessionUser.id;
+    const resolvedPlan = sessionUser?.serviceRegistrations?.academy?.plan || "free";
+
+    if (!resolvedUserId || !resolvedPlan) return;
+    const plan = String(resolvedPlan).toLowerCase();
     const isPaid = ["elite", "standard", "foundation", "advanced", "member", "student", "academy_student", "scholarship", "active", "enrolled", "approved"].includes(plan);
     if (!isPaid) return;
 
@@ -1450,9 +1474,9 @@ export async function autoEnrollPaidUser(userId: string, userPlan: string) {
 
         // 3. Parallel fetch existing records to avoid sequential Firestore calls
         const [progressSubSnap, progressSnap, enrollmentsSnap] = await Promise.all([
-            db.collection(`user_progress/${userId}/courses`).get(),
-            db.collection(COLLECTIONS.COURSE_PROGRESS).where("userId", "==", userId).get(),
-            db.collection(COLLECTIONS.COURSE_ENROLLMENTS).where("userId", "==", userId).get()
+            db.collection(`user_progress/${resolvedUserId}/courses`).get(),
+            db.collection(COLLECTIONS.COURSE_PROGRESS).where("resolvedUserId", "==", resolvedUserId).get(),
+            db.collection(COLLECTIONS.COURSE_ENROLLMENTS).where("resolvedUserId", "==", resolvedUserId).get()
         ]);
 
         const existingProgressSubs = new Set(progressSubSnap.docs.map(doc => doc.id));
@@ -1465,9 +1489,9 @@ export async function autoEnrollPaidUser(userId: string, userPlan: string) {
 
             // Place A: user_progress subcollection
             if (!existingProgressSubs.has(courseId)) {
-                const progressSubRef = db.doc(`user_progress/${userId}/courses/${courseId}`);
+                const progressSubRef = db.doc(`user_progress/${resolvedUserId}/courses/${courseId}`);
                 await progressSubRef.set({
-                    userId,
+                    resolvedUserId,
                     courseId,
                     completedLessons: [],
                     completedModules: [],
@@ -1485,11 +1509,11 @@ export async function autoEnrollPaidUser(userId: string, userPlan: string) {
             }
 
             // Place B: course_progress
-            const progressRefId = `${userId}_${courseId}`;
+            const progressRefId = `${resolvedUserId}_${courseId}`;
             if (!existingProgresses.has(progressRefId)) {
                 const progressRef = db.collection(COLLECTIONS.COURSE_PROGRESS).doc(progressRefId);
                 await progressRef.set({
-                    userId,
+                    resolvedUserId,
                     courseId,
                     progressPercent: 0,
                     completionPercentage: 0,
@@ -1504,7 +1528,7 @@ export async function autoEnrollPaidUser(userId: string, userPlan: string) {
             // Place C: course_enrollments
             if (!existingEnrollments.has(courseId)) {
                 await db.collection(COLLECTIONS.COURSE_ENROLLMENTS).add({
-                    userId,
+                    resolvedUserId,
                     courseId,
                     enrolledAt: FieldValue.serverTimestamp(),
                     status: 'active',
