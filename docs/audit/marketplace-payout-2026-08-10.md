@@ -51,7 +51,21 @@ stale-snapshot defect below.
 3. The seller withdraws from `/dashboard/wallet`; an admin approves; Paystack
    pays out. So the money does reach a bank account — one step later, at 100%.
 
-Every step is wired. Sellers can reach their money.
+Every step is wired.
+
+**CORRECTION, 2026-08-11.** This originally said "Sellers can reach their
+money", and that overstated it. The *code path* is complete; the *feature* may
+be switched off. `wallet_deposits` and `wallet_withdrawals` both default to
+`false` in `feature-toggles.ts`, commented "disabled for production rollout",
+and `getFeatureToggle` falls back to that default when no override row exists.
+
+`withdrawFromWalletAction` returns "Wallet withdrawals are currently disabled"
+before it reaches any money code. So if those toggles have never been enabled in
+production, escrow releases credit a wallet that **cannot be topped up or
+withdrawn from** — the balance is real and the exit is closed.
+
+Check `/admin/feature-toggles` before relying on the chain above. It was found
+by a test that could not reach the debit it was written to exercise.
 
 Two things the code implies and does not do:
 

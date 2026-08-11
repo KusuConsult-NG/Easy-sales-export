@@ -393,10 +393,40 @@ async function _walletCheckoutAction(
     // both passed the sufficiency check, and both charged it — overdrawing the
     // wallet. The order id is the idempotency key because it is stable across
     // retries of the same purchase.
+    // WHAT WAS WRONG HERE
+    // -------------------
+    // `amountNGN` came from the caller and was never compared to the order. The
+    // function debited whatever it was told and wrote two ledger rows marked
+    // `status: "completed"` for that amount.
+    //
+    // It never updates the order, so it could not mark an unpaid order paid —
+    // but it could write a "completed" purchase row for ₦1 against a ₦50,000
+    // order, and reconciliation reads those rows to decide whether a payment
+    // produced what it should have.
+    //
+    // The order is loaded now, the caller must own it, and the amount comes
+    // from `totalAmount` rather than the request. The parameter is retained so
+    // the signature does not change and is deliberately ignored.
+    const orderSnap = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId).get();
+    if (!orderSnap.exists) {
+        return { success: false as const, error: "Order not found", data: null };
+    }
+
+    const order = orderSnap.data() as { buyerId?: string; totalAmount?: number };
+
+    if (order.buyerId !== userId) {
+        return { success: false as const, error: "Unauthorized", data: null };
+    }
+
+    const orderTotal = Number(order.totalAmount || 0);
+    if (!Number.isFinite(orderTotal) || orderTotal <= 0) {
+        return { success: false as const, error: "This order has no amount to charge", data: null };
+    }
+
     const { ok, balance: newBalance, reason } = await debitWalletOnce({
         reference: `order:${orderId}`,
         userId,
-        amount: amountNGN,
+        amount: orderTotal,
         purpose: "marketplace_checkout",
         metadata: { orderId },
     });
@@ -652,8 +682,17 @@ async function _processWalletWithdrawalAction(
         });
 
         if (!claimed) {
-            logger.info(`[Wallet] Withdrawal ${txnRef.id} already refunded; ignoring duplicate rejection`);
-            return { success: false as const, error: "Withdrawal is no longer pending", data: null };
+            // A lost claim means the refund ALREADY happened — rule 3 in
+            // wallet-ledger.ts: that is a success, not an error.
+            //
+            // Returning early here also skipped the status update below, so a
+            // rejection that raced left the withdrawal at "pending" for ever
+            // while telling the admin it had failed. They would see it in the
+            // queue again and try once more, and get the same answer.
+            //
+            // The status write is idempotent, so it runs either way and the
+            // record ends up consistent with the money.
+            logger.info(`[Wallet] Withdrawal ${txnRef.id} already refunded; settling status only`);
         }
 
         await txnRef.update({
