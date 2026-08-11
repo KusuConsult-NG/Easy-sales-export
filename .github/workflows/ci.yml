@@ -1,5 +1,10 @@
 name: Continuous Integration
 
+# The repo default is already read-only, but an org-level change would
+# silently widen every workflow. Declared here so it cannot.
+permissions:
+  contents: read
+
 on:
   push:
     branches: [ main ]
@@ -24,7 +29,12 @@ jobs:
           fetch-depth: 0
 
       - name: Scan the full history for credentials
-        uses: gitleaks/gitleaks-action@v2
+        # Pinned to a commit, not the mutable v2 tag. A third-party action runs
+        # in CI with repository access; whoever controls the tag controls that
+        # code. This repo's history holds a live-key incident and 41,105 user
+        # records, so the blast radius is not theoretical.
+        # gitleaks/gitleaks-action v2 as of 2025-04-17.
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
