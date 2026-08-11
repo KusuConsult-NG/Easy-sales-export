@@ -25,6 +25,7 @@ import {
     UserX,
     BadgeCheck,
     ToggleLeft,
+    Megaphone,
     ShieldCheck,
     Headphones,
 } from "lucide-react";
@@ -47,6 +48,10 @@ const NAV_ITEMS = [
     { label: "Orphaned Users", href: "/admin/orphaned-users", icon: UserX, section: "platform" },
 
     { label: "Feature Toggles", href: "/admin/feature-toggles", icon: ToggleLeft, section: "platform" },
+    // Announcements and banners render site-wide via AnnouncementBanner.tsx.
+    // The actions existed and the page did not, so the only way to publish was
+    // to write to the database by hand.
+    { label: "Announcements", href: "/admin/cms", icon: Megaphone, section: "platform" },
     // ── Modules ─────────────────────────────────────────────────────────────
     { label: "WAVE Program", href: "/admin/wave", icon: Waves, section: "modules", featureToggle: "wave_program" },
     { label: "Cooperatives", href: "/admin/cooperatives", icon: Building2, section: "modules", featureToggle: "cooperative_loans" },
