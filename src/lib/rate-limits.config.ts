@@ -5,6 +5,30 @@
  */
 
 export const rateLimitConfig = {
+    /**
+     * Public contact form — unauthenticated and it SENDS EMAIL through Resend,
+     * so an unthrottled endpoint is a spam relay, a quota drain and a bill.
+     *
+     * Sized for CGNAT, deliberately. Nigerian mobile networks share IPs heavily,
+     * so a limit tuned as though an IP were a person locks out real users. The
+     * login config's 5-per-15-minutes would be actively harmful applied here:
+     * one shared carrier IP could exhaust it for everyone behind it.
+     *
+     * 30 per hour per IP. Note that login's 5-per-15-minutes works out to the
+     * same 20/hour sustained — so matching it would have delivered none of the
+     * headroom this is for. The difference that matters is burst tolerance: the
+     * login window refuses a sixth attempt in fifteen minutes, while a carrier
+     * NAT can legitimately produce a cluster of submissions at once.
+     *
+     * 30 in an hour leaves room for an office or a NAT pool and still stops a
+     * script cold — abuse means hundreds, not dozens. Nobody legitimately
+     * submits a contact form thirty times an hour.
+     */
+    contactForm: {
+        interval: 60 * 60 * 1000, // 1 hour
+        maxRequests: 30,
+    },
+
     // Authentication endpoints - strict limits
     login: {
         interval: 15 * 60 * 1000, // 15 minutes
