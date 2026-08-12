@@ -246,23 +246,41 @@ async function _updateVendorProductInventoryAction(
                 throw new Error("Unauthorized");
             }
 
-            const currentStock = currentData.stock || 0;
+            // stockChange is a quantity, so it is never negative.
+            //
+            // It arrived unvalidated. "subtract" clamped its result with
+            // Math.max(0, ...) and the other two did not, so `set` with -5, or
+            // `add` with -100, drove stock below zero — and a non-numeric value
+            // turned the addition into string concatenation.
+            const change = Number(stockChange);
+            if (!Number.isFinite(change) || change < 0) {
+                throw new Error("Stock change must be a positive number");
+            }
+
+            const currentStock = Number(currentData.stock) || 0;
             let newStock = currentStock;
 
             switch (operation) {
                 case "add":
-                    newStock = currentStock + stockChange;
+                    newStock = currentStock + change;
                     break;
                 case "subtract":
-                    newStock = Math.max(0, currentStock - stockChange);
+                    newStock = Math.max(0, currentStock - change);
                     break;
                 case "set":
-                    newStock = stockChange;
+                    newStock = change;
                     break;
             }
 
             updatedStock = newStock;
-            const status = newStock === 0 ? "out_of_stock" : "active";
+
+            // `newStock === 0 ? "out_of_stock" : "active"` labelled NEGATIVE
+            // stock as active, so a product nobody could buy stayed listed as
+            // available. A buyer reaching checkout on one of those is charged
+            // before the stock decrement runs — decrementManyOrFail refuses at
+            // verification, after claimPaymentOnce has claimed the reference —
+            // which is the charge-with-no-order failure described in #113.
+            const status = newStock <= 0 ? "out_of_stock" : "active";
 
             transaction.update(productRef, { stock: newStock,
                 status,
