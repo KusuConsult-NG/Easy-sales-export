@@ -895,6 +895,40 @@ async function _releaseFarmNationEscrowAction(transactionId: string): Promise<Ac
         // The payout row is keyed on the transaction id, so it could not
         // duplicate — but the ownership transfer and the escrow release both
         // ran twice, and nothing recorded that they had.
+        // Everything knowable is checked BEFORE the claim.
+        //
+        // Claiming first is right — it is what stops two admins both releasing —
+        // but it also means anything that throws afterwards leaves the
+        // transaction reading "completed" and "released" with the property never
+        // transferred and no payout row written. The claim cannot be retried,
+        // because a second attempt no longer sees "payment_confirmed": the
+        // seller is simply never paid, and the record says the release
+        // succeeded.
+        //
+        // The property going missing and the escrow amount being absent are both
+        // knowable now, while backing out still costs nothing. What remains
+        // after the claim is a write failure, which is a reconciliation problem
+        // rather than a silent one.
+        const preTx = await txRef.get();
+        if (!preTx.exists) {
+            return { success: false, error: "Transaction not found", data: null };
+        }
+
+        const preTxData = preTx.data()!;
+        const preAmount = Number(preTxData.escrowAmount ?? 0);
+        if (!Number.isFinite(preAmount) || preAmount <= 0) {
+            return { success: false, error: "Transaction has no escrow amount to release", data: null };
+        }
+
+        if (!preTxData.propertyId) {
+            return { success: false, error: "Transaction is not linked to a property", data: null };
+        }
+
+        const preProperty = await db.collection(COLLECTIONS.LAND_LISTINGS).doc(preTxData.propertyId).get();
+        if (!preProperty.exists) {
+            return { success: false, error: "Property not found", data: null };
+        }
+
         const releaseClaim = await claimStatusTransition({
             collection: COLLECTIONS.FARM_NATION_TRANSACTIONS,
             id: transactionId,
