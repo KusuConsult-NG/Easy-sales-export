@@ -23,8 +23,11 @@ export async function createBookingAction(data: CreateBookingData) { try {
         if (!session?.user?.id) { return { success: false as const, data: null, error: 'Not authenticated', meta: null };
         }
 
-        // Validate input
-        if (!data.exportWindowId || data.quantity <= 0 || data.totalPrice <= 0) { return { success: false as const, data: null, error: 'Invalid booking data', meta: null };
+        // Validate input. totalPrice is deliberately NOT checked here — it is
+        // recalculated below and the caller's copy is discarded.
+        const quantity = Number(data.quantity);
+        if (!data.exportWindowId || !Number.isFinite(quantity) || quantity <= 0) {
+            return { success: false as const, data: null, error: 'Invalid booking data', meta: null };
         }
 
         // Check if export window exists and has availability
@@ -35,6 +38,29 @@ export async function createBookingAction(data: CreateBookingData) { try {
         }
 
         const windowData = windowDoc.data()!;
+
+        // The price comes from the window, not from the browser.
+        //
+        // totalPrice arrived as a parameter and was stored as the booking's
+        // money figure, checked only for being above zero. BookingWizard.tsx
+        // computes it as `volume * exportWindow.slotPrice` and sends the result
+        // — so the arithmetic the server recorded was the client's.
+        //
+        // The server has slotPrice in the very document it just read, and
+        // export-aggregation.ts already does this correctly one file over:
+        //   const totalCost = data.volume * windowData.slotPrice;
+        //
+        // A booking also RESERVES capacity through incrementWithinCeiling
+        // below, so a caller-chosen price meant consuming an export window's
+        // volume while recording whatever total they liked against it.
+        //
+        // Derived before the reservation, so a window with no usable price
+        // fails without consuming volume first.
+        const slotPrice = Number(windowData.slotPrice ?? 0);
+        if (!Number.isFinite(slotPrice) || slotPrice <= 0) {
+            return { success: false as const, data: null, error: 'This export window is not priced for booking', meta: null };
+        }
+        const totalPrice = slotPrice * quantity;
 
         // Reserve the volume under a row lock, BEFORE the booking is written.
         //
@@ -62,7 +88,7 @@ export async function createBookingAction(data: CreateBookingData) { try {
             collection: COLLECTIONS.EXPORT_WINDOWS,
             id: data.exportWindowId,
             field: "currentVolume",
-            amount: data.quantity,
+            amount: quantity,
             ceilingField: "targetVolume",
         });
 
@@ -85,8 +111,9 @@ export async function createBookingAction(data: CreateBookingData) { try {
         const bookingRef = await db.collection(COLLECTIONS.EXPORT_BOOKINGS).add({
             userId: session.user.id,
             exportWindowId: data.exportWindowId,
-            quantity: data.quantity,
-            totalPrice: data.totalPrice,
+            quantity,
+            totalPrice,
+            slotPriceAtBooking: slotPrice,
             status: 'pending',
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp()
