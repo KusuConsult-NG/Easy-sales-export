@@ -54,6 +54,23 @@ async function validateCartItems(clientItems: CartItem[]): Promise<{ subtotal: n
             throw new Error(`Product not found: ${item.title}`);
         }
 
+        // Quantity comes from the client and was used raw.
+        //
+        // `itemTotal = effectivePrice * item.quantity` a few lines below, so a
+        // negative quantity subtracts from the order. Mixed with a real item it
+        // keeps the total above minOrderAmount while charging the buyer far less
+        // than the goods are worth.
+        //
+        // It does not end in theft — decrementManyOrFail refuses a non-positive
+        // amount, so verification throws at the stock step, AFTER the payment
+        // reference is claimed. The buyer is charged, no escrow is written, no
+        // order exists, and a retry is a no-op because the reference is spent.
+        // A stuck payment needing a manual refund is still a defect.
+        const quantity = Number(item.quantity);
+        if (!Number.isInteger(quantity) || quantity <= 0) {
+            throw new Error(`Invalid quantity for ${item.title}`);
+        }
+
         const productData = productDoc.data();
         let dbPrice = 0;
         
@@ -71,14 +88,34 @@ async function validateCartItems(clientItems: CartItem[]): Promise<{ subtotal: n
 
         // Force DB price for security
         const effectivePrice = dbPrice;
-        const itemTotal = effectivePrice * item.quantity;
+
+        // Taking the price from the database is not enough on its own — the
+        // stored price also has to be a real one.
+        //
+        // Nothing that writes a price requires it to be positive:
+        // PricingTierSchema is `price: z.number().default(0)`, and
+        // addFlashSaleProductAction wrote `data.price` straight through. A
+        // seller could list an item at a negative price, and unlike the quantity
+        // case nothing downstream refuses it — the quantity stays positive so
+        // the stock decrement succeeds, the order completes, and that seller's
+        // escrow is created with a negative grossAmount while the other seller's
+        // is whole. The buyer pays the reduced total; the platform still owes
+        // the second seller in full.
+        //
+        // A zero price is refused for the same reason: an order line worth
+        // nothing is either a mistake or a way to move stock without paying.
+        if (!Number.isFinite(effectivePrice) || effectivePrice <= 0) {
+            throw new Error(`Invalid price for ${productData?.title || item.title}`);
+        }
+
+        const itemTotal = effectivePrice * quantity;
 
         subtotal += itemTotal;
         validatedItems.push({ 
             productId: item.id,
             productTitle: productData?.title || item.title,
             sellerId: productData?.sellerId || item.sellerId, // Trust DB sellerId
-            quantity: item.quantity,
+            quantity,
             unit: item.unit,
             pricePerUnit: effectivePrice,
             totalPrice: itemTotal,
