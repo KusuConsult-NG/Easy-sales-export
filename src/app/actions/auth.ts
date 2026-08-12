@@ -714,28 +714,114 @@ export async function changePasswordAction(
             return { success: false as const, error: "Unauthorized"};
         }
 
-        // Verify current password via REST API
-        const authEmulatorHost = process.env.FIREBASE_AUTH_EMULATOR_HOST;
-        const signInUrl = authEmulatorHost
-            ? `http://${authEmulatorHost}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${process.env.NEXT_PUBLIC_FIREBASE_API_KEY}`
-            : `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${process.env.NEXT_PUBLIC_FIREBASE_API_KEY}`;
-        const verifyRes = await fetch(signInUrl, { method: 'POST',
-            body: JSON.stringify({
-                email: session.user.email,
-                password: currentPassword,
-                returnSecureToken: true
-            }),
-            headers: { 'Content-Type': 'application/json' }
-        });
-
-        if (!verifyRes.ok) { const errorData = await verifyRes.json();
-            logger.error("Failed to verify current password", errorData);
-            return { success: false as const, error: "Incorrect current password.", data: null };
+        // The new password must clear the same bar as a new registration.
+        //
+        // It used to go straight to the provider, so the only rule that applied
+        // was Firebase's six-character floor and a user could drop below the
+        // policy they signed up under.
+        const { passwordPolicySchema } = await import("@/lib/schemas");
+        const policy = passwordPolicySchema.safeParse(newPassword);
+        if (!policy.success) {
+            return { success: false as const, error: policy.error.issues[0].message, data: null };
         }
 
-        // Update to new password via Admin SDK
-        await adminAuth.updateUser(session.user.id, { password: newPassword
+        if (newPassword === currentPassword) {
+            return { success: false as const, error: "Your new password must be different from your current one.", data: null };
+        }
+
+        const email = session.user.email;
+
+        // ── Verify the current password, primary store first ──────────────
+        //
+        // This whole function used to talk to Firebase and only Firebase, while
+        // lib/auth.ts authenticates against SUPABASE first and treats Firebase
+        // as a legacy fallback. The consequence was not a partial failure — it
+        // was a password change that did nothing and said it had worked:
+        //
+        //   old password  Supabase still holds it, accepts, login succeeds
+        //   new password  Supabase rejects it, the Firebase fallback accepts,
+        //                 then tries to provision the user in Supabase, gets
+        //                 "already exists" and throws auth/invalid-credential
+        //
+        // So the new password failed, the old one kept working, and the person
+        // who changed it because it had been compromised was told "success".
+        //
+        // Supabase is verified first now, exactly as login does it, with the
+        // Firebase check kept as the fallback for accounts that never made it
+        // into Supabase.
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+        if (!supabaseUrl || !supabaseAnonKey) {
+            return { success: false as const, error: "Service configuration error. Please contact support.", data: null };
+        }
+
+        const { createClient } = await import("@supabase/supabase-js");
+        const anonClient = createClient(supabaseUrl, supabaseAnonKey);
+
+        const { data: sbVerify, error: sbVerifyError } = await anonClient.auth.signInWithPassword({
+            email,
+            password: currentPassword,
         });
+
+        let supabaseAuthId: string | null = sbVerify?.user?.id ?? null;
+
+        if (sbVerifyError || !supabaseAuthId) {
+            // Fallback: the account may predate the Supabase migration.
+            const authEmulatorHost = process.env.FIREBASE_AUTH_EMULATOR_HOST;
+            const signInUrl = authEmulatorHost
+                ? `http://${authEmulatorHost}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${process.env.NEXT_PUBLIC_FIREBASE_API_KEY}`
+                : `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${process.env.NEXT_PUBLIC_FIREBASE_API_KEY}`;
+            const verifyRes = await fetch(signInUrl, {
+                method: 'POST',
+                body: JSON.stringify({ email, password: currentPassword, returnSecureToken: true }),
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (!verifyRes.ok) {
+                const errorData = await verifyRes.json();
+                logger.error("Failed to verify current password", errorData);
+                return { success: false as const, error: "Incorrect current password.", data: null };
+            }
+
+            // Verified against the legacy store, so the Supabase id has to come
+            // from the profile. The JIT migration in lib/auth.ts records it as
+            // supabaseAuthId; a normally-registered account uses the Supabase
+            // UUID as its own document id.
+            try {
+                const profile = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+                supabaseAuthId = profile.data()?.supabaseAuthId || session.user.id;
+            } catch {
+                supabaseAuthId = session.user.id;
+            }
+        }
+
+        // ── Write the new password to the primary store ───────────────────
+        //
+        // Reported as a failure if it does not land. Saying "password changed"
+        // when the store that authenticates logins still holds the old one is
+        // the defect this replaces, and a partial success is not worth
+        // repeating in a quieter form.
+        const { supabaseAdmin } = await import("@/lib/supabase");
+        const { error: sbUpdateError } = await supabaseAdmin.auth.admin.updateUserById(
+            supabaseAuthId,
+            { password: newPassword }
+        );
+
+        if (sbUpdateError) {
+            logger.error("[changePassword] Supabase Auth password update failed:", sbUpdateError);
+            return { success: false as const, error: "Could not update your password. Please try again or contact support.", data: null };
+        }
+
+        // Firebase second, and it matters: lib/auth.ts falls back to it when
+        // Supabase rejects a password, so leaving the old one there keeps a
+        // superseded credential alive. Best-effort because plenty of accounts
+        // have no Firebase record at all — the primary store is already correct
+        // by this point.
+        try {
+            await adminAuth.updateUser(session.user.id, { password: newPassword });
+        } catch (fbErr: any) {
+            logger.warn("[changePassword] Legacy Firebase password update skipped:", fbErr?.message);
+        }
 
         return { success: true as const, error: null };
     } catch (error: any) { logger.error("Error changing password:", error);
