@@ -109,10 +109,20 @@ jest.mock('@/lib/firebase-admin', () => {
                 endAt: () => queryObj,
                 endBefore: () => queryObj,
 
-                // .all() bypasses the default row cap. It returns the same shape
-                // as .get(), so tests that stub mockFirestoreGet keep working
-                // without knowing which one the code under test chose.
-                all: () => global.mockFirestoreGet(name),
+                // .all() bypasses the default row cap.
+                //
+                // It is a BUILDER on the real adapter — `all(): this` clones the
+                // query, sets _unbounded and returns it — so production code
+                // writes `.all().get()`. This stub used to execute immediately
+                // and return the snapshot, which made that chain throw
+                // "…all(...).get is not a function".
+                //
+                // schema-standardization.ts reads the whole users collection
+                // that way and could not be tested at all until this was fixed.
+                // The presence check in harness-covers-adapter.test.ts passed
+                // throughout, because a stub that exists but behaves differently
+                // is exactly what that test says it cannot catch.
+                all: () => queryObj,
 
                 aggregate: () => ({
                     get: () => global.mockFirestoreGet(name + "_aggregate")
@@ -211,10 +221,20 @@ jest.mock('@/lib/supabase-db', () => {
                 endAt: () => queryObj,
                 endBefore: () => queryObj,
 
-                // .all() bypasses the default row cap. It returns the same shape
-                // as .get(), so tests that stub mockFirestoreGet keep working
-                // without knowing which one the code under test chose.
-                all: () => global.mockFirestoreGet(name),
+                // .all() bypasses the default row cap.
+                //
+                // It is a BUILDER on the real adapter — `all(): this` clones the
+                // query, sets _unbounded and returns it — so production code
+                // writes `.all().get()`. This stub used to execute immediately
+                // and return the snapshot, which made that chain throw
+                // "…all(...).get is not a function".
+                //
+                // schema-standardization.ts reads the whole users collection
+                // that way and could not be tested at all until this was fixed.
+                // The presence check in harness-covers-adapter.test.ts passed
+                // throughout, because a stub that exists but behaves differently
+                // is exactly what that test says it cannot catch.
+                all: () => queryObj,
 
                 aggregate: () => ({
                     get: () => global.mockFirestoreGet(name + "_aggregate")
