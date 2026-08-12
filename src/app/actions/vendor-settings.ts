@@ -75,6 +75,20 @@ async function _updateVendorProfileAction(profileData: { storeName: string;
 }
 export const updateVendorProfileAction = withFlexibleSafeAction("updateVendorProfileAction", _updateVendorProfileAction);
 
+/**
+ * NOTE ON WHERE PAYOUTS ACTUALLY READ FROM.
+ *
+ * Nothing pays out from this record. No payout path reads VENDOR_PROFILES at
+ * all: withdrawFromWalletAction takes bankDetails as an argument, validated by
+ * BankDetailsSchema, and paystackPayout needs a bankCode — which this config
+ * does not even have a field for.
+ *
+ * So a vendor filling in "payment configuration" here is entering details that
+ * no transfer consults. That is a product gap rather than a defect to fix
+ * unilaterally — wiring this record into money routing is a decision about
+ * where funds go, not a correction — and it is recorded here so the next reader
+ * does not assume otherwise.
+ */
 async function _updateVendorPaymentConfigAction(paymentData: { bankName: string;
     accountNumber: string;
     accountName: string;
@@ -88,17 +102,46 @@ async function _updateVendorPaymentConfigAction(paymentData: { bankName: string;
         if (!session?.user?.id) { return { success: false as const, error: "Unauthorized", data: null };
         }
 
+        // Bank details are stored unvalidated, and this is the one screen where
+        // a vendor believes they are entering where their money goes.
+        //
+        // wallet.ts validates the same fields with BankDetailsSchema — account
+        // number 5-30 characters, bank and account names present — and
+        // SellerVerificationSchema requires ten digits. Nothing was applied
+        // here, so a half-typed account number is stored and shown back as
+        // settled fact.
+        //
+        // See the note above this function about where payouts actually read
+        // from: nothing pays out from this record today. That makes storing a
+        // malformed number harmless now and dangerous the moment it is wired
+        // up, which is exactly when nobody re-checks it.
+        const accountNumber = String(paymentData.accountNumber ?? "").trim();
+        if (!/^\d{5,30}$/.test(accountNumber)) {
+            return { success: false as const, error: "Account number must be between 5 and 30 digits", data: null };
+        }
+        if (String(paymentData.bankName ?? "").trim().length < 2) {
+            return { success: false as const, error: "Bank name is required", data: null };
+        }
+        if (String(paymentData.accountName ?? "").trim().length < 2) {
+            return { success: false as const, error: "Account name is required", data: null };
+        }
+
+        const threshold = Number(paymentData.minPayoutThreshold);
+        if (!Number.isFinite(threshold) || threshold < 0) {
+            return { success: false as const, error: "Minimum payout threshold cannot be negative", data: null };
+        }
+
         const vendorId = session.user.id;
         const vendorRef = db.collection(COLLECTIONS.VENDOR_PROFILES).doc(vendorId);
         const { versionedUpdate } = await import("@/lib/optimistic-locking");
 
         await db.runTransaction(async (transaction) => { await versionedUpdate(transaction, vendorRef, expectedVersion, {
                 paymentConfig: {
-                    bankName: paymentData.bankName,
-                    accountNumber: paymentData.accountNumber,
-                    accountName: paymentData.accountName,
+                    bankName: String(paymentData.bankName).trim(),
+                    accountNumber,
+                    accountName: String(paymentData.accountName).trim(),
                     paymentSchedule: paymentData.paymentSchedule,
-                    minPayoutThreshold: paymentData.minPayoutThreshold,
+                    minPayoutThreshold: threshold,
                     taxId: paymentData.taxId || null },
                 updatedAt: FieldValue.serverTimestamp() });
         });
