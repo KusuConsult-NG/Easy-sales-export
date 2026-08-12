@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useDebounce } from './useDebounce';
-import { searchProductsAction } from '@/app/actions/marketplace/_actions';
+import { searchProductsAction } from '@/app/actions/marketplace';
 
 interface Product {
     id: string;
