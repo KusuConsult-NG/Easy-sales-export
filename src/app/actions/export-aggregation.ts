@@ -54,22 +54,47 @@ export async function createExportWindowAction(data: { title: string;
         const sessionResult = await requireAdmin();
         if ('error' in sessionResult) return { success: false as const, error: sessionResult.error, data: null };
 
+        // The creator is who called, not who the call says.
+        //
+        // `data.adminId` is a caller parameter and was written as createdBy AND
+        // as the audit log's userId, while requireAdmin() had just returned the
+        // real actor and it was discarded. So one admin could create a window
+        // attributed to another, and the audit entry would corroborate it.
+        //
+        // Same shape as the dispute assignee in #122 and the property seller in
+        // #103: a value the server already holds, taken from the client instead.
+        const actingAdminId = (sessionResult as { userId: string }).userId;
+
+        // slotPrice is what a booking is priced from — #127 made it the
+        // authoritative figure for createBookingAction, which multiplies it by
+        // the tonnage. A window created at zero or below produces bookings that
+        // path now refuses, so this is the source side of the same check.
+        const slotPrice = Number(data.slotPrice);
+        if (!Number.isFinite(slotPrice) || slotPrice <= 0) {
+            return { success: false as const, error: "Slot price must be greater than zero", data: null };
+        }
+
+        const targetVolume = Number(data.targetVolume);
+        if (!Number.isFinite(targetVolume) || targetVolume <= 0) {
+            return { success: false as const, error: "Target volume must be greater than zero", data: null };
+        }
+
         const window: Omit<ExportWindow, "id"> = { title: data.title,
             commodity: data.commodity,
-            targetVolume: data.targetVolume,
+            targetVolume,
             currentVolume: 0,
-            slotPrice: data.slotPrice,
+            slotPrice,
             startDate: new Date(data.startDate),
             endDate: new Date(data.endDate),
             destination: data.destination,
             status: "open",
             createdAt: FieldValue.serverTimestamp(),
-            createdBy: data.adminId };
+            createdBy: actingAdminId };
 
         const docRef = await db.collection(COLLECTIONS.EXPORT_WINDOWS).add(window);
 
         await createAdminAuditLog({ action: "user_update",
-            userId: data.adminId,
+            userId: actingAdminId,
             targetId: docRef.id,
             targetType: "export_window_creation",
             metadata: {
@@ -220,6 +245,28 @@ export async function bookExportSlotAction(data: { windowId: string;
 export async function getUserExportSlotsAction(userId: string) { try {
         const sessionResult = await requireSession();
         if (sessionResult.error) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
+
+        // requireSession() was called and the result never used again, and the
+        // query ran on the CALLER-SUPPLIED userId — so any authenticated user
+        // could read anyone's export slots, which carry the booker's name,
+        // email and volume.
+        //
+        // That is the exact defect the comment in bookExportSlotAction, a
+        // hundred lines above, describes as fixed — including its warning that
+        // "fixing one copy and leaving its siblings is how this class keeps
+        // surviving". The sibling was left.
+        const viewerId = sessionResult.session?.user?.id;
+        if (!viewerId) {
+            return { success: false as const, error: "Authentication required", data: null };
+        }
+
+        const viewerRoles = sessionResult.session?.user?.roles ?? [];
+        const viewerIsAdmin = viewerRoles.some(
+            (r: string) => r === "admin" || r === "super_admin" || r === "export_admin"
+        );
+        if (viewerId !== userId && !viewerIsAdmin) {
+            return { success: false as const, error: "Unauthorized", data: null };
+        }
 
         const q = db.collection(COLLECTIONS.EXPORT_SLOTS).where("userId", "==", userId);
 
