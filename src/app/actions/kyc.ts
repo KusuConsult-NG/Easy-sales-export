@@ -48,6 +48,24 @@ async function _verifyBVNAction(payload: { bvn: string;
 
         const { bvn } = payload;
 
+        // An empty submission is not a submission.
+        //
+        // There was no check at all, and the write below stores
+        // hashData('00000000000') when bvn is falsy. updateOverallKYCStatus
+        // then treats that exact fallback as "no BVN provided" — so calling
+        // this with an empty string set bvnVerified: true against a placeholder
+        // and left the account counting as having supplied nothing.
+        //
+        // Combined with the completeness rule below, that marked an account
+        // KYC-verified having submitted no identity document whatsoever.
+        //
+        // This is separate from the QoreID decision recorded further down: that
+        // one is "we trust what the user types". This was "we mark verified
+        // when the user types nothing", which nobody decided.
+        if (!/^\d{11}$/.test(String(bvn ?? "").trim())) {
+            return { success: false as const, error: 'A BVN must be 11 digits', data: null };
+        }
+
         // Persist result to Firestore forcefully as fully verified
         await runQueryWithRetry(() => atomicUpdateUser(userId, { 
             'kyc.bvn': bvn ? hashData(bvn) : hashData('00000000000'),
@@ -101,6 +119,12 @@ async function _verifyNINAction(payload: { nin: string;
         const userId = session.user.id;
 
         const { nin } = payload;
+
+        // Same as the BVN path: an empty NIN stored the placeholder hash and
+        // was then counted as "not provided" by updateOverallKYCStatus.
+        if (!/^\d{11}$/.test(String(nin ?? "").trim())) {
+            return { success: false as const, error: 'A NIN must be 11 digits', data: null };
+        }
 
         // Persist result to Firestore forcefully as fully verified
         await runQueryWithRetry(() => atomicUpdateUser(userId, { 
@@ -395,8 +419,20 @@ async function updateOverallKYCStatus(userId: string): Promise<void> {
         const hasVotersCard = votersCardVal && votersCardVal !== '';
         const votersCardOk = !hasVotersCard || votersCardVerified;
 
-        // Overall KYC is complete if all provided IDs are verified.
-        const kycComplete = bvnOk && ninOk && votersCardOk;
+        // Overall KYC is complete if all provided IDs are verified — AND at
+        // least one was provided.
+        //
+        // Each of bvnOk/ninOk/votersCardOk is `!hasX || xVerified`, so with
+        // nothing on file all three are vacuously true and kycComplete came out
+        // TRUE. An account that had submitted no identity document at all was
+        // written `kyc.status: 'verified'` and `kycVerified: true` the moment
+        // this ran — and saveKYCProfileAction calls it, so saving a profile was
+        // enough.
+        //
+        // "All provided documents are verified" is only a meaningful statement
+        // about somebody who provided one.
+        const hasAnyDocument = Boolean(hasBvn || hasNin || hasVotersCard);
+        const kycComplete = hasAnyDocument && bvnOk && ninOk && votersCardOk;
 
         await runQueryWithRetry(() => atomicUpdateUser(userId, { 
             'kyc.status': kycComplete ? 'verified' : 'pending',
