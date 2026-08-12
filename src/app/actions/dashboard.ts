@@ -65,18 +65,32 @@ async function _getDashboardStatsAction(): Promise<DashboardActionState> {
 
         const userId = session.user.id;
 
-        // ⚡️ PERFORMANCE FIX: Parallel Fetching & Count Aggregations
-        // 1. Total Exports (Use Count)
-        const totalExportsPromise = db.collection(COLLECTIONS.EXPORT_WINDOWS)
+        // A user has no relationship to an EXPORT WINDOW.
+        //
+        // These three queries filtered EXPORT_WINDOWS by `userId`, and a window
+        // has no such field. export-aggregation.ts is the only thing that
+        // creates one, and its document is
+        // { title, commodity, targetVolume, currentVolume, slotPrice, startDate,
+        //   endDate, destination, status, createdAt, createdBy } —
+        // createdBy being the ADMIN who opened it.
+        //
+        // So totalExports, activeOrders and the export half of totalEscrow read
+        // empty for every user, always. Nobody reports it, because a dashboard
+        // of zeros looks exactly like a user who has not started yet. The same
+        // shape as the vendor dashboard in #132, in the screen every user sees
+        // first.
+        //
+        // A user's participation is their SLOTS and BOOKINGS — the two doors
+        // onto a window that export-booking.ts's own comment describes:
+        //   EXPORT_SLOTS     { windowId, userId, volume, totalCost, status }
+        //   EXPORT_BOOKINGS  { userId, exportWindowId, quantity, totalPrice, status }
+        // Both are queried, because both are written and neither is a superset.
+        const exportSlotsPromise = db.collection(COLLECTIONS.EXPORT_SLOTS)
             .where("userId", "==", userId)
-            .count()
             .get();
 
-        // 2. Active Orders (Pending/In_Transit) (Use Count)
-        const activeOrdersPromise = db.collection(COLLECTIONS.EXPORT_WINDOWS)
+        const exportBookingsPromise = db.collection(COLLECTIONS.EXPORT_BOOKINGS)
             .where("userId", "==", userId)
-            .where("status", "in", ["pending", "in_transit"])
-            .count()
             .get();
 
         // 3. Academy Enrollments (Use Count)
@@ -87,15 +101,6 @@ async function _getDashboardStatsAction(): Promise<DashboardActionState> {
 
         // 4. Cooperative Savings (Direct Doc Fetch)
         const userDocPromise = db.collection(COLLECTIONS.USERS).doc(userId).get();
-
-        // 5. Total Escrow (Must fetch docs to sum amount, but filter strictly)
-        // We only fetch minimal fields if possible, but Firestore Admin doesn't support select() well in Node client 
-        // without check (it does, but let's just fetch).
-        // Optimization: Only fetch 'in_transit' or 'delivered' which should be smaller subset than 'all'
-        const escrowDocsPromise = db.collection(COLLECTIONS.EXPORT_WINDOWS)
-            .where("userId", "==", userId)
-            .where("status", "in", ["in_transit", "delivered"])
-            .get();
 
         // 5b. Marketplace Escrow (Queried by participants only to avoid composite index requirement)
         const marketplaceEscrowPromise = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
@@ -108,24 +113,31 @@ async function _getDashboardStatsAction(): Promise<DashboardActionState> {
             activeOrdersSnap,
             enrollmentsSnap,
             userDoc,
-            escrowDocsSnap,
             marketplaceEscrowSnap
         ] = await Promise.all([
-            totalExportsPromise,
-            activeOrdersPromise,
+            exportSlotsPromise,
+            exportBookingsPromise,
             enrollmentsPromise,
             userDocPromise,
-            escrowDocsPromise,
             marketplaceEscrowPromise
         ]);
 
         // Process Results
-        const totalExports = totalExportsSnap.data().count;
-        const activeOrders = activeOrdersSnap.data().count;
+        const exportRecords = [
+            ...totalExportsSnap.docs.map((d) => ({ ...d.data(), value: Number(d.data().totalCost ?? 0) })),
+            ...activeOrdersSnap.docs.map((d) => ({ ...d.data(), value: Number(d.data().totalPrice ?? 0) })),
+        ];
+
+        const totalExports = exportRecords.length;
+        const activeOrders = exportRecords.filter(
+            (r: any) => r.status === "pending" || r.status === "in_transit"
+        ).length;
         const academyEnrollments = enrollmentsSnap.data().count;
 
-        const exportEscrow = escrowDocsSnap.docs
-            .reduce((sum, doc) => sum + (doc.data().amount || 0), 0);
+        // Money still held against a slot or booking that has not settled.
+        const exportEscrow = exportRecords
+            .filter((r: any) => r.status === "in_transit" || r.status === "delivered" || r.status === "pending")
+            .reduce((sum: number, r: any) => sum + (Number.isFinite(r.value) ? r.value : 0), 0);
 
         const marketplaceEscrow = marketplaceEscrowSnap.docs
             .reduce((sum, doc) => {
@@ -141,25 +153,35 @@ async function _getDashboardStatsAction(): Promise<DashboardActionState> {
 
         let cooperativeSavings = 0;
         const userData = userDoc.data();
-        const cooperativeId = userData?.cooperativeId;
 
-        if (cooperativeId) { // Priority: Check Root Collection (Standardized)
-            const rootMemberDoc = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
+        // The gate on `userData.cooperativeId` never opened.
+        //
+        // Nothing in the codebase writes cooperativeId onto a USER document —
+        // it lives on the membership record and on withdrawal rows. So this
+        // whole block was skipped and cooperativeSavings was reported as 0 to
+        // every member, including one with savings.
+        //
+        // The membership record is keyed BY the user id — platform.ts and
+        // admin.ts both write COOPERATIVE_MEMBERS.doc(userId) — so it can be
+        // read directly, and the gate was never needed to find it.
+        const rootMemberDoc = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
 
-            if (rootMemberDoc.exists) {
-                const data = rootMemberDoc.data();
-                cooperativeSavings = data?.savingsBalance || data?.balance || 0;
-            } else { // Fallback: Check Nested Collection (Legacy)
-                const nestedMemberDoc = await db
-                    .collection(COLLECTIONS.COOPERATIVES)
-                    .doc(cooperativeId)
-                    .collection("members")
-                    .doc(userId)
-                    .get();
+        if (rootMemberDoc.exists) {
+            const data = rootMemberDoc.data();
+            cooperativeSavings = Number(data?.savingsBalance ?? data?.balance ?? 0) || 0;
+        } else if (userData?.cooperativeId) {
+            // Legacy nested collection, kept for members whose record predates
+            // the root collection. Reachable only when the user document does
+            // carry a cooperativeId, which is why it stays behind that check.
+            const nestedMemberDoc = await db
+                .collection(COLLECTIONS.COOPERATIVES)
+                .doc(userData.cooperativeId)
+                .collection("members")
+                .doc(userId)
+                .get();
 
-                if (nestedMemberDoc.exists) {
-                    cooperativeSavings = nestedMemberDoc.data()?.balance || 0;
-                }
+            if (nestedMemberDoc.exists) {
+                cooperativeSavings = Number(nestedMemberDoc.data()?.balance ?? 0) || 0;
             }
         }
 
