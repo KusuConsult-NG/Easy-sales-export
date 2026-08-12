@@ -54,19 +54,29 @@ export type LoginFormData = z.infer<typeof loginSchema>;
  * Registration Schema
  * Validates user registration with comprehensive password requirements
  */
+/**
+ * The password policy, in one place.
+ *
+ * It used to live inline in registerSchema alone, so changePasswordAction —
+ * which handed `newPassword` straight to the auth provider — enforced nothing
+ * beyond the provider's own six-character floor. A user could register under
+ * this policy and then immediately drop below it.
+ */
+export const passwordPolicySchema = z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
+    .regex(/[a-z]/, "Password must contain at least one lowercase letter")
+    .regex(/[0-9]/, "Password must contain at least one number")
+    .regex(/[^A-Za-z0-9]/, "Password must contain at least one special character");
+
 export const registerSchema = z
     .object({
         fullName: strictNameSchema,
         email: strictEmailSchema,
         phone: strictPhoneSchema,
         gender: z.enum(["Male", "Female", "male", "female"], { message: "Please select your gender" }),
-        password: z
-            .string()
-            .min(8, "Password must be at least 8 characters")
-            .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
-            .regex(/[a-z]/, "Password must contain at least one lowercase letter")
-            .regex(/[0-9]/, "Password must contain at least one number")
-            .regex(/[^A-Za-z0-9]/, "Password must contain at least one special character"),
+        password: passwordPolicySchema,
         confirmPassword: z.string().min(1, "Please confirm your password"),
     })
     .refine((data) => data.password === data.confirmPassword, {
