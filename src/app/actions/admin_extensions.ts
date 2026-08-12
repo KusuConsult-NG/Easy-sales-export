@@ -9,7 +9,7 @@ import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logAuditAction } from "./audit";
-import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission, isSuperAdmin } from "@/lib/admin-permissions";
 
 type ActionState = 
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
@@ -24,11 +24,23 @@ export async function softDeleteUserAction(targetUserId: string): Promise<Action
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         
-        // Strict: Only Super Admin or Admin can delete users
-        if (!session?.user || !hasAdminPermission(session.user.roles, "users:delete")) { // Fallback if specific permission doesn't exist
-            if (!isAdmin(session.user.roles)) {
-                return { error: "Unauthorized: Admin access required", success: false as const, data: null };
-            }
+        // users:delete, and nothing weaker.
+        //
+        // The comment here said "Strict: Only Super Admin or Admin", and the
+        // code did the opposite. users:delete is held by super_admin ALONE in
+        // PERMISSION_MATRIX; the fallback below it — "if the specific permission
+        // doesn't exist" — fell through to isAdmin(), which accepts ten roles:
+        // super_admin, admin, moderator, support and every module admin.
+        //
+        // So a support agent or a moderator could irreversibly scrub a person's
+        // name, email, phone and bank details, and revoke their sign-in. The
+        // permission the matrix deliberately reserves was handed to everyone
+        // wearing a badge.
+        //
+        // bulkDeleteUsersAction, which does the same job in bulk, already gates
+        // on users:delete with no fallback. This is that rule.
+        if (!session?.user || !hasAdminPermission(session.user.roles, "users:delete")) {
+            return { error: "Unauthorized: Permission required - users:delete (super_admin only)", success: false as const, data: null };
         }
 
         const userRef = db.collection(COLLECTIONS.USERS).doc(targetUserId);
@@ -41,6 +53,18 @@ export async function softDeleteUserAction(targetUserId: string): Promise<Action
 
         // Prevent deleting yourself
         if (targetUserId === session.user.id) { return { error: "Cannot delete your own account", success: false as const, data: null };
+        }
+
+        // An administrator is not deleted by another administrator.
+        //
+        // bulkDeleteUsersAction skips admin targets unless the caller is a
+        // super_admin; this path had no such rule at all, so whoever got past
+        // the guard above could delete an admin — or a super_admin — scrubbing
+        // their details and cutting off their access.
+        const targetRoles: string[] = userData?.roles || [];
+        const targetIsAdmin = targetRoles.some((r) => r === "admin" || r === "super_admin");
+        if (targetIsAdmin && !isSuperAdmin(session.user.roles)) {
+            return { error: "Only a super admin can delete an administrator", success: false as const, data: null };
         }
 
         // PII Scrubbing
