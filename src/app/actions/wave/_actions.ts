@@ -576,15 +576,46 @@ async function _enrollInWaveAction(userId: string): Promise<ActionResponse<null>
             return { success: false as const, error: eligibility.error || eligibility.data?.reason || "Not eligible", data: null };
         }
 
+        // An admin's decision is not the applicant's to overwrite.
+        //
+        // This action wrote "serviceRegistrations.wave.status": "approved"
+        // unconditionally, for whoever called it about themselves. The review
+        // path in _admin.ts reaches that same field through
+        // claimStatusTransition, so approving or rejecting an application is
+        // claimed once and audited — and then this endpoint wrote straight over
+        // the result, with no claim and no reviewer.
+        //
+        // A rejected applicant could call it and be approved. One in
+        // revision_required could skip the revisions. One awaiting review could
+        // skip the review. module-access-check.ts scores "approved" as full
+        // access, so the outcome was worth having.
+        //
+        // Enrolment is now what its name says: a way in for someone the admins
+        // have not yet ruled on. It has no UI caller, but every export of a
+        // "use server" module is a reachable endpoint whether the app calls it
+        // or not.
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const userData = userDoc.data();
+        const existingStatus = String(userData?.serviceRegistrations?.wave?.status || "");
+
+        const REVIEW_OWNS = ["pending", "rejected", "revision_required", "suspended"];
+        if (REVIEW_OWNS.includes(existingStatus)) {
+            return {
+                success: false as const,
+                error: existingStatus === "pending"
+                    ? "Your WAVE application is awaiting review."
+                    : `Your WAVE application is ${existingStatus.replace(/_/g, " ")}. Enrolling cannot override a review decision.`,
+                data: null,
+            };
+        }
+
         await db.collection(COLLECTIONS.WAVE_MEMBERS).doc(userId).set({
             enrolledAt: FieldValue.serverTimestamp(),
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
             active: true
         }, { merge: true });
-        
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        const userData = userDoc.data();
+
         const existingApplicationId = userData?.serviceRegistrations?.wave?.applicationId || `WAVE-ENROLL-${Date.now()}`;
 
         // Ensure user registration is also updated
