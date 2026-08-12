@@ -211,12 +211,48 @@ export async function runForensicScanAction(): Promise<
                 .get();
 
             const balanceMismatches: string[] = [];
+            const unreadableMembers: string[] = [];
+
+            // This check reconciled nothing, on both sides of the comparison.
+            //
+            // It read `doc.data().cooperativeProfile?.savingsBalance` off the
+            // USER document. Nothing in the codebase writes cooperativeProfile —
+            // not one line. The maintained balance lives on the
+            // COOPERATIVE_MEMBERS document as savingsBalance, which is what
+            // debitJsonbBalanceWithFloor debits for a withdrawal and what
+            // user.ts reads before allowing account deletion.
+            //
+            // So `|| 0` turned "this field does not exist" into "the balance is
+            // zero", for every member, forever. That is how a broken check goes
+            // on looking healthy.
+            //
+            // The ledger side was wrong too. _makeContributionAction credits
+            // savingsBalance and writes its row with type "savings" — which was
+            // not in the counted list — while "withdrawal" was subtracted and is
+            // never written at all: a withdrawal moves savings into
+            // lockedBalance and records a cooperative_withdrawals document.
+            //
+            // Both sides are corrected here, and lockedBalance is included
+            // because money reserved for a pending withdrawal is still the
+            // member's.
+            const CREDIT_TYPES = ["savings", "deposit", "contribution", "loan_repayment_excess"];
+            const DEBIT_TYPES = ["withdrawal"];
 
             for (const doc of coopMembersQuery.docs) {
                 const userId = doc.id;
-                const profileBalance = doc.data().cooperativeProfile?.savingsBalance || 0;
 
-                // Sum Sync Transactions
+                const memberSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
+                if (!memberSnap.exists) {
+                    // Reported rather than counted as a zero balance. A user with
+                    // the cooperative_member role and no membership record is
+                    // itself a finding.
+                    unreadableMembers.push(userId);
+                    continue;
+                }
+
+                const memberData = memberSnap.data() || {};
+                const heldBalance = Number(memberData.savingsBalance || 0) + Number(memberData.lockedBalance || 0);
+
                 const transactionsSnapshot = await db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS)
                     .where("userId", "==", userId)
                     .where("status", "==", "completed") // Only completed transactions count
@@ -225,25 +261,28 @@ export async function runForensicScanAction(): Promise<
                 let calculatedBalance = 0;
                 transactionsSnapshot.docs.forEach(tx => {
                     const type = tx.data().type;
-                    const amount = tx.data().amount || 0;
-                    if (type === "deposit" || type === "contribution" || type === "loan_repayment_excess") {
+                    const amount = Number(tx.data().amount || 0);
+                    if (CREDIT_TYPES.includes(type)) {
                         calculatedBalance += amount;
-                    } else if (type === "withdrawal") { calculatedBalance -= amount;
+                    } else if (DEBIT_TYPES.includes(type)) {
+                        calculatedBalance -= amount;
                     }
                 });
 
                 // Tolerance for floating point math (kobo)
-                if (Math.abs(calculatedBalance - profileBalance) > 1.0) {
-                    balanceMismatches.push(`${userId} (Profile: ${profileBalance}, Calc: ${calculatedBalance})`);
+                if (Math.abs(calculatedBalance - heldBalance) > 1.0) {
+                    balanceMismatches.push(`${userId} (Held: ${heldBalance}, Ledger: ${calculatedBalance})`);
                 }
             }
 
             results.push({
                 module: "Cooperative",
                 check: "Financial Reconciliation (Balance vs Txs)",
-                status: balanceMismatches.length > 0 ? "fail" : "pass",
-                details: `Scanned 20 random members. Found ${balanceMismatches.length} balance mismatches.`,
-                affectedIds: balanceMismatches
+                status: (balanceMismatches.length > 0 || unreadableMembers.length > 0) ? "fail" : "pass",
+                // The sample size and the comparison are both stated, so a
+                // "pass" cannot be read as more than it is.
+                details: `Sampled ${coopMembersQuery.docs.length} members. Compared cooperative_members.savingsBalance + lockedBalance against completed ledger rows (${CREDIT_TYPES.join("/")} minus ${DEBIT_TYPES.join("/")}). ${balanceMismatches.length} mismatch(es), ${unreadableMembers.length} member(s) with no membership record.`,
+                affectedIds: [...balanceMismatches, ...unreadableMembers.map((id) => `${id} (no membership record)`)]
             });
         } catch (e: any) { results.push({ module: "Cooperative", check: "Financial Scan", status: "fail", details: e.message, affectedIds: [] });
         }
