@@ -54,6 +54,21 @@ jest.mock('@/lib/status-transition', () => ({
     claimStatusTransition: jest.fn(),
     claimStatusTransitionFromAny: (...a: any[]) => mockClaimFromAny(...a),
 }));
+/**
+ * The money now moves through credit_wallet_once rather than a hand-rolled
+ * wallet write, so the release path has a new dependency. Unmocked it reaches
+ * the real Supabase RPC, throws, and the action returns a failure before it ever
+ * gets to the order-completion write this file is about — every assertion below
+ * would fail for a reason unrelated to order completion.
+ */
+jest.mock('@/lib/wallet-ledger', () => ({
+    creditWalletOnce: jest.fn(async () => ({ claimed: true, balance: 5000 })),
+    debitWalletOnce: jest.fn(), debitWalletLocked: jest.fn(), claimPaymentOnce: jest.fn(),
+    debitJsonbBalance: jest.fn(), debitJsonbBalanceWithFloor: jest.fn(),
+    claimVersionedUpdate: jest.fn(), claimIdempotencyKey: jest.fn(),
+    incrementWithinCeiling: jest.fn(), decrementManyOrFail: jest.fn(),
+    claimSingleOpenLoanApplication: jest.fn(),
+}));
 jest.mock('@/lib/africastalking', () => ({ smsEscrowReleased: jest.fn(), smsDisputeResolved: jest.fn() }));
 jest.mock('@/lib/fcm', () => ({ pushEscrowReleased: jest.fn(), pushDisputeResolved: jest.fn() }));
 jest.mock('@/app/actions/notifications', () => ({ createNotificationAction: jest.fn(async () => ({})) }));

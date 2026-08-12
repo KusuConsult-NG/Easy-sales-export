@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
+import { creditWalletOnce } from "@/lib/wallet-ledger";
 import { z } from "zod";
 import type { EscrowStatus, EscrowTransaction } from "@/types/escrow";
 import { FieldValue, Timestamp, FieldPath } from "@/lib/firestore-compat";
@@ -399,6 +400,44 @@ async function _releaseEscrowFunds(
             };
         }
 
+        // Credit the seller through the ledger primitive, not by hand.
+        //
+        // This used to read the wallet and write a computed balance:
+        //
+        //     if (!walletSnap.exists) tx.set(walletRef, { balance: escrowAmount })
+        //     else                    tx.update(walletRef, { balance: increment(...) })
+        //
+        // The increment branch is safe. The other one is not: two escrows for
+        // the SAME seller released at the same time, before that seller has a
+        // wallet row, both take it and both set the balance to their own amount.
+        // Last write wins and one release is simply gone. db.runTransaction on
+        // this adapter takes no lock and cannot roll back, so it does not help.
+        //
+        // credit_wallet_once does the whole thing in one statement —
+        //     INSERT INTO wallets ... ON CONFLICT (id)
+        //     DO UPDATE SET balance = wallets.balance + EXCLUDED.balance
+        // — which is an upsert AND an increment, and it claims the reference in
+        // processed_payments first so a repeat cannot pay twice.
+        //
+        // status is "disbursement", NOT "completed". platform_revenue_totals()
+        // sums processed_payments rows whose status is 'completed', and an
+        // escrow release is platform-held money going OUT to a seller. Recording
+        // it as completed would have added every payout to reported revenue.
+        const credit = await creditWalletOnce({
+            reference: `escrow-release:${transactionId}`,
+            userId: data.sellerId,
+            amount: escrowAmount,
+            paymentType: "escrow_release",
+            source: "marketplace_escrow",
+            status: "disbursement",
+            metadata: { escrowId: transactionId, orderId, productName: data.productName ?? "" },
+        });
+
+        // claimed:false means an earlier attempt already credited this escrow.
+        // That is success, not an error — the money is where it should be.
+        const balanceAfter = credit.balance;
+        const balanceBefore = credit.claimed ? balanceAfter - escrowAmount : balanceAfter;
+
         await db.runTransaction(async (tx) => {
             // Create payout instruction
             const paymentInstructionRef = db.collection(COLLECTIONS.PAYMENT_INSTRUCTIONS).doc();
@@ -414,28 +453,14 @@ async function _releaseEscrowFunds(
                 createdBy: userId,
                 _version: 0 });
 
-            // 3. Credit Seller's Wallet directly
-            const walletRef = db.collection(COLLECTIONS.WALLETS).doc(data.sellerId);
-            const walletSnap = await tx.get(walletRef);
-            let balanceBefore = 0;
-            if (!walletSnap.exists) {
-                tx.set(walletRef, {
-                    userId: data.sellerId,
-                    balance: escrowAmount,
-                    currency: "NGN",
-                    createdAt: FieldValue.serverTimestamp(),
-                    updatedAt: FieldValue.serverTimestamp()
-                });
-            } else {
-                balanceBefore = walletSnap.data()?.balance || 0;
-                tx.update(walletRef, {
-                    balance: FieldValue.increment(escrowAmount),
-                    updatedAt: FieldValue.serverTimestamp()
-                });
-            }
-
-            // Record transaction in seller's wallet_transactions history
-            const sellerTxnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc();
+            // 3. Record the credit in the seller's wallet_transactions history.
+            //
+            // The money itself moved above, through credit_wallet_once. This row
+            // is the history entry, and its id is derived from the escrow rather
+            // than random so that a retry overwrites it instead of showing the
+            // seller the same payout twice.
+            const sellerTxnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS)
+                .doc(`escrow-release-${transactionId}`);
             tx.set(sellerTxnRef, {
                 id: sellerTxnRef.id,
                 walletId: data.sellerId,
@@ -443,7 +468,7 @@ async function _releaseEscrowFunds(
                 type: "funding",
                 amount: escrowAmount,
                 balanceBefore,
-                balanceAfter: balanceBefore + escrowAmount,
+                balanceAfter,
                 reference: transactionId,
                 description: `Payout for order #${data.orderId} (Escrow released)`,
                 status: "completed",
@@ -608,6 +633,29 @@ async function _refundEscrowToBuyer(
             };
         }
 
+        // Return the money through the ledger primitive — same reasoning as the
+        // release path. The hand-rolled version set a computed balance whenever
+        // the buyer had no wallet row yet, which loses one of two concurrent
+        // refunds to the same buyer.
+        //
+        // status is "refund" so platform_revenue_totals() does not count money
+        // going back to a buyer as income.
+        const refundBuyerId = preRefund.data()?.buyerId;
+        const refundCredit = await creditWalletOnce({
+            reference: `escrow-refund:${transactionId}`,
+            userId: refundBuyerId,
+            amount: escrowAmount,
+            paymentType: "escrow_refund",
+            source: "marketplace_escrow",
+            status: "refund",
+            metadata: { escrowId: transactionId, orderId: preRefund.data()?.orderId ?? "" },
+        });
+
+        const refundBalanceAfter = refundCredit.balance;
+        const refundBalanceBefore = refundCredit.claimed
+            ? refundBalanceAfter - escrowAmount
+            : refundBalanceAfter;
+
         await db.runTransaction(async (tx) => {
             const txDoc = await tx.get(txRef);
             const data = txDoc.data()!;
@@ -627,35 +675,21 @@ async function _refundEscrowToBuyer(
                 _version: 0 });
 
             // 1. Credit Buyer's Wallet directly
-            const walletRef = db.collection(COLLECTIONS.WALLETS).doc(data.buyerId);
-            const walletSnap = await tx.get(walletRef);
-            let balanceBefore = 0;
-            if (!walletSnap.exists) {
-                tx.set(walletRef, {
-                    userId: data.buyerId,
-                    balance: escrowAmount,
-                    currency: "NGN",
-                    createdAt: FieldValue.serverTimestamp(),
-                    updatedAt: FieldValue.serverTimestamp()
-                });
-            } else {
-                balanceBefore = walletSnap.data()?.balance || 0;
-                tx.update(walletRef, {
-                    balance: FieldValue.increment(escrowAmount),
-                    updatedAt: FieldValue.serverTimestamp()
-                });
-            }
-
-            // 2. Record transaction in buyer's wallet_transactions history
-            const buyerTxnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc();
+            // 2. Record the refund in the buyer's wallet_transactions history.
+            //
+            // As with the release path, the money moved through
+            // credit_wallet_once above and this is the history entry, keyed on
+            // the escrow so a retry cannot show the same refund twice.
+            const buyerTxnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS)
+                .doc(`escrow-refund-${transactionId}`);
             tx.set(buyerTxnRef, {
                 id: buyerTxnRef.id,
                 walletId: data.buyerId,
                 userId: data.buyerId,
                 type: "refund",
                 amount: escrowAmount,
-                balanceBefore,
-                balanceAfter: balanceBefore + escrowAmount,
+                balanceBefore: refundBalanceBefore,
+                balanceAfter: refundBalanceAfter,
                 reference: transactionId,
                 description: `Refund for order #${data.orderId} (Escrow refunded)`,
                 status: "completed",
