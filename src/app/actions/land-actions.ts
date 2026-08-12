@@ -13,6 +13,30 @@ import {
 import { type LandListing } from "@/types/strict";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
+import { isAdmin } from "@/lib/admin-permissions";
+
+/**
+ * Statuses a stranger may see.
+ *
+ * A land listing is public once it has been verified — browsing farmland for
+ * sale is the point of the module. Everything else is a review queue:
+ * pending_verification, rejected, deleted. Those documents carry the admin's
+ * verificationNotes and rejectionReason, the owner's id and email, and they
+ * belong to people who have not agreed to be listed anywhere yet.
+ */
+const PUBLIC_LAND_STATUSES = ["verified", "approved"];
+
+/** Fields that exist for the review process and are nobody else's business. */
+const INTERNAL_LAND_FIELDS = [
+    "verificationNotes", "rejectionReason", "verifiedBy",
+    "ownerEmail", "previousOwnerId",
+];
+
+function stripInternalLandFields<T extends Record<string, any>>(listing: T): T {
+    const copy: Record<string, any> = { ...listing };
+    for (const field of INTERNAL_LAND_FIELDS) delete copy[field];
+    return copy as T;
+}
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { logger } from "@/lib/logger";
 
@@ -81,6 +105,30 @@ export async function createLandListing(...args: Parameters<typeof _createLandLi
  */
 async function _getLandListings(filters?: z.infer<typeof landSearchSchema>): Promise<ActionResponse<LandListing[]>> { 
     try {
+        // The review queue is not a public feed.
+        //
+        // This endpoint had no caller check at all and honoured a `status`
+        // filter, so anyone could ask for `{ status: 'pending_verification' }`
+        // and receive every unverified land listing — full documents, including
+        // the admin's verificationNotes and rejectionReason, the owner's id and
+        // their email. /land/verify, an admin page, is the only caller that ever
+        // passes a non-public status.
+        //
+        // Browsing VERIFIED land stays open, because that is what the module is
+        // for. Anything else now needs an admin.
+        const requestedStatus = filters?.status;
+        const wantsNonPublic = requestedStatus !== undefined && !PUBLIC_LAND_STATUSES.includes(requestedStatus);
+
+        let callerIsAdmin = false;
+        if (wantsNonPublic) {
+            const sessionResult = await requireSession();
+            const roles = sessionResult.session?.user?.roles;
+            callerIsAdmin = Boolean(sessionResult.session) && isAdmin(roles);
+            if (!callerIsAdmin) {
+                return { success: false, error: "Unauthorized", data: null };
+            }
+        }
+
         let listingsQuery = db.collection(COLLECTIONS.LAND_LISTINGS)
             .orderBy('createdAt', 'desc');
 
@@ -168,6 +216,26 @@ async function _getLandListing(listingId: string): Promise<ActionResponse<LandLi
 
         const data = listingDoc.data()!;
 
+        // A listing under review is visible to its owner and to admins, and to
+        // nobody else.
+        //
+        // This returned the whole document for any id, in any status, with no
+        // session at all — so a stranger walking ids could read pending and
+        // rejected listings along with the admin notes explaining why. It has no
+        // UI caller, which is not a defence: every export of a "use server"
+        // module is a reachable endpoint.
+        const isPublicStatus = PUBLIC_LAND_STATUSES.includes(String(data.status));
+        if (!isPublicStatus) {
+            const sessionResult = await requireSession();
+            const viewerId = sessionResult.session?.user?.id;
+            const viewerIsAdmin = isAdmin(sessionResult.session?.user?.roles);
+            if (!viewerId || (viewerId !== data.ownerId && !viewerIsAdmin)) {
+                // Indistinguishable from "no such listing", so the endpoint does
+                // not confirm that an id exists to someone who may not see it.
+                return { success: true, error: null, data: null };
+            }
+        }
+
         const listing: LandListing = { 
             id: listingDoc.id,
             ...data,
@@ -181,7 +249,17 @@ async function _getLandListing(listingId: string): Promise<ActionResponse<LandLi
             verifiedAt: data.verifiedAt ? (data.verifiedAt as Timestamp).toDate().toISOString() : null 
         } as unknown as LandListing;
 
-        return { success: true, error: null, data: listing };
+        // Internal review fields are stripped for a public viewer. The owner and
+        // an admin keep them — the owner needs to read why they were rejected.
+        const sessionForFields = await requireSession();
+        const viewer = sessionForFields.session?.user;
+        const privileged = Boolean(viewer) && (viewer!.id === data.ownerId || isAdmin(viewer!.roles));
+
+        return {
+            success: true,
+            error: null,
+            data: privileged ? listing : stripInternalLandFields(listing),
+        };
     } catch (error: any) { 
         logger.error("getLandListing error:", error);
         return { success: false, error: "Failed to fetch listing", data: null };
@@ -308,7 +386,13 @@ async function _verifyLandListing(
     if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
     
-    if (!session || !session.user.roles?.includes('admin')) { 
+    // `.includes('admin')` alone refused a super_admin who did not also hold the
+    // literal 'admin' role — the one account that should never be locked out of
+    // a verification queue. isSuperAdmin is checked explicitly rather than
+    // switching to isAdmin(), which would WIDEN this to moderator, support and
+    // every module admin; verifying land is not their job.
+    const canVerifyLand = session?.user.roles?.includes('admin') || session?.user.roles?.includes('super_admin');
+    if (!session || !canVerifyLand) { 
         return { success: false, error: "Unauthorized - Admin only", data: null };
     }
 
