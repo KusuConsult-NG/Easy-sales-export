@@ -17,6 +17,101 @@ import type {
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * How many pages of Paystack transactions any one revenue sweep will read.
+ * 100 pages x 100 per page = 10,000 transactions.
+ */
+const MAX_REVENUE_PAGES = 100;
+
+/**
+ * Read every successful Paystack transaction, handing each one to `onTransaction`.
+ *
+ * This exists because the same paging bug was written three times in this file.
+ * Each site decided when to stop with
+ *
+ *     const totalPages = json.meta?.pageCount ?? 1;
+ *
+ * which cannot tell "the API sent no page count" apart from "there is one page".
+ * When Paystack omits the field, every one of those loops stopped after page 1
+ * and reported the hundred most recent transactions as the platform's lifetime
+ * revenue — silently, with nothing marking the figure as partial.
+ *
+ * The end-of-data signal used here is a SHORT PAGE, which is a fact about the
+ * response rather than about its metadata. `pageCount` is still used when it is
+ * actually present, because paging to the ceiling on every call would be slow,
+ * but it can no longer end the sweep by being absent.
+ *
+ * `truncated` is returned rather than logged-and-forgotten so callers can label
+ * the number instead of presenting a floor as a total.
+ */
+async function eachPaystackSuccess(
+    secretKey: string,
+    opts: {
+        dateFrom?: Date;
+        dateTo?: Date;
+        maxPages?: number;
+        timeoutMs?: number;
+        label: string;
+        /**
+         * Set when the cap is a deliberate product limit rather than a safety
+         * ceiling, so hitting it is expected and should not log an error every
+         * call. `truncated` is still returned either way — the caller is
+         * expected to label the figure.
+         */
+        capIsIntentional?: boolean;
+    },
+    onTransaction: (tx: any) => void,
+): Promise<{ pagesRead: number; truncated: boolean }> {
+    const maxPages = opts.maxPages ?? MAX_REVENUE_PAGES;
+    const timeoutMs = opts.timeoutMs ?? 6000;
+    const PER_PAGE = 100;
+
+    let page = 1;
+    let truncated = false;
+
+    while (page <= maxPages) {
+        let url = `https://api.paystack.co/transaction?perPage=${PER_PAGE}&page=${page}&status=success`;
+        if (opts.dateFrom) url += `&from=${encodeURIComponent(opts.dateFrom.toISOString())}`;
+        if (opts.dateTo) url += `&to=${encodeURIComponent(opts.dateTo.toISOString())}`;
+
+        const res = await fetch(url, {
+            headers: {
+                Authorization: `Bearer ${secretKey}`,
+                "Content-Type": "application/json",
+            },
+            cache: "no-store",
+            signal: AbortSignal.timeout(timeoutMs),
+        });
+        if (!res.ok) throw new Error(`Paystack API returned status ${res.status}`);
+
+        const json = await res.json();
+        const data = json.data ?? [];
+        for (const tx of data) onTransaction(tx);
+
+        // A short page is the end of the data, whatever the metadata says.
+        if (data.length < PER_PAGE) return { pagesRead: page, truncated: false };
+
+        // Honoured when present; unable to end the sweep by being absent.
+        const reportedPages = Number(json.meta?.pageCount);
+        if (Number.isFinite(reportedPages) && page >= reportedPages) {
+            return { pagesRead: page, truncated: false };
+        }
+
+        if (page === maxPages) {
+            truncated = true;
+            if (!opts.capIsIntentional) {
+                logger.error(
+                    `[${opts.label}] Paystack paging hit the ${maxPages}-page ceiling. ` +
+                    `The revenue total is INCOMPLETE — raise the ceiling or sum from processed_payments.`
+                );
+            }
+        }
+        page++;
+    }
+
+    return { pagesRead: maxPages, truncated };
+}
+
 async function safeCount(
     ref: import("@/lib/supabase-db").SupabaseQuery | any
 ): Promise<number> {
@@ -89,74 +184,27 @@ export class AnalyticsService implements AnalyticsServiceContract {
 
         let totalRevenue = 0;
         let totalTransactions = 0;
+        // True when paging stopped at its ceiling, so totalRevenue is a floor.
+        let revenueIsPartial = false;
 
         const secretKey = process.env.PAYSTACK_SECRET_KEY;
         let paystackSuccess = false;
 
         if (secretKey) {
             try {
-                // 1. Fetch Page 1 to get meta pageCount
-                let url = `https://api.paystack.co/transaction?perPage=100&page=1&status=success`;
-                if (options?.dateFrom) {
-                    url += `&from=${encodeURIComponent(options.dateFrom.toISOString())}`;
-                }
-                if (options?.dateTo) {
-                    url += `&to=${encodeURIComponent(options.dateTo.toISOString())}`;
-                }
-                const res = await fetch(url, {
-                    headers: {
-                        Authorization: `Bearer ${secretKey}`,
-                        "Content-Type": "application/json",
+                // The pages were previously fetched 2..pageCount all at once with
+                // Promise.all and no bound. On a platform this size that is a
+                // burst of hundreds of concurrent requests at whatever Paystack's
+                // rate limit is, so it now reads sequentially with a ceiling.
+                const sweep = await eachPaystackSuccess(
+                    secretKey,
+                    { dateFrom: options?.dateFrom, dateTo: options?.dateTo, label: "PlatformMetrics" },
+                    (tx) => {
+                        totalRevenue += (tx.amount / 100);
+                        totalTransactions++;
                     },
-                    cache: "no-store",
-                    signal: AbortSignal.timeout(6000), // Increased timeout to 6s
-                });
-                if (!res.ok) throw new Error(`Paystack API returned status ${res.status}`);
-                const json = await res.json();
-                const data = json.data ?? [];
-                
-                for (const tx of data) {
-                    totalRevenue += (tx.amount / 100);
-                    totalTransactions++;
-                }
-
-                const totalPages = json.meta?.pageCount ?? 1;
-                
-                // 2. Fetch remaining pages in parallel if totalPages > 1
-                if (totalPages > 1) {
-                    const pagePromises = [];
-                    for (let page = 2; page <= totalPages; page++) {
-                        let pageUrl = `https://api.paystack.co/transaction?perPage=100&page=${page}&status=success`;
-                        if (options?.dateFrom) {
-                            pageUrl += `&from=${encodeURIComponent(options.dateFrom.toISOString())}`;
-                        }
-                        if (options?.dateTo) {
-                            pageUrl += `&to=${encodeURIComponent(options.dateTo.toISOString())}`;
-                        }
-                        pagePromises.push(
-                            fetch(pageUrl, {
-                                headers: {
-                                    Authorization: `Bearer ${secretKey}`,
-                                    "Content-Type": "application/json",
-                                },
-                                cache: "no-store",
-                                signal: AbortSignal.timeout(6000),
-                            }).then(async (pageRes) => {
-                                if (!pageRes.ok) throw new Error(`Page ${page} failed: ${pageRes.status}`);
-                                return pageRes.json();
-                            })
-                        );
-                    }
-
-                    const pageResults = await Promise.all(pagePromises);
-                    for (const result of pageResults) {
-                        const pageData = result.data ?? [];
-                        for (const tx of pageData) {
-                            totalRevenue += (tx.amount / 100);
-                            totalTransactions++;
-                        }
-                    }
-                }
+                );
+                revenueIsPartial = sweep.truncated;
                 paystackSuccess = true;
             } catch (e: any) {
                 logger.error(`[PlatformMetrics] Live Paystack revenue fetch failed, falling back to Firestore: ${e.message}`);
@@ -174,6 +222,9 @@ export class AnalyticsService implements AnalyticsServiceContract {
             // returned as the platform's revenue.
             totalRevenue = 0;
             totalTransactions = 0;
+            // The aggregate below is computed by the database over the whole
+            // table, so the fallback figure is never a partial one.
+            revenueIsPartial = false;
 
             try {
                 let query: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
@@ -216,6 +267,7 @@ export class AnalyticsService implements AnalyticsServiceContract {
             totalUsers,
             revenueAvailable: revenueSource !== null,
             revenueSource,
+            revenueIsPartial,
         };
     }
 
@@ -421,45 +473,57 @@ export class AnalyticsService implements AnalyticsServiceContract {
         const secretKey = process.env.PAYSTACK_SECRET_KEY;
         let paystackSuccess = false;
         let revenueByMonth: Array<{ month: string; revenue: number }> = [];
+        // True when the monthly chart hit its page cap, so earlier months read
+        // low. Surfaced rather than left for the reader to infer from a dip.
+        let monthlyRevenueIsPartial = false;
 
         if (secretKey) {
             try {
                 // Initialize monthly buckets with 0
                 const buckets = months.map(m => ({ label: m.label, start: m.start, end: m.end, revenue: 0 }));
                 
-                let page = 1;
-                const fromStr = months[0].start.toISOString();
-                const toStr = months[months.length - 1].end.toISOString();
-                
-                while (true) {
-                    const url = `https://api.paystack.co/transaction?perPage=100&page=${page}&status=success&from=${encodeURIComponent(fromStr)}&to=${encodeURIComponent(toStr)}`;
-                    const res = await fetch(url, {
-                        headers: {
-                            Authorization: `Bearer ${secretKey}`,
-                            "Content-Type": "application/json",
-                        },
-                        cache: "no-store",
-                        signal: AbortSignal.timeout(3000),
-                    });
-                    if (!res.ok) throw new Error(`Paystack API returned status ${res.status}`);
-                    const json = await res.json();
-                    const data = json.data ?? [];
-                    for (const tx of data) {
+                // The 5-page cap below is somebody's deliberate latency decision
+                // ("to prevent slow API response or timeouts", at 3s per page)
+                // and is kept as it was. Only the stop CONDITION is fixed: a
+                // missing meta.pageCount used to cut this to 1 page rather than
+                // the 5 that were intended, so a chart already limited to 500
+                // transactions could quietly be drawn from 100.
+                //
+                // WORTH A DECISION, NOT CHANGED HERE: 500 transactions across
+                // twelve months means the monthly chart is drawn from the most
+                // recent 500 only, so early months read low. Raising the cap
+                // costs 3s per extra page on a dashboard load; summing from
+                // processed_payments instead would be exact and fast. That is a
+                // product call, so it is reported rather than taken.
+                const MONTHLY_REVENUE_PAGE_CAP = 5;
+                const monthlySweep = await eachPaystackSuccess(
+                    secretKey,
+                    {
+                        dateFrom: months[0].start,
+                        dateTo: months[months.length - 1].end,
+                        maxPages: MONTHLY_REVENUE_PAGE_CAP,
+                        timeoutMs: 3000,
+                        label: "DashboardStats.monthlyRevenue",
+                        capIsIntentional: true,
+                    },
+                    (tx) => {
                         const paidAtStr = tx.paid_at || tx.paidAt || tx.created_at || tx.createdAt;
-                        if (!paidAtStr) continue;
+                        if (!paidAtStr) return;
                         const txDate = new Date(paidAtStr);
-                        
                         for (const bucket of buckets) {
                             if (txDate >= bucket.start && txDate <= bucket.end) {
                                 bucket.revenue += (tx.amount / 100);
                                 break;
                             }
                         }
-                    }
-                    const totalPages = json.meta?.pageCount ?? 1;
-                    // Guard: Cap at 5 pages (500 transactions) to prevent slow API response or timeouts
-                    if (page >= 5 || page >= totalPages || data.length === 0) break;
-                    page++;
+                    },
+                );
+                if (monthlySweep.truncated) {
+                    logger.warn(
+                        `[DashboardStats] Monthly revenue chart read its ${MONTHLY_REVENUE_PAGE_CAP}-page cap ` +
+                        `(${MONTHLY_REVENUE_PAGE_CAP * 100} transactions). Earlier months are under-reported.`
+                    );
+                    monthlyRevenueIsPartial = true;
                 }
                 
                 revenueByMonth = buckets.map(b => ({ month: b.label, revenue: b.revenue }));
@@ -488,6 +552,8 @@ export class AnalyticsService implements AnalyticsServiceContract {
             });
 
             revenueByMonth = await Promise.all(revenuePromises);
+            // Per-month database aggregates are exact, so this path is complete.
+            monthlyRevenueIsPartial = false;
         }
 
         const monthlyRevenue = revenueByMonth.length > 0 ? revenueByMonth[revenueByMonth.length - 1].revenue : 0;
@@ -587,6 +653,7 @@ export class AnalyticsService implements AnalyticsServiceContract {
                 pendingLoans,
             },
             revenueByMonth,
+            monthlyRevenueIsPartial,
             userGrowthByMonth,
             moduleUsage: moduleUsage.length ? moduleUsage : [{ module: "No data yet", count: 1 }],
             userSegments,
@@ -601,6 +668,7 @@ export class AnalyticsService implements AnalyticsServiceContract {
         const db = getAdminDb();
 
         let totalRevenue = 0;
+        let revenueIsPartial = false;
         let totalEscrowVolume = 0;
         let totalLoansDisbursed = 0;
         let totalSuccessfulCount = 0;
@@ -661,28 +729,26 @@ export class AnalyticsService implements AnalyticsServiceContract {
                     }
                 }
 
-                // Fetch and sum all successful transaction amounts to calculate exact total revenue
-                let page = 1;
-                while (true) {
-                    const url = `https://api.paystack.co/transaction?perPage=100&page=${page}&status=success`;
-                    const res = await fetch(url, {
-                        headers: {
-                            Authorization: `Bearer ${secretKey}`,
-                            "Content-Type": "application/json",
-                        },
-                        cache: "no-store",
-                        signal: AbortSignal.timeout(3000),
-                    });
-                    if (!res.ok) throw new Error(`Paystack total revenue API error: ${res.status}`);
-                    const json = await res.json();
-                    const data = json.data ?? [];
-                    for (const tx of data) {
-                        totalRevenue += (tx.amount / 100);
-                    }
-                    const totalPages = json.meta?.pageCount ?? 1;
-                    if (page >= totalPages || data.length === 0) break;
-                    page++;
-                }
+                // Fetch and sum all successful transaction amounts to calculate
+                // exact total revenue.
+                //
+                // This was the third copy of the same paging bug in this file —
+                // `json.meta?.pageCount ?? 1`, which stops after ONE page when
+                // the API sends no page count and reports the hundred most
+                // recent transactions as the platform's lifetime revenue. The
+                // loop lived here, in getPlatformMetrics, and in the monthly
+                // chart. All three now share eachPaystackSuccess above, because
+                // fixing one copy and leaving its siblings is how this class
+                // keeps surviving in this codebase.
+                const sweep = await eachPaystackSuccess(
+                    secretKey,
+                    { label: "FinancialOverview", timeoutMs: 3000 },
+                    (tx) => { totalRevenue += (tx.amount / 100); },
+                );
+                // Reported rather than swallowed: an admin reading this figure
+                // needs to know it is a floor, not a total. Surfaced on the
+                // payload below, not only logged.
+                revenueIsPartial = sweep.truncated;
 
                 paystackSuccess = true;
             } catch (e: any) {
@@ -883,6 +949,11 @@ export class AnalyticsService implements AnalyticsServiceContract {
             error: null,
             success: true,
             totalRevenue,
+            // True when the Paystack paging ceiling was reached, so totalRevenue
+            // is a floor rather than a total. Surfaced instead of logged only,
+            // because an admin reading the figure is the person who needs to
+            // know it is incomplete.
+            revenueIsPartial,
             totalEscrowVolume,
             totalLoansDisbursed,
             pendingPayoutAmount,

@@ -33,6 +33,12 @@ export interface AnalyticsData {
         pendingLoans: number;
     };
     revenueByMonth: Array<{ month: string; revenue: number }>;
+    /**
+     * True when the monthly revenue series was read up to its page cap,
+     * so earlier months are under-reported. Optional so existing callers
+     * compile unchanged; the chart should say so when it is set.
+     */
+    monthlyRevenueIsPartial?: boolean;
     userGrowthByMonth: Array<{ month: string; users: number }>;
     moduleUsage: Array<{ module: string; count: number }>;
     userSegments: UserSegments;
@@ -48,6 +54,8 @@ export interface FinancialOverview {
     error: string | null;
     success: boolean;
     totalRevenue: number;
+    /** totalRevenue stopped at the paging ceiling and is a floor, not a total. */
+    revenueIsPartial?: boolean;
     totalEscrowVolume: number;
     totalLoansDisbursed: number;
     pendingPayoutAmount: number;
