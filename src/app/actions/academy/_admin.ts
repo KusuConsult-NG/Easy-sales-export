@@ -1176,6 +1176,25 @@ async function _logAcademyExportAction(details: any): Promise<ActionResponse<nul
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
+
+        // Writing to the admin audit log is an admin action.
+        //
+        // This endpoint took `details` from the caller and wrote it into
+        // createAdminAuditLog with action "data_export" and targetId
+        // "academy_applications", behind a session check alone. Every other
+        // export in this file — getStandardAcademyApplicationsAction,
+        // getPendingAcademyApplicationsAction — is gated on isAdmin; only the
+        // record of the export was not.
+        //
+        // So any signed-in user could write entries into the log that says who
+        // read the applicant data, with a count and filters they chose. That log
+        // is the evidence an incident is reconstructed from, and this platform
+        // has an open data-exposure incident. A record anybody can write to is
+        // not evidence.
+        if (!isAdmin(session.user.roles)) {
+            return { success: false, error: "Unauthorized", data: null };
+        }
+
         await createAdminAuditLog({
             action: "data_export",
             userId: session.user.id,
