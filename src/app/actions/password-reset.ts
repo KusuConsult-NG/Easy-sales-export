@@ -7,8 +7,14 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
 import crypto from 'crypto';
 import { Resend } from 'resend';
+import { claimIdempotencyKey } from '@/lib/wallet-ledger';
+import { rateLimit } from '@/lib/rate-limiter';
+import { rateLimitConfig } from '@/lib/rate-limits.config';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
+
+/** See sendResetEmailAction for why this bucket and not the login one. */
+const resetLimiter = rateLimit(rateLimitConfig.contactForm);
 
 export type SendResetEmailState = 
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
@@ -42,6 +48,28 @@ export async function sendResetEmailAction(
         // Validate email format
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) { return { success: false as const, error: 'Invalid email format', data: null };
+        }
+
+        // Somebody else's inbox is not a free megaphone.
+        //
+        // This endpoint is unauthenticated, sends a real email through Resend on
+        // every call, and had no limit of any kind — so one address could be
+        // mailed as fast as requests could be made, at the platform's cost and
+        // the recipient's expense.
+        //
+        // Keyed on the email rather than the caller, because the caller is
+        // anonymous and the address is what is being abused. The contactForm
+        // bucket is 30 per hour, which is far above anyone's genuine need to
+        // reset a password and far below a usable flood.
+        //
+        // Deliberately NOT the login bucket: that is keyed by email too, and
+        // spending it here would let reset requests lock the same person out of
+        // signing in.
+        const limit = await resetLimiter.check(`password-reset:${email}`);
+        if (!limit.success) {
+            // Same shape as the unknown-address reply below, so the limit does
+            // not become an oracle for which addresses are registered.
+            return { success: true as const, error: null };
         }
 
         const auth = adminAuth;
@@ -156,7 +184,15 @@ export async function resetPasswordAction(
         if (password !== confirmPassword) { return { success: false as const, error: 'Passwords do not match', data: null };
         }
 
-        if (password.length < 8) { return { success: false as const, error: 'Password must be at least 8 characters', data: null };
+        // The same bar as registration and as changePasswordAction.
+        //
+        // This checked length alone, so a reset was the weakest of the three
+        // ways to set a password on this platform — and the one reachable
+        // without knowing the old one.
+        const { passwordPolicySchema } = await import("@/lib/schemas");
+        const policy = passwordPolicySchema.safeParse(password);
+        if (!policy.success) {
+            return { success: false as const, error: policy.error.issues[0].message, data: null };
         }
 
         // Find and validate token in Firestore
@@ -175,15 +211,99 @@ export async function resetPasswordAction(
         if (Date.now() > resetData.expiry) { return { success: false as const, error: 'Reset token has expired', data: null };
         }
 
-        // Update password in Firebase Auth
-        const auth = adminAuth;
-        try { // Find user again to be sure (since resetData.email is trusted from DB)
-            const user = await auth.getUserByEmail(resetData.email);
-            await auth.updateUser(user.uid, {
-                password: password
-            });
-        } catch (error) { logger.error('Failed to update password:', error);
+        // Claim the token BEFORE changing anything.
+        //
+        // It used to be marked used at the very end, after the password write
+        // and after clearing requiresPasswordChange. A failure anywhere in
+        // between left a valid reset token in the database — and a reset link
+        // that still works after it has been used is worth more to whoever
+        // intercepted the email than to the person who requested it.
+        //
+        // Claiming first means a failure after this point costs a wasted token
+        // and a second request. That is the cheaper mistake.
+        const claim = await claimIdempotencyKey({
+            key: `password-reset:${resetDoc.id}`,
+            action: "password_reset",
+        });
+
+        if (!claim.claimed) {
+            return { success: false as const, error: 'Invalid or expired reset token', data: null };
+        }
+
+        await db.collection(COLLECTIONS.PASSWORD_RESETS).doc(resetDoc.id).update({
+            used: true,
+            usedAt: FieldValue.serverTimestamp(),
+        });
+
+        // Write the new password to the store that authenticates logins.
+        //
+        // This updated Firebase Auth and only Firebase Auth. lib/auth.ts
+        // authenticates against SUPABASE first and treats Firebase as a legacy
+        // fallback — the same split fixed for changePasswordAction in #108, in
+        // the path that matters more. A reset is what somebody uses when they
+        // are locked out or believe their password is compromised.
+        //
+        // With Supabase still holding the old secret:
+        //   old password  Supabase accepts. Login succeeds.
+        //   new password  Supabase rejects, the Firebase fallback accepts, then
+        //                 tries to provision the user in Supabase, gets
+        //                 "already exists" and throws auth/invalid-credential.
+        //
+        // So the reset did nothing, the old password kept working, and the
+        // person was told to sign in with the new one.
+        //
+        // Supabase is authoritative here and its failure is reported as a
+        // failure. Firebase is updated afterwards, best-effort, because the
+        // fallback would otherwise keep accepting the superseded password.
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        if (!supabaseUrl) {
+            return { success: false as const, error: 'Service configuration error. Please contact support.', data: null };
+        }
+
+        const { supabaseAdmin } = await import("@/lib/supabase");
+
+        // getUserByEmail is Firebase's, and an account created after the
+        // migration may have no Firebase record at all — registerAction catches
+        // that failure and logs a warning. So the Supabase id is resolved from
+        // the user profile, falling back to Firebase only if needed.
+        let targetUserId: string | null = null;
+        try {
+            const profileSnap = await db.collection(COLLECTIONS.USERS)
+                .where("email", "==", resetData.email)
+                .limit(1)
+                .get();
+            if (!profileSnap.empty) {
+                const profile = profileSnap.docs[0];
+                targetUserId = profile.data()?.supabaseAuthId || profile.id;
+            }
+        } catch (lookupErr) {
+            logger.warn('[reset] profile lookup failed:', lookupErr as Error);
+        }
+
+        if (!targetUserId) {
+            try {
+                const fbUser = await adminAuth.getUserByEmail(resetData.email);
+                targetUserId = fbUser.uid;
+            } catch {
+                return { success: false as const, error: 'Failed to update password', data: null };
+            }
+        }
+
+        const { error: sbUpdateError } = await supabaseAdmin.auth.admin.updateUserById(
+            targetUserId,
+            { password }
+        );
+
+        if (sbUpdateError) {
+            logger.error('[reset] Supabase Auth password update failed:', sbUpdateError);
             return { success: false as const, error: 'Failed to update password', data: null };
+        }
+
+        try {
+            const fbUser = await adminAuth.getUserByEmail(resetData.email);
+            await adminAuth.updateUser(fbUser.uid, { password });
+        } catch (fbErr: any) {
+            logger.warn('[reset] legacy Firebase password update skipped:', fbErr?.message);
         }
 
         // Also clear requiresPasswordChange if it exists (e.g. for legacy members)
@@ -196,11 +316,6 @@ export async function resetPasswordAction(
         } catch (updateErr) {
             // Ignore if field doesn't exist
         }
-
-        // Mark token as used
-        await db.collection(COLLECTIONS.PASSWORD_RESETS).doc(resetDoc.id).update({ used: true,
-            usedAt: FieldValue.serverTimestamp()
-        });
 
         return { success: true as const, error: null
  };
