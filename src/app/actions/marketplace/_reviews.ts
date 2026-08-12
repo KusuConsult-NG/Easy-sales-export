@@ -43,8 +43,34 @@ async function _submitProductReviewAction(data: {
         if (orderData.buyerId !== buyerId) { 
             return { success: false as const, error: "Unauthorized: not your order", data: null };
         }
-        if (orderData.status !== "delivered" && orderData.status !== "completed") { 
+        if (orderData.status !== "delivered" && orderData.status !== "completed") {
             return { success: false as const, error: "You can only review orders that have been delivered", data: null };
+        }
+
+        // The product has to have been IN the order.
+        //
+        // Everything above checks the order — the buyer owns it, it was
+        // delivered — and then productId was taken from the caller and never
+        // compared to what the order contained. One delivered order therefore
+        // licensed a review of any product on the platform, written with
+        // `verified: true` and fed straight into _recalculateProductRating,
+        // which moves that product's public average.
+        //
+        // It works in both directions: one-star a competitor, or buy anything
+        // once and five-star your own listings as a verified purchase. The
+        // duplicate guard is per (buyer, order, product), so a single order
+        // covered the entire catalogue, one review each.
+        //
+        // submitSellerReviewAction, two screens below, already does exactly this
+        // check — `if (!sellerIds.includes(data.sellerId))`. Only the product
+        // path was missing it.
+        const orderItems: any[] = Array.isArray(orderData.items) ? orderData.items : [];
+        const orderedProductIds = orderItems
+            .map((item) => String(item?.productId ?? item?.id ?? ""))
+            .filter(Boolean);
+
+        if (!orderedProductIds.includes(String(data.productId))) {
+            return { success: false as const, error: "That product was not part of this order", data: null };
         }
 
         const existingSnap = await db.collection(COLLECTIONS.PRODUCT_REVIEWS)
@@ -273,6 +299,19 @@ async function _moderateReviewAction(
 
         if (!isAdmin(sessionResult.session.user.roles)) { 
             return { success: false as const, error: "Unauthorized", data: null };
+        }
+
+        // `action` is typed as "approved" | "rejected", which is a compile-time
+        // claim only — a server action is reachable with any argument. It is
+        // written straight into `status`, and a review in an unrecognised status
+        // is invisible to both the pending queue and the public list: not lost,
+        // but unreachable by anyone who would look for it.
+        //
+        // `collection` needs no such check: the ternary below maps anything that
+        // is not "product_reviews" to seller_reviews, so an arbitrary string
+        // cannot reach an arbitrary table.
+        if (action !== "approved" && action !== "rejected") {
+            return { success: false as const, error: "Moderation action must be approved or rejected", data: null };
         }
 
         const collectionName = collection === "product_reviews"
