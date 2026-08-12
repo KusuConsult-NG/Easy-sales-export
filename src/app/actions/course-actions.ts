@@ -210,12 +210,84 @@ export async function getUserEnrolledCourses() { const sessionResult = await req
 /**
  * Mark course as complete (manual completion)
  */
+
+/**
+ * Load a course and flatten its lesson ids.
+ *
+ * Courses live in academy_courses; platform.ts also writes a `courses`
+ * collection, so both are tried before giving up.
+ */
+async function loadCourseForCompletion(courseId: string): Promise<{
+    title: string | null;
+    lessonIds: string[];
+    found: boolean;
+}> {
+    for (const collectionName of [COLLECTIONS.ACADEMY_COURSES, COLLECTIONS.COURSES]) {
+        const doc = await db.collection(collectionName).doc(courseId).get();
+        if (!doc.exists) continue;
+        const data = doc.data() || {};
+        const modules: any[] = Array.isArray(data.modules) ? data.modules : [];
+        const lessonIds = modules.flatMap((m: any) =>
+            (Array.isArray(m?.lessons) ? m.lessons : []).map((l: any) => String(l?.id ?? "")).filter(Boolean)
+        );
+        return { title: data.title ? String(data.title) : null, lessonIds, found: true };
+    }
+    return { title: null, lessonIds: [], found: false };
+}
+
+/** The lessons of this course the learner has actually finished. */
+async function completedLessonIds(userId: string, courseId: string): Promise<Set<string>> {
+    const snap = await db.collection(COLLECTIONS.LESSON_VIDEO_PROGRESS)
+        .where("userId", "==", userId)
+        .where("courseId", "==", courseId)
+        .get();
+    const done = new Set<string>();
+    for (const d of snap.docs) {
+        const data = d.data() || {};
+        if (data.completed === true && data.lessonId) done.add(String(data.lessonId));
+    }
+    return done;
+}
+
 export async function completeCourse(courseId: string) { const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
     try { const progressRef = db.collection(COLLECTIONS.COURSE_PROGRESS).doc(`${session.user.id}_${courseId}`);
-        
+
+        // Completion is earned, not declared.
+        //
+        // This set completed:true and progressPercent:100 for anyone who asked,
+        // needing only that a progress record existed — which enrolling creates.
+        // generateCourseCertificate then checks exactly that flag, so enrol,
+        // call this, collect a certificate, having watched nothing.
+        //
+        // The irony is that the lesson endpoint in this same file already
+        // guards against exactly this. updateLessonProgress measures elapsed
+        // wall-clock time against claimed watch time and CLAMPS anything faster
+        // than 2x playback, logging a "[LMS Progress Guard] Watch-rate anomaly".
+        // Someone took care that a learner cannot skim a video, and the endpoint
+        // next door skipped the whole course in one call.
+        //
+        // So completion is now derived from the per-lesson records that guard
+        // produces: every lesson of the course must have one marked completed.
+        const course = await loadCourseForCompletion(courseId);
+        if (!course.found || course.lessonIds.length === 0) {
+            // Fail closed. A course whose lessons cannot be read is exactly the
+            // case a caller would want when self-completing.
+            return { success: false as const, error: "Course content unavailable — completion cannot be verified", data: null };
+        }
+
+        const finished = await completedLessonIds(session.user.id, courseId);
+        const outstanding = course.lessonIds.filter((id) => !finished.has(id));
+        if (outstanding.length > 0) {
+            return {
+                success: false as const,
+                error: `Course not finished — ${outstanding.length} of ${course.lessonIds.length} lessons still incomplete`,
+                data: null,
+            };
+        }
+
         // Use a transaction to update progress atomically and avoid write race conditions
         await db.runTransaction(async (transaction) => {
             const progressDoc = await transaction.get(progressRef);
@@ -235,7 +307,9 @@ export async function completeCourse(courseId: string) { const sessionResult = a
             targetId: courseId,
             targetType: 'course',
             metadata: {
-                manualCompletion: true } });
+                // Verified against per-lesson progress rather than accepted on
+                // request, which is what "manualCompletion: true" used to mean.
+                lessonsCompleted: course.lessonIds.length } });
 
         return { error: null, success: true as const, data: null };
     } catch (error) { logger.error("Failed to complete course:", error);
@@ -247,7 +321,7 @@ export async function completeCourse(courseId: string) { const sessionResult = a
  * Generate certificate for completed course
  * Called automatically when progress reaches 100%
  */
-export async function generateCourseCertificate(courseId: string, courseTitle: string) { const sessionResult = await requireSession();
+export async function generateCourseCertificate(courseId: string, _courseTitle?: string) { const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
@@ -260,6 +334,22 @@ export async function generateCourseCertificate(courseId: string, courseTitle: s
         }
 
         const progressData = progressDoc.data()!;
+
+        // The certificate says what the COURSE is called, not what the holder
+        // asked it to say.
+        //
+        // `courseTitle` arrived as a parameter and was written onto the
+        // certificate, into the notification and into the audit log. A learner
+        // could mint themselves a credential reading anything at all — and these
+        // are issued with a certificateNumber and stored to be looked up later,
+        // so it is a document meant to be shown to somebody else.
+        //
+        // The parameter is kept so existing callers still compile, and ignored.
+        const courseRecord = await loadCourseForCompletion(courseId);
+        if (!courseRecord.found || !courseRecord.title) {
+            return { success: false as const, error: "Course not found", data: null };
+        }
+        const verifiedCourseTitle = courseRecord.title;
 
         // Check if certificate already exists
         const certSnapshot = await db.collection(COLLECTIONS.COURSE_CERTIFICATES)
@@ -278,7 +368,7 @@ export async function generateCourseCertificate(courseId: string, courseTitle: s
             userName: session.user.name || "Unknown",
             userEmail: session.user.email,
             courseId,
-            courseTitle,
+            courseTitle: verifiedCourseTitle,
             completedAt: progressData.completedAt || FieldValue.serverTimestamp(),
             issuedAt: FieldValue.serverTimestamp(),
             certificateNumber: `CERT-${Date.now()}-${session.user.id?.substring(0, 8)}`,
@@ -291,7 +381,7 @@ export async function generateCourseCertificate(courseId: string, courseTitle: s
             userId: session.user.id || "",
             type: "success",
             title: "🎉 Certificate Issued!",
-            message: `Congratulations! You've completed "${courseTitle}" and earned your certificate.`,
+            message: `Congratulations! You've completed "${verifiedCourseTitle}" and earned your certificate.`,
             link: `/courses/${courseId}/certificate`,
             linkText: "View Certificate" });
 
@@ -303,7 +393,7 @@ export async function generateCourseCertificate(courseId: string, courseTitle: s
             targetType: 'certificate',
             metadata: {
                 courseId,
-                courseTitle,
+                courseTitle: verifiedCourseTitle,
                 certificateNumber: `CERT-${Date.now()}-${session.user.id?.substring(0, 8)}` } });
 
         return { error: null, success: true as const, data: { certificateId: certificateRef.id, message: "Certificate generated successfully" } };
