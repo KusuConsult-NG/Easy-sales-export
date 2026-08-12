@@ -7,6 +7,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { hashData } from "@/lib/security";
 import { requireSession } from "@/lib/session-guard";
 import { checkModuleAccess } from "@/lib/module-access-check";
 import { logger } from '@/lib/logger';
@@ -295,9 +296,25 @@ async function _submitSellerVerificationAction(
                 sellerVerificationId: verificationId,
                 
                 // Concurrently replicate onboarding details directly to the parent user
-                ...(verificationData.nin ? { nin: verificationData.nin, ninVerified: true } : {}),
-                ...(verificationData.bvn ? { bvn: verificationData.bvn, bvnVerified: true } : {}),
-                ...(cac ? { cacNumber: cac, cacVerified: true } : {}),
+                    // The applicant typed these. Nobody checked them.
+                //
+                // `ninVerified`/`bvnVerified`/`cacVerified` were set to true right
+                // here, from the presence of the field. admin/users renders each as
+                // a green "Verified" badge, so the reviewer deciding whether to
+                // approve THIS application was told the identity had already been
+                // checked — because the applicant had filled the box in. Nothing in
+                // the codebase ever verified an identity document, so the badge was
+                // never earned by anyone.
+                //
+                // The numbers are still stored, now hashed, matching kyc.ts and
+                // wave/_actions.ts which both write hashData(bvn). The reviewable
+                // copy is untouched in the verification record, so admin review is
+                // unaffected — this replica exists for the user list, and it was the
+                // only place a readable BVN sat in the users table. That is the
+                // table that spent 52 days in a public repository.
+                ...(verificationData.nin ? { nin: hashData(verificationData.nin) } : {}),
+                ...(verificationData.bvn ? { bvn: hashData(verificationData.bvn) } : {}),
+                ...(cac ? { cacNumber: cac } : {}),
                 ...(bankAccount?.accountNumber ? {
                     bankDetails: {
                         accountNumber: bankAccount.accountNumber,
@@ -2196,9 +2213,25 @@ async function _resubmitSellerVerificationAction(data: unknown): Promise<ActionR
                 "serviceRegistrations.marketplace.resubmittedAt": FieldValue.serverTimestamp(),
                 
                 // Concurrently replicate onboarding details directly to the parent user
-                ...(validatedData.nin ? { nin: validatedData.nin, ninVerified: true } : {}),
-                ...(validatedData.bvn ? { bvn: validatedData.bvn, bvnVerified: true } : {}),
-                ...(cac ? { cacNumber: cac, cacVerified: true } : {}),
+                    // The applicant typed these. Nobody checked them.
+                //
+                // `ninVerified`/`bvnVerified`/`cacVerified` were set to true right
+                // here, from the presence of the field. admin/users renders each as
+                // a green "Verified" badge, so the reviewer deciding whether to
+                // approve THIS application was told the identity had already been
+                // checked — because the applicant had filled the box in. Nothing in
+                // the codebase ever verified an identity document, so the badge was
+                // never earned by anyone.
+                //
+                // The numbers are still stored, now hashed, matching kyc.ts and
+                // wave/_actions.ts which both write hashData(bvn). The reviewable
+                // copy is untouched in the verification record, so admin review is
+                // unaffected — this replica exists for the user list, and it was the
+                // only place a readable BVN sat in the users table. That is the
+                // table that spent 52 days in a public repository.
+                ...(validatedData.nin ? { nin: hashData(validatedData.nin) } : {}),
+                ...(validatedData.bvn ? { bvn: hashData(validatedData.bvn) } : {}),
+                ...(cac ? { cacNumber: cac } : {}),
                 ...(bankAccount?.accountNumber ? {
                     bankDetails: {
                         accountNumber: bankAccount.accountNumber,

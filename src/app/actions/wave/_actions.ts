@@ -458,8 +458,20 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
                 nin: applicantNin ? hashData(applicantNin) : null,
                 "kyc.bvn": applicantBvn ? hashData(applicantBvn) : null,
                 "kyc.nin": applicantNin ? hashData(applicantNin) : null,
-                "kyc.bvnVerified": applicantBvn ? true : false,
-                "kyc.ninVerified": applicantNin ? true : false,
+                // "kyc.bvnVerified" / "kyc.ninVerified" are deliberately NOT
+                // written here.
+                //
+                // They were set from `applicantBvn ? true : false`, which is
+                // self-assertion in both directions. True: an applicant marked
+                // her own identity verified by typing eleven digits, and
+                // updateOverallKYCStatus in kyc.ts reads exactly these two
+                // fields to decide the account's overall KYC state. False: an
+                // applicant resubmitting WITHOUT a BVN wiped a verification that
+                // had already been recorded, so filling in less of the form
+                // downgraded her.
+                //
+                // The numbers are still stored above, hashed. Only something
+                // that actually checks an identity may say it was checked.
                 // Next of Kin
                 nextOfKinName: validatedData.nextOfKinName,
                 nextOfKinPhone: validatedData.nextOfKinPhone,
@@ -1697,8 +1709,20 @@ async function _resubmitWaveApplicationAction(
                 nin: applicantNin ? hashData(applicantNin) : null,
                 "kyc.bvn": applicantBvn ? hashData(applicantBvn) : null,
                 "kyc.nin": applicantNin ? hashData(applicantNin) : null,
-                "kyc.bvnVerified": applicantBvn ? true : false,
-                "kyc.ninVerified": applicantNin ? true : false,
+                // "kyc.bvnVerified" / "kyc.ninVerified" are deliberately NOT
+                // written here.
+                //
+                // They were set from `applicantBvn ? true : false`, which is
+                // self-assertion in both directions. True: an applicant marked
+                // her own identity verified by typing eleven digits, and
+                // updateOverallKYCStatus in kyc.ts reads exactly these two
+                // fields to decide the account's overall KYC state. False: an
+                // applicant resubmitting WITHOUT a BVN wiped a verification that
+                // had already been recorded, so filling in less of the form
+                // downgraded her.
+                //
+                // The numbers are still stored above, hashed. Only something
+                // that actually checks an identity may say it was checked.
                 // Next of Kin
                 nextOfKinName: validatedData.nextOfKinName,
                 nextOfKinPhone: validatedData.nextOfKinPhone,
