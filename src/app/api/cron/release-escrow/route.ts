@@ -7,7 +7,10 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { claimStatusTransition } from "@/lib/status-transition";
 import { createAdminAuditLog } from "@/lib/audit-log";
-import { createNotificationAction } from "@/app/actions/notifications";
+// The notification ACTION now requires a session, which a cron run does not
+// have. This route is already gated by CRON_SECRET, so it calls the service
+// directly — the same layer the action delegates to.
+import { createNotification as createNotificationAction } from "@/infrastructure/notifications/service";
 
 export const dynamic = 'force-dynamic';
 
