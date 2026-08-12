@@ -142,6 +142,23 @@ export async function trackResourceAccessAction(resourceId: string): Promise<Act
         if (!session?.user?.id) { return { success: false as const, error: "Not authenticated", data: null };
         }
 
+        // The resource has to exist before anything is recorded about it.
+        //
+        // resourceId came from the caller and was never checked. The counter
+        // update below is harmless on its own — the adapter turns update() on a
+        // missing document into a logged no-op rather than creating one — but
+        // the two access rows were written regardless. So any signed-in user
+        // could add unbounded rows to wave_resource_access and to
+        // wave_resource_downloads, the collection this file's own comment calls
+        // "for access auditing", naming resources that do not exist.
+        //
+        // An audit trail anyone can fill with invented entries is worth less
+        // than one that refuses them.
+        const resourceDoc = await db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId).get();
+        if (!resourceDoc.exists) {
+            return { success: false as const, error: "Resource not found", data: null };
+        }
+
         // Check if already accessed
         const accessSnap = await db.collection(COLLECTIONS.WAVE_RESOURCE_ACCESS)
             .where("userId", "==", session.user.id)
