@@ -72,12 +72,56 @@ export async function getDashboardDataAction() {
                         .get()
                 );
                 if (!emailQuery.empty) {
-                    logger.info(`[getDashboardData] Found membership via Email fallback for user: ${userId}`);
                     const memberDoc = emailQuery.docs[0];
-                    if (!memberDoc.data().userId) {
-                        await memberDoc.ref.update({ userId });
+                    const memberData = memberDoc.data();
+
+                    // A matching email is not proof of ownership.
+                    //
+                    // This bound the membership to the caller — `update({ userId })`,
+                    // permanently — on nothing but an email match, and then returned
+                    // it as theirs, savingsBalance and loanBalance included.
+                    //
+                    // The caller's email comes from their own profile, and
+                    // profile.ts lets them change it. So a user could set their
+                    // address to that of an ORPHANED membership — a member who paid
+                    // by form submission and never registered, which is precisely the
+                    // case Fallback 4's own comment describes — load this dashboard,
+                    // and inherit that person's cooperative savings.
+                    //
+                    // Supabase enforces uniqueness among registered addresses, so the
+                    // target has to be an address no account holds. An orphaned
+                    // membership is exactly that.
+                    //
+                    // Claiming now needs the same evidence Fallback 4 demands one
+                    // block below: a completed cooperative registration payment whose
+                    // reference matches this membership AND whose userId is the
+                    // caller. That ties the record to the caller's money rather than
+                    // to a string they can edit.
+                    let mayClaim = false;
+                    if (memberData.userId === userId) {
+                        mayClaim = true; // already theirs
+                    } else if (!memberData.userId && memberData.paymentReference) {
+                        const proof = await runQueryWithRetry(() =>
+                            db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+                                .where("reference", "==", memberData.paymentReference)
+                                .limit(1)
+                                .get()
+                        );
+                        mayClaim = !proof.empty && proof.docs[0].data()?.userId === userId;
                     }
-                    membershipSnapshot = { empty: false, size: 1, docs: [memberDoc] } as any;
+
+                    if (mayClaim) {
+                        logger.info(`[getDashboardData] Found membership via Email fallback for user: ${userId}`);
+                        if (!memberData.userId) {
+                            await memberDoc.ref.update({ userId });
+                        }
+                        membershipSnapshot = { empty: false, size: 1, docs: [memberDoc] } as any;
+                    } else {
+                        logger.warn(
+                            `[getDashboardData] Email matched membership ${memberDoc.id} for ${userId}, ` +
+                            `but no payment ties it to them — not claiming.`
+                        );
+                    }
                 }
             }
         }
@@ -124,6 +168,20 @@ export async function getDashboardDataAction() {
                     // admins filter for these in Firestore console if needed.
                     logger.info(`[getDashboardData] No member doc found — synthesising from payment for ${userId}`);
                     const newMemberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
+
+                    // Do not write over a document that is already there.
+                    //
+                    // This was a set({ ..., membershipStatus: "pending" }, { merge: true })
+                    // straight onto doc(userId). If a member record existed at that id
+                    // but the lookups above had missed it — no userId field, a different
+                    // email — loading the dashboard would demote an ACTIVE member to
+                    // pending. A read endpoint should not be able to do that.
+                    const existingAtId = await newMemberRef.get();
+                    if (existingAtId.exists) {
+                        logger.info(`[getDashboardData] Member doc already exists at ${userId} — using it rather than synthesising`);
+                        membershipSnapshot = { empty: false, size: 1, docs: [existingAtId] } as any;
+                    } else {
+
                     const userDocSnap = await db.collection(COLLECTIONS.USERS).doc(userId).get();
                     const userData = userDocSnap.data() || {};
                     await newMemberRef.set({
@@ -143,6 +201,7 @@ export async function getDashboardDataAction() {
                     }, { merge: true });
                     const healedSnap = await newMemberRef.get();
                     membershipSnapshot = { empty: false, size: 1, docs: [healedSnap] } as any;
+                    }
                 }
             }
         }
