@@ -202,7 +202,25 @@ export async function approveContentAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
-        if (!session?.user?.id || !isAdmin(session.user.roles)) {
+        if (!session?.user?.id) {
+            return { success: false as const, error: "Not authenticated" , data: null };
+        }
+
+        // Live role re-validation — bypasses the stale JWT.
+        //
+        // getContentApprovalItemsAction, twenty lines above in this same file,
+        // reads the caller's roles from the database before listing anything.
+        // These two endpoints — which mark land VERIFIED, put products live and
+        // publish export listings — trusted session.user.roles alone, so the
+        // read beside them was better protected than the writes.
+        //
+        // In practice the gap is small: role changes invalidate the user's cache
+        // and the JWT callback resynchronises from it. This is consistency
+        // rather than a live hole, and it costs one document read on an action
+        // an admin performs by hand. Recorded that way rather than overstated.
+        const callerDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const callerRoles: string[] = callerDoc.data()?.roles ?? [];
+        if (!callerDoc.exists || !isAdmin(callerRoles)) {
             return { success: false as const, error: "Unauthorized" , data: null };
         }
 
@@ -293,7 +311,25 @@ export async function rejectContentAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
-        if (!session?.user?.id || !isAdmin(session.user.roles)) {
+        if (!session?.user?.id) {
+            return { success: false as const, error: "Not authenticated" , data: null };
+        }
+
+        // Live role re-validation — bypasses the stale JWT.
+        //
+        // getContentApprovalItemsAction, twenty lines above in this same file,
+        // reads the caller's roles from the database before listing anything.
+        // These two endpoints — which mark land VERIFIED, put products live and
+        // publish export listings — trusted session.user.roles alone, so the
+        // read beside them was better protected than the writes.
+        //
+        // In practice the gap is small: role changes invalidate the user's cache
+        // and the JWT callback resynchronises from it. This is consistency
+        // rather than a live hole, and it costs one document read on an action
+        // an admin performs by hand. Recorded that way rather than overstated.
+        const callerDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const callerRoles: string[] = callerDoc.data()?.roles ?? [];
+        if (!callerDoc.exists || !isAdmin(callerRoles)) {
             return { success: false as const, error: "Unauthorized" , data: null };
         }
 
