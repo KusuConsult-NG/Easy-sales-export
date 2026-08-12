@@ -12,7 +12,7 @@ import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { hasAdminPermission, isSuperAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission, isSuperAdmin, includesPrivilegedRole } from "@/lib/admin-permissions";
 import { logAuditAction } from "@/lib/audit-log";
 import { redis } from "@/lib/redis";
 import { invalidateUserCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
@@ -220,8 +220,22 @@ export async function bulkAssignRolesAction(
         }
 
         // Prevent removing admin role via bulk operation
-        if (rolesToRemove.includes("admin") || rolesToRemove.includes("super_admin")) { 
+        if (rolesToRemove.includes("admin") || rolesToRemove.includes("super_admin")) {
             return { success: false, error: "Cannot remove admin roles via bulk operation", data: null };
+        }
+
+        // ...and prevent GRANTING one, which the check above stopped just short
+        // of. rolesToAdd was unrestricted, so an admin — who holds
+        // users:assign_roles but deliberately not users:delete or
+        // users:impersonate — could pass their own id with ["super_admin"] and
+        // collect both. Every other endpoint in this file defends that boundary
+        // explicitly; this was the one that did not.
+        if (includesPrivilegedRole(rolesToAdd) && !isSuperAdmin(session.user.roles)) {
+            return {
+                success: false,
+                error: "Only a super admin can grant admin roles",
+                data: null,
+            };
         }
 
         let updatedCount = 0;

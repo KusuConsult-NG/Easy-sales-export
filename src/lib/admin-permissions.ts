@@ -227,6 +227,40 @@ export function isSuperAdmin(userRoles: string[] | undefined): boolean {
 }
 
 /**
+ * Roles that carry platform-wide authority. Only a super_admin may grant one.
+ */
+export const PRIVILEGED_ROLES = ["admin", "super_admin"] as const;
+
+/**
+ * Does this set of roles include one that only a super_admin may hand out?
+ *
+ * WHY THIS EXISTS
+ * ---------------
+ * PERMISSION_MATRIX gives `admin` the "users:assign_roles" permission and
+ * withholds "users:delete", "users:impersonate" and "config:rollback" — the
+ * entry says so in as many words: "no deletion, no impersonation, no config
+ * rollback". Both role-writing endpoints then accepted whatever role list they
+ * were handed:
+ *
+ *   bulkAssignRolesAction   refused rolesToRemove containing admin/super_admin
+ *                           and placed no restriction at all on rolesToAdd
+ *   updateUserRolesAction   wrote the array wholesale; its only check was that
+ *                           you were not removing your OWN admin rights, which
+ *                           adding a role never does
+ *
+ * So any admin could call either one on their own id and come back a
+ * super_admin, collecting exactly the permissions the matrix was written to
+ * withhold. The boundary was described everywhere and enforced nowhere.
+ *
+ * Both call sites route through here so the rule has one definition rather than
+ * two that can drift apart.
+ */
+export function includesPrivilegedRole(roles: string[] | undefined): boolean {
+    if (!roles) return false;
+    return roles.some((r) => (PRIVILEGED_ROLES as readonly string[]).includes(r));
+}
+
+/**
  * Get highest admin role user has
  */
 export function getHighestAdminRole(userRoles: string[] | undefined): AdminRole | null {

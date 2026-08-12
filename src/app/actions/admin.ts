@@ -36,7 +36,7 @@ import {
     LegacyOnboardingSchema
 } from "@/lib/schemas";
 import { sendLegacyMemberWelcomeEmail, sendPasswordResetEmail } from "@/lib/email-notifications";
-import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission, isAdmin, isSuperAdmin, includesPrivilegedRole } from "@/lib/admin-permissions";
 import { requireAdmin } from "@/lib/require-admin";
 import { atomicUpdateUser } from "@/lib/services/userService";
 import { writeGuard, UserRolesWriteSchema } from "@/lib/write-guard";
@@ -1970,6 +1970,23 @@ async function _updateUserRolesAction(
         // Prevent admin from removing their own admin role
         if (userId === session.user.id && !isAdmin(roles)) {
             return { error: "Cannot remove your own admin privileges", success: false as const };
+        }
+
+        // Only a super_admin may hand out admin authority.
+        //
+        // This writes the roles array wholesale, and UserRoleSchema accepts
+        // "admin" and "super_admin" as values, so the check above was the only
+        // thing standing between an admin and calling this on their own id with
+        // ["super_admin"] — which it does not catch, because adding a role is
+        // not removing one.
+        //
+        // The rule is deliberately blunt: any request whose resulting roles
+        // include admin or super_admin needs a super_admin to make it. That also
+        // stops a plain admin editing an existing admin's unrelated roles, since
+        // the array has to carry "admin" through to preserve it. Editing another
+        // admin's account is the case worth being strict about.
+        if (includesPrivilegedRole(roles) && !isSuperAdmin(session.user.roles)) {
+            return { error: "Only a super admin can grant admin roles", success: false as const };
         }
 
         await atomicUpdateUser(userId, writeGuard(
