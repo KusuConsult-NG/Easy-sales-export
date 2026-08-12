@@ -153,6 +153,23 @@ export async function startConversationAction(participantUid: string, productId?
 /**
  * Search for users to start a conversation with (keeps standard matching filters)
  */
+/**
+ * Show enough of an address to tell two people apart, and no more.
+ *
+ * The messages page prints the email under each search result so a user can
+ * distinguish two accounts with the same name. That is a fair need. Handing the
+ * full address of every match to any signed-in caller is not — see
+ * searchUsersAction below for why the two came apart.
+ */
+function maskEmail(email: string): string {
+    const at = email.indexOf("@");
+    if (at <= 0) return "";
+    const local = email.slice(0, at);
+    const domain = email.slice(at + 1);
+    const shown = local.slice(0, 1);
+    return `${shown}${"•".repeat(Math.max(2, Math.min(6, local.length - 1)))}@${domain}`;
+}
+
 export async function searchUsersAction(query: string) {
     try {
         const sessionResult = await requireSession();
@@ -162,6 +179,23 @@ export async function searchUsersAction(query: string) {
         const { session } = sessionResult;
 
         const trimmedQuery = query.trim().toLowerCase();
+
+        // A one-character query used to sweep the directory.
+        //
+        // The match below is a SUBSTRING test over fullName and email, run
+        // against the 500 most recently active users. A query of "a" therefore
+        // returned most of that window — full name, email address and roles —
+        // to any signed-in caller. That is a user-list download wearing the
+        // clothes of a people-picker, on a platform whose user export has
+        // already been exposed once.
+        //
+        // Three characters is the shortest query that expresses an intent to
+        // find someone in particular. The empty-query branch below is separate
+        // and deliberately still works: it returns admins, so a user can reach
+        // support without knowing anyone's name.
+        const MIN_QUERY_LENGTH = 3;
+        const MAX_RESULTS = 25;
+
         const ADMIN_ROLES = ["admin", "super_admin", "wave_admin", "cooperative_admin", "marketplace_admin", "export_admin", "farmnation_admin", "academy_admin"];
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
@@ -209,6 +243,10 @@ export async function searchUsersAction(query: string) {
             return { users: admins, error: null };
         }
 
+        if (trimmedQuery.length < MIN_QUERY_LENGTH) {
+            return { users: [], error: null };
+        }
+
         let adminsSnapshot: any;
         let generalSnapshot: any;
         let exactEmailSnapshot: any;
@@ -246,10 +284,15 @@ export async function searchUsersAction(query: string) {
 
             const matches = fullName.includes(trimmedQuery) || email.includes(trimmedQuery);
             if (matches) {
+                if (users.length >= MAX_RESULTS) return;
                 users.push({
                     uid: doc.id,
                     fullName: userData.fullName || userData.email || "User",
-                    email: userData.email || "",
+                    // Full address for an admin, who can already read the user
+                    // list; masked for everyone else. The page shows this under
+                    // the name to tell two people apart, which a masked address
+                    // still does.
+                    email: userIsAdmin ? (userData.email || "") : maskEmail(userData.email || ""),
                     roles: roles
                 });
                 seenIds.add(doc.id);
