@@ -17,6 +17,33 @@ export async function submitExportProductAction(productData: any) { try {
 
         const dataToSave = { ...productData };
         delete dataToSave.id;
+
+        // A submitted price has to be a real one.
+        //
+        // productData arrives as `any` and is stored wholesale — no schema, no
+        // checks — and export-payment.ts later multiplies pricePerMT by the
+        // ordered tonnage to build the charge. A negative price there is not
+        // caught by anything downstream once an admin approves the listing, and
+        // an admin reviewing a product page has no particular reason to notice
+        // a minus sign.
+        //
+        // Checkout now refuses a non-positive stored price as well. This is the
+        // source; that is the boundary. Both, for the same reason as #113.
+        if (dataToSave.pricePerMT !== undefined && dataToSave.pricePerMT !== null) {
+            const price = Number(dataToSave.pricePerMT);
+            if (!Number.isFinite(price) || price <= 0) {
+                return { success: false as const, error: "Price per MT must be greater than zero", data: null };
+            }
+            dataToSave.pricePerMT = price;
+        }
+
+        if (dataToSave.availableQuantityMT !== undefined && dataToSave.availableQuantityMT !== null) {
+            const qty = Number(dataToSave.availableQuantityMT);
+            if (!Number.isFinite(qty) || qty < 0) {
+                return { success: false as const, error: "Available quantity cannot be negative", data: null };
+            }
+            dataToSave.availableQuantityMT = qty;
+        }
         
         const ref = await db.collection(COLLECTIONS.EXPORT_CATALOG).add({ ...dataToSave,
             userId: session.user.id,

@@ -65,14 +65,46 @@ export async function initializeExportOrderPaymentAction(
                 return { error: `Product ${productData.name} is not available for purchase`, success: false as const, data: undefined, meta: null };
             }
 
-            const pricePerMT = productData.pricePerMT || 0;
-            const itemTotalUSD = pricePerMT * item.quantityMT;
+            // Neither factor of this line total was checked.
+            //
+            // Same defect as #113 in marketplace/_payment.ts, in the module that
+            // was not fixed at the same time — and worse here, because the
+            // marketplace at least has a minOrderAmount floor and this path has
+            // no minimum at all.
+            //
+            // quantityMT comes straight from the client. A negative one
+            // subtracts from the order: pair it with a real item and the buyer
+            // is charged a fraction of what the goods are worth. It does not end
+            // in theft — decrementManyOrFail refuses a non-positive amount, so
+            // verification throws at the stock step AFTER the payment reference
+            // is claimed — but that leaves a charge with no order and no
+            // automatic refund.
+            //
+            // pricePerMT comes from the catalogue document, which
+            // submitExportProductAction writes from an unvalidated `any`. A
+            // negative price needs an admin to approve the listing, and then
+            // nothing downstream refuses it.
+            //
+            // Fractional tonnage is legitimate — 2.5 MT is a real order — so
+            // this requires a positive finite number rather than an integer,
+            // unlike the marketplace equivalent which counts whole units.
+            const quantityMT = Number(item.quantityMT);
+            if (!Number.isFinite(quantityMT) || quantityMT <= 0) {
+                return { error: `Invalid quantity for ${productData.name || item.productId}`, success: false as const, data: undefined, meta: null };
+            }
+
+            const pricePerMT = Number(productData.pricePerMT || 0);
+            if (!Number.isFinite(pricePerMT) || pricePerMT <= 0) {
+                return { error: `Product ${productData.name || item.productId} is not priced for sale`, success: false as const, data: undefined, meta: null };
+            }
+
+            const itemTotalUSD = pricePerMT * quantityMT;
             totalUSD += itemTotalUSD;
 
             validatedItems.push({ productId: item.productId,
                 name: productData.name,
                 grade: item.grade,
-                quantityMT: item.quantityMT,
+                quantityMT,
                 pricePerMT: pricePerMT,
                 totalUSD: itemTotalUSD,
                 sellerId: productData.userId || "export-operations"
