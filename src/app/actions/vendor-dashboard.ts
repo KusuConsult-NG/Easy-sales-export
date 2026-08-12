@@ -12,6 +12,56 @@ import { logger } from "@/lib/logger";
  * VENDOR DASHBOARD ANALYTICS ACTIONS
  */
 
+/**
+ * Every order belonging to this vendor.
+ *
+ * The five queries in this file read MARKETPLACE_ORDERS `.where("vendorId",
+ * "==", vendorId)`. **No order has a vendorId field.** orders.ts writes
+ * `sellerId`; marketplace/_payment.ts writes `sellerIds` and sets `sellerId` to
+ * `sellerIds[0]`. vendor.ts, the vendor-facing order LIST, queries
+ * `sellerIds array-contains` and works; vendor-settings.ts queries
+ * `sellerId ==` and works. Only this file invented a third name.
+ *
+ * So every sales figure on the vendor dashboard read zero, for every vendor,
+ * always — the same shape as the forensics reconciliation in #118, which
+ * compared a stored balance against a field nothing wrote.
+ *
+ * Neither seller field is sufficient alone:
+ *
+ *   sellerId ==            misses a non-first seller on a multi-seller order,
+ *                          because _payment.ts records only sellerIds[0] there
+ *   sellerIds contains     misses every order from orders.ts, which does not
+ *                          write that array at all
+ *
+ * Both are queried and the results merged by document id. The alternative —
+ * picking one and accepting the gap — would replace "no sales" with "some
+ * sales", which is harder to notice and worse to trust.
+ */
+async function fetchVendorOrderDocs(
+    vendorId: string,
+    refine?: (q: any) => any
+): Promise<any[]> {
+    const build = (base: any) => (refine ? refine(base) : base);
+
+    const [bySellerId, bySellerIds] = await Promise.all([
+        build(
+            db.collection(COLLECTIONS.MARKETPLACE_ORDERS).where("sellerId", "==", vendorId)
+        ).get(),
+        build(
+            db.collection(COLLECTIONS.MARKETPLACE_ORDERS).where("sellerIds", "array-contains", vendorId)
+        ).get(),
+    ]);
+
+    const seen = new Set<string>();
+    const merged: any[] = [];
+    for (const doc of [...bySellerId.docs, ...bySellerIds.docs]) {
+        if (seen.has(doc.id)) continue;
+        seen.add(doc.id);
+        merged.push(doc);
+    }
+    return merged;
+}
+
 async function _getVendorSalesStatsAction() { let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -28,12 +78,10 @@ async function _getVendorSalesStatsAction() { let sessionResult;
         startOfWeek.setHours(0, 0, 0, 0);
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-        const ordersSnapshot = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
-            .where("vendorId", "==", vendorId)
-            .where("paymentStatus", "==", "paid")
-            .get();
+        const orderDocs = await fetchVendorOrderDocs(vendorId, (q) =>
+            q.where("paymentStatus", "==", "paid"));
 
-        const orders = serializeDocs(ordersSnapshot.docs);
+        const orders = serializeDocs(orderDocs);
 
         const stats = { today: { orders: 0, revenue: 0 },
             thisWeek: { orders: 0, revenue: 0 },
@@ -78,15 +126,12 @@ async function _getVendorRevenueTrendsAction() { let sessionResult;
         const thirtyDaysAgo = new Date(now);
         thirtyDaysAgo.setDate(now.getDate() - 30);
 
-        const ordersSnapshot = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
-            .where("vendorId", "==", vendorId)
-            .where("paymentStatus", "==", "paid")
-            .where("createdAt", ">=", thirtyDaysAgo)
-            .get();
+        const orderDocs = await fetchVendorOrderDocs(vendorId, (q) =>
+            q.where("paymentStatus", "==", "paid").where("createdAt", ">=", thirtyDaysAgo));
 
         const dailyData: Record<string, { revenue: number; orders: number }> = {};
 
-        ordersSnapshot.docs.forEach(doc => { const data = doc.data();
+        orderDocs.forEach(doc => { const data = doc.data();
             const createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
             const dateKey = createdAt.toISOString().split('T')[0];
 
@@ -127,14 +172,12 @@ async function _getTopSellingProductsAction(limit: number = 5) { let sessionResu
         if (!session?.user?.id) return { success: false as const, error: "Unauthorized", data: null };
 
         const vendorId = session.user.id;
-        const ordersSnapshot = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
-            .where("vendorId", "==", vendorId)
-            .where("paymentStatus", "==", "paid")
-            .get();
+        const orderDocs = await fetchVendorOrderDocs(vendorId, (q) =>
+            q.where("paymentStatus", "==", "paid"));
 
         const productStats: Record<string, { name: string; sold: number; revenue: number }> = {};
 
-        ordersSnapshot.docs.forEach(doc => { const data = doc.data();
+        orderDocs.forEach(doc => { const data = doc.data();
             const items = data.items || [];
 
             items.forEach((item: any) => {
@@ -222,16 +265,14 @@ async function _getVendorRevenueInsightsAction() { let sessionResult;
         if (!session?.user?.id) return { success: false as const, error: "Unauthorized", data: null };
 
         const vendorId = session.user.id;
-        const ordersSnapshot = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
-            .where("vendorId", "==", vendorId)
-            .get();
+        const orderDocs = await fetchVendorOrderDocs(vendorId);
 
         let totalRevenue = 0;
         let pendingPayouts = 0;
         let completedTransactions = 0;
         const categoryRevenue: Record<string, number> = {};
 
-        ordersSnapshot.docs.forEach(doc => { const data = doc.data();
+        orderDocs.forEach(doc => { const data = doc.data();
             const amount = data.totalAmount || 0;
 
             if (data.paymentStatus === "paid") {
@@ -276,13 +317,18 @@ async function _getVendorActivityFeedAction(limit: number = 20) { let sessionRes
         const vendorId = session.user.id;
         const activities: Array<any> = [];
 
-        const ordersSnapshot = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
-            .where("vendorId", "==", vendorId)
-            .orderBy("createdAt", "desc")
-            .limit(10)
-            .get();
+        // Sorted and limited in memory: the two queries are merged, so a
+        // per-query limit would cut the wrong ten.
+        const allOrderDocs = await fetchVendorOrderDocs(vendorId);
+        const orderDocs = allOrderDocs
+            .sort((a: any, b: any) => {
+                const at = a.data()?.createdAt?.toDate?.()?.getTime?.() ?? 0;
+                const bt = b.data()?.createdAt?.toDate?.()?.getTime?.() ?? 0;
+                return bt - at;
+            })
+            .slice(0, 10);
 
-        ordersSnapshot.docs.forEach(doc => {
+        orderDocs.forEach(doc => {
             const data = doc.data();
             activities.push({
                 id: doc.id,
