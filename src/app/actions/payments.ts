@@ -64,7 +64,43 @@ export async function createPaymentRecordAction(data: { userId: string;
             return { success: false, error: "Unauthorized", data: null };
         }
 
+        // `amount` was written exactly as supplied. Nothing aggregates this
+        // collection today — every other reader fetches a single document by id
+        // — so a negative or NaN row is a data-quality problem rather than a
+        // money one. It is still a payments writer, and the check is one line.
+        const amount = Number(data.amount);
+        if (!Number.isFinite(amount) || amount <= 0) {
+            return { success: false, error: "Amount must be a positive number", data: null };
+        }
+        if (!String(data.paymentReference ?? "").trim()) {
+            return { success: false, error: "A payment reference is required", data: null };
+        }
+
+        // userEmail arrived from the caller alongside userId, and both the record
+        // and the audit row below were written from it. So a caller could file
+        // their own payment under somebody else's email address, and the audit
+        // entry would agree with it — the same caller-supplied-identity shape as
+        // #103, #122 and #137, one field further along.
+        //
+        // The address is now read from the account the payment is being recorded
+        // against, which is the only place it can be trusted from. The extra read
+        // only happens on the admin-on-behalf path; a self-call uses the session.
+        let userEmail: string;
+        if (callerId === data.userId) {
+            userEmail = sessionResult.session?.user?.email ?? "";
+        } else {
+            const targetSnap = await db.collection(COLLECTIONS.USERS).doc(data.userId).get();
+            if (!targetSnap.exists) {
+                return { success: false, error: "User not found", data: null };
+            }
+            userEmail = String(targetSnap.data()?.email ?? "");
+        }
+
         const payment: Omit<PaymentRecord, "id"> = { ...data,
+            // After the spread, so the caller's copies of these are recorded
+            // nowhere.
+            amount,
+            userEmail,
             status: "pending",
             paymentMethod: data.paymentMethod,
             purpose: data.purpose,
@@ -74,7 +110,7 @@ export async function createPaymentRecordAction(data: { userId: string;
 
         await createAdminAuditLog({ action: "payment_initiated",
             userId: data.userId,
-            userEmail: data.userEmail,
+            userEmail,
             targetId: docRef.id,
             targetType: "payment",
             metadata: {
@@ -93,8 +129,39 @@ export async function createPaymentRecordAction(data: { userId: string;
  * Get user payment history
  */
 export async function getUserPaymentHistoryAction(userId: string): Promise<PaymentRecord[]> { try {
+        // The sibling that was left behind.
+        //
+        // The other two actions in this file were both closed in an earlier
+        // pass — createPaymentRecordAction stopped trusting a caller-supplied
+        // userId, and getPaymentByReferenceAction stopped serving a record to
+        // anyone holding a reference. This one kept the exact shape both of them
+        // were fixed for: requireSession() was called, only `error` was
+        // inspected, and the query then ran on the caller's own `userId`
+        // argument. The session was fetched and never consulted.
+        //
+        // So any authenticated user could read anybody's payment history. The
+        // `payments` collection is live and populated — farm-nation-payment.ts,
+        // marketplace/_payment.ts and infrastructure/payments/service.ts all
+        // write real rows carrying userEmail, amount, purpose, relatedId,
+        // sellerId and participants. A user id is enough to harvest another
+        // person's purchase history, and user ids are not secret.
+        //
+        // Two of three fixed and the third left is the pattern this audit keeps
+        // meeting. It is why the read half of ownership-scan.ts was blind here:
+        // the scanner treated `.where("userId", "==", userId)` as evidence that
+        // ownership had been checked, when the value being scoped came from the
+        // caller rather than the session — in which case that clause IS the
+        // vulnerability, not the defence.
         const sessionResult = await requireSession();
-        if (sessionResult.error) return [];
+        const session = sessionResult.session;
+        if (!session?.user?.id) return [];
+
+        // An empty list rather than an error, matching
+        // getPaymentByReferenceAction: the endpoint does not confirm whose
+        // history exists.
+        if (session.user.id !== userId && !isAdmin(session.user.roles)) {
+            return [];
+        }
 
         const snapshot = await db.collection(COLLECTIONS.PAYMENTS)
             .where("userId", "==", userId)

@@ -178,6 +178,34 @@ async function _approveFarmNationSellerAction(userId: string): Promise<ActionRes
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
+        // This is the admin review gate for a Farm Nation seller, and it had no
+        // admin check. Only requireSession() stood in front of it, so any
+        // authenticated user could call it with their own id and approve
+        // themselves — or with anybody's id.
+        //
+        // WHAT IT IS, STATED PRECISELY
+        //
+        // Not a role escalation. _submitFarmNationOnboardingAction already grants
+        // `farmer` to whoever completes onboarding — `roles:
+        // FieldValue.arrayUnion(...roles)` — so the role below is self-grantable
+        // by design and calling this adds nothing there.
+        //
+        // What onboarding deliberately does NOT do is set the status: it leaves
+        // `serviceRegistrations.farmNation.status` at "pending". This action is
+        // what moves it to "approved", and module-access-check.ts Layer 2 gates
+        // access on exactly `serviceRegistrations[module].status === "approved"`.
+        // So self-approval buys the Farm Nation module past the human review that
+        // "pending" exists to require.
+        //
+        // Guarded with this file's own idiom, three functions below at
+        // _verifyPropertyAction — which is the third admin action here and was
+        // already guarded. One of three checked and two not is the shape this
+        // audit keeps finding.
+        const { isAdmin } = await import("@/lib/admin-permissions");
+        if (!isAdmin(session?.user?.roles)) {
+            return { success: false as const, error: "Unauthorized", data: null, meta: null };
+        }
+
         // Fetch application outside transaction
         const appQuery = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
             .where("userId", "==", userId);
@@ -251,6 +279,21 @@ async function _rejectFarmNationSellerAction(userId: string, reason: string): Pr
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
+
+        // The other half, and the clearer of the two: unguarded, this let any
+        // authenticated user set ANOTHER user's farmNation status to "rejected"
+        // and strip their `farmer` role with FieldValue.arrayRemove.
+        //
+        // Unlike approval there is no self-service path that grants this, so it
+        // is not something a caller could do to themselves by other means. It
+        // revoked a working seller's module access and role on the say-so of
+        // anybody with an account, and the record would name the caller as
+        // `rejectedBy` — an audit trail agreeing with an action nobody was
+        // entitled to take.
+        const { isAdmin } = await import("@/lib/admin-permissions");
+        if (!isAdmin(session?.user?.roles)) {
+            return { success: false as const, error: "Unauthorized", data: null, meta: null };
+        }
 
         // Fetch application outside transaction
         const appQuery = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
