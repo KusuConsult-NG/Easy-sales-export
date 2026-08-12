@@ -252,12 +252,27 @@ describe('no endpoint anywhere claims a verification it did not perform', () => 
         // with QoreID bypassed, which is a decision the operator took and is
         // recorded in this file's header — not something to smuggle a fix for
         // into a ratchet.
+        // Comment lines are excluded. A comment that NAMES the pattern — like
+        // the one in kyc.ts describing what an empty BVN used to do — is prose,
+        // not a self-assertion, and failing on it makes the guard fire at
+        // correct code. That happened, and it is fixed here rather than worked
+        // around by rewording the comment: a ratchet that punishes describing a
+        // defect discourages exactly the documentation this codebase runs on.
         const { execSync } = await import('child_process');
 
-        const hits = execSync(
+        const raw = execSync(
             `grep -rn "ninVerified: true\\|bvnVerified: true\\|cacVerified: true" src/app/actions || true`,
             { encoding: 'utf-8', cwd: process.cwd() }
         ).trim();
+
+        const hits = raw
+            .split('\n')
+            .filter(Boolean)
+            .filter((line) => {
+                const code = line.slice(line.indexOf(':', line.indexOf(':') + 1) + 1).trim();
+                return !code.startsWith('//') && !code.startsWith('*');
+            })
+            .join('\n');
 
         expect(hits).toBe('');
     });
