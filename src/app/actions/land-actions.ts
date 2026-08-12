@@ -332,7 +332,7 @@ async function _updateLandListing(
         }
 
         const listingData = listingDoc.data()!;
-        if (listingData.ownerId !== session.user.id && !session.user.roles?.includes('admin')) { 
+        if (listingData.ownerId !== session.user.id && !(session.user.roles?.includes('admin') || session.user.roles?.includes('super_admin'))) { 
             return { success: false, error: "Unauthorized to edit this listing", data: null };
         }
 
@@ -453,7 +453,7 @@ async function _deleteLandListing(listingId: string): Promise<ActionResponse<nul
         }
 
         const listingData = listingDoc.data()!;
-        if (listingData.ownerId !== session.user.id && !session.user.roles?.includes('admin')) { 
+        if (listingData.ownerId !== session.user.id && !(session.user.roles?.includes('admin') || session.user.roles?.includes('super_admin'))) { 
             return { success: false, error: "Unauthorized to delete this listing", data: null };
         }
 
@@ -492,7 +492,7 @@ async function _getLandStatistics(): Promise<ActionResponse<any>> {
     if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
     
-    if (!session || !session.user.roles?.includes('admin')) { 
+    if (!session || !(session.user.roles?.includes('admin') || session.user.roles?.includes('super_admin'))) { 
         return { success: false, error: "Unauthorized - Admin only", data: null };
     }
 
