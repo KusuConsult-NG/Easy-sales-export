@@ -116,6 +116,48 @@ describe('the jest harness against the real adapter', () => {
         expect(missing).toEqual([]);
     });
 
+    it('exports every top-level helper the adapter exports', () => {
+        // The fluent surface above is not the whole adapter. supabase-db.ts also
+        // exports modular compat helpers — doc, getDoc, setDoc, updateDoc,
+        // collection, increment, serverTimestamp, arrayUnion, arrayRemove,
+        // deleteField, runTransaction — and ten-odd action files destructure
+        // them:
+        //
+        //     const { supabaseDb: db, doc, getDoc, runTransaction } =
+        //         await import('@/lib/supabase-db');
+        //
+        // The mock exported only supabaseDb, getAdminDb and getTableName. Every
+        // one of those helpers was undefined, so the first call threw
+        // "doc is not a function", the action's catch turned it into a generic
+        // failure, and no assertion about what it wrote could fail.
+        //
+        // cooperative/_payment.ts — a money path — could not be tested at all,
+        // and nothing said so. The check above passes happily, because it only
+        // ever looked at class members.
+        const adapterSrc = readFileSync(join(process.cwd(), 'src/lib/supabase-db.ts'), 'utf-8');
+        const harnessSrc = readFileSync(join(process.cwd(), 'jest.setup.js'), 'utf-8');
+
+        const exported = [...adapterSrc.matchAll(/^export (?:async )?(?:function|const) ([a-zA-Z][a-zA-Z0-9_]*)/gm)]
+            .map((m) => m[1]);
+
+        // The mock declares them as object properties: `doc: (...)` etc.
+        const missing = exported
+            .filter((name) => !new RegExp(`\\b${name}\\s*:`).test(harnessSrc))
+            .sort();
+
+        expect(exported.length).toBeGreaterThan(5);
+        if (missing.length > 0) {
+            throw new Error(
+                `\n\njest.setup.js does not export ${missing.length} adapter helper(s):\n\n` +
+                missing.map((m) => `  ${m}()`).join('\n') +
+                `\n\nCode that destructures one gets undefined and throws on the\n` +
+                `first call. Most actions catch that and return a generic failure,\n` +
+                `which leaves every assertion about their writes unable to fail.\n`
+            );
+        }
+        expect(missing).toEqual([]);
+    });
+
     it('records the writes it accepts, rather than swallowing them', () => {
         // The narrower lesson from docRef.set(). A write stub that returns a
         // resolved promise and calls no jest.fn() is indistinguishable from a

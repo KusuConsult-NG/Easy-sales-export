@@ -10,6 +10,8 @@ import { logger } from '@/lib/logger';
 import { initializePaystackPayment } from '@/lib/paystack-server';
 import { rateLimit } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
+import { claimPaymentOnce } from '@/lib/wallet-ledger';
+import { FieldValue } from '@/lib/firestore-compat';
 
 const paymentLimiter = rateLimit(rateLimitConfig.payment);
 
@@ -79,16 +81,6 @@ export async function verifyContributionPaymentAction(
         const { calculateUserTier } = await import('@/lib/cooperative-tiers');
         const { createAdminAuditLog } = await import('@/lib/audit-log');
 
-        // 🔒 SECURITY FIX #1: Double-payment protection
-        const processedRef = doc(db, 'processedPayments', reference);
-        const existingPayment = await getDoc(processedRef);
-
-        // ✅ FIX: If webhook already processed this payment, return success not an error.
-        if (existingPayment.exists) {
-            logger.info(`[verifyContributionPaymentAction] Payment ${reference} already processed — returning success.`);
-            return { error: null, success: true as const, message: 'Your contribution has been recorded.', data: undefined };
-        }
-
         // Verify payment with Paystack
         const verification = await verifyPaystackPayment(reference);
 
@@ -114,8 +106,55 @@ export async function verifyContributionPaymentAction(
         if (expectedAmount && Math.abs(amountInNaira - expectedAmount) > 1) { return { error: 'Payment amount mismatch', success: false as const, data: undefined };
         }
 
-        // 🔒 SECURITY FIX #4: Use Firestore transaction for atomicity
-        const result = await runTransaction(db, async (transaction) => { const membershipRef = doc(db, COLLECTIONS.COOPERATIVE_MEMBERS, userId);
+        // Claim the reference before anything is credited.
+        //
+        // The guard used to be a read of processedPayments near the top of this
+        // function, followed much later by a blind
+        // `transaction.set(processedRef, ...)`. That is a check-then-write, and
+        // runTransaction on this adapter takes no lock and cannot roll back, so
+        // both halves are just ordinary statements. A webhook and a client
+        // verification landing on one reference together both saw an absent row
+        // and both credited the contribution.
+        //
+        // claim_payment_once is INSERT ... ON CONFLICT DO NOTHING, so exactly
+        // one caller wins. It is the same gate export.ts, export-payment.ts and
+        // farm-nation-payment.ts already moved to; this file was the one left
+        // behind, with its own hand-rolled version of the same idea.
+        // Checked BEFORE the claim, deliberately.
+        //
+        // Claiming first is the right order for money — it is what stops two
+        // callers both crediting — but it means a later failure leaves the
+        // reference marked processed and the member uncredited, and a retry then
+        // returns "already recorded" without ever adding the contribution.
+        //
+        // A missing membership is the one failure here that is both plausible
+        // and knowable in advance, so it is ruled out while backing out is still
+        // free. Anything after the claim is a reconciliation problem, which is
+        // the trade every sibling module already makes.
+        const preMembership = await getDoc(doc(db, COLLECTIONS.COOPERATIVE_MEMBERS, userId));
+        if (!preMembership.exists) {
+            return { error: 'Membership not found', success: false as const, data: undefined };
+        }
+
+        const claim = await claimPaymentOnce({
+            reference,
+            userId,
+            amount: amountInNaira,
+            type: "cooperative_contribution",
+            source: "client_verify",
+            metadata: { module: "cooperative" },
+        });
+
+        // Losing the claim means someone else already recorded this exact
+        // payment. That is success — the money is where it should be.
+        if (!claim.claimed) {
+            logger.info(`[verifyContributionPaymentAction] Payment ${reference} already processed — returning success.`);
+            return { error: null, success: true as const, message: 'Your contribution has been recorded.', data: undefined };
+        }
+
+        const membershipRefOuter = doc(db, COLLECTIONS.COOPERATIVE_MEMBERS, userId);
+
+        const result = await runTransaction(db, async (transaction) => { const membershipRef = membershipRefOuter;
             const membershipDoc = await transaction.get(membershipRef);
 
             if (!membershipDoc.exists) {
@@ -127,22 +166,24 @@ export async function verifyContributionPaymentAction(
             }
 
             const currentTotal = membershipData.totalContributions || 0;
-            const newTotal = currentTotal + amountInNaira;
-            const newTier = calculateUserTier(newTotal);
             // ✅ FIX: read cooperativeId from membership doc — not a hardcoded constant
             const cooperativeId = membershipData.cooperativeId || "default";
 
-            // Update membership atomically
-            transaction.update(membershipRef, { totalContributions: newTotal,
-                tier: newTier,
+            // Add to the savings balance; do not overwrite it.
+            //
+            // This read `totalContributions`, added the amount in JavaScript and
+            // wrote the result back. Two contributions from the same member
+            // processed at once — a webhook and a client verification for two
+            // different references, which is the normal shape of this system —
+            // both read the same starting figure and both wrote their own total.
+            // One member's savings quietly disappeared.
+            //
+            // The claim above stops one reference being counted twice. It does
+            // nothing about two references arriving together, which is what this
+            // increment is for.
+            transaction.update(membershipRef, { totalContributions: FieldValue.increment(amountInNaira),
                 lastContributionAt: serverTimestamp(),
                 updatedAt: serverTimestamp() });
-
-            // Mark payment as processed atomically
-            transaction.set(processedRef, { processedAt: serverTimestamp(),
-                amount: amountInNaira,
-                type: 'contribution',
-                reference });
 
             // Unified Ledger write
             transaction.set(doc(db, COLLECTIONS.TRANSACTIONS, reference), { id: reference,
@@ -171,10 +212,26 @@ export async function verifyContributionPaymentAction(
             });
 
             return { currentTotal,
-                newTotal,
-                previousTier: membershipData.tier,
-                newTier };
+                previousTier: membershipData.tier };
         });
+
+        // Recompute the tier from the stored total, not from an arithmetic
+        // guess made before the write.
+        //
+        // The tier used to be calculated as `currentTotal + amountInNaira` from
+        // the same stale snapshot as the balance, so a member whose two
+        // contributions raced was placed on the tier for one of them. Reading
+        // back what the increment actually produced gives the right answer for
+        // whatever total the row ended up holding, and concurrent callers
+        // converge because each reads strictly after its own increment.
+        //
+        // Tier is derived state. Deriving it from the authoritative figure is
+        // the whole job.
+        const freshMembership = await getDoc(membershipRefOuter);
+        const newTotal = freshMembership.data()?.totalContributions ?? (result.currentTotal + amountInNaira);
+        const newTier = calculateUserTier(newTotal);
+
+        await membershipRefOuter.update({ tier: newTier, updatedAt: serverTimestamp() });
 
         // Create audit log (outside transaction - not critical)
         await createAdminAuditLog({ action: 'contribution_made',
@@ -185,7 +242,7 @@ export async function verifyContributionPaymentAction(
             metadata: {
                 amount: amountInNaira,
                 previousTotal: result.currentTotal,
-                newTotal: result.newTotal,
+                newTotal,
                 previousTier: result.previousTier,
                 newTier: result.newTier,
                 paymentReference: reference },

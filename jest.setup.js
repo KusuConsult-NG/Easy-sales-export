@@ -54,6 +54,9 @@ global.mockFirestoreSet = jest.fn();
 // batch.delete() had no stub at all, so any action deleting documents in a
 // batch threw `batch.delete is not a function` and its later writes never ran.
 global.mockFirestoreBatchDelete = jest.fn();
+// docRef.delete() — reachable through the compat helpers below and through
+// docObj, and previously undefined, so calling it threw rather than recording.
+global.mockFirestoreDelete = jest.fn(() => Promise.resolve());
 
 jest.mock('@/lib/firebase-admin', () => {
     const mockDb = {
@@ -263,10 +266,58 @@ jest.mock('@/lib/supabase-db', () => {
         'wallets': 'wallets',
         'academy_applications': 'academy_applications',
     };
+    /**
+     * The modular compat helpers, which the mock did not export at all.
+     *
+     * src/lib/supabase-db.ts exports doc/getDoc/setDoc/updateDoc/collection/
+     * increment/serverTimestamp/arrayUnion/arrayRemove/deleteField/runTransaction
+     * alongside the fluent supabaseDb object, and ten-odd action files
+     * destructure them:
+     *
+     *     const { supabaseDb: db, doc, getDoc, runTransaction } =
+     *         await import('@/lib/supabase-db');
+     *
+     * Every one of those was `undefined` here, so the first call threw
+     * "doc is not a function", the action's catch turned it into a generic
+     * failure, and any assertion about what it wrote could never fail.
+     * cooperative/_payment.ts could not be tested at all, and nothing said so —
+     * the harness gap and the coverage gap hid each other, exactly as they did
+     * for .select() and docRef.set() before.
+     *
+     * These record through the same globals as the fluent API, so a test can
+     * assert on writes made either way.
+     */
+    const sentinel = (methodName, elements, operand) => ({ _methodName: methodName, _elements: elements, _operand: operand });
+
+    const docRefFor = (path, id) => ({
+        id,
+        path,
+        get: () => global.mockFirestoreGet(id),
+        update: (fields) => global.mockFirestoreUpdate(id, fields),
+        set: (data) => { global.mockFirestoreSet(id, data); return Promise.resolve(); },
+        delete: () => global.mockFirestoreDelete(id),
+    });
+
     return {
         supabaseDb: mockDb,
         getAdminDb: () => mockDb,
         getTableName: (collection) => DEDICATED[collection] || 'document_collections',
+
+        doc: (_db, path, ...segments) => {
+            const id = segments.length ? segments[segments.length - 1] : path;
+            global.mockFirestoreDoc(id);
+            return docRefFor(path, id);
+        },
+        collection: (_db, path) => mockDb.collection(path),
+        getDoc: (ref) => global.mockFirestoreGet(ref?.id),
+        setDoc: (ref, data) => { global.mockFirestoreSet(ref?.id, data); return Promise.resolve(); },
+        updateDoc: (ref, data) => { global.mockFirestoreUpdate(ref?.id, data); return Promise.resolve(); },
+        runTransaction: (_db, cb) => mockDb.runTransaction(cb),
+        increment: (n) => sentinel('FieldValue.increment', undefined, n),
+        serverTimestamp: () => sentinel('FieldValue.serverTimestamp'),
+        arrayUnion: (...elements) => sentinel('FieldValue.arrayUnion', elements),
+        arrayRemove: (...elements) => sentinel('FieldValue.arrayRemove', elements),
+        deleteField: () => sentinel('FieldValue.delete'),
     };
 });
 
