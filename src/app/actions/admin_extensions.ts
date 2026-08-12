@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { adminAuth } from "@/lib/firebase-admin";
 import { supabaseDb as db } from "@/lib/supabase-db";
+import { revokeAuthAccess } from "@/lib/auth-revocation";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -63,18 +64,31 @@ export async function softDeleteUserAction(targetUserId: string): Promise<Action
             // Deactivate Roles
             roles: ["deleted"],
             isActive: false,
+            // The field lib/auth.ts actually refuses to log in. roles and
+            // isActive are read by nothing in the sign-in path.
+            suspended: true,
 
             updatedAt: FieldValue.serverTimestamp() });
 
-        // 2. Disable in Firebase Auth (prevent login)
-        try { await adminAuth.updateUser(targetUserId, {
-                disabled: true,
-                email: scrubbedEmail, // Sync email change so they can't recover via old email
-                displayName: scrubbedName
-            });
-        } catch (authError) {
-            logger.error(`Failed to disable Auth user ${targetUserId}:`, authError);
-            // Non-blocking, but logged
+        // 2. Actually prevent login.
+        //
+        // This disabled the FIREBASE auth user, and lib/auth.ts authenticates
+        // against SUPABASE first — the disabled record was never consulted. The
+        // profile write above sets roles: ["deleted"] and isActive: false, and
+        // login checks neither; it refuses on isBanned, status === 'banned' or
+        // suspended. So a deleted user kept their original email and password
+        // and could still sign in, to a scrubbed account.
+        //
+        // revokeAuthAccess moves the account to the scrubbed address and a
+        // random password in Supabase, and disables Firebase as well.
+        const revocation = await revokeAuthAccess(targetUserId, scrubbedEmail);
+        if (!revocation.primaryRevoked) {
+            logger.error(`[delete] auth revocation failed for ${targetUserId}: ${revocation.error}`);
+            return {
+                error: "Account data was scrubbed but sign-in could not be revoked. Please retry.",
+                success: false as const,
+                data: null,
+            };
         }
 
         // 3. Clear Cache

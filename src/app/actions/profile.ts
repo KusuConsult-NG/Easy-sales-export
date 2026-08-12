@@ -6,6 +6,7 @@
 
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
+import { syncAuthEmail } from "@/lib/auth-revocation";
 import { logger } from '@/lib/logger';
 import { adminAuth } from "@/lib/firebase-admin";
 import { supabaseDb as db } from "@/lib/supabase-db";
@@ -100,12 +101,20 @@ export const updateUserProfileAction = withSafeAction("updateUserProfileAction",
     const validated = profileUpdateSchema.parse(data);
     const userId = session.user.id;
 
-    if (validated.email && validated.email !== session.user.email) { try {
-            await adminAuth.updateUser(userId, { email: validated.email });
-        } catch (authErr: any) { logger.error("Firebase Auth email update failed:", authErr);
-            if (authErr.code === 'auth/email-already-exists') {
+    if (validated.email && validated.email !== session.user.email) {
+        // The email has to change in the store that authenticates.
+        //
+        // This updated Firebase only. lib/auth.ts signs in against Supabase
+        // first, so the OLD address kept working — and the new one fell through
+        // to the Firebase fallback, which then tries to provision the account in
+        // Supabase and can fork a second auth identity for the same person.
+        const sync = await syncAuthEmail(userId, validated.email);
+        if (!sync.primaryRevoked) {
+            const message = String(sync.error || "");
+            if (/already|exists|registered/i.test(message)) {
                 return { success: false as const, error: "That email address is already in use by another account.", data: null };
             }
+            logger.error("Auth email update failed:", message);
             return { success: false as const, error: "Failed to update email. Please try again.", data: null };
         }
     }
