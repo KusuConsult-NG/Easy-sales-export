@@ -381,9 +381,24 @@ global.mockRequireSession = jest.fn(() => Promise.resolve({
     },
     error: null
 }));
+// `isAdmin: () => true` used to be here, unconditionally.
+//
+// session-guard's isAdmin is a thin delegate to admin-permissions' isAdmin, and
+// stubbing it true made EVERY caller an admin in EVERY test. Any guard of the
+// shape
+//
+//     if (record.userId !== session.user.id && !isAdmin(session.user.roles))
+//
+// therefore could not be tested at all: the admin arm always won, so a test
+// asserting "a stranger is refused" could never pass no matter how correct the
+// action was. It also meant a missing guard and a present one looked identical.
+//
+// The real function is used now, so roles decide. It is imported lazily inside
+// the factory because jest.mock factories may not close over out-of-scope
+// variables.
 jest.mock('@/lib/session-guard', () => ({
     requireSession: () => global.mockRequireSession(),
-    isAdmin: () => true,
+    isAdmin: (roles) => jest.requireActual('@/lib/admin-permissions').isAdmin(roles),
     isSessionExpired: () => false,
 }));
 

@@ -697,6 +697,21 @@ async function _getLandInquiriesAction(userId: string): Promise<ActionResponse<a
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
+
+        // The session was established and then never consulted: the query ran on
+        // `listingOwnerId == userId` where userId is the caller's own argument.
+        // Any authenticated user could name any landowner and read their inbox.
+        //
+        // These rows are unusually sensitive. _submitLandInquiryAction is public
+        // BY DESIGN — someone enquiring about land should not need an account —
+        // and each row it writes carries `buyerName`, `buyerEmail`, `buyerPhone`
+        // and the message body. So this endpoint turned a deliberately open
+        // intake form into a bulk export of the contact details it collected,
+        // for any owner, to anyone with an account.
+        const { session } = sessionResult;
+        if (session.user.id !== userId && !isAdmin(session.user.roles)) {
+            return { success: false, error: "Unauthorized", data: null };
+        }
         
         const snapshot = await db.collection(COLLECTIONS.LAND_INQUIRIES)
             .where("listingOwnerId", "==", userId)
@@ -725,6 +740,31 @@ async function _getLandInquiryByIdAction(inquiryId: string): Promise<ActionRespo
         const docSnap = await docRef.get();
 
         if (docSnap.exists) {
+            // Found by reading rather than by the scanner, and worth saying why:
+            // this one takes an inquiryId, not a userId, and runs no `.where` at
+            // all, so neither the ownership scan's read rule nor its write rule
+            // has anything to catch. A single doc fetched by id with no
+            // ownership check afterwards is a third shape, and the tool still
+            // cannot see it.
+            //
+            // It returned the same buyerName/buyerEmail/buyerPhone/message as
+            // the list above, one row at a time, to any authenticated caller.
+            // The notification sent on submission links to
+            // /farm-nation/inquiries/<id>, so ids travel.
+            // Owner or admin, and deliberately no "or the buyer" clause: the
+            // intake is public, so an inquiry carries buyerName/buyerEmail/
+            // buyerPhone but never a buyerId — there may be no account behind it
+            // at all. A buyerId comparison here would be dead code that reads as
+            // though it grants the enquirer access.
+            const inquiry = docSnap.data() ?? {};
+            const { session } = sessionResult;
+            const isParty = inquiry.listingOwnerId === session.user.id;
+            if (!isParty && !isAdmin(session.user.roles)) {
+                // The same "not found" an absent row gets, so the endpoint does
+                // not confirm which inquiry ids exist.
+                return { success: false, error: "Inquiry not found", data: null };
+            }
+
             // ✅ FIX: serializeValue converts Timestamp fields to ISO strings for safe client transfer.
             return { success: true, error: null, data: { id: docSnap.id, ...serializeValue(docSnap.data()) } };
         } else { 

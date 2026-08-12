@@ -178,6 +178,151 @@ describe('what it cannot see — each of these was a false positive worth readin
     });
 });
 
+describe('reads, which it used to ignore entirely', () => {
+    it('flags a read scoped by a caller-supplied id', async () => {
+        // THE addition. getUserPaymentHistoryAction is this exact shape: the
+        // session is established, only the error is inspected, and the query
+        // then runs on the caller's own argument. Any authenticated user reads
+        // anybody's rows.
+        //
+        // Before this, the scanner considered only functions that WRITE, so the
+        // read half was found by hand four separate times instead.
+        const found = scan(`
+            "use server";
+            export async function getHistory(userId: string) {
+                const sessionResult = await requireSession();
+                if (sessionResult.error) return [];
+                const snap = await db.collection("payments").where("userId", "==", userId).get();
+                return snap.docs;
+            }
+        `);
+
+        expect(found).toContain('getHistory');
+    });
+
+    it('does not flag a read scoped by the session', async () => {
+        // Vacuity guard, and the distinction the whole rule turns on. Same
+        // query, same collection — the only difference is where the compared
+        // value came from.
+        const found = scan(`
+            "use server";
+            export async function getMyHistory() {
+                const { session } = await requireSession();
+                const snap = await db.collection("payments").where("userId", "==", session.user.id).get();
+                return snap.docs;
+            }
+        `);
+
+        expect(found).not.toContain('getMyHistory');
+    });
+
+    it('does not flag a read scoped through a session-derived local', async () => {
+        // Ownership is routinely established through a local rather than inline.
+        const found = scan(`
+            "use server";
+            export async function getMine() {
+                const sessionResult = await requireSession();
+                const callerId = sessionResult.session?.user?.id;
+                const snap = await db.collection("payments").where("userId", "==", callerId).get();
+                return snap.docs;
+            }
+        `);
+
+        expect(found).not.toContain('getMine');
+    });
+
+    it('clears a caller-scoped read once ownership is checked', async () => {
+        // The fix shape, so the rule cannot be satisfied only by deleting the
+        // query.
+        const found = scan(`
+            "use server";
+            export async function getHistory(userId: string) {
+                const { session } = await requireSession();
+                if (session.user.id !== userId && !isAdmin(session.user.roles)) return [];
+                const snap = await db.collection("payments").where("userId", "==", userId).get();
+                return snap.docs;
+            }
+        `);
+
+        expect(found).not.toContain('getHistory');
+    });
+
+    it('does not flag a read that never scopes by an identity at all', async () => {
+        // Reads are reported only when a caller-supplied identity chose the
+        // rows. Without that there is no demonstrable link to another user and
+        // the list would fill with noise.
+        const found = scan(`
+            "use server";
+            export async function getCourse(courseId: string) {
+                await requireSession();
+                const snap = await db.collection("courses").doc(courseId).get();
+                return snap.data();
+            }
+        `);
+
+        expect(found).not.toContain('getCourse');
+    });
+});
+
+describe('stamping an identity into a log decides nothing', () => {
+    it('still flags a function whose only session use is a log line', async () => {
+        // How _getSellerReviewSummaryAction hid. `userId: session...` inside a
+        // logger call matched the "identity field receives a session value"
+        // rule, which exists for `ownerId: session.user.id` on a RECORD, and
+        // marked the whole function as having decided ownership.
+        //
+        // This is the very distinction the rule was written to make — the vendor
+        // writers "recorded WHO acted without deciding whether they MAY" — and
+        // it was implemented for `updatedBy` only.
+        const found = scan(`
+            "use server";
+            export async function getSummary(sellerId: string) {
+                let sessionResult;
+                try {
+                    sessionResult = await requireSession();
+                    const snap = await db.collection("reviews").where("sellerId", "==", sellerId).get();
+                    return snap.docs;
+                } catch (err) {
+                    logger.error("failed", { sellerId, userId: sessionResult?.session?.user?.id });
+                    return null;
+                }
+            }
+        `);
+
+        expect(found).toContain('getSummary');
+    });
+
+    it('still clears a write that stamps the identity onto the record', async () => {
+        // Vacuity guard. The original rule is correct and must survive: an
+        // ownerId taken from the session cannot be forged, so there is nothing
+        // left to compare.
+        const found = scan(`
+            "use server";
+            export async function createListing(data: { title: string }) {
+                const { session } = await requireSession();
+                await db.collection("listings").add({ title: data.title, ownerId: session.user.id });
+            }
+        `);
+
+        expect(found).not.toContain('createListing');
+    });
+
+    it('does not clear a write because an audit call names the caller', async () => {
+        // The vendor defect itself, one call further along: the audit row
+        // records who acted, the update still writes to a caller-supplied id.
+        const found = scan(`
+            "use server";
+            export async function zeroStock(productId: string) {
+                const { session } = await requireSession();
+                await db.collection("products").doc(productId).update({ stock: 0 });
+                await createAdminAuditLog({ action: "zero_stock", userId: session.user.id });
+            }
+        `);
+
+        expect(found).toContain('zeroStock');
+    });
+});
+
 describe('corrections made after it missed a real bug', () => {
     it('does not treat a ceiling guard as an ownership guard', async () => {
         // THE correction. bookExportSlotAction authenticated, ignored the
