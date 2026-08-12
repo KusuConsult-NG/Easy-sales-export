@@ -116,8 +116,27 @@ export async function createAnnouncementAction(prevState: ActionResponse<unknown
         }
 
         // Create announcement in database
+        // `content` and `targetAudience` are written because the only reader of
+        // this collection needs both.
+        //
+        // cms.ts's getActiveAnnouncementsAction maps `content` (this wrote only
+        // `message`) and, since the entitlement fix, returns nothing whose
+        // targetAudience it does not recognise — and an absent one is not
+        // recognised. It was invisible before that too: the old filter dropped
+        // anything whose audience was neither "all" nor the requested one, and
+        // undefined is neither.
+        //
+        // So every row this action has ever written was unreadable by the only
+        // thing that reads them. It has no callers today, which is the only
+        // reason nobody has noticed; wiring the form up would have published
+        // announcements that never appeared anywhere.
+        //
+        // `message` is kept alongside `content` rather than renamed, in case a
+        // row somewhere is already read by it.
         const announcementRef = await db.collection(COLLECTIONS.ANNOUNCEMENTS).add({ title,
             message,
+            content: message,
+            targetAudience: "all",
             priority,
             active: true,
             createdBy: adminCheck.userId,
