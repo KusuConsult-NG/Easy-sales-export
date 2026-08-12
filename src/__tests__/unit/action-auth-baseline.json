@@ -51,8 +51,6 @@
     "app/actions/marketplace/_buyer.ts::getProductsAction",
     "app/actions/marketplace/_buyer.ts::getProductsByCategoryAction",
     "app/actions/marketplace/_payment.ts::calculateDeliveryAction",
-    "app/actions/notifications.ts::createBulkNotificationsAction",
-    "app/actions/notifications.ts::createNotificationAction",
     "app/actions/password-reset.ts::resetPasswordAction",
     "app/actions/password-reset.ts::sendResetEmailAction",
     "app/actions/reviews.ts::getProductReviewsAction",
