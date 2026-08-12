@@ -7,7 +7,7 @@ import { requireAdmin } from "@/lib/require-admin";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
-import { hasRole } from "@/lib/role-utils";
+import { hasAnyRole } from "@/lib/role-utils";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { createNotificationAction } from "@/app/actions/notifications";
 import { serializeValue } from "@/lib/firestore-serialize";
@@ -66,15 +66,39 @@ export async function assignDisputeAction(
         const assigneeDoc = await db.collection(COLLECTIONS.USERS).doc(assigneeId).get();
         if (!assigneeDoc.exists) return { success: false as const, error: "Assignee not found", data: null };
         const assigneeData = assigneeDoc.data();
-        if (!hasRole(assigneeData?.roles || [], "admin")) { return { success: false as const, error: "Assignee is not an admin", data: null };
+
+        // A super_admin is a valid assignee.
+        //
+        // hasRole is a literal includes("admin"), so a super_admin who does not
+        // also hold the plain 'admin' role was refused — while
+        // getAdminUsersAction, forty lines above, deliberately queries for
+        // super_admin and returns them tagged `role: "super_admin"` to populate
+        // this very dropdown. The picker offered people the assignment then
+        // rejected, with "Assignee is not an admin" about an administrator.
+        const assigneeRoles = assigneeData?.roles || [];
+        if (!hasAnyRole(assigneeRoles, ["admin", "super_admin"] as any)) {
+            return { success: false as const, error: "Assignee is not an admin", data: null };
         }
+
+        // The name on the record comes from the record.
+        //
+        // assigneeName arrived as a parameter and was written to the dispute as
+        // assignedAdminName and into the audit log — while the assignee's own
+        // document was already loaded, one line up, to check their role. So the
+        // attribution on an escalated dispute was whatever the caller typed, and
+        // the audit entry agreed with it.
+        //
+        // Same shape as the certificate title in #116 and the property title in
+        // #103: a value the server already holds, taken from the client instead.
+        const verifiedAssigneeName =
+            assigneeData?.displayName || assigneeData?.name || assigneeData?.email || assigneeName || "Admin";
 
         const disputeRef = db.collection(COLLECTIONS.DISPUTES).doc(disputeId);
         const disputeDoc = await disputeRef.get();
         if (!disputeDoc.exists) return { success: false as const, error: "Dispute not found", data: null };
 
         await disputeRef.update({ assignedAdminId: assigneeId,
-            assignedAdminName: assigneeName,
+            assignedAdminName: verifiedAssigneeName,
             assignedAt: FieldValue.serverTimestamp(),
             assignedBy: adminId,
             updatedAt: FieldValue.serverTimestamp() });
@@ -84,7 +108,7 @@ export async function assignDisputeAction(
             userId: adminId,
             targetId: disputeId,
             targetType: "dispute",
-            metadata: { assignedTo: assigneeId, assigneeName } });
+            metadata: { assignedTo: assigneeId, assigneeName: verifiedAssigneeName } });
 
         // Notify the assigned admin in-app
         await createNotificationAction({
