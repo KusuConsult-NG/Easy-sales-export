@@ -242,15 +242,50 @@ export async function addFlashSaleProductAction(data: {
             return { success: false as const, error: "You must join the event before listing products" , data: null };
         }
 
+        // The listed price has to be a real one.
+        //
+        // `price` and `flashPrice` were written straight through from the
+        // caller, and marketplace/_payment.ts multiplies the stored price by the
+        // quantity to build the order. A negative price there is not caught by
+        // anything downstream — the quantity stays positive so the stock
+        // decrement succeeds and the order completes — leaving that seller's
+        // escrow with a negative grossAmount while a co-seller's is whole, and
+        // the platform owing money it never collected.
+        //
+        // Checkout now refuses a non-positive stored price as well. This is the
+        // source; that is the boundary. Both, because this is not the only way a
+        // price gets written: PricingTierSchema is `z.number().default(0)`.
+        const price = Number(data.price);
+        if (!Number.isFinite(price) || price <= 0) {
+            return { success: false as const, error: "Price must be greater than zero", data: null };
+        }
+
+        const flashPrice = data.flashPrice === undefined || data.flashPrice === null
+            ? null
+            : Number(data.flashPrice);
+        if (flashPrice !== null && (!Number.isFinite(flashPrice) || flashPrice <= 0)) {
+            return { success: false as const, error: "Flash price must be greater than zero", data: null };
+        }
+        if (flashPrice !== null && flashPrice > price) {
+            return { success: false as const, error: "Flash price cannot be higher than the normal price", data: null };
+        }
+
+        const availableQuantity = data.availableQuantity === undefined || data.availableQuantity === null
+            ? null
+            : Number(data.availableQuantity);
+        if (availableQuantity !== null && (!Number.isInteger(availableQuantity) || availableQuantity < 0)) {
+            return { success: false as const, error: "Available quantity must be a whole number", data: null };
+        }
+
         const docRef = await db.collection(COLLECTIONS.FLASH_SALE_PRODUCTS).add({
             eventId: data.eventId,
             sellerId: userId,
             title: data.title,
             description: data.description || null,
-            price: data.price,
-            flashPrice: data.flashPrice || null,
+            price,
+            flashPrice,
             unit: data.unit || null,
-            availableQuantity: data.availableQuantity || null,
+            availableQuantity,
             imageUrl: data.imageUrl || null,
             productId: data.productId || null,
             externalMerchantId: null,
