@@ -33,6 +33,19 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 
 const USER = 'user-1';
 
+/**
+ * Deletion now revokes sign-in as well as scrubbing the profile, so this suite
+ * has a new dependency. Unmocked it reaches the real Supabase admin client,
+ * fails, and the action reports failure — which turned "proceeds when nothing
+ * is outstanding" red for a reason that has nothing to do with obligations.
+ *
+ * The revocation itself is covered in auth-revocation.test.ts.
+ */
+jest.mock('@/lib/auth-revocation', () => ({
+    revokeAuthAccess: jest.fn(async () => ({ primaryRevoked: true, legacyRevoked: true })),
+    syncAuthEmail: jest.fn(async () => ({ primaryRevoked: true, legacyRevoked: true })),
+    resolveSupabaseAuthId: jest.fn(async (id: string) => id),
+}));
 jest.mock('@/lib/cache-invalidation', () => ({
     invalidateUserCache: jest.fn(async () => ({})),
     invalidateAdminGlobalStats: jest.fn(async () => ({})),

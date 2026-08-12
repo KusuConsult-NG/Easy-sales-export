@@ -4,6 +4,7 @@ import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
+import { revokeAuthAccess } from "@/lib/auth-revocation";
 import { logger } from "@/lib/logger";
 import type { ActionResponse } from "@/lib/safe-action";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
@@ -135,10 +136,34 @@ async function _deleteUserAccountAction(): Promise<ActionResponse<null>> { try {
             // Track deletion status and timestamp
             deleted: true,
             deletedAt: FieldValue.serverTimestamp(),
+            // The field lib/auth.ts refuses to log in. Without it, a deleted
+            // account still authenticates — `deleted: true` is read by nothing
+            // in the sign-in path.
+            suspended: true,
             updatedAt: FieldValue.serverTimestamp()
         });
 
         await batch.commit();
+
+        // Take away the password as well as the data.
+        //
+        // This path scrubbed the profile and touched NO auth store at all, so
+        // somebody who exercised their right to erasure kept a working email
+        // and password and could sign straight back into the redacted account.
+        // The admin deletion at least tried, against the wrong provider.
+        //
+        // Reported as a failure if the primary store cannot be revoked: telling
+        // someone their account is gone while their credentials still work is
+        // the outcome this whole function exists to avoid.
+        const revocation = await revokeAuthAccess(userId, "deleted_" + userId + "@redacted.local");
+        if (!revocation.primaryRevoked) {
+            logger.error("[NDPR Compliance] auth revocation failed after scrubbing", { userId });
+            return {
+                success: false as const,
+                error: "Your data was removed but sign-in could not be revoked. Please contact support.",
+                data: null,
+            };
+        }
 
         logger.info(`[NDPR Compliance] User PII successfully scrubbed for UID: ${userId}`);
 
