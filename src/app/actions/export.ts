@@ -1,6 +1,7 @@
 "use server";
 
 import { supabaseDb as db } from "@/lib/supabase-db";
+import { hashData } from "@/lib/security";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { auth } from "@/lib/auth";
@@ -1468,9 +1469,25 @@ export async function resubmitExportApplicationAction(
                 }
             } : {}),
             // Mirror KYC details
-            ...(validatedData.kycData.nin ? { nin: validatedData.kycData.nin, ninVerified: true } : {}),
-            ...(validatedData.kycData.bvn ? { bvn: validatedData.kycData.bvn, bvnVerified: true } : {}),
-            ...(validatedData.kycData.cacNumber ? { cacNumber: validatedData.kycData.cacNumber, cacVerified: true } : {}),
+            // The applicant typed these. Nobody checked them.
+            //
+            // `ninVerified`/`bvnVerified`/`cacVerified` were set to true right
+            // here, from the presence of the field. admin/users renders each as
+            // a green "Verified" badge, so the reviewer deciding whether to
+            // approve THIS application was told the identity had already been
+            // checked — because the applicant had filled the box in. Nothing in
+            // the codebase ever verified an identity document, so the badge was
+            // never earned by anyone.
+            //
+            // The numbers are still stored, now hashed, matching kyc.ts and
+            // wave/_actions.ts which both write hashData(bvn). The reviewable
+            // copy is untouched in the verification record, so admin review is
+            // unaffected — this replica exists for the user list, and it was the
+            // only place a readable BVN sat in the users table. That is the
+            // table that spent 52 days in a public repository.
+            ...(validatedData.kycData.nin ? { nin: hashData(validatedData.kycData.nin) } : {}),
+            ...(validatedData.kycData.bvn ? { bvn: hashData(validatedData.kycData.bvn) } : {}),
+            ...(validatedData.kycData.cacNumber ? { cacNumber: validatedData.kycData.cacNumber } : {}),
             updatedAt: FieldValue.serverTimestamp() 
         });
 
