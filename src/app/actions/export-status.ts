@@ -41,11 +41,44 @@ async function _updateExportStatusAction(
         if (!exportDoc.exists) { return { error: "Export window not found", success: false as const, data: null, meta: null };
         }
 
-        // Verify ownership (unless admin)
+        // Verify ownership (unless admin).
+        //
+        // Roles are re-read from the database rather than taken from the JWT,
+        // matching admin-content.ts since #114 and the escrow readers: a token
+        // keeps its roles until it refreshes, and this endpoint decides who may
+        // change a record the dashboard reads as escrow.
         const exportData = exportDoc.data()!;
-        const roles = session.user.roles || [];
+        const callerDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const roles: string[] = callerDoc.data()?.roles ?? [];
         const hasExportAccess = roles.some(r => r === "admin" || r === "super_admin" || r === "export_admin");
         if (exportData.userId !== session.user.id && !hasExportAccess) { return { error: "Unauthorized to update this export", success: false as const, data: null, meta: null };
+        }
+
+        // An owner moves their export along. They do not settle it, and they do
+        // not reopen it.
+        //
+        // Any of the four statuses could be set from any other, by the window's
+        // owner as readily as by an admin. Two consequences worth separating:
+        //
+        //   "completed" is a settlement statement. An owner could declare their
+        //   own export finished without an admin ever seeing it.
+        //
+        //   Moving OUT of "completed" reopens a settled record. dashboard.ts
+        //   sums windows in in_transit/delivered as the owner's Total Escrow,
+        //   so the same call that reopens the record also puts the figure back.
+        //
+        // Admins keep full control, including correcting a mistake in either
+        // direction. This is deliberately not a full state machine — which
+        // transitions are legal in the middle of the flow is a wider question
+        // than this function should answer alone, the same line drawn for
+        // export order status in #112.
+        if (!hasExportAccess) {
+            if (newStatus === "completed") {
+                return { error: "Only an administrator can mark an export completed", success: false as const, data: null, meta: null };
+            }
+            if (exportData.status === "completed") {
+                return { error: "This export is completed and can only be changed by an administrator", success: false as const, data: null, meta: null };
+            }
         }
 
         // Update status
