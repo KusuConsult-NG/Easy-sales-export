@@ -24,6 +24,25 @@ export async function getAdminExportCatalogAction(options: { limit?: number;
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
+        // The only endpoint in this file with no caller check.
+        //
+        // Its eight siblings all call isAdmin, its name says Admin, and its only
+        // caller is /admin/export/catalog. It had no session check at all, so
+        // any unauthenticated request could page through the catalogue.
+        //
+        // The rows are whole documents — createExportCatalogAction spreads
+        // `...productData` in with no schema, so a catalogue entry holds
+        // whatever the admin form sent, and serializeDocs returns all of it.
+        // There is no public catalogue reader anywhere in the codebase for this
+        // to have been standing in for: participants read their own products
+        // through getUserExportProductsAction, which is session-scoped.
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
+        const { session } = sessionResult;
+        if (!session?.user || !isAdmin(session.user.roles)) {
+            return { success: false as const, error: "Unauthorized", data: null };
+        }
+
         const db = getAdminDb();
         let query = db.collection(COLLECTIONS.EXPORT_CATALOG)
             .where("isActive", "==", true)
@@ -301,6 +320,32 @@ export async function updateAdminExportOrderStatusAction(
         const { session } = sessionResult;
 
         if (!isAdmin(session.user.roles)) { return { success: false as const, error: "Unauthorized access", data: null };
+        }
+
+        // `status` arrived as a free string and was written straight to the
+        // order.
+        //
+        // The vocabulary export-payment.ts actually writes is small —
+        // pending_payment, processing, completed, cancelled_out_of_stock — and
+        // nothing here checked against it, so a typo like "shiped" or an invented
+        // value became the order's state permanently. Buyers' dashboards filter
+        // on these strings, so an order in an unknown state simply stops
+        // appearing anywhere.
+        //
+        // This is an admin endpoint, so the concern is a mistake rather than an
+        // attack, and a whitelist is the cheapest way to make the mistake
+        // impossible. It is not a transition check: which moves are legal is a
+        // wider question than this function should answer alone.
+        const ALLOWED_ORDER_STATUSES = [
+            "pending_payment", "processing", "shipped", "delivered",
+            "completed", "cancelled", "cancelled_out_of_stock", "refunded",
+        ];
+        if (!ALLOWED_ORDER_STATUSES.includes(status)) {
+            return {
+                success: false as const,
+                error: `Unknown order status "${status}". Allowed: ${ALLOWED_ORDER_STATUSES.join(", ")}`,
+                data: null,
+            };
         }
 
         const db = getAdminDb();
