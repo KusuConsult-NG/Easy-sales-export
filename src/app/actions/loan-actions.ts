@@ -155,7 +155,7 @@ export async function getLoanApplication(loanId: string) { const sessionResult =
         const data = loanDoc.data()!;
 
         // Check authorization - user can only view their own loans unless admin
-        if (data.userId !== session.user.id && !session.user.roles?.includes('admin')) { return { success: false as const, error: "Unauthorized to view this loan", loan: null, data: null };
+        if (data.userId !== session.user.id && !(session.user.roles?.includes('admin') || session.user.roles?.includes('super_admin'))) { return { success: false as const, error: "Unauthorized to view this loan", loan: null, data: null };
         }
 
         const loan = serializeDoc<LoanApplication>(loanDoc.id, data);
@@ -171,7 +171,7 @@ export async function getLoanApplication(loanId: string) { const sessionResult =
 export async function getPendingLoanApplications() { const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
-    if (!session || !session.user.roles?.includes('admin')) { return { success: false as const, error: "Unauthorized - Admin only", loans: [], data: null };
+    if (!session || !(session.user.roles?.includes('admin') || session.user.roles?.includes('super_admin'))) { return { success: false as const, error: "Unauthorized - Admin only", loans: [], data: null };
     }
 
     try { const loansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
@@ -194,7 +194,7 @@ export async function approveLoanApplication(
 ) { const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
-    if (!session || !session.user.roles?.includes('admin')) { return { success: false as const, error: "Unauthorized - Admin only", data: null };
+    if (!session || !(session.user.roles?.includes('admin') || session.user.roles?.includes('super_admin'))) { return { success: false as const, error: "Unauthorized - Admin only", data: null };
     }
 
     try {
@@ -397,7 +397,7 @@ export async function approveLoanApplication(
 export async function disburseLoan(loanId: string, disbursementNotes?: string) { const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
     const { session } = sessionResult;
-    if (!session || !session.user.roles?.includes('admin')) { return { success: false as const, error: "Unauthorized - Admin only"};
+    if (!session || !(session.user.roles?.includes('admin') || session.user.roles?.includes('super_admin'))) { return { success: false as const, error: "Unauthorized - Admin only"};
     }
 
     try {
@@ -558,7 +558,7 @@ export async function disburseLoan(loanId: string, disbursementNotes?: string) {
 export async function getLoanStatistics() { const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
-    if (!session || !session.user.roles?.includes('admin')) { return { success: false as const, error: "Unauthorized - Admin only", stats: null, data: null };
+    if (!session || !(session.user.roles?.includes('admin') || session.user.roles?.includes('super_admin'))) { return { success: false as const, error: "Unauthorized - Admin only", stats: null, data: null };
     }
 
     try { // Optimization: Select only necessary fields to reduce bandwidth
