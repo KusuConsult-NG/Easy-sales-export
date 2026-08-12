@@ -120,7 +120,36 @@ async function _createOrderAction(
                     throw new Error(`Pricing tier ${item.tierType} not found for product ${product.title}`);
                 }
 
-                const totalPrice = tier.price * item.quantity;
+                // The stored tier price still has to be a real one.
+                //
+                // Taking it from the product document is right, and is not
+                // enough on its own: PricingTierSchema is
+                // `price: z.number().default(0)`, so nothing stops a seller
+                // listing a tier at zero or below.
+                //
+                // This is the same defect #113 fixed at the marketplace
+                // checkout boundary and #123 fixed in the export module — and
+                // this is a THIRD order-creation path that never passes through
+                // either. The order is written `status: "pending_payment"` with
+                // this figure as totalAmount, and walletCheckoutAction charges
+                // exactly that, so an understated line total is money.
+                const unitPrice = Number(tier.price);
+                if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+                    throw new Error(`"${product.title}" is not priced for sale.`);
+                }
+
+                // decrementManyOrFail above already refuses a non-positive
+                // amount, so a bad quantity fails before this point. Checked
+                // here anyway, because that is a guarantee of the primitive
+                // rather than of this function, and because the message it
+                // produces — "Could not reserve stock" — describes the wrong
+                // problem.
+                const quantity = Number(item.quantity);
+                if (!Number.isInteger(quantity) || quantity <= 0) {
+                    throw new Error(`Invalid quantity for "${product.title}".`);
+                }
+
+                const totalPrice = unitPrice * quantity;
                 const sellerId = product.sellerId;
 
                 if (!sellerOrders.has(sellerId)) { sellerOrders.set(sellerId, { items: [], subtotal: 0 });
@@ -137,8 +166,8 @@ async function _createOrderAction(
 
                 so.items.push({ productId: item.productId,
                     productTitle: product.title,
-                    quantity: item.quantity,
-                    unitPrice: tier.price,
+                    quantity,
+                    unitPrice,
                     totalPrice: totalPrice,
                     tier: item.tierType });
             }
