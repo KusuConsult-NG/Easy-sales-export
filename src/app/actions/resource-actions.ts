@@ -32,6 +32,41 @@ export interface WaveResource { id?: string;
 /**
  * Upload a resource to Firebase Storage and create Firestore record
  */
+/**
+ * Is this caller entitled to WAVE resources?
+ *
+ * wave/_actions.ts::_getWaveResourcesAction — the module's own listing of this
+ * same collection — requires an ACTIVE wave_members record, or an admin. The two
+ * endpoints in this file serve /wave/(member)/resources and enforced neither:
+ * the listing had no session check at all, and the download had only a session.
+ *
+ * So the membership gate the WAVE module applies to its resource list was
+ * undone by a second listing of the same documents. The same shape as the
+ * unguarded export catalogue in #112, where one endpoint had no check while its
+ * siblings all did.
+ */
+async function callerMayAccessResources(): Promise<
+    { ok: true; userId: string } | { ok: false; error: string }
+> {
+    const sessionResult = await requireSession();
+    if (!sessionResult.session?.user?.id) {
+        return { ok: false, error: sessionResult.error?.error ?? "Authentication required" };
+    }
+    const { session } = sessionResult;
+
+    const memberDoc = await db.collection(COLLECTIONS.WAVE_MEMBERS).doc(session.user.id).get();
+    if (memberDoc.exists && memberDoc.data()?.active) {
+        return { ok: true, userId: session.user.id };
+    }
+
+    const { isAdmin } = await import("@/lib/admin-permissions");
+    if (isAdmin(session.user.roles)) {
+        return { ok: true, userId: session.user.id };
+    }
+
+    return { ok: false, error: "WAVE membership required" };
+}
+
 export async function uploadResourceAction(formData: FormData): Promise<
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
@@ -128,6 +163,20 @@ export async function getResourcesAction(category?: string): Promise<
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
+        // The same gate the WAVE module puts on its own listing.
+        //
+        // This had no session check at all, while
+        // wave/_actions.ts::_getWaveResourcesAction requires an active
+        // wave_members record or an admin to list the very same collection. Its
+        // only caller is /wave/(member)/resources, so the intent was never in
+        // doubt — a second listing simply bypassed it, and a route group named
+        // (member) enforces nothing on a server action, which is reachable
+        // directly regardless of which page imports it.
+        const access = await callerMayAccessResources();
+        if (access.ok !== true) {
+            return { success: false as const, error: access.error, data: null };
+        }
+
         let query = db.collection(COLLECTIONS.WAVE_RESOURCES)
             .where("isActive", "==", true)
             .orderBy("uploadedAt", "desc");
@@ -151,11 +200,9 @@ export async function downloadResourceAction(resourceId: string): Promise<
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
-    const { session } = sessionResult;
-
-        if (!session?.user?.id) { return { success: false as const, error: "Authentication required", data: null };
+        const access = await callerMayAccessResources();
+        if (access.ok !== true) {
+            return { success: false as const, error: access.error, data: null };
         }
 
         const resourceRef = db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId);
@@ -166,13 +213,27 @@ export async function downloadResourceAction(resourceId: string): Promise<
 
         const resource = resourceDoc.data() as WaveResource;
 
+        // A deleted resource is not downloadable.
+        //
+        // deleteResourceAction is a SOFT delete — it sets isActive: false — and
+        // getResourcesAction filters on `.where("isActive", "==", true)`, so a
+        // deleted resource disappears from the list. This path fetched by id and
+        // never looked, so anyone holding the id could still download the file
+        // after an admin removed it. The deletion looked effective and was not.
+        //
+        // Reported as "not found", the same as a missing id, so the endpoint
+        // does not confirm that a withdrawn resource exists.
+        if ((resource as any).isActive === false) {
+            return { success: false as const, error: "Resource not found", data: null };
+        }
+
         // Increment download count
         await resourceRef.update({ downloads: FieldValue.increment(1),
             updatedAt: FieldValue.serverTimestamp() });
 
         // Create audit log
         await createAdminAuditLog({ action: "resource_download",
-            userId: session.user.id,
+            userId: access.userId,
             targetId: resourceId,
             targetType: "wave_resource" });
 

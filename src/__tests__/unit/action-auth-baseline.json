@@ -55,7 +55,6 @@
     "app/actions/notifications.ts::createNotificationAction",
     "app/actions/password-reset.ts::resetPasswordAction",
     "app/actions/password-reset.ts::sendResetEmailAction",
-    "app/actions/resource-actions.ts::getResourcesAction",
     "app/actions/reviews.ts::getProductReviewsAction",
     "app/actions/reviews.ts::getSellerRatingAction",
     "app/actions/village-market.ts::getActiveFlashSaleProductsAction",
