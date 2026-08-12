@@ -29,7 +29,6 @@
     "app/actions/cms.ts::getActiveAnnouncementsAction",
     "app/actions/cms.ts::getActiveBannersAction",
     "app/actions/cooperative/_actions.ts::validateCooperativeInviteAction",
-    "app/actions/export-admin.ts::getAdminExportCatalogAction",
     "app/actions/export-aggregation.ts::getActiveExportWindowsAction",
     "app/actions/export-investments.ts::getExportOpportunities",
     "app/actions/export-investments.ts::getExportOpportunityById",
