@@ -62,6 +62,20 @@ export const PURCHASABLE_STATUSES: readonly LandListingStatus[] = ["verified", "
  */
 export const BROWSABLE_STATUSES: readonly LandListingStatus[] = PURCHASABLE_STATUSES;
 
+/**
+ * Statuses meaning "waiting for an admin to look at it".
+ *
+ * Named here because two dashboards counted `status == "pending"` for this and
+ * got a different, live meaning: farm-nation sets `pending` when a BUYER
+ * reserves a listing mid-purchase. So those panels counted reserved properties
+ * as outstanding approvals and showed zero for the listings actually awaiting
+ * review — while farm-nation-admin.ts and admin-content.ts, which query
+ * `pending_verification`, showed the real queue. Three screens, two answers.
+ *
+ * Anything counting an approval backlog should use this rather than a literal.
+ */
+export const AWAITING_REVIEW_STATUSES: readonly LandListingStatus[] = ["pending_verification"];
+
 /** True when a listing can be bought right now. */
 export function isPurchasable(status: unknown): boolean {
     return typeof status === "string" &&

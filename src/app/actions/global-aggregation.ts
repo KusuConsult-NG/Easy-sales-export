@@ -7,6 +7,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { AggregateField } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
+import { AWAITING_REVIEW_STATUSES } from "@/lib/land-listing-status";
 
 /**
  * Returns exact system-wide analytics pulling Exclusively from the 
@@ -82,7 +83,15 @@ export async function getGlobalPendingApprovalsAction() { try {
             db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).where("membershipStatus", "==", "pending").count().get(),
             db.collection(COLLECTIONS.EXPORT_APPLICATIONS).where("status", "==", "pending").count().get(),
             db.collection(COLLECTIONS.SELLER_VERIFICATIONS).where("status", "==", "pending").count().get(),
-            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "pending").count().get(),
+            // `pending` is not "awaiting approval" for a land listing — it is
+            // what farm-nation sets when a BUYER reserves one mid-purchase (see
+            // land-listing-status.ts). So this counted reserved properties as
+            // outstanding approvals and reported zero for the listings actually
+            // waiting to be reviewed, while farm-nation-admin.ts and
+            // admin-content.ts, which query `pending_verification`, showed the
+            // real queue. Three screens, two answers, and this is the one on the
+            // global dashboard.
+            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", AWAITING_REVIEW_STATUSES[0]).count().get(),
             db.collection(COLLECTIONS.LOAN_APPLICATIONS).where("status", "==", "pending").count().get(),
             db.collection(COLLECTIONS.WAVE_WITHDRAWALS).where("status", "==", "pending").count().get(),
             db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).where("status", "==", "pending").count().get()
@@ -168,7 +177,17 @@ export async function getMarketplaceMetricsAction() {
             db.collection(COLLECTIONS.SELLER_VERIFICATIONS).where("status", "==", "pending").count().get(),
             db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).count().get(),
             db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("status", "==", "pending").count().get(),
-            db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("status", "==", "completed").count().get(),
+            // An escrow is never `completed`. Its statuses are pending, funded,
+            // released, refunded and disputed — the type in marketplace/_escrow.ts
+            // says so, and `released` is what order-management.ts and the
+            // dispute resolution both transition to. So `completedEscrows` was
+            // structurally always 0, however many had been paid out.
+            //
+            // `completed` does appear next to escrow code, which is how this
+            // survived: it is the status of the WALLET_TRANSACTIONS and
+            // TRANSACTIONS rows written when an escrow is released, a few lines
+            // apart in the same function.
+            db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("status", "==", "released").count().get(),
             db.collection(COLLECTIONS.MARKETPLACE_ORDERS).count().get()
         ]);
 
