@@ -58,7 +58,58 @@ global.mockFirestoreBatchDelete = jest.fn();
 // docObj, and previously undefined, so calling it threw rather than recording.
 global.mockFirestoreDelete = jest.fn(() => Promise.resolve());
 
+// ── firebase-admin Auth and Storage ──────────────────────────────────────────
+//
+// Declared here with the other recorders so a test can assert on them. The mock
+// used to export `adminAuth: {}`, so every one of these calls threw — and most
+// callers wrap the Firebase half in try/catch as best-effort, which turned the
+// throw into a silent skip no assertion could see.
+global.mockAdminAuthCreateCustomToken = jest.fn(() => Promise.resolve('mock-custom-token'));
+global.mockAdminAuthCreateUser = jest.fn((props) => Promise.resolve({ uid: 'mock-uid', ...(props || {}) }));
+global.mockAdminAuthDeleteUser = jest.fn(() => Promise.resolve());
+global.mockAdminAuthDeleteUsers = jest.fn(() => Promise.resolve({ successCount: 0, failureCount: 0, errors: [] }));
+global.mockAdminAuthGetUser = jest.fn((uid) => Promise.resolve({ uid, email: `${uid}@example.test`, disabled: false }));
+global.mockAdminAuthGetUserByEmail = jest.fn((email) => Promise.resolve({ uid: 'mock-uid', email, disabled: false }));
+global.mockAdminAuthListUsers = jest.fn(() => Promise.resolve({ users: [], pageToken: undefined }));
+global.mockAdminAuthUpdateUser = jest.fn((uid, props) => Promise.resolve({ uid, ...(props || {}) }));
+global.mockAdminStorageBucket = jest.fn(() => undefined);
+global.mockAdminStorageFileDelete = jest.fn(() => Promise.resolve());
+global.mockAdminStorageFileSave = jest.fn(() => Promise.resolve());
+
 jest.mock('@/lib/firebase-admin', () => {
+    // Firebase Auth admin surface, as used in src: createCustomToken,
+    // createUser, deleteUser, deleteUsers, getUser, getUserByEmail, listUsers
+    // and updateUser. getUser/getUserByEmail resolve to a plausible record
+    // rather than undefined, so a caller reading .uid off the result does not
+    // throw on a path that would have worked.
+    const mockAdminAuth = {
+        createCustomToken: (...a) => global.mockAdminAuthCreateCustomToken(...a),
+        createUser: (...a) => global.mockAdminAuthCreateUser(...a),
+        deleteUser: (...a) => global.mockAdminAuthDeleteUser(...a),
+        deleteUsers: (...a) => global.mockAdminAuthDeleteUsers(...a),
+        getUser: (...a) => global.mockAdminAuthGetUser(...a),
+        getUserByEmail: (...a) => global.mockAdminAuthGetUserByEmail(...a),
+        listUsers: (...a) => global.mockAdminAuthListUsers(...a),
+        updateUser: (...a) => global.mockAdminAuthUpdateUser(...a),
+    };
+
+    // Storage: only bucket().file().delete() is reached from src today, but the
+    // handle is complete enough that a caller chaining off it does not throw.
+    const mockAdminStorage = {
+        bucket: (...a) => {
+            global.mockAdminStorageBucket(...a);
+            return {
+                file: (path) => ({
+                    delete: (opts) => global.mockAdminStorageFileDelete(path, opts),
+                    exists: () => Promise.resolve([true]),
+                    save: (data) => global.mockAdminStorageFileSave(path, data),
+                    getSignedUrl: () => Promise.resolve([`https://mock-storage.test/${path}`]),
+                    makePublic: () => Promise.resolve(),
+                }),
+            };
+        },
+    };
+
     const mockDb = {
         collection: (name) => {
             global.mockFirestoreCollection(name);
@@ -182,8 +233,36 @@ jest.mock('@/lib/firebase-admin', () => {
     };
     return {
         db: mockDb,
+        // The module's full export surface, not two thirds of it.
+        //
+        // This returned `{ getAdminDb, adminAuth: {} }`. The real module also
+        // exports initializeFirebaseAdmin, db, getAdminAuth, getAdminStorage
+        // and adminStorage — so anything importing one of those got undefined
+        // and threw on first use, and `adminAuth: {}` threw on every method
+        // call.
+        //
+        // That is why the seven suites in src/__tests__/integration failed with
+        // "getAdminAuth is not a function": not stale tests, not missing
+        // credentials, an incomplete mock. They are excluded from the default
+        // jest config and CI runs only that config, so nothing ever reported it.
+        //
+        // Third instance of this shape. `isAdmin: () => true` made every
+        // ownership guard untestable; a missing docRef.delete() made every
+        // "refuses to delete" assertion vacuous. harness-covers-adapter.test.ts
+        // was written after the second and diffs the supabase-db surface — it
+        // now diffs this module too.
+        //
+        // Every stub records through a global jest.fn(), because a stub that
+        // accepts a call and reports nothing is the other half of the same
+        // problem: it cannot be distinguished from a working one until a test
+        // asserts on it.
+        initializeFirebaseAdmin: () => ({ name: 'mock-app' }),
         getAdminDb: () => mockDb,
-        adminAuth: {},
+        db: mockDb,
+        getAdminAuth: () => mockAdminAuth,
+        adminAuth: mockAdminAuth,
+        getAdminStorage: () => mockAdminStorage,
+        adminStorage: mockAdminStorage,
     };
 });
 

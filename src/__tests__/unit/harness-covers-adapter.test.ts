@@ -202,6 +202,90 @@ describe('the jest harness against the real adapter', () => {
         expect(gaps).toEqual([]);
     });
 
+    it('mocks every export of @/lib/firebase-admin', () => {
+        // The third instance of one shape, and the reason this test exists at
+        // all: `isAdmin: () => true` made every ownership guard untestable
+        // (#142), a missing docRef.delete() made every "refuses to delete"
+        // assertion vacuous (#144), and this mock returned two of the module's
+        // seven exports.
+        //
+        // Anything importing getAdminAuth got undefined and threw on first use.
+        // That is why all seven suites in src/__tests__/integration failed with
+        // "getAdminAuth is not a function" — not stale tests, not missing
+        // credentials, an incomplete mock nothing was checking. Those suites are
+        // excluded from the default config and CI runs only that config, so the
+        // gap was invisible from both directions.
+        //
+        // The supabase-db surface has been checked since #144. This module was
+        // not, purely because the earlier failures happened to be there.
+        const realSrc = readFileSync(join(process.cwd(), 'src/lib/firebase-admin.ts'), 'utf-8');
+        const harnessSrc = readFileSync(join(process.cwd(), 'jest.setup.js'), 'utf-8');
+
+        const exported = [...realSrc.matchAll(/^export (?:async )?(?:function|const) ([a-zA-Z][a-zA-Z0-9_]*)/gm)]
+            .map((m) => m[1]);
+
+        // The mock factory only — a name appearing anywhere else in the setup
+        // file does not make it an export of this module.
+        const factoryStart = harnessSrc.indexOf("jest.mock('@/lib/firebase-admin'");
+        const factoryEnd = harnessSrc.indexOf("jest.mock('@/lib/supabase-db'", factoryStart);
+        const factory = harnessSrc.slice(factoryStart, factoryEnd);
+
+        expect(exported.length).toBeGreaterThanOrEqual(5);
+        expect(factoryStart).toBeGreaterThan(-1);
+        expect(factoryEnd).toBeGreaterThan(factoryStart);
+
+        const missing = exported
+            .filter((name) => !new RegExp(`\\b${name}\\s*:`).test(factory))
+            .sort();
+
+        if (missing.length > 0) {
+            throw new Error(
+                `\n\njest.setup.js does not mock ${missing.length} export(s) of ` +
+                `@/lib/firebase-admin:\n\n` +
+                missing.map((m) => `  ${m}`).join('\n') +
+                `\n\nAnything importing one gets undefined and throws on first use.\n` +
+                `Most callers wrap that in try/catch, so it becomes a silent skip\n` +
+                `no assertion can see — which is how seven integration suites sat\n` +
+                `failing without anybody noticing.\n`
+            );
+        }
+        expect(missing).toEqual([]);
+    });
+
+    it('gives the mocked auth handle the methods src calls on it', () => {
+        // `adminAuth: {}` satisfies a presence check and throws on every call.
+        // These are the methods actually reached from src.
+        const harnessSrc = readFileSync(join(process.cwd(), 'jest.setup.js'), 'utf-8');
+        // Comment lines removed before matching.
+        //
+        // The comment explaining this fix quotes `adminAuth: {}` to say what was
+        // wrong with it, so the assertion below matched the explanation. That is
+        // the sixth assertion in this audit to trip over prose describing the
+        // defect it checks for. A check about what the CODE does has to read the
+        // code.
+        const factory = harnessSrc
+            .slice(
+                harnessSrc.indexOf("jest.mock('@/lib/firebase-admin'"),
+                harnessSrc.indexOf("jest.mock('@/lib/supabase-db'")
+            )
+            .split('\n')
+            .filter((l) => {
+                const t = l.trim();
+                return !t.startsWith('//') && !t.startsWith('*') && !t.startsWith('/*');
+            })
+            .join('\n');
+
+        for (const method of [
+            'createCustomToken', 'createUser', 'deleteUser', 'deleteUsers',
+            'getUser', 'getUserByEmail', 'listUsers', 'updateUser',
+        ]) {
+            expect(factory).toContain(`${method}:`);
+        }
+
+        // And it is not an empty object again.
+        expect(factory).not.toMatch(/adminAuth:\s*\{\s*\}/);
+    });
+
     it('exports every top-level helper the adapter exports', () => {
         // The fluent surface above is not the whole adapter. supabase-db.ts also
         // exports modular compat helpers — doc, getDoc, setDoc, updateDoc,
@@ -262,7 +346,15 @@ describe('the jest harness against the real adapter', () => {
             // Reading only the first line reported every multi-line stub as
             // silent — which is what the first version of this check did.
             const body = [m[2], ...lines.slice(i + 1, i + 4)].join(' ');
-            if (!/mockFirestore/.test(body)) {
+            // Any global recorder, not just the mockFirestore family.
+            //
+            // This tested /mockFirestore/, which was every recorder in the file
+            // when it was written. Completing the firebase-admin mock added
+            // mockAdminStorageFileDelete and mockAdminAuth*, and the check
+            // reported a stub that records perfectly well as silent — a ratchet
+            // failing on correct code, which is the thing that gets ratchets
+            // deleted.
+            if (!/global\.mock\w+\(/.test(body)) {
                 silent.push(`${m[1]}: ${m[2].trim().slice(0, 40) || '(block)'}`);
             }
         }
