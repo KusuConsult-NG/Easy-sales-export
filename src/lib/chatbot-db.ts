@@ -343,3 +343,64 @@ export async function purgeChatbotDataOlderThan(days: number): Promise<number> {
         return 0;
     }
 }
+
+/**
+ * Exact counts for the admin chatbot panel.
+ *
+ * getChatbotStatsAction used to build these by calling getAdminChatSessions
+ * three times with `limit: 100` and counting the rows it got back. That query
+ * hard-caps its page at `Math.min(limit, 100)` — so once the platform passed a
+ * hundred sessions, `totalSessions` read exactly 100 and stayed there. The panel
+ * said "Total sessions: 100" indefinitely, which is a number rather than an
+ * error and so reads as an answer.
+ *
+ * It also returned `hasMore`, which the caller discarded. The information that
+ * the figure was incomplete was already in hand.
+ *
+ * These are database counts, so they are the real totals. Seven module counts is
+ * seven cheap aggregates, which is what makes an exact `mostActiveModule`
+ * affordable rather than a sample of the hundred most recent.
+ *
+ * `resolvedToday` reads `resolvedAt` — the field resolveSession actually writes.
+ * The old version filtered on `lastMessageAt`, so a session resolved this
+ * morning whose last message was yesterday did not count, and one resolved last
+ * week whose user wrote again today did.
+ */
+export async function getChatbotSessionStats(modules: readonly ChatbotModule[]): Promise<{
+    totalSessions: number;
+    escalatedUnresolved: number;
+    resolvedToday: number;
+    mostActiveModule: ChatbotModule | null;
+}> {
+    const db = getAdminDb();
+    const sessions = () => db.collection(COLLECTIONS.CHATBOT_SESSIONS);
+
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const [totalSnap, escalatedSnap, resolvedSnap, ...moduleSnaps] = await Promise.all([
+        sessions().count().get(),
+        sessions().where("escalated", "==", true).where("resolved", "==", false).count().get(),
+        sessions().where("resolved", "==", true).where("resolvedAt", ">=", startOfToday).count().get(),
+        ...modules.map(m => sessions().where("module", "==", m).count().get()),
+    ]);
+
+    let mostActiveModule: ChatbotModule | null = null;
+    let highest = 0;
+    modules.forEach((m, i) => {
+        const count = moduleSnaps[i]?.data().count ?? 0;
+        if (count > highest) {
+            highest = count;
+            mostActiveModule = m;
+        }
+    });
+
+    return {
+        totalSessions: totalSnap.data().count ?? 0,
+        escalatedUnresolved: escalatedSnap.data().count ?? 0,
+        resolvedToday: resolvedSnap.data().count ?? 0,
+        // Null rather than an arbitrary first module when there are no sessions
+        // at all — "no sessions yet" and "hub is busiest" are different answers.
+        mostActiveModule,
+    };
+}

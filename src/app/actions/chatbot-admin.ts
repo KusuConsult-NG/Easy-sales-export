@@ -4,11 +4,18 @@ import { requireSession } from "@/lib/session-guard";
 import { getAdminChatSessions,
     getChatThread,
     resolveSession,
+    getChatbotSessionStats,
     type ChatSessionFilters,
     type ChatSessionRow,
     type ChatbotMessageRow } from "@/lib/chatbot-db";
 import { logAdminAction } from "@/lib/audit-log";
-import type { ChatbotModule } from "@/lib/chatbot-knowledge";
+import { MODULE_CONFIGS, type ChatbotModule } from "@/lib/chatbot-knowledge";
+
+/**
+ * The modules to count, taken from the config map rather than written out
+ * again. A module added there is counted here without anyone remembering to.
+ */
+const CHATBOT_MODULES = Object.keys(MODULE_CONFIGS) as ChatbotModule[];
 
 // ─── Guards ──────────────────────────────────────────────────────────────────
 async function requireSuperAdmin() { const sessionResult = await requireSession();
@@ -85,28 +92,25 @@ export interface ChatbotStats { totalSessions: number;
 export async function getChatbotStatsAction(): Promise<ChatbotStats & { error?: string }> { try {
         await requireSuperAdmin();
 
-        const [all, escalatedUnresolved, allForModule] = await Promise.all([
-            getAdminChatSessions({ limit: 100 }),
-            getAdminChatSessions({ escalatedOnly: true, unresolvedOnly: true, limit: 100 }),
-            getAdminChatSessions({ limit: 100 }),
-        ]);
+        // These were counted by fetching rows and taking .length.
+        //
+        // Three calls to getAdminChatSessions with `limit: 100`, whose page size
+        // is hard-capped at Math.min(limit, 100) — so once the platform passed a
+        // hundred sessions, totalSessions read exactly 100 and stayed there
+        // forever. A stats panel reporting a constant is worse than one
+        // reporting an error, because 100 looks like a measurement.
+        //
+        // Two of those three calls were the same query, run twice.
+        //
+        // The query also returns `hasMore`, and the caller threw it away: the
+        // fact that the number was incomplete was already in hand.
+        //
+        // Counted in the database now, so these are the real totals — including
+        // mostActiveModule, which was previously the busiest module among the
+        // hundred most recent sessions rather than overall.
+        const stats = await getChatbotSessionStats(CHATBOT_MODULES);
 
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const resolvedToday = allForModule.sessions.filter(
-            s => s.resolved && s.lastMessageAt >= today
-        ).length;
-
-        // Module frequency
-        const moduleCounts: Partial<Record<ChatbotModule, number>> = {};
-        for (const s of allForModule.sessions) { moduleCounts[s.module] = (moduleCounts[s.module] ?? 0) + 1;
-        }
-        const mostActiveModule = (Object.entries(moduleCounts).sort((a, b) => b[1] - a[1])[0]?.[0] as ChatbotModule) ?? null;
-
-        return { totalSessions: all.sessions.length,
-            escalatedUnresolved: escalatedUnresolved.sessions.length,
-            resolvedToday,
-            mostActiveModule };
+        return { ...stats };
     } catch (err: any) { return { totalSessions: 0, escalatedUnresolved: 0, resolvedToday: 0, mostActiveModule: null, error: err.message };
     }
 }
