@@ -43,10 +43,14 @@ export default function ResetLegacyPasswordPage() {
             const result = await changePasswordAction(currentPassword, newPassword);
             
             if (result.success) {
-                // IMPORTANT: Also clear the requiresPasswordChange flag in Firestore
-                const { clearLegacyPasswordFlagAction } = await import("@/app/actions/auth-extra");
-                await clearLegacyPasswordFlagAction();
-
+                // The requiresPasswordChange flag is cleared by
+                // changePasswordAction itself now.
+                //
+                // It used to be a second call to clearLegacyPasswordFlagAction,
+                // which deleted the flag and verified nothing — so anyone
+                // holding the temporary password could call that action
+                // directly and skip the change entirely. The flow here was
+                // right; the action it depended on was reachable without it.
                 setIsSuccess(true);
                 showToast("Account secured successfully", "success");
                 
