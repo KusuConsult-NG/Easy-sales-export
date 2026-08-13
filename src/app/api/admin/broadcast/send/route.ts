@@ -14,6 +14,8 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { collectRecipients } from "@/app/actions/broadcast";
 import { logger } from "@/lib/logger";
 import { isAdmin } from "@/lib/admin-permissions";
+import { rateLimit, createRateLimitResponse } from "@/lib/rate-limiter";
+import { rateLimitConfig } from "@/lib/rate-limits.config";
 
 export const maxDuration = 300; // 5 min timeout for Pro plan
 
@@ -47,6 +49,13 @@ function buildEmailHtml(subject: string, body: string, recipientEmail?: string):
     </div>`;
 }
 
+/** A broadcast is not a click — a handful an hour is generous for a person. */
+const broadcastLimiter = rateLimit(rateLimitConfig.admin);
+
+/** Subject and body are stored and sent; neither was bounded. */
+const MAX_SUBJECT_CHARS = 200;
+const MAX_BODY_CHARS = 100_000;
+
 export async function POST(req: NextRequest) {
     try {
         const session = (await requireSession()).session;
@@ -60,6 +69,18 @@ export async function POST(req: NextRequest) {
         if (!isAdmin(session.user.roles)) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
         }
+
+        // Throttled, which it was not.
+        //
+        // This route sends mail from the business's domain to as many people as
+        // the filters select, and could be called as fast as requests could be
+        // issued. Keyed on the account rather than the address, per the same
+        // reasoning as the other admin routes: an admin behind a shared IP
+        // should not spend everyone else's allowance.
+        const rateLimitResult = await broadcastLimiter.check(session.user.id);
+        if (!rateLimitResult.success) {
+            return createRateLimitResponse(rateLimitResult);
+        }
         
         // Still need userData for logging the name later
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
@@ -69,6 +90,23 @@ export async function POST(req: NextRequest) {
 
         if (!filters || !subject || !body) {
             return NextResponse.json({ success: false, error: "Missing required fields" }, { status: 400 });
+        }
+
+        // Both are stored in a BROADCAST_LOGS document and sent to every
+        // recipient. Neither was bounded, and a document that exceeds the row
+        // limit fails the write AFTER the caller has been told the send is
+        // under way.
+        if (String(subject).length > MAX_SUBJECT_CHARS) {
+            return NextResponse.json(
+                { success: false, error: `Subject is limited to ${MAX_SUBJECT_CHARS} characters` },
+                { status: 413 }
+            );
+        }
+        if (String(body).length > MAX_BODY_CHARS) {
+            return NextResponse.json(
+                { success: false, error: `Message is limited to ${MAX_BODY_CHARS.toLocaleString()} characters` },
+                { status: 413 }
+            );
         }
 
         // Collect recipients using centralized stream-safe logic directly

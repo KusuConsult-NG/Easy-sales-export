@@ -70,6 +70,27 @@ export interface BroadcastFilters {
     endDate?: string;   // ISO string
 }
 
+/**
+ * Ceiling on an uploaded recipient list.
+ *
+ * Not a limit on how many people can be emailed — a database-derived audience
+ * is as large as the platform is. This bounds the array a caller can post, and
+ * ten thousand is well above any real CSV a person assembles by hand.
+ */
+export const MAX_CSV_RECIPIENTS = 10_000;
+
+/**
+ * Is this plausibly an email address?
+ *
+ * Deliberately loose. The purpose is to keep obvious rubbish — a header row, a
+ * name column, an empty cell — out of an outbound send, not to decide RFC 5322
+ * conformance, which no regex settles and the receiving server settles for
+ * free. Anything with one @, something either side, and a dot in the domain.
+ */
+export function isPlausibleEmail(value: string): boolean {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
 export interface Recipient {
     uid: string;
     email: string;
@@ -640,7 +661,46 @@ async function getCleanBroadcastListInternal(filters?: BroadcastFilters) {
             if (!filters.csvEmails || filters.csvEmails.length === 0) {
                 return { success: false as const, error: "No emails provided in CSV upload.", data: null };
             }
-            const uniqueEmails = Array.from(new Set(filters.csvEmails.map(e => e.toLowerCase().trim())));
+
+            // The one audience whose recipients come from the caller rather
+            // than from the database, and the only one that needed bounding.
+            //
+            // Every other audience is derived from stored records, so its size
+            // is whatever the platform contains and validating the addresses
+            // would be validating our own data. This list is uploaded, and it
+            // was taken as given: any string became a recipient, and the array
+            // could be any length. That is an outbound mail path, from this
+            // business's sending domain, with no cap and no format check —
+            // while BOUNCED_EMAILS exists precisely because sender reputation
+            // matters here.
+            if (filters.csvEmails.length > MAX_CSV_RECIPIENTS) {
+                return {
+                    success: false as const,
+                    error: `CSV upload is limited to ${MAX_CSV_RECIPIENTS.toLocaleString()} addresses (received ${filters.csvEmails.length.toLocaleString()}). Split the list and send in batches.`,
+                    data: null,
+                };
+            }
+
+            const normalised = Array.from(new Set(
+                filters.csvEmails
+                    .map(e => String(e ?? "").toLowerCase().trim())
+                    .filter(Boolean)
+            ));
+            const uniqueEmails = normalised.filter(isPlausibleEmail);
+            const rejected = normalised.length - uniqueEmails.length;
+
+            if (uniqueEmails.length === 0) {
+                return {
+                    success: false as const,
+                    error: `None of the ${normalised.length.toLocaleString()} uploaded addresses were valid email addresses.`,
+                    data: null,
+                };
+            }
+
+            if (rejected > 0) {
+                logger.warn(`[broadcast] dropped ${rejected} malformed address(es) from a CSV upload`);
+            }
+
             const recipients = uniqueEmails.map(email => ({
                 uid: email,
                 email: email,
