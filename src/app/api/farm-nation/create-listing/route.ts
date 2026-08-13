@@ -102,9 +102,36 @@ export async function POST(request: NextRequest) {
         const userData = userDoc.data()!;
 
         // Create land listing (Admin SDK)
+        //
+        // This wrote `userId` and `verificationStatus`. Every reader of this
+        // collection uses `ownerId` and `status`:
+        //
+        //   farm-nation.ts        .where('ownerId', '==', userId)   — my listings
+        //   land-listings.ts      .where("status", "==", "verified") — the browse list
+        //   farm-nation-admin.ts  .where("status", "==", "pending_verification")
+        //                                                           — the review queue
+        //
+        // and the other writer of this collection, _createLandListingAction,
+        // writes both. So a listing created here was invisible to its own owner,
+        // never entered the verification queue, and therefore could never become
+        // verified and appear in the marketplace. It existed and nothing could
+        // see it.
+        //
+        // `ownerId` and `status` are written now. `userId` and
+        // `verificationStatus` are kept alongside rather than renamed, in case a
+        // row already exists that something reads by them.
+        //
+        // `pending_verification` rather than `draft`, because this route sets
+        // verificationStatus: "pending" — it submits, it does not save a draft.
+        // land-listing-status.ts is the vocabulary, and `draft` is not in it:
+        // land-actions creates `pending_verification`, farm-nation creates
+        // `available`. `available` would put a listing on sale with no review at
+        // all, which is not this route's decision to take.
         const listingRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc();
         await listingRef.set({
             userId,
+            ownerId: userId,
+            status: "pending_verification",
             ownerName: userData.name || userData.email,
             title,
             category,
