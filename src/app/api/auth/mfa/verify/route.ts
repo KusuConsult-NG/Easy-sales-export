@@ -12,7 +12,34 @@ import { withRateLimit } from "@/lib/rate-limit";
 
 /**
  * POST /api/auth/mfa/verify
- * Verify MFA code for session (used by middleware enforcement)
+ *
+ * Verifies a TOTP code and issues the `mfa_verified` cookie.
+ *
+ * NOTHING READS THAT COOKIE, AND NOTHING ENFORCES MFA.
+ *
+ * The comment here used to say the cookie was consumed by middleware.
+ * src/middleware.ts contains no MFA logic at all, and a search for the cookie
+ * contains no MFA logic at all, and a search for the cookie name across src
+ * returns this file and nothing else. The same is true of the rest of the
+ * feature:
+ *
+ *   requiresMFA()        names ten sensitive actions — withdrawal,
+ *                        fund_release, loan_approval, escrow_release,
+ *                        role_change, admin_action among them — and has NO
+ *                        CALLERS.
+ *   verifyBackupCode()   exists and is never called, so the eight recovery
+ *                        codes handed to the user at setup, over the words
+ *                        "Each can only be used once", cannot be redeemed.
+ *   verifyMFACode()      the email-code path, also uncalled.
+ *
+ * So a user who enables MFA scans a QR code, saves recovery codes, and their
+ * account is protected exactly as much as it was before. The four routes in
+ * this directory each work; nothing connects them to anything.
+ *
+ * That is a gap to close deliberately rather than quietly: switching enforcement
+ * on for those ten actions while backup codes cannot be redeemed would lock
+ * anyone who loses their authenticator out of withdrawals with no way back.
+ * Recorded here and pinned by a test rather than half-wired.
  */
 async function verifyMFAHandler(request: NextRequest) {
     try {
@@ -95,8 +122,23 @@ async function verifyMFAHandler(request: NextRequest) {
         const isLocal = hostname.includes("localhost") || hostname.includes("127.0.0.1");
         const domain = (!isLocal && hostParts.length >= 2) ? `.${hostParts.slice(-2).join(".")}` : undefined;
 
+        // The value is bound to the user, not the literal "true".
+        //
+        // "true" says nothing about WHO verified, and this cookie is issued with
+        // a wildcard domain and a thirty-minute life. On a shared browser, user
+        // A verifying and signing out left a cookie user B would inherit —
+        // sign-out clears cookies by name and this is not one of them. Signed
+        // with MFA_SECRET_KEY, which every route in this feature already
+        // requires, so a value from another account or another browser fails
+        // rather than being accepted.
+        //
+        // This matters for whoever wires enforcement rather than for today: see
+        // the header comment on this route. Fixing the primitive now means the
+        // person who connects it does not inherit the bypass.
+        const { issueMfaVerifiedValue } = await import("@/lib/mfa");
+
         const response = NextResponse.json({ success: true });
-        response.cookies.set("mfa_verified", "true", {
+        response.cookies.set("mfa_verified", issueMfaVerifiedValue(session.user.id, secretKey), {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
             sameSite: "lax",
