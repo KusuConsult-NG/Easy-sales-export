@@ -3,7 +3,16 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
-import { uploadFileToStorage } from "@/lib/storage-admin";
+import { uploadFileToStorage, detectFileType } from "@/lib/storage-admin";
+
+/**
+ * What a certificate may be.
+ *
+ * "image/jpg" is deliberately absent: it is not a MIME type, and JPEG content
+ * is detected as image/jpeg. Keeping it in the list only made the list look
+ * more permissive than the check.
+ */
+const ALLOWED_CERTIFICATE_TYPES = ["application/pdf", "image/jpeg", "image/png"];
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
@@ -41,18 +50,35 @@ export async function POST(request: NextRequest) {
                 );
             }
 
-            // Strictly validate that the URL matches an authorized storage domain
+            // The host check is necessary and was not sufficient.
+            //
+            // res.cloudinary.com is Cloudinary's SHARED delivery domain: every
+            // Cloudinary customer serves from it, under
+            // /<cloud_name>/<resource>. So allowing the hostname allowed any
+            // file hosted by anyone on Cloudinary, not files belonging to this
+            // platform — a check that reads like a restriction and is close to
+            // none.
+            //
+            // The cloud name is pinned as well now, so the URL has to name THIS
+            // account.
+            const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+            if (!cloudName) {
+                logger.error("[certificates/upload] NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME is not set");
+                return NextResponse.json(
+                    { success: false, error: "Upload service is not configured" },
+                    { status: 500 }
+                );
+            }
+
             try {
                 const parsedUrl = new URL(fileUrl);
-                const allowedHostnames = [
-                    "res.cloudinary.com"
-                ];
-                const hostname = parsedUrl.hostname;
-                const isAllowed = allowedHostnames.some(allowed => 
-                    hostname === allowed || hostname.endsWith("." + allowed)
-                );
-                
-                if (!isAllowed) {
+                const hostname = parsedUrl.hostname.toLowerCase();
+                const hostAllowed = hostname === "res.cloudinary.com" || hostname.endsWith(".res.cloudinary.com");
+                // Path is /<cloud_name>/<type>/<delivery>/... — the first
+                // segment is the account.
+                const firstSegment = parsedUrl.pathname.split("/").filter(Boolean)[0];
+
+                if (!hostAllowed || firstSegment !== cloudName) {
                     return NextResponse.json(
                         { success: false, error: "Unauthorized file hosting domain" },
                         { status: 400 }
@@ -61,6 +87,16 @@ export async function POST(request: NextRequest) {
             } catch (e) {
                 return NextResponse.json(
                     { success: false, error: "Invalid URL format for fileUrl" },
+                    { status: 400 }
+                );
+            }
+
+            // No file to inspect on this branch, so the declared type is all
+            // there is — but it can at least be one of the types this endpoint
+            // accepts rather than arbitrary text stored as fact.
+            if (!ALLOWED_CERTIFICATE_TYPES.includes(fileType)) {
+                return NextResponse.json(
+                    { success: false, error: "Invalid file type" },
                     { status: 400 }
                 );
             }
@@ -75,9 +111,21 @@ export async function POST(request: NextRequest) {
                 );
             }
 
-            // Validate file type
-            const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "image/jpg"];
-            if (!allowedTypes.includes(file.type)) {
+            // The type is decided by the file's CONTENT.
+            //
+            // This checked `file.type`, a string the client sends. #144 fixed
+            // the identical line in uploadCertificateAction — but that action
+            // has no callers, and THIS route is what /dashboard/certificates
+            // posts to, so the live path kept the defect while the audited one
+            // was corrected.
+            //
+            // uploadFileToStorage does sniff magic bytes, against a broader list
+            // that also permits video and Word documents. So an MP4 declared as
+            // application/pdf satisfied this check, then satisfied that one, and
+            // was stored with `fileType: "application/pdf"` recorded against it.
+            const buffer = Buffer.from(await file.arrayBuffer());
+            const detectedType = await detectFileType(buffer, file.name);
+            if (!detectedType || !ALLOWED_CERTIFICATE_TYPES.includes(detectedType)) {
                 return NextResponse.json(
                     { success: false, error: "Invalid file type" },
                     { status: 400 }
@@ -86,7 +134,7 @@ export async function POST(request: NextRequest) {
 
             // Upload to Firebase Storage (Admin SDK)
             fileName = file.name;
-            fileType = file.type;
+            fileType = detectedType;
             const uniqueFileName = `${Date.now()}_${file.name}`;
             storagePath = `certificates/${session.user.id}/${uniqueFileName}`;
             // Upload via the shared server-side uploader (Cloudinary).
