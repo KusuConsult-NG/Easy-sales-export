@@ -163,11 +163,29 @@ export async function runForensicScanAction(): Promise<
                 .get();
 
             const ineligibleIds: string[] = [];
+            const undatedIds: string[] = [];
 
             for (const doc of waveParticipantsQuery.docs) {
                 const data = doc.data();
                 const gender = data.gender;
-                const dob = data.dateOfBirth; // String YYYY-MM-DD
+
+                // The age half of this check never ran.
+                //
+                // It read `data.dateOfBirth` on the USER document, and the only
+                // thing that writes that field is the admin create-user flow in
+                // admin.ts. Registration does not write it, and no code anywhere
+                // writes a top-level `dob` either — so for every user who signed
+                // up normally the value was undefined, `if (dob)` was false, and
+                // the check passed them silently.
+                //
+                // The date does exist. _saveKYCProfileAction writes
+                // `kyc.dateOfBirth` and `verificationProfile.dob`, and the WAVE
+                // application itself carries one. All three are consulted now,
+                // in the same order lib/verification-canonical.ts resolves an
+                // identity profile.
+                const dob = data.dateOfBirth
+                    || data.kyc?.dateOfBirth
+                    || data.verificationProfile?.dob;
 
                 // Gender Check
                 if (gender !== "female") {
@@ -176,16 +194,30 @@ export async function runForensicScanAction(): Promise<
                 }
 
                 // Age Check
-                if (dob) { const birthDate = new Date(dob);
-                    const today = new Date();
-                    let age = today.getFullYear() - birthDate.getFullYear();
-                    const m = today.getMonth() - birthDate.getMonth();
-                    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-                        age--;
-                    }
-                    if (age < 18) {
-                        ineligibleIds.push(`${doc.id} (Age: ${age})`);
-                    }
+                if (!dob) {
+                    // Reported rather than passed. A forensic that cannot see a
+                    // date should say so — "no finding" and "could not look" are
+                    // different answers, and this check gave the first for the
+                    // second. The cooperative reconciliation below already
+                    // separates them with `unreadableMembers`.
+                    undatedIds.push(`${doc.id} (no date of birth on record)`);
+                    continue;
+                }
+
+                const birthDate = new Date(dob);
+                if (Number.isNaN(birthDate.getTime())) {
+                    undatedIds.push(`${doc.id} (unreadable date of birth: ${String(dob)})`);
+                    continue;
+                }
+
+                const today = new Date();
+                let age = today.getFullYear() - birthDate.getFullYear();
+                const m = today.getMonth() - birthDate.getMonth();
+                if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+                    age--;
+                }
+                if (age < 18) {
+                    ineligibleIds.push(`${doc.id} (Age: ${age})`);
                 }
             }
 
@@ -193,8 +225,16 @@ export async function runForensicScanAction(): Promise<
                 module: "WAVE",
                 check: "Eligibility Paradox (Gender/Age)",
                 status: ineligibleIds.length > 0 ? "fail" : "pass",
-                details: `Scanned ${waveParticipantsQuery.size} participants. Found ${ineligibleIds.length} ineligible.`,
-                affectedIds: ineligibleIds
+                details:
+                    `Scanned ${waveParticipantsQuery.size} participants. Found ${ineligibleIds.length} ineligible.` +
+                    (undatedIds.length > 0
+                        ? ` ${undatedIds.length} could not be age-checked — no readable date of birth on record.`
+                        : ""),
+                // Listed alongside, so somebody reading the report can see WHO
+                // was not checked. They are not counted as ineligible: an
+                // absent date is a gap in the records, not evidence about a
+                // participant.
+                affectedIds: [...ineligibleIds, ...undatedIds]
             });
         } catch (e: any) { results.push({ module: "WAVE", check: "Eligibility Scan", status: "fail", details: e.message, affectedIds: [] });
         }
