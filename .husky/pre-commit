@@ -1,5 +1,21 @@
 #!/usr/bin/env sh
 # Easy Sales Export — pre-commit hook
-# Runs lint-staged: TypeScript check + ESLint on staged files only.
-# Fast: only checks files you actually changed, not the whole project.
+#
+# Runs lint-staged, which does two different things:
+#
+#   ESLint  --fix on the STAGED files only.
+#   tsc     --noEmit over the WHOLE PROJECT, every time, whatever is staged.
+#
+# The second one is deliberate and cannot sensibly be narrowed. A type error is
+# usually not in the file that caused it: change an interface here and the break
+# appears in a caller you did not touch. Checking only staged files would miss
+# exactly the errors worth catching.
+#
+# Cost, measured rather than assumed: about 5 seconds for tsc on this project,
+# plus ESLint on whatever you staged.
+#
+# NOTE: .husky/pre-push runs the same full tsc again, followed by the unit
+# suite. So a commit-then-push type-checks the project twice. That is cheap
+# enough not to have bothered anyone, and is left alone here rather than
+# changed as a side effect of correcting a comment.
 npx lint-staged
