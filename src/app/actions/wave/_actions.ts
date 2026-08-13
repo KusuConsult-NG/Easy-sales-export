@@ -310,6 +310,42 @@ async function _checkWaveEligibilityAction(userId: string): Promise<ActionRespon
 export const checkWaveEligibilityAction = withFlexibleSafeAction("checkWaveEligibilityAction", _checkWaveEligibilityAction);
 
 /**
+ * The identity fields a WAVE application may write to a user record.
+ *
+ * Date of birth and gender are set ONCE. An application is a declaration, not a
+ * correction: allowing one to overwrite a stored identity field would reopen for
+ * these the door #155 closed on the profile screen, and admin.ts has the audited
+ * route for fixing a record that is genuinely wrong.
+ *
+ * Shared by enrolment and resubmission because they had the same two-line write
+ * and would otherwise drift — the shape this audit has met repeatedly.
+ */
+function identityFieldsToSetOnce(
+    userData: Record<string, any> | undefined,
+    declaredDateOfBirth: string,
+    context: { userId: string; applicationId: string }
+): Record<string, unknown> {
+    const storedDob = String(userData?.dateOfBirth ?? "").trim();
+    const storedGender = String(userData?.gender ?? "").trim();
+    const fields: Record<string, unknown> = {};
+
+    if (!storedDob) {
+        fields.dateOfBirth = declaredDateOfBirth;
+    } else if (storedDob !== declaredDateOfBirth) {
+        // Reported, not resolved. Both values survive — the declared one on the
+        // application row, the stored one on the user — and the disagreement is
+        // what the forensic sweep exists to surface.
+        logger.warn("[WAVE] Declared date of birth differs from the stored one; keeping the stored value", context);
+    }
+
+    if (!storedGender) {
+        fields.gender = "Female";
+    }
+
+    return fields;
+}
+
+/**
  * Submit multi-step WAVE application
  * Accepts object data from multi-step form (not FormData)
  */
@@ -420,6 +456,44 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
             applicationId = `WAVE-${Date.now()}-${Math.random().toString(36).substring(2, 11).toUpperCase()}`;
         }
 
+        // The date of birth this function just validated is recorded on the user
+        // now, and the gender is no longer overwritten.
+        //
+        // THE DATE
+        //
+        // The age gate above computes calculatedAge from
+        // validatedData.dateOfBirth and refuses anyone under 18. That date went
+        // onto the WAVE_APPLICATIONS row (through the spread below) and nowhere
+        // else, so the user document — which is what forensics.ts sweeps for
+        // under-age participants — had no date to check. Registration writes
+        // none either, so the age half of that sweep checked nobody. See #156.
+        //
+        // SET ONCE, LIKE GENDER
+        //
+        // Both are written only where the user record has no value yet. An
+        // application is a declaration, not a correction: letting one overwrite
+        // a stored identity field would reopen for date of birth the door #155
+        // closed for gender, and admin.ts already has the audited route for
+        // fixing a record that is genuinely wrong.
+        //
+        // `gender: "Female"` was written unconditionally, which matters more
+        // than it looks. Reaching this line does not prove the applicant is
+        // female: the eligibility check exempts admins, Academy Elite members
+        // and anyone holding a pre-existing WAVE role or registration. A male
+        // applicant in any of those categories passed and then had his user
+        // record rewritten to Female — and after #155 he could not correct it
+        // himself.
+        //
+        // A mismatch is left alone rather than resolved. The declared value
+        // stays on the application row, the stored value stays on the user, and
+        // the two disagreeing is the sort of thing the forensic sweep exists to
+        // surface. Silently picking a winner would erase the signal.
+        const identityFieldsToSet = identityFieldsToSetOnce(
+            userData,
+            validatedData.dateOfBirth,
+            { userId: session.user.id, applicationId }
+        );
+
         await db.runTransaction(async (transaction) => {
             transaction.set(db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId), {
                 ...validatedData,
@@ -448,7 +522,7 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
                 fullName: [validatedData.firstName, validatedData.otherNames, validatedData.surname]
                     .filter(Boolean).join(" ").trim(),
                 phone: applicantPhone,
-                gender: "Female",
+                ...identityFieldsToSet,
                 stateOfOrigin: validatedData.stateOfOrigin,
                 residentialState: validatedData.stateOfResidence,
                 lga: validatedData.lgaOfOrigin,
@@ -568,6 +642,7 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
     }
 }
 export const submitMultiStepWaveApplicationAction = withFlexibleSafeAction("submitMultiStepWaveApplicationAction", _submitMultiStepWaveApplicationAction);
+
 
 /**
  * Enroll user in WAVE program
@@ -1709,6 +1784,19 @@ async function _resubmitWaveApplicationAction(
             const appRef = db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId);
             const userRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
 
+            // Same set-once rule as enrolment, and it matters more here.
+            //
+            // This path runs no eligibility check at all — it only requires the
+            // application to be pending or revision_required — so an applicant
+            // who reached it through one of the exemptions could rewrite their
+            // stored gender to Female on every resubmission.
+            const resubmitUserSnap = await transaction.get(userRef);
+            const identityFieldsToSet = identityFieldsToSetOnce(
+                resubmitUserSnap.data(),
+                validatedData.dateOfBirth,
+                { userId: session.user.id, applicationId }
+            );
+
             transaction.update(appRef, {
                 ...validatedData,
                 bvn: applicantBvn ? hashData(applicantBvn) : null,
@@ -1729,7 +1817,7 @@ async function _resubmitWaveApplicationAction(
                 fullName: [validatedData.firstName, validatedData.otherNames, validatedData.surname]
                     .filter(Boolean).join(" ").trim(),
                 phone: applicantPhone,
-                gender: "Female",
+                ...identityFieldsToSet,
                 stateOfOrigin: validatedData.stateOfOrigin,
                 residentialState: validatedData.stateOfResidence,
                 lga: validatedData.lgaOfOrigin,
