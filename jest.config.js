@@ -62,9 +62,14 @@ const customJestConfig = {
         // never migrated, so npm run test:integration cannot make them pass in
         // any environment — it starts an emulator nothing is able to reach.
         //
-        // The remaining failures (auto-approval, data-consistency) are real
-        // tests of real code that need a real database, which is a separate
-        // problem with a real answer.
+        // The remaining two — auto-approval and data-consistency — are real
+        // tests of real code that need a real database. They now have one:
+        // `npm run test:integration` runs them against an ephemeral Supabase
+        // stack, and CI does that on every pull request.
+        //
+        // They stay excluded HERE because `npm run test` must not require a
+        // database. Excluded from the default run is not the same as not run,
+        // which is the distinction this list previously collapsed.
         '/src/__tests__/integration/',
         '/tests/integration/',
         // ── QA/diagnostic scripts in /tests/ root and root __tests__ ─────────

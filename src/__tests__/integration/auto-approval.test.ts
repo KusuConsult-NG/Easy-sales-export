@@ -11,7 +11,16 @@ import {
 import { getCleanBroadcastList } from '@/lib/broadcast-logic';
 import { createTestUser } from './setup';
 
-describe('Auto-Approval & Broadcast Integration Tests', () => {
+declare const maybeDescribe: jest.Describe;
+
+/**
+ * Runs against a real database — an ephemeral Supabase stack in CI, or whatever
+ * .env.staging points at locally. Skips when neither is configured, except in
+ * CI where a skip is treated as a failure (src/lib/testing/db-env-guard.js).
+ *
+ * Run with:  npm run test:integration
+ */
+maybeDescribe('Auto-Approval & Broadcast Integration Tests', () => {
     const db = getAdminDb();
     let testUser1: { uid: string; email: string };
     let testUser2: { uid: string; email: string };
