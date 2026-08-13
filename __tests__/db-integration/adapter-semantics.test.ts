@@ -97,6 +97,44 @@ maybeDescribe("adapter semantics, against real Postgres", () => {
         expect(found).toEqual([1000, 1500, 90000]);
     });
 
+    it("gets the seller's low-stock filter right in both directions", async () => {
+        // The shape a real caller uses:
+        //
+        //     getSellerProducts(status: "low_stock")
+        //     query.where("availableQuantity", "<", 50).where("availableQuantity", ">", 0)
+        //     src/app/actions/marketplace/_actions.ts:1450
+        //
+        // products is not in DEDICATED_TABLE_MAP, so availableQuantity lives in
+        // raw_data and this ran as a text comparison. `> 0` came out right by
+        // accident — every non-zero digit string sorts after '0' — which is why
+        // the filter looked like it worked.
+        //
+        // `< 50` did not. As text, '100' < '50' is TRUE and '6' < '50' is FALSE,
+        // so a seller asking for low stock was shown items with 100 units and
+        // NOT shown items with 6 left. Both halves are asserted here because a
+        // one-sided check passes on a filter that simply returns nothing.
+        const quantities = [0, 6, 9, 10, 49, 50, 100, 1000];
+        for (const [i, availableQuantity] of quantities.entries()) {
+            await db.collection(COLLECTION).doc(`${TEST_PREFIX}stock-${i}`).set({ availableQuantity });
+        }
+
+        const lowStock = await db.collection(COLLECTION)
+            .where("availableQuantity", "<", 50)
+            .where("availableQuantity", ">", 0)
+            .get();
+        const found = lowStock.docs
+            .map((d: any) => Number(d.data().availableQuantity))
+            .sort((a: number, b: number) => a - b);
+
+        expect(found).toEqual([6, 9, 10, 49]);
+
+        // Named individually so a failure says which end broke.
+        expect(found).toContain(6);      // was excluded: '6' < '50' is false
+        expect(found).not.toContain(100); // was included: '100' < '50' is true
+        expect(found).not.toContain(0);   // the `> 0` half, which was already right
+        expect(found).not.toContain(50);  // the boundary is exclusive
+    });
+
     it("truncates an unbounded query and says so", async () => {
         // Deliberately small so the test stays quick; the property is that
         // truncation is reported, not the specific number.

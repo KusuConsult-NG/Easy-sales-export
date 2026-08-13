@@ -1048,21 +1048,50 @@ function applySimpleFilter(query: any, column: string, op: FilterOperator, value
 }
 
 /**
- * Adds a ::numeric cast to a JSONB path when the value being compared is a
- * number.
+ * Rewrites a JSONB path so an ordering comparison against a number is done
+ * numerically.
  *
- * PostgREST returns JSONB text from `->>`, so an ordering comparison against a
- * number is done lexicographically unless the column is cast. Numbers only:
- * dates are ISO-8601 strings which already sort correctly, and casting them
- * would fail outright.
+ * THE CAST HAS TO GO ON `->`, NOT `->>`
+ * -------------------------------------
+ * This appended `::numeric` to the `->>` path and looked correct. PostgREST
+ * ignores it. `->>` already yields text, and the cast written after it does not
+ * reach the comparison, so `where("amount", ">", 900)` compared strings and
+ * silently dropped every amount whose first digit was below 9 — 1000 and 1500
+ * both sort before '900'.
  *
- * A non-finite number is left uncast — the comparison is meaningless either
- * way, and an invalid cast would turn a wrong answer into a query error.
+ * Measured rather than reasoned about, against PostgREST in CI:
+ *
+ *     raw_data->>"amount"::numeric=gt.900   →  [90000]                 wrong
+ *     raw_data->>amount::numeric=gt.900     →  [90000]                 wrong
+ *     raw_data->>amount::int=gt.900         →  [90000]                 wrong
+ *     raw_data->>amount=gt.900              →  [90000]                 the text answer
+ *     raw_data->amount::numeric=gt.900      →  [1000, 1500, 90000]     correct
+ *
+ * The single arrow yields jsonb, which the cast does apply to. So the final
+ * `->>` becomes `->` whenever a numeric comparison is being built.
+ *
+ * The previous version of this function shipped with a comment explaining that
+ * the cast fixed the lexicographic comparison. It did not, and nothing could
+ * tell the difference until the suite that checks the adapter against real
+ * Postgres was actually run — which happened for the first time in the change
+ * that found this.
+ *
+ * Numbers only: dates are ISO-8601 strings which already sort correctly as
+ * text, and casting them would break the comparison rather than fix it. A
+ * non-finite number is left alone — the comparison is meaningless either way,
+ * and an invalid cast would turn a wrong answer into a query error.
  */
 function numericAware(jsonPath: string, value: any): string {
-    return typeof value === 'number' && Number.isFinite(value)
-        ? `${jsonPath}::numeric`
-        : jsonPath;
+    if (typeof value !== 'number' || !Number.isFinite(value)) return jsonPath;
+
+    // Only the LAST arrow is the text extractor; intermediate segments of a
+    // nested path already use `->`.
+    const lastTextArrow = jsonPath.lastIndexOf('->>');
+    const asJsonb = lastTextArrow === -1
+        ? jsonPath
+        : `${jsonPath.slice(0, lastTextArrow)}->${jsonPath.slice(lastTextArrow + 3)}`;
+
+    return `${asJsonb}::numeric`;
 }
 
 function applyJsonbFilter(query: any, field: string, op: FilterOperator, value: any): any {
@@ -1085,15 +1114,7 @@ function applyJsonbFilter(query: any, field: string, op: FilterOperator, value: 
             if (value === null) return query.not(jsonPath, 'is', null);
             return query.neq(jsonPath, String(value));
         // Ordering comparisons on a NUMBER must compare as numbers.
-        //
-        // `->>` yields text, so these were string comparisons: '1000' > '900'
-        // is false, and where("amount", ">", 900) silently skipped every amount
-        // beginning with a digit below 9. Casting the extracted value to
-        // numeric makes the database compare them properly.
-        //
-        // Only numbers are cast. Dates are stored as ISO-8601 strings, which
-        // already sort correctly as text, and casting them would break the
-        // comparison rather than fix it.
+        // See numericAware — the cast has to be applied to `->`, not `->>`.
         case '<': return query.lt(numericAware(jsonPath, value), String(value));
         case '<=': return query.lte(numericAware(jsonPath, value), String(value));
         case '>': return query.gt(numericAware(jsonPath, value), String(value));

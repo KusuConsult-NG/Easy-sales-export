@@ -54,6 +54,7 @@ echo
 probe "current: quoted key, cast after quotes" 'raw_data->>"amount"::numeric=gt.900'
 probe "unquoted key, cast at end"              'raw_data->>amount::numeric=gt.900'
 probe "arrow (not ->>) with cast"              'raw_data->amount::numeric=gt.900'
+probe "quoted key with single arrow"          'raw_data->"amount"::numeric=gt.900'
 probe "cast written as ::int"                  'raw_data->>amount::int=gt.900'
 probe "no cast at all (text baseline)"         'raw_data->>amount=gt.900'
 probe "quoted key, no cast (text baseline)"    'raw_data->>"amount"=gt.900'
