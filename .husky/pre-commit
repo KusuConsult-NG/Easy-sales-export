@@ -14,8 +14,13 @@
 # Cost, measured rather than assumed: about 5 seconds for tsc on this project,
 # plus ESLint on whatever you staged.
 #
-# NOTE: .husky/pre-push runs the same full tsc again, followed by the unit
-# suite. So a commit-then-push type-checks the project twice. That is cheap
-# enough not to have bothered anyone, and is left alone here rather than
-# changed as a side effect of correcting a comment.
+# This is now the ONLY local type-check. .husky/pre-push used to run the same
+# full tsc again before the unit suite; that duplicate has been removed, so the
+# tree is checked here and then in CI, rather than three times.
+#
+# Which means the gap this hook cannot see matters more than it did. git does
+# not run pre-commit for a merge commit, so merging two individually clean
+# branches into a type-broken tree is not caught locally at all — CI catches it
+# on the PR. If that ever proves too late, put the check back in pre-push
+# rather than trying to widen this one.
 npx lint-staged

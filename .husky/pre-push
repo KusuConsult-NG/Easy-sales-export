@@ -1,15 +1,33 @@
 #!/usr/bin/env sh
 # Easy Sales Export — pre-push hook
-# Runs a full TypeScript check and Jest unit tests before any push to remote.
-
-echo "🔍 Running full TypeScript check before push..."
-npx tsc --noEmit --project tsconfig.json
-if [ $? -ne 0 ]; then
-  echo "❌ TypeScript errors found. Fix them before pushing."
-  exit 1
-fi
-echo "✅ TypeScript OK."
-
+# Runs the Jest unit suite before any push to remote.
+#
+# The full `tsc --noEmit` that used to run here first has been removed. It was
+# the third type-check of the same tree:
+#
+#   .husky/pre-commit   tsc over the whole project, on every commit that stages
+#                       a .ts or .tsx file
+#   here                tsc over the whole project again
+#   CI                  tsc, lint, build and this same suite, on every pull
+#                       request to main and on main itself
+#
+# WHAT STILL GUARANTEES IT
+#
+# Nothing type-broken can reach main: CI runs `npx tsc --noEmit` on every PR and
+# on main, and main takes changes by PR. That is the guarantee, and it did not
+# come from this hook.
+#
+# WHAT IS ACTUALLY LOST
+#
+# Local feedback on the case pre-commit cannot see. A commit that stages no
+# TypeScript does not run tsc — and, more to the point, git does not run
+# pre-commit for a merge commit at all, so merging two individually clean
+# branches into a broken tree is exactly the case this hook used to catch at
+# push time. CI still catches it, a couple of minutes later, on the PR.
+#
+# The unit suite is kept because it is fast (about 15 seconds for ~1,600 tests)
+# and because a failing test is worth knowing about before it is on the remote,
+# where it is somebody else's problem too.
 echo "🧪 Running Jest unit tests..."
 npm run test
 if [ $? -ne 0 ]; then
