@@ -76,12 +76,36 @@ for f in $(ls "$STASHED_DIR" | sort); do
     psql "$DB_URL" -v ON_ERROR_STOP=1 -q -f "$STASHED_DIR/$f"
 done
 
+# Grants, and why they are not automatic here.
+#
+# PostgREST connects as `authenticator` and switches to `anon`,
+# `authenticated` or `service_role` depending on the JWT. Supabase normally
+# arranges for those roles to hold privileges on new tables through ALTER
+# DEFAULT PRIVILEGES tied to the roles its own migration flow runs as. These
+# tables were created by psql as `postgres`, outside that flow, so the roles
+# ended up with no privileges at all and every request came back 403.
+#
+# Granted explicitly rather than by adding the tables to Supabase's migration
+# flow, because the flow is exactly what cannot be used: it would apply
+# migrations 002..024 before schema.sql exists.
+echo "== granting the PostgREST roles access to the schema"
+psql "$DB_URL" -v ON_ERROR_STOP=1 -q <<'SQL'
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL FUNCTIONS IN SCHEMA public TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+    GRANT ALL ON TABLES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+    GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
+SQL
+
 # PostgREST caches the schema at boot. It booted against an empty database, so
 # without this every request 404s on a table that demonstrably exists — which
 # looks exactly like a broken adapter.
 echo "== reloading the PostgREST schema cache"
 psql "$DB_URL" -q -c "NOTIFY pgrst, 'reload schema';"
-sleep 2
+sleep 3
 
 API_URL="http://127.0.0.1:54321"
 ANON_KEY="$(npx --yes supabase@latest status -o env | grep '^ANON_KEY=' | cut -d= -f2- | tr -d '"')"
@@ -96,11 +120,18 @@ fi
 # 404 here means the reload above did not take, and finding that out now is much
 # cheaper than reading it as a test failure.
 echo "== verifying the API can see the schema"
-code="$(curl -s -o /dev/null -w '%{http_code}' \
+# Body as well as status. The first run of this reported only "403", and
+# PostgREST puts the actual reason — permission denied for table users — in the
+# body. A check that says less than the thing it is checking costs a round trip
+# through CI to learn nothing.
+response="$(curl -s -w '\n%{http_code}' \
     -H "apikey: $SERVICE_KEY" -H "Authorization: Bearer $SERVICE_KEY" \
     "$API_URL/rest/v1/users?select=id&limit=1")"
+code="$(echo "$response" | tail -n1)"
+body="$(echo "$response" | sed '$d')"
 if [ "$code" != "200" ]; then
     echo "FAIL: GET /rest/v1/users returned $code, expected 200" >&2
+    echo "  body: $body" >&2
     exit 1
 fi
 echo "   ok"

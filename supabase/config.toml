@@ -52,5 +52,5 @@ enabled = false
 [edge_runtime]
 enabled = false
 
-[inbucket]
+[local_smtp]
 enabled = false
