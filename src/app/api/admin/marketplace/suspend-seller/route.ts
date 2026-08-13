@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
+import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -65,6 +66,22 @@ export async function POST(request: NextRequest) {
             verificationStatus: "suspended",
             updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
+
+        // Recorded, which it was not.
+        //
+        // "seller_suspended" is declared in the AuditAction union and had ZERO
+        // emitters anywhere in the codebase — as do the other two seller
+        // decisions. The vocabulary for recording who approved, rejected or
+        // suspended a seller was written and never used, so the audit log holds
+        // no record of any of them.
+        await createAdminAuditLog({
+            action: "seller_suspended",
+            userId: session.user.id,
+            targetType: "seller_verification",
+            targetId: verificationId,
+            details: `Suspended seller ${verificationData.userId}: ${reason}`,
+            metadata: { sellerUserId: verificationData.userId ?? null, reason },
+        }).catch((e) => logger.error("[suspend-seller] audit log failed", e));
 
         // Invalidate cache
         if (verificationData.userId) {

@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
+import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -47,9 +48,13 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        const previous = listingDoc.data() ?? {};
+
         await listingRef.update({
             status: "rejected",
             verificationStatus: {
+                // See approve-land: the prior decision is kept, not overwritten.
+                ...(previous.verificationStatus ?? {}),
                 verified: false,
                 rejectionReason: reason,
                 verifiedBy: session.user.id,
@@ -57,6 +62,15 @@ export async function POST(request: NextRequest) {
             },
             updatedAt: FieldValue.serverTimestamp(),
         });
+
+        await createAdminAuditLog({
+            action: "land_rejected",
+            userId: session.user.id,
+            targetType: "land_listing",
+            targetId: verificationId,
+            details: `Rejected land listing ${verificationId}: ${reason}`,
+            metadata: { previousStatus: previous.status ?? null, reason },
+        }).catch((e) => logger.error("[reject-land] audit log failed", e));
 
         // Invalidate cache
         try {

@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
+import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -47,15 +48,40 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        const previous = listingDoc.data() ?? {};
+
         await listingRef.update({
             status: "verified",
             verificationStatus: {
+                // The prior decision is carried forward rather than replaced.
+                //
+                // This assigned a fresh object, so approving a listing that had
+                // been rejected erased the rejection reason and who gave it —
+                // the record of the earlier decision disappeared at the moment
+                // it was reversed, which is exactly when it matters.
+                ...(previous.verificationStatus ?? {}),
                 verified: true,
+                rejectionReason: null,
                 verifiedBy: session.user.id,
                 verifiedAt: FieldValue.serverTimestamp()
             },
             updatedAt: FieldValue.serverTimestamp(),
         });
+
+        // Recorded, which it was not.
+        //
+        // `land_verified` exists in the AuditAction union and is emitted by
+        // land-listings.ts — an action the admin screen does not call. The
+        // screen posts here, so every land verification made through the UI
+        // went unrecorded while the vocabulary for recording it sat unused.
+        await createAdminAuditLog({
+            action: "land_verified",
+            userId: session.user.id,
+            targetType: "land_listing",
+            targetId: verificationId,
+            details: `Approved land listing ${verificationId}`,
+            metadata: { previousStatus: previous.status ?? null },
+        }).catch((e) => logger.error("[approve-land] audit log failed", e));
 
         // Invalidate cache
         try {

@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
+import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
@@ -83,13 +84,7 @@ export async function POST(request: NextRequest) {
 
         const verificationData = verificationDoc.data()!;
 
-        // Update verification status
-        await verificationRef.update({
-            status: "approved",
-            reviewedAt: FieldValue.serverTimestamp(),
-            reviewedBy: session.user.id,
-            updatedAt: FieldValue.serverTimestamp(),
-        });
+        // The verification is marked approved LAST. See below.
 
         // Upsert marketplace_sellers record (use set+merge so it works whether doc exists or not)
         await db.collection(COLLECTIONS.MARKETPLACE_SELLERS).doc(verificationData.userId).set({
@@ -144,9 +139,51 @@ export async function POST(request: NextRequest) {
                 await userRef.update(updateData);
             }
         } catch (roleErr) {
+            // NOT non-fatal.
+            //
+            // This was `// Non-fatal — continue`, and it sat AFTER the
+            // verification had already been marked approved. So a failure here
+            // produced an approved seller with no seller role — someone the
+            // admin screen shows as approved and who cannot sell — and the
+            // route returned success. The only trace was this log line.
+            //
+            // The order is inverted now: the seller record and the role are
+            // written first and the verification is marked approved last, so a
+            // failure leaves it pending and the admin retries. Both writes are
+            // idempotent — a merge and an arrayUnion — so a retry is safe.
             logger.error("Failed to grant seller role:", roleErr);
-            // Non-fatal — continue
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "Could not grant the seller role. The verification is unchanged — please retry.",
+                },
+                { status: 500 }
+            );
         }
+
+        // Marked approved only once the seller can actually sell.
+        await verificationRef.update({
+            status: "approved",
+            reviewedAt: FieldValue.serverTimestamp(),
+            reviewedBy: session.user.id,
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        // Recorded, which it was not.
+        //
+        // "seller_approved" is declared in the AuditAction union and had ZERO
+        // emitters anywhere in the codebase, as did seller_rejected and
+        // seller_suspended. The admin screen posts here rather than to the
+        // audited server action, so no seller approval in the platform's
+        // history was ever written to the audit log.
+        await createAdminAuditLog({
+            action: "seller_approved",
+            userId: session.user.id,
+            targetType: "seller_verification",
+            targetId: verificationId,
+            details: `Approved seller ${verificationData.userId}`,
+            metadata: { sellerUserId: verificationData.userId ?? null },
+        }).catch((e) => logger.error("[approve-seller] audit log failed", e));
 
         // Fetch user document to get the correct email/name and send email (non-blocking)
         try {
