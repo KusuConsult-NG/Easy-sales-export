@@ -12,7 +12,8 @@
     "2026-08-11: the remaining entries were triaged against the collections they touch. What is left is public listings (products, courses, banners, land), pre-auth flows (login, register, password reset), and callbacks whose credential is the reference itself (wallet/verify, whatsapp-invite). None returns another user's record keyed on a caller-supplied id — that was the class, and it is now empty.",
     "2026-08-11: autoEnrollPaidUser removed. It was a paid-content bypass hiding in this list among catalogue reads -- 'use server' export, both the user and the plan taken from the caller, enrolling anyone in any tier. Found by re-running the scanners grouped by BUSINESS MODULE rather than by directory, which put it beside getCoursesAction where 'auto-enrol' stopped looking like a read.",
     "land-actions getLandListings/getVerifiedLandListings reach a guard CONDITIONALLY: browsing verified land stays open to anyone by design, and the requireSession only runs when a non-public status is requested. They are off this list because the scanner asks whether a guard is reachable, not whether it always fires.",
-    "2026-08-12: cms.ts::getActiveAnnouncementsAction removed for the same reason as the land listings above — it now READS the session but still refuses nobody. targetAudience is an access control (the admin UI offers an \"admins\" audience) and membership was decided from the caller's own argument, so anyone could ask for staff-only notices by naming them. Entitlement now comes from roles; the endpoint stays public because a landing-page notice is the point of it, and \"all\" is entitled to everyone including signed-out callers. getActiveBannersAction stays on the list: it is genuinely public with no segmentation to get wrong."
+    "2026-08-12: cms.ts::getActiveAnnouncementsAction removed for the same reason as the land listings above — it now READS the session but still refuses nobody. targetAudience is an access control (the admin UI offers an \"admins\" audience) and membership was decided from the caller's own argument, so anyone could ask for staff-only notices by naming them. Entitlement now comes from roles; the endpoint stays public because a landing-page notice is the point of it, and \"all\" is entitled to everyone including signed-out callers. getActiveBannersAction stays on the list: it is genuinely public with no segmentation to get wrong.",
+    "2026-08-13: wave/_actions.ts::syncShipmentWithCarrierAction removed — genuinely guarded now, not the conditional case above. It had no session at all while calling the logistics provider on every invocation and writing the carrier's status onto the shipment, so anyone could spend the platform's outbound API budget and learn which shipment ids exist. Found by grouping every entry point by BUSINESS MODULE: it was unremarkable in its file and an outlier among WAVE's endpoints, every one of which requires a session. See lib/testing/module-sweep.ts."
   ],
   "unguarded": [
     "app/actions/academy/_actions.ts::calculateStreakAction",
@@ -58,7 +59,6 @@
     "app/actions/village-market.ts::getActiveFlashSaleProductsAction",
     "app/actions/village-market.ts::getActiveVillageMarketEventsAction",
     "app/actions/village-market.ts::getVillageMarketEventAction",
-    "app/actions/wallet.ts::confirmWalletFundingAction",
-    "app/actions/wave/_actions.ts::syncShipmentWithCarrierAction"
+    "app/actions/wallet.ts::confirmWalletFundingAction"
   ]
 }
