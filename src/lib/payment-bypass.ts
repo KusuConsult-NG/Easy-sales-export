@@ -10,14 +10,31 @@
  *
  * IS IT A VULNERABILITY?
  * ----------------------
- * No, and that was checked rather than assumed:
+ * No — but the reasons have changed since this was written, and one of them
+ * stopped being true.
+ *
+ * As recorded originally:
  *
  *   - there is no self-service action that changes a user's email
  *   - registration rejects a duplicate via adminAuth.getUserByEmail
  *   - /api/auth/register returns 404 in production anyway
  *
- * So an attacker cannot obtain the address, and the bypass is not reachable by
- * anyone else. It is a deliberate owner/test account.
+ * The first is no longer the case. updateProfileAction accepts an email and
+ * calls syncAuthEmail, so a user can change their own address. What stops the
+ * default bypass address being taken is now Supabase's uniqueness constraint —
+ * the owner's account holds it, so the change fails.
+ *
+ * That protection is real and CONDITIONAL, which the original reasoning did not
+ * have to consider. Nothing requires an address on this list to belong to a
+ * registered account. Add a colleague's address before they sign up, or mistype
+ * one, and any user could claim free cooperative and academy membership by
+ * editing their profile.
+ *
+ * So updateProfileAction now refuses an email change onto this list outright,
+ * which does not depend on who happens to hold the address. No legitimate
+ * profile edit moves a user onto it.
+ *
+ * The address remains a deliberate owner/test account.
  *
  * WHY CONSOLIDATE IT ANYWAY
  * -------------------------

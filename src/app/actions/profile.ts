@@ -8,6 +8,7 @@ import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { syncAuthEmail } from "@/lib/auth-revocation";
 import { logger } from '@/lib/logger';
+import { isPaymentBypassAccount } from "@/lib/payment-bypass";
 import { adminAuth } from "@/lib/firebase-admin";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -102,6 +103,35 @@ export const updateUserProfileAction = withSafeAction("updateUserProfileAction",
     const userId = session.user.id;
 
     if (validated.email && validated.email !== session.user.email) {
+        // Nobody moves onto the payment-bypass list by editing their profile.
+        //
+        // payment-bypass.ts records that the bypass is safe because "there is
+        // no self-service action that changes a user's email". This action is
+        // one, added afterwards, so that reason no longer holds.
+        //
+        // What actually stops the default address being taken today is
+        // Supabase's uniqueness constraint — the owner's account already holds
+        // it, so the change below fails. That protection is real but
+        // conditional, and nothing requires a bypass address to correspond to a
+        // registered account. Add a colleague's address to
+        // PAYMENT_BYPASS_EMAILS before they sign up, or mistype one, and any
+        // user could claim free cooperative and academy membership by editing
+        // their profile.
+        //
+        // Refused outright, which does not depend on who happens to hold the
+        // address. No legitimate profile edit moves a user onto that list.
+        if (isPaymentBypassAccount(validated.email)) {
+            logger.warn("[profile] refused an email change onto the payment-bypass list", {
+                userId,
+                attempted: validated.email.trim().toLowerCase(),
+            });
+            return {
+                success: false as const,
+                error: "That email address is already in use by another account.",
+                data: null,
+            };
+        }
+
         // The email has to change in the store that authenticates.
         //
         // This updated Firebase only. lib/auth.ts signs in against Supabase
