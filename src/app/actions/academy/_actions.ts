@@ -1473,15 +1473,60 @@ export async function autoEnrollPaidUser(userId: string, userPlan: string) {
         if (eligibleCourses.length === 0) return;
 
         // 3. Parallel fetch existing records to avoid sequential Firestore calls
-        const [progressSubSnap, progressSnap, enrollmentsSnap] = await Promise.all([
+        // The field is `userId`. It always was.
+        //
+        // When this function was fixed to take the caller from the session, the
+        // local was renamed userId -> resolvedUserId — and the rename was applied
+        // inside the query STRING LITERALS and the written field names too.
+        // Nothing anywhere writes a column called `resolvedUserId`, so both of
+        // these queries matched nothing, every time.
+        //
+        // Three things followed, and the second is the one that cost data:
+        //
+        //   Every row this function wrote carried `resolvedUserId` instead of
+        //   `userId`, so it was invisible to every OTHER reader of these
+        //   collections — an auto-enrolled course did not appear in the
+        //   learner's course list.
+        //
+        //   existingProgresses was therefore always empty, so Place B below
+        //   re-set COURSE_PROGRESS for `${userId}_${courseId}` — the same
+        //   document enrollInCourse, updateLessonProgress and completeCourse all
+        //   use — with progressPercent: 0, completed: false, completedAt: null,
+        //   merged over whatever the learner had actually done. This function
+        //   runs on every academy dashboard load, so a paid learner's progress
+        //   was zeroed the next time they opened the dashboard.
+        //
+        //   existingEnrollments was always empty too, so a learner who had
+        //   enrolled properly got a duplicate enrolment row.
+        //
+        // Each of those self-limits after the first run, because the row it then
+        // writes DOES carry resolvedUserId and the query finds it next time —
+        // which is exactly why this never looked like an ongoing fault.
+        // The legacy queries are kept alongside the correct ones.
+        //
+        // Rows this function wrote while the field name was wrong carry
+        // `resolvedUserId`, so querying only `userId` would miss them — and
+        // missing them is what causes the damage below. Reading both and taking
+        // the union means the affected records are recognised on the next
+        // dashboard load instead of being zeroed one final time, so no backfill
+        // is needed for this to stop.
+        const [progressSubSnap, progressSnap, legacyProgressSnap, enrollmentsSnap, legacyEnrollmentsSnap] = await Promise.all([
             db.collection(`user_progress/${resolvedUserId}/courses`).get(),
+            db.collection(COLLECTIONS.COURSE_PROGRESS).where("userId", "==", resolvedUserId).get(),
             db.collection(COLLECTIONS.COURSE_PROGRESS).where("resolvedUserId", "==", resolvedUserId).get(),
+            db.collection(COLLECTIONS.COURSE_ENROLLMENTS).where("userId", "==", resolvedUserId).get(),
             db.collection(COLLECTIONS.COURSE_ENROLLMENTS).where("resolvedUserId", "==", resolvedUserId).get()
         ]);
 
         const existingProgressSubs = new Set(progressSubSnap.docs.map(doc => doc.id));
-        const existingProgresses = new Set(progressSnap.docs.map(doc => doc.id));
-        const existingEnrollments = new Set(enrollmentsSnap.docs.map(doc => doc.data().courseId));
+        const existingProgresses = new Set([
+            ...progressSnap.docs.map(doc => doc.id),
+            ...legacyProgressSnap.docs.map(doc => doc.id),
+        ]);
+        const existingEnrollments = new Set([
+            ...enrollmentsSnap.docs.map(doc => doc.data().courseId),
+            ...legacyEnrollmentsSnap.docs.map(doc => doc.data().courseId),
+        ]);
 
         // 4. Ensure enrollment in all eligible courses in parallel
         await Promise.all(eligibleCourses.map(async (courseDoc) => {
@@ -1491,7 +1536,7 @@ export async function autoEnrollPaidUser(userId: string, userPlan: string) {
             if (!existingProgressSubs.has(courseId)) {
                 const progressSubRef = db.doc(`user_progress/${resolvedUserId}/courses/${courseId}`);
                 await progressSubRef.set({
-                    resolvedUserId,
+                    userId: resolvedUserId,
                     courseId,
                     completedLessons: [],
                     completedModules: [],
@@ -1510,10 +1555,21 @@ export async function autoEnrollPaidUser(userId: string, userPlan: string) {
 
             // Place B: course_progress
             const progressRefId = `${resolvedUserId}_${courseId}`;
-            if (!existingProgresses.has(progressRefId)) {
-                const progressRef = db.collection(COLLECTIONS.COURSE_PROGRESS).doc(progressRefId);
+            const progressRef = db.collection(COLLECTIONS.COURSE_PROGRESS).doc(progressRefId);
+
+            // Belt and braces on the one write that can destroy something.
+            //
+            // The document id is deterministic, so its existence is knowable
+            // without trusting any query. This write merges zeros over
+            // progressPercent, completed and completedAt — so if the guard above
+            // is ever wrong again, a learner loses their progress. Reading the
+            // document costs one round trip and removes that entirely.
+            const alreadyHasProgress = existingProgresses.has(progressRefId)
+                || (await progressRef.get()).exists;
+
+            if (!alreadyHasProgress) {
                 await progressRef.set({
-                    resolvedUserId,
+                    userId: resolvedUserId,
                     courseId,
                     progressPercent: 0,
                     completionPercentage: 0,
@@ -1528,7 +1584,7 @@ export async function autoEnrollPaidUser(userId: string, userPlan: string) {
             // Place C: course_enrollments
             if (!existingEnrollments.has(courseId)) {
                 await db.collection(COLLECTIONS.COURSE_ENROLLMENTS).add({
-                    resolvedUserId,
+                    userId: resolvedUserId,
                     courseId,
                     enrolledAt: FieldValue.serverTimestamp(),
                     status: 'active',
