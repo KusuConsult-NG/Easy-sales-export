@@ -211,7 +211,7 @@ export async function verifyBackupCode(userId: string, code: string): Promise<{ 
 /**
  * TOTP Authenticator App Functions
  */
-import { createHmac } from 'crypto';
+import { createHmac, timingSafeEqual } from 'crypto';
 import QRCode from 'qrcode';
 
 /**
@@ -343,4 +343,58 @@ export function requiresMFA(action: string): boolean {
     ];
 
     return sensitiveActions.includes(action);
+}
+
+// ─── The mfa_verified cookie ─────────────────────────────────────────────────
+
+/**
+ * Mint and check the value of the `mfa_verified` cookie.
+ *
+ * WHY THIS EXISTS
+ * ---------------
+ * /api/auth/mfa/verify set the cookie to the literal string "true". It is
+ * httpOnly, so a script cannot write it — but the value says nothing about WHO
+ * verified, and the cookie is issued with a wildcard domain (`.example.com`)
+ * and a thirty-minute life.
+ *
+ * Two consequences, both only reachable once something actually reads the
+ * cookie — which today nothing does (see the note on requiresMFA below):
+ *
+ *   A shared browser. User A verifies, signs out, user B signs in within the
+ *   half hour. The cookie is still there and still says "true", so B would be
+ *   treated as having completed a second factor they never saw. Sign-out
+ *   clears a list of cookies by name and this is not one of them.
+ *
+ *   The wildcard domain. Any subdomain able to set cookies on the parent can
+ *   mint "true"; there is nothing to forge because the value carries no claim.
+ *
+ * Binding it to the user costs one HMAC and removes both. The value is
+ * `<userId>.<hmac>`, so a reader can tell whether THIS session's user is the
+ * one who verified, and a value lifted from another browser or another account
+ * fails the comparison rather than being accepted.
+ *
+ * MFA_SECRET_KEY is already required by every route in this feature, so this
+ * adds no new configuration.
+ */
+export function issueMfaVerifiedValue(userId: string, secretKey: string): string {
+    const mac = createHmac('sha256', secretKey).update(userId).digest('hex');
+    return `${userId}.${mac}`;
+}
+
+/**
+ * Does this cookie value prove that THIS user completed a second factor?
+ *
+ * Compared with timingSafeEqual rather than `===`. The comparison is against a
+ * value an attacker supplies, and a length-varying early return is the classic
+ * way to learn a MAC a byte at a time.
+ */
+export function isMfaVerifiedValueFor(value: string | undefined, userId: string, secretKey: string): boolean {
+    if (!value || !userId || !secretKey) return false;
+
+    const expected = issueMfaVerifiedValue(userId, secretKey);
+    const a = Buffer.from(value);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length) return false;
+
+    return timingSafeEqual(a, b);
 }
