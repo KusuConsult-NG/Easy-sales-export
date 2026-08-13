@@ -35,6 +35,7 @@ import type { CooperativeMembership,
     GetTransactionsState } from "@/lib/types/cooperative";
 import { serializeDoc, serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { revalidatePath } from "next/cache";
+import { calculateRepaymentTerms } from "@/lib/loan-terms";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
 
 /**
@@ -1260,19 +1261,56 @@ async function _applyForLoanAction(
             throw new Error(`Loan amount exceeds your limit of ₦${maxLoanAmount.toLocaleString()} (3x Savings)`);
         }
 
-        // 3. Get Loan Product Details (Simulated/fetched)
-        let interestRate = 5; // Default 5%
-        let durationMonths = 6;
-
-        const productDoc = await db.collection(COLLECTIONS.COOPERATIVE_LOAN_PRODUCTS).doc(productId).get();
-        if (productDoc.exists) { const prod = productDoc.data()!;
-            interestRate = prod.interestRate;
-            durationMonths = prod.durationMonths;
+        // 3. The loan is written on the terms of the product the member chose.
+        //
+        // This read COLLECTIONS.COOPERATIVE_LOAN_PRODUCTS — "cooperative_loan_products",
+        // a collection NOTHING WRITES. Every loan product the admin creates goes
+        // into COLLECTIONS.LOAN_PRODUCTS ("loan_products"), which is what the
+        // admin CRUD routes, the public list and /api/cooperative/apply-loan all
+        // use. The only reference to the other name anywhere is its definition.
+        //
+        // So productDoc.exists was always false and every application fell
+        // through to the defaults below it:
+        //
+        //     let interestRate = 5; // Default 5%
+        //     let durationMonths = 6;
+        //
+        // The member page fetches products from /api/cooperative/loan-products,
+        // shows the real rate, and quotes with calculateRepaymentTerms. Then it
+        // submits here. So the borrower was quoted their product's terms and the
+        // loan was recorded at 5% over 6 months, whichever product they picked.
+        //
+        // The interest maths differed too. This computed `amount * (rate/100)`
+        // once — a flat charge — while the route and the quote treat
+        // interestRate as a MONTHLY rate through calculateRepaymentTerms, which
+        // cooperative-tiers.ts and loan-terms.ts both say is correct. Same
+        // function now, so a rate change or a fix cannot reach only one of them.
+        //
+        // Fails closed on a missing or malformed product, as the route does. A
+        // silent default is what turned this into money.
+        const productDoc = await db.collection(COLLECTIONS.LOAN_PRODUCTS).doc(productId).get();
+        if (!productDoc.exists) {
+            throw new Error("That loan product is no longer available.");
         }
 
-        const interestAmount = amount * (interestRate / 100);
-        const totalRepayment = amount + interestAmount;
-        const monthlyPayment = totalRepayment / durationMonths;
+        const prod = productDoc.data()!;
+        const interestRate = Number(prod.interestRate);
+        const durationMonths = Number(prod.durationMonths);
+
+        if (!Number.isFinite(interestRate) || interestRate < 0
+            || !Number.isInteger(durationMonths) || durationMonths < 1) {
+            logger.error("[Loan Apply] Loan product has unusable terms", {
+                productId,
+                interestRate: prod.interestRate,
+                durationMonths: prod.durationMonths,
+            });
+            throw new Error("That loan product is not correctly configured. Please contact support.");
+        }
+
+        const terms = calculateRepaymentTerms(amount, durationMonths, interestRate);
+        const interestAmount = terms.totalRepayment - amount;
+        const totalRepayment = terms.totalRepayment;
+        const monthlyPayment = terms.monthlyPayment;
 
         // Create the loan application, and let the insert be the guard.
         //

@@ -151,7 +151,19 @@ describe('cooperative/_actions — _applyForLoanAction', () => {
         jest.clearAllMocks();
         setSession('member-1');
         // Membership with enough savings to clear the 3x limit on 10,000.
-        setDocs({ userId: 'member-1', savingsBalance: 500_000 });
+        //
+        // The loan product's terms are on the same fixture because setDocs
+        // answers every .get() with one document. _applyForLoanAction now reads
+        // the product from COLLECTIONS.LOAN_PRODUCTS and fails closed on a
+        // missing or malformed one — it used to read a collection nothing
+        // writes and silently default to 5% over 6 months, so this fixture did
+        // not need them.
+        setDocs({
+            userId: 'member-1',
+            savingsBalance: 500_000,
+            interestRate: 10,
+            durationMonths: 12,
+        });
         mockClaimLoanApp.mockResolvedValue({ claimed: true, existingId: null });
     });
 
