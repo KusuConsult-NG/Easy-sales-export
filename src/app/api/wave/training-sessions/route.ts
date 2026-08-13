@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/session-guard";
+import { canReadWaveProgramme } from "@/lib/wave-access";
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
@@ -26,6 +27,25 @@ export async function GET(request: NextRequest) {
             );
         }
 
+        // Being signed in is not being in the programme.
+        //
+        // This asked for a session and nothing else, then returned every
+        // training session document — including customMeetingLink and roomName,
+        // which are the live video room. So the meeting links for a
+        // women's-only programme were available to every account on the
+        // platform, including the ones /api/wave/check-eligibility exists to
+        // turn away.
+        //
+        // src/middleware.ts has enforced exactly this for /wave PAGES since it
+        // was written. The rule now lives in @/lib/wave-access and both read it.
+        const waveRegStatus = (session.user as any)?.serviceRegistrations?.wave?.status ?? null;
+        if (!canReadWaveProgramme({ roles: session.user.roles, waveRegStatus })) {
+            return NextResponse.json(
+                { success: false, data: null, error: "WAVE programme access required", meta: { cursor: null, hasMore: false } },
+                { status: 403 }
+            );
+        }
+
         const { searchParams } = new URL(request.url);
         const rawLimit = parseInt(searchParams.get("limit") || "20");
         const limit = Math.min(Math.max(rawLimit, 1), 50);
@@ -33,8 +53,14 @@ export async function GET(request: NextRequest) {
 
         const db = getAdminDb();
 
+        // Deactivated sessions are not listed.
+        //
+        // endWaveLiveSession sets isActive: false (wave/_admin.ts) and nothing
+        // read it, so a session an admin had ended stayed in this response with
+        // its room name and meeting link intact.
         let query: import("@/lib/supabase-db").SupabaseQuery = db
             .collection(COLLECTIONS.WAVE_TRAINING_SESSIONS)
+            .where("isActive", "==", true)
             .orderBy("scheduledAt", "asc")
             .limit(limit + 1); // Fetch one extra to determine hasMore
 
@@ -50,12 +76,24 @@ export async function GET(request: NextRequest) {
         const hasMore = snap.docs.length > limit;
         const docs = hasMore ? snap.docs.slice(0, limit) : snap.docs;
 
-        const sessions = docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            scheduledAt: doc.data().scheduledAt?.toDate?.()?.toISOString() ?? doc.data().scheduledAt,
-            createdAt: doc.data().createdAt?.toDate?.()?.toISOString() ?? null,
-        }));
+        // Named fields, not the document.
+        //
+        // The spread also carried createdBy — the user id of the admin who
+        // scheduled the session — which no participant needs.
+        const sessions = docs.map((doc: any) => {
+            const data = doc.data() ?? {};
+            return {
+                id: doc.id,
+                title: data.title ?? "",
+                description: data.description ?? "",
+                durationMinutes: data.durationMinutes ?? null,
+                roomName: data.roomName ?? null,
+                customMeetingLink: data.customMeetingLink ?? null,
+                isActive: data.isActive ?? false,
+                scheduledAt: data.scheduledAt?.toDate?.()?.toISOString() ?? data.scheduledAt,
+                createdAt: data.createdAt?.toDate?.()?.toISOString() ?? null,
+            };
+        });
 
         const nextCursor = hasMore && docs.length > 0
             ? docs[docs.length - 1].data().scheduledAt?.toDate?.()?.toISOString() ?? null
