@@ -12,6 +12,8 @@ import { initializePaystackPayment, verifyPaystackPayment } from "@/lib/paystack
 import { revalidatePath } from "next/cache";
 
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { gradeModuleQuiz, stripAnswerKey } from "@/lib/academy-grading";
+import { isAdmin } from "@/lib/admin-permissions";
 import { claimPaymentOnce } from "@/lib/wallet-ledger";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { serializeDoc, serializeDocs, serializeValue } from "@/lib/firestore-serialize";
@@ -305,7 +307,26 @@ async function _getCourseByIdAction(courseId: string): Promise<ActionResponse<an
 
         const d = courseDoc.data()!;
         const formattedCourse = serializeDoc<Course>(courseDoc.id, d);
-        return { error: null, success: true as const, data: formattedCourse };
+
+        // The answer key does not go to the browser.
+        //
+        // This returned the whole course document, and modules[].quiz.questions[]
+        // carries correctAnswer. Every learner loading a course page received the
+        // answers to its quizzes, and QuizComponent then graded against them
+        // client-side. The API route path strips exactly this before sending a
+        // quiz; this path did not.
+        //
+        // Admins keep it: /admin/academy/[courseId] is the course editor and
+        // cannot edit questions it cannot see. Same shape as the email masking
+        // in messages.ts — the caller knows who is asking, so the caller decides.
+        const sessionResult = await requireSession();
+        const viewerIsAdmin = isAdmin(sessionResult.session?.user?.roles);
+
+        return {
+            error: null,
+            success: true as const,
+            data: viewerIsAdmin ? formattedCourse : stripAnswerKey(formattedCourse),
+        };
     } catch (error) {
         logger.error("[getCourseByIdAction] Failed to fetch course:", {
             courseId,
@@ -718,13 +739,26 @@ export const completeLessonAction = withFlexibleSafeAction("completeLessonAction
 /**
  * Submit quiz score
  */
+/**
+ * Submit quiz ANSWERS. The score is computed here.
+ *
+ * This took `score: number` and stored it. Being a "use server" export it is a
+ * reachable endpoint regardless of the UI, so
+ * submitQuizScoreAction(me, course, module, 100) was a passing grade on any
+ * module without a quiz being involved at all — and the browser was computing
+ * the number anyway, against an answer key the course loader had sent it.
+ *
+ * Answers are graded by the shared helper in @/lib/academy-grading, which is
+ * also what the API-route path uses, so the two cannot disagree about what a
+ * pass is.
+ */
 async function _submitQuizScoreAction(
     userId: string,
     courseId: string,
     moduleId: string,
-    score: number,
+    answers: Record<string, number>,
     expectedVersion?: number
-): Promise<ActionResponse<{ passed: boolean }>> {
+): Promise<ActionResponse<{ passed: boolean; score: number; results: Record<string, boolean> }>> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: 'Unauthorized', data: null };
@@ -741,6 +775,8 @@ async function _submitQuizScoreAction(
         }
 
         let userPassed = false;
+        let score = 0;
+        let results: Record<string, boolean> = {};
         await db.runTransaction(async (t) => {
             const tProgressDoc = await t.get(progressRef);
             if (!tProgressDoc.exists) throw new Error("Not enrolled");
@@ -751,19 +787,31 @@ async function _submitQuizScoreAction(
                 throw new Error("STALE_DATA: Progress has been updated elsewhere.");
             }
 
-            progress.quizScores = progress.quizScores || {};
-            progress.quizScores[moduleId] = score;
             progress.lastAccessedAt = FieldValue.serverTimestamp();
-            
+
             // Check if module is complete (quiz passed)
             const academyCourseDoc = await t.get(db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId));
             if (academyCourseDoc.exists) {
                 const course = academyCourseDoc.data() as Course;
                 const courseModule = course.modules?.find((m) => m.id === moduleId);
 
+                // Graded from the stored questions, inside the transaction that
+                // reads them, so the quiz being scored is the quiz that exists.
+                const passingScore = courseModule?.quiz?.passingScore ?? 95;
+                const graded = gradeModuleQuiz(
+                    (courseModule?.quiz?.questions ?? []) as any[],
+                    answers ?? {},
+                    passingScore
+                );
+                score = graded.scorePercentage;
+                results = graded.results;
+
+                progress.quizScores = progress.quizScores || {};
+                progress.quizScores[moduleId] = score;
+
                 if (!progress.completedModules) progress.completedModules = [];
 
-                if (courseModule?.quiz && score >= (courseModule.quiz.passingScore ?? 95)) {
+                if (courseModule?.quiz && graded.passed) {
                     if (!progress.completedModules.includes(moduleId)) {
                         progress.completedModules.push(moduleId);
                     }
@@ -803,13 +851,16 @@ async function _submitQuizScoreAction(
             t.set(progressRef, progress);
         });
 
-        return { success: true, error: null, data: { passed: userPassed } };
+        return { success: true, error: null, data: { passed: userPassed, score, results } };
     } catch (error) {
         logger.error("Quiz submission error:", {
             userId,
             courseId,
             moduleId,
-            score,
+            // The score is computed inside the transaction now, so there is
+            // none to log when the transaction is what failed. The count of
+            // answers is the useful thing.
+            answerCount: Object.keys(answers ?? {}).length,
             error: error instanceof Error ? error.message : String(error)
         });
         return { success: false as const, error: "Failed to submit quiz", data: null };
