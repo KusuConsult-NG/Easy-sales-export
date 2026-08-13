@@ -100,6 +100,23 @@ export const rateLimitConfig = {
         maxRequests: 30,
     },
 
+    /**
+     * Federated-module telemetry — writes to the AUDIT LOG.
+     *
+     * Every accepted call adds a row to the same collection the audit trail and
+     * its statistics are read from, so an unthrottled endpoint lets one account
+     * bury the record of what everybody else did. It had no limit at all.
+     *
+     * Generous, because this is machine traffic reporting real events rather
+     * than a person clicking: a module doing genuine work can legitimately emit
+     * a burst. 120 an hour per account stops a flood without getting in the way
+     * of one.
+     */
+    telemetry: {
+        interval: 60 * 60 * 1000, // 1 hour
+        maxRequests: 120,
+    },
+
     // Admin operations - generous (legitimate admin workload)
     admin: {
         interval: 60 * 1000, // 1 minute
