@@ -7,6 +7,8 @@
 
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { rateLimit } from '@/lib/rate-limiter';
+import { rateLimitConfig } from '@/lib/rate-limits.config';
 import { logger } from "@/lib/logger";
 import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
@@ -65,6 +67,11 @@ You should provide helpful, concise, and accurate information. Always be profess
     return `${basePrompt}${contextPrompt ? '\n\n' + contextPrompt : ''}${rolePrompt}`;
 }
 
+/** How many past messages one history request may read. */
+const MAX_CHAT_HISTORY = 200;
+
+const aiChatLimiter = rateLimit(rateLimitConfig.aiChat);
+
 /**
  * Handles sending a message to OpenAI GPT-4 securely
  */
@@ -79,6 +86,30 @@ export async function sendSecureAIMessage(
         const trimmedMessage = message.trim();
         if (!trimmedMessage) {
             return { success: false, error: "Message cannot be empty", data: null };
+        }
+
+        // Every call below is a GPT-4 completion, billed per token, and there
+        // was no limit on it at all.
+        //
+        // The action in front of this requires a session and caps the message at
+        // 2,000 characters, so it is not open to the world — but one
+        // authenticated account could loop it as fast as the network allowed and
+        // run an unbounded bill against the platform's OpenAI key. The codebase
+        // already throttles KYC lookups for exactly this reason ("cost
+        // optimization"), and the limiter is Redis-backed and distributed, so
+        // the tool was there and unused.
+        //
+        // Keyed on the user: the endpoint is authenticated, the account is what
+        // gets billed for, and an IP key would punish everyone behind a Nigerian
+        // carrier NAT.
+        const limit = await aiChatLimiter.check(userId);
+        if (!limit.success) {
+            logger.warn("[AI Chat] Rate limit reached", { userId, limit: limit.limit });
+            return {
+                success: false,
+                error: "You have sent a lot of messages in a short time. Please wait a moment and try again.",
+                data: null,
+            };
         }
 
         // Build context system prompt strictly using server session roles
@@ -119,9 +150,23 @@ export async function sendSecureAIMessage(
         });
 
         // Generate platform audit log securely
+        // `action: 'user_login'` with the comment "Map to general action for audit
+        // log tracking schema" — so every AI message wrote an audit entry saying
+        // the user had logged in.
+        //
+        // That is not a cosmetic mislabel. getAuditStatsAction counts by action
+        // and reports the top ten, so chat volume was inflating login counts;
+        // and anyone reading the audit trail during an investigation would find
+        // logins that never happened, at times the person was not signing in.
+        // An audit log that records the wrong verb is worse than one that
+        // records nothing, because it is believed.
+        //
+        // The union in lib/audit-log.ts gained 'ai_chat_message'. The comment
+        // suggests the mapping was a workaround for that type not having a
+        // member to use; adding one costs nothing.
         await createAdminAuditLog({
             userId,
-            action: 'user_login', // Map to general action for audit log tracking schema
+            action: 'ai_chat_message',
             targetId: chatRef.id,
             targetType: 'ai_chat',
             metadata: {
@@ -142,10 +187,17 @@ export async function sendSecureAIMessage(
  */
 export async function getSecureAIChatHistory(userId: string, maxMessages = 20): Promise<ActionResponse<{ messages: AIChatMessage[] }>> {
     try {
+        // maxMessages arrived from the caller and went straight into .limit(),
+        // so getAIChatHistory(1_000_000) read a million rows into memory. The
+        // same shape as the audit statistics window bounded in #150.
+        const boundedMax = Number.isFinite(Number(maxMessages))
+            ? Math.min(MAX_CHAT_HISTORY, Math.max(1, Math.floor(Number(maxMessages))))
+            : 20;
+
         const snapshot = await db.collection(COLLECTIONS.AI_CHAT_HISTORY)
             .where('userId', '==', userId)
             .orderBy('createdAt', 'desc')
-            .limit(maxMessages)
+            .limit(boundedMax)
             .get();
 
         const messages = snapshot.docs.map(doc => {

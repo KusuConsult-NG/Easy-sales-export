@@ -77,6 +77,29 @@ export const rateLimitConfig = {
         maxRequests: 3, // 3 lookups per hour per user
     },
 
+    /**
+     * AI assistant messages — every call is a GPT-4 completion, billed per token.
+     *
+     * The endpoint requires a session and validates the message, and had no
+     * limit at all: one authenticated account could loop it and run up an
+     * unbounded bill against the platform's OpenAI key. Same reasoning as the
+     * `kyc` entry above, which is throttled for cost rather than for security.
+     *
+     * Sized against a real conversation rather than against an attacker. Someone
+     * typing to a support bot, waiting for a reply and typing again manages
+     * perhaps two or three messages a minute at the very most, so 30 in ten
+     * minutes is beyond anything a person does and still stops a script cold —
+     * bounded at ~180/hour instead of as fast as the network allows.
+     *
+     * Keyed per USER, not per IP: the endpoint is authenticated, so the account
+     * is the thing being billed for, and Nigerian carrier NAT would make an IP
+     * key punish everyone behind it.
+     */
+    aiChat: {
+        interval: 10 * 60 * 1000, // 10 minutes
+        maxRequests: 30,
+    },
+
     // Admin operations - generous (legitimate admin workload)
     admin: {
         interval: 60 * 1000, // 1 minute
