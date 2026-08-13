@@ -16,6 +16,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import sharp from "sharp";
 import { requireSession } from "@/lib/session-guard";
+import { getCooperativeMemberIdCardAction } from "@/app/actions/cooperative";
 import { logger } from "@/lib/logger";
 import { jsPDF } from "jspdf";
 
@@ -62,12 +63,69 @@ function fmtDate(iso: string): string {
     }
 }
 
-async function fetchAsBase64(url: string): Promise<{ b64: string; mime: string } | null> {
+/** Largest passport photo worth compositing onto a CR80 card. */
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+
+/**
+ * Is this a photo URL this server will fetch?
+ *
+ * The same rule /api/proxy-image was given: an allowed host AND this account's
+ * cloud name, because res.cloudinary.com is Cloudinary's shared delivery
+ * domain and the hostname alone permits every customer on it.
+ *
+ * The passport URL is server-derived now, so this is a second line rather than
+ * the only one — but it is the line that stops a stored value, written by some
+ * other path, turning into an outbound request from this server.
+ */
+function isAllowedPhotoUrl(raw: string): boolean {
     try {
-        const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+        const parsed = new URL(raw);
+        if (parsed.protocol !== "https:") return false;
+
+        const hostAllowed = parsed.hostname === "res.cloudinary.com"
+            || parsed.hostname.endsWith(".cloudinary.com");
+        if (!hostAllowed) return false;
+
+        const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+        if (!cloudName) return false;
+
+        return parsed.pathname.split("/").filter(Boolean)[0] === cloudName;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Fetches a photo, bounded.
+ *
+ * This took any URL and fetched it — no host check, no redirect handling, no
+ * size ceiling, no content-type check — with the URL supplied in the request
+ * body. A relative value was resolved against req.url, so the server would also
+ * fetch its own endpoints.
+ */
+async function fetchAsBase64(url: string): Promise<{ b64: string; mime: string } | null> {
+    if (!isAllowedPhotoUrl(url)) {
+        logger.warn("[id-card] refused a passport photo URL outside this Cloudinary account");
+        return null;
+    }
+
+    try {
+        const res = await fetch(url, {
+            signal: AbortSignal.timeout(8000),
+            // A host check on the first hop is not a check on the destination.
+            redirect: "manual",
+        });
         if (!res.ok) return null;
-        const buf = await res.arrayBuffer();
+
         const mime = res.headers.get("content-type") || "image/jpeg";
+        if (!mime.startsWith("image/")) return null;
+
+        const declared = Number(res.headers.get("content-length") ?? NaN);
+        if (Number.isFinite(declared) && declared > MAX_PHOTO_BYTES) return null;
+
+        const buf = await res.arrayBuffer();
+        if (buf.byteLength > MAX_PHOTO_BYTES) return null;
+
         return { b64: Buffer.from(buf).toString("base64"), mime };
     } catch {
         return null;
@@ -237,7 +295,30 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Authentication required" }, { status: 401 });
         }
 
-        const data = await req.json();
+        // The card is built from the caller's own membership, not from the body.
+        //
+        // Every field on it — fullName, memberNumber, membershipTier, gender,
+        // stateOfOrigin, joinedAt, validUntil, passportPhotoUrl — came from
+        // `await req.json()`. A session was required and then nothing about the
+        // session was used, so any signed-in account could POST somebody else's
+        // name, an invented member number, a tier they had not paid for and a
+        // validity date of its choosing, and receive a rendered cooperative ID
+        // card. The page happens to send the member's real data; the route did
+        // not require it to.
+        //
+        // getCooperativeMemberIdCardAction is the same call the page makes to
+        // populate the card. It takes no arguments, derives everything from the
+        // session, and already refuses when the membership fee is unpaid — so
+        // routing through it also means the download cannot outrun the checks
+        // the screen enforces.
+        const card = await getCooperativeMemberIdCardAction();
+        if (!card.success || !card.data) {
+            return NextResponse.json(
+                { error: card.success ? "No membership card available" : card.error },
+                { status: 403 }
+            );
+        }
+
         const {
             fullName = "",
             memberNumber = "",
@@ -247,20 +328,15 @@ export async function POST(req: NextRequest) {
             joinedAt = "",
             validUntil = "",
             passportPhotoUrl = null,
-        } = data;
+        } = card.data as Record<string, any>;
 
         // Fetch passport photo as base64
         let photoData: { b64: string; mime: string } | null = null;
         if (passportPhotoUrl) {
-            let finalPhotoUrl = passportPhotoUrl;
-            if (!/^https?:\/\//i.test(passportPhotoUrl)) {
-                try {
-                    finalPhotoUrl = new URL(passportPhotoUrl, req.url).toString();
-                } catch (e) {
-                    logger.error("Failed to construct absolute URL for passport photo:", e);
-                }
-            }
-            photoData = await fetchAsBase64(finalPhotoUrl);
+            // A relative value used to be resolved against req.url, which made
+            // this server fetch its own origin. Photo URLs are absolute
+            // Cloudinary links; anything else is refused by isAllowedPhotoUrl.
+            photoData = await fetchAsBase64(String(passportPhotoUrl));
         }
 
         // Build SVG (photo slot left transparent — will be composited)
