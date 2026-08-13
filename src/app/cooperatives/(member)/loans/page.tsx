@@ -14,6 +14,7 @@ import { useActionState } from "react";
 import { applyForLoanAction } from "@/app/actions/cooperative";
 import { Loader2 } from "lucide-react";
 import { COOPERATIVE_CONFIG, CURRENCY_CONFIG } from "@/lib/constants";
+import { calculateRepaymentTerms } from "@/lib/loan-terms";
 
 type LoanProduct = {
     id: string;
@@ -95,11 +96,28 @@ export default function LoansPage() {
         }
     };
 
+    /**
+     * The estimate a member sees before applying.
+     *
+     * This divided the rate by 12, treating the product's interestRate as an
+     * ANNUAL figure. It is monthly — cooperative-tiers.ts and loan-terms.ts both
+     * say so, and /api/cooperative/apply-loan carries a comment recording that
+     * this same defect was found and fixed on the server side. The client copy
+     * was left.
+     *
+     * So the quote shown here was far below what the borrower would actually be
+     * billed: at 10% per month on ₦1,000,000 over 12 months this displayed about
+     * ₦87,900 against a real instalment of about ₦146,800. Someone deciding
+     * whether they could afford a loan was reading the wrong number.
+     *
+     * Both sides call the same function now, so a rate change or a fix cannot
+     * apply to only one of them.
+     */
     const calculateMonthlyPayment = (principal: number, rate: number, months: number) => {
-        const monthlyRate = rate / 100 / 12;
-        const payment = (principal * monthlyRate * Math.pow(1 + monthlyRate, months)) /
-            (Math.pow(1 + monthlyRate, months) - 1);
-        return payment;
+        if (!Number.isFinite(principal) || principal <= 0) return 0;
+        if (!Number.isInteger(months) || months < 1) return 0;
+        if (!Number.isFinite(rate) || rate < 0) return 0;
+        return calculateRepaymentTerms(principal, months, rate).monthlyPayment;
     };
 
     // Show onboarding if not a member or pending approval
