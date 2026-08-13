@@ -97,3 +97,56 @@ jobs:
 
       - name: Run Jest Unit Tests
         run: npm run test
+
+  # Application integration tests against a real database.
+  #
+  # WHY A SEPARATE JOB
+  # ------------------
+  # It boots a Supabase stack in docker, which takes a minute or two and has
+  # nothing to do with tsc, lint or the production build. Failing separately also
+  # keeps the signal readable: "the schema and the code disagree" is a different
+  # message from "the build is broken".
+  #
+  # WHAT IT COVERS THAT `npm run test` CANNOT
+  # -----------------------------------------
+  # jest.setup.js mocks @/lib/supabase-db globally, so all 1730 unit tests run
+  # against a hand-written fake. That fake cannot disagree with the schema,
+  # because it has no schema. These two suites call real actions and let them
+  # write to real Postgres through real PostgREST.
+  #
+  # Both were excluded from every run for as long as they have existed —
+  # `npm run test` ignores their directories, and the escape hatch the config
+  # named (`npm run test:integration`, which started a Firebase emulator) could
+  # not work, because the firebase client SDK is a shim that throws. So this is
+  # the first time either has executed in CI.
+  integration-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Starts postgres + kong + postgrest + gotrue, applies supabase/schema.sql
+      # and then the migrations, and exports the stack's URL and keys to
+      # $GITHUB_ENV for the next step. It verifies GET /rest/v1/users returns 200
+      # before handing over, so a schema-cache problem fails here with that
+      # message rather than as a confusing test failure.
+      - name: Start an ephemeral Supabase and load the schema
+        run: ./scripts/ci-integration-db.sh
+
+      # The suites skip when no database is configured, which is right on a
+      # developer machine and wrong here. db-env-guard.js turns that skip into a
+      # failure when CI is set, so this step cannot pass by not running.
+      - name: Run integration tests
+        run: npm run test:integration
+
+      - name: Stop Supabase
+        if: always()
+        run: npx --yes supabase@latest stop --no-backup || true

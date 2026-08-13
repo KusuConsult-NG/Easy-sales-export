@@ -72,8 +72,25 @@
  * health-diagnostic.test.ts fails to parse entirely (`SyntaxError: Unexpected
  * token 'export'`), so it has never contributed a result either way.
  *
- * WHY RECORDED RATHER THAN FIXED
- * ------------------------------
+ * WHAT HAS SINCE BEEN WIRED IN
+ * ----------------------------
+ * The two suites worth connecting now run in CI on every pull request, against
+ * an ephemeral Supabase stack that scripts/ci-integration-db.sh brings up:
+ *
+ *     src/__tests__/integration/auto-approval.test.ts
+ *     tests/integration/data-consistency.test.ts
+ *
+ * `npm run test:integration` is that suite now, not the Firebase emulator. Both
+ * files needed work before they meant anything — data-consistency was four
+ * loops over query results, which assert nothing when the query returns nothing,
+ * and one of them had no expect() at all.
+ *
+ * They stay in jest.config.js's ignore list because they need a database and
+ * `npm run test` must not. Excluded from the default run is not the same as
+ * excluded from CI, and that distinction is the whole point of this change.
+ *
+ * WHY THE REST IS RECORDED RATHER THAN FIXED
+ * ------------------------------------------
  * Deleting suites and rebuilding integration coverage against Supabase are both
  * decisions with a cost, and neither is a defect to fix inside an audit. The
  * same choice as the QoreID bypass in #140 and MFA enforcement in #167: assert
@@ -129,12 +146,22 @@ describe('the documented way to run these suites cannot work', () => {
         }
     });
 
-    it('test:integration still starts an emulator nothing can reach', () => {
-        // Left as found — removing the script would hide the problem rather
-        // than answer it. Pinned so the claim and the reality stay visible
-        // together.
-        expect(pkg.scripts['test:integration']).toContain('firebase emulators:exec');
-        expect(pkg.scripts['test:integration:run']).toContain('jest.config.emulator.js');
+    it('test:integration no longer starts an emulator nothing can reach', () => {
+        // It was `firebase emulators:exec ... npm run test:integration:run`,
+        // which booted a Firestore emulator that no code in this project can
+        // address. It runs the two migrated suites against a real database now.
+        expect(pkg.scripts['test:integration']).toContain('jest.config.integration.js');
+        expect(pkg.scripts['test:integration']).not.toContain('emulators:exec');
+        expect(pkg.scripts['test:integration:run']).toBeUndefined();
+    });
+
+    it('the emulator config is no longer referenced by any script', () => {
+        // The file is left on disk for the four unmigrated suites, but nothing
+        // runs it. A script that cannot work is worse than no script: it is an
+        // answer to "how do I run these?" that costs an afternoon to disprove.
+        const scripts = Object.values(pkg.scripts).join(' ');
+
+        expect(scripts).not.toContain('jest.config.emulator.js');
     });
 
     it('the config no longer blames missing credentials', () => {
@@ -145,7 +172,7 @@ describe('the documented way to run these suites cannot work', () => {
     });
 });
 
-describe('what the excluded suites cover', () => {
+describe('the four suites still excluded from every run', () => {
     it('three of them call no application code', () => {
         // If this starts failing, someone has begun pointing them at real
         // actions, which is the rewrite this file argues for.
@@ -218,12 +245,51 @@ describe('the exclusions themselves', () => {
         expect(ci).not.toContain('playwright test');
     });
 
-    it('CI runs the default config only', () => {
-        // The reason none of this was caught. Recorded so that wiring any of
-        // these in is a visible change to this expectation.
+    it('CI runs the integration suites as well as the default config', () => {
+        // This asserted that CI ran `npm run test` and nothing else, which was
+        // why none of the above was caught. It failed when the integration job
+        // was added, which is what it was for.
         const ci = source('.github/workflows/ci.yml');
 
         expect(ci).toContain('npm run test');
-        expect(ci).not.toContain('test:integration');
+        expect(ci).toContain('npm run test:integration');
+        expect(ci).toContain('./scripts/ci-integration-db.sh');
+    });
+
+    it('a skipped integration suite fails CI instead of passing quietly', () => {
+        // The failure mode this whole change exists to prevent. The suites skip
+        // when no database is configured — correct locally, and indistinguishable
+        // from passing in a CI log. `npm run test:db` skipped 69 tests on every
+        // machine for as long as it has existed for exactly that reason.
+        const guard = source('src/lib/testing/db-env-guard.js');
+        const guardCode = codeOnly(guard);
+
+        expect(guardCode).toContain('if (!hasDb && process.env.CI)');
+        expect(guardCode).toContain('throw new Error');
+    });
+
+    it('both real-database setups share one production refusal', () => {
+        // Two copies of a safety rule is how the weaker one ends up deciding.
+        for (const setup of ['jest.db.setup.js', 'jest.integration.setup.js']) {
+            expect(source(setup)).toContain("require('./src/lib/testing/db-env-guard')");
+        }
+        expect(codeOnly(source('src/lib/testing/db-env-guard.js')))
+            .toContain('PRODUCTION_PROJECT_REF');
+    });
+
+    it('the db-integration suite is still configured but skipping', () => {
+        // 69 tests that have never run, because .env.staging carries all three
+        // Supabase variables with EMPTY values — configured enough to look
+        // fine, empty enough to disable everything. Recorded because it is the
+        // same defect as the one above, one directory over, and it is not fixed
+        // by this change.
+        expect(pkg.scripts['test:db']).toContain('jest.config.db.js');
+
+        const staging = existsSync(join(process.cwd(), '.env.staging'))
+            ? source('.env.staging')
+            : '';
+        if (staging) {
+            expect(staging).toMatch(/NEXT_PUBLIC_SUPABASE_URL=\s*$/m);
+        }
     });
 });

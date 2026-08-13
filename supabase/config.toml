@@ -1,0 +1,56 @@
+# Local Supabase stack, used only by the integration suites.
+#
+# This is not a description of production. It exists so `supabase start` can
+# bring up postgres + kong + postgrest + gotrue on a CI runner, which is what
+# supabase-db.ts and the auth shim need in order to run against something real.
+# See scripts/ci-integration-db.sh.
+
+project_id = "easy-sales-export"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+# The adapter's own default page size is 5000 (SUPABASE_DEFAULT_QUERY_LIMIT in
+# supabase-db.ts) and its unbounded ceiling is 500_000. PostgREST's max_rows
+# truncates SILENTLY — it returns fewer rows with a 200 and no indication that
+# anything was left out, which is the same class of defect this audit has found
+# in application code more than once. Set above the adapter's ceiling so the
+# limit that applies is always the one the code chose.
+max_rows = 500000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:3000"
+enable_signup = true
+
+[auth.email]
+# createTestUser passes email_confirm: true. Confirmation flows would only add a
+# mailbox to poll for a value no assertion looks at.
+enable_confirmations = false
+
+# Everything below is off because nothing under test touches it, and each one is
+# another container to pull and another 20 seconds on every CI run.
+[studio]
+enabled = false
+
+[storage]
+enabled = false
+
+[realtime]
+enabled = false
+
+[analytics]
+enabled = false
+
+[edge_runtime]
+enabled = false
+
+[local_smtp]
+enabled = false
