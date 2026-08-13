@@ -3,6 +3,7 @@ export const maxDuration = 60; // Vercel Hobby max; upgrade to 300 on Pro if nee
 
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/session-guard";
+import { withRateLimit } from "@/lib/rate-limit";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { hasAdminPermission } from "@/lib/admin-permissions";
@@ -77,8 +78,28 @@ async function fetchAllPaystackByStatus(status: string, PAYSTACK_SECRET_KEY: str
 async function paystackSyncHandler(_req: NextRequest) {
     try {
         // ── Auth guard ────────────────────────────────────────────────────────
+        // finance:reconcile, not finance:read.
+        //
+        // This route reads nothing. Every successful transaction it finds goes
+        // through processMarketplaceOrder, processExportInvestment,
+        // processCooperativeRegistration, processAcademyRegistration,
+        // processFarmNationRegistration, processWaveRegistration or
+        // confirmWalletFundingAction — the same processors the Paystack webhook
+        // uses. They grant roles, activate memberships and credit wallets.
+        //
+        // finance:read is held by support, cooperative_admin and
+        // marketplace_admin, none of which hold any other finance permission.
+        // So a support agent could trigger platform-wide payment fulfilment.
+        //
+        // The matrix already had the right shape — finance:process_withdrawals
+        // is held by super_admin and admin alone — and that is the set
+        // finance:reconcile is granted to. The permission is new only because
+        // none of the existing names describe replaying fulfilment.
+        //
+        // The scheduled twin of this job, cron/reconcile-paystack, runs the
+        // same processors behind CRON_SECRET and was always guarded correctly.
         const session = (await requireSession()).session;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "finance:read")) {
+        if (!session?.user || !hasAdminPermission(session.user.roles, "finance:reconcile")) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
         }
 
@@ -258,4 +279,13 @@ async function paystackSyncHandler(_req: NextRequest) {
     }
 }
 
-export const GET = paystackSyncHandler;
+/**
+ * Throttled, which it was not.
+ *
+ * One call pages through the ENTIRE Paystack transaction history — three status
+ * buckets in parallel, 100 per page, no page ceiling — and then runs fulfilment
+ * on everything successful. It was exported bare, so any holder of the guard
+ * permission could run that as fast as they could issue requests, against a
+ * third-party API with its own rate limits and a bill attached.
+ */
+export const GET = withRateLimit(paystackSyncHandler);

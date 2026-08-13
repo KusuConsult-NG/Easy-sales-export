@@ -31,6 +31,11 @@ export type AdminPermission =
 
     // Financial Operations
     | "finance:read"
+    // Re-running payment fulfilment: replaying Paystack transactions through
+    // the same processors a webhook uses. It grants roles, activates
+    // memberships and credits wallets, so it belongs with the finance WRITE
+    // permissions and not with finance:read, which is where it was.
+    | "finance:reconcile"
     | "finance:process_withdrawals"
     | "finance:refund"
     | "finance:resolve_disputes"
@@ -85,7 +90,7 @@ const PERMISSION_MATRIX: Record<AdminRole, AdminPermission[]> = {
         "users:suspend", "users:assign_roles", "users:impersonate",
         "content:read", "content:approve", "content:reject", "content:delete",
         "announcements:manage",
-        "finance:read", "finance:process_withdrawals", "finance:refund",
+        "finance:read", "finance:reconcile", "finance:process_withdrawals", "finance:refund",
         "finance:resolve_disputes",
         "config:read", "config:update", "config:feature_toggles", "config:rollback",
         "marketplace:approve_sellers", "marketplace:suspend_sellers",
@@ -105,7 +110,7 @@ const PERMISSION_MATRIX: Record<AdminRole, AdminPermission[]> = {
         "users:read", "users:update", "users:suspend", "users:assign_roles",
         "content:read", "content:approve", "content:reject",
         "announcements:manage",
-        "finance:read", "finance:process_withdrawals", "finance:resolve_disputes",
+        "finance:read", "finance:reconcile", "finance:process_withdrawals", "finance:resolve_disputes",
         "config:read", "config:update", "config:feature_toggles",
         "marketplace:approve_sellers", "marketplace:suspend_sellers",
         "marketplace:moderate_reviews",
