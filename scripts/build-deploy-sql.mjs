@@ -68,6 +68,13 @@ const EXPECTED = [
              "invisible to every reader until it runs, and the code fix in #148 stops " +
              "the damage without repairing what is already stored.",
     },
+    {
+        n: "024",
+        why: "backfills the date of birth WAVE validated onto the user record — a DATA " +
+             "migration, like 023. Independent of the others; it is here rather than " +
+             "excluded because until it runs, forensics.ts cannot age-check any " +
+             "participant who enrolled before #157.",
+    },
     { n: "004", why: "row-level security — LAST, and in a low-traffic window" },
 ];
 
