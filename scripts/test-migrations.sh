@@ -155,6 +155,65 @@ else
     printf "  FAIL  second session did not block (%ss) — the lock is not holding\n" "$((t1-t0))"; fail=$((fail+1))
 fi
 
+echo "== 023 — the academy field-rename backfill"
+# A DATA migration, not a function, so it needs fixtures rather than a call.
+#
+# It is worth testing here for the same reason 021 was: the failure mode is a
+# row that exists and cannot be seen, which no assertion against a mocked
+# adapter reaches. Part 2 also runs an aggregate cast over JSONB, and a single
+# non-numeric value there would abort the whole migration part-way.
+Q "INSERT INTO document_collections (id, collection_name, raw_data) VALUES
+   ('u1_c1','course_progress','{\"resolvedUserId\":\"u1\",\"courseId\":\"c1\",\"progressPercent\":0,\"completionPercentage\":0,\"completed\":false,\"completedAt\":null}'),
+   ('u1_l1','lesson_video_progress','{\"userId\":\"u1\",\"courseId\":\"c1\",\"lessonId\":\"l1\",\"progressPercent\":100,\"completed\":true}'),
+   ('u1_l2','lesson_video_progress','{\"userId\":\"u1\",\"courseId\":\"c1\",\"lessonId\":\"l2\",\"progressPercent\":50,\"completed\":false}'),
+   ('u2_c1','course_progress','{\"userId\":\"u2\",\"courseId\":\"c1\",\"progressPercent\":73}'),
+   ('u3_c1','course_progress','{\"userId\":\"u3\",\"resolvedUserId\":\"u3\",\"courseId\":\"c1\",\"progressPercent\":12}'),
+   ('u4_c1','course_progress','{\"resolvedUserId\":\"u4\",\"courseId\":\"c9\",\"progressPercent\":0}'),
+   ('u4_l1','lesson_video_progress','{\"userId\":\"u4\",\"courseId\":\"c9\",\"lessonId\":\"l1\",\"progressPercent\":\"n/a\"}'),
+   ('u1_sub','user_progress/u1/courses','{\"resolvedUserId\":\"u1\",\"courseId\":\"c1\"}'),
+   ('u5_c1','course_progress','{\"resolvedUserId\":\"u5\",\"courseId\":\"c1\",\"progressPercent\":0,\"completed\":false}'),
+   ('u5_l1','lesson_video_progress','{\"userId\":\"u5\",\"courseId\":\"c1\",\"lessonId\":\"l1\",\"progressPercent\":100,\"completed\":true}'),
+   ('u5_l2','lesson_video_progress','{\"userId\":\"u5\",\"courseId\":\"c1\",\"lessonId\":\"l2\",\"progressPercent\":100,\"completed\":true}'),
+   ('e1','course_enrollments','{\"userId\":\"u1\",\"courseId\":\"c1\",\"status\":\"active\"}'),
+   ('e2','course_enrollments','{\"resolvedUserId\":\"u1\",\"courseId\":\"c1\",\"status\":\"active\"}');" >/dev/null
+
+"$PGBIN/psql" -h "$SOCK" -p "$PORT" -U postgres -d "$DB" -v ON_ERROR_STOP=1 -q \
+    -f supabase/migrations/023_academy_resolved_user_id_backfill.sql >/dev/null 2>&1 \
+    || { printf "  FAIL  023 did not apply\n"; fail=$((fail+1)); }
+
+check "no resolvedUserId survives, in any collection" "0" \
+      "$(Q "SELECT COUNT(*) FROM document_collections WHERE raw_data ? 'resolvedUserId';")"
+check "the subcollection row was renamed too" "u1" \
+      "$(Q "SELECT raw_data->>'userId' FROM document_collections WHERE id='u1_sub';")"
+check "a row holding both keys keeps its userId" "u3" \
+      "$(Q "SELECT raw_data->>'userId' FROM document_collections WHERE id='u3_c1';")"
+# The lessons say 100 and 50, so the course figure comes back as 75.
+check "zeroed progress is restored from the lesson records" "75" \
+      "$(Q "SELECT raw_data->>'progressPercent' FROM document_collections WHERE id='u1_c1';")"
+# THE assertion. Restoring this would mint a certificate the platform then
+# vouches for publicly, from a number a migration guessed.
+#
+# u5 is the fixture that makes this bite: BOTH their lessons are at 100, so any
+# rule that infers completion from the lesson records would set it. The first
+# version of this check used u1, whose average is 75 — it passed against a
+# deliberately mutated migration that DID restore completion, because that
+# fixture never crossed the threshold. An assertion that cannot fail is not one.
+check "completion is NOT restored, even at 100% lessons" "false" \
+      "$(Q "SELECT raw_data->>'completed' FROM document_collections WHERE id='u5_c1';")"
+check "and its percentage still is restored" "100" \
+      "$(Q "SELECT raw_data->>'progressPercent' FROM document_collections WHERE id='u5_c1';")"
+check "a learner who has since progressed is untouched" "73" \
+      "$(Q "SELECT raw_data->>'progressPercent' FROM document_collections WHERE id='u2_c1';")"
+check "a non-numeric lesson value does not abort the run" "0" \
+      "$(Q "SELECT raw_data->>'progressPercent' FROM document_collections WHERE id='u4_c1';")"
+check "duplicate enrolments are reported, not deleted" "2" \
+      "$(Q "SELECT COUNT(*) FROM document_collections WHERE collection_name='course_enrollments';")"
+
+"$PGBIN/psql" -h "$SOCK" -p "$PORT" -U postgres -d "$DB" -v ON_ERROR_STOP=1 -q \
+    -f supabase/migrations/023_academy_resolved_user_id_backfill.sql >/dev/null 2>&1
+check "re-running changes nothing (idempotent)" "75|13" \
+      "$(Q "SELECT (SELECT raw_data->>'progressPercent' FROM document_collections WHERE id='u1_c1')||'|'||(SELECT COUNT(*) FROM document_collections);")"
+
 echo
 echo "== $pass passed, $fail failed"
 [ "$fail" -eq 0 ] || exit 1

@@ -60,6 +60,14 @@ const EXPECTED = [
     { n: "019", why: "claim an idempotency key — platform.ts and export.ts throw without it" },
     { n: "020", why: "floored debit + versioned CAS — the withdrawal floor and every versionedUpdate caller" },
     { n: "021", why: "one open loan application per borrower (advisory lock)" },
+    {
+        n: "023",
+        why: "repairs the academy rows autoEnrollPaidUser wrote as `resolvedUserId` — " +
+             "a DATA migration, not a function. Order does not matter against the " +
+             "others; it is here rather than excluded because the rows it fixes are " +
+             "invisible to every reader until it runs, and the code fix in #148 stops " +
+             "the damage without repairing what is already stored.",
+    },
     { n: "004", why: "row-level security — LAST, and in a low-traffic window" },
 ];
 
