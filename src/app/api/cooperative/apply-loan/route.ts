@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { calculateRepaymentTerms } from "@/lib/loan-terms";
 import { FieldValue } from "@/lib/firestore-compat";
 import { withRateLimit } from "@/lib/rate-limit";
 
@@ -123,9 +124,35 @@ async function applyLoanHandler(request: NextRequest) {
         // This previously divided by 12 as well, treating it as an annual rate —
         // so the monthly payment quoted here was a twelfth of what the repayment
         // schedule generator, which reads the same field as monthly, went on to bill.
-        const monthlyRate = product.interestRate / 100;
-        const monthlyPayment = (amount * monthlyRate * Math.pow(1 + monthlyRate, product.durationMonths)) /
-            (Math.pow(1 + monthlyRate, product.durationMonths) - 1);
+        //
+        // The annuity formula was also inlined here, and divided by zero on an
+        // interest-free product: at r = 0 the denominator (1+r)^n - 1 is 0, and
+        // 0/0 is NaN, so `monthlyPayment: NaN` was written onto the loan
+        // application. Nothing downstream would have flagged it.
+        //
+        // lib/loan-terms.ts already solves this — it validates its inputs, and
+        // its comment names this exact case: "A zero rate is interest-free: the
+        // annuity formula divides by zero there." It also runs in kobo, so a
+        // full schedule does not drift. Using it rather than keeping a third
+        // copy of the same maths.
+        if (!Number.isFinite(product.interestRate) || product.interestRate < 0
+            || !Number.isInteger(product.durationMonths) || product.durationMonths < 1) {
+            // A product predating the validation added to loan-products.ts.
+            // Refusing is right: quoting a payment from unusable terms is worse
+            // than declining to quote one.
+            logger.error("[apply-loan] Loan product has unusable terms", {
+                productId,
+                interestRate: product.interestRate,
+                durationMonths: product.durationMonths,
+            });
+            return NextResponse.json(
+                { success: false, message: "This loan product is not currently available" },
+                { status: 409 }
+            );
+        }
+
+        const terms = calculateRepaymentTerms(amount, product.durationMonths, product.interestRate);
+        const monthlyPayment = terms.monthlyPayment;
 
         // Create loan application (Admin SDK)
         const applicationRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc();
