@@ -17,9 +17,35 @@ import { serializeDocs } from "@/lib/firestore-serialize";
 import { z } from "zod";
 import { ActionResponse } from "@/lib/safe-action";
 import { escapeHtml } from "@/lib/utils";
+import { toDateOrNull } from "@/lib/date-utils";
 
 const reviewSchema = z.object({ rating: z.number().min(1, "Rating must be at least 1").max(5, "Rating cannot exceed 5"),
     comment: z.string().trim().min(20, "Review must be at least 20 characters").max(500, "Review must not exceed 500 characters") });
+
+/** How many pictures a single review may carry. */
+const MAX_REVIEW_IMAGES = 8;
+
+/**
+ * Is this string something that can only ever resolve to an image location?
+ *
+ * Rejects `javascript:`, `data:` and every other scheme by allowing exactly two
+ * shapes: an absolute https URL, or a root-relative path on this site.
+ * Protocol-relative ("//evil.example") is rejected too — it reads as a path and
+ * behaves as a URL.
+ */
+function isSafeImageReference(value: string): boolean {
+    const trimmed = value.trim();
+    if (!trimmed) return false;
+
+    if (trimmed.startsWith("//")) return false;
+    if (trimmed.startsWith("/")) return true;
+
+    try {
+        return new URL(trimmed).protocol === "https:";
+    } catch {
+        return false;
+    }
+}
 
 /**
  * Create a product review
@@ -80,6 +106,26 @@ export async function createReviewAction(params: {
         if (!productDoc.exists) { return { success: false as const, error: "Product no longer exists on the platform", data: null };
         }
         const productActualSellerId = productDoc.data()?.sellerId || order.sellerId;
+
+        // `images` arrived from the caller and was stored exactly as sent — any
+        // number of them, any string. These are rendered beside a review, so an
+        // unbounded list of arbitrary URIs is both a layout problem and a way to
+        // put `javascript:` or `data:` into an attribute, depending on how a
+        // future component uses them.
+        //
+        // Bounded, and restricted to shapes that can only ever be a picture:
+        // an https URL, or a path within this site.
+        if (!Array.isArray(images)) {
+            return { success: false as const, error: "Images must be a list", data: null };
+        }
+        if (images.length > MAX_REVIEW_IMAGES) {
+            return { success: false as const, error: `A review may have at most ${MAX_REVIEW_IMAGES} images`, data: null };
+        }
+        for (const image of images) {
+            if (typeof image !== "string" || image.length > 2000 || !isSafeImageReference(image)) {
+                return { success: false as const, error: "Images must be https URLs or site paths", data: null };
+            }
+        }
 
         // Create review
         const reviewData: Partial<ProductReview> = { productId,
@@ -302,9 +348,27 @@ export async function updateReviewAction(
         }
 
         // Check 30-day limit
-        const reviewDate = ('toDate' in review.createdAt && typeof review.createdAt.toDate === 'function')
-            ? review.createdAt.toDate()
-            : (review.createdAt instanceof Date ? review.createdAt : new Date());
+        //
+        // This handled only a Timestamp with .toDate() and a real Date, and fell
+        // back to `new Date()` for everything else — so an unrecognised
+        // createdAt made the review zero days old and permanently editable. The
+        // read paths in this same file coerce `seconds`, `_seconds`, Date and
+        // string forms explicitly, which is the evidence that those shapes
+        // occur here.
+        //
+        // Worse than the bypass: `'toDate' in review.createdAt` THROWS on a
+        // string or a null, because `in` needs an object. A review whose
+        // createdAt had been serialised to an ISO string could not be edited at
+        // all, failing with a generic error from the outer catch.
+        //
+        // toDateOrNull handles every shape and returns null when it genuinely
+        // cannot tell. A window rule must fail CLOSED there: "we cannot tell
+        // when this was written" is not "it was written just now".
+        const reviewDate = toDateOrNull(review.createdAt);
+        if (!reviewDate) {
+            logger.warn("[updateReviewAction] Review has an unreadable createdAt; refusing the edit", { reviewId });
+            return { success: false as const, error: "This review's date cannot be determined, so it can no longer be edited", data: null };
+        }
         const daysSinceCreation = Math.floor(
             (Date.now() - reviewDate.getTime()) / (1000 * 60 * 60 * 24)
         );
@@ -342,7 +406,19 @@ export async function moderateReviewAction(
         // Verify admin role
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const userData = userDoc.data();
-        if (!hasRole(userData?.roles || [], "admin")) { return { success: false as const, error: "Not authorized as admin", data: null };
+        // A super_admin who does not also hold the plain 'admin' role was
+        // refused here. hasRole is a literal includes(), so this is the same
+        // lockout fixed in #115, #122 and #134 — and #122 fixed it in
+        // assignDisputeAction, in this very codebase, while leaving these
+        // siblings. The #138 ratchet did not catch them because it matches the
+        // `roles.includes("admin")` spelling and these say `hasRole(...)`.
+        //
+        // Deliberately NOT switched to isAdmin(), which also admits moderator,
+        // support and every module admin. Widening review moderation while
+        // fixing a lockout would be a bad trade made quietly.
+        const callerRoles = userData?.roles || [];
+        if (!hasRole(callerRoles, "admin") && !hasRole(callerRoles, "super_admin")) {
+            return { success: false as const, error: "Not authorized as admin", data: null };
         }
 
         // Get review
@@ -435,7 +511,19 @@ export async function getAdminReviewsAction(options: {
         // Verify admin role
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const userData = userDoc.data();
-        if (!hasRole(userData?.roles || [], "admin")) { return { success: false as const, error: "Not authorized as admin", data: null };
+        // A super_admin who does not also hold the plain 'admin' role was
+        // refused here. hasRole is a literal includes(), so this is the same
+        // lockout fixed in #115, #122 and #134 — and #122 fixed it in
+        // assignDisputeAction, in this very codebase, while leaving these
+        // siblings. The #138 ratchet did not catch them because it matches the
+        // `roles.includes("admin")` spelling and these say `hasRole(...)`.
+        //
+        // Deliberately NOT switched to isAdmin(), which also admits moderator,
+        // support and every module admin. Widening review moderation while
+        // fixing a lockout would be a bad trade made quietly.
+        const callerRoles = userData?.roles || [];
+        if (!hasRole(callerRoles, "admin") && !hasRole(callerRoles, "super_admin")) {
+            return { success: false as const, error: "Not authorized as admin", data: null };
         }
 
         const fetchLimit = options.limit || 20;
