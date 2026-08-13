@@ -214,6 +214,57 @@ check "duplicate enrolments are reported, not deleted" "2" \
 check "re-running changes nothing (idempotent)" "75|13" \
       "$(Q "SELECT (SELECT raw_data->>'progressPercent' FROM document_collections WHERE id='u1_c1')||'|'||(SELECT COUNT(*) FROM document_collections);")"
 
+echo "== 024 — the WAVE date-of-birth backfill"
+# Fixtures cover each branch, because the branches are the whole design: copy
+# where absent and unambiguous, leave everything else alone.
+Q "INSERT INTO users (id, email, roles, raw_data) VALUES
+   ('w1','w1@e.com','{wave_participant}','{}'),
+   ('w2','w2@e.com','{wave_participant}','{\"dateOfBirth\":\"1990-01-01\"}'),
+   ('w3','w3@e.com','{wave_participant}','{}'),
+   ('w4','w4@e.com','{wave_participant}','{}'),
+   ('w5','w5@e.com','{wave_participant}','{}');" >/dev/null
+Q "INSERT INTO document_collections (id, collection_name, raw_data) VALUES
+   -- w1: one application, one usable date -> backfilled
+   ('a1','wave_applications','{\"userId\":\"w1\",\"dateOfBirth\":\"1995-06-15\"}'),
+   -- w2: has a date already -> left alone
+   ('a2','wave_applications','{\"userId\":\"w2\",\"dateOfBirth\":\"1985-03-02\"}'),
+   -- w3: two applications that AGREE -> backfilled
+   ('a3','wave_applications','{\"userId\":\"w3\",\"dateOfBirth\":\"1992-02-02\"}'),
+   ('a4','wave_applications','{\"userId\":\"w3\",\"dateOfBirth\":\"1992-02-02\"}'),
+   -- w4: two applications that DISAGREE -> reported, not merged
+   ('a5','wave_applications','{\"userId\":\"w4\",\"dateOfBirth\":\"1991-01-01\"}'),
+   ('a6','wave_applications','{\"userId\":\"w4\",\"dateOfBirth\":\"1993-09-09\"}'),
+   -- w5: a malformed date -> ignored entirely
+   ('a7','wave_applications','{\"userId\":\"w5\",\"dateOfBirth\":\"not a date\"}');" >/dev/null
+
+"$PGBIN/psql" -h "$SOCK" -p "$PORT" -U postgres -d "$DB" -v ON_ERROR_STOP=1 -q \
+    -f supabase/migrations/024_wave_date_of_birth_backfill.sql >/dev/null 2>&1 \
+    || { printf "  FAIL  024 did not apply\n"; fail=$((fail+1)); }
+
+check "a single usable application date is copied across" "1995-06-15" \
+      "$(Q "SELECT raw_data->>'dateOfBirth' FROM users WHERE id='w1';")"
+check "the copy is stamped with where it came from" "wave_application_backfill_024" \
+      "$(Q "SELECT raw_data->>'dateOfBirthSource' FROM users WHERE id='w1';")"
+# Set-once. The application says 1985; the user record already says 1990 and wins.
+check "a date already on the record is not overwritten" "1990-01-01" \
+      "$(Q "SELECT raw_data->>'dateOfBirth' FROM users WHERE id='w2';")"
+check "two applications that agree are unambiguous" "1992-02-02" \
+      "$(Q "SELECT raw_data->>'dateOfBirth' FROM users WHERE id='w3';")"
+# THE assertion. Picking one would erase the discrepancy the sweep exists to find.
+check "conflicting declarations are left untouched" "" \
+      "$(Q "SELECT COALESCE(raw_data->>'dateOfBirth','') FROM users WHERE id='w4';")"
+# new Date("not a date") is NaN and every comparison against it is false, so
+# copying it across would recreate the defect while looking fixed.
+check "a malformed date is ignored, not copied" "" \
+      "$(Q "SELECT COALESCE(raw_data->>'dateOfBirth','') FROM users WHERE id='w5';")"
+check "nothing else on the row was disturbed" "w1@e.com" \
+      "$(Q "SELECT email FROM users WHERE id='w1';")"
+
+"$PGBIN/psql" -h "$SOCK" -p "$PORT" -U postgres -d "$DB" -v ON_ERROR_STOP=1 -q \
+    -f supabase/migrations/024_wave_date_of_birth_backfill.sql >/dev/null 2>&1
+check "re-running changes nothing (idempotent)" "1995-06-15|5" \
+      "$(Q "SELECT (SELECT raw_data->>'dateOfBirth' FROM users WHERE id='w1')||'|'||(SELECT COUNT(*) FROM users);")"
+
 echo
 echo "== $pass passed, $fail failed"
 [ "$fail" -eq 0 ] || exit 1
