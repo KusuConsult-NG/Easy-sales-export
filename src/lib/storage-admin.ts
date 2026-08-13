@@ -33,17 +33,33 @@ const ALLOWED_MIMES = [
  * swallowed every error except its own, so a `file-type` import failure
  * silently disabled content validation. Detection failures now fail closed.
  */
-export async function assertAllowedFileType(buffer: Buffer, fileName: string): Promise<void> {
-    let detectedMime: string | undefined;
-
+/**
+ * The MIME type of a buffer's actual CONTENT, by magic bytes.
+ *
+ * Split out of assertAllowedFileType so a caller with a narrower policy than
+ * ALLOWED_MIMES can enforce it against what the file really is. certificates.ts
+ * accepts only PDFs and images, and was checking `file.type` — a string the
+ * client sends — while this list also permits video and Word documents. So an
+ * MP4 declared as `application/pdf` passed both checks and was recorded as a
+ * PDF.
+ *
+ * Detection failure throws rather than returning undefined: a caller cannot tell
+ * "not a recognised type" from "the detector broke" otherwise, and the second
+ * must never be treated as permission.
+ */
+export async function detectFileType(buffer: Buffer, fileName: string): Promise<string | undefined> {
     try {
         const { fileTypeFromBuffer } = await import('file-type');
         const type = await fileTypeFromBuffer(buffer);
-        detectedMime = type?.mime;
+        return type?.mime;
     } catch (error: any) {
         logger.error('[storage-admin] File type detection failed', { fileName, error: error?.message });
         throw new Error('Security Error: unable to verify file contents.');
     }
+}
+
+export async function assertAllowedFileType(buffer: Buffer, fileName: string): Promise<void> {
+    const detectedMime = await detectFileType(buffer, fileName);
 
     if (!detectedMime || !ALLOWED_MIMES.includes(detectedMime)) {
         logger.warn(`[storage-admin] Blocked upload of type ${detectedMime || 'unknown'} for file ${fileName}`);

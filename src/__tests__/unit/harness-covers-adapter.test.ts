@@ -33,6 +33,25 @@
  * floor, not the ceiling: a stub that silently discards its arguments is still
  * a vacuum, and only a positive assertion in the test that uses it will catch
  * that.
+ *
+ * ONE FLAT NAMESPACE WAS NOT ENOUGH
+ * ---------------------------------
+ * A fourth gap got through this file: `docRef.delete()`. The mock defines
+ * several distinct shapes — a query object, two `docObj` document refs, and the
+ * modular `docRefFor` — and the check above collects method names from the WHOLE
+ * file into one set. `delete:` existed on `docRefFor`, so `delete` was "present"
+ * while both `docObj` shapes lacked it, and
+ * `db.collection(x).doc(y).delete()` threw.
+ *
+ * The cost is the usual one: certificates.ts's delete returned a generic
+ * failure, so every "refuses to delete" assertion passed whether the guard was
+ * there or not. It was found by a VACUITY GUARD failing — "still deletes a
+ * document the user uploaded" — and not by any of the refusals.
+ *
+ * So the document-ref shape is now checked on its own, per shape rather than
+ * per file. The query surface is still checked flat; doing this properly for
+ * every shape means parsing the mock, and the document ref is where actions
+ * actually write.
  */
 
 import { describe, it, expect } from '@jest/globals';
@@ -114,6 +133,73 @@ describe('the jest harness against the real adapter', () => {
             );
         }
         expect(missing).toEqual([]);
+    });
+
+    it('gives every document-ref shape the full document-ref surface', () => {
+        // Per shape, not per file. `delete` on one shape used to satisfy the
+        // flat check above for all of them.
+        //
+        // These four are what an action reaches on a `db.collection(x).doc(y)`
+        // handle. Anything missing throws, gets caught, and turns into a generic
+        // failure that no assertion can distinguish from a refusal.
+        const DOC_REF_SURFACE = ['get', 'set', 'update', 'delete'];
+
+        const src = readFileSync(join(process.cwd(), 'jest.setup.js'), 'utf-8');
+
+        // Each `const docObj = (id) => { ... };` block, plus the modular
+        // docRefFor. Located by name so a new shape has to be added here
+        // deliberately.
+        const shapes: Array<{ name: string; body: string }> = [];
+        for (const m of src.matchAll(/const (docObj|docRefFor) = \([^)]*\) =>/g)) {
+            const start = m.index ?? 0;
+            // Take the balanced body that follows.
+            let depth = 0, end = start;
+            for (let i = src.indexOf('{', start); i < src.length; i++) {
+                if (src[i] === '{') depth++;
+                else if (src[i] === '}') { depth--; if (depth === 0) { end = i; break; } }
+            }
+            // Comment lines are stripped before matching.
+            //
+            // The first version of this check passed against a shape whose
+            // `delete` had been deliberately removed, because the explanatory
+            // comment sitting inside that shape contains the literal text
+            // "delete:" while describing the bug. A check for what the CODE
+            // implements has to read the code — the same trap the #105 ratchet
+            // and the analytics paging test each hit.
+            const body = src.slice(start, end)
+                .split('\n')
+                .filter((line) => {
+                    const t = line.trim();
+                    return !t.startsWith('//') && !t.startsWith('*') && !t.startsWith('/*');
+                })
+                .join('\n');
+            shapes.push({ name: `${m[1]} @ line ${src.slice(0, start).split('\n').length}`, body });
+        }
+
+        // Sanity: without this the loop below can pass against zero shapes,
+        // which is the vacuity failure this file exists to prevent.
+        expect(shapes.length).toBeGreaterThanOrEqual(3);
+
+        const gaps: string[] = [];
+        for (const shape of shapes) {
+            for (const method of DOC_REF_SURFACE) {
+                if (!new RegExp(`\\b${method}\\s*:`).test(shape.body)) {
+                    gaps.push(`${shape.name} — missing .${method}()`);
+                }
+            }
+        }
+
+        if (gaps.length > 0) {
+            throw new Error(
+                `\n\n${gaps.length} document-ref shape gap(s) in jest.setup.js:\n\n` +
+                gaps.map((g) => `  ${g}`).join('\n') +
+                `\n\ndocRef.delete() was missing from both docObj shapes while present\n` +
+                `on docRefFor, so the flat check above saw it as covered. Actions\n` +
+                `calling it threw, their catch returned a generic failure, and every\n` +
+                `"refuses to delete" assertion passed with or without a guard.\n`
+            );
+        }
+        expect(gaps).toEqual([]);
     });
 
     it('exports every top-level helper the adapter exports', () => {
