@@ -12,6 +12,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
 import { logger } from "@/lib/logger";
+import { claimIdempotencyKey } from "@/lib/wallet-ledger";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +46,9 @@ export async function GET(req: NextRequest) {
         const invite = inviteSnap.data()!;
 
         // --- 3. Token must not have been used ---
+        //
+        // A cheap early exit, and it is NOT what makes redemption single-use —
+        // see step 6.
         if (invite.used === true) {
             logger.warn(`[WhatsApp Invite] Token already used: ${token} by ${invite.email}`);
             return NextResponse.redirect(`${APP_URL}/invite-error?reason=used`);
@@ -64,7 +68,36 @@ export async function GET(req: NextRequest) {
             return NextResponse.redirect(`${APP_URL}/invite-error?reason=unavailable`);
         }
 
-        // --- 6. Atomically mark as used BEFORE redirecting ---
+        // --- 6. Claim the token, once, before redirecting ---
+        //
+        // The comment here said "Atomically mark as used" and the code was a
+        // read at step 2 followed by a write here. Two requests carrying the
+        // same token both read `used: false`, both passed step 3, and both were
+        // redirected — so the one-time token was one-time only against a user
+        // who clicked twice slowly. A leaked or forwarded link admitted as many
+        // people to the private group as could load it together.
+        //
+        // claimIdempotencyKey is an insert into a table with a unique key, so
+        // exactly one concurrent caller wins. It needs no status field on the
+        // invite and works for tokens issued before this change, which
+        // claimStatusTransition would not.
+        //
+        // The trade-off is the one that primitive documents: a caller that
+        // claims and then fails leaves the token spent. That was already the
+        // behaviour — `used: true` was written before the redirect — so nothing
+        // is lost here.
+        const claim = await claimIdempotencyKey({
+            key: `whatsapp-invite:${token}`,
+            action: "whatsapp_invite_redeem",
+        });
+
+        if (!claim.claimed) {
+            logger.warn(`[WhatsApp Invite] Token already claimed: ${token}`);
+            return NextResponse.redirect(`${APP_URL}/invite-error?reason=used`);
+        }
+
+        // The document is still marked, so the admin views and the `used` check
+        // above stay meaningful. The claim above is what enforces it.
         await inviteRef.update({
             used: true,
             usedAt: FieldValue.serverTimestamp(),
