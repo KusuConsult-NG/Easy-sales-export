@@ -21,6 +21,7 @@ import { requireSession } from "@/lib/session-guard";
 import { serializeDocs, serializeDoc } from "@/lib/firestore-serialize";
 import { withSafeAction, type ActionResponse } from "@/lib/safe-action";
 import { isAdmin } from "@/lib/admin-permissions";
+import { calculatePenalty } from "@/lib/calculatePenalty";
 
 export interface LoanApplication {
     id?: string;
@@ -492,6 +493,9 @@ export async function getAdminLoanApplicationsAction(options: {
 /**
  * Admin: Get loan applications with user details for export
  */
+/** How many rows one loan export will read. */
+const EXPORT_ROW_CAP = 5000;
+
 export async function getAdminLoanApplicationsExportAction(options: {
     statusFilter?: "all" | "pending" | "approved" | "rejected" | "disbursed" | "active" | "completed";
 }): Promise<
@@ -516,13 +520,13 @@ export async function getAdminLoanApplicationsExportAction(options: {
 
         let loans: any[];
         try {
-            const snapshot = await query.limit(5000).get();
+            const snapshot = await query.limit(EXPORT_ROW_CAP).get();
             loans = serializeDocs(snapshot.docs) as any[];
         } catch (e: any) {
             if (e.code === 9 || e.message?.includes("FAILED_PRECONDITION") || e.message?.toLowerCase().includes("index")) {
                 logger.warn("Admin loans export query failed due to missing index. Falling back.", { error: e.message });
                 const fallbackQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS);
-                const snapshot = await fallbackQuery.limit(5000).get();
+                const snapshot = await fallbackQuery.limit(EXPORT_ROW_CAP).get();
                 let loansRaw = serializeDocs(snapshot.docs) as any[];
                 if (options.statusFilter && options.statusFilter !== "all") {
                     loansRaw = loansRaw.filter(loan => loan.status === options.statusFilter);
@@ -580,9 +584,28 @@ export async function getAdminLoanApplicationsExportAction(options: {
             };
         });
 
+        // Say so when the export is a portion.
+        //
+        // Both query paths cap at 5,000 rows and neither said anything about it,
+        // so an export that hit the cap was indistinguishable from a complete
+        // one — the same shape as the audit-log export in #150, which was
+        // silently the last fifty rows.
+        //
+        // 5,000 is left as it is; it is a reasonable ceiling and raising it is a
+        // separate judgement. What was missing is the caller being able to tell.
+        const truncated = enrichedLoans.length >= EXPORT_ROW_CAP;
+        if (truncated) {
+            logger.error(
+                `[LoansExport] Hit the ${EXPORT_ROW_CAP}-row cap. The export is INCOMPLETE — ` +
+                `narrow the status filter or add a date range.`
+            );
+        }
+
         return { 
             error: null, success: true as const, 
-            data: enrichedLoans
+            data: enrichedLoans,
+            truncated,
+            rowCap: EXPORT_ROW_CAP
         };
     } catch (error: any) {
         logger.error("Failed to fetch admin loan applications for export:", error);
@@ -1113,22 +1136,35 @@ export const getRepaymentScheduleAction = withSafeAction("getRepaymentScheduleAc
 /**
  * Calculate penalty for overdue payment (7-day grace period)
  */
-function calculatePenalty(dueDate: Date, totalAmount: number): { penalty: number; daysOverdue: number } {
-    const now = new Date();
-    const gracePeriodDays = 7;
-    const penaltyRatePerDay = 0.001; // 0.1% per day after grace period
-
-    const daysDiff = Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
-
-    if (daysDiff <= gracePeriodDays) {
-        return { penalty: 0, daysOverdue: 0 };
-    }
-
-    const daysOverdue = daysDiff - gracePeriodDays;
-    const penalty = totalAmount * penaltyRatePerDay * daysOverdue;
-
-    return { penalty: Math.round(penalty), daysOverdue };
-}
+// The penalty maths lives in @/lib/calculatePenalty and is imported at the top
+// of this file.
+//
+// It used to live here too — an identical private copy — while
+// src/lib/calculatePenalty.ts carried the header "Extracted from loans.ts for
+// testing" and a full suite in src/__tests__/lib/penalty.test.ts.
+//
+// The extraction happened and the original was never replaced with an import,
+// so THE TESTED IMPLEMENTATION WAS NOT THE ONE THAT RAN. Ten assertions about
+// grace periods, rounding and large amounts covered a function no production
+// path called, and a fix to either copy would have left the other alone.
+//
+// The two were byte-identical in behaviour, so nothing was wrong yet. That is
+// the point: this is the state a duplicate sits in right up until somebody
+// changes one of them.
+//
+// UNCAPPED, AND WORTH A DECISION
+// ------------------------------
+// The penalty is 0.1% of the instalment per day after a seven-day grace period,
+// with no ceiling, and it is real money: submitRepaymentAction adds it to
+// `totalDue` and an instalment is not marked paid until paidAmount covers it.
+//
+//     1,000 days overdue  =  100% of the instalment, on top of the instalment
+//     2,000 days overdue  =  200%
+//
+// It simply keeps going. Whether a cap exists, and where, is a lending policy
+// decision rather than something to infer from the code — the same reason the
+// business loan rate in loan-terms.ts records who confirmed it. Reported rather
+// than invented.
 
 /**
  * Submit loan repayment
