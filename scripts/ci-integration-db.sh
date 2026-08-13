@@ -26,11 +26,28 @@
 # database, and this script applies schema.sql first and the migrations after —
 # the same order scripts/test-migrations.sh uses, for the same reason.
 #
-# 004 (row-level security) is skipped, as it is there. Under RLS every query
-# from a non-service role returns zero rows, which reads as a failure of the
-# thing under test rather than of the setup. The integration suites authenticate
-# as service_role, which bypasses RLS anyway, so applying it would change
-# nothing except the confusion when something else breaks.
+# 004 (ROW-LEVEL SECURITY) IS APPLIED HERE, AND IS NOT IN PRODUCTION
+# -----------------------------------------------------------------
+# scripts/test-migrations.sh skips 004 and this used to as well. It is applied
+# now because __tests__/db-integration/schema-guarantees.test.ts asserts that
+# the public anon key CANNOT read the users table, and without 004 it can — the
+# assertion would be measuring the absence of the migration rather than the
+# behaviour of the code.
+#
+# Everything else is unaffected: every other suite authenticates as
+# service_role, which bypasses RLS, and psql here connects as postgres, which
+# has BYPASSRLS.
+#
+# READ THIS BEFORE TRUSTING A GREEN RUN. 004 has NOT been applied to the
+# production database — it is item 3 in docs/audit/outstanding-work.md, and its
+# own header says the rollout "is not tested anywhere yet". So a green
+# schema-guarantees run means "004 does what it claims", NOT "production is
+# protected". Production still has RLS disabled on all nine tables, which means
+# the anon key that ships in the browser bundle can read and write every row.
+#
+# Applying it here is the first time it has been executed anywhere, which is
+# worth something: it now proves the migration applies cleanly and produces the
+# denial it promises. It does not move the outstanding work.
 #
 # USAGE
 #   ./scripts/ci-integration-db.sh          # start, load, print env
@@ -67,14 +84,23 @@ DB_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
 echo "== applying schema.sql"
 psql "$DB_URL" -v ON_ERROR_STOP=1 -q -f supabase/schema.sql
 
-echo "== applying migrations (004 skipped: see header)"
+echo "== applying migrations (including 004: see header)"
 for f in $(ls "$STASHED_DIR" | sort); do
-    case "$f" in
-        004_*) echo "   skip $f"; continue ;;
-    esac
     echo "   $f"
     psql "$DB_URL" -v ON_ERROR_STOP=1 -q -f "$STASHED_DIR/$f"
 done
+
+# Prove 004 actually took. `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` on a
+# table that does not exist is an error, but a migration that quietly enabled it
+# on nothing would leave schema-guarantees asserting against an open database
+# while reporting success.
+rls_count="$(psql "$DB_URL" -t -A -c \
+    "SELECT count(*) FROM pg_tables WHERE schemaname='public' AND rowsecurity;")"
+echo "== row-level security enabled on $rls_count tables"
+if [ "$rls_count" -lt 9 ]; then
+    echo "FAIL: expected RLS on at least 9 tables, found $rls_count" >&2
+    exit 1
+fi
 
 # Grants, and why they are not automatic here.
 #
