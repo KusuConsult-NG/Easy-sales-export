@@ -101,7 +101,37 @@ export default function NotificationSettingsPage() {
                     Save
                 </button>
             </div>
-            <p className="text-slate-600 mb-8">Configure which events trigger admin email notifications</p>
+            {/*
+              * This said "Configure which events trigger admin email
+              * notifications". It configures nothing, and the notifications do
+              * not exist.
+              *
+              * None of the five keys — newUserEmail, exportRequestEmail,
+              * loanApplicationEmail, systemAlerts, weeklyDigest — is read
+              * anywhere outside this screen and the route that stores them.
+              * More than that: there is no admin-directed email sender in the
+              * platform at all. Every function in lib/email-notifications.ts
+              * writes to a user — membership approval, withdrawal confirmation,
+              * seller approval — and nothing sends to an operator address.
+              *
+              * Four of the five default to ON, so an operator opening this page
+              * is told that new-user, export-request and loan-application
+              * emails are being sent to them, and that System Alerts —
+              * "Critical system notifications" — is active. None of it is. That
+              * is the same defect as the MFA line on the security screen and
+              * worse in one respect: someone relying on system alerts to hear
+              * about a problem has been told they are covered.
+              *
+              * Same treatment as #170. The preferences are still stored and are
+              * what a notifier should read when one is built; the copy now says
+              * which of those two things is true today.
+              */}
+            <p className="text-slate-600 mb-2">Preferences for admin email notifications</p>
+            <p className="text-sm text-amber-700 mb-8">
+                Not yet active — these preferences are recorded, but the platform has no
+                admin notification email. Nothing reads these settings and no message is
+                sent for any of the events below.
+            </p>
 
             <div className="bg-white rounded-2xl shadow-sm divide-y divide-slate-100">
                 {items.map(item => (
