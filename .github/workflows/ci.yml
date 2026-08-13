@@ -147,6 +147,24 @@ jobs:
       - name: Run integration tests
         run: npm run test:integration
 
+      # The adapter suite. Same database, same guard, different subject: these
+      # test that supabase-db.ts and Postgres agree, rather than that the
+      # application is correct.
+      #
+      # 69 tests that had never executed. jest.config.db.js and jest.db.setup.js
+      # have existed since the wallet-balance incident they were written for, and
+      # every run of them skipped — .env.staging carries the three Supabase
+      # variables with EMPTY values, which is configured enough to look fine and
+      # empty enough to disable everything. The suite that exists to catch
+      # adapter bugs was reporting "8 skipped" and nobody read it as a problem.
+      #
+      # `!cancelled()` rather than a plain sequential step so a failure in the
+      # integration suite above does not hide this one's result. Two suites, two
+      # answers.
+      - name: Run adapter tests against the same database
+        if: ${{ !cancelled() }}
+        run: npm run test:db
+
       - name: Stop Supabase
         if: always()
         run: npx --yes supabase@latest stop --no-backup || true
