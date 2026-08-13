@@ -161,6 +161,11 @@ jobs:
       # `!cancelled()` rather than a plain sequential step so a failure in the
       # integration suite above does not hide this one's result. Two suites, two
       # answers.
+      # TEMPORARY diagnostic — remove with scripts/diagnose-jsonb-cast.sh.
+      - name: Ask PostgREST which JSONB cast syntax it honours
+        if: ${{ !cancelled() }}
+        run: ./scripts/diagnose-jsonb-cast.sh
+
       - name: Run adapter tests against the same database
         if: ${{ !cancelled() }}
         run: npm run test:db
