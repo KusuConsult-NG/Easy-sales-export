@@ -246,7 +246,19 @@ async function _getAdminDisputesAction(options: { status?: "open" | "under_revie
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const userData = userDoc.data();
-        if (!hasRole(userData?.roles || [], "admin")) { return { success: false as const, error: "Not authorized as admin", data: null };
+        // A super_admin who does not also hold the plain 'admin' role was
+        // refused here. hasRole is a literal includes(), so this is the same
+        // lockout fixed in #115, #122 and #134 — and #122 fixed it in
+        // assignDisputeAction, in this very codebase, while leaving these
+        // siblings. The #138 ratchet did not catch them because it matches the
+        // `roles.includes("admin")` spelling and these say `hasRole(...)`.
+        //
+        // Deliberately NOT switched to isAdmin(), which also admits moderator,
+        // support and every module admin. Widening review moderation while
+        // fixing a lockout would be a bad trade made quietly.
+        const callerRoles = userData?.roles || [];
+        if (!hasRole(callerRoles, "admin") && !hasRole(callerRoles, "super_admin")) {
+            return { success: false as const, error: "Not authorized as admin", data: null };
         }
 
         const fetchLimit = options.search ? 5000 : (options.limit || 50);
@@ -437,7 +449,19 @@ async function _updateDisputeStatusAction(
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const userData = userDoc.data();
-        if (!hasRole(userData?.roles || [], "admin")) { return { success: false as const, error: "Not authorized as admin", data: null };
+        // A super_admin who does not also hold the plain 'admin' role was
+        // refused here. hasRole is a literal includes(), so this is the same
+        // lockout fixed in #115, #122 and #134 — and #122 fixed it in
+        // assignDisputeAction, in this very codebase, while leaving these
+        // siblings. The #138 ratchet did not catch them because it matches the
+        // `roles.includes("admin")` spelling and these say `hasRole(...)`.
+        //
+        // Deliberately NOT switched to isAdmin(), which also admits moderator,
+        // support and every module admin. Widening review moderation while
+        // fixing a lockout would be a bad trade made quietly.
+        const callerRoles = userData?.roles || [];
+        if (!hasRole(callerRoles, "admin") && !hasRole(callerRoles, "super_admin")) {
+            return { success: false as const, error: "Not authorized as admin", data: null };
         }
 
         const disputeDoc = await db.collection(COLLECTIONS.DISPUTES).doc(disputeId).get();

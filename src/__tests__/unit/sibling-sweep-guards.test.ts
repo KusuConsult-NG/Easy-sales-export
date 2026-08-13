@@ -83,6 +83,25 @@ describe('an admin check that names admin also names super_admin', () => {
         expect(actionFiles().length).toBeGreaterThan(20);
     });
 
+    /**
+     * The spellings a narrow admin check comes in.
+     *
+     * The first version matched only `roles.includes("admin")` and missed FOUR
+     * live sites — reviews.ts twice and disputes.ts twice — all spelled
+     * `hasRole(roles, "admin")`. Two of those were in the same file as the site
+     * #122 had already fixed and written up.
+     *
+     * A ratchet that pins one spelling of a defect pins the spelling, not the
+     * defect. Both forms are checked now, and a new helper with the same meaning
+     * has to be added here.
+     */
+    const NARROW_ADMIN_CHECKS = [
+        // roles.includes("admin")
+        /roles\??\.\s*includes\(\s*['"]admin['"]\s*\)/,
+        // hasRole(anything, "admin")
+        /hasRole\([^)]*,\s*['"]admin['"]\s*\)/,
+    ];
+
     it('has no condition testing for admin alone', () => {
         const offenders: string[] = [];
 
@@ -92,8 +111,8 @@ describe('an admin check that names admin also names super_admin', () => {
 
             readFileSync(file, 'utf-8').split('\n').forEach((line, i) => {
                 if (line.trim().startsWith('//') || line.trim().startsWith('*')) return;
-                // `roles.includes("admin")` with no super_admin anywhere on the line.
-                if (/roles\??\.\s*includes\(\s*['"]admin['"]\s*\)/.test(line) && !line.includes('super_admin')) {
+                if (line.includes('super_admin')) return;
+                if (NARROW_ADMIN_CHECKS.some((pattern) => pattern.test(line))) {
                     offenders.push(`${rel}:${i + 1}`);
                 }
             });
@@ -105,7 +124,8 @@ describe('an admin check that names admin also names super_admin', () => {
                 offenders.map((o) => `  ${o}`).join('\n') +
                 `\n\nA super_admin who does not also hold the literal 'admin' role is\n` +
                 `refused — a lockout of the most privileged account, not a hole.\n` +
-                `Fixed three times already: #115, #122, #134.\n\n` +
+                `Fixed four times already: #115, #122, #134, and the four\n` +
+                `hasRole() siblings this pattern list was widened to catch.\n\n` +
                 `Add `+ '`|| roles?.includes("super_admin")`' + `. Do NOT switch to isAdmin(),\n` +
                 `which also admits moderator, support and every module admin.\n`
             );

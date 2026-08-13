@@ -4,13 +4,28 @@
  * ISO strings, and numeric timestamps.
  */
 
-export function toDate(date: any): Date {
-    if (!date) return new Date();
-    
+/**
+ * The same coercion as `toDate`, but null when the value is not a date.
+ *
+ * `toDate` falls back to `new Date()` — the current moment — which is right for
+ * display, where showing today beats showing "Invalid Date". It is wrong for any
+ * rule about ELAPSED TIME, because "we cannot tell when this happened" becomes
+ * "it happened just now".
+ *
+ * reviews.ts is where that mattered: its 30-day edit window computed the age
+ * from a hand-rolled coercion whose final fallback was `new Date()`, so a
+ * createdAt shape it did not recognise made every review zero days old and
+ * permanently editable. Callers enforcing a window should use this and refuse
+ * when it returns null.
+ */
+export function toDateOrNull(date: any): Date | null {
+    if (date === null || date === undefined || date === '') return null;
+
     // Handle Firestore Timestamp (client-side plain object or server-side class)
     if (typeof date === 'object') {
         if (typeof date.toDate === 'function') {
-            return date.toDate();
+            const d = date.toDate();
+            return d instanceof Date && !isNaN(d.getTime()) ? d : null;
         }
         if (typeof date.seconds === 'number') {
             return new Date(date.seconds * 1000);
@@ -21,14 +36,14 @@ export function toDate(date: any): Date {
             return new Date(date._seconds * 1000);
         }
     }
-    
+
     // Handle numeric timestamp or ISO string
     const d = new Date(date);
-    if (!isNaN(d.getTime())) {
-        return d;
-    }
-    
-    return new Date();
+    return isNaN(d.getTime()) ? null : d;
+}
+
+export function toDate(date: any): Date {
+    return toDateOrNull(date) ?? new Date();
 }
 
 /**
