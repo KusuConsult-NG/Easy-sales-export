@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { ACADEMY_CERTIFICATE } from "@/lib/certificate-kind";
 import { FieldValue } from "@/lib/firestore-compat";
 
 /**
@@ -95,6 +96,10 @@ export async function POST(request: NextRequest) {
         }
 
         const certificateData = {
+            // Distinguishes this from a file the user attached to their own
+            // profile. Both live in this collection; only this kind may be
+            // publicly verified or counted as earned. See lib/certificate-kind.
+            recordType: ACADEMY_CERTIFICATE,
             userId,
             userName: userData.name || userData.email,
             courseId,

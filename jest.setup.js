@@ -68,6 +68,23 @@ jest.mock('@/lib/firebase-admin', () => {
                     get: () => global.mockFirestoreGet(id),
                     update: (fields) => global.mockFirestoreUpdate(id, fields),
                     set: (data) => { global.mockFirestoreSet(id, data); return Promise.resolve(); },
+                    // docRef.delete() was missing here, on BOTH docObj shapes,
+                    // while existing on the modular docRefFor() below. So
+                    // `db.collection(x).doc(y).delete()` threw
+                    // "certRef.delete is not a function", the action's catch
+                    // swallowed it, and a generic failure came back.
+                    //
+                    // That makes every "refuses to delete" assertion vacuous —
+                    // it passes whether the guard is there or not, because the
+                    // delete could never succeed either way. Found by a vacuity
+                    // guard ("still deletes a document the user uploaded")
+                    // failing, not by the refusals.
+                    //
+                    // harness-covers-adapter.test.ts did not catch it because it
+                    // compares one flat set of names across this whole file, so
+                    // `delete:` on any shape counted as present on all of them.
+                    // That check is now per-shape for the document ref.
+                    delete: () => global.mockFirestoreDelete(id),
                 };
             };
             const queryObj = {
@@ -180,6 +197,23 @@ jest.mock('@/lib/supabase-db', () => {
                     get: () => global.mockFirestoreGet(id),
                     update: (fields) => global.mockFirestoreUpdate(id, fields),
                     set: (data) => { global.mockFirestoreSet(id, data); return Promise.resolve(); },
+                    // docRef.delete() was missing here, on BOTH docObj shapes,
+                    // while existing on the modular docRefFor() below. So
+                    // `db.collection(x).doc(y).delete()` threw
+                    // "certRef.delete is not a function", the action's catch
+                    // swallowed it, and a generic failure came back.
+                    //
+                    // That makes every "refuses to delete" assertion vacuous —
+                    // it passes whether the guard is there or not, because the
+                    // delete could never succeed either way. Found by a vacuity
+                    // guard ("still deletes a document the user uploaded")
+                    // failing, not by the refusals.
+                    //
+                    // harness-covers-adapter.test.ts did not catch it because it
+                    // compares one flat set of names across this whole file, so
+                    // `delete:` on any shape counted as present on all of them.
+                    // That check is now per-shape for the document ref.
+                    delete: () => global.mockFirestoreDelete(id),
                 };
             };
             const queryObj = {

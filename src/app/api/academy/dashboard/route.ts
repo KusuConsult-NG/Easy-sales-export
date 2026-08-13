@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { isIssuedCertificate } from "@/lib/certificate-kind";
 import { autoEnrollPaidUser } from "@/app/actions/academy";
 
 /**
@@ -81,11 +82,16 @@ export async function GET(request: NextRequest) {
             .where("userId", "==", userId)
             .get();
 
-        const certificates = certSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            completionDate: doc.data().completionDate?.toDate?.() || new Date(),
-        }));
+        // Only credentials the platform issued. This counted every row for the
+        // user, and uploadCertificateAction writes user-attached files into the
+        // same collection — so uploading PDFs inflated `certificatesEarned`.
+        const certificates = certSnapshot.docs
+            .filter(doc => isIssuedCertificate(doc.data()))
+            .map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+                completionDate: doc.data().completionDate?.toDate?.() || new Date(),
+            }));
 
         const stats = {
             totalCourses: courses.length,

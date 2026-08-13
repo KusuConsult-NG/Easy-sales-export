@@ -8,13 +8,15 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { createAdminAuditLog } from "@/lib/audit-log";
-import { uploadFileToStorage } from "@/lib/storage-admin";
+import { uploadFileToStorage, detectFileType } from "@/lib/storage-admin";
+import { USER_UPLOADED_DOCUMENT, isIssuedCertificate } from "@/lib/certificate-kind";
 
 /**
  * Certificate Management Actions
  */
 
 export interface Certificate { id?: string;
+    recordType?: string;
     userId: string;
     fileName: string;
     fileUrl: string;
@@ -51,9 +53,38 @@ export async function uploadCertificateAction(
         if (file.size > maxSize) { return { success: false as const, error: `File size exceeds ${maxSize / 1024 / 1024}MB limit` };
         }
 
-        // Validate file type
-        const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "image/jpg"];
-        if (!allowedTypes.includes(file.type)) { return { success: false as const, error: "Invalid file type. Only PDF and images are allowed"};
+        // The file type is now decided by the file's CONTENT.
+        //
+        // `file.type` is a string the client sends. It was the only thing
+        // checked here, and while uploadFileToStorage does sniff magic bytes, it
+        // does so against a BROADER list — ALLOWED_MIMES there also permits
+        // video, Word documents, webp and gif. So an MP4 declared as
+        // `application/pdf` satisfied this check and then satisfied that one
+        // too, and was stored with `fileType: "application/pdf"` recorded
+        // against it: a certificate whose recorded type was a lie.
+        //
+        // "image/jpg" is dropped from the list because it is not a MIME type;
+        // JPEG content is detected as image/jpeg.
+        const allowedTypes = ["application/pdf", "image/jpeg", "image/png"];
+        const buffer = Buffer.from(await file.arrayBuffer());
+        const detectedType = await detectFileType(buffer, file.name);
+        if (!detectedType || !allowedTypes.includes(detectedType)) {
+            return { success: false as const, error: "Invalid file type. Only PDF and images are allowed", data: null };
+        }
+
+        // The stored metadata is validated too. These are TypeScript types on a
+        // server action, erased before the request arrives, so they constrain
+        // the callsite and nothing else. An unparseable date becomes Invalid
+        // Date and is stored as one — the same silent failure as the CMS banner
+        // dates.
+        const certificateTypes = ["training", "license", "accreditation", "other"];
+        if (!certificateTypes.includes(metadata.certificateType)) {
+            return { success: false as const, error: "Unknown certificate type", data: null };
+        }
+        for (const [label, value] of [["Issue", metadata.issueDate], ["Expiry", metadata.expiryDate]] as const) {
+            if (value !== undefined && Number.isNaN(new Date(value).getTime())) {
+                return { success: false as const, error: `${label} date is not a valid date`, data: null };
+            }
         }
 
         // Upload to Firebase Storage (Admin SDK)
@@ -63,10 +94,17 @@ export async function uploadCertificateAction(
         // Upload and get URL (Signed URL, effectively private/secure)
         const fileUrl = await uploadFileToStorage(file, destination, false);
 
-        const certificate: Omit<Certificate, "id"> = { userId,
+        const certificate: Omit<Certificate, "id"> = {
+            // Marks this as a document the user attached, not a credential the
+            // platform issued. Both kinds live in this collection, and three
+            // readers used to treat every row as the second — including the
+            // PUBLIC verification endpoint, which answered isValid:true for the
+            // id this action hands back. See lib/certificate-kind.
+            recordType: USER_UPLOADED_DOCUMENT,
+            userId,
             fileName: file.name,
             fileUrl,
-            fileType: file.type,
+            fileType: detectedType,
             certificateType: metadata.certificateType as Certificate["certificateType"],
             issueDate: metadata.issueDate ? new Date(metadata.issueDate) : undefined,
             expiryDate: metadata.expiryDate ? new Date(metadata.expiryDate) : undefined,
@@ -142,6 +180,15 @@ export async function deleteCertificateAction(
 
         // Verify ownership
         if (cert.userId !== userId) { return { success: false as const, error: "Unauthorized", data: null };
+        }
+
+        // This endpoint manages documents the user attached to their own
+        // profile. Academy-issued credentials share the collection, carry the
+        // learner's userId, and would therefore have passed the ownership check
+        // above — so a learner could delete a credential the platform issued and
+        // that a third party may be verifying, through the attach-a-file screen.
+        if (isIssuedCertificate(cert as unknown as Record<string, any>)) {
+            return { success: false as const, error: "Issued certificates cannot be deleted here", data: null };
         }
 
         // Delete from Cloud Storage
