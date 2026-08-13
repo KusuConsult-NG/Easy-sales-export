@@ -34,19 +34,31 @@ export interface BroadcastLog { id: string;
  * @returns A deduplicated, sanitized list of 36,924 recipients.
  */
 export async function getCleanBroadcastListAction(filters?: BroadcastFilters) { try {
-        // 1. Security Check: Only admins can generate broadcast lists
-        if (process.env.ADMIN_OVERRIDE !== "true") {
-            const sessionResult = await requireSession();
-            if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
-            const { session } = sessionResult;
-            
-            if (!isAdmin(session.user.roles)) {
-                return { success: false as const, error: "Unauthorized. Admin access required.", data: null };
-            }
-            logger.info(`[Broadcast] Generating clean list for admin: ${session.user.id}`);
-        } else {
-            logger.info(`[Broadcast] Generating clean list in TEST MODE`);
+        // The admin check used to sit inside `if (process.env.ADMIN_OVERRIDE !==
+        // "true")`, with the else branch logging "TEST MODE" and proceeding.
+        //
+        // Setting one environment variable therefore made this endpoint public,
+        // and what it returns is the platform's entire deduplicated mailing list
+        // — around 37,000 real email addresses, per this function's own header.
+        // previewBroadcastAction and collectRecipients both route through it, so
+        // the same switch opened those too.
+        //
+        // ADMIN_OVERRIDE appeared exactly once in the whole repository: in that
+        // condition. Nothing sets it, no script exports it, no test uses it, and
+        // it is documented nowhere. So it bought nothing and cost the guard on
+        // the platform's user list — the sort of flag that is harmless until
+        // somebody copies a .env into a deploy config.
+        //
+        // Removed rather than tightened. A test that needs this function mocks
+        // requireSession, which is what every other test in this suite does.
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
+        const { session } = sessionResult;
+
+        if (!isAdmin(session.user.roles)) {
+            return { success: false as const, error: "Unauthorized. Admin access required.", data: null };
         }
+        logger.info(`[Broadcast] Generating clean list for admin: ${session.user.id}`);
 
         return await getCleanBroadcastList(filters);
 
@@ -99,6 +111,28 @@ export async function getBroadcastHistoryAction(): Promise<
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
+        // This had no session check at all.
+        //
+        // It is listed in action-auth-baseline.json, whose triage note says what
+        // remains there is "public listings, pre-auth flows, and callbacks whose
+        // credential is the reference itself". This is none of those: it returns
+        // the SUBJECT AND BODY of every email, SMS and in-app broadcast the
+        // platform has ever sent, together with who sent each one. Internal
+        // operational content, readable by anyone who called the endpoint.
+        //
+        // It most likely survived triage because "broadcast" reads as outbound
+        // and public. The messages are; the log of them is not.
+        //
+        // Every caller is already an admin surface — /admin/communications/history
+        // — so nothing legitimate changes.
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) {
+            return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
+        }
+        if (!isAdmin(sessionResult.session.user.roles)) {
+            return { success: false as const, error: "Unauthorized. Admin access required.", data: null };
+        }
+
         // Fetch from all three broadcast log collections in parallel (increased limit to show older history)
         const [emailSnap, smsSnap, inAppSnap] = await Promise.all([
             db.collection(COLLECTIONS.BROADCAST_LOGS).orderBy("sentAt", "desc").limit(100).get(),
