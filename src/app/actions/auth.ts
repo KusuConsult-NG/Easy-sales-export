@@ -823,6 +823,42 @@ export async function changePasswordAction(
             logger.warn("[changePassword] Legacy Firebase password update skipped:", fbErr?.message);
         }
 
+        // Clear the forced-change flag HERE, because this is the only place that
+        // knows a password was actually changed.
+        //
+        // It used to be cleared by clearLegacyPasswordFlagAction — a separate
+        // "use server" export that deleted the flag and verified nothing. The
+        // reset page called it right after this function returned success, so
+        // the FLOW was correct and the FUNCTION was independently addressable: a
+        // user holding the temporary password an admin generated could call it
+        // directly, clear the flag, and never change the password.
+        //
+        // What the flag does makes that matter. session-guard.ts and
+        // hub-guard.ts both read requiresPasswordChange and force the user to
+        // the reset page while it is set; auth.ts reads it at login. Clearing it
+        // without a password change leaves the account on a credential a third
+        // party issued, with the platform no longer asking about it.
+        //
+        // The same shape as autoEnrollPaidUser, whose own comment says it: the
+        // call site was protected and the function was not.
+        //
+        // Best-effort, deliberately. The password is already changed in both
+        // stores by this point; failing the whole operation because a flag write
+        // failed would tell the user their password did not change when it did.
+        // The worst case here is being asked to change it again.
+        try {
+            await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
+                requiresPasswordChange: FieldValue.delete(),
+                passwordChangedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+        } catch (flagErr: any) {
+            logger.error("[changePassword] Password changed but the forced-change flag was not cleared", {
+                userId: session.user.id,
+                error: flagErr?.message,
+            });
+        }
+
         return { success: true as const, error: null };
     } catch (error: any) { logger.error("Error changing password:", error);
         return { success: false as const, error: error.message || "An unexpected error occurred. Please try again.", data: null };
