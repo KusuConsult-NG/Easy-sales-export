@@ -1388,7 +1388,22 @@ export async function requestCooperativeRevisionAction(
 
 export async function getStandardCooperativeMembersAction(
     options: {
-        status?: "pending" | "approved" | "active" | "suspended" | "under_review" | "all";
+        // "under_review" is gone and "rejected" is here instead.
+        //
+        // Nothing writes membershipStatus: "under_review" — the only setter,
+        // _updateMemberStatusAction, takes "active" | "approved" | "suspended";
+        // registration writes "pending"; reject-member writes "rejected". So the
+        // filter option offering it returned an empty list that read as "no
+        // members are under review".
+        //
+        // "rejected" is the reverse: written by
+        // /api/admin/cooperative/reject-member and impossible to filter for, so
+        // rejected members could only be found mixed into everyone else.
+        //
+        // The state stays in lib/types/firestore.ts. Removing it there is a
+        // separate question — it may be a state somebody intends to add — but a
+        // filter offering it today is a wrong answer today.
+        status?: "pending" | "approved" | "active" | "suspended" | "rejected" | "all";
         paymentStatus?: "pending" | "completed" | "failed" | "unpaid" | "all";
         cursorId?: string;
         limit?: number;

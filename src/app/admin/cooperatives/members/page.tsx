@@ -396,10 +396,26 @@ export default function CooperativeMembersPage() {
                             onChange={(e) => updateFilter("status", e.target.value)}
                             className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary"
                         >
+                            {/*
+                              * "Under Review" was here and could never match.
+                              * `membershipStatus: "under_review"` appears in the
+                              * type in lib/types/firestore.ts and is written by
+                              * nothing: the only setter, _updateMemberStatusAction,
+                              * takes "active" | "approved" | "suspended";
+                              * registration writes "pending"; and
+                              * /api/admin/cooperative/reject-member writes
+                              * "rejected". So selecting it returned an empty list,
+                              * which reads as "no members are under review" rather
+                              * than "this filter does nothing".
+                              *
+                              * "Rejected" was missing for the opposite reason — it
+                              * IS written, so rejected members existed and could
+                              * only be found mixed into All Applications.
+                              */}
                             <option value="all">All Applications</option>
                             <option value="pending">Pending</option>
-                            <option value="under_review">Under Review</option>
                             <option value="approved">Approved</option>
+                            <option value="rejected">Rejected</option>
                             <option value="suspended">Suspended</option>
                         </select>
                     </div>
