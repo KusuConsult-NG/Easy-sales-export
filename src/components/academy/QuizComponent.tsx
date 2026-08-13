@@ -24,6 +24,10 @@ export default function QuizComponent({
 }: QuizComponentProps) {
     const [answers, setAnswers] = useState<Record<string, number>>({});
     const [submitted, setSubmitted] = useState(false);
+    // Which questions were right, as judged by the server. The component used
+    // to work this out itself from question.correctAnswer, which meant the
+    // answer key had to be in the browser for the review to render.
+    const [results, setResults] = useState<Record<string, boolean>>({});
     const [score, setScore] = useState<number | null>(existingScore || null);
     const [submitting, setSubmitting] = useState(false);
     const { showToast } = useToast();
@@ -36,19 +40,19 @@ export default function QuizComponent({
 
         setSubmitting(true);
 
-        // Calculate score
-        let correct = 0;
-        quiz.questions.forEach((q) => {
-            if (answers[q.id] === q.correctAnswer) {
-                correct++;
-            }
-        });
+        // The server grades this. It used to be counted here against
+        // q.correctAnswer, which the course loader sent to the browser, and the
+        // resulting number was what got stored.
+        const result = await submitQuizScoreAction(userId, courseId, moduleId, answers);
 
-        const calculatedScore = Math.round((correct / quiz.questions.length) * 100);
-        setScore(calculatedScore);
-
-        // Submit to backend
-        await submitQuizScoreAction(userId, courseId, moduleId, calculatedScore);
+        if (result?.success && result.data) {
+            setScore(result.data.score ?? 0);
+            setResults(result.data.results ?? {});
+        } else {
+            showToast(result?.error || "Failed to submit quiz", "error");
+            setSubmitting(false);
+            return;
+        }
 
         setSubmitted(true);
         setSubmitting(false);
@@ -75,9 +79,14 @@ export default function QuizComponent({
                     </p>
                     <div className="space-y-3">
                         {question.options.map((option, optIndex) => {
-                            const isCorrect = optIndex === question.correctAnswer;
                             const isSelected = answers[question.id] === optIndex;
                             const showFeedback = submitted;
+                            // After submitting, the learner's OWN answer is
+                            // marked right or wrong. It used to highlight the
+                            // correct option, which required the key locally —
+                            // and telling someone which option was right on a
+                            // quiz they can retake is how the key leaks anyway.
+                            const isCorrect = isSelected && results[question.id] === true;
 
                             return (
                                 <label

@@ -6,6 +6,7 @@ import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
+import { gradeStoredQuiz } from "@/lib/academy-grading";
 
 /**
  * API Route: Submit Quiz Attempt
@@ -20,9 +21,9 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const { quizId, courseId, answers, attemptNumber, autoSubmit } = await request.json();
+        const { quizId, courseId: claimedCourseId, answers, autoSubmit } = await request.json();
 
-        if (!quizId || !courseId || !answers) {
+        if (!quizId || !claimedCourseId || !answers) {
             return NextResponse.json(
                 { success: false, message: "Missing required fields" },
                 { status: 400 }
@@ -41,39 +42,63 @@ export async function POST(request: NextRequest) {
 
         const quizData = quizDoc.data()!;
 
-        // Calculate score
-        let totalPoints = 0;
-        let earnedPoints = 0;
+        // The course credited is the quiz's course, not the caller's.
+        //
+        // The score was computed from `quizId`'s quiz and the progress was
+        // written to `${userId}_${courseId}` with courseId taken from the
+        // request body. Nothing compared the two, so a pass on any quiz could be
+        // recorded against any course — including the grade that
+        // /api/academy/certificate/generate puts on the certificate, which reads
+        // progressData.quizScores.
+        const courseId = quizData.courseId;
+        if (!courseId) {
+            return NextResponse.json(
+                { success: false, message: "Quiz is not attached to a course" },
+                { status: 409 }
+            );
+        }
+        if (claimedCourseId !== courseId) {
+            logger.warn("[quiz/submit] courseId in request does not match the quiz", {
+                userId: session.user.id,
+                quizId,
+                claimed: claimedCourseId,
+                actual: courseId,
+            });
+            return NextResponse.json(
+                { success: false, message: "Quiz does not belong to that course" },
+                { status: 400 }
+            );
+        }
 
-        quizData.questions.forEach((question: any) => {
-            totalPoints += question.points;
-            const userAnswer = answers[question.id];
+        // maxAttempts is enforced here, having been enforced nowhere.
+        //
+        // The admin quiz editor collects it and defaults it to 3, the learner
+        // screen prints "attempt N of {quiz.maxAttempts}", and no server code
+        // ever read it. attemptNumber came from the request body and was stored
+        // as given, while the fetch route returned a hardcoded `attemptNumber:
+        // 1`. So the limit was decorative and the recorded number was whatever
+        // the client said.
+        const priorAttempts = await db.collection(COLLECTIONS.QUIZ_ATTEMPTS)
+            .where("userId", "==", session.user.id)
+            .where("quizId", "==", quizId)
+            .get();
 
-            if (question.type === "mcq-single") {
-                const correctAnswer = question.answers.find((a: any) => a.isCorrect);
-                if (userAnswer === correctAnswer?.id) {
-                    earnedPoints += question.points;
-                }
-            } else if (question.type === "mcq-multiple") {
-                const correctAnswers = question.answers
-                    .filter((a: any) => a.isCorrect)
-                    .map((a: any) => a.id)
-                    .sort();
-                const userAnswers = (userAnswer as string[] || []).sort();
+        const maxAttempts = Number.isFinite(quizData.maxAttempts) ? Number(quizData.maxAttempts) : 0;
+        if (maxAttempts > 0 && priorAttempts.docs.length >= maxAttempts) {
+            return NextResponse.json(
+                { success: false, message: `No attempts remaining (${maxAttempts} used)` },
+                { status: 429 }
+            );
+        }
 
-                if (JSON.stringify(correctAnswers) === JSON.stringify(userAnswers)) {
-                    earnedPoints += question.points;
-                }
-            } else if (question.type === "true-false") {
-                const correctAnswer = question.answers.find((a: any) => a.isCorrect);
-                if (userAnswer === correctAnswer?.id) {
-                    earnedPoints += question.points;
-                }
-            }
-        });
+        // Derived, not accepted.
+        const attemptNumber = priorAttempts.docs.length + 1;
 
-        const scorePercentage = totalPoints > 0 ? Math.round((earnedPoints / totalPoints) * 100) : 0;
-        const passed = scorePercentage >= quizData.passingScore;
+        const { earnedPoints, totalPoints, scorePercentage, passed } = gradeStoredQuiz(
+            quizData.questions ?? [],
+            answers,
+            quizData.passingScore
+        );
 
         // Save quiz attempt (Admin SDK)
         const attemptRef = db.collection(COLLECTIONS.QUIZ_ATTEMPTS).doc();

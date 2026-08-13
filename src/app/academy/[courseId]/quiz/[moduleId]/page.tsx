@@ -184,27 +184,21 @@ export default function QuizPage(props: QuizPageProps) {
     async function submitQuiz(answers: Record<string, number> = selectedAnswers) {
         if (!session?.user || !quiz || !currentModule) return;
 
-        // Calculate score
-        let correctAnswers = 0;
-        quiz.questions.forEach(question => {
-            if (answers[question.id] === question.correctAnswer) {
-                correctAnswers++;
-            }
-        });
-
-        const percentage = Math.round((correctAnswers / quiz.questions.length) * 100);
-        setScore(percentage);
-
-        // Submit to backend
+        // The score comes back from the server, which grades it.
+        //
+        // This counted correct answers here, against question.correctAnswer —
+        // a value the course loader used to send to the browser — and posted
+        // the number. The server stored whatever arrived.
         setSubmitting(true);
         const result = await submitQuizScoreAction(
             session.user.id,
             courseId,
             moduleId,
-            percentage
+            answers
         );
 
         if (result.success && result.data) {
+            setScore(result.data.score ?? 0);
             setPassed(result.data.passed || false);
             setQuizCompleted(true);
             localStorage.removeItem(`quiz_timer_end_${moduleId}`);
