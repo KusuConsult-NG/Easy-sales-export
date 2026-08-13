@@ -5,6 +5,7 @@ import { ActionResponse } from "@/lib/safe-action";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
+import { csvCell } from "@/lib/csv-safe";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { serializeDocs } from "@/lib/firestore-serialize";
@@ -41,11 +42,7 @@ const EXPORT_PAGE_SIZE = 500;
  * text and do not display the apostrophe. Tab and carriage return are stripped
  * of their leading position for the same reason.
  */
-function csvCell(value: unknown): string {
-    const text = String(value ?? "");
-    const neutralised = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
-    return `"${neutralised.replace(/"/g, '""')}"`;
-}
+
 
 /**
  * Get audit logs with enhanced filtering

@@ -5,23 +5,24 @@ import { requireSession } from "@/lib/session-guard";
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
-import type { UserRole } from "@/lib/types/roles";
+import { includesPrivilegedRole } from "@/lib/admin-permissions";
+import { ALL_USER_ROLES, type UserRole } from "@/lib/types/roles";
 
-const VALID_ROLES: UserRole[] = [
-    "admin",
-    "super_admin",
-    "field_officer",
-    "general_user",
-    "buyer",
-    "seller",
-    "land_owner",
-    "farmer",
-    "investor",
-    "export_participant",
-    "cooperative_member",
-    "wave_participant",
-    "academy_participant",
-];
+/**
+ * Assignable roles.
+ *
+ * This was a hand-written list of thirteen that omitted all six module-admin
+ * roles — while the doc comment below said "Regular admins can assign
+ * module-level roles (e.g. cooperative_admin, wave_admin)". Both of the names
+ * it gives as examples were rejected as "Invalid role(s)".
+ *
+ * It is the canonical list now, so the type and the validation cannot disagree.
+ * cooperative_admin is grantable only by a super_admin, which is enforced by
+ * the privileged-role check below rather than by leaving it off the list —
+ * absence from a list produces a confusing "invalid role" where the real answer
+ * is "not by you".
+ */
+const VALID_ROLES: readonly UserRole[] = ALL_USER_ROLES;
 
 /**
  * POST /api/admin/add-roles
@@ -59,10 +60,11 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // Only super_admin can promote to admin or super_admin
-        const privilegedRoles: UserRole[] = ["admin", "super_admin"];
-        const requestingPrivileged = roles.some((r) => privilegedRoles.includes(r));
-        if (requestingPrivileged && !callerRoles.includes("super_admin")) {
+        // Only a super_admin can grant a role that can do something the
+        // granter cannot. The set is derived from PERMISSION_MATRIX rather than
+        // listed here — a local `["admin", "super_admin"]` is what went stale in
+        // admin-permissions.ts when the module-admin roles were added.
+        if (includesPrivilegedRole(roles) && !callerRoles.includes("super_admin")) {
             return NextResponse.json(
                 { error: "Only super_admin can assign admin or super_admin roles." },
                 { status: 403 }
@@ -88,7 +90,7 @@ export async function POST(req: NextRequest) {
         });
 
         // Also update admin_users collection if promoting to admin-level roles
-        if (roles.some((r) => privilegedRoles.includes(r))) {
+        if (includesPrivilegedRole(roles)) {
             await db.collection(COLLECTIONS.ADMIN_USERS).doc(userId).set({
                 userId,
                 email: userDoc.data()?.email ?? "",
@@ -147,9 +149,7 @@ export async function DELETE(req: NextRequest) {
             );
         }
 
-        const privilegedRoles: UserRole[] = ["admin", "super_admin"];
-        const revokingPrivileged = roles.some((r) => privilegedRoles.includes(r));
-        if (revokingPrivileged && !isSuperAdmin) {
+        if (includesPrivilegedRole(roles) && !isSuperAdmin) {
             return NextResponse.json(
                 { error: "Only super_admin can revoke admin or super_admin roles." },
                 { status: 403 }
@@ -173,7 +173,7 @@ export async function DELETE(req: NextRequest) {
         });
 
         // Remove from admin_users if all privileged roles revoked
-        const stillPrivileged = updatedRoles.some((r) => privilegedRoles.includes(r));
+        const stillPrivileged = includesPrivilegedRole(updatedRoles);
         if (!stillPrivileged) {
             await db.collection(COLLECTIONS.ADMIN_USERS).doc(userId).delete();
         }

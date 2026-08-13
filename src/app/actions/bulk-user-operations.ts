@@ -14,6 +14,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { hasAdminPermission, isSuperAdmin, includesPrivilegedRole } from "@/lib/admin-permissions";
 import { logAuditAction } from "@/lib/audit-log";
+import { isUserRole } from "@/lib/types/roles";
 import { redis } from "@/lib/redis";
 import { invalidateUserCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { ActionResponse } from "@/lib/safe-action";
@@ -234,6 +235,31 @@ export async function bulkAssignRolesAction(
             return {
                 success: false,
                 error: "Only a super admin can grant admin roles",
+                data: null,
+            };
+        }
+
+        // The role NAMES have to be real ones, which nothing here checked.
+        //
+        // add-roles validates against a list and this did not, so the two
+        // writers of the same field disagreed about what a role even is. Two
+        // consequences, and the second is the one that matters:
+        //
+        //   - a typo wrote a string nobody grants anything for, and the call
+        //     reported success
+        //   - "moderator" and "support" are honoured by isAdmin() and appear in
+        //     PERMISSION_MATRIX, but in no role type, schema or UI list. 32
+        //     admin routes are gated on isAdmin(). So this was the one path that
+        //     could hand somebody full admin access under a name that nothing
+        //     displays as admin access.
+        //
+        // Checked against ALL_USER_ROLES, the value form of the UserRole union,
+        // so this cannot drift from the type the way the other five lists did.
+        const unknownRoles = [...rolesToAdd, ...rolesToRemove].filter((r) => !isUserRole(r));
+        if (unknownRoles.length > 0) {
+            return {
+                success: false,
+                error: `Unknown role(s): ${unknownRoles.join(", ")}`,
                 data: null,
             };
         }
