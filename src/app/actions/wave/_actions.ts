@@ -900,6 +900,27 @@ export const updateShipmentStatusAction = withFlexibleSafeAction("updateShipment
  */
 async function _syncShipmentWithCarrierAction(shipmentId: string): Promise<ActionResponse<null>> {
     try {
+        // This was reachable with no session at all.
+        //
+        // Found by grouping every entry point by business module rather than by
+        // directory: among WAVE's endpoints, all of which require a session, one
+        // took an id and required nothing.
+        //
+        // Three things followed from that. It calls out to the logistics
+        // provider on every invocation, so an anonymous caller could drive the
+        // platform's outbound carrier API usage without limit — a bill and a
+        // rate limit that belong to somebody else. It WRITES the returned status
+        // onto the shipment. And its three distinct replies — "Shipment not
+        // found", "No tracking number explicitly linked", success — tell an
+        // unauthenticated caller which shipment ids exist and which are live.
+        //
+        // Shipments carry memberId, so ownership was available the whole time.
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) {
+            return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
+        }
+        const { session } = sessionResult;
+
         const shipmentRef = db.collection(COLLECTIONS.WAVE_SHIPMENTS).doc(shipmentId);
         const shipmentDoc = await shipmentRef.get();
 
@@ -908,6 +929,15 @@ async function _syncShipmentWithCarrierAction(shipmentId: string): Promise<Actio
         }
 
         const shipmentData = shipmentDoc.data() as ShipmentTracking;
+
+        // The member whose shipment it is, or someone who administers WAVE.
+        // Anyone else gets the same "not found" a missing id gets, so this stops
+        // being an oracle for which shipments exist.
+        const { isAdmin } = await import("@/lib/admin-permissions");
+        const isOwner = (shipmentData as any).memberId === session.user.id;
+        if (!isOwner && !isAdmin(session.user.roles)) {
+            return { success: false as const, error: "Shipment not found", data: null };
+        }
 
         if (!shipmentData.trackingNumber) {
             return { success: false as const, error: "No tracking number explicitly linked", data: null };

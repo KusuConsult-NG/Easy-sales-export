@@ -368,8 +368,18 @@ async function _getPropertyByIdAction(propertyId: string): Promise<ActionRespons
 
         const data = propertyDoc.data()!;
 
-        // Increment view count
-        await propertyRef.update({ viewCount: (data.viewCount || 0) + 1 });
+        // Increment view count.
+        //
+        // This read the value and wrote back `(data.viewCount || 0) + 1`, so two
+        // views landing together both read the same number and one of them was
+        // lost. The endpoint is public, so concurrency here is the normal case
+        // rather than the exception.
+        //
+        // The rest of the codebase already uses the atomic primitive —
+        // `downloads: FieldValue.increment(1)` in wave/_actions.ts — and the
+        // sweep for this shape found no other persisted counter doing it by
+        // hand, so this was the last one.
+        await propertyRef.update({ viewCount: FieldValue.increment(1) });
 
         const property = serializeDoc<Property>(propertyDoc.id, data);
 
