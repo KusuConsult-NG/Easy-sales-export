@@ -81,17 +81,56 @@ export async function repairOrphanedUser(uid: string): Promise<{ success: boolea
         const email = userRecord.email || `orphaned-${uid}@temp.local`;
         const fullName = userRecord.displayName || 'User';
 
-        // Infer gender from name (basic heuristic, defaults to male)
-        const gender = inferGenderFromName(fullName);
-
-        // Create minimal Firestore profile
+        // Gender is NOT guessed.
+        //
+        // This called inferGenderFromName(fullName) — twelve hard-coded first
+        // names, five suffixes, and "Default to male if uncertain" — and wrote
+        // the answer to the profile. /api/wave/check-eligibility then reads it:
+        //
+        //     const isMale = gender?.toLowerCase() === "male";
+        //     const isWaveBlocked = isMale && (isNewMaleUser || (!hasWaveRole && !hasWaveReg));
+        //
+        // WAVE is a women's programme. So a repair guessed a protected
+        // attribute from a name, defaulted to the answer that excludes, and
+        // locked the user out of a programme they may be entitled to — with
+        // nothing on screen to say a guess had been made. Against the actual
+        // user base the heuristic is close to a coin toss weighted to male:
+        // the pattern list is a dozen names and the ending rule is "-a, -e,
+        // -ie, -lyn, -elle".
+        //
+        // Left unset instead. An unset gender reads as null in the eligibility
+        // check, isMale is false, and the user is in exactly the position of
+        // anyone else who has not filled it in — which is the truth about what
+        // is known. The user sets it in their profile.
         const userProfile: Omit<FirestoreUser, 'createdAt' | 'updatedAt'> = {
             uid,
             fullName,
             email,
             roles: ['general_user'], // Minimal role, user can request more
-            verified: true, // Auto-verify
-            gender,
+            // NOT verified.
+            //
+            // This said `verified: true, // Auto-verify`. A rebuilt profile
+            // knows nothing about whether the person ever completed
+            // verification — the Auth record it is rebuilt from carries no such
+            // claim — so asserting it invents the fact.
+            //
+            // It does not stop at a cosmetic flag. data-recovery.ts unifies the
+            // two spellings:
+            //
+            //     // 7. Unify Verification Fields
+            //     if (userData.verified === true && userData.isVerified !== true) {
+            //         updates.isVerified = true;
+            //
+            // and isVerified is the real one, read in 88 places — the KYC
+            // surface, the admin member views, and the "Verified" column of the
+            // user CSV export. So a repair granted identity-verified status on
+            // the next recovery run.
+            //
+            // False is the honest answer and the safe one: a user who really
+            // was verified re-verifies, which is a nuisance; the other
+            // direction hands unverified accounts a status the platform sells
+            // trust on.
+            verified: false,
         };
 
         await db.collection(COLLECTIONS.USERS).doc(uid).set({
@@ -149,29 +188,12 @@ export async function repairAllOrphanedUsers(): Promise<{
 }
 
 /**
- * Basic gender inference from name (fallback heuristic)
+ * inferGenderFromName was removed.
+ *
+ * It guessed a protected attribute from a name and defaulted to male, and the
+ * only caller wrote that guess to the profile that /api/wave/check-eligibility
+ * reads to decide access to a women's programme. Deleted rather than left
+ * unused, because an available gender-from-name helper is an invitation to the
+ * next person who needs a gender and does not have one.
  */
-function inferGenderFromName(name: string): 'male' | 'female' {
-    const lowerName = name.toLowerCase();
 
-    // Common female name patterns/endings
-    const femalePatterns = [
-        'mary', 'sarah', 'elizabeth', 'grace', 'faith', 'hope',
-        'aisha', 'fatima', 'blessing', 'mercy', 'joy', 'peace',
-    ];
-
-    const femaleEndings = ['a', 'e', 'ie', 'lyn', 'elle'];
-
-    // Check patterns
-    if (femalePatterns.some(pattern => lowerName.includes(pattern))) {
-        return 'female';
-    }
-
-    // Check endings
-    if (femaleEndings.some(ending => lowerName.endsWith(ending))) {
-        return 'female';
-    }
-
-    // Default to male if uncertain (user can update in profile)
-    return 'male';
-}
