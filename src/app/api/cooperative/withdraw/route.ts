@@ -8,7 +8,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
 import { debitJsonbBalanceWithFloor } from "@/lib/wallet-ledger";
 import { COOPERATIVE_MINIMUM_BALANCE } from "@/lib/cooperative-limits";
-import { rateLimit, getClientIp, createRateLimitResponse } from '@/lib/rate-limiter';
+import { rateLimit, createRateLimitResponse } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 
 // Rate limiter for withdrawal requests (very strict for financial security)
@@ -20,12 +20,6 @@ const withdrawalLimiter = rateLimit(rateLimitConfig.withdrawal);
  */
 export async function POST(request: NextRequest) {
     // RATE LIMITING - Prevent withdrawal spam/abuse
-    const clientIp = getClientIp(request);
-    const rateLimitResult = await withdrawalLimiter.check(clientIp);
-
-    if (!rateLimitResult.success) {
-        return createRateLimitResponse(rateLimitResult);
-    }
 
     try {
         const session = (await requireSession()).session;
@@ -35,6 +29,31 @@ export async function POST(request: NextRequest) {
                 { status: 401 }
             );
         }
+
+        // Keyed on the ACCOUNT, not the IP address.
+        //
+        // This endpoint is authenticated, and rate-limits.config.ts already
+        // spells out why an IP key is the wrong unit here: "Nigerian mobile
+        // networks share IPs heavily, so a limit tuned as though an IP were a
+        // person locks out real users." That note was written for the public
+        // contact form and applies with more force to a signed-in one — behind a
+        // carrier NAT, a handful of members exhausting this limit blocked
+        // everyone else sharing that address.
+        //
+        // The four payment ACTIONS already key on session.user.id. The API
+        // routes doing the same work did not, so one convention was correct and
+        // the other was not, for the same operation.
+        //
+        // The check moves below the session because that is where the user id
+        // exists. The trade is that an unauthenticated flood now reaches
+        // requireSession() first — which reads a token and returns 401 without
+        // touching the database, so it is the cheap path either way, and
+        // volumetric protection belongs at the edge rather than here.
+        const rateLimitResult = await withdrawalLimiter.check(session.user.id);
+        if (!rateLimitResult.success) {
+            return createRateLimitResponse(rateLimitResult);
+        }
+
 
         const userId = session.user.id;
         const { amount, reason, accountNumber, bankName, accountName } = await request.json();

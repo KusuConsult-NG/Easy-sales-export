@@ -6,7 +6,7 @@ import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
-import { rateLimit, getClientIp, createRateLimitResponse } from '@/lib/rate-limiter';
+import { rateLimit, createRateLimitResponse } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 
 const verificationLimiter = rateLimit(rateLimitConfig.serverAction);
@@ -15,12 +15,6 @@ const verificationLimiter = rateLimit(rateLimitConfig.serverAction);
  * API Route: Submit Seller Verification
  */
 export async function POST(request: NextRequest) {
-    const clientIp = getClientIp(request);
-    const rateLimitResult = await verificationLimiter.check(clientIp);
-
-    if (!rateLimitResult.success) {
-        return createRateLimitResponse(rateLimitResult);
-    }
 
     try {
         const session = (await requireSession()).session;
@@ -29,6 +23,30 @@ export async function POST(request: NextRequest) {
                 { success: false, message: "Unauthorized" },
                 { status: 401 }
             );
+        }
+
+        // Keyed on the ACCOUNT, not the IP address.
+        //
+        // This endpoint is authenticated, and rate-limits.config.ts already
+        // spells out why an IP key is the wrong unit here: "Nigerian mobile
+        // networks share IPs heavily, so a limit tuned as though an IP were a
+        // person locks out real users." That note was written for the public
+        // contact form and applies with more force to a signed-in one — behind a
+        // carrier NAT, a handful of members exhausting this limit blocked
+        // everyone else sharing that address.
+        //
+        // The four payment ACTIONS already key on session.user.id. The API
+        // routes doing the same work did not, so one convention was correct and
+        // the other was not, for the same operation.
+        //
+        // The check moves below the session because that is where the user id
+        // exists. The trade is that an unauthenticated flood now reaches
+        // requireSession() first — which reads a token and returns 401 without
+        // touching the database, so it is the cheap path either way, and
+        // volumetric protection belongs at the edge rather than here.
+        const rateLimitResult = await verificationLimiter.check(session.user.id);
+        if (!rateLimitResult.success) {
+            return createRateLimitResponse(rateLimitResult);
         }
 
         const userId = session.user.id;
