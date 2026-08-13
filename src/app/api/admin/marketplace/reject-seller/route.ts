@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
+import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
@@ -66,6 +67,22 @@ export async function POST(request: NextRequest) {
             verificationStatus: "rejected",
             updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
+
+        // Recorded, which it was not.
+        //
+        // "seller_rejected" is declared in the AuditAction union and had ZERO
+        // emitters anywhere in the codebase — as do the other two seller
+        // decisions. The vocabulary for recording who approved, rejected or
+        // suspended a seller was written and never used, so the audit log holds
+        // no record of any of them.
+        await createAdminAuditLog({
+            action: "seller_rejected",
+            userId: session.user.id,
+            targetType: "seller_verification",
+            targetId: verificationId,
+            details: `Rejected seller ${verificationData.userId}: ${reason}`,
+            metadata: { sellerUserId: verificationData.userId ?? null, reason },
+        }).catch((e) => logger.error("[reject-seller] audit log failed", e));
 
         // ✅ FIX: Sync rejection status to user doc so they can re-apply.
         // Without this, serviceRegistrations.marketplace.status stays 'pending',
