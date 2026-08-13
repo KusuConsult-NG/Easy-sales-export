@@ -66,10 +66,39 @@ maybeDescribe('Auto-Approval & Broadcast Integration Tests', () => {
         // Delete processedPayments docs we might create
         batch.delete(db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc('ref-coop-123'));
         batch.delete(db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc('ref-acad-123'));
+
+        // Fulfilment also writes a transaction keyed by the payment reference
+        // (service.ts:487, :626, :770). This cleanup deleted the users and left
+        // those rows pointing at them, so every run added two permanent orphans
+        // to the database.
+        //
+        // Nothing noticed while this suite was the only thing running. It was
+        // found the first time it ran alongside data-consistency.test.ts, which
+        // failed with exactly those two ids — two suites in one database saying
+        // something neither could say alone.
+        batch.delete(db.collection(COLLECTIONS.TRANSACTIONS).doc('ref-coop-123'));
+        batch.delete(db.collection(COLLECTIONS.TRANSACTIONS).doc('ref-acad-123'));
+
         batch.delete(db.collection(COLLECTIONS.USERS).doc(testUser1.uid));
         batch.delete(db.collection(COLLECTIONS.USERS).doc(testUser2.uid));
 
         await batch.commit();
+
+        // These two use generated ids, so they have to be queried for rather
+        // than addressed. Same reasoning as above: fulfilment writes them, and
+        // leaving them behind accumulates rows referencing deleted users.
+        for (const [collection, field, values] of [
+            [COLLECTIONS.COOPERATIVE_TRANSACTIONS, 'userId', [testUser1.uid, testUser2.uid]],
+            [COLLECTIONS.WHATSAPP_INVITES, 'email', [testUser1.email, testUser2.email]],
+        ] as const) {
+            try {
+                const snap = await db.collection(collection).where(field, 'in', values).get();
+                await Promise.all(snap.docs.map((d: any) => d.ref.delete()));
+            } catch {
+                // Best effort. A leftover row here is inert, and failing the
+                // teardown would mask whichever assertion actually ran.
+            }
+        }
     });
 
     describe('Cooperative Auto-Approval', () => {
