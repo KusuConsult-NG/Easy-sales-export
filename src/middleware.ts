@@ -1,4 +1,5 @@
 import NextAuth from "next-auth";
+import { hasWaveAccess } from "@/lib/wave-access";
 import { authConfig } from "@/lib/auth.config";
 import { NextResponse } from "next/server";
 import { buildCsp, generateNonce, NONCE_HEADER } from "@/lib/csp";
@@ -80,17 +81,16 @@ const authMiddleware = auth((req: any) => {
         const isNewMaleUser = isMale && registeredOnOrAfterCutoff;
 
         // Stale-safe check: also allow if serviceRegistrations.wave is approved/active/pending/reviewing.
+        //
+        // The status list moved to @/lib/wave-access so the API routes can ask
+        // the same question. /api/wave/training-sessions asked only for a
+        // session and handed every meeting link to any signed-in account.
         const waveRegStatus = serviceRegs.wave?.status;
-        const hasWaveAccess = hasWaveRole || 
-                             waveRegStatus === "approved" || 
-                             waveRegStatus === "active" || 
-                             waveRegStatus === "pending" || 
-                             waveRegStatus === "under_review" ||
-                             waveRegStatus === "revision_required";
+        const hasWaveAccessNow = hasWaveAccess({ roles: userRoles, waveRegStatus });
 
         // Strict enforcement: new male users (registered on/after June 17, 2026) are never allowed access.
         // Legacy male users are allowed only if they have pre-existing WAVE access.
-        const isWaveBlocked = isMale && (isNewMaleUser || !hasWaveAccess);
+        const isWaveBlocked = isMale && (isNewMaleUser || !hasWaveAccessNow);
 
         const normalizedHostname = hostname.replace(/^www\./, "");
         
