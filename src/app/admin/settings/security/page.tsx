@@ -168,8 +168,33 @@ export default function SecuritySettingsPage() {
                                     <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600 peer-disabled:opacity-50"></div>
                                 </label>
                             </div>
+                            {/*
+                              * This said "MFA is enforced for all admin accounts"
+                              * whenever the toggle was on — and the toggle
+                              * defaults to on.
+                              *
+                              * Nothing enforces MFA. src/middleware.ts has no MFA
+                              * logic, the mfa_verified cookie is read by nothing,
+                              * and requiresMFA() — which names withdrawal, loan
+                              * approval and role change — has no callers. See
+                              * the audit in mfa-not-enforced.test.ts.
+                              *
+                              * So the security settings screen was telling the
+                              * person responsible for the platform's security
+                              * that a control existed, in the place they would
+                              * go to check. The preference is still recorded and
+                              * is what enforcement should read when it is built;
+                              * the copy now says which of those two things is
+                              * true today.
+                              */}
                             <p className="text-sm text-slate-500">
-                                {settings.enforceMfa ? "MFA is enforced for all admin accounts" : "MFA is optional for admin accounts"}
+                                {settings.enforceMfa
+                                    ? "Preference saved: require MFA for admin accounts."
+                                    : "Preference saved: MFA optional for admin accounts."}
+                            </p>
+                            <p className="text-sm text-amber-700 mt-1">
+                                Not yet enforced — this preference is recorded but no sign-in
+                                currently requires a second factor.
                             </p>
                         </div>
                     </div>
