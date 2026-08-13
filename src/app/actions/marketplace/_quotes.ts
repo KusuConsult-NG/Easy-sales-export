@@ -32,8 +32,49 @@ async function _submitQuoteRequestAction(data: QuoteRequestData): Promise<Action
 
         const userId = session.user.id;
 
+        // `sellerId` and `productName` arrived from the caller and went straight
+        // into a notification: the recipient id and the body text were both
+        // whatever the request said.
+        //
+        // So this was an open endpoint for sending a platform notification to
+        // ANY user, with an attacker-chosen product name in the message and the
+        // marketplace's own branding around it. A phishing primitive.
+        //
+        // This codebase has fixed the identical shape twice already.
+        // _submitLandInquiryAction took listingOwnerId and listingTitle from the
+        // request and now reads them from the listing, with a comment saying
+        // exactly this; and createReviewAction reads the product to attribute a
+        // review to "the ACTUAL seller". This is the third instance.
+        //
+        // Both values come from the product now, and the product has to exist —
+        // which it never had to before, so a quote could be raised against a
+        // productId that was never a product.
+        const productSnap = await db.collection(COLLECTIONS.PRODUCTS).doc(data.productId).get();
+        if (!productSnap.exists) {
+            return { success: false as const, error: "Product not found", data: null };
+        }
+        const product = productSnap.data() ?? {};
+
+        const sellerId = String(product.sellerId ?? "");
+        if (!sellerId) {
+            return { success: false as const, error: "This product has no seller to contact", data: null };
+        }
+        const productName = String(product.title ?? product.name ?? "this product");
+
+        // A quote for zero or minus one is not a quote. The field is a number in
+        // the interface and that is a TypeScript claim, erased before the request
+        // arrives.
+        const quantity = Number(data.quantity);
+        if (!Number.isFinite(quantity) || quantity <= 0) {
+            return { success: false as const, error: "Quantity must be a positive number", data: null };
+        }
+
         const quoteRef = await db.collection(COLLECTIONS.MARKETPLACE_QUOTES).add({ 
             ...data,
+            // After the spread, so the caller's copies are recorded nowhere.
+            sellerId,
+            productName,
+            quantity,
             buyerId: userId,
             buyerName: session.user.name || "Unknown Buyer",
             buyerEmail: session.user.email,
@@ -44,10 +85,11 @@ async function _submitQuoteRequestAction(data: QuoteRequestData): Promise<Action
         });
 
         await db.collection(COLLECTIONS.NOTIFICATIONS).add({
-            userId: data.sellerId,
+            // The product's seller, not the caller's nominee.
+            userId: sellerId,
             type: "marketplace",
             title: "New Quote Request",
-            message: `You have received a new quote request for "${data.productName}" from ${session.user.name || "a buyer"}.`,
+            message: `You have received a new quote request for "${productName}" from ${session.user.name || "a buyer"}.`,
             link: `/marketplace/seller/quotes/${quoteRef.id}`,
             read: false,
             createdAt: FieldValue.serverTimestamp() 
