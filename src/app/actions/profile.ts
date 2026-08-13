@@ -121,6 +121,51 @@ export const updateUserProfileAction = withSafeAction("updateUserProfileAction",
 
     const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
 
+    // Gender is set once, as the note above this function already says.
+    //
+    // It did not enforce that. The code was
+    //
+    //     if (validated.gender) updatePayload.gender = validated.gender.toLowerCase();
+    //
+    // with no comparison to the stored value — so any user could change it, any
+    // number of times, through their own profile screen. The `existing`
+    // document was read in the transaction below and used to assemble the name,
+    // so the value needed for the check was already in hand.
+    //
+    // WHY IT MATTERS
+    //
+    // WAVE is a female-only programme and _enrollInWaveAction enforces that by
+    // reading this exact field:
+    //
+    //     const isMale = applicantGender?.toLowerCase() === "male";
+    //     if (isMale && !isUserAdmin && ...) return "Only female applicants are
+    //         eligible to enroll in the WAVE program."
+    //
+    // Its own comment calls that "🔒 SECURITY: Strict Gender Enforcement". A
+    // male applicant refused there could call updateUserProfileAction({ gender:
+    // "female" }) and enrol — the eligibility check was reading a field the
+    // applicant controlled. That is the "identity hopping" the note names.
+    //
+    // The intended route exists: _updateUserGenderAction in admin.ts requires
+    // the users:update permission and writes a `user_gender_update` audit entry.
+    // So the design was set-once plus an audited admin override, and only the
+    // self-service half was missing.
+    //
+    // Read before the transaction so the refusal is a proper error rather than a
+    // throw from inside the callback. A concurrent first-set is caught by the
+    // version check in versionedUpdate.
+    const currentDoc = await userRef.get();
+    const currentGender = String(currentDoc.data()?.gender ?? "").trim().toLowerCase();
+    const requestedGender = validated.gender?.toLowerCase();
+
+    if (requestedGender && currentGender && requestedGender !== currentGender) {
+        return {
+            success: false as const,
+            error: "Gender cannot be changed here. Please contact support if it is recorded incorrectly.",
+            data: null,
+        };
+    }
+
     await db.runTransaction(async (transaction) => {
         const existingDoc = await transaction.get(userRef);
         const existing = existingDoc.data() || {};
@@ -130,8 +175,12 @@ export const updateUserProfileAction = withSafeAction("updateUserProfileAction",
         // Remove version from payload as it's handled by versionedUpdate
         delete updatePayload.version;
 
-        if (validated.gender) {
-            updatePayload.gender = validated.gender.toLowerCase();
+        // Written only on the first set. Sending the value it already holds is
+        // not an error — a profile form resubmits every field — it simply
+        // writes nothing.
+        delete updatePayload.gender;
+        if (requestedGender && !currentGender) {
+            updatePayload.gender = requestedGender;
         }
 
         if (validated.firstName || validated.lastName || validated.otherName) { const first = validated.firstName ?? existing.firstName ?? existing.fullName?.split(' ')[0] ?? "";
