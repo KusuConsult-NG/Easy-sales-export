@@ -19,6 +19,7 @@ export type AuditAction =
     | 'user_activate'
     | 'user_role_change'
     | 'user_gender_update'
+    | 'ai_chat_message'
     | 'user_impersonate'
     | 'user_kyc_verify_bvn'
     | 'user_kyc_verify_nin'
