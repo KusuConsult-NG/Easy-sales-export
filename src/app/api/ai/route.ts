@@ -8,6 +8,8 @@ import {
     detectEscalation,
     saveMessageAsync,
     createChatbotSession,
+    getRecentSessionTurns,
+    getSessionOwner,
 } from "@/lib/chatbot-db";
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -19,6 +21,18 @@ import { randomUUID } from "crypto";
 const VALID_MODULES: ChatbotModule[] = [
     "hub", "marketplace", "cooperative", "export", "academy", "wave", "farm-nation"
 ];
+
+/**
+ * Longest message accepted, and the longest recalled turn.
+ *
+ * Neither had a bound. The rate limit caps requests at 15/hour and says nothing
+ * about their size, so one caller could write fifteen arbitrarily large
+ * documents an hour into CHATBOT_MESSAGES and send the same to OpenAI. 2000
+ * characters is a long support question and a short essay.
+ */
+const MAX_MESSAGE_CHARS = 2000;
+const MAX_HISTORY_TURNS = 6;
+const MAX_HISTORY_CHARS = 2000;
 
 // 15 messages per user per hour (sliding window)
 const chatbotRateLimiter = new Ratelimit({
@@ -93,17 +107,58 @@ export async function POST(req: NextRequest) {
 
         // 4. Parse body
         const body = await req.json();
-        const { message, module: rawModule, history, sessionId: clientSessionId } = body;
+        // `history` is deliberately not destructured. Older widgets still send
+        // it and are not broken by that — it is simply not read, because the
+        // server rebuilds context from what it stored.
+        const { message, module: rawModule, sessionId: clientSessionId } = body;
 
         if (!message?.trim()) {
             return NextResponse.json({ error: "Message required" }, { status: 400 });
         }
 
-        const validModule: ChatbotModule = VALID_MODULES.includes(rawModule) ? rawModule : "hub";
-        const sessionId: string = clientSessionId || randomUUID();
-        const isNewSession = !clientSessionId;
+        if (message.length > MAX_MESSAGE_CHARS) {
+            return NextResponse.json(
+                { error: `Message too long (max ${MAX_MESSAGE_CHARS} characters)` },
+                { status: 413 }
+            );
+        }
 
-        // 5. Create session in Firestore if this is the first message
+        const validModule: ChatbotModule = VALID_MODULES.includes(rawModule) ? rawModule : "hub";
+
+        // 5. A supplied session id has to be one of yours.
+        //
+        // It was taken as given. Messages are written with the caller's userId
+        // but the SUPPLIED sessionId, and getChatThread — what an admin reads —
+        // selects purely on sessionId. So posting with somebody else's session
+        // id put your messages in their transcript, incremented their
+        // messageCount, could set escalated on their session, and arrayUnion'd
+        // tags onto it.
+        //
+        // Session ids are randomUUID, so this needed one to be known rather
+        // than guessed. That lowers the odds and does not make the check
+        // optional — ids are handed to the client, and this costs one read.
+        let sessionId: string;
+        let isNewSession: boolean;
+
+        if (clientSessionId) {
+            const owner = await getSessionOwner(String(clientSessionId));
+            if (owner && owner !== userId) {
+                logger.warn("[chatbot] session id belongs to another user", {
+                    userId,
+                    sessionId: String(clientSessionId),
+                });
+                return NextResponse.json({ error: "Unknown session" }, { status: 403 });
+            }
+            sessionId = String(clientSessionId);
+            // An id with no session behind it is a new session, not an orphan:
+            // messages used to be written against a session document that had
+            // never been created.
+            isNewSession = owner === null;
+        } else {
+            sessionId = randomUUID();
+            isNewSession = true;
+        }
+
         if (isNewSession) {
             await createChatbotSession(sessionId, userId, userEmail, validModule);
         }
@@ -122,13 +177,25 @@ export async function POST(req: NextRequest) {
                     { role: "system", content: systemPrompt },
                 ];
 
-                // Last 6 turns of context
-                if (Array.isArray(history) && history.length > 0) {
-                    for (const msg of history.slice(-6)) {
-                        if (msg.role === "user" || msg.role === "assistant") {
-                            conversationMessages.push({ role: msg.role, content: String(msg.content) });
-                        }
-                    }
+                // Context is read back from storage, not accepted from the caller.
+                //
+                // `history` came from the request body and entries with
+                // role: "assistant" were passed through, so the caller wrote
+                // what the assistant had previously said. That is prompt
+                // injection with no cleverness required — a support bot can be
+                // told it already agreed to a refund and asked to confirm — and
+                // the reply is stored and read by staff.
+                //
+                // Reading the stored turns is the only version the caller
+                // cannot author. Messages are saved after the reply, so the
+                // current turn is not in storage yet; it is appended below,
+                // which is where it belongs anyway.
+                const priorTurns = isNewSession ? [] : await getRecentSessionTurns(sessionId, MAX_HISTORY_TURNS);
+                for (const turn of priorTurns) {
+                    conversationMessages.push({
+                        role: turn.role,
+                        content: turn.content.slice(0, MAX_HISTORY_CHARS),
+                    });
                 }
                 conversationMessages.push({ role: "user", content: message });
 
