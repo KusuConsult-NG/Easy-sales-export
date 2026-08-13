@@ -84,6 +84,19 @@ export const ROLE_APP_ACCESS: Record<UserRole, AppIdentifier[]> = {
 export const UNIVERSAL_APPS: AppIdentifier[] = ["dashboard", "profile", "messages"];
 
 /**
+ * Every app identifier, as a runtime value.
+ *
+ * The type above cannot be checked against anything that arrives over the wire,
+ * and this list previously existed only as a local inside canAccessRoute — so
+ * anything else needing to validate a module identifier had to write its own
+ * copy. /api/hub/telemetry did not, and accepted any string.
+ */
+export const APP_IDENTIFIERS: readonly AppIdentifier[] = [
+    "dashboard", "export", "marketplace", "cooperatives",
+    "wave", "farm-nation", "academy", "escrow", "messages", "profile",
+] as const;
+
+/**
  * Check if user has access to a specific app
  */
 export function hasAppAccess(userRoles: UserRole[], app: AppIdentifier): boolean {
@@ -128,12 +141,7 @@ export function canAccessRoute(userRoles: UserRole[], routePath: string): boolea
     }
 
     // Check if this is a valid app identifier
-    const validApps: AppIdentifier[] = [
-        "dashboard", "export", "marketplace", "cooperatives",
-        "wave", "farm-nation", "academy", "escrow", "messages", "profile"
-    ];
-
-    if (!validApps.includes(firstSegment as AppIdentifier)) {
+    if (!APP_IDENTIFIERS.includes(firstSegment as AppIdentifier)) {
         return true; // Unknown routes are allowed (let Next.js handle 404)
     }
 
