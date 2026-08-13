@@ -49,10 +49,22 @@ const customJestConfig = {
         // Run them with: npx playwright test
         '/e2e/',
         '/tests/e2e/',
-        // ── Firebase Admin integration tests ──────────────────────────────────
-        // These require a live Firebase Admin service account (GOOGLE_APPLICATION_CREDENTIALS
-        // or FIREBASE_SERVICE_ACCOUNT_KEY) which is not available in CI.
-        // Run them with: npm run test:integration (in environments with credentials)
+        // ── Integration tests that cannot currently run ───────────────────────
+        // This said they need a live Firebase Admin service account and to
+        // "Run them with: npm run test:integration (in environments with
+        // credentials)". Neither is true, and see
+        // src/__tests__/unit/excluded-suites-state.test.ts for the detail.
+        //
+        // Credentials are not what is missing: the client SDK is the shim in
+        // src/lib/shims/firebase, wired in as `"firebase": "file:./..."`, and
+        // its addDoc/setDoc/updateDoc throw by design. Four of these suites
+        // were written against the real SDK before the Supabase migration and
+        // never migrated, so npm run test:integration cannot make them pass in
+        // any environment — it starts an emulator nothing is able to reach.
+        //
+        // The remaining failures (auto-approval, data-consistency) are real
+        // tests of real code that need a real database, which is a separate
+        // problem with a real answer.
         '/src/__tests__/integration/',
         '/tests/integration/',
         // ── QA/diagnostic scripts in /tests/ root and root __tests__ ─────────
