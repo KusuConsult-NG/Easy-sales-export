@@ -4,6 +4,7 @@ import { unstable_cache } from "next/cache";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
+import { AWAITING_REVIEW_STATUSES } from "@/lib/land-listing-status";
 import type {
     AnalyticsServiceContract,
     PlatformHealthMetrics,
@@ -148,7 +149,15 @@ export class AnalyticsService implements AnalyticsServiceContract {
             const [totalUsersSnap, suspendedUsersSnap, lockedEscrowsSnap] = await Promise.all([
                 db.collection(COLLECTIONS.USERS).count().get(),
                 db.collection(COLLECTIONS.USERS).where("status", "==", "suspended").count().get(),
-                db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("status", "==", "locked").count().get()
+                // "locked" is not an escrow status and never was. The string
+                // appears exactly once in this codebase — here, in this query —
+                // so `activeEscrows` on the platform health panel has always
+                // read 0, whatever was actually held.
+                //
+                // An escrow holding money is `funded`: marketplace/_payment.ts
+                // sets it when payment clears, and it stays there until a
+                // release, a refund or a dispute moves it on.
+                db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("status", "==", "funded").count().get()
             ]);
 
             const totalUsers = totalUsersSnap.data().count ?? 0;
@@ -287,7 +296,10 @@ export class AnalyticsService implements AnalyticsServiceContract {
             db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).where("membershipStatus", "==", "pending").count().get(),
             db.collection(COLLECTIONS.EXPORT_APPLICATIONS).where("status", "==", "pending").count().get(),
             db.collection(COLLECTIONS.SELLER_VERIFICATIONS).where("status", "==", "pending").count().get(),
-            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "pending").count().get(),
+            // The sibling of the count in global-aggregation.ts. `pending` on a
+            // land listing means "reserved by a buyer mid-purchase", not
+            // "awaiting approval" — see land-listing-status.ts.
+            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", AWAITING_REVIEW_STATUSES[0]).count().get(),
             db.collection(COLLECTIONS.LOAN_APPLICATIONS).where("status", "==", "pending").count().get(),
             db.collection(COLLECTIONS.WAVE_WITHDRAWALS).where("status", "==", "pending").count().get(),
             db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).where("status", "==", "pending").count().get()

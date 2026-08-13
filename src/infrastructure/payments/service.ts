@@ -288,9 +288,22 @@ export async function processMarketplaceOrder(reference: string, amount: number,
 export async function reconcilePendingFulfillments() {
     logger.info("[Reconciliation] Scanning for stuck pending_fulfillment payments...");
     
-    // Find processed_payments that are stuck in "pending_fulfillment"
+    // One L, not two.
+    //
+    // This queried "pending_fulfillment" while the claim eighty lines below
+    // writes "pending_fulfilment" — the British spelling — so the recovery
+    // routine for stranded payments could never find a stranded payment. The
+    // string with two Ls appears exactly once in the codebase: in this query.
+    //
+    // cron/reconcile-fulfilment/route.ts filters on the correct spelling, which
+    // is why one reconciler works and this one silently did not.
+    //
+    // Latent rather than live: reconcilePendingFulfillments has no callers
+    // today. It matters because it is the thing somebody would wire to a cron
+    // the first time money goes missing, and it would report "no stuck payments
+    // found" while they existed.
     const stuckQuery = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
-        .where("status", "==", "pending_fulfillment")
+        .where("status", "==", "pending_fulfilment")
         .get();
 
     if (stuckQuery.empty) {
