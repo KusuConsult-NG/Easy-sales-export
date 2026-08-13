@@ -43,8 +43,22 @@
  * comment "Verify a single BVN against QoreID... Returns isMatch:true only if
  * QoreID confirms the name matches" directly above a body that writes
  * `'kyc.bvnVerified': true` unconditionally and logs
- * "BVN verified forcefully (QoreID bypassed)". No QoreID call exists in the
- * repository, and no other identity verifier does either.
+ * "BVN verified forcefully (QoreID bypassed)".
+ *
+ * CORRECTION, ADDED LATER
+ * -----------------------
+ * This paragraph used to end "No QoreID call exists in the repository, and no
+ * other identity verifier does either." That is no longer true, and it was the
+ * premise the bypass rested on.
+ *
+ * src/lib/qoreid.ts implements verifyBVN, verifyNIN, verifyCAC, verifyTIN and
+ * more — OAuth token exchange, real requests, timeout, rate-limit and error
+ * handling — and /api/kyc/verify-business calls verifyCAC and verifyTIN today.
+ * /api/kyc/verify-bank-account verifies against Paystack's resolve endpoint for
+ * real. So identity verification IS wired on this platform; BVN and NIN are the
+ * two that skip it, and their routes import qoreIdService without calling it.
+ *
+ * See kyc-route-bypass.test.ts, which covers the route path this file does not.
  *
  * That is deliberate — the log line names it — and reversing it needs QoreID
  * credentials and a decision about whether an unverifiable applicant may
