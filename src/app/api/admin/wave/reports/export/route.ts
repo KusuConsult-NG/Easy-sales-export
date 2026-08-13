@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
+import { csvDocument } from "@/lib/csv-safe";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isAdmin } from "@/lib/admin-permissions";
@@ -180,10 +181,7 @@ function generateCSV(applications: any[], timeframe: string) {
         app.createdAt ? new Date(app.createdAt).toLocaleDateString() : "",
     ]);
 
-    const csvContent = [
-        headers.join(","),
-        ...rows.map(row => row.map(cell => `"${cell}"`).join(",")),
-    ].join("\n");
+    const csvContent = csvDocument(headers, rows);
 
     return new NextResponse(csvContent, {
         status: 200,

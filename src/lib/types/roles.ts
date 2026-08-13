@@ -29,6 +29,79 @@ export type UserRole =
     | "super_admin";       // Full system control
 
 /**
+ * Every role in UserRole, as a value.
+ *
+ * WHY THIS EXISTS
+ * ---------------
+ * "What is a valid role?" had six answers in this codebase and no two agreed:
+ *
+ *   UserRole (this file)                21 roles, including six module admins
+ *   add-roles VALID_ROLES               13 — no module admins at all, while its
+ *                                       own doc comment says "Regular admins can
+ *                                       assign module-level roles (e.g.
+ *                                       cooperative_admin, wave_admin)"
+ *   schemas.ts UserRoleSchema           14 — has marketplace_buyer, not
+ *                                       marketplace_seller
+ *   write-guard.ts VALID_ROLES          19 — including "user", "academy_student",
+ *                                       "wave_member", "farm_nation_member" and
+ *                                       "exporter", none of which are roles
+ *   PERMISSION_MATRIX                   10 — including "moderator" and "support",
+ *                                       which appear in NO other list
+ *   bulkAssignRolesAction               no list; any string was accepted
+ *
+ * The combination that mattered: isAdmin() honours "moderator" and "support",
+ * 32 admin routes are gated on isAdmin(), and the only path that could write
+ * those strings was the one with no validation. So a role conferring full admin
+ * access could be granted while appearing in no type, no schema and no UI —
+ * admin access that nothing lists as admin access.
+ *
+ * This array is the value form of the type. The `satisfies` below fails
+ * compilation if a role is added to UserRole and not here.
+ */
+export const ALL_USER_ROLES = [
+    "general_user",
+    "buyer",
+    "marketplace_buyer",
+    "seller",
+    "marketplace_seller",
+    "land_owner",
+    "farmer",
+    "investor",
+    "export_participant",
+    "cooperative_member",
+    "wave_participant",
+    "academy_participant",
+    "field_officer",
+    "cooperative_admin",
+    "academy_admin",
+    "wave_admin",
+    "marketplace_admin",
+    "farm_nation_admin",
+    "export_admin",
+    "admin",
+    "super_admin",
+] as const satisfies readonly UserRole[];
+
+/**
+ * Compile-time exhaustiveness: if UserRole gains a member that ALL_USER_ROLES
+ * does not list, this assignment stops type-checking.
+ *
+ * `satisfies` above proves every entry IS a UserRole. This proves every UserRole
+ * IS an entry. Both directions are needed — a list can be wrong by omission as
+ * easily as by addition, and omission is how add-roles lost the six module
+ * admins.
+ */
+const _everyRoleIsListed: Record<UserRole, true> = Object.fromEntries(
+    ALL_USER_ROLES.map((r) => [r, true])
+) as Record<UserRole, true>;
+void _everyRoleIsListed;
+
+/** Is this arbitrary string one of the platform's roles? */
+export function isUserRole(value: unknown): value is UserRole {
+    return typeof value === "string" && (ALL_USER_ROLES as readonly string[]).includes(value);
+}
+
+/**
  * Legacy role type for backward compatibility
  * @deprecated Use UserRole instead
  */

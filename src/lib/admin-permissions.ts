@@ -227,9 +227,40 @@ export function isSuperAdmin(userRoles: string[] | undefined): boolean {
 }
 
 /**
- * Roles that carry platform-wide authority. Only a super_admin may grant one.
+ * Roles that only a super_admin may grant.
+ *
+ * DERIVED, BECAUSE A HAND-WRITTEN LIST WENT STALE
+ * ----------------------------------------------
+ * This was `["admin", "super_admin"]`, written when those were the only roles
+ * that could do anything a plain admin could not. Six module-admin roles were
+ * added to PERMISSION_MATRIX afterwards and the list was not revisited, so
+ * `cooperative_admin` — which holds "cooperatives:manage_products", a
+ * permission the matrix deliberately withholds from `admin` — became grantable
+ * by any admin. An admin could assign it to themselves and hold a permission
+ * the matrix gives only to super_admin and cooperative_admin.
+ *
+ * That particular escalation is latent rather than live: nothing in the
+ * codebase checks "cooperatives:manage_products" today, so the permission
+ * currently gates nothing. It stops being latent the moment somebody writes the
+ * check, and a guard that is correct only because the thing it protects is
+ * unused is not a guard.
+ *
+ * So the rule is computed instead of listed: a role is privileged if it can do
+ * anything a plain `admin` cannot. Add a permission to any module-admin role
+ * and that role becomes super_admin-only to grant, without anyone remembering
+ * to come back here.
+ *
+ * "admin" and "super_admin" are unioned in explicitly. They are privileged by
+ * definition rather than by holding a surplus permission, and `admin` compared
+ * against itself has a surplus of nothing.
  */
-export const PRIVILEGED_ROLES = ["admin", "super_admin"] as const;
+export const PRIVILEGED_ROLES: readonly string[] = (() => {
+    const adminPerms = new Set<AdminPermission>(PERMISSION_MATRIX.admin);
+    const beyondAdmin = (Object.keys(PERMISSION_MATRIX) as AdminRole[]).filter((role) =>
+        (PERMISSION_MATRIX[role] ?? []).some((p) => !adminPerms.has(p))
+    );
+    return Array.from(new Set<string>(["admin", "super_admin", ...beyondAdmin]));
+})();
 
 /**
  * Does this set of roles include one that only a super_admin may hand out?
@@ -254,10 +285,12 @@ export const PRIVILEGED_ROLES = ["admin", "super_admin"] as const;
  *
  * Both call sites route through here so the rule has one definition rather than
  * two that can drift apart.
+ *
+ * The set it consults is derived from the matrix — see PRIVILEGED_ROLES.
  */
 export function includesPrivilegedRole(roles: string[] | undefined): boolean {
     if (!roles) return false;
-    return roles.some((r) => (PRIVILEGED_ROLES as readonly string[]).includes(r));
+    return roles.some((r) => PRIVILEGED_ROLES.includes(r));
 }
 
 /**

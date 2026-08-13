@@ -6,6 +6,7 @@ import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isAdmin } from "@/lib/admin-permissions";
+import { csvDocument } from "@/lib/csv-safe";
 
 export async function GET(request: NextRequest) {
     try {
@@ -56,13 +57,13 @@ export async function GET(request: NextRequest) {
             }
         }
         
-        const headersLine = [
+        const headers = [
             "ID", "Name", "Email", "Phone", "Gender", "Tier", "Registration Fee (NGN)",
             "Payment Status", "Membership Status", "State", "LGA",
             "Occupation", "Date Applied"
-        ].map(h => `"${h}"`).join(",");
+        ];
 
-        const rows: string[] = [];
+        const rows: unknown[][] = [];
         
         snapshot.docs.forEach(doc => {
             const data = doc.data();
@@ -162,10 +163,10 @@ export async function GET(request: NextRequest) {
                 }
             }
             
-            rows.push(cols.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","));
+            rows.push(cols);
         });
 
-        const csvContent = [headersLine, ...rows].join("\n");
+        const csvContent = csvDocument(headers, rows);
 
         return new NextResponse(csvContent, {
             status: 200,

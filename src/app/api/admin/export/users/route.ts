@@ -6,6 +6,7 @@ import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isAdmin } from "@/lib/admin-permissions";
+import { csvDocument } from "@/lib/csv-safe";
 
 export async function GET(request: NextRequest) {
     try {
@@ -22,12 +23,12 @@ export async function GET(request: NextRequest) {
         // Usually, 34,000 JSON records fit safely in 40-50MB RAM.
         const snapshot = await db.collection(COLLECTIONS.USERS).get();
         
-        const headersLine = [
+        const headers = [
             "ID", "Name", "Email", "Phone", "Gender", "Roles", "Verified",
             "BVN", "BVN Verified", "NIN", "NIN Verified",
             "TIN", "TIN Verified", "CAC", "CAC Verified",
             "KYC Status", "State", "LGA", "Date Joined"
-        ].map(h => `"${h}"`).join(",");
+        ];
 
         const rows = snapshot.docs.map(doc => {
             const data = doc.data();
@@ -105,10 +106,10 @@ export async function GET(request: NextRequest) {
                 createdAt
             ];
             
-            return cols.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",");
+            return cols;
         });
 
-        const csvContent = [headersLine, ...rows].join("\n");
+        const csvContent = csvDocument(headers, rows);
 
         return new NextResponse(csvContent, {
             status: 200,
