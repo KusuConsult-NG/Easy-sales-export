@@ -245,6 +245,57 @@ export interface ChatbotMessageRow {
     isEscalation: boolean;
 }
 
+/**
+ * The recent turns of a session, for rebuilding model context on the server.
+ *
+ * /api/ai used to take the conversation history from the request body, which
+ * meant the caller wrote the assistant's prior turns. Reading them back from
+ * where they were stored is the only version of this that the caller cannot
+ * author.
+ *
+ * Ownership is the caller's to check — this returns what is stored, and
+ * `userId` is on every row for exactly that purpose.
+ */
+export async function getRecentSessionTurns(
+    sessionId: string,
+    limit: number
+): Promise<Array<{ role: "user" | "assistant"; content: string }>> {
+    try {
+        const db = getAdminDb();
+        const snapshot = await db.collection(COLLECTIONS.CHATBOT_MESSAGES)
+            .where("sessionId", "==", sessionId)
+            .orderBy("timestamp", "desc")
+            .limit(limit)
+            .get();
+
+        return snapshot.docs
+            .map((d: any) => d.data())
+            .reverse()
+            .filter((m: any) => m.role === "user" || m.role === "assistant")
+            .map((m: any) => ({ role: m.role, content: String(m.content ?? "") }));
+    } catch (err) {
+        // Non-blocking: a chat with no recalled context is worse than a chat
+        // that fails, but only slightly — and failing here would take the
+        // assistant down whenever the database hiccups.
+        logger.error("[chatbot-db] Failed to load session turns:", err);
+        return [];
+    }
+}
+
+/**
+ * Who owns a session, or null if it does not exist.
+ */
+export async function getSessionOwner(sessionId: string): Promise<string | null> {
+    try {
+        const db = getAdminDb();
+        const doc = await db.collection(COLLECTIONS.CHATBOT_SESSIONS).doc(sessionId).get();
+        return doc.exists ? (doc.data()?.userId ?? null) : null;
+    } catch (err) {
+        logger.error("[chatbot-db] Failed to read session owner:", err);
+        return null;
+    }
+}
+
 export async function getChatThread(
     sessionId: string
 ): Promise<{ messages: ChatbotMessageRow[]; session: ChatSessionRow | null }> {
