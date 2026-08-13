@@ -14,29 +14,8 @@ import { type LandListing } from "@/types/strict";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
 import { isAdmin } from "@/lib/admin-permissions";
+import { PUBLIC_LAND_STATUSES, stripInternalLandFields } from "@/lib/land-visibility";
 
-/**
- * Statuses a stranger may see.
- *
- * A land listing is public once it has been verified — browsing farmland for
- * sale is the point of the module. Everything else is a review queue:
- * pending_verification, rejected, deleted. Those documents carry the admin's
- * verificationNotes and rejectionReason, the owner's id and email, and they
- * belong to people who have not agreed to be listed anywhere yet.
- */
-const PUBLIC_LAND_STATUSES = ["verified", "approved"];
-
-/** Fields that exist for the review process and are nobody else's business. */
-const INTERNAL_LAND_FIELDS = [
-    "verificationNotes", "rejectionReason", "verifiedBy",
-    "ownerEmail", "previousOwnerId",
-];
-
-function stripInternalLandFields<T extends Record<string, any>>(listing: T): T {
-    const copy: Record<string, any> = { ...listing };
-    for (const field of INTERNAL_LAND_FIELDS) delete copy[field];
-    return copy as T;
-}
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { logger } from "@/lib/logger";
 
