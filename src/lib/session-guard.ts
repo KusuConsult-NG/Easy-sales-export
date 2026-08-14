@@ -49,6 +49,10 @@ export async function requireSession(): Promise<
 
     let shouldRedirectToPasswordReset = false;
     let data: any = null;
+    // Whether the live lookup below actually completed. On the failure path
+    // `data` stays null, and the difference between "verified, nothing found"
+    // and "could not verify" decides whether an elevated session is honoured.
+    let verificationFailed = false;
 
     try {
         const { getCached, CacheKeys, setCache, CACHE_TTL } = await import("@/lib/redis");
@@ -190,6 +194,51 @@ export async function requireSession(): Promise<
     } catch (e) {
         console.error("[SessionGuard] Verification failed:", e);
         // Fail open if database lookup fails for some reason or network error to avoid breaking platform
+        //
+        // — but not for administrators. See the check below.
+        verificationFailed = true;
+    }
+
+    // AN UNVERIFIED SESSION MAY NOT CARRY ADMINISTRATIVE AUTHORITY.
+    //
+    // The fail-open above is a deliberate availability trade: a database blip
+    // should not sign every shopper out. What it also did, until this check
+    // existed, was return the raw JWT session — which means:
+    //
+    //   1. the ban and suspension check below never ran (it is inside
+    //      `if (data)`), and
+    //   2. `session.user.roles` stayed as the token was minted, up to 8 hours
+    //      ago, instead of being replaced by the live roles on line ~215.
+    //
+    // Point 2 is the one that matters, because 99 files under src/app decide
+    // administrative authority by reading `session.user.roles` off the result
+    // of this function, against 14 that call requireAdmin. So a revoked
+    // administrator kept administrative access for the life of their token
+    // whenever this lookup happened to fail.
+    //
+    // requireAdmin already states the policy for this exact question, and
+    // states the opposite of what happened here:
+    //
+    //     // Fail closed — never grant access if we cannot verify the live role
+    //
+    // Two guards in one codebase disagreeing about what an unverifiable session
+    // means is how the disagreement gets decided by whichever one a route
+    // happened to import. They agree now, and only for elevated roles: an
+    // ordinary user still rides out the blip, because their token grants
+    // nothing that needs live confirmation.
+    if (verificationFailed && isAdmin((session.user as any).roles)) {
+        console.error(
+            "[SessionGuard] Refusing an unverified elevated session",
+            { userId: session.user.id }
+        );
+        return {
+            session: null,
+            error: {
+                success: false,
+                code: SESSION_EXPIRED_CODE,
+                error: "We could not confirm your administrator access just now. Please try again.",
+            },
+        };
     }
 
     if (data) {
