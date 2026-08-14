@@ -35,6 +35,23 @@ const SESSION_GUARD_EXEMPTIONS = new Set([
   "app/actions/schema-standardization.ts",
   /** Investment export — data export utility, called from authenticated admin pages */
   "app/actions/export-investments.ts",
+  /**
+   * Public product browsing — the storefront a signed-out visitor sees.
+   *
+   * Surfaced by splitting marketplace/_actions.ts: these five actions
+   * (getMarketplaceProductsAction, getProductByIdAction,
+   * getRecommendedProductsAction, getRelatedProductsAction,
+   * searchProductsAction) were always unguarded, and action-auth-baseline.json
+   * has always recorded them as such per-function. They shared a file with
+   * guarded actions, so this FILE-level check passed on their neighbours'
+   * imports rather than on anything about them.
+   *
+   * Isolating them makes the public surface one file and one exemption, which
+   * is the shape the rest of this list has. Anything added to _mp_catalog.ts
+   * that is not meant to be public will not be caught here — the per-function
+   * baseline is what catches that.
+   */
+  "app/actions/marketplace/_mp_catalog.ts",
 ]);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
