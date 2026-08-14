@@ -105,7 +105,7 @@ describe('the approval backlog counts listings awaiting approval', () => {
     it('agrees with the screens that were already right', () => {
         // farm-nation-admin.ts and admin-content.ts were correct all along, and
         // are the reason the right answer was knowable.
-        expect(source('src/app/actions/farm-nation-admin.ts'))
+        expect(source('src/app/actions/farm-nation-admin/_fna_verifications.ts'))
             .toContain('where("status", "==", "pending_verification")');
         expect(source('src/app/actions/admin-content.ts'))
             .toContain('where("status", "==", "pending_verification")');

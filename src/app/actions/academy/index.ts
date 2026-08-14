@@ -89,22 +89,35 @@ export {
     resubmitAcademyApplicationAction,
 } from "./_ac_applications";
 
-// ─── Admin actions (_admin.ts) ────────────────────────────────────────────────
-// NOTE: approveAcademyApplicationAction from _admin.ts is canonical
+// ─── Admin: application review (_ac_admin_review.ts) ─────────────────────────
+// NOTE: approveAcademyApplicationAction here is canonical, over the copy in
+// _ac_applications.ts — the arrangement _admin.ts had.
 export {
     approveAcademyApplicationAction,
     rejectAcademyApplicationAction,
     updateAcademyApplicationPaymentAction,
+} from "./_ac_admin_review";
+
+// ─── Admin: application lists (_ac_admin_applications.ts) ────────────────────
+export {
     getPendingAcademyApplicationsAction,
-    getAcademyEnrollmentsAction,
-    getAcademyInstructorsAction,
-    getAcademyCoursesAction,
-    getAcademyStatsAction,
-    getAcademyApplicationStatsAction,
-    upsertAcademyCourseAction,
     getStandardAcademyApplicationsAction,
+    getAcademyApplicationStatsAction,
     logAcademyExportAction,
-} from "./_admin";
+} from "./_ac_admin_applications";
+
+// ─── Admin: course catalogue (_ac_admin_catalog.ts) ──────────────────────────
+export {
+    getAcademyCoursesAction,
+    upsertAcademyCourseAction,
+    getAcademyInstructorsAction,
+} from "./_ac_admin_catalog";
+
+// ─── Admin: reports (_ac_admin_reports.ts) ───────────────────────────────────
+export {
+    getAcademyEnrollmentsAction,
+    getAcademyStatsAction,
+} from "./_ac_admin_reports";
 
 // ─── Payment actions (_payment.ts) ────────────────────────────────────────────
 export {
