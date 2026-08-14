@@ -135,7 +135,7 @@ describe('logAcademyExportAction — the audit log is not a public inbox', () =>
     });
 
     async function log(details: any) {
-        const { logAcademyExportAction } = await import('@/app/actions/academy/_admin');
+        const { logAcademyExportAction } = await import('@/app/actions/academy/_ac_admin_applications');
         return logAcademyExportAction(details);
     }
 
@@ -201,7 +201,7 @@ describe('every other endpoint refuses a non-admin', () => {
 
     for (const [name, args] of cases) {
         it(`${name} refuses`, async () => {
-            const mod: any = await import('@/app/actions/academy/_admin');
+            const mod: any = await import('@/app/actions/academy');
 
             const r = await mod[name](...args).catch((e: any) => ({ success: false, error: String(e) }));
 
@@ -219,7 +219,7 @@ describe('an admin gets through, so the refusals above are not vacuous', () => {
     });
 
     it('approves an application', async () => {
-        const { approveAcademyApplicationAction } = await import('@/app/actions/academy/_admin');
+        const { approveAcademyApplicationAction } = await import('@/app/actions/academy');
 
         const r: any = await approveAcademyApplicationAction(APP);
 
@@ -235,7 +235,7 @@ describe('an admin gets through, so the refusals above are not vacuous', () => {
         // — but it must not become money-in. platform_revenue_totals() counts
         // transactions with status "completed", so a ledger row written here
         // would inflate reported revenue by whatever the admin typed.
-        const { updateAcademyApplicationPaymentAction } = await import('@/app/actions/academy/_admin');
+        const { updateAcademyApplicationPaymentAction } = await import('@/app/actions/academy');
 
         const r: any = await updateAcademyApplicationPaymentAction(APP, 'completed', 250_000, 'elite');
 
@@ -250,7 +250,7 @@ describe('an admin gets through, so the refusals above are not vacuous', () => {
     it('records the payment against the application and the learner', async () => {
         // The positive half of the assertion above: "writes no ledger row" is
         // also satisfied by writing nothing at all.
-        const { updateAcademyApplicationPaymentAction } = await import('@/app/actions/academy/_admin');
+        const { updateAcademyApplicationPaymentAction } = await import('@/app/actions/academy');
 
         await updateAcademyApplicationPaymentAction(APP, 'completed', 250_000, 'elite');
 

@@ -228,7 +228,7 @@ describe('a land listing its owner can see', () => {
         // carry it to ever be verified.
         const { readFileSync } = await import('fs');
         const { join } = await import('path');
-        const admin = readFileSync(join(process.cwd(), 'src/app/actions/farm-nation-admin.ts'), 'utf-8');
+        const admin = readFileSync(join(process.cwd(), 'src/app/actions/farm-nation-admin/_fna_verifications.ts'), 'utf-8');
 
         expect(admin).toContain('where("status", "==", "pending_verification")');
         expect(await routeSource()).toContain('status: "pending_verification"');
