@@ -80,7 +80,7 @@ function setEscrow(overrides: Record<string, any> = {}) {
 }
 
 async function confirm(escrowId = 'esc-1', ref = 'PAY-REF-1') {
-    const { confirmEscrowPaymentAction } = await import('@/app/actions/marketplace/_escrow');
+    const { confirmEscrowPaymentAction } = await import('@/app/actions/marketplace/_escrow_lifecycle');
     return confirmEscrowPaymentAction(escrowId, ref);
 }
 

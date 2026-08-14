@@ -136,7 +136,7 @@ describe('createBankTransferOrderAction', () => {
     });
 
     async function order() {
-        const { createBankTransferOrderAction } = await import('@/app/actions/marketplace/_payment');
+        const { createBankTransferOrderAction } = await import('@/app/actions/marketplace/_payment_orders');
         return createBankTransferOrderAction(cart as any, 'buyer@example.com', '08000000000', 0);
     }
 
@@ -211,7 +211,7 @@ describe('createPaymentOnDeliveryOrderAction', () => {
     });
 
     async function order() {
-        const { createPaymentOnDeliveryOrderAction } = await import('@/app/actions/marketplace/_payment');
+        const { createPaymentOnDeliveryOrderAction } = await import('@/app/actions/marketplace/_payment_orders');
         return createPaymentOnDeliveryOrderAction(cart as any, '08000000000', {
             recipientName: 'Ada Obi',
             recipientPhone: '08000000000',

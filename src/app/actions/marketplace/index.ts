@@ -13,8 +13,15 @@ export * from "./_mp_catalog";
 export * from "./_mp_seller_dashboard";
 export * from "./_mp_buyer_dashboard";
 export * from "./_buyer";
-export * from "./_payment";
+export * from "./_payment_orders";
+export * from "./_payment_verify";
 export * from "./_quotes";
 export * from "./_reviews";
-export * from "./_escrow";
+// Escrow types moved to a plain module when _escrow.ts was split; re-exported
+// here because `export * from "./_escrow"` used to carry them.
+export type { EscrowTransaction, Dispute, Message } from "@/lib/types/marketplace-escrow";
+
+export * from "./_escrow_lifecycle";
+export * from "./_escrow_disputes";
+export * from "./_escrow_messages";
 export * from "./_escrow_actions";

@@ -19,7 +19,7 @@ jest.mock('@/lib/system-settings', () => ({
     })),
 }));
 
-import { calculateDeliveryAction } from '@/app/actions/marketplace/_payment';
+import { calculateDeliveryAction } from '@/app/actions/marketplace/_payment_orders';
 
 describe('calculateDeliveryAction Unit Tests', () => {
     const mockCartItems = [

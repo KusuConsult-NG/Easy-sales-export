@@ -129,7 +129,7 @@ const location = { state: 'Lagos', city: 'Ikeja', street: '1 Road', isWithinCity
  * and ignores the argument, which the success case below asserts.
  */
 async function checkout(items: any[]) {
-    const { initializeOrderPaymentAction } = await import('@/app/actions/marketplace/_payment');
+    const { initializeOrderPaymentAction } = await import('@/app/actions/marketplace/_payment_orders');
     return initializeOrderPaymentAction(items as any, 'buyer@e.com', '08030000000', 0, location as any);
 }
 

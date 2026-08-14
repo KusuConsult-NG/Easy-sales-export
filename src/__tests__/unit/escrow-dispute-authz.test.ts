@@ -104,7 +104,7 @@ function writtenDispute(): Record<string, any> | undefined {
  */
 async function dispute(callerId: string) {
     setSession(callerId);
-    const { createDisputeAction } = await import('@/app/actions/marketplace/_escrow');
+    const { createDisputeAction } = await import('@/app/actions/marketplace/_escrow_disputes');
     return createDisputeAction({
         escrowId: ESCROW_ID,
         initiatedBy: 'buyer',
