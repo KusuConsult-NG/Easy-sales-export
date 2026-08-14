@@ -333,10 +333,53 @@ export async function GET(request: NextRequest) {
             (sum, r) => sum + (Number(r.amount) || 0), 0
         );
 
+        // PAYOUTS THAT FAILED AND WERE FLAGGED FOR A HUMAN NOBODY TOLD.
+        //
+        // order-management.ts sets `escrowPendingManualRelease: true` when the
+        // Paystack transfer to a seller fails, in two places — once on a failed
+        // transfer and once in the catch around the whole payout. The field is
+        // declared in packages/marketplace with the comment "Set if Paystack
+        // payout failed".
+        //
+        // NOTHING READ IT. Not a screen, not a query, not this job. So a
+        // released escrow whose payout failed left the seller unpaid, the buyer
+        // charged, and a boolean nobody looks at — the same
+        // collected-stored-never-consulted shape as the loan product isActive
+        // flag and the MFA enforcement setting.
+        //
+        // Reported, not repaired: retrying a transfer moves money, and this
+        // route alerts rather than auto-heals, for the same reason refundsOwed
+        // does not issue refunds.
+        const payoutsStuck: Array<Record<string, any>> = [];
+
+        {
+            // .all(), like the scans above: a stuck payout past the 5,000th row
+            // is exactly the one nobody would find by hand either.
+            const snap = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
+                .where("escrowPendingManualRelease", "==", true)
+                .all()
+                .get();
+            snap.docs.forEach((d: any) => {
+                const data = d.data() ?? {};
+                if (data.escrowPendingManualRelease !== true) return;
+                payoutsStuck.push({
+                    orderId: data.orderId || d.id,
+                    sellerId: data.sellerId || data.vendorId || "",
+                    amount: data.sellerAmountPaid ?? data.totalAmount ?? null,
+                    error: data.escrowReleaseError || "(no error recorded)",
+                    transferCode: data.paystackTransferCode || null,
+                });
+            });
+        }
+
+        const payoutsStuckTotal = payoutsStuck.reduce(
+            (sum, r) => sum + (Number(r.amount) || 0), 0
+        );
+
         // Both of these count toward the alarm as much as a missing artefact
         // does. Reporting either without counting it would let a run with
         // stranded payments, or with money owed to buyers, report "ok".
-        totalUnfulfilled += stranded.length + refundsOwed.length;
+        totalUnfulfilled += stranded.length + refundsOwed.length + payoutsStuck.length;
 
         const body = {
             // An incomplete scan cannot report "ok". Every "unfulfilled" result
@@ -361,6 +404,14 @@ export async function GET(request: NextRequest) {
                 })),
                 ...(stranded.length > MAX_LISTED
                     ? { truncated: stranded.length - MAX_LISTED }
+                    : {}),
+            },
+            payoutsStuck: {
+                count: payoutsStuck.length,
+                totalAmount: payoutsStuckTotal,
+                orders: payoutsStuck.slice(0, MAX_LISTED),
+                ...(payoutsStuck.length > MAX_LISTED
+                    ? { truncated: payoutsStuck.length - MAX_LISTED }
                     : {}),
             },
             refundsOwed: {

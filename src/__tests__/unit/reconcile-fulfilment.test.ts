@@ -286,6 +286,62 @@ describe('reconcile-fulfilment', () => {
         expect(body.status).toBe('unfulfilled_payments_found');
     });
 
+    it('reports a payout that failed and was flagged for a human', async () => {
+        // order-management.ts sets escrowPendingManualRelease when the Paystack
+        // transfer to a seller fails. NOTHING read that field — not a screen,
+        // not a query, not this job — so the seller stayed unpaid, the buyer
+        // stayed charged, and the flag sat there.
+        COLLECTION_DATA['processedPayments'] = [];
+        COLLECTION_DATA['marketplaceOrders'] = [{
+            id: 'ord-stuck',
+            data: {
+                orderId: 'ORD-STUCK',
+                sellerId: 'seller-9',
+                paymentStatus: 'escrow_held',
+                escrowReleased: false,
+                escrowPendingManualRelease: true,
+                escrowReleaseError: 'Paystack transfer failed: insufficient balance',
+                sellerAmountPaid: 48_000,
+            },
+        }];
+
+        const { GET } = await import('@/app/api/cron/reconcile-fulfilment/route');
+        const body = await (await GET(req())).json();
+
+        expect(body.payoutsStuck.count).toBe(1);
+        expect(body.payoutsStuck.totalAmount).toBe(48_000);
+        expect(body.payoutsStuck.orders[0]).toMatchObject({
+            orderId: 'ORD-STUCK',
+            sellerId: 'seller-9',
+            error: 'Paystack transfer failed: insufficient balance',
+        });
+        // Must count toward the alarm: a seller who has not been paid is not an
+        // "ok" run, for the same reason money owed to a buyer is not.
+        expect(body.totalUnfulfilled).toBe(1);
+        expect(body.status).toBe('unfulfilled_payments_found');
+    });
+
+    it('reports no stuck payouts when every release succeeded', async () => {
+        // Vacuity guard: a field-name typo would report 0 either way.
+        COLLECTION_DATA['processedPayments'] = [];
+        COLLECTION_DATA['marketplaceOrders'] = [{
+            id: 'ord-paid',
+            data: {
+                orderId: 'ORD-PAID',
+                sellerId: 'seller-1',
+                paymentStatus: 'completed',
+                escrowReleased: true,
+                escrowPendingManualRelease: false,
+            },
+        }];
+
+        const { GET } = await import('@/app/api/cron/reconcile-fulfilment/route');
+        const body = await (await GET(req())).json();
+
+        expect(body.payoutsStuck.count).toBe(0);
+        expect(body.status).toBe('ok');
+    });
+
     it('reports no refunds owed when no order is awaiting one', async () => {
         // Vacuity guard: a collection-name typo would report 0 either way.
         COLLECTION_DATA['processedPayments'] = [];
