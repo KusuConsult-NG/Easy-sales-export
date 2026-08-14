@@ -183,6 +183,10 @@ describe('what the bypass grants, which is why the address matters', () => {
 
     it('and it is consulted elsewhere too', () => {
         // So the address is worth more than one module's fees.
-        expect(source('src/app/actions/academy/_actions.ts')).toContain('isPaymentBypassAccount');
+        // academy/_actions.ts held a SECOND, dead copy of autoProvisionZereAcademy
+        // — no callers, and already drifted from the live one (it had stopped
+        // invalidating the user cache). It was deleted when that file was split.
+        // This is the copy that runs.
+        expect(source('src/app/actions/academy/_payment.ts')).toContain('isPaymentBypassAccount');
     });
 });

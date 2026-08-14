@@ -1,0 +1,478 @@
+"use server";
+
+import { supabaseDb as db } from "@/lib/supabase-db";
+import { logger } from '@/lib/logger';
+import { FieldValue } from "@/lib/firestore-compat";
+import { requireSession } from "@/lib/session-guard";
+import { COLLECTIONS } from "@/lib/types/firestore";
+import { gradeModuleQuiz } from "@/lib/academy-grading";
+import { serializeValue } from "@/lib/firestore-serialize";
+import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
+import type { Course, Lesson, Quiz, UserProgress } from "@/lib/types/academy-actions";
+
+/**
+ * Mark lesson as complete
+ */
+async function _completeLessonAction(
+    userId: string,
+    courseId: string,
+    lessonId: string,
+    expectedVersion?: number
+): Promise<ActionResponse<null>> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: 'Unauthorized', data: null };
+        const { session } = sessionResult;
+        if (!session?.user?.id || session.user.id !== userId) {
+            return { success: false as const, error: "Unauthorized", data: null };
+        }
+
+        const progressRef = db.doc(`user_progress/${userId}/courses/${courseId}`);
+        const progressDoc = await progressRef.get();
+
+        if (!progressDoc.exists) {
+            return { success: false as const, error: "Not enrolled in this course", data: null };
+        }
+
+        // 🔒 SECURITY FIX: Enforce "Watch to Complete" logic
+        // 1. Get the course/lesson details to see if it has a video
+        const courseDoc = await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId).get();
+        if (!courseDoc.exists) return { success: false as const, error: "Course not found", data: null };
+
+        const course = courseDoc.data() as Course;
+        let targetLesson: Lesson | null = null;
+
+        // Find the lesson
+        for (const mod of course.modules) {
+            const found = mod.lessons.find(l => l.id === lessonId);
+            if (found) {
+                targetLesson = found;
+                break;
+            }
+        }
+
+        if (!targetLesson) return { success: false as const, error: "Lesson not found", data: null };
+
+        // 2. If it has a video, verify progress (Bypassed to allow self-paced manual completion)
+        /*
+        if (targetLesson.videoUrl) {
+            const progressId = `${userId}_${lessonId}`;
+            const videoProgressDoc = await db.collection(COLLECTIONS.LESSON_VIDEO_PROGRESS).doc(progressId).get();
+
+            // Allow if admin (for testing) ?? No, enforce for everyone for now.
+            // Maybe allow if no progress doc exists BUT require it?
+            // "The Honor System" fix means we MUST require it.
+
+            if (!videoProgressDoc.exists) {
+                return { success: false as const, error: "Please start watching the video to track your progress.", data: null };
+            }
+
+            const videoData = videoProgressDoc.data();
+            if (!videoData || videoData.progressPercent < 90) { // 90% Threshold
+                const current = Math.round(videoData?.progressPercent || 0);
+                return {
+                    success: false as const,
+                    error: `You have only watched ${current}% of the video. Please watch at least 90% to complete.`,
+                    data: null
+                };
+            }
+        }
+        */
+
+        // Use transaction to prevent concurrent lesson completions from overwriting each other
+        await db.runTransaction(async (t) => {
+            const tProgressDoc = await t.get(progressRef);
+            if (!tProgressDoc.exists) throw new Error("Not enrolled");
+            const progress = tProgressDoc.data() as UserProgress;
+
+            if (!progress.completedLessons.includes(lessonId)) {
+                // Concurrency Guard: Optimistic Locking
+                if (expectedVersion !== undefined && progress._version !== undefined && progress._version !== expectedVersion) {
+                    throw new Error("STALE_DATA: Progress has been updated elsewhere.");
+                }
+
+                progress.completedLessons.push(lessonId);
+                progress.lastAccessedAt = FieldValue.serverTimestamp();
+
+                // Calculate overall progress using weighted formula (70% Lessons, 30% Quizzes)
+                const totalLessons = course.modules.reduce((sum, mod) => sum + mod.lessons.length, 0);
+                const lessonProgressPercent = totalLessons > 0 ? (progress.completedLessons.length / totalLessons) * 100 : 0;
+
+                const modulesWithQuizzes = course.modules.filter(m => m.quiz);
+                const totalQuizzes = modulesWithQuizzes.length;
+                let passedQuizzesCount = 0;
+                modulesWithQuizzes.forEach(m => {
+                    if (progress.completedModules?.includes(m.id)) {
+                        passedQuizzesCount++;
+                    }
+                });
+                const quizProgressPercent = totalQuizzes > 0 ? (passedQuizzesCount / totalQuizzes) * 100 : 0;
+
+                let overallProgress = 0;
+                if (totalQuizzes > 0) {
+                    overallProgress = Math.round((lessonProgressPercent * 0.7) + (quizProgressPercent * 0.3));
+                } else {
+                    overallProgress = Math.round(lessonProgressPercent);
+                }
+                progress.overallProgress = overallProgress;
+
+                // Check if course is complete
+                if (overallProgress >= 100) {
+                    progress.completedAt = FieldValue.serverTimestamp();
+                }
+
+                // Increment version
+                progress._version = (progress._version || 0) + 1;
+
+                t.set(progressRef, progress);
+            }
+        });
+
+        return { success: true, error: null, data: null };
+    } catch (error) {
+        logger.error("Lesson completion error:", {
+            userId,
+            courseId,
+            lessonId,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false as const, error: "Failed to mark lesson as complete", data: null };
+    }
+}
+
+
+export const completeLessonAction = withFlexibleSafeAction("completeLessonAction", _completeLessonAction);
+
+
+/**
+ * Submit quiz score
+ */
+/**
+ * Submit quiz ANSWERS. The score is computed here.
+ *
+ * This took `score: number` and stored it. Being a "use server" export it is a
+ * reachable endpoint regardless of the UI, so
+ * submitQuizScoreAction(me, course, module, 100) was a passing grade on any
+ * module without a quiz being involved at all — and the browser was computing
+ * the number anyway, against an answer key the course loader had sent it.
+ *
+ * Answers are graded by the shared helper in @/lib/academy-grading, which is
+ * also what the API-route path uses, so the two cannot disagree about what a
+ * pass is.
+ */
+async function _submitQuizScoreAction(
+    userId: string,
+    courseId: string,
+    moduleId: string,
+    answers: Record<string, number>,
+    expectedVersion?: number
+): Promise<ActionResponse<{ passed: boolean; score: number; results: Record<string, boolean> }>> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: 'Unauthorized', data: null };
+        const { session } = sessionResult;
+        if (!session?.user?.id || session.user.id !== userId) {
+            return { success: false as const, error: "Unauthorized", data: null };
+        }
+
+        const progressRef = db.doc(`user_progress/${userId}/courses/${courseId}`);
+        const progressDoc = await progressRef.get();
+
+        if (!progressDoc.exists) {
+            return { success: false as const, error: "Not enrolled in this course", data: null };
+        }
+
+        let userPassed = false;
+        let score = 0;
+        let results: Record<string, boolean> = {};
+        await db.runTransaction(async (t) => {
+            const tProgressDoc = await t.get(progressRef);
+            if (!tProgressDoc.exists) throw new Error("Not enrolled");
+            const progress = tProgressDoc.data() as UserProgress;
+
+            // Concurrency Guard: Optimistic Locking
+            if (expectedVersion !== undefined && progress._version !== undefined && progress._version !== expectedVersion) {
+                throw new Error("STALE_DATA: Progress has been updated elsewhere.");
+            }
+
+            progress.lastAccessedAt = FieldValue.serverTimestamp();
+
+            // Check if module is complete (quiz passed)
+            const academyCourseDoc = await t.get(db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId));
+            if (academyCourseDoc.exists) {
+                const course = academyCourseDoc.data() as Course;
+                const courseModule = course.modules?.find((m) => m.id === moduleId);
+
+                // Graded from the stored questions, inside the transaction that
+                // reads them, so the quiz being scored is the quiz that exists.
+                const passingScore = courseModule?.quiz?.passingScore ?? 95;
+                const graded = gradeModuleQuiz(
+                    (courseModule?.quiz?.questions ?? []) as any[],
+                    answers ?? {},
+                    passingScore
+                );
+                score = graded.scorePercentage;
+                results = graded.results;
+
+                progress.quizScores = progress.quizScores || {};
+                progress.quizScores[moduleId] = score;
+
+                if (!progress.completedModules) progress.completedModules = [];
+
+                if (courseModule?.quiz && graded.passed) {
+                    if (!progress.completedModules.includes(moduleId)) {
+                        progress.completedModules.push(moduleId);
+                    }
+                    userPassed = true;
+                }
+
+                // Calculate overall progress using weighted formula (70% Lessons, 30% Quizzes)
+                const totalLessons = course.modules.reduce((sum, mod) => sum + mod.lessons.length, 0);
+                const lessonProgressPercent = totalLessons > 0 ? (progress.completedLessons.length / totalLessons) * 100 : 0;
+
+                const modulesWithQuizzes = course.modules.filter(m => m.quiz);
+                const totalQuizzes = modulesWithQuizzes.length;
+                let passedQuizzesCount = 0;
+                modulesWithQuizzes.forEach(m => {
+                    if (progress.completedModules?.includes(m.id)) {
+                        passedQuizzesCount++;
+                    }
+                });
+                const quizProgressPercent = totalQuizzes > 0 ? (passedQuizzesCount / totalQuizzes) * 100 : 0;
+
+                let overallProgress = 0;
+                if (totalQuizzes > 0) {
+                    overallProgress = Math.round((lessonProgressPercent * 0.7) + (quizProgressPercent * 0.3));
+                } else {
+                    overallProgress = Math.round(lessonProgressPercent);
+                }
+                progress.overallProgress = overallProgress;
+
+                // Check if course is complete
+                if (overallProgress >= 100) {
+                    progress.completedAt = FieldValue.serverTimestamp();
+                }
+            }
+            // Increment version
+            progress._version = (progress._version || 0) + 1;
+
+            t.set(progressRef, progress);
+        });
+
+        return { success: true, error: null, data: { passed: userPassed, score, results } };
+    } catch (error) {
+        logger.error("Quiz submission error:", {
+            userId,
+            courseId,
+            moduleId,
+            // The score is computed inside the transaction now, so there is
+            // none to log when the transaction is what failed. The count of
+            // answers is the useful thing.
+            answerCount: Object.keys(answers ?? {}).length,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false as const, error: "Failed to submit quiz", data: null };
+    }
+}
+
+
+export const submitQuizScoreAction = withFlexibleSafeAction("submitQuizScoreAction", _submitQuizScoreAction);
+
+
+/**
+ * Get user progress
+ */
+async function _getUserProgressAction(
+    userId: string,
+    courseId: string
+): Promise<ActionResponse<any>> {
+    try {
+        const progressDoc = await db.doc(`user_progress/${userId}/courses/${courseId}`).get();
+
+        if (!progressDoc.exists) {
+            return { success: true, error: null, data: null };
+        }
+
+        const data = progressDoc.data();
+        return { success: true, error: null, data: serializeValue(data) };
+    } catch (error) {
+        logger.error("Failed to fetch progress:", {
+            userId,
+            courseId,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false as const, error: "Fetch failed", data: null };
+    }
+}
+
+
+export const getUserProgressAction = withFlexibleSafeAction("getUserProgressAction", _getUserProgressAction);
+
+
+/**
+ * Get user's aggregate progress across all courses
+ */
+async function _getUserAggregateProgressAction(userId: string): Promise<ActionResponse<any>> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: 'Unauthorized', data: null };
+        const { session } = sessionResult;
+        if (!session?.user?.id || session.user.id !== userId) {
+            return {
+                error: "Action failed", success: false as const, data: null };
+        }
+
+        // Fetch all course progress records
+        const progressQuery = db.collection(`user_progress/${userId}/courses`);
+        const snapshot = await progressQuery.get();
+        const enrolledCourses = snapshot.docs.map(doc => doc.data() as UserProgress);
+
+        const completedCourses = enrolledCourses.filter(p => p.completedAt).length;
+        const inProgressCourses = enrolledCourses.filter(p => !p.completedAt && (p.completedLessons?.length || 0) > 0).length;
+        const totalCompletedLessons = enrolledCourses.reduce((sum, p) => sum + p.completedLessons.length, 0);
+
+        // Calculate total lessons: batch all course reads in parallel (N+1 → 1 burst)
+        const courseSnapshots = await Promise.all(
+            enrolledCourses.map(p =>
+                db.collection(COLLECTIONS.ACADEMY_COURSES).doc(p.courseId).get()
+            )
+        );
+        let totalLessons = 0;
+        for (const courseDoc of courseSnapshots) {
+            if (courseDoc.exists) {
+                const course = courseDoc.data() as Course;
+                totalLessons += course.modules.reduce((sum, mod) => sum + mod.lessons.length, 0);
+            }
+        }
+
+        const overallProgress = totalLessons > 0 ? Math.round((totalCompletedLessons / totalLessons) * 100) : 0;
+
+        return {
+            error: null, success: true as const,
+            data: {
+                totalCourses: enrolledCourses.length,
+                completedCourses,
+                inProgressCourses,
+                totalHoursLearned: totalCompletedLessons * 0.5, // Estimate 30 min per lesson
+                certificatesEarned: completedCourses, // One certificate per completed course
+                totalLessons,
+                completedLessons: totalCompletedLessons,
+                overallProgress,
+                enrolledCourses: serializeValue(enrolledCourses),
+            }
+        };
+    } catch (error) {
+        logger.error("Failed to fetch aggregate progress:", {
+            userId,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return {
+            success: false as const,
+            error: error instanceof Error ? error.message : "Fetch failed",
+            data: null
+        };
+    }
+}
+
+
+export const getUserAggregateProgressAction = withFlexibleSafeAction("getUserAggregateProgressAction", _getUserAggregateProgressAction);
+
+
+// ============================================================================
+// LEARNING STREAK TRACKING
+// ============================================================================
+
+/**
+ * Record that the current user completed at least one lesson today.
+ * Call this whenever a lesson is marked complete.
+ * Collection: user_activity_logs/{userId}/days/{YYYY-MM-DD}
+ */
+async function _logLessonActivityAction(): Promise<ActionResponse<null>> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: 'Unauthorized', data: null };
+        const { session } = sessionResult;
+        if (!session?.user?.id) return { success: false as const, error: "Authentication required", data: null };
+
+        const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+        await db
+            .collection(COLLECTIONS.USER_ACTIVITY_LOGS)
+            .doc(session.user.id)
+            .collection("days")
+            .doc(today)
+            .set({
+                date: today,
+                lessonsCompletedCount: FieldValue.increment(1),
+                lastUpdated: FieldValue.serverTimestamp(),
+            }, { merge: true });
+
+        return { success: true, error: null, data: null };
+    } catch (error) {
+        logger.error("logLessonActivityAction error:", {
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { error: "Action failed", success: false as const , data: null };
+    }
+}
+
+
+export const logLessonActivityAction = withFlexibleSafeAction("logLessonActivityAction", _logLessonActivityAction);
+
+
+/**
+ * Calculate the current consecutive-day learning streak for a given user.
+ * A streak day = any day with at least one lesson logged.
+ * Returns { streak } — count of consecutive days ending today (or yesterday if today not yet active).
+ */
+async function _calculateStreakAction(userId: string): Promise<ActionResponse<any>> {
+    try {
+        // Fetch the last 90 days of activity (enough for any realistic streak)
+        const snap = await db
+            .collection(COLLECTIONS.USER_ACTIVITY_LOGS)
+            .doc(userId)
+            .collection("days")
+            .orderBy("date", "desc")
+            .limit(90)
+            .get();
+
+        if (snap.empty) return { error: null, success: true as const, data: null };
+
+        const activeDays = new Set(snap.docs.map(d => d.id)); // Set of "YYYY-MM-DD" strings
+
+        let streak = 0;
+        // Start from today and walk back
+        const cursor = new Date();
+        cursor.setHours(0, 0, 0, 0);
+
+        while (true) {
+            const dateStr = cursor.toISOString().split("T")[0];
+            if (activeDays.has(dateStr)) {
+                streak++;
+                cursor.setDate(cursor.getDate() - 1);
+            } else if (streak === 0) {
+                // Allow one day gap at the start (e.g. user completed lessons yesterday but not today yet)
+                cursor.setDate(cursor.getDate() - 1);
+                const yesterdayStr = cursor.toISOString().split("T")[0];
+                if (activeDays.has(yesterdayStr)) {
+                    streak++;
+                    cursor.setDate(cursor.getDate() - 1);
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+
+        return { error: null, success: true as const, data: { streak } };
+    } catch (error) {
+        logger.error("calculateStreakAction error:", {
+            userId,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false as const, data: null, error: error instanceof Error ? error.message : "Streak calculation failed" };
+    }
+}
+
+
+export const calculateStreakAction = withFlexibleSafeAction("calculateStreakAction", _calculateStreakAction);

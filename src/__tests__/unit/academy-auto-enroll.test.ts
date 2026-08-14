@@ -95,7 +95,7 @@ function enrolmentWrites(): number {
 }
 
 async function autoEnrol(userId: string, plan: string) {
-    const { autoEnrollPaidUser } = await import('@/app/actions/academy/_actions');
+    const { autoEnrollPaidUser } = await import('@/app/actions/academy/_ac_enrollment');
     return autoEnrollPaidUser(userId, plan);
 }
 
