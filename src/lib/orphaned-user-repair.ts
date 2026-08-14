@@ -19,44 +19,114 @@ interface OrphanedUser {
     createdAt: string;
 }
 
+export interface OrphanedScan {
+    orphaned: OrphanedUser[];
+    /** Firebase Auth accounts actually examined by this call. */
+    scanned: number;
+    /** True only when Auth ran out of accounts before this call ran out of budget. */
+    complete: boolean;
+    /** Pass back as `startPageToken` to continue. Null when complete. */
+    nextPageToken: string | null;
+}
+
+/** listUsers' own per-call ceiling. Asking for more is an error, not a bigger page. */
+const AUTH_PAGE_SIZE = 1000;
+
 /**
- * Scan Firebase Auth for users without Firestore profiles
+ * Pages of Auth accounts one request will walk before reporting a partial scan.
+ *
+ * 10,000 accounts is far more than a repair run should ever need and still
+ * finishes inside a request. The point of the bound is that exceeding it is
+ * *reported*, which is what the previous version did not do.
  */
-export async function detectOrphanedUsers(): Promise<OrphanedUser[]> {
+const MAX_AUTH_PAGES = 10;
+
+/**
+ * Scan Firebase Auth for users without Firestore profiles.
+ *
+ * IT LOOKED AT THE FIRST 1,000 ACCOUNTS AND CALLED THAT ALL OF THEM
+ * -----------------------------------------------------------------
+ * This was:
+ *
+ *     // Get all Auth users
+ *     const listUsersResult = await adminAuth.listUsers(1000); // Max 1000 users
+ *
+ * 1000 is `listUsers`' per-call ceiling, not the size of the user base. The
+ * method returns a `pageToken` for the next page and this never read it, so the
+ * comment "Get all Auth users" described the intent and the code did something
+ * else. Against the 41,105 accounts in the production export, the scan covered
+ * roughly 2.4% of them.
+ *
+ * Nothing said so. `detectOrphanedUsers` returned a plain array, the route
+ * returned `{ count: orphanedUsers.length }`, and an admin reading "0 orphaned
+ * users" learned that there were none among the first thousand — which is not
+ * the question the screen asks. `repairAllOrphanedUsers` inherited it: "repair
+ * ALL orphaned users in batch" repaired the ones it had found in that thousand,
+ * and reported a total that agreed with itself.
+ *
+ * This is the shape #190 fixed on four admin queues and fb7e93e6 fixed on the
+ * database sweeps: a bounded read presented as a complete one. The rule those
+ * settled on is the adapter's own — "reported, never silent" — so the scan is
+ * paginated, bounded, and says which of the two it ended on.
+ */
+export async function detectOrphanedUsers(startPageToken?: string): Promise<OrphanedScan> {
     const orphanedUsers: OrphanedUser[] = [];
+    let scanned = 0;
+    let pageToken: string | undefined = startPageToken;
+    let pagesRead = 0;
 
     try {
-        // Get all Auth users
-        const listUsersResult = await adminAuth.listUsers(1000); // Max 1000 users
+        do {
+            const listUsersResult = await adminAuth.listUsers(AUTH_PAGE_SIZE, pageToken);
+            pagesRead++;
+            scanned += listUsersResult.users.length;
 
-        // Check each user for Firestore profile efficiently in batches of 50
-        const chunkSize = 50;
-        for (let i = 0; i < listUsersResult.users.length; i += chunkSize) {
-            const chunk = listUsersResult.users.slice(i, i + chunkSize);
-            const refs = chunk.map(u => db.collection(COLLECTIONS.USERS).doc(u.uid));
-            
-            // Fetch up to 50 docs in parallel
-            const docs = await db.getAll(...refs);
-            
-            docs.forEach((doc, idx) => {
-                const userRecord = chunk[idx];
-                if (!doc.exists) {
-                    orphanedUsers.push({
-                        uid: userRecord.uid,
-                        email: userRecord.email,
-                        displayName: userRecord.displayName,
-                        createdAt: userRecord.metadata.creationTime,
-                    });
+            // Check each user for Firestore profile efficiently in batches of 50
+            const chunkSize = 50;
+            for (let i = 0; i < listUsersResult.users.length; i += chunkSize) {
+                const chunk = listUsersResult.users.slice(i, i + chunkSize);
+                const refs = chunk.map(u => db.collection(COLLECTIONS.USERS).doc(u.uid));
 
-                    logger.warn('Orphaned user detected', {
-                        uid: userRecord.uid,
-                        email: userRecord.email,
-                    });
-                }
+                // Fetch up to 50 docs in parallel
+                const docs = await db.getAll(...refs);
+
+                docs.forEach((doc: { exists: boolean }, idx: number) => {
+                    const userRecord = chunk[idx];
+                    if (!doc.exists) {
+                        orphanedUsers.push({
+                            uid: userRecord.uid,
+                            email: userRecord.email,
+                            displayName: userRecord.displayName,
+                            createdAt: userRecord.metadata.creationTime,
+                        });
+
+                        logger.warn('Orphaned user detected', {
+                            uid: userRecord.uid,
+                            email: userRecord.email,
+                        });
+                    }
+                });
+            }
+
+            pageToken = listUsersResult.pageToken;
+        } while (pageToken && pagesRead < MAX_AUTH_PAGES);
+
+        const complete = !pageToken;
+
+        if (!complete) {
+            logger.warn('Orphaned user scan stopped at the page budget', {
+                scanned,
+                pagesRead,
+                found: orphanedUsers.length,
             });
         }
 
-        return orphanedUsers;
+        return {
+            orphaned: orphanedUsers,
+            scanned,
+            complete,
+            nextPageToken: pageToken ?? null,
+        };
     } catch (error) {
         logger.error('Failed to detect orphaned users', error);
         throw error;
@@ -151,24 +221,36 @@ export async function repairOrphanedUser(uid: string): Promise<{ success: boolea
 }
 
 /**
- * Repair ALL orphaned users in batch
+ * Repair the orphaned users found by one scan.
+ *
+ * Named "ALL" before, and it was not: it repaired whatever
+ * detectOrphanedUsers had found in the first 1,000 Auth accounts and returned a
+ * `total` that agreed with itself. The scan's own bound is now carried out
+ * here — `complete` and `nextPageToken` — so a caller can tell the difference
+ * between "there were none left" and "we stopped looking".
  */
-export async function repairAllOrphanedUsers(): Promise<{
+export async function repairAllOrphanedUsers(startPageToken?: string): Promise<{
     total: number;
     repaired: number;
     failed: number;
     errors: Array<{ uid: string; error: string }>;
+    scanned: number;
+    complete: boolean;
+    nextPageToken: string | null;
 }> {
-    const orphanedUsers = await detectOrphanedUsers();
+    const scan = await detectOrphanedUsers(startPageToken);
 
     const results = {
-        total: orphanedUsers.length,
+        total: scan.orphaned.length,
         repaired: 0,
         failed: 0,
         errors: [] as Array<{ uid: string; error: string }>,
+        scanned: scan.scanned,
+        complete: scan.complete,
+        nextPageToken: scan.nextPageToken,
     };
 
-    for (const user of orphanedUsers) {
+    for (const user of scan.orphaned) {
         const result = await repairOrphanedUser(user.uid);
 
         if (result.success) {

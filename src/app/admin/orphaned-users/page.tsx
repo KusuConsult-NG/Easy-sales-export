@@ -21,6 +21,10 @@ export default function OrphanedUsersPage() {
     const [loading, setLoading] = useState(false);
     const [repairing, setRepairing] = useState(false);
     const [results, setResults] = useState<any>(null);
+    // How much of Firebase Auth the last scan actually covered. Without this the
+    // screen said "No orphaned users detected" after looking at the first 1,000
+    // accounts of 41,105.
+    const [scan, setScan] = useState<{ scanned: number; complete: boolean } | null>(null);
 
     const detectOrphaned = async () => {
         setLoading(true);
@@ -28,6 +32,7 @@ export default function OrphanedUsersPage() {
             const response = await fetch('/api/admin/orphaned-users');
             const data = await response.json();
             setOrphanedUsers(data.users || []);
+            setScan({ scanned: data.scanned ?? 0, complete: data.complete !== false });
         } catch (error) {
             logger.error('Failed to detect orphaned users', error);
         } finally {
@@ -115,6 +120,12 @@ export default function OrphanedUsersPage() {
                         <div className="text-green-600">Repaired: {results.repaired}</div>
                         <div className="text-red-600">Failed: {results.failed}</div>
                     </div>
+                    {results.complete === false && (
+                        <p className="mt-2 text-sm text-amber-800">
+                            Partial: {results.scanned?.toLocaleString()} Auth accounts were scanned and
+                            there are more. Run again with the returned pageToken to continue.
+                        </p>
+                    )}
                     {results.errors?.length > 0 && (
                         <details className="mt-2">
                             <summary className="cursor-pointer text-red-600">Show Errors</summary>
@@ -124,9 +135,25 @@ export default function OrphanedUsersPage() {
                 </div>
             )}
 
+            {scan && !scan.complete && (
+                <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-md text-sm">
+                    <h3 className="font-semibold mb-1">This is a partial scan</h3>
+                    <p className="text-amber-900">
+                        {scan.scanned.toLocaleString()} Firebase Auth accounts were checked, and there
+                        are more. Anything below — including <strong>Repair All</strong> — covers only
+                        those accounts. Continue with{' '}
+                        <code className="font-mono">?pageToken=</code> from the API response.
+                    </p>
+                </div>
+            )}
+
             {orphanedUsers.length === 0 && !loading && (
                 <div className="p-6 text-center text-gray-500 bg-white border border-gray-200 rounded-md">
-                    No orphaned users detected
+                    {scan
+                        ? scan.complete
+                            ? `No orphaned users among all ${scan.scanned.toLocaleString()} Auth accounts`
+                            : `None among the ${scan.scanned.toLocaleString()} accounts scanned so far`
+                        : 'No orphaned users detected'}
                 </div>
             )}
 
