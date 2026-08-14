@@ -55,19 +55,27 @@ export {
     updateMemberProfileDetailsAction,
 } from "./_coop_identity";
 
-// ─── Admin actions (_admin.ts) ────────────────────────────────────────────────
+// ─── Admin: members (_coop_admin_members.ts) ─────────────────────────────────
 export {
-    getCooperativeStatsAction,
     getAllMembersAction,
     updateMemberStatusAction,
-    getAllTransactionsAction,
+    getStandardCooperativeMembersAction,
+    requestCooperativeRevisionAction,
+} from "./_coop_admin_members";
+
+// ─── Admin: reports and stats (_coop_admin_reports.ts) ───────────────────────
+export {
+    getCooperativeStatsAction,
     getContributionReportsAction,
     getRecentActivityAction,
+} from "./_coop_admin_reports";
+
+// ─── Admin: transactions and withdrawals (_coop_admin_money.ts) ──────────────
+export {
+    getAllTransactionsAction,
     approveWithdrawalAction,
     rejectWithdrawalAction,
-    requestCooperativeRevisionAction,
-    getStandardCooperativeMembersAction,
-} from "./_admin";
+} from "./_coop_admin_money";
 
 // ─── Payment actions (_payment.ts) ────────────────────────────────────────────
 export {

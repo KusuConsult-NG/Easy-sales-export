@@ -130,7 +130,7 @@ describe('the states behind those options', () => {
     it('"suspended" is written through a union-typed parameter, not a literal', () => {
         // Recorded because it is what a grep for the literal misses, and the
         // reason the first pass nearly removed a working option.
-        const admin = source('src/app/actions/cooperative/_admin.ts');
+        const admin = source('src/app/actions/cooperative/_coop_admin_members.ts');
 
         expect(admin).toContain('status: "active" | "approved" | "suspended"');
         expect(admin).toContain('membershipStatus: status');
@@ -138,7 +138,7 @@ describe('the states behind those options', () => {
 });
 
 describe('the action accepts what the screen can ask for', () => {
-    const admin = source('src/app/actions/cooperative/_admin.ts');
+    const admin = source('src/app/actions/cooperative/_coop_admin_members.ts');
 
     it('takes "rejected" and not "under_review"', () => {
         const signature = admin.slice(

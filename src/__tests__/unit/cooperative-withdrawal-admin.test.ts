@@ -80,7 +80,7 @@ describe('rejectWithdrawalAction', () => {
         // amount ever withdrawn.
         mockClaim.mockResolvedValue({ claimed: false, status: 'rejected' });
 
-        const { rejectWithdrawalAction } = await import('@/app/actions/cooperative/_admin');
+        const { rejectWithdrawalAction } = await import('@/app/actions/cooperative/_coop_admin_money');
         const result = await rejectWithdrawalAction('wd-1', 'Insufficient documentation');
 
         expect(result.success).toBe(false);
@@ -92,7 +92,7 @@ describe('rejectWithdrawalAction', () => {
     });
 
     it('claims pending → rejected before crediting savings', async () => {
-        const { rejectWithdrawalAction } = await import('@/app/actions/cooperative/_admin');
+        const { rejectWithdrawalAction } = await import('@/app/actions/cooperative/_coop_admin_money');
         await rejectWithdrawalAction('wd-1', 'Insufficient documentation');
 
         const call = mockClaim.mock.calls[0][0] as any;
@@ -102,7 +102,7 @@ describe('rejectWithdrawalAction', () => {
     });
 
     it('moves the refund by increment, never by an absolute write', async () => {
-        const { rejectWithdrawalAction } = await import('@/app/actions/cooperative/_admin');
+        const { rejectWithdrawalAction } = await import('@/app/actions/cooperative/_coop_admin_money');
         await rejectWithdrawalAction('wd-1', 'Insufficient documentation');
 
         const update = (global as any).mockFirestoreUpdate.mock.calls[0][1];
@@ -130,7 +130,7 @@ describe('approveWithdrawalAction', () => {
         // so the funds were released AND refunded.
         mockClaim.mockResolvedValue({ claimed: false, status: 'rejected' });
 
-        const { approveWithdrawalAction } = await import('@/app/actions/cooperative/_admin');
+        const { approveWithdrawalAction } = await import('@/app/actions/cooperative/_coop_admin_money');
         const result = await approveWithdrawalAction('wd-1');
 
         expect(result.success).toBe(false);
@@ -139,7 +139,7 @@ describe('approveWithdrawalAction', () => {
     });
 
     it('claims pending → approved', async () => {
-        const { approveWithdrawalAction } = await import('@/app/actions/cooperative/_admin');
+        const { approveWithdrawalAction } = await import('@/app/actions/cooperative/_coop_admin_money');
         await approveWithdrawalAction('wd-1');
 
         const call = mockClaim.mock.calls[0][0] as any;
@@ -152,7 +152,7 @@ describe('approveWithdrawalAction', () => {
         // undone after it.
         setDocs(withdrawal({ requestedAt: { toDate: () => new Date() } }));
 
-        const { approveWithdrawalAction } = await import('@/app/actions/cooperative/_admin');
+        const { approveWithdrawalAction } = await import('@/app/actions/cooperative/_coop_admin_money');
         const result = await approveWithdrawalAction('wd-1');
 
         expect(result.success).toBe(false);
