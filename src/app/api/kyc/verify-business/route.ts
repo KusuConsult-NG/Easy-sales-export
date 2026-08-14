@@ -42,7 +42,38 @@ async function verifyBusinessHandler(req: NextRequest) {
             return NextResponse.json({ error: 'Invalid business verification type' }, { status: 400 });
         }
 
-        return NextResponse.json(result);
+        // THE UPSTREAM RECORD IS NOT PART OF THE ANSWER.
+        //
+        // This returned `result` whole, and verifyCAC and verifyTIN both end:
+        //
+        //     return { success: true, isMatch: ..., details: result.data };
+        //
+        // where `details` is QoreID's raw payload for whatever RC number or TIN
+        // the caller typed. So any signed-in account could POST an arbitrary
+        // number and read back the record it resolves to — a third party's
+        // business, not their own. Nothing in this codebase establishes that the
+        // caller has anything to do with the company they are asking about,
+        // because nothing calls this route at all: it is referenced only by
+        // comments in verify-bvn/verify-nin and by kyc-route-bypass.test.ts,
+        // which cite it as the evidence that the QoreID integration is real.
+        //
+        // A verification endpoint owes its caller a verdict, and that is what it
+        // returns now. The failure shape is unchanged — qoreIdFetch's error
+        // paths carry a message string and never a payload.
+        //
+        // Kept rather than deleted, on the strength of what #184 established:
+        // this route calling verifyCAC and verifyTIN is the standing evidence
+        // that BVN and NIN are *deliberately* bypassed while the rest of KYC is
+        // wired for real. Deleting it would take that argument with it.
+        //
+        // If a screen ever needs a resolved company name to show the user, add
+        // that one named field. Do not restore `details` — the reason this was
+        // exposed is that a whole payload is easier to forward than to read.
+        if (!result.success) {
+            return NextResponse.json(result);
+        }
+
+        return NextResponse.json({ success: true, isMatch: result.isMatch });
     } catch (error) {
         logger.error('Error in verify-business route:', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
