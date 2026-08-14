@@ -69,6 +69,16 @@ export type SmsBroadcastResult = ActionResponse<{
     failed: number;
     skipped: number;
     logId?: string;
+    /**
+     * True when AT_USERNAME is "sandbox" — which is the DEFAULT when it is
+     * unset. Africa's Talking accepts every message in that mode and delivers
+     * none of them, so `sent` counts API acceptances rather than deliveries.
+     *
+     * This was recorded in the sms_broadcast_logs document and returned to
+     * nobody, so the screen reported "Sent 500, Failed 0" for a broadcast that
+     * reached no phone.
+     */
+    sandboxMode?: boolean;
 }>;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -803,7 +813,25 @@ export async function sendSmsBroadcastAction(
             status: failed === 0 ? "done" : sent === 0 ? "failed" : "partial",
         });
 
-        return { success: true, error: null, data: { sent, failed, skipped, logId: logRef.id } };
+        // sandboxMode goes BACK TO THE CALLER, not only into the log document.
+        //
+        // It was written to sms_broadcast_logs and nowhere else, and the only
+        // other signal was a logger.warn the person clicking Send never sees. So
+        // a broadcast sent with AT_USERNAME unset — which is the default, the
+        // literal string "sandbox" — reported "Sent 500, Failed 0" while not one
+        // message reached a real phone.
+        //
+        // That is the defect docs/audit/outstanding-work.md records against push
+        // notifications: "a stub that returned a fake success id for every send,
+        // so nothing was ever delivered while the logs reported success". Same
+        // shape, different channel. The count is honest about what the API
+        // accepted; sandboxMode is what makes it honest about what was
+        // delivered.
+        return {
+            success: true,
+            error: null,
+            data: { sent, failed, skipped, logId: logRef.id, sandboxMode: atUsername.toLowerCase() === "sandbox" },
+        };
     } catch (error: any) {
         return { success: false, error: error.message, data: null };
     }
