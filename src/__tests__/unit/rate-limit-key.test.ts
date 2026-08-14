@@ -139,7 +139,7 @@ describe('the two conventions now agree', () => {
         // These are where the correct convention came from. If they ever move to
         // an IP key, this file should be the thing that notices.
         for (const rel of [
-            'src/app/actions/marketplace/_payment.ts',
+            'src/app/actions/marketplace/_payment_verify.ts',
             'src/app/actions/cooperative/_payment.ts',
             'src/app/actions/academy/_payment.ts',
             'src/app/actions/farm-nation-payment.ts',
