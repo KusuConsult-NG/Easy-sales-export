@@ -117,9 +117,53 @@ function analyse(file: string): Entry[] {
      * as the defect.
      */
     const guardingHelpers = new Set<string>();
-    for (const m of src.matchAll(/(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\([^)]*\)[^{]*\{([\s\S]{0,400}?)\n\}/g)) {
-        if (/\b(requireSession|requireAdmin|auth)\s*\(/.test(m[2])) guardingHelpers.add(m[1]);
-    }
+
+    // Walked, not matched with a regex.
+    //
+    // This was `/function\s+(\w+)\([^)]*\)[^{]*\{([\s\S]{0,400}?)\n\}/`, which
+    // only sees a helper whose body fits in 400 characters. Adding a comment to
+    // currentUserId() pushed it over, the helper stopped being recognised, and
+    // all sixteen of my-data.ts's functions were reported unguarded again — by
+    // documentation, with the guard untouched. A detector that answers
+    // differently depending on how much prose sits above the code is not
+    // measuring what it claims to.
+    //
+    // The file is already parsed above for everything else, so the same tree
+    // answers this exactly and with no length limit. Arrow functions assigned
+    // to a const are included; the regex never saw those at all.
+    const GUARD_CALLEES = /^(requireSession|requireAdmin|auth|getServerSession)$/;
+
+    const bodyCallsGuard = (node: ts.Node): boolean => {
+        let found = false;
+        const visit = (n: ts.Node) => {
+            if (found) return;
+            if (ts.isCallExpression(n)) {
+                const callee = ts.isPropertyAccessExpression(n.expression)
+                    ? n.expression.name.text
+                    : ts.isIdentifier(n.expression) ? n.expression.text : '';
+                if (GUARD_CALLEES.test(callee)) { found = true; return; }
+            }
+            ts.forEachChild(n, visit);
+        };
+        ts.forEachChild(node, visit);
+        return found;
+    };
+
+    const collectHelpers = (node: ts.Node) => {
+        // function currentUserId() { ... }
+        if (ts.isFunctionDeclaration(node) && node.name && node.body) {
+            if (bodyCallsGuard(node.body)) guardingHelpers.add(node.name.text);
+        }
+        // const currentUserId = async () => { ... }
+        if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+            const init = node.initializer;
+            if ((ts.isArrowFunction(init) || ts.isFunctionExpression(init)) && init.body) {
+                if (bodyCallsGuard(init.body)) guardingHelpers.add(node.name.text);
+            }
+        }
+        ts.forEachChild(node, collectHelpers);
+    };
+    collectHelpers(sf);
 
     // Names this module actually exports, however they are declared.
     const exportedNames = new Set<string>();
