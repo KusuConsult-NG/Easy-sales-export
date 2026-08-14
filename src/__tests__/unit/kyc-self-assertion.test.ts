@@ -165,7 +165,7 @@ describe('marketplace seller verification — resubmission', () => {
     });
 
     async function resubmit(payload: any = validPayload) {
-        const { resubmitSellerVerificationAction } = await import('@/app/actions/marketplace/_actions');
+        const { resubmitSellerVerificationAction } = await import('@/app/actions/marketplace/_mp_seller_verification');
         return resubmitSellerVerificationAction(payload);
     }
 
@@ -301,7 +301,7 @@ describe('marketplace guards that were already correct', () => {
     it('grantSellerVerifiedBadgeAction refuses a non-admin', async () => {
         // A self-granted "verified seller" badge is what a buyer trusts before
         // paying into escrow.
-        const { grantSellerVerifiedBadgeAction } = await import('@/app/actions/marketplace/_actions');
+        const { grantSellerVerifiedBadgeAction } = await import('@/app/actions/marketplace/_mp_seller_verification');
 
         const r: any = await grantSellerVerifiedBadgeAction(SELLER);
 
@@ -310,7 +310,7 @@ describe('marketplace guards that were already correct', () => {
     });
 
     it('revokeSellerVerifiedBadgeAction refuses a non-admin', async () => {
-        const { revokeSellerVerifiedBadgeAction } = await import('@/app/actions/marketplace/_actions');
+        const { revokeSellerVerifiedBadgeAction } = await import('@/app/actions/marketplace/_mp_seller_verification');
 
         const r: any = await revokeSellerVerifiedBadgeAction(SELLER);
 
@@ -321,7 +321,7 @@ describe('marketplace guards that were already correct', () => {
     it('lets an admin grant the badge, so the two refusals above are not vacuous', async () => {
         setSession(ADMIN, ['admin']);
         setDoc({ id: SELLER, roles: ['seller'], sellerVerificationStatus: 'approved' });
-        const { grantSellerVerifiedBadgeAction } = await import('@/app/actions/marketplace/_actions');
+        const { grantSellerVerifiedBadgeAction } = await import('@/app/actions/marketplace/_mp_seller_verification');
 
         const r: any = await grantSellerVerifiedBadgeAction(SELLER);
 
@@ -330,7 +330,7 @@ describe('marketplace guards that were already correct', () => {
 
     it('deleteProductAction refuses somebody else\'s product', async () => {
         setDoc({ sellerId: OTHER, name: 'A Product', status: 'active' });
-        const { deleteProductAction } = await import('@/app/actions/marketplace/_actions');
+        const { deleteProductAction } = await import('@/app/actions/marketplace/_mp_products');
 
         const r: any = await deleteProductAction('prod-1');
 
