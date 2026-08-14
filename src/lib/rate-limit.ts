@@ -111,15 +111,27 @@ export function withRateLimit(
 }
 
 /**
+ * One definition of the login window.
+ *
+ * It was written three times — "15 m" in the limiter below, `15 * 60 * 1000` in
+ * the in-memory fallback, and implicitly in resetLoginAttempts' key wildcard.
+ * The reset now computes the exact bucket keys from this number, so a change
+ * here that did not reach the others would stop the reset matching anything.
+ * `${n} ms` is a format the library's own parser accepts.
+ */
+export const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_LIMIT_PREFIX = "@upstash/login_limit";
+
+/**
  * Rate limiter for login attempts per user (Redis-backed)
  */
 const loginLimiter = new Ratelimit({
     redis: redis,
     limiter: Ratelimit.slidingWindow(
         parseInt(process.env.MAX_LOGIN_ATTEMPTS || '5', 10),
-        "15 m" // 15 minutes
+        `${LOGIN_WINDOW_MS} ms`
     ),
-    prefix: "@upstash/login_limit",
+    prefix: LOGIN_LIMIT_PREFIX,
 });
 
 /**
@@ -188,7 +200,7 @@ export async function consumeLoginAttempt(
         console.error("Login rate limit error (falling back to in-memory):", error);
         // Fall back to a conservative in-memory rate limiter instead of failing fully open
         const maxAttempts = parseInt(process.env.MAX_LOGIN_ATTEMPTS || '5', 10);
-        const fallback = checkFallbackLimit(key, maxAttempts, 15 * 60 * 1000); // 15 minutes window
+        const fallback = checkFallbackLimit(key, maxAttempts, LOGIN_WINDOW_MS);
         if (fallback.success) {
             return {
                 allowed: true,
@@ -206,27 +218,49 @@ export async function consumeLoginAttempt(
 }
 
 /**
- * Reset login attempts (call on successful login)
+ * Reset login attempts (call on successful login).
  *
- * FIX: Upstash Ratelimit (sliding window) appends timestamp bucket suffixes to
- * keys, e.g. `@upstash/login_limit:login_email@gmail.com:1969580`.
- * A single redis.del() on the bare key never matched anything.
- * We now use KEYS with a wildcard to find and delete ALL window buckets.
+ * IT RAN A FULL KEYSPACE SCAN ON EVERY SUCCESSFUL LOGIN
+ * -----------------------------------------------------
+ * The previous version was:
+ *
+ *     const pattern = `@upstash/login_limit:login_${email.toLowerCase()}*`;
+ *     const matchingKeys = await redis.keys(pattern);
+ *
+ * The observation that led to it is correct and is kept below: the sliding
+ * window appends a bucket suffix, so deleting the bare key matches nothing.
+ * The remedy was the problem. `KEYS` walks the ENTIRE keyspace and then
+ * filters — the pattern narrows the result, not the work — and this keyspace
+ * holds a rate-limit bucket per active identifier plus a cached profile per
+ * signed-in user (CacheKeys.userProfile, 5-minute TTL). At 41,105 accounts that
+ * is a scan of everything, on the login path, on every success.
+ *
+ * It also fails in a way that hides itself. The Upstash client is built with
+ * `AbortSignal.timeout(2000)`; once the scan exceeds two seconds it throws, the
+ * caller in lib/auth.ts logs "[Auth:Fallback] Redis resetLoginAttempts failed"
+ * and lets the login through — so the reset silently stops happening exactly
+ * when the keyspace is largest, and a user who failed four times before
+ * succeeding keeps those four against them for the rest of the window.
+ *
+ * The keys are computable, so no scan is needed. @upstash/ratelimit builds them
+ * as [prefix, identifier].join(":") and the sliding window appends
+ * `:${Math.floor(now / windowMs)}`; it consults the current bucket and the one
+ * before it, and nothing else. Two deletes, no scan, and both are exact.
  */
+export function loginRateLimitKeys(email: string, now: number = Date.now()): string[] {
+    const identifier = `login_${email.toLowerCase()}`;
+    const currentWindow = Math.floor(now / LOGIN_WINDOW_MS);
+
+    // The only two buckets a sliding window reads.
+    return [
+        `${LOGIN_LIMIT_PREFIX}:${identifier}:${currentWindow}`,
+        `${LOGIN_LIMIT_PREFIX}:${identifier}:${currentWindow - 1}`,
+    ];
+}
+
 export async function resetLoginAttempts(email: string): Promise<void> {
     try {
-        const pattern = `@upstash/login_limit:login_${email.toLowerCase()}*`;
-
-        // Scan for all sliding-window bucket keys for this email
-        const matchingKeys = await redis.keys(pattern);
-
-        if (matchingKeys && matchingKeys.length > 0) {
-            // Delete all matching keys in one call
-            await redis.del(...matchingKeys);
-            console.log(`[Auth] Cleared ${matchingKeys.length} rate-limit key(s) for ${email}`);
-        } else {
-            console.log(`[Auth] No rate-limit keys found for ${email} (already clean)`);
-        }
+        await redis.del(...loginRateLimitKeys(email));
     } catch (error) {
         console.error("Failed to reset login attempts:", error);
         // Non-blocking: do not throw — a reset failure must never block login
