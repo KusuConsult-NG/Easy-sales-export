@@ -69,7 +69,7 @@ function source(rel: string): string {
 }
 
 describe('the tested penalty function is the one that runs', () => {
-    const loans = source('src/app/actions/cooperative/_loans.ts');
+    const loans = source('src/app/actions/cooperative/_loans_repayments.ts');
 
     it('imports it rather than redefining it', () => {
         // THE test. Both statements were true at once before: the lib exported
@@ -145,7 +145,7 @@ describe('the penalty arithmetic, pinned so the exposure is visible', () => {
 });
 
 describe('the loan export says when it is a portion', () => {
-    const loans = source('src/app/actions/cooperative/_loans.ts');
+    const loans = source('src/app/actions/cooperative/_loans_applications.ts');
 
     it('reports truncation to the caller', () => {
         // Not only to a log line the person downloading the file never sees.
