@@ -57,80 +57,66 @@ export interface PaystackVerifyResponse {
  * Verify a Paystack payment on the server
  * @param reference - Payment reference from Paystack
  * @returns Verification response with payment details
- */
-/**
- * Verify a Paystack payment on the server
- * @param reference - Payment reference from Paystack
- * @returns Verification response with payment details
+ *
+ * THE TEST MOCK THAT REAL REFERENCES MATCHED
+ * ------------------------------------------
+ * This function used to begin:
+ *
+ *     const isTestRef = reference.startsWith('TEST_E2E_REF_') ||
+ *                       reference.startsWith('T') ||
+ *                       reference.startsWith('E2E_') ||
+ *                       reference === 'INVALID_REF' ||
+ *                       process.env.NODE_ENV === 'test' ||
+ *                       process.env.PLAYWRIGHT_TEST === 'true';
+ *
+ *     if (isTestRef) { ...return a fabricated successful payment... }
+ *
+ * `reference.startsWith('T')` is not a test-only shape. Paystack issues
+ * references of the form T + fifteen digits, and production records carry them:
+ *
+ *     T457550806738035   T232223621495674   T750250345181632
+ *
+ * all three on cooperative membership records, alongside card-checkout
+ * references in Paystack's other form (`583fq11y9g`, `9bvszibs1d`, …). Which
+ * form a payment gets is Paystack's business and not ours, so no caller can
+ * know whether its reference will be verified or fabricated. Every reference in
+ * the first form was fabricated. The function returned, without contacting
+ * anyone:
+ *
+ *     status: 'success', amount: 5000000 kobo (₦50,000),
+ *     metadata: { userId: <the CALLER'S own session id>, type: 'academy_registration', amount: 50000 }
+ *
+ * Both halves of that are wrong in opposite directions. A caller who paid
+ * ₦10,000 was recorded as having paid ₦50,000. A caller who paid nothing at
+ * all got the same answer: invent any string beginning with T, hand it to any
+ * of the dozen verify paths — cooperative contribution and registration,
+ * academy enrolment, marketplace escrow, farm-nation purchase, export
+ * investment — and the platform recorded a successful ₦50,000 payment and
+ * fulfilled against it.
+ *
+ * The userId defeats the checks written to catch exactly this. Callers compare
+ * `verification.data.metadata.userId` against the session — a real check
+ * against a real Paystack response — but the mock read the session and echoed
+ * it back, so the comparison was the caller against themselves. The amount
+ * checks fare no better: metadata.amount is 50000 and data.amount is 5000000
+ * kobo, so "does the charge match the metadata" agrees with itself.
+ *
+ * REMOVED RATHER THAN NARROWED, because nothing used it. No Playwright spec
+ * sets PLAYWRIGHT_TEST, which appeared exactly once in the repository — in that
+ * condition. No e2e spec sends a TEST_E2E_REF_, E2E_ or INVALID_REF reference;
+ * the only payment assertion in e2e/ checks the redirect to Paystack's own
+ * domain. Every unit test that touches a payment path already does
+ * `jest.mock('@/lib/paystack-server')`, which is how the rest of the suite has
+ * always stubbed this. So the block cost the verification on every money path
+ * and bought nothing, which is the same argument #154 made for deleting
+ * ADMIN_OVERRIDE.
+ *
+ * What remains fails closed: no PAYSTACK_SECRET_KEY throws rather than
+ * returning a success, and Paystack's answer is the only source of a success.
  */
 export async function verifyPaystackPayment(
     reference: string
 ): Promise<PaystackVerifyResponse> {
-    // E2E Test Mock Bypass
-    const isTestRef = reference.startsWith('TEST_E2E_REF_') || 
-                      reference.startsWith('T') || 
-                      reference.startsWith('E2E_') || 
-                      reference === 'INVALID_REF' ||
-                      process.env.NODE_ENV === 'test' ||
-                      process.env.PLAYWRIGHT_TEST === 'true';
-                      
-    if (isTestRef) {
-        if (reference === 'INVALID_REF') {
-            return {
-                status: false,
-                message: 'Payment verification failed',
-                data: { status: 'failed', reference }
-            } as any;
-        }
-
-        const { auth } = await import("@/lib/auth");
-        const session = await auth();
-        const userId = session?.user?.id || "mock-user-id";
-        const email = session?.user?.email || "mock@example.com";
-        
-        let type = "academy_registration";
-        const plan = "standard";
-        const amount = 5000000; // in kobo
-
-        if (reference.includes("EXPORT") || reference.includes("export")) {
-            type = "export_investment";
-        }
-
-        return {
-            status: true,
-            message: 'Verification successful',
-            data: {
-                id: 12345,
-                domain: 'test',
-                status: 'success',
-                reference,
-                amount,
-                message: 'Verification successful',
-                gateway_response: 'Successful',
-                paid_at: new Date().toISOString(),
-                created_at: new Date().toISOString(),
-                channel: 'card',
-                currency: 'NGN',
-                ip_address: '127.0.0.1',
-                metadata: {
-                    userId,
-                    email,
-                    type,
-                    purpose: type,
-                    plan,
-                    amount: amount / 100,
-                    exportId: "window_01",
-                },
-                customer: {
-                    id: 111,
-                    email,
-                    customer_code: 'CUST_123'
-                },
-                authorization: {}
-            }
-        } as any;
-    }
-
     const maxRetries = 3;
     let delay = 500;
     for (let i = 0; i < maxRetries; i++) {
