@@ -218,7 +218,7 @@ describe('a role that can do more than admin is super_admin-only to grant', () =
     it('both role writers use the shared rule', () => {
         for (const file of [
             'src/app/actions/bulk-user-operations.ts',
-            'src/app/actions/admin.ts',
+            'src/app/actions/admin/_users.ts',
             'src/app/api/admin/add-roles/route.ts',
         ]) {
             expect(source(file)).toContain('includesPrivilegedRole');

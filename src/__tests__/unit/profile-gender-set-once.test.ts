@@ -201,7 +201,7 @@ describe('the check WAVE relies on, and the route that may still change it', () 
     it('an admin route still exists to correct a wrong record', async () => {
         // The refusal message tells the user to contact support, so support must
         // have a way to act. It requires users:update and leaves an audit entry.
-        const admin = await source('src/app/actions/admin.ts');
+        const admin = await source('src/app/actions/admin/_users.ts');
 
         expect(admin).toContain('_updateUserGenderAction');
         expect(admin).toContain('hasAdminPermission(session.user.roles, "users:update")');
