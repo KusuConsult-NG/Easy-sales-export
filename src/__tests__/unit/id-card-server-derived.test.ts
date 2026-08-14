@@ -89,7 +89,7 @@ describe('the card is the caller\'s own', () => {
 
     it('the action takes no arguments, so there is nothing to spoof', () => {
         // The property that makes this fix complete rather than a filter.
-        expect(source('src/app/actions/cooperative/_actions.ts'))
+        expect(source('src/app/actions/cooperative/_coop_identity.ts'))
             .toContain('export async function getCooperativeMemberIdCardAction(): Promise<');
     });
 

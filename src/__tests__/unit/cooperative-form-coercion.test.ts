@@ -101,7 +101,7 @@ describe('makeContributionAction', () => {
         // Against the pre-fix code this returns
         // "amount: Invalid input: expected number, received string" — for every
         // possible input, which is why contributions never worked.
-        const { makeContributionAction } = await import('@/app/actions/cooperative/_actions');
+        const { makeContributionAction } = await import('@/app/actions/cooperative/_coop_money');
         const result: any = await makeContributionAction({} as any, form('5000'));
 
         expectNotAValidationFailure(result);
@@ -109,7 +109,7 @@ describe('makeContributionAction', () => {
 
     it('accepts a currency-formatted amount', async () => {
         // z.coerce alone does not save this: Number("₦5,000") is NaN.
-        const { makeContributionAction } = await import('@/app/actions/cooperative/_actions');
+        const { makeContributionAction } = await import('@/app/actions/cooperative/_coop_money');
         const result: any = await makeContributionAction({} as any, form('₦5,000'));
 
         expectNotAValidationFailure(result);
@@ -117,7 +117,7 @@ describe('makeContributionAction', () => {
 
     it('still refuses a genuinely invalid amount', async () => {
         // Coercion must not turn the validation into a rubber stamp.
-        const { makeContributionAction } = await import('@/app/actions/cooperative/_actions');
+        const { makeContributionAction } = await import('@/app/actions/cooperative/_coop_money');
         const result: any = await makeContributionAction({} as any, form('0'));
 
         expect(result.success).toBe(false);
@@ -140,21 +140,21 @@ describe('applyForLoanAction', () => {
     }
 
     it('accepts a plain numeric string', async () => {
-        const { applyForLoanAction } = await import('@/app/actions/cooperative/_actions');
+        const { applyForLoanAction } = await import('@/app/actions/cooperative/_coop_money');
         const result: any = await applyForLoanAction({} as any, form('10000'));
 
         expectNotAValidationFailure(result);
     });
 
     it('accepts a currency-formatted amount', async () => {
-        const { applyForLoanAction } = await import('@/app/actions/cooperative/_actions');
+        const { applyForLoanAction } = await import('@/app/actions/cooperative/_coop_money');
         const result: any = await applyForLoanAction({} as any, form('₦10,000'));
 
         expectNotAValidationFailure(result);
     });
 
     it('still refuses a zero amount', async () => {
-        const { applyForLoanAction } = await import('@/app/actions/cooperative/_actions');
+        const { applyForLoanAction } = await import('@/app/actions/cooperative/_coop_money');
         const result: any = await applyForLoanAction({} as any, form('0'));
 
         expect(result.success).toBe(false);

@@ -169,7 +169,11 @@ describe('the record says what is true now', () => {
 
 describe('what the bypass grants, which is why the address matters', () => {
     it('a fully approved, fully paid cooperative membership', () => {
-        const coop = source('src/app/actions/cooperative/_actions.ts');
+        // Moved to @/lib/cooperative-provisioning when cooperative/_actions.ts
+        // was split by domain. It is a plain module rather than a "use server"
+        // one precisely so that granting a paid membership cannot be called
+        // from a client — every export of a "use server" module is an endpoint.
+        const coop = source('src/lib/cooperative-provisioning.ts');
 
         expect(coop).toContain('if (!isPaymentBypassAccount(email)) return');
         expect(coop).toContain('membershipStatus: "approved"');

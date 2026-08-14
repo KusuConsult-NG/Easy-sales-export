@@ -29,7 +29,7 @@
     "app/actions/auth.ts::preValidateLoginAction",
     "app/actions/auth.ts::registerAction",
     "app/actions/cms.ts::getActiveBannersAction",
-    "app/actions/cooperative/_actions.ts::validateCooperativeInviteAction",
+    "app/actions/cooperative/_coop_registration.ts::validateCooperativeInviteAction",
     "app/actions/export-aggregation.ts::getActiveExportWindowsAction",
     "app/actions/export-investments.ts::getExportOpportunities",
     "app/actions/export-investments.ts::getExportOpportunityById",

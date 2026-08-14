@@ -228,7 +228,7 @@ describe('cooperative/_actions — _submitWithdrawalAction locks what it debits'
         // was right. It never incremented lockedBalance, so every request
         // through it left the field one withdrawal further negative once an
         // admin approved or rejected.
-        const { submitWithdrawalAction } = await import('@/app/actions/cooperative/_actions');
+        const { submitWithdrawalAction } = await import('@/app/actions/cooperative/_coop_money');
         await submitWithdrawalAction({} as any, withdrawalForm(25_000));
 
         expect(mockDebit).toHaveBeenCalledWith(expect.objectContaining({
@@ -246,7 +246,7 @@ describe('cooperative/_actions — _submitWithdrawalAction locks what it debits'
     it('locks nothing when the debit is refused', async () => {
         mockDebit.mockResolvedValue({ ok: false, balance: 100, reason: 'insufficient_funds' });
 
-        const { submitWithdrawalAction } = await import('@/app/actions/cooperative/_actions');
+        const { submitWithdrawalAction } = await import('@/app/actions/cooperative/_coop_money');
         const result: any = await submitWithdrawalAction({} as any, withdrawalForm(25_000));
 
         expect(result.success).toBe(false);

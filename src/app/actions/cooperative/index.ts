@@ -10,7 +10,7 @@
 // ─── Domain types ─────────────────────────────────────────────────────────────
 export type {
     MemberIdCardData,
-} from "./_actions";
+} from "./_coop_identity";
 
 export type {
     ActionState,
@@ -21,27 +21,39 @@ export type {
     RepaymentInstallment,
 } from "./_loans";
 
-// ─── Member-facing actions (_actions.ts) ──────────────────────────────────────
+// ─── Registration and applications (_coop_registration.ts) ───────────────────
 export {
-    initiateCooperativePaymentAction,
     registerCooperativeMemberAction,
     joinCooperativeAction,
-    makeContributionAction,
-    submitWithdrawalAction,
-    getMembershipAction,
-    getTransactionsAction,
-    getUserTierAction,
-    checkCooperativeStatusAction,
-    applyForLoanAction,
-    createFixedSavingsAction,
-    getDirectoryMembersAction,
+    validateCooperativeInviteAction,
     getCooperativeApplicationAction,
     resubmitCooperativeApplicationAction,
+} from "./_coop_registration";
+
+// ─── Membership status and directory (_coop_membership.ts) ───────────────────
+export {
+    getMembershipAction,
+    checkCooperativeStatusAction,
+    getUserTierAction,
+    getDirectoryMembersAction,
+} from "./_coop_membership";
+
+// ─── Money in and out (_coop_money.ts) ───────────────────────────────────────
+export {
+    initiateCooperativePaymentAction,
+    makeContributionAction,
+    submitWithdrawalAction,
+    applyForLoanAction,
+    createFixedSavingsAction,
+    getTransactionsAction,
+} from "./_coop_money";
+
+// ─── Member identity and profile (_coop_identity.ts) ─────────────────────────
+export {
     getCooperativeMemberIdCardAction,
     updatePassportPhotoAction,
     updateMemberProfileDetailsAction,
-    validateCooperativeInviteAction,
-} from "./_actions";
+} from "./_coop_identity";
 
 // ─── Admin actions (_admin.ts) ────────────────────────────────────────────────
 export {
