@@ -33,6 +33,18 @@ export async function GET(request: NextRequest) {
             .orderBy("createdAt", "desc")
             .get();
 
+        // Truncation is reported, not swallowed.
+        //
+        // The adapter caps an unbounded query at SUPABASE_DEFAULT_QUERY_LIMIT
+        // and sets `truncated` for exactly this reason — analytics.service.ts
+        // and cron/reconcile-fulfilment both read it. An admin queue that shows
+        // the first N as though they were all of them is how a pending item is
+        // never actioned.
+        const truncated = Boolean((snapshot as any).truncated);
+        if (truncated) {
+            logger.warn("[admin/marketplace/seller-verifications] result truncated by the adapter's query limit");
+        }
+
         const verifications = await Promise.all(
             snapshot.docs.map(async (verDoc) => {
                 const data = verDoc.data();
@@ -55,6 +67,7 @@ export async function GET(request: NextRequest) {
         );
 
         return NextResponse.json({
+            truncated,
             success: true,
             verifications
         });
