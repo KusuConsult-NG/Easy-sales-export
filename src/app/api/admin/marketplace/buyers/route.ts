@@ -17,17 +17,48 @@ export async function GET() {
             return NextResponse.json({ success: false, message: "Admin access required" }, { status: 403 });
         }
 
-        // We fetch users who have explicitly chosen to be buyers or sellers.
-        // Easiest is to scan the users collection for marketplace roles or service registrations
-        const snapshot = await db.collection(COLLECTIONS.USERS).get();
-        const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // Asked of the database, not of the whole users table.
+        //
+        // This did `db.collection(USERS).get()` and filtered in memory. The
+        // adapter caps an unbounded query at SUPABASE_DEFAULT_QUERY_LIMIT —
+        // 5,000 — and sets `snapshot.truncated` so a partial answer is not
+        // silent. This route did not look at it.
+        //
+        // The users table holds tens of thousands of rows. So an admin opening
+        // the marketplace buyers screen saw the marketplace users found among
+        // the first five thousand USERS, presented as the complete list. A
+        // buyer who registered later was simply absent, and the screen said
+        // nothing.
+        //
+        // array-contains-any asks Postgres for the rows that match, so the
+        // limit now applies to marketplace users rather than to users in
+        // general — a much smaller set — and the truncation flag is reported
+        // either way.
+        //
+        // THE THIRD CONDITION WAS DEAD
+        // The filter also had:
+        //
+        //     const isRegisteredInMarketplace = u.serviceRegistrations?.marketplace === true;
+        //
+        // serviceRegistrations.marketplace is always an OBJECT —
+        // { status, accountType, paymentStatus, ... } — written by
+        // approve-seller and admin.ts. An object is never === true, so that
+        // clause never fired. It is dropped rather than repaired: a user with a
+        // marketplace registration and no seller or buyer role is not something
+        // the approval path produces, and inventing a query for a case that has
+        // never existed would be guessing.
+        const snapshot = await db.collection(COLLECTIONS.USERS)
+            .where("roles", "array-contains-any", ["seller", "buyer"])
+            .get();
 
-        const marketplaceUsers = users.filter((u: any) => {
-            const hasSellerRole = (u.roles || []).includes("seller");
-            const hasBuyerRole = (u.roles || []).includes("buyer");
-            const isRegisteredInMarketplace = u.serviceRegistrations?.marketplace === true;
-            return hasSellerRole || hasBuyerRole || isRegisteredInMarketplace;
-        }).map((u: any) => {
+        const truncated = Boolean((snapshot as any).truncated);
+        if (truncated) {
+            logger.warn("[admin/marketplace/buyers] result truncated by the adapter's query limit");
+        }
+
+        const users = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+
+        const marketplaceUsers = users.map((u: any) => {
             const hasSellerRole = (u.roles || []).includes("seller");
             const hasBuyerRole = (u.roles || []).includes("buyer");
             let buyerRole = "invalid";
@@ -59,7 +90,9 @@ export async function GET() {
             return dateB - dateA;
         });
 
-        return NextResponse.json({ success: true, users: validUsers });
+        // Reported, never silent. A screen showing a partial list as though it
+        // were whole is how an admin concludes a member does not exist.
+        return NextResponse.json({ success: true, users: validUsers, truncated });
 
     } catch (error) {
         logger.error("Failed to fetch marketplace buyers:", error);
