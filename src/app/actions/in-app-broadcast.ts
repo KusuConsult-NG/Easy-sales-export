@@ -46,6 +46,7 @@ export type InAppAudience =
     | "abandoned_failed_transactions";
 
 import type { Notification } from "@/lib/types/firestore";
+import { isMarketplaceBuyer } from "@/lib/broadcast-audience";
 
 export type NotificationType = Notification["type"];
 
@@ -193,13 +194,19 @@ export async function collectRecipientUserIds(
 
             break;
         }
-        case "buyers": { const stream = db
+        case "buyers": {
+            // Same defect as sms-broadcast.ts: this queried
+            // `.where("marketplaceAccountType", "in", ["buyer", "both"])` on a
+            // field nothing writes, so the in-app "buyers" broadcast reached
+            // nobody. See @/lib/broadcast-audience for the shared definition.
+            const stream = db
                 .collection(COLLECTIONS.USERS)
-                .where("marketplaceAccountType", "in", ["buyer", "both"])
-                .select("name", "fullName", "stateOfOrigin", "state", "address")
+                .where("roles", "array-contains", "buyer")
+                .select("name", "fullName", "stateOfOrigin", "state", "address", "marketplaceAccountType", "roles")
                 .get();
             for (const d of (await stream).docs) {
                 const u = d.data();
+                if (!isMarketplaceBuyer(u)) continue;
                 const userState = u.stateOfOrigin || u.state || u.address?.state;
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 add(d.id, u.fullName || u.name || "User");

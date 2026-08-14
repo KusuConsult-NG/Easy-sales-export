@@ -21,6 +21,7 @@ import { requireAdmin } from "@/lib/require-admin";
 import { ActionResponse } from "@/lib/safe-action";
 import { logger } from "@/lib/logger";
 import { categorizeUser } from "@/lib/broadcast-logic";
+import { isMarketplaceBuyer } from "@/lib/broadcast-audience";
 
 function isStateMatch(dbState: any, filterState: string | undefined): boolean { if (!filterState) return true;
     if (!dbState || typeof dbState !== 'string') return false;
@@ -289,13 +290,23 @@ async function collectSmsRecipients(
 
             break;
         }
-        case "buyers": { const stream = db
+        case "buyers": {
+            // This queried `.where("marketplaceAccountType", "in", ["buyer", "both"])`,
+            // and nothing in this codebase writes that field. The query matched
+            // no rows, this loop ran zero times, and the broadcast reached
+            // nobody — silently, with a recipient count of zero.
+            //
+            // The email path in broadcast-logic.ts has always accepted a "buyer"
+            // ROLE as well, which is the clause doing all the work there. All
+            // three channels share that definition now. See @/lib/broadcast-audience.
+            const stream = db
                 .collection(COLLECTIONS.USERS)
-                .where("marketplaceAccountType", "in", ["buyer", "both"])
-                .select("stateOfOrigin", "state", "address", "phone", "phoneNumber", "fullName", "name")
+                .where("roles", "array-contains", "buyer")
+                .select("stateOfOrigin", "state", "address", "phone", "phoneNumber", "fullName", "name", "marketplaceAccountType", "roles")
                 .get();
             for (const d of (await stream).docs) {
                 const u: any = d.data();
+                if (!isMarketplaceBuyer(u)) continue;
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 add(u.phone || u.phoneNumber, u.fullName || u.name || "User");
