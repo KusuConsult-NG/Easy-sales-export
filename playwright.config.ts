@@ -23,6 +23,23 @@ import { defineConfig, devices } from '@playwright/test';
 
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
 
+/**
+ * Use an already-installed Chromium when one is provided.
+ *
+ * Playwright pins an exact browser build per release, so a sandbox or CI image
+ * that ships its own Chromium fails with "Executable doesn't exist at
+ * .../chromium_headless_shell-<build>" even though a perfectly usable browser
+ * is present. Downloading the pinned build is often not possible in those
+ * environments, which is one reason this suite has never been run.
+ *
+ * Set PLAYWRIGHT_CHROMIUM_PATH to the chrome binary to use it instead.
+ * Unset, Playwright resolves its own download exactly as before.
+ */
+const CHROMIUM_PATH = process.env.PLAYWRIGHT_CHROMIUM_PATH;
+const chromiumLaunch = CHROMIUM_PATH
+    ? { launchOptions: { executablePath: CHROMIUM_PATH } }
+    : {};
+
 export default defineConfig({
     // Default to full suite; override with --project=smoke for fast CI checks
     testDir: './',
@@ -57,13 +74,13 @@ export default defineConfig({
         {
             name: 'smoke',
             testMatch: ['tests/e2e/public-routes.spec.ts'],
-            use: { ...devices['Desktop Chrome'] },
+            use: { ...devices['Desktop Chrome'], ...chromiumLaunch },
         },
 
         // ── Full suite: Chromium (primary CI browser) ──────────────────────────
         {
             name: 'chromium',
-            use: { ...devices['Desktop Chrome'] },
+            use: { ...devices['Desktop Chrome'], ...chromiumLaunch },
         },
 
         // ── Safari: run full suite cross-browser ───────────────────────────────
