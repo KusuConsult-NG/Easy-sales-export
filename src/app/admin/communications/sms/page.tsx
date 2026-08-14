@@ -233,7 +233,18 @@ export default function SmsBroadcastPage() {
             if (res.success) {
                 const resultData = { success: true, ...res.data };
                 setResult(resultData);
-                toast.success(`Complete: Sent ${res.data.sent}, Failed ${res.data.failed}`, { id: "sms-send", duration: 5000 });
+                if (res.data.sandboxMode) {
+                    // Not a success. AT_USERNAME is "sandbox" — the default when
+                    // it is unset — so Africa's Talking accepted every message
+                    // and delivered none of them. The counts below are real
+                    // API responses for messages that went nowhere.
+                    toast.error(
+                        `SANDBOX MODE — nothing was delivered. The API accepted ${res.data.sent} message(s), but AT_USERNAME is "sandbox", so no real phone received one. Set AT_USERNAME to the live Africa's Talking username.`,
+                        { id: "sms-send", duration: 15000 }
+                    );
+                } else {
+                    toast.success(`Complete: Sent ${res.data.sent}, Failed ${res.data.failed}`, { id: "sms-send", duration: 5000 });
+                }
             } else {
                 setResult({ success: false, error: res.error, sent: 0, failed: 0, skipped: 0 });
                 toast.error(`Broadcast Error: ${res.error}`, { id: "sms-send", duration: 8000 });
