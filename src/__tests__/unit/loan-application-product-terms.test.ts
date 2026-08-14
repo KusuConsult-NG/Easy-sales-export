@@ -83,7 +83,7 @@ function codeOnly(src: string): string {
         .join('\n');
 }
 
-const action = source('src/app/actions/cooperative/_actions.ts');
+const action = source('src/app/actions/cooperative/_coop_money.ts');
 const publicRoute = source('src/app/api/cooperative/loan-products/route.ts');
 const applyRoute = source('src/app/api/cooperative/apply-loan/route.ts');
 const page = source('src/app/cooperatives/(member)/loans/page.tsx');

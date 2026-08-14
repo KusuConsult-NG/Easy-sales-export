@@ -176,7 +176,7 @@ describe('cooperative/_actions — _applyForLoanAction', () => {
     }
 
     async function apply(amount = 10_000) {
-        const { applyForLoanAction } = await import('@/app/actions/cooperative/_actions');
+        const { applyForLoanAction } = await import('@/app/actions/cooperative/_coop_money');
         return applyForLoanAction({} as any, loanForm(amount));
     }
 
