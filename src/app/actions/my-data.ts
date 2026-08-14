@@ -34,8 +34,26 @@ import { logger } from "@/lib/logger";
 
 /** The signed-in user's id, or null when unauthenticated. */
 async function currentUserId(): Promise<string | null> {
-    const result = await requireSession();
-    return result.session?.user?.id ?? null;
+    // requireSession() is the one call in this module outside a try/catch, and
+    // every function here begins with it. A session lookup that throws
+    // therefore escaped the per-function handling and rejected the action.
+    //
+    // That mattered because this module is the only one under src/app/actions
+    // NOT wrapped in withSafeAction — these return raw values (a number, an
+    // array) rather than { success, error }, so there is no wrapper converting
+    // a throw into a result. The dashboard awaited eight of them together and
+    // one rejection blanked the whole page.
+    //
+    // Returning null is what every caller already handles: each opens with
+    // `if (!userId) return <empty default>`. An unreadable session is
+    // indistinguishable from being signed out, which is the correct reading.
+    try {
+        const result = await requireSession();
+        return result.session?.user?.id ?? null;
+    } catch (error) {
+        logger.error("[my-data] session lookup failed", { error });
+        return null;
+    }
 }
 
 /**

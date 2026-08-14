@@ -168,3 +168,78 @@ jobs:
       - name: Stop Supabase
         if: always()
         run: npx --yes supabase@latest stop --no-backup || true
+
+  # Browser smoke tests.
+  #
+  # WHY THIS JOB DID NOT EXIST
+  # --------------------------
+  # 23 Playwright specs have been in the repository for a month and no workflow
+  # referenced any of them, so not one had ever run. When first executed by hand
+  # on 2026-08-14 they could not even launch: Playwright pins an exact browser
+  # build, and the environment shipped a different one. That is fixed
+  # separately (PLAYWRIGHT_CHROMIUM_PATH in playwright.config.ts); here CI
+  # installs the pinned build, which is the simpler answer when the network
+  # allows it.
+  #
+  # WHAT IT COVERS THAT NOTHING ELSE DOES
+  # -------------------------------------
+  # Every other job reasons about source text. jest never calls render() — there
+  # is no @testing-library/react import in any of the 199 test files — so no
+  # check anywhere proves a page renders. This job opens the app in a real
+  # browser and looks.
+  #
+  # WHY IT NEEDS THE DATABASE
+  # -------------------------
+  # The marketplace spec asserts the product query SUCCEEDED, which cannot be
+  # distinguished from failure without a backend. Run against a dead database it
+  # skips itself, and a skipped smoke test proves nothing. Booting the same
+  # ephemeral stack the integration job uses is what gives it teeth.
+  #
+  # Only the `smoke` project runs here. The other 22 specs need seeded users and
+  # module fixtures; adding them before that exists would produce failures that
+  # say nothing about the change under review.
+  e2e-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright's pinned Chromium
+        run: npx playwright install --with-deps chromium
+
+      # Same script the integration job uses. Exports the stack's URL and keys
+      # to $GITHUB_ENV, so the dev server Playwright starts talks to a real
+      # database rather than a placeholder.
+      - name: Start an ephemeral Supabase and load the schema
+        run: ./scripts/ci-integration-db.sh
+
+      # playwright.config.ts starts `npm run dev` itself and waits for the port.
+      - name: Run public-route smoke tests
+        run: npx playwright test --project=smoke
+        env:
+          NEXTAUTH_SECRET: placeholder-ci-secret-placeholder-ci-secret
+          AUTH_SECRET: placeholder-ci-secret-placeholder-ci-secret
+          NEXTAUTH_URL: http://localhost:3000
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+
+      # The HTML report carries the screenshot and trace taken on failure, which
+      # is the whole reason to run a browser in CI rather than guess from a log.
+      - name: Upload the Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+      - name: Stop Supabase
+        if: always()
+        run: npx --yes supabase@latest stop --no-backup || true

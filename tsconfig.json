@@ -72,8 +72,8 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts",
-    "**/*.mts"
+    "**/*.mts",
+    ".next/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
@@ -83,6 +83,7 @@
     "e2e",
     "test-*.ts",
     "functions",
-    "scratch"
+    "scratch",
+    ".next/dev"
   ]
 }

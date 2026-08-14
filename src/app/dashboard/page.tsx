@@ -220,16 +220,22 @@ function DashboardHomeContent() {
         let cancelled = false;
 
         const load = async () => {
-            const [
-                regs,
-                unreadNotifications,
-                unreadMessages,
-                recent,
-                walletBalance,
-                activeOrders,
-                events,
-                resources,
-            ] = await Promise.all([
+            // allSettled, NOT all.
+            //
+            // Promise.all rejects on the first rejection and discards every
+            // other result, so a single failing action left this entire page on
+            // its initial zeros — no balance, no counts, no notifications, no
+            // events — rather than losing one tile.
+            //
+            // That is reachable: each action in my-data.ts wraps its query in
+            // try/catch and returns a safe default, but currentUserId() calls
+            // requireSession() OUTSIDE that try. A session lookup that throws
+            // took the whole dashboard down.
+            //
+            // Each failure now costs only its own value, and says which one it
+            // was — a blank tile with nothing in the console is the kind of
+            // thing that gets diagnosed twice.
+            const settled = await Promise.allSettled([
                 getMyServiceRegistrations(),
                 getMyUnreadNotificationCount(),
                 getMyUnreadMessageCount(),
@@ -239,6 +245,22 @@ function DashboardHomeContent() {
                 getUpcomingEvents(3),
                 getRecentResources(3),
             ]);
+
+            const valueOf = <T,>(index: number, fallback: T, name: string): T => {
+                const result = settled[index];
+                if (result.status === "fulfilled") return result.value as T;
+                console.error(`Dashboard: ${name} failed`, result.reason);
+                return fallback;
+            };
+
+            const regs = valueOf<Record<string, any>>(0, {}, "service registrations");
+            const unreadNotifications = valueOf<number>(1, 0, "unread notification count");
+            const unreadMessages = valueOf<number>(2, 0, "unread message count");
+            const recent = valueOf<any[]>(3, [], "recent notifications");
+            const walletBalance = valueOf<number>(4, 0, "wallet balance");
+            const activeOrders = valueOf<number>(5, 0, "active order count");
+            const events = valueOf<any[]>(6, [], "upcoming events");
+            const resources = valueOf<any[]>(7, [], "recent resources");
 
             if (cancelled) return;
 

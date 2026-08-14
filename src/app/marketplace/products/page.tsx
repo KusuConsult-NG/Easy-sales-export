@@ -162,8 +162,16 @@ export default function MarketplaceProductsPage() {
                 </div>
 
                 {/* Error State */}
+                {/* data-testid: when the products query fails this banner renders
+                    alongside the "No products found" empty state, so an e2e
+                    assertion that accepts either state cannot tell a failed
+                    query from an empty catalogue. This gives it something
+                    unambiguous to assert on. */}
                 {error && (
-                    <div className="bg-rose-50 border border-rose-200 text-rose-600 p-4 rounded-xl mb-8 text-center flex items-center justify-center gap-2">
+                    <div
+                        data-testid="products-error"
+                        className="bg-rose-50 border border-rose-200 text-rose-600 p-4 rounded-xl mb-8 text-center flex items-center justify-center gap-2"
+                    >
                         <AlertCircle className="w-5 h-5" />
                         <span>{error}</span>
                     </div>

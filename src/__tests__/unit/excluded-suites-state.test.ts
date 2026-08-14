@@ -229,8 +229,21 @@ describe('the exclusions themselves', () => {
         }
     });
 
-    it('the Playwright specs are excluded and CI never runs them', () => {
-        // 23 specs. `npm run test:e2e` exists; no workflow calls it.
+    it('CI runs the smoke project only — the other Playwright specs still never run', () => {
+        // Updated 2026-08-14. Previously this asserted CI ran NO Playwright at
+        // all, which was true for the month the specs sat here unexecuted.
+        //
+        // Running them by hand revealed why that mattered twice over. They could
+        // not launch — Playwright pins an exact browser build and the
+        // environment shipped another — and once launched, all seven smoke
+        // specs PASSED against a backend where every data fetch was failing.
+        // Their assertions ("URL is not /auth/", "body is not empty") were true
+        // of a page rendering nothing but an error banner.
+        //
+        // So the `e2e-smoke` job now runs that one project against a real
+        // ephemeral database, and the marketplace spec asserts the query
+        // actually succeeded. The remaining 22 specs still never run: they need
+        // seeded users and module fixtures that do not exist yet.
         const specs = execSync('find e2e tests/e2e -name "*.spec.ts" 2>/dev/null | wc -l', {
             encoding: 'utf-8',
             cwd: process.cwd(),
@@ -238,11 +251,21 @@ describe('the exclusions themselves', () => {
         }).trim();
 
         expect(Number(specs)).toBeGreaterThan(20);
+        // jest still ignores them — they are Playwright's, not jest's.
         expect(config).toContain("'/e2e/'");
 
         const ci = source('.github/workflows/ci.yml');
-        expect(ci).not.toContain('test:e2e');
-        expect(ci).not.toContain('playwright test');
+
+        // The smoke project runs, and only the smoke project.
+        expect(ci).toContain('--project=smoke');
+        // Guards against someone widening this to the full suite without
+        // seeding the fixtures it needs.
+        expect(ci).not.toContain('npx playwright test\n');
+        expect(ci).not.toContain('npm run test:e2e');
+
+        // It needs a real database or the marketplace spec skips itself, and a
+        // skipped smoke test proves nothing.
+        expect(ci).toContain('ci-integration-db.sh');
     });
 
     it('CI runs the integration suites as well as the default config', () => {
