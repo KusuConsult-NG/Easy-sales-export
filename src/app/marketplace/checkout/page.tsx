@@ -45,48 +45,9 @@ function estimateCartWeight(items: any[]): number {
     }, 0);
 }
 
-const NIGERIAN_STATE_COORDINATES: Record<string, { lat: number; lng: number }> = {
-    "Abia": { lat: 5.5249, lng: 7.4898 },
-    "Adamawa": { lat: 9.3265, lng: 12.3984 },
-    "Akwa Ibom": { lat: 5.0389, lng: 7.9092 },
-    "Anambra": { lat: 6.2209, lng: 7.0670 },
-    "Bauchi": { lat: 10.3158, lng: 9.8442 },
-    "Bayelsa": { lat: 4.9267, lng: 6.2676 },
-    "Benue": { lat: 7.3333, lng: 8.8833 },
-    "Borno": { lat: 11.8311, lng: 13.1509 },
-    "Cross River": { lat: 5.9631, lng: 8.3300 },
-    "Delta": { lat: 5.7040, lng: 5.9789 },
-    "Ebonyi": { lat: 6.2649, lng: 8.0874 },
-    "Edo": { lat: 6.3350, lng: 5.6037 },
-    "Ekiti": { lat: 7.6306, lng: 5.2194 },
-    "Enugu": { lat: 6.4584, lng: 7.5464 },
-    "FCT": { lat: 9.0765, lng: 7.3986 },
-    "Abuja": { lat: 9.0765, lng: 7.3986 },
-    "Gombe": { lat: 10.2796, lng: 11.1686 },
-    "Imo": { lat: 5.4854, lng: 7.0357 },
-    "Jigawa": { lat: 12.1852, lng: 9.7742 },
-    "Kaduna": { lat: 10.5105, lng: 7.4165 },
-    "Kano": { lat: 12.0022, lng: 8.5919 },
-    "Katsina": { lat: 12.9856, lng: 7.6171 },
-    "Kebbi": { lat: 11.4942, lng: 4.1950 },
-    "Kogi": { lat: 7.7969, lng: 6.7406 },
-    "Kwara": { lat: 8.4833, lng: 4.5417 },
-    "Lagos": { lat: 6.5244, lng: 3.3792 },
-    "Nasarawa": { lat: 8.4907, lng: 7.7212 },
-    "Niger": { lat: 9.5833, lng: 6.5000 },
-    "Ogun": { lat: 7.1583, lng: 3.3500 },
-    "Ondo": { lat: 7.2500, lng: 5.2000 },
-    "Osun": { lat: 7.5629, lng: 4.5200 },
-    "Oyo": { lat: 7.9700, lng: 3.5900 },
-    "Plateau": { lat: 9.8965, lng: 8.8583 },
-    "Rivers": { lat: 4.8156, lng: 7.0498 },
-    "Sokoto": { lat: 13.0622, lng: 5.2439 },
-    "Taraba": { lat: 8.0000, lng: 10.5000 },
-    "Yobe": { lat: 12.0000, lng: 11.5000 },
-    "Zamfara": { lat: 12.1222, lng: 6.2236 }
-};
 
 import dynamicImport from "next/dynamic";
+import { NIGERIAN_STATE_COORDINATES } from "@/lib/locations";
 
 const CheckoutMapFallback = dynamicImport(
     () => import("@/components/marketplace/CheckoutMapFallback"),
