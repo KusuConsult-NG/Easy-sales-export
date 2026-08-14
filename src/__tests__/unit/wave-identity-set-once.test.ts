@@ -77,7 +77,7 @@ function codeOnly(src: string): string {
         .join('\n');
 }
 
-const wave = source('src/app/actions/wave/_actions.ts');
+const wave = source('src/app/actions/wave/_wv_applications.ts');
 
 describe('the validated date is written to the user', () => {
     it('records dateOfBirth on the user document', () => {

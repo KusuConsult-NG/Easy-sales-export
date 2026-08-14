@@ -88,7 +88,7 @@ describe('dateOfBirth is not the gender defect', () => {
     it('WAVE checks the SUBMITTED date, not a stored one', () => {
         // This is the whole difference. A stored field can be edited by another
         // endpoint before the gate runs; a submitted one cannot.
-        const wave = source('src/app/actions/wave/_actions.ts');
+        const wave = source('src/app/actions/wave/_wv_applications.ts');
 
         expect(wave).toContain('const dob = new Date(validatedData.dateOfBirth)');
         expect(wave).toContain('You must be at least 18 years old to apply');
@@ -97,7 +97,7 @@ describe('dateOfBirth is not the gender defect', () => {
     it('and cross-checks it against the declared age', () => {
         // A second reason the submitted value is hard to game: two independently
         // declared fields have to agree.
-        const wave = source('src/app/actions/wave/_actions.ts');
+        const wave = source('src/app/actions/wave/_wv_applications.ts');
 
         expect(wave).toContain('Math.abs(calculatedAge - validatedData.age) > 1');
         expect(wave).toContain('does not match the declared age');

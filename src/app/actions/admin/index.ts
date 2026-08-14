@@ -114,7 +114,7 @@ export {
 export {
     approveWaveApplicationAction,
     rejectWaveApplicationAction,
-} from "../wave/_admin";
+} from "../wave/_wv_admin_applications";
 
 // ─── Diagnostics (_diagnostics.ts) ────────────────────────────────────────────
 export { runSystemDiagnosticAction } from "./_diagnostics";

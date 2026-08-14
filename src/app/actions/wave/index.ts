@@ -18,7 +18,7 @@ export type {
     ShipmentTracking,
     MemberEarnings,
     WaveCertificate,
-} from "./_actions";
+} from "@/lib/types/wave-actions";
 
 // Briefing types
 export type {
@@ -33,30 +33,51 @@ export type {
 } from "@/app/actions/briefing-admin";
 
 // ─── Member-facing actions ────────────────────────────────────────────────────
+// ─── Applications (_wv_applications.ts) ──────────────────────────────────────
 export {
-    checkWaveStatusAction,
-    checkWaveEligibilityAction,
     submitMultiStepWaveApplicationAction,
-    enrollInWaveAction,
-    getWaveResourcesAction,
-    getWaveTrainingEventsAction,
-    getShipmentTrackingAction,
-    updateShipmentStatusAction,
-    syncShipmentWithCarrierAction,
-    calculateEarningsAction,
-    generateCertificateAction,
-    getMemberCertificatesAction,
-    getCurrentUserCertificatesAction,
-    uploadWaveResourceAction,
-    incrementResourceDownloadAction,
-    registerForTrainingAction,
-    withdrawEarningsAction,
+    resubmitWaveApplicationAction,
     getWaveApplicationStatusAction,
     getWaveApplicationAction,
     requestWaveRevisionAction,
-    resubmitWaveApplicationAction,
+} from "./_wv_applications";
+
+// ─── Membership and eligibility (_wv_membership.ts) ──────────────────────────
+export {
+    checkWaveStatusAction,
+    checkWaveEligibilityAction,
+    enrollInWaveAction,
     checkWaveAccessAction,
-} from "./_actions";
+} from "./_wv_membership";
+
+// ─── Resources and training (_wv_resources.ts) ───────────────────────────────
+export {
+    getWaveResourcesAction,
+    uploadWaveResourceAction,
+    incrementResourceDownloadAction,
+    getWaveTrainingEventsAction,
+    registerForTrainingAction,
+} from "./_wv_resources";
+
+// ─── Shipment tracking (_wv_shipments.ts) ────────────────────────────────────
+export {
+    getShipmentTrackingAction,
+    updateShipmentStatusAction,
+    syncShipmentWithCarrierAction,
+} from "./_wv_shipments";
+
+// ─── Earnings and withdrawals (_wv_earnings.ts) ──────────────────────────────
+export {
+    calculateEarningsAction,
+    withdrawEarningsAction,
+} from "./_wv_earnings";
+
+// ─── Certificates (_wv_certificates.ts) ──────────────────────────────────────
+export {
+    generateCertificateAction,
+    getMemberCertificatesAction,
+    getCurrentUserCertificatesAction,
+} from "./_wv_certificates";
 
 // ─── Member utility actions ───────────────────────────────────────────────────
 export {
@@ -67,6 +88,7 @@ export {
 } from "./_member";
 
 // ─── Admin actions ────────────────────────────────────────────────────────────
+// ─── Admin: resources and training (_wv_admin_resources.ts) ─────────────────
 export {
     createResourceAction,
     updateResourceAction,
@@ -74,18 +96,34 @@ export {
     createTrainingEventAction,
     updateTrainingEventAction,
     deleteTrainingEventAction,
+    getEventParticipantsAction,
+} from "./_wv_admin_resources";
+
+// ─── Admin: live sessions (_wv_admin_live.ts) ───────────────────────────────
+export {
     startWaveLiveSessionAction,
     endWaveLiveSessionAction,
-    getEventParticipantsAction,
+} from "./_wv_admin_live";
+
+// ─── Admin: applications (_wv_admin_applications.ts) ────────────────────────
+export {
     getWaveApplicationsAction,
     approveWaveApplicationAction,
     rejectWaveApplicationAction,
     getStandardWaveApplicationsAction,
+} from "./_wv_admin_applications";
+
+// ─── Admin: withdrawals (_wv_admin_withdrawals.ts) ──────────────────────────
+export {
     getStandardWaveWithdrawalsAction,
     processWaveWithdrawalAction,
+} from "./_wv_admin_withdrawals";
+
+// ─── Admin: shipments (_wv_admin_shipments.ts) ──────────────────────────────
+export {
     createWaveShipmentAction,
     getWaveShipmentsAction,
-} from "./_admin";
+} from "./_wv_admin_shipments";
 
 
 // ─── Briefing actions ─────────────────────────────────────────────────────────

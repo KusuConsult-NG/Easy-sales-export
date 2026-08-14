@@ -192,7 +192,7 @@ describe('the check WAVE relies on, and the route that may still change it', () 
     it('WAVE still gates enrolment on the stored gender', async () => {
         // If this ever stops being true the set-once rule loses its reason, and
         // whoever removes it should see that here.
-        const wave = await source('src/app/actions/wave/_actions.ts');
+        const wave = await source('src/app/actions/wave/_wv_applications.ts');
 
         expect(wave).toContain('Only female applicants are eligible to enroll in the WAVE program.');
         expect(wave).toMatch(/isMale\s*=\s*applicantGender\?\.toLowerCase\(\)\s*===\s*"male"/);
