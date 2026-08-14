@@ -21,12 +21,24 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
 
-        // Detect orphaned users
-        const orphanedUsers = await detectOrphanedUsers();
+        // Say how much of Auth was actually looked at.
+        //
+        // `count` used to be the length of a scan of the first 1,000 Auth
+        // accounts, presented as the number of orphaned users on the platform.
+        // Against 41,105 accounts that is 2.4% of them, and "0" read as "none"
+        // rather than as "none in the first thousand".
+        //
+        // `scanned` and `complete` are on the response so the screen can say
+        // which it got; `nextPageToken` continues the walk.
+        const pageToken = request.nextUrl.searchParams.get('pageToken') ?? undefined;
+        const scan = await detectOrphanedUsers(pageToken);
 
         return NextResponse.json({
-            count: orphanedUsers.length,
-            users: orphanedUsers,
+            count: scan.orphaned.length,
+            users: scan.orphaned,
+            scanned: scan.scanned,
+            complete: scan.complete,
+            nextPageToken: scan.nextPageToken,
         });
     } catch (error) {
         logger.error('Failed to detect orphaned users', error);
@@ -54,8 +66,10 @@ export async function POST(request: NextRequest) {
             const result = await repairOrphanedUser(body.uid);
             return NextResponse.json(result);
         } else {
-            // Repair all orphaned users
-            const results = await repairAllOrphanedUsers();
+            // Repair the orphans in one scan, and report whether that was all
+            // of them. `complete: false` means there are more Auth accounts
+            // than this call examined — repost with `pageToken` to continue.
+            const results = await repairAllOrphanedUsers(body.pageToken);
             return NextResponse.json(results);
         }
     } catch (error) {
