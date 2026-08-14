@@ -18,50 +18,6 @@
 // COOPERATIVE MODULE - PRD Section 5.5
 // ============================================
 
-export interface CooperativeMember {
-    id: string;
-    userId: string;
-    cooperativeId: string;
-
-    // Personal Information (PRD Required Fields)
-    firstName: string;
-    middleName?: string;
-    lastName: string;
-    dateOfBirth: Date;
-    gender: "male" | "female";
-    email: string;
-    phone: string;
-    stateOfOrigin: string;
-    lga: string;
-    residentialAddress: string;
-    occupation: string;
-
-    // Next of Kin Information
-    nextOfKin: {
-        fullName: string;
-        phone: string;
-        residentialAddress: string;
-    };
-
-    // Membership Details
-    membershipTier: "Member"; // Unified single tier
-    registrationFee: number;
-    membershipStatus: "pending" | "approved" | "suspended";
-    paymentReference: string;
-
-    // Financial
-    savingsBalance: number;
-    loanBalance: number;
-
-    // Approval Tracking
-    approvedBy?: string;
-    approvedAt?: Date;
-
-    // Timestamps
-    createdAt: Date;
-    updatedAt: Date;
-}
-
 export interface FixedSavingsPlan {
     id: string;
     memberId: string;
@@ -87,31 +43,6 @@ export interface LoanProduct {
     durationMonths: number;
     eligibilityRules: string;
     status: "active" | "inactive";
-    createdAt: Date;
-    updatedAt: Date;
-}
-
-export interface LoanApplication {
-    id: string;
-    memberId: string;
-    productId: string;
-    amount: number;
-    purpose: string;
-    interestAmount: number;
-    totalRepayment: number;
-    monthlyPayment: number;
-    status: "pending" | "approved" | "rejected" | "disbursed" | "completed";
-    repaymentSchedule: {
-        dueDate: Date;
-        amount: number;
-        paid: boolean;
-        paidAt?: Date;
-    }[];
-    approvedBy?: string;
-    approvedAt?: Date;
-    disbursedAt?: Date;
-    completedAt?: Date;
-    rejectionReason?: string;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -224,3 +155,33 @@ export interface LandVerification {
     createdAt: Date;
     updatedAt: Date;
 }
+
+/**
+ * CooperativeMember and LoanApplication WERE DECLARED HERE AND UNREACHABLE.
+ *
+ * The header above already listed both as migrated to cooperative.ts. The
+ * migration moved them and did not delete them, and nothing failed, because
+ * firestore.ts does
+ *
+ *     export * from "./prd-interfaces";
+ *
+ * and ALSO declares both names itself. A local declaration shadows a star
+ * re-export silently — no error, no warning — so the versions here lost, and
+ * neither had a direct importer either. They were edited-in-good-faith dead
+ * code: a file titled "PRD-Required Type Interfaces" in which two of eight
+ * requirements could not be enforced by anything.
+ *
+ * WHAT THE WINNING SHAPES DO NOT HAVE
+ * -----------------------------------
+ * Recorded because it is the only part worth keeping. The firestore.ts
+ * declarations that win carry more fields overall, but not these:
+ *
+ *   LoanApplication    approvedBy, completedAt, dueDate, interestAmount,
+ *                      memberId, paid, paidAt, productId, repaymentSchedule
+ *   CooperativeMember  approvedAt, approvedBy, fullName, paymentReference
+ *
+ * Whether any of those SHOULD be on the live shapes is a product question. It
+ * is now a visible question rather than an interface nobody could reach.
+ *
+ * prd-interfaces-shadowing.test.ts fails if any name here is shadowed again.
+ */
