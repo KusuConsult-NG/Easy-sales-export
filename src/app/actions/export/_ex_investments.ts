@@ -1,0 +1,449 @@
+"use server";
+
+import { supabaseDb as db } from "@/lib/supabase-db";
+import { logger } from '@/lib/logger';
+import { FieldValue } from "@/lib/firestore-compat";
+import { requireSession } from "@/lib/session-guard";
+import { COLLECTIONS } from "@/lib/types/firestore";
+import { createAdminAuditLog } from "@/lib/audit-log";
+import { claimPaymentOnce } from "@/lib/wallet-ledger";
+import { revalidatePath } from "next/cache";
+
+// ============================================
+// Get User Export Investments Action
+// ============================================
+
+export async function getUserExportInvestmentsAction(
+    limit: number = 10,
+    lastId?: string
+): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired"};
+        const { session } = sessionResult;
+        if (!session?.user?.id) { return { error: "Authentication required", success: false as const, data: null };
+        }
+
+        const userId = session.user.id;
+
+        // Fetch user's active Paystack-verified EXPORT_INVESTMENTS
+        const query = db.collection(COLLECTIONS.EXPORT_INVESTMENTS)
+            .where("investorId", "==", userId)
+
+        const snapshotRaw = await query.get();
+        // Robust Sort: Handle both Timestamps and String dates gracefully
+        const allDocs = snapshotRaw.docs.sort((a, b) => { const dataA = a.data();
+             const dataB = b.data();
+             const getMillis = (val: any) => {
+                 if (!val) return 0;
+                 if (typeof val.toMillis === 'function') return val.toMillis();
+                 if (val instanceof Date) return val.getTime();
+                 if (typeof val === 'string') return new Date(val).getTime();
+                 if (val.seconds) return val.seconds * 1000;
+                 return 0;
+             };
+
+             const tA = getMillis(dataA.createdAt) || getMillis(dataA.bookedAt) || 0;
+             const tB = getMillis(dataB.createdAt) || getMillis(dataB.bookedAt) || 0;
+             return tB - tA;
+        });
+
+        // Manual Pagination
+        let startIndex = 0;
+        if (lastId) { const idx = allDocs.findIndex(d => d.id === lastId);
+             if (idx !== -1) startIndex = idx + 1;
+        }
+        const paginatedDocs = allDocs.slice(startIndex, startIndex + limit);
+
+        const investments = await Promise.all(paginatedDocs.map(async doc => { const data = doc.data();
+            // Soft-join to get the actual Export Window details dynamically
+            let commodity = data.commodity || "Export Opportunity";
+            let status = data.status || "pending";
+            let startDate = new Date().toISOString();
+            let endDate = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();
+            let daysRemaining = 0;
+
+            if (data.windowId) {
+                 const windowId = data.windowId;
+                 const windowDoc = await db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(windowId).get();
+                 if (windowDoc.exists) {
+                     const wData = windowDoc.data()!;
+                     commodity = wData.title || wData.commodity || commodity;
+                     status = wData.status || status; // Reflect parent window status
+                     startDate = wData.startDate?.toDate()?.toISOString() || startDate;
+                     endDate = wData.endDate?.toDate()?.toISOString() || endDate;
+                     if (wData.endDate) {
+                         const delivery = wData.endDate.toDate();
+                         const diffTime = delivery.getTime() - new Date().getTime();
+                         daysRemaining = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+                     }
+                 }
+            }
+
+            // Real investment logic calculations
+            const amount = data.amount || data.totalCost || 0;
+            const expectedReturn = data.expectedReturn || (amount * 0.20);
+
+            const formatDate = (val: any) => { if (!val) return new Date().toISOString();
+                if (typeof val.toDate === 'function') return val.toDate().toISOString();
+                if (val instanceof Date) return val.toISOString();
+                if (typeof val === 'string') return new Date(val).toISOString();
+                if (val.seconds) return new Date(val.seconds * 1000).toISOString();
+                return new Date().toISOString();
+            };
+
+            return { id: doc.id,
+                commodity,
+                amount,
+                expectedReturn,
+                status,
+                daysRemaining,
+                startDate,
+                endDate,
+                createdAt: formatDate(data.createdAt) };
+        }));
+
+        const lastDocId = paginatedDocs.length === limit ? paginatedDocs[paginatedDocs.length - 1].id : null;
+
+        return { error: null, success: true as const, data: investments, meta: { cursor: lastDocId, hasMore: !!lastDocId }
+        };
+    } catch (error: any) { logger.error("Get user export investments error:", error);
+        return { error: "Failed to fetch investments", success: false as const, meta: null };
+    }
+}
+
+
+// ============================================
+// Get User Export Stats Action
+// ============================================
+
+export async function getUserExportStatsAction() { try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired"};
+        const { session } = sessionResult;
+        if (!session?.user?.id) { return { error: "Authentication required", success: false as const, data: null };
+        }
+
+        const userId = session.user.id;
+
+        // Fetch O(1) Compiled Stats from Active Paystack Integration
+        const portfolioDoc = await db.collection(COLLECTIONS.INVESTOR_PORTFOLIOS).doc(userId).get();
+
+        if (portfolioDoc.exists) { const data = portfolioDoc.data()!;
+             return { error: null, success: true as const,
+                 meta: null
+             , data: {
+                 totalInvested: data.totalInvested || 0,
+                 activeInvestments: data.activeInvestments || 0,
+                 totalReturns: data.totalReturns || 0,
+                 pendingReturns: data.pendingReturns || 0
+             } };
+        }
+
+        // Fallback if no portfolio exists yet
+        return { 
+            error: null, success: true as const, 
+            data: { totalInvested: 0, activeInvestments: 0, totalReturns: 0, pendingReturns: 0 } 
+        };
+    } catch (error: any) { logger.error("Get user export stats error:", error);
+        return { error: "Failed to fetch stats", success: false as const, meta: null, data: null };
+    }
+}
+
+
+// ============================================
+// Invest in Export Window
+// ============================================
+
+export async function investInExportAction(
+    exportId: string,
+    amount: number
+): Promise<{ success: true; error: null; data: { authorizationUrl: string }; meta?: any }
+    | { success: false; error: string; data?: null; meta?: any }
+> { try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired"};
+        const { session } = sessionResult;
+        if (!session?.user?.id) { return { success: false as const, error: "Authentication required"};
+        }
+
+        const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
+        const exportDoc = await exportRef.get();
+
+        if (!exportDoc.exists) { return { success: false as const, error: "Export window not found"};
+        }
+
+        const exportData = exportDoc.data();
+        if (exportData?.status !== "open" && exportData?.status !== "active") { return { success: false as const, error: "This export window is not open for investment"};
+        }
+
+        // Validate Minimum Investment (assuming 'amount' in window is unit price or min investment)
+        const minInvestment = exportData?.amount || 50000; // Default fallback
+        if (amount < minInvestment) { return { success: false as const, error: `Minimum investment is ₦${minInvestment.toLocaleString()}` };
+        }
+
+        // Check Funding Limit (Optional - if totalSpots defined)
+        if (exportData?.totalSpots && exportData?.spotsFilled >= exportData?.totalSpots) { return { success: false as const, error: "Investment slots are full"};
+        }
+
+        // Initialize Paystack
+        const { initializePaystackPayment } = await import("@/lib/paystack-server");
+        const initResult = await initializePaystackPayment(
+            session.user.email || "",
+            Math.round(amount * 100), // Kobo
+            { type: "export_investment",
+                exportId,
+                userId: session.user.id,
+                amount,
+                email: session.user.email
+            },
+            `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/export/verify`
+        );
+
+        return { error: null, success: true as const, data: initResult };
+
+    } catch (error: any) { logger.error("Invest in export error:", error);
+        return { success: false as const, error: error.message || "Investment initialization failed"};
+    }
+}
+
+
+// ============================================
+// Verify Export Investment
+// ============================================
+
+export async function verifyExportInvestmentAction(reference: string): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired"};
+        const { session } = sessionResult;
+        if (!session?.user?.id) return { success: false as const, error: "Unauthorized"};
+
+        const { verifyPaystackPayment } = await import("@/lib/paystack-server");
+        const verify = await verifyPaystackPayment(reference);
+
+        if (!verify.status || verify.data.status !== "success") { return { success: false as const, error: "Payment verification failed"};
+        }
+
+        const metadata = verify.data.metadata;
+        if (metadata.type !== "export_investment") { return { success: false as const, error: "Invalid payment type"};
+        }
+
+        const userId = metadata.userId;
+        const exportId = metadata.exportId;
+        const amount = metadata.amount;
+
+        if (userId !== session.user.id) return { success: false as const, error: "User mismatch"};
+
+        // WHAT WAS WRONG HERE
+        // -------------------
+        // This is the client-side half of the same payment the Paystack webhook
+        // fulfils in infrastructure/payments/service.ts. Both wrote
+        // processed_payments.doc(reference), and both decided whether to run by
+        // reading it first — so a webhook arriving while the buyer sat on this
+        // callback page had both paths pass the check and both fulfil: two
+        // EXPORT_SLOTS rows and the window funded twice for one payment.
+        //
+        // Worse, `set()` on that document is an upsert. The webhook writes
+        // `status: "completed"`, which platform_revenue_totals() sums as
+        // revenue; this path wrote no status at all and OVERWROTE the webhook's
+        // row, silently removing that payment from the revenue figure.
+        //
+        // Claiming the reference fixes all three: exactly one path fulfils, the
+        // row is written once, and the status survives.
+        //
+        // The overfunding check is copied from the webhook path so that
+        // whichever side wins, an investment beyond the funding goal is routed
+        // to review rather than counted. It is an advisory read — two
+        // investments that each fit but together exceed the goal can still both
+        // pass, exactly as on the webhook side. That race is recorded in
+        // docs/audit/atomic-money-migration.md and wants a decision, not a
+        // patch smuggled in here.
+        const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
+        const exportSnap = await exportRef.get();
+        const exportWindow = exportSnap.data();
+
+        if (!exportSnap.exists || !exportWindow) {
+            return { success: false as const, error: "Export window not found" };
+        }
+
+        const fundingGoal = exportWindow.fundingGoal ?? exportWindow.goal ?? 0;
+        const currentFunded = exportWindow.fundedAmount ?? exportWindow.currentFunding ?? 0;
+        const overfunded = fundingGoal > 0 && currentFunded + amount > fundingGoal;
+
+        const claim = await claimPaymentOnce({
+            reference,
+            userId,
+            amount,
+            type: "export_investment",
+            source: "client_verify",
+            // Not "completed" when overfunded: global-aggregation must not count
+            // a payment that is being held for review as revenue.
+            status: overfunded ? "overfunded_review" : "completed",
+            metadata: { exportId },
+        });
+
+        if (!claim.claimed) {
+            return { success: false as const, error: "Payment already processed" };
+        }
+
+        if (overfunded) {
+            await db.collection(COLLECTIONS.FAILED_PAYMENTS).doc(reference).set({
+                reference,
+                type: "export_investment",
+                userId,
+                exportId,
+                amount,
+                status: "overfunded_review",
+                gatewayResponse: "Investment exceeds export window funding goal",
+                failedAt: FieldValue.serverTimestamp(),
+            }, { merge: true });
+
+            logger.warn("[verifyExportInvestmentAction] investment exceeds funding goal — routed to review", {
+                reference, exportId, amount, fundingGoal, currentFunded,
+            });
+
+            return {
+                success: false as const,
+                error: "This investment exceeds the window's remaining funding goal and has been sent for review. You have been charged and will be contacted.",
+            };
+        }
+
+        {
+            // 1. Create Investment Record (Slot)
+            const slotRef = db.collection(COLLECTIONS.EXPORT_SLOTS).doc();
+            await slotRef.set({
+                userId,
+                exportId,
+                amount,
+                status: "active",
+                paymentReference: reference,
+                purchaseDate: FieldValue.serverTimestamp(),
+                createdAt: FieldValue.serverTimestamp(),
+                roi: exportWindow.roiPercentage || exportWindow.roi || "15-20%",
+                expectedReturn: amount * (exportWindow.returnMultiplier ?? exportWindow.expectedReturnMultiplier ?? 1.20),
+                source: "client_verify",
+            });
+
+            // 2. Update Export Window Stats
+            await exportRef.update({ spotsFilled: FieldValue.increment(1),
+                fundedAmount: FieldValue.increment(amount),
+                updatedAt: FieldValue.serverTimestamp()
+            });
+
+            // (The processed_payments row is written by claimPaymentOnce above.)
+        }
+
+        await createAdminAuditLog({ action: "export_investment",
+            userId,
+            targetId: exportId,
+            targetType: "export_window",
+            metadata: { amount, reference }
+        });
+
+        revalidatePath("/dashboard/export");
+        revalidatePath(`/export/windows/${exportId}`);
+
+        return { error: null, success: true as const , data: { message: "Investment verified" } };
+
+    } catch (error: any) { logger.error("Verify export investment error:", error);
+        return { success: false as const, error: "Failed to verify investment"};
+    }
+}
+
+
+// ============================================
+// Get My Investments (Revised for Investors)
+// ============================================
+
+export async function getMyExportInvestmentsAction() { try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired"};
+        const { session } = sessionResult;
+        if (!session?.user?.id) return { success: false as const, error: "Unauthorized"};
+
+        const snapshot = await db.collection(COLLECTIONS.EXPORT_INVESTMENTS)
+            .where("investorId", "==", session.user.id)
+            .get();
+        // Use in-memory sort to avoid index compilation errors
+        const allDocs = snapshot.docs.sort((a, b) => { const tA = a.data().createdAt?.toMillis() || a.data().bookedAt?.toMillis() || 0;
+             const tB = b.data().createdAt?.toMillis() || b.data().bookedAt?.toMillis() || 0;
+             return tB - tA;
+        });
+
+        const investments = await Promise.all(allDocs.map(async (doc) => { const data = doc.data();
+            // Fetch window details for display safely
+            let windowTitle = data.windowTitle || "Export Investment";
+            if (data.windowId) {
+                 const windowDoc = await db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(data.windowId).get();
+                 if (windowDoc.exists) {
+                     const windowData = windowDoc.data()!;
+                     windowTitle = windowData.title || windowData.commodity || windowTitle;
+                 }
+            }
+
+            return { id: doc.id,
+                ...data,
+                windowTitle,
+                createdAt: data.createdAt?.toDate() || data.bookedAt?.toDate() || new Date() };
+        }));
+
+        return { error: null, success: true as const, data: investments };
+    } catch (error) { logger.error("Get my investments error:", error);
+        return { success: false as const, error: "Failed to fetch investments"};
+    }
+}
+
+
+/**
+ * Extend Escrow Period (Admin Only)
+ * Used when shipping delays or disputes occur
+ */
+export async function extendEscrowAction(
+    exportId: string,
+    days: number,
+    reason: string
+): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired"};
+        const { session } = sessionResult;
+        // Check admin role
+        if (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin")) { return { success: false as const, error: "Unauthorized"};
+        }
+
+        const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
+        const exportDoc = await exportRef.get();
+
+        if (!exportDoc.exists) { return { success: false as const, error: "Export window not found"};
+        }
+
+        const currentReleaseDate = exportDoc.data()?.escrowReleaseDate?.toDate() || new Date();
+        const newReleaseDate = new Date(currentReleaseDate);
+        newReleaseDate.setDate(newReleaseDate.getDate() + days);
+
+        await exportRef.update({ escrowReleaseDate: newReleaseDate,
+            updatedAt: FieldValue.serverTimestamp(),
+            // We might want to track extensions in a subcollection or array, but for now just audit log
+        });
+
+        // 📜 Audit Log
+        const { logAuditAction } = await import("@/lib/audit-log");
+        await logAuditAction({
+            userId: session.user.id,
+            action: "EXTEND_ESCROW",
+            details: `Extended escrow for ${exportId} by ${days} days. Reason: ${reason}`,
+            metadata: { exportId, days, reason, oldDate: currentReleaseDate, newDate: newReleaseDate }
+        });
+
+        return { error: null,  success: true as const , data: { message: "Escrow extended" } };
+    } catch (error: any) { logger.error("Extend escrow error:", error);
+        return { success: false as const, error: error.message};
+    }
+}

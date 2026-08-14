@@ -91,7 +91,7 @@ function setDocs(savings: number) {
 
 async function repay(amount: number, caller: { id: string; roles?: string[] } = { id: BORROWER }) {
     setSession(caller.id, caller.roles ?? []);
-    const { repayLoanFromSavingsAction } = await import('@/app/actions/cooperative/_loans');
+    const { repayLoanFromSavingsAction } = await import('@/app/actions/cooperative/_loans_repayments');
     return repayLoanFromSavingsAction({
         loanId: 'loan-1',
         installmentId: 'inst-1',

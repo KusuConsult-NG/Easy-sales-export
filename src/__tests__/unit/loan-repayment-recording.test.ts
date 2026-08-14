@@ -78,7 +78,7 @@ function setDocs() {
 
 async function record(caller: { id: string; roles?: string[] }) {
     setSession(caller.id, caller.roles ?? []);
-    const { submitRepaymentAction } = await import('@/app/actions/cooperative/_loans');
+    const { submitRepaymentAction } = await import('@/app/actions/cooperative/_loans_repayments');
     return submitRepaymentAction({
         loanId: 'loan-1',
         installmentId: 'inst-1',
@@ -155,7 +155,7 @@ describe('submitRepaymentAction — who may record a repayment', () => {
 
     it('refuses a non-positive amount', async () => {
         setSession(ADMIN, ['admin']);
-        const { submitRepaymentAction } = await import('@/app/actions/cooperative/_loans');
+        const { submitRepaymentAction } = await import('@/app/actions/cooperative/_loans_repayments');
         const r: any = await submitRepaymentAction({
             loanId: 'loan-1', installmentId: 'inst-1', userId: BORROWER,
             amount: 0, paymentReference: 'FT-X',

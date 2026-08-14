@@ -19,7 +19,7 @@ export type {
 export type {
     LoanApplication,
     RepaymentInstallment,
-} from "./_loans";
+} from "@/lib/types/cooperative-loans";
 
 // ─── Registration and applications (_coop_registration.ts) ───────────────────
 export {
@@ -89,6 +89,7 @@ export {
 } from "./_dashboard";
 
 // ─── Loan actions (_loans.ts) ─────────────────────────────────────────────────
+// ─── Loans: applications (_loans_applications.ts) ────────────────────────────
 export {
     submitLoanApplicationAction,
     getUserLoanApplicationsAction,
@@ -96,14 +97,22 @@ export {
     getAdminLoanApplicationsAction,
     getAdminLoanApplicationsExportAction,
     getAdminLoanStatsAction,
+} from "./_loans_applications";
+
+// ─── Loans: decisions (_loans_decisions.ts) ──────────────────────────────────
+export {
     approveLoanAction,
     rejectLoanAction,
     disburseLoanAction,
+} from "./_loans_decisions";
+
+// ─── Loans: repayments (_loans_repayments.ts) ────────────────────────────────
+export {
     getRepaymentScheduleAction,
     submitRepaymentAction,
     repayLoanFromSavingsAction,
     getRepaymentHistoryAction,
-} from "./_loans";
+} from "./_loans_repayments";
 
 // ─── Withdrawal actions (_withdrawal.ts) ──────────────────────────────────────
 export {

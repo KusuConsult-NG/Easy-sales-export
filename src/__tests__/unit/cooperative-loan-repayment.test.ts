@@ -82,7 +82,7 @@ describe('submitRepaymentAction', () => {
         // THE test. The absolute write is what lost a concurrent repayment.
         setSession('member-1');
 
-        const { submitRepaymentAction } = await import('@/app/actions/cooperative/_loans');
+        const { submitRepaymentAction } = await import('@/app/actions/cooperative/_loans_repayments');
         await submitRepaymentAction({
             loanId: 'loan-1',
             installmentId: 'inst-1',
@@ -102,7 +102,7 @@ describe('submitRepaymentAction', () => {
     it('claims the payment reference before touching the instalment', async () => {
         setSession('member-1');
 
-        const { submitRepaymentAction } = await import('@/app/actions/cooperative/_loans');
+        const { submitRepaymentAction } = await import('@/app/actions/cooperative/_loans_repayments');
         await submitRepaymentAction({
             loanId: 'loan-1',
             installmentId: 'inst-1',
@@ -122,7 +122,7 @@ describe('submitRepaymentAction', () => {
         setSession('member-1');
         mockClaimPaymentOnce.mockResolvedValue({ claimed: false, status: 'loan_repayment' });
 
-        const { submitRepaymentAction } = await import('@/app/actions/cooperative/_loans');
+        const { submitRepaymentAction } = await import('@/app/actions/cooperative/_loans_repayments');
         const result = await submitRepaymentAction({
             loanId: 'loan-1',
             installmentId: 'inst-1',
@@ -143,7 +143,7 @@ describe('submitRepaymentAction', () => {
         // effect of an idempotency fix.
         setSession('member-1');
 
-        const { submitRepaymentAction } = await import('@/app/actions/cooperative/_loans');
+        const { submitRepaymentAction } = await import('@/app/actions/cooperative/_loans_repayments');
         await submitRepaymentAction({
             loanId: 'loan-1',
             installmentId: 'inst-1',
@@ -165,7 +165,7 @@ describe('submitRepaymentAction', () => {
         // test would assert nothing.
         setSession('not-the-member', []);
 
-        const { submitRepaymentAction } = await import('@/app/actions/cooperative/_loans');
+        const { submitRepaymentAction } = await import('@/app/actions/cooperative/_loans_repayments');
         const result = await submitRepaymentAction({
             loanId: 'loan-1',
             installmentId: 'inst-1',
@@ -194,7 +194,7 @@ describe('disburseLoanAction', () => {
     it('claims approved → disbursed rather than checking then writing', async () => {
         setSession('admin-A');
 
-        const { disburseLoanAction } = await import('@/app/actions/cooperative/_loans');
+        const { disburseLoanAction } = await import('@/app/actions/cooperative/_loans_decisions');
         await disburseLoanAction('loan-1');
 
         const call = mockClaimFromAny.mock.calls[0][0] as any;
@@ -208,7 +208,7 @@ describe('disburseLoanAction', () => {
         setSession('admin-B');
         mockClaimFromAny.mockResolvedValue({ claimed: false, status: 'disbursed' });
 
-        const { disburseLoanAction } = await import('@/app/actions/cooperative/_loans');
+        const { disburseLoanAction } = await import('@/app/actions/cooperative/_loans_decisions');
         const result = await disburseLoanAction('loan-1');
 
         expect(result.success).toBe(false);
@@ -219,7 +219,7 @@ describe('disburseLoanAction', () => {
         setSession('admin-A');
         mockClaimFromAny.mockResolvedValue({ claimed: false, status: 'pending' });
 
-        const { disburseLoanAction } = await import('@/app/actions/cooperative/_loans');
+        const { disburseLoanAction } = await import('@/app/actions/cooperative/_loans_decisions');
         const result = await disburseLoanAction('loan-1');
 
         expect(result.success).toBe(false);
