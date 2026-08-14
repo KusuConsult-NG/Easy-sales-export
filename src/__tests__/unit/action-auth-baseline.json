@@ -17,10 +17,10 @@
     "2026-08-13: broadcast.ts::getBroadcastHistoryAction removed \u2014 genuinely guarded now. It had no session check at all and returns the SUBJECT AND BODY of every email, SMS and in-app broadcast the platform has sent, plus who sent each. That is none of the categories the 2026-08-11 triage note says are left here; it most likely survived because \"broadcast\" reads as outbound and public. The messages are, the log of them is not. Found by auditing the file rather than the list, which is the argument for not treating presence here as a judgement that an action is safe."
   ],
   "unguarded": [
-    "app/actions/academy/_actions.ts::calculateStreakAction",
-    "app/actions/academy/_actions.ts::getCoursesAction",
-    "app/actions/academy/_actions.ts::getLiveSessionsAction",
-    "app/actions/academy/_actions.ts::getUserProgressAction",
+    "app/actions/academy/_ac_progress.ts::calculateStreakAction",
+    "app/actions/academy/_ac_catalog.ts::getCoursesAction",
+    "app/actions/academy/_ac_live.ts::getLiveSessionsAction",
+    "app/actions/academy/_ac_progress.ts::getUserProgressAction",
     "app/actions/admin/_settings.ts::getPlatformSettingsAction",
     "app/actions/admin/_legacy.ts::inviteLegacyMemberAction",
     "app/actions/auth.ts::getPostLoginRedirect",

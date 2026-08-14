@@ -203,7 +203,7 @@ describe('the answer key does not leave the server for a learner', () => {
     });
 
     it('the course loader strips for learners and not for admins', () => {
-        const actions = source('src/app/actions/academy/_actions.ts');
+        const actions = source('src/app/actions/academy/_ac_catalog.ts');
 
         expect(actions).toContain('viewerIsAdmin ? formattedCourse : stripAnswerKey(formattedCourse)');
         expect(actions).toContain('isAdmin(sessionResult.session?.user?.roles)');
@@ -213,7 +213,7 @@ describe('the answer key does not leave the server for a learner', () => {
 describe('the score is not accepted from the caller', () => {
     it('the action takes answers, not a number', () => {
         // THE test.
-        const actions = source('src/app/actions/academy/_actions.ts');
+        const actions = source('src/app/actions/academy/_ac_progress.ts');
 
         expect(actions).toContain('answers: Record<string, number>,');
         expect(codeOnly(actions)).not.toContain('progress.quizScores[moduleId] = score;\n            progress.lastAccessedAt');
@@ -264,7 +264,7 @@ describe('the score is not accepted from the caller', () => {
 
     it('both paths use the one grading module', () => {
         for (const file of [
-            'src/app/actions/academy/_actions.ts',
+            'src/app/actions/academy/_ac_progress.ts',
             'src/app/api/academy/quiz/submit/route.ts',
         ]) {
             expect(source(file)).toContain('@/lib/academy-grading');

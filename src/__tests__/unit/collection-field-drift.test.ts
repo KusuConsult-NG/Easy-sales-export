@@ -128,7 +128,7 @@ describe('the academy rename, and what it cost', () => {
     async function academySource(): Promise<string> {
         const { readFileSync } = await import('fs');
         const { join } = await import('path');
-        return readFileSync(join(process.cwd(), 'src/app/actions/academy/_actions.ts'), 'utf-8');
+        return readFileSync(join(process.cwd(), 'src/app/actions/academy/_ac_enrollment.ts'), 'utf-8');
     }
 
     it('writes the field every other reader queries', async () => {
@@ -182,7 +182,7 @@ describe('the academy rename, and what it cost', () => {
         // returns empty — the class behind #118, #132 and #139 as well as this.
         const { readFileSync } = await import('fs');
         const { join } = await import('path');
-        const src = readFileSync(join(process.cwd(), 'src/app/actions/academy/_actions.ts'), 'utf-8');
+        const src = readFileSync(join(process.cwd(), 'src/app/actions/academy/_ac_enrollment.ts'), 'utf-8');
 
         // resolvedUserId is written by nothing. It may now appear ONLY as the
         // deliberate legacy read — one for COURSE_PROGRESS and one for

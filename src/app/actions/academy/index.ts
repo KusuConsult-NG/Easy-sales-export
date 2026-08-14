@@ -24,43 +24,70 @@ export type {
     AcademyApplicationData,
     EnrolledCourseWithDetails,
     QuizEditorQuestion,
-} from "./_actions";
+} from "@/lib/types/academy-actions";
 
 // Payment types
 export type {
     PaymentInitState,
 } from "./_payment";
 
-// ─── Learner-facing actions (_actions.ts) ─────────────────────────────────────
+// ─── Course catalogue (_ac_catalog.ts) ───────────────────────────────────────
 export {
-    checkAcademyStatusAction,
     getCoursesAction,
     getCourseByIdAction,
-    initializeCoursePaymentAction,
-    verifyCoursePaymentAction,
-    enrollInCourseAction,
-    completeLessonAction,
-    submitQuizScoreAction,
-    getUserProgressAction,
-    getUserAggregateProgressAction,
-    getLiveSessionsAction,
-    startAcademyLiveSessionAction,
-    endAcademyLiveSessionAction,
-    submitAcademyApplicationAction,
     createCourseAction,
     updateCourseAction,
     updateCourseModulesAction,
     deleteCourseAction,
+} from "./_ac_catalog";
+
+// ─── Enrolment and access (_ac_enrollment.ts) ────────────────────────────────
+export {
+    checkAcademyStatusAction,
+    enrollInCourseAction,
     getEnrolledCoursesWithDetailsAction,
-    saveQuizAction,
-    getQuizAction,
+    autoEnrollPaidUser,
+} from "./_ac_enrollment";
+
+// ─── Per-course payment (_ac_course_payment.ts) ──────────────────────────────
+export {
+    initializeCoursePaymentAction,
+    verifyCoursePaymentAction,
+} from "./_ac_course_payment";
+
+// ─── Learner progress (_ac_progress.ts) ──────────────────────────────────────
+export {
+    completeLessonAction,
+    submitQuizScoreAction,
+    getUserProgressAction,
+    getUserAggregateProgressAction,
     logLessonActivityAction,
     calculateStreakAction,
+} from "./_ac_progress";
+
+// ─── Quizzes (_ac_quiz.ts) ───────────────────────────────────────────────────
+export {
+    saveQuizAction,
+    getQuizAction,
+} from "./_ac_quiz";
+
+// ─── Live sessions (_ac_live.ts) ─────────────────────────────────────────────
+export {
+    getLiveSessionsAction,
+    startAcademyLiveSessionAction,
+    endAcademyLiveSessionAction,
+} from "./_ac_live";
+
+// ─── Applications (_ac_applications.ts) ──────────────────────────────────────
+// NOTE: approveAcademyApplicationAction from _admin.ts is canonical, so the
+// copy in _ac_applications.ts is deliberately not re-exported here — the same
+// arrangement _actions.ts had.
+export {
+    submitAcademyApplicationAction,
     getAcademyApplicationAction,
     requestAcademyRevisionAction,
     resubmitAcademyApplicationAction,
-    autoEnrollPaidUser,
-} from "./_actions";
+} from "./_ac_applications";
 
 // ─── Admin actions (_admin.ts) ────────────────────────────────────────────────
 // NOTE: approveAcademyApplicationAction from _admin.ts is canonical
