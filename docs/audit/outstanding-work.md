@@ -3,14 +3,108 @@
 Everything still to be done, and who is blocking each item.
 Written to be handed to a developer as-is.
 
-Last updated 2026-08-10. Type-check clean, **664 tests passing**, production
-build succeeding.
+Last updated 2026-08-14. Type-check clean, **2,032 tests passing** on `main`,
+production build succeeding.
 
 **Everything below is on `main` and none of it is running.** Production serves a
-build from 2026-07-23. That single fact outranks every item in this document:
-the work is done, merged and unavailable to users. See §0.
+build from 2026-07-23. That single fact outranks every item in this
+document: the work is done, merged and unavailable to users. See §1.
 
-## 0. The critical path, in order
+Two findings from 2026-08-14 sharpen that sentence, which is why they now sit
+above the critical path. Their fixes are on `main` and not running, like
+everything else — but the *defects* they fix are in the build production is
+serving today. For the rest of this file, not deploying means users do not get
+an improvement. For these two, not deploying means the hole stays open.
+
+## 0. Live in production right now
+
+Everything else in this file is a fix waiting to ship. These two are holes
+waiting to be used: the first open since 2026-06-20, the second since
+2026-05-17. Both fixes are merged — #192 and #191 — and neither is deployed, so
+both holes are open right now.
+
+### Payments are verified by a mock — fixed in #192, not deployed
+
+`verifyPaystackPayment` in `src/lib/paystack-server.ts` opened with a test
+bypass whose trigger was `reference.startsWith('T')`. Paystack issues references
+of the form `T` + fifteen digits; production records carry three of them
+(`T457550806738035`, `T232223621495674`, `T750250345181632`), all on cooperative
+membership records, alongside card-checkout references in Paystack's other form
+(`583fq11y9g`, `9bvszibs1d`). Which form a payment gets is Paystack's to decide.
+
+For any reference in the first form the function returned, without contacting
+Paystack at all:
+
+```
+status: 'success', amount: 5000000 kobo (₦50,000),
+metadata: { userId: <the CALLER'S own session id>, type: 'academy_registration', amount: 50000 }
+```
+
+Wrong in both directions:
+
+- **Money in.** The amount returned is 5,000,000 kobo whatever was charged, so a
+  member paying the ₦10,000 cooperative registration fee is verified as having
+  paid ₦50,000. Which stored rows this actually produced is the open question in
+  §3; that it does so is not in question.
+- **Money for nothing.** Invent a string beginning with `T`, hand it to any of
+  the dozen verify paths — cooperative contribution and registration, academy
+  enrolment, marketplace escrow, farm-nation purchase, export investment — and
+  the platform records a successful ₦50,000 payment and fulfils against it.
+
+The identity and amount checks written to catch exactly this did not fire. They
+are real checks — `verifyContributionPaymentAction` compares
+`metadata.userId` to the session, bounds the amount, and compares the charge to
+`metadata.amount` — but the mock read the session and echoed the id back, so the
+identity check compared the caller to themselves, and it set `data.amount` to
+5,000,000 kobo and `metadata.amount` to 50,000, so the amount check agreed with
+itself. **A stub that answers every question consistently passes every
+consistency check.** That is §5's vacuous-assertion problem, in production code
+rather than in a test.
+
+It arrived in `a51213fa` on **2026-06-20** ("complete phases 1-8 recovery and
+phase 9 E2E test fixes"), so it is in the July build. Removed rather than
+narrowed, because nothing used it: `PLAYWRIGHT_TEST` appeared exactly once in
+the repository — in that condition — no e2e spec sends a `TEST_E2E_REF_`, `E2E_`
+or `INVALID_REF` reference, and all eight unit tests touching a payment path
+already `jest.mock('@/lib/paystack-server')`, which is how it stayed hidden.
+
+**Do first:** deploy (§1 below) — this is the item that makes the deploy
+urgent rather than merely overdue — then read the record question in §3.
+
+### The broadcast estimate answered anyone — fixed in #191, not deployed
+
+`/api/admin/broadcast/estimate` opened with:
+
+```js
+const isTest = req.nextUrl.searchParams.get("debug") === "antigravity";
+if (!isTest) { ...requireSession + isAdmin... }
+```
+
+so `POST /api/admin/broadcast/estimate?debug=antigravity` ran with no session.
+The middleware does not cover it — `PROTECTED_PATHS` gates `/admin`, and this
+path starts with `/api` — so the route's own check was the only one there was.
+An anonymous caller got the size of any audience they chose, the module
+breakdowns, and a sample of **five real names and email addresses**, plus a full
+collection scan under the route's 300-second budget, as often as they liked.
+
+In the repository since **2026-05-17**, so this one is in the July build too.
+
+This is the defect #154 removed from `getCleanBroadcastListAction`, where
+`process.env.ADMIN_OVERRIDE === "true"` skipped the same check on the same data.
+That commit closed with "every caller ... the two `/api/admin/broadcast` routes
+— so nothing legitimate changes", which took the routes' own guards as given.
+One of them had a switch of its own, and a query parameter is the worse of the
+two: `ADMIN_OVERRIDE` needed deploy access, `?debug=antigravity` needed a URL.
+
+**The lesson is the one §4 already records** — *search for a second door before
+calling a defect fixed* — and the specific door to check is a guarded helper
+that a route imports and does not call. This route imported
+`previewBroadcastAction` and called the unguarded `getCleanBroadcastList`
+directly, which is exactly why the earlier fix missed it.
+
+---
+
+## 1. The critical path, in order
 
 Nothing else in this file matters until these are done, and the order is not
 cosmetic — steps 3 and 4 are actively harmful if run against the July build.
@@ -27,7 +121,7 @@ declined — see `performance-2026-08-10.md`.
 
 ---
 
-## 1. You can do these yourself — no technical skill needed
+## 2. You can do these yourself — no technical skill needed
 
 | Task | Where | Why it matters |
 |---|---|---|
@@ -39,7 +133,61 @@ declined — see `performance-2026-08-10.md`.
 
 ---
 
-## 2. Blocked on a decision only you can make
+## 3. Blocked on a decision only you can make
+
+### What the payment mock wrote — UNANSWERED, added 2026-08-14
+
+Follows from §0. Every `processed_payments` row created through
+`verifyPaystackPayment` between 2026-06-20 and the deploy of PR #192 carries an
+amount the mock supplied — ₦50,000 — rather than one Paystack confirmed. Some of
+those rows are real payments recorded at the wrong figure. Some may be
+fulfilments nobody paid for at all.
+
+**Why no existing job will tell you.** `reconcile-paystack` compares payment
+*references*: Paystack's list of successful transactions against
+`processed_payments`. A row written for a reference Paystack really did charge
+reconciles cleanly no matter what amount we stored beside it. And a row written
+for a reference Paystack never issued is invisible to it for a structural
+reason: the job iterates **Paystack's** transaction list
+(`for (const tx of allPaystackTransactions)`) and reports what is missing on our
+side. A reference Paystack never issued is not in that list, so the loop never
+reaches it. `reconcile-fulfilment` asks the opposite question — did the artefact
+get created — and a mock-verified payment produces a real artefact, so it passes
+too. Neither job compares **amounts**, which is the only thing that would show
+this.
+
+The shape of the check that would:
+
+```sql
+-- Candidates: everything the mock could have written, at its one amount.
+-- processed_payments has no native created_at; the claim writes an ISO-8601
+-- 'processedAt' into raw_data, which sorts correctly as text.
+SELECT p.id, p.user_id, p.reference, p.amount,
+       p.raw_data->>'type', p.raw_data->>'processedAt'
+FROM processed_payments p
+WHERE p.raw_data->>'processedAt' >= '2026-06-20'
+  AND (p.amount = 50000 OR p.reference LIKE 'T%')
+ORDER BY p.raw_data->>'processedAt';
+```
+
+Then take that reference list to the Paystack dashboard and compare, one by one:
+does the transaction exist, and was the amount the same? Three outcomes, and
+each is a different decision:
+
+| Paystack says | Means | Decision needed |
+|---|---|---|
+| No such transaction | Fulfilled without payment | Reverse it, or absorb it |
+| Exists, different amount | Under- or over-credited | Correct the record; refund or invoice the difference |
+| Exists, same amount | Coincidence — genuinely a ₦50,000 payment | Leave alone |
+
+**This is an operations task against production data, not a code change**, and
+the judgement in the third column is yours. Do it after PR #192 is deployed, so
+the list stops growing while you work through it.
+
+One thing that makes it smaller than it sounds: the mock's amount was a fixed
+₦50,000, which is not a price anything on the platform charges — cooperative
+registration is ₦10,000. A stored ₦50,000 against a product that costs something
+else is the strongest single signal in the data.
 
 ### Business loan at `/loans/apply` — RESOLVED 2026-08-07
 
@@ -159,7 +307,7 @@ protection is intact.
 
 ---
 
-## 3. Ready to build — no input needed
+## 4. Ready to build — no input needed
 
 ### Phase 2b — enable row-level security *(highest value)*
 No table has row-level security and the browser holds a publicly visible key, so
@@ -346,7 +494,7 @@ worst offenders in production.
 
 ---
 
-## 4. For whoever takes the codebase on
+## 5. For whoever takes the codebase on
 
 - ~~**Numeric comparisons on unindexed fields compare as text**~~ — FIXED
   2026-08-08. `raw_data->>'field'` yields TEXT, so `where("amount", ">", 900)`
@@ -395,9 +543,25 @@ file can import the guard and contain functions that never call it. That is
 precisely how the vendor IDOR defects survived it. A per-function check is worth
 building.
 
+**The same failure can live in production code.** The payment mock in §0 is this
+table's sixth row, promoted: it answered every question about a payment
+consistently — echoing the caller's own user id back, and setting the charge and
+the metadata amount to agree — so the identity and amount checks written to
+catch a forged payment all passed against it. A vacuous *assertion* passes
+because the test asks nothing; a vacuous *dependency* passes because it answers
+everything. Both look like coverage.
+
+It is also why mocking is not free. All eight unit tests that touch a payment
+path do `jest.mock('@/lib/paystack-server')`, so no test in the suite had ever
+executed the first ten lines of `verifyPaystackPayment`. The new
+`paystack-verify-no-mock.test.ts` deliberately does not mock that module — it
+stubs `fetch` instead, one layer lower — which is the only vantage point from
+which the bypass is visible. **On any module that is universally mocked, keep
+one test that isn't.**
+
 ---
 
-## 5. Already fixed — for reference
+## 6. Already fixed — for reference
 
 Twenty-four defects across 18 commits. The ones that were breaking things daily:
 
