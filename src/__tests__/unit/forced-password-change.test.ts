@@ -164,7 +164,7 @@ describe('the flag still means something', () => {
     it('an admin creating a user still sets it', () => {
         // Vacuity guard: if nothing set the flag, none of the above would
         // matter and the tests would pass against a dead feature.
-        expect(source('src/app/actions/admin.ts')).toContain('requiresPasswordChange = true');
+        expect(source('src/app/actions/admin/_legacy.ts')).toContain('requiresPasswordChange = true');
     });
 
     it('the guards still enforce it', () => {

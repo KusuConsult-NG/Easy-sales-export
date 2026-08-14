@@ -107,7 +107,7 @@ describe('the buyers list is a query, not a table scan', () => {
         // places that write it. An object is never === true.
         expect(source('src/app/api/admin/marketplace/approve-seller/route.ts'))
             .toContain('"marketplace": {');
-        expect(source('src/app/actions/admin.ts'))
+        expect(source('src/app/actions/admin/_legacy.ts'))
             .toContain('serviceRegistrations.marketplace = {');
     });
 

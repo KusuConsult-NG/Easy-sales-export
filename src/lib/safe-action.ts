@@ -7,6 +7,18 @@ import { z } from "zod";
  * Standardized response format for all Next.js Server Actions
  * Enforces safe boundary so no unhandled exceptions leak to the client
  */
+/**
+ * The older, narrower result shape.
+ *
+ * Predates ActionResponse and is still what several admin actions return. It
+ * lived at the top of admin.ts; when that file was split by domain it needed a
+ * home outside src/app/actions, where every file must carry "use server" and
+ * export only async functions. Here, beside the type it was the forerunner of.
+ */
+export type ActionState =
+    | { error: string; success: false }
+    | { error: null; success: true; message: string };
+
 export type ActionResponse<T = unknown, M = any> = {
     success: true;
     error: null;

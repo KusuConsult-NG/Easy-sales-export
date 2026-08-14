@@ -82,3 +82,50 @@ export function dateRangeEnd(yyyyMmDd: string): Date {
     return new Date(yyyyMmDd + "T23:59:59.999Z");
 }
 
+
+
+/**
+ * ISO-8601 or a fallback, never a throw.
+ *
+ * Both of these lived at the top of the 5,604-line admin.ts and moved here when
+ * it was split by domain. They are date formatters, not server actions, and
+ * everything under src/app/actions must carry "use server" and export only
+ * async functions — action-security-audit.test.ts enforces both — so the
+ * actions tree is the wrong home for them.
+ *
+ * They differ from toDate/toDateOrNull above in what they return: a string for
+ * a caller that is about to serialise, with an explicit fallback rather than a
+ * RangeError on an unparseable value.
+ */
+
+export function safeToISOString(val: any, fallback: string): string {
+    if (!val) return fallback;
+    try {
+        let d;
+        if (val.toDate && typeof val.toDate === "function") {
+            d = val.toDate();
+        } else {
+            d = new Date(val);
+        }
+        if (isNaN(d.getTime())) return fallback;
+        return d.toISOString();
+    } catch {
+        return fallback;
+    }
+}
+
+export function safeToISOStringOptional(val: any): string | undefined {
+    if (!val) return undefined;
+    try {
+        let d;
+        if (val.toDate && typeof val.toDate === "function") {
+            d = val.toDate();
+        } else {
+            d = new Date(val);
+        }
+        if (isNaN(d.getTime())) return undefined;
+        return d.toISOString();
+    } catch {
+        return undefined;
+    }
+}
