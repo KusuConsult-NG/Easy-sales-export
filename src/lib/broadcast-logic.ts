@@ -3,6 +3,7 @@ import { COLLECTIONS } from './types/firestore';
 import { logger } from './logger';
 import { User } from './types/firestore';
 import { dateRangeStart, dateRangeEnd } from './date-utils';
+import { isMarketplaceBuyer } from "./broadcast-audience";
 
 /**
  * High-Precision Mutually Exclusive Segmenter
@@ -908,7 +909,10 @@ async function getCleanBroadcastListInternal(filters?: BroadcastFilters) {
                                 userStatus = mReg?.status || "approved"; 
                             }
                         } else if (filters.audience === "buyers") {
-                            if (data.marketplaceAccountType === "buyer" || data.marketplaceAccountType === "both" || (data.roles && data.roles.includes("buyer"))) { 
+                            // One definition, shared with sms-broadcast and
+                            // in-app-broadcast, which both used to query a field
+                            // nothing writes and reach nobody.
+                            if (isMarketplaceBuyer(data)) { 
                                 inModule = true; 
                                 userStatus = "approved"; 
                             }
