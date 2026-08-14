@@ -123,17 +123,46 @@ const loginLimiter = new Ratelimit({
 });
 
 /**
- * Check and consume login attempt
+ * Check and consume login attempt.
+ *
+ * THE BRUTE-FORCE GUARD HAD AN ENVIRONMENT-VARIABLE OFF SWITCH
+ * ------------------------------------------------------------
+ * This opened with:
+ *
+ *     const isEmulator = !!(
+ *         process.env.FIREBASE_AUTH_EMULATOR_HOST ||
+ *         process.env.FIRESTORE_EMULATOR_HOST ||
+ *         process.env.NODE_ENV === 'test'
+ *     );
+ *     if (isEmulator && !email.toLowerCase().includes('ratelimit-test')) {
+ *         return { allowed: true, remainingAttempts: 999 };
+ *     }
+ *
+ * So the *presence* of either emulator variable removed the limit on password
+ * attempts — not "no Redis, fall back to something conservative", but
+ * `allowed: true` unconditionally, for every address that does not happen to
+ * contain the string "ratelimit-test".
+ *
+ * Nothing sets those variables in production today and the app would not work
+ * if they were: they point Firebase at a local emulator. The argument for
+ * removing rather than narrowing is the one #154 made about ADMIN_OVERRIDE and
+ * #192 about PLAYWRIGHT_TEST — a variable like this is harmless until somebody
+ * copies a .env into a deploy config, and this one guards the login form.
+ *
+ * NODE_ENV is the discriminator now, and it is the one this codebase already
+ * trusts for exactly this question: security-checks.ts enforces strong secrets
+ * on `NODE_ENV === 'production'`. Next sets it at build and start, so it cannot
+ * be turned off by adding a variable. Local development and jest keep the
+ * bypass; a production build cannot have it at any price.
+ *
+ * The "ratelimit-test" carve-out stays: tests/e2e/auth.spec.ts signs in as
+ * ratelimit-test@example.com precisely to prove the limit still bites.
  */
 export async function consumeLoginAttempt(
     email: string
 ): Promise<{ allowed: boolean; remainingAttempts?: number; error?: string }> {
-    const isEmulator = !!(
-        process.env.FIREBASE_AUTH_EMULATOR_HOST ||
-        process.env.FIRESTORE_EMULATOR_HOST ||
-        process.env.NODE_ENV === 'test'
-    );
-    if (isEmulator && !email.toLowerCase().includes('ratelimit-test')) {
+    const isProduction = process.env.NODE_ENV === 'production';
+    if (!isProduction && !email.toLowerCase().includes('ratelimit-test')) {
         return { allowed: true, remainingAttempts: 999 };
     }
 

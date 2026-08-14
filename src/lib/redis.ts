@@ -4,13 +4,22 @@ import { Redis } from '@upstash/redis';
 const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
 const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
 
-const isEmulator = !!(
-    process.env.FIREBASE_AUTH_EMULATOR_HOST ||
-    process.env.FIRESTORE_EMULATOR_HOST ||
-    process.env.NODE_ENV === 'test'
-);
+// Only jest forces the stub.
+//
+// This also treated FIREBASE_AUTH_EMULATOR_HOST and FIRESTORE_EMULATOR_HOST as
+// reasons to replace the Redis client with the stub below — and the stub backs
+// every rate limiter on the platform, so setting either variable stood down
+// throttling everywhere at once.
+//
+// The clauses bought nothing they were needed for. Local emulator work has no
+// UPSTASH_REDIS_REST_URL either, and the condition on the next line already
+// falls back to the stub whenever the Upstash variables are absent. So the only
+// case those two clauses actually changed was "Upstash IS configured and an
+// emulator host is set", where using the configured Redis is what the operator
+// asked for.
+const isTestRun = process.env.NODE_ENV === 'test';
 
-const redis = (redisUrl && redisToken && !isEmulator)
+const redis = (redisUrl && redisToken && !isTestRun)
     ? new Redis({ 
         url: redisUrl, 
         token: redisToken,
