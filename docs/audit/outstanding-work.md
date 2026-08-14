@@ -3,7 +3,7 @@
 Everything still to be done, and who is blocking each item.
 Written to be handed to a developer as-is.
 
-Last updated 2026-08-14. Type-check clean, **2,032 tests passing** on `main`,
+Last updated 2026-08-14. Type-check clean, **2,058 tests passing** on `main`,
 production build succeeding.
 
 **Everything below is on `main` and none of it is running.** Production serves a
@@ -129,7 +129,45 @@ declined — see `performance-2026-08-10.md`.
 | Download `exports/all_users.xlsx` | GitHub → `exports` folder | 41,105 user records. Your safety net if data is missing |
 | Check database backups | Supabase → Database → Backups | Retention expires. Tells us what is recoverable |
 | Run one query | Supabase → SQL Editor:<br>`select count(*) from public.users;` | Decides whether users were lost, or simply never given logins |
+| **Settle the GitHub Actions bill** | GitHub → Settings → Billing & plans | **No CI has run since 2026-08-13.** See below |
 | Take legal advice | — | Separate from the code, and the larger exposure |
+
+### CI stopped on 2026-08-13, and the reason is a bill — added 2026-08-14
+
+Recent commit messages end "Verified locally only ... CI cannot run." That was
+accurate and incomplete: it never said *why*, so it read as a limitation of the
+environment. It is not. The reason, from the failed check on PR #191:
+
+> The job was not started because recent account payments have failed or your
+> spending limit needs to be increased. Please check the 'Billing & plans'
+> section in your settings.
+
+All three jobs — `secret-scan`, `build-and-test`, `integration-tests` — are
+refused before a single step executes, which is why they "fail" in two seconds
+with empty logs. There is nothing wrong with `.github/workflows/ci.yml`.
+
+**When it stopped**, precisely, because the fix is cheaper than the guesswork:
+the last successful run was **2026-08-13 at 15:05 UTC**. Every run since has
+been refused — 33 that day and 11 more on 2026-08-14, on pull requests and on
+pushes to `main` alike. Work merged before that time had CI run against it;
+everything from #191 onwards rests on a local run
+alone. Note also that no check is *required* to merge here, so a red
+tick has never blocked anything; it only informed.
+
+**This is a settings page, not an engineering task**, and it is in this section
+because you can fix it and no one else can.
+
+What it costs while it is off: `secret-scan` exists because a live Paystack
+`sk_live_` key sat in a public repository for four months and nothing looked. It
+is not looking now. `build-and-test` and `integration-tests` are the only things
+between a local pass and a merge.
+
+**What it would not have caught, and this matters more.** CI was green
+throughout the eight weeks the payment mock in §0 was live. It passed over that
+defect on every run, because all eight unit tests touching a payment path mock
+`@/lib/paystack-server`, so nothing ever executed the branch. A green tick is
+evidence that the tests we wrote pass — nothing more. Pay the bill because an
+unwatched repository is worse; do not read the tick as coverage.
 
 ---
 
