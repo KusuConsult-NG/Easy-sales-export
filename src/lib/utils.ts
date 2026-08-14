@@ -1,5 +1,6 @@
 import { formatDistance } from "date-fns";
 import { CURRENCY_CONFIG } from "./constants";
+import { toDateOrNull } from "./date-utils";
 
 export function formatCurrency(amount: any): string {
     const value = Number(amount);
@@ -12,18 +13,31 @@ export function formatCurrency(amount: any): string {
     }).format(safeAmount);
 }
 
+/**
+ * Coercion is delegated to date-utils rather than repeated here.
+ *
+ * This function had its own chain — string/number, .toDate(), else
+ * `new Date(value)` — which does not recognise a SERIALIZED Firestore
+ * Timestamp. Once a Timestamp crosses to a client component it is a plain
+ * object carrying `_seconds`/`seconds` and no methods, and `new Date({...})`
+ * on that is Invalid Date.
+ *
+ * So every one of the 26 files calling formatDate rendered the literal text
+ * "Invalid Date" for any date arriving in that shape. Found by the first
+ * rendering test in this repository, on the admin users table's Joined column
+ * — tsc cannot see it, because the parameter is `any`.
+ *
+ * date-utils.toDateOrNull already handles both shapes and returns null when a
+ * value genuinely is not a date, which preserves the "N/A" and "Invalid Date"
+ * answers below exactly as they were. Note toDate (no OrNull) would be wrong
+ * here: it falls back to the current moment, so an unparseable value would
+ * render as today.
+ */
 export function formatDate(date: Date | string | null | undefined | any): string {
     if (!date) return "N/A";
     try {
-        let d = date;
-        if (typeof date === "string" || typeof date === "number") {
-            d = new Date(date);
-        } else if (date && typeof date.toDate === "function") {
-            d = date.toDate();
-        } else if (!(date instanceof Date)) {
-            d = new Date(date);
-        }
-        if (isNaN(d.getTime())) return "Invalid Date";
+        const d = toDateOrNull(date);
+        if (!d) return "Invalid Date";
         return new Intl.DateTimeFormat("en-NG", {
             year: "numeric",
             month: "short",
@@ -34,18 +48,12 @@ export function formatDate(date: Date | string | null | undefined | any): string
     }
 }
 
+/** Same coercion fix as formatDate above. */
 export function formatDateTime(date: Date | string | null | undefined | any): string {
     if (!date) return "Unknown";
     try {
-        let d = date;
-        if (typeof date === "string" || typeof date === "number") {
-            d = new Date(date);
-        } else if (date && typeof date.toDate === "function") {
-            d = date.toDate();
-        } else if (!(date instanceof Date)) {
-            d = new Date(date);
-        }
-        if (isNaN(d.getTime())) return "Unknown";
+        const d = toDateOrNull(date);
+        if (!d) return "Unknown";
         return d.toLocaleDateString("en-NG", {
             day: "numeric", month: "short", year: "numeric",
             hour: "2-digit", minute: "2-digit",
