@@ -117,7 +117,7 @@ describe('enrollInWaveAction — a review decision is not the applicant\'s to ov
     });
 
     async function enroll(target = MEMBER) {
-        const { enrollInWaveAction } = await import('@/app/actions/wave/_actions');
+        const { enrollInWaveAction } = await import('@/app/actions/wave/_wv_membership');
         return enrollInWaveAction(target);
     }
 
@@ -242,7 +242,7 @@ describe('withdrawEarningsAction — disabled, with the money code dormant benea
      * an account number as a parameter would be the defect this audit looks for.
      */
     async function withdraw(amount: number) {
-        const { withdrawEarningsAction } = await import('@/app/actions/wave/_actions');
+        const { withdrawEarningsAction } = await import('@/app/actions/wave/_wv_earnings');
         return withdrawEarningsAction(amount);
     }
 
@@ -272,7 +272,7 @@ describe('withdrawEarningsAction — disabled, with the money code dormant benea
         // it, and a future edit that re-enables the endpoint must not undo that.
         const { readFileSync } = await import('fs');
         const { join } = await import('path');
-        const src = readFileSync(join(process.cwd(), 'src/app/actions/wave/_actions.ts'), 'utf-8');
+        const src = readFileSync(join(process.cwd(), 'src/app/actions/wave/_wv_earnings.ts'), 'utf-8');
 
         const fn = src.slice(src.indexOf('async function _withdrawEarningsAction'));
         const body = fn.slice(0, fn.indexOf('\n}\n'));
@@ -303,7 +303,7 @@ describe('the admin-only endpoints refuse a member', () => {
 
     for (const [name, args] of cases) {
         it(`${name} refuses a non-admin`, async () => {
-            const mod: any = await import('@/app/actions/wave/_actions');
+            const mod: any = await import('@/app/actions/wave');
 
             const r = await mod[name](...args).catch((e: any) => ({ success: false, error: String(e) }));
 
@@ -317,7 +317,7 @@ describe('the admin-only endpoints refuse a member', () => {
         // for any caller — which is how a previous suite passed with the real
         // requireAdmin left unmocked.
         setSession(ADMIN, ['admin']);
-        const { uploadWaveResourceAction } = await import('@/app/actions/wave/_actions');
+        const { uploadWaveResourceAction } = await import('@/app/actions/wave/_wv_resources');
 
         const r: any = await uploadWaveResourceAction({ title: 'x', url: 'https://e', category: 'guide' } as any);
 
@@ -343,7 +343,7 @@ describe('the member-scoped reads refuse another member', () => {
             // These carry member PII and earnings. The platform has already had
             // one user-data exposure this month; these are the reads that would
             // be the next one.
-            const mod: any = await import('@/app/actions/wave/_actions');
+            const mod: any = await import('@/app/actions/wave');
 
             const r = await mod[name](...args).catch((e: any) => ({ success: false, error: String(e) }));
 
@@ -357,7 +357,7 @@ describe('the member-scoped reads refuse another member', () => {
         (global as any).mockFirestoreGet.mockImplementation(() => Promise.resolve({
             exists: true, empty: true, docs: [], data: () => ({}),
         }));
-        const { getMemberCertificatesAction } = await import('@/app/actions/wave/_actions');
+        const { getMemberCertificatesAction } = await import('@/app/actions/wave/_wv_certificates');
 
         const r: any = await getMemberCertificatesAction(MEMBER);
 

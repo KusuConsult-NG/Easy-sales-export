@@ -82,7 +82,7 @@ describe('processWaveWithdrawalAction', () => {
         // member's earnings grew by the withdrawn amount twice.
         mockClaim.mockResolvedValue({ claimed: false, status: 'rejected' });
 
-        const { processWaveWithdrawalAction } = await import('@/app/actions/wave/_admin');
+        const { processWaveWithdrawalAction } = await import('@/app/actions/wave/_wv_admin_withdrawals');
         const result = await processWaveWithdrawalAction({
             withdrawalId: 'wd-1', action: 'reject', adminNotes: 'no',
         } as any);
@@ -92,7 +92,7 @@ describe('processWaveWithdrawalAction', () => {
     });
 
     it('claims pending → rejected before restoring the balance', async () => {
-        const { processWaveWithdrawalAction } = await import('@/app/actions/wave/_admin');
+        const { processWaveWithdrawalAction } = await import('@/app/actions/wave/_wv_admin_withdrawals');
         await processWaveWithdrawalAction({
             withdrawalId: 'wd-1', action: 'reject', adminNotes: 'no',
         } as any);
@@ -112,7 +112,7 @@ describe('processWaveWithdrawalAction', () => {
     it('locks the request for payout by claiming, not by writing', async () => {
         mockClaim.mockResolvedValue({ claimed: true, status: 'approved_processing' });
 
-        const { processWaveWithdrawalAction } = await import('@/app/actions/wave/_admin');
+        const { processWaveWithdrawalAction } = await import('@/app/actions/wave/_wv_admin_withdrawals');
         await processWaveWithdrawalAction({ withdrawalId: 'wd-1', action: 'approve' } as any);
 
         const call = mockClaim.mock.calls[0][0] as any;
@@ -123,7 +123,7 @@ describe('processWaveWithdrawalAction', () => {
     it('does not set up a second payout when the approval claim is lost', async () => {
         mockClaim.mockResolvedValue({ claimed: false, status: 'approved_processing' });
 
-        const { processWaveWithdrawalAction } = await import('@/app/actions/wave/_admin');
+        const { processWaveWithdrawalAction } = await import('@/app/actions/wave/_wv_admin_withdrawals');
         const result = await processWaveWithdrawalAction({ withdrawalId: 'wd-1', action: 'approve' } as any);
 
         expect(result.success).toBe(false);
@@ -139,7 +139,7 @@ describe('WAVE application verdicts', () => {
     });
 
     it('claims the approval from the reviewable states only', async () => {
-        const { approveWaveApplicationAction } = await import('@/app/actions/wave/_admin');
+        const { approveWaveApplicationAction } = await import('@/app/actions/wave/_wv_admin_applications');
         await approveWaveApplicationAction('app-1');
 
         const call = mockClaimFromAny.mock.calls[0][0] as any;
@@ -152,7 +152,7 @@ describe('WAVE application verdicts', () => {
         // granted the role AND marked rejected.
         mockClaimFromAny.mockResolvedValue({ claimed: false, status: 'rejected' });
 
-        const { approveWaveApplicationAction } = await import('@/app/actions/wave/_admin');
+        const { approveWaveApplicationAction } = await import('@/app/actions/wave/_wv_admin_applications');
         const result = await approveWaveApplicationAction('app-1');
 
         expect(result.success).toBe(false);
@@ -162,7 +162,7 @@ describe('WAVE application verdicts', () => {
     it('claims the rejection from the same states', async () => {
         mockClaimFromAny.mockResolvedValue({ claimed: true, status: 'rejected' });
 
-        const { rejectWaveApplicationAction } = await import('@/app/actions/wave/_admin');
+        const { rejectWaveApplicationAction } = await import('@/app/actions/wave/_wv_admin_applications');
         await rejectWaveApplicationAction('app-1', 'incomplete');
 
         const call = mockClaimFromAny.mock.calls[0][0] as any;

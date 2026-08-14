@@ -153,7 +153,10 @@ describe('the response is bounded and current', () => {
 
     it('the flag is written by the admin path', () => {
         // Which makes filtering on it honouring an existing intent.
-        const admin = source('src/app/actions/wave/_admin.ts');
+        // Both writes are in the live-session pair: startWaveLiveSession sets
+        // it true and endWaveLiveSession sets it false. They were in _admin.ts
+        // until that 1,833-line file was split by domain.
+        const admin = source('src/app/actions/wave/_wv_admin_live.ts');
 
         expect(admin).toContain('isActive: true');
         expect(admin).toContain('isActive: false');

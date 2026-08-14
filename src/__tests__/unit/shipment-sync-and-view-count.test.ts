@@ -116,7 +116,7 @@ describe('the shipment sync belongs to the shipment', () => {
     });
 
     async function sync() {
-        const { syncShipmentWithCarrierAction } = await import('@/app/actions/wave/_actions');
+        const { syncShipmentWithCarrierAction } = await import('@/app/actions/wave/_wv_shipments');
         return syncShipmentWithCarrierAction('WSH-1') as any;
     }
 

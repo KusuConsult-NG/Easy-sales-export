@@ -237,7 +237,7 @@ describe('WAVE application — the kyc.* namespace the KYC gate reads', () => {
         // updateOverallKYCStatus in kyc.ts reads exactly these two fields.
         const { readFileSync } = await import('fs');
         const { join } = await import('path');
-        const src = readFileSync(join(process.cwd(), 'src/app/actions/wave/_actions.ts'), 'utf-8');
+        const src = readFileSync(join(process.cwd(), 'src/app/actions/wave/_wv_applications.ts'), 'utf-8');
 
         expect(src).not.toContain('"kyc.bvnVerified": applicantBvn ? true : false');
         expect(src).not.toContain('"kyc.ninVerified": applicantNin ? true : false');
@@ -249,7 +249,7 @@ describe('WAVE application — the kyc.* namespace the KYC gate reads', () => {
         // matched without being readable.
         const { readFileSync } = await import('fs');
         const { join } = await import('path');
-        const src = readFileSync(join(process.cwd(), 'src/app/actions/wave/_actions.ts'), 'utf-8');
+        const src = readFileSync(join(process.cwd(), 'src/app/actions/wave/_wv_applications.ts'), 'utf-8');
 
         expect(src).toContain('"kyc.bvn": applicantBvn ? hashData(applicantBvn) : null');
         expect(src).toContain('"kyc.nin": applicantNin ? hashData(applicantNin) : null');
