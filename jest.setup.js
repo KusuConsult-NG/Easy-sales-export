@@ -488,6 +488,18 @@ jest.mock('@/lib/supabase-db', () => {
         getAdminDb: () => mockDb,
         getTableName: (collection) => DEDICATED[collection] || 'document_collections',
 
+        // The three routing maps, taken from the REAL module rather than
+        // copied.
+        //
+        // DEDICATED above is already a hand-kept duplicate of
+        // DEDICATED_TABLE_MAP, which is precisely the drift this audit keeps
+        // finding: two copies of one fact, and the stale one deciding. These
+        // are re-exported from source so a table added there cannot go missing
+        // here, and so a unit test that reads them sees what production sees.
+        DEDICATED_TABLE_MAP: jest.requireActual('@/lib/supabase-db').DEDICATED_TABLE_MAP,
+        NATIVE_COLUMNS: jest.requireActual('@/lib/supabase-db').NATIVE_COLUMNS,
+        FIELD_TO_COLUMN: jest.requireActual('@/lib/supabase-db').FIELD_TO_COLUMN,
+
         doc: (_db, path, ...segments) => {
             const id = segments.length ? segments[segments.length - 1] : path;
             global.mockFirestoreDoc(id);
