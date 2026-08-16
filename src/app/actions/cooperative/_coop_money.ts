@@ -21,6 +21,12 @@ import type { CooperativeTransaction, MakeContributionState, GetTransactionsStat
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { revalidatePath } from "next/cache";
 import { calculateRepaymentTerms } from "@/lib/loan-terms";
+import { isEligibleForLoan } from "@/lib/cooperative-tiers";
+import {
+    FIXED_SAVINGS_ANNUAL_RATE,
+    projectedFixedSavingsProfit,
+    fixedSavingsMaturityDate,
+} from "@/lib/cooperative-savings";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
 
 /**
@@ -460,12 +466,40 @@ async function _applyForLoanAction(
 
         const loansRef = db.collection(COLLECTIONS.COOPERATIVE_LOANS);
 
-        // 2. Check Loan Limit (e.g., 3x Savings Balance)
-        const savingsBalance = membershipData.savingsBalance || 0;
-        const maxLoanAmount = savingsBalance * 3;
-
-        if (amount > maxLoanAmount) {
-            throw new Error(`Loan amount exceeds your limit of ₦${maxLoanAmount.toLocaleString()} (3x Savings)`);
+        // 2. Loan limit — decided by lib/cooperative-tiers.ts, not inline here.
+        //
+        // This read `savingsBalance * 3` and refused above it. The confirmed
+        // policy is the opposite direction: a member may borrow up to HALF their
+        // savings, i.e. savings must be at least twice the loan. That is what
+        // COOPERATIVE_TIERS.Member.maxLoanMultiplier (0.5) says, what
+        // getMaxLoanAmount returns, and what the benefits list rendered to
+        // members on the contribute page promises.
+        //
+        // The multiplier was corrected from 3 to 0.5 in cooperative-tiers.ts.
+        // This line was the reason that correction did not take: it never read
+        // the constant. Two other loan paths (_loans_applications.ts,
+        // _loans_decisions.ts) already go through the policy module — this one,
+        // the path the member UI actually submits through, was the hold-out. So
+        // the limit shown to a member and the limit enforced on them came from
+        // different numbers, and the enforced one was six times larger.
+        //
+        // Uncollateralised by six times, on loans whose only security is the
+        // savings being lent against.
+        //
+        // savingsBalance is the right input, and stays. It is the spendable
+        // figure the cooperative actually holds; totalContributions is a
+        // lifetime total that is never decremented, so a member who paid in
+        // ₦100,000 and withdrew ₦95,000 still reports ₦100,000 against it. The
+        // withdraw route carries the same note for the same reason.
+        //
+        // currentLoanBalance is 0 because claimSingleOpenLoanApplication below
+        // refuses outright if the borrower has any open application or loan, so
+        // there is never a balance to add here. If that guard is ever relaxed,
+        // this argument is where the outstanding balance belongs.
+        const savingsBalance = Number(membershipData.savingsBalance) || 0;
+        const eligibility = isEligibleForLoan(savingsBalance, amount, 0);
+        if (!eligibility.eligible) {
+            throw new Error(eligibility.reason ?? "You are not eligible for this loan amount.");
         }
 
         // 3. The loan is written on the terms of the product the member chose.
@@ -641,14 +675,72 @@ async function _createFixedSavingsAction(
 
         // Create Fixed Savings Record. This is a single write; the
         // runTransaction wrapper around it bought nothing at all.
-        const fixedSavingsRef = db.collection(COLLECTIONS.COOPERATIVE_FIXED_SAVINGS).doc();
+        //
+        // THE COLLECTION WAS WRONG, and it cost the member their plan.
+        //
+        // This wrote to COLLECTIONS.COOPERATIVE_FIXED_SAVINGS. The plan list
+        // the member sees comes from /api/cooperative/fixed-savings, which
+        // reads COLLECTIONS.FIXED_SAVINGS_PLANS — the collection the sibling
+        // route writes. So this action debited the member's savings and filed
+        // the plan somewhere nothing reads: the money left the balance and the
+        // plan did not appear anywhere.
+        //
+        // Nothing in the UI calls this action today — the route is the door —
+        // but it is exported through the cooperative barrel, so the next caller
+        // would have hit it. Pointed at the collection that is actually read.
+        //
+        // The shape matches the route's exactly, projectedProfit and
+        // maturityDate included. Both were missing here, and the member page
+        // renders `plan.amount + plan.projectedProfit` — undefined would have
+        // shown as ₦NaN on the savings page.
+        const fixedSavingsRef = db.collection(COLLECTIONS.FIXED_SAVINGS_PLANS).doc();
         await fixedSavingsRef.set({ memberId: userId,
             amount,
             durationMonths,
             startDate: FieldValue.serverTimestamp(),
+            maturityDate: fixedSavingsMaturityDate(durationMonths),
             status: "active",
-            interestRate: 14, // 14% p.a.
+            // Per YEAR, unlike every other rate in this codebase. The literal 14
+            // that stood here was one of four copies. See lib/cooperative-savings.ts.
+            interestRate: FIXED_SAVINGS_ANNUAL_RATE,
+            projectedProfit: projectedFixedSavingsProfit(amount, durationMonths),
             createdAt: FieldValue.serverTimestamp() });
+
+        // Ledger entries. Neither existed: this path debited savingsBalance and
+        // recorded the movement nowhere, so the money left the member's held
+        // total with nothing accounting for it.
+        //
+        // forensics.ts reconciles savingsBalance + lockedBalance against
+        // completed cooperative_transactions rows. A fixed savings lock is
+        // unlike a withdrawal — it does not move the amount into lockedBalance
+        // — so with no debit row the member reconciles short by the plan
+        // amount, permanently. Same rows and same shape as the route, so the
+        // two creation paths leave the same trail.
+        const reference = `fixsav_${fixedSavingsRef.id}`;
+
+        await db.collection(COLLECTIONS.TRANSACTIONS).doc(reference).set({
+            id: reference,
+            userId,
+            type: "fixed_savings_funding",
+            module: "cooperative",
+            amount,
+            currency: "NGN",
+            reference,
+            description: `Funded ${durationMonths}-month fixed savings plan`,
+            status: "completed",
+            date: FieldValue.serverTimestamp() });
+
+        await db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc(reference).set({
+            id: reference,
+            userId,
+            cooperativeId: membershipSnapshot.docs[0].data()?.cooperativeId || "default",
+            type: "fixed_savings_lock",
+            amount,
+            currency: "NGN",
+            reference,
+            description: `Locked into a ${durationMonths}-month fixed savings plan`,
+            status: "completed",
+            date: FieldValue.serverTimestamp() });
 
         return { error: null, success: true as const, data: { message: "Fixed savings plan created" }  };
     } catch (error) { logger.error("Fixed savings creation failed:", {

@@ -486,7 +486,33 @@ export interface Course {
     description: string;
     instructor: string;
     duration: string;
-    modules?: number;
+    /**
+     * The course's modules, each carrying its own lessons.
+     *
+     * THIS SAID `modules?: number`, AND EVERY CONSUMER TREATS IT AS AN ARRAY.
+     * src/lib/types/academy-actions.ts declares a second Course with
+     * `modules: CourseModule[]`, and that is the one the code follows:
+     * academy/[courseId]/page.tsx does `course.modules.reduce(...)` and
+     * `.map(...)` at render, the lesson page indexes into it, and
+     * _ac_progress.ts counts its lessons.
+     *
+     * A count is not a list, and the mismatch is not academic — seeding a
+     * course with `modules: 3`, exactly as this type instructed, made the
+     * course detail page throw "reduce is not a function" and render nothing.
+     * Two Course types disagreeing is the same duplicate-definition drift that
+     * has produced defects elsewhere in this codebase; the array shape wins
+     * because it is what actually runs.
+     *
+     * Typed structurally rather than by importing CourseModule to avoid a
+     * dependency from this shared module into the academy-specific one.
+     */
+    modules?: Array<{
+        id: string;
+        title: string;
+        description?: string;
+        lessons: Array<{ id: string; title: string; duration?: string; content?: string }>;
+        [key: string]: any;
+    }>;
     price: number;
     currency?: "NGN" | "USD";
     imageUrl?: string;

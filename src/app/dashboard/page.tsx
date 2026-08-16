@@ -347,6 +347,13 @@ function DashboardHomeContent() {
                             <Link
                                 key={label}
                                 href={href}
+                                // The cooperative dashboard's cards carry this and these
+                                // did not, so nothing could address the main dashboard's
+                                // stats. A test had to fall back to matching visible text,
+                                // which breaks on any copy change and cannot count cards
+                                // at all. A test id is a deliberate contract; classNames
+                                // are not.
+                                data-testid="stat-card"
                                 className="bg-white rounded-2xl border border-slate-200 p-5 hover:shadow-md transition-shadow group"
                             >
                                 <div className={`w-11 h-11 rounded-xl ${color} flex items-center justify-center mb-4`}>

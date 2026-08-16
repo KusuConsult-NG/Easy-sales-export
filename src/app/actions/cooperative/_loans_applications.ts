@@ -11,6 +11,7 @@ import { requireSession } from "@/lib/session-guard";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { isAdmin } from "@/lib/admin-permissions";
 import type { LoanApplication } from "@/lib/types/cooperative-loans";
+import { normaliseLoanApplication } from "@/lib/loan-application-location";
 
 /**
  * Submit loan application
@@ -366,7 +367,69 @@ export async function getAdminLoanApplicationsAction(options: {
             applicationsRaw = serializeDocs(docs) as unknown as any[];
             nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : undefined;
         }
-        
+
+        // THE MEMBER-FACING APPLICATIONS WERE NOT IN THIS LIST AT ALL.
+        //
+        // Loan applications are written to TWO collections by three paths:
+        //
+        //   loan_applications   submitLoanApplicationAction (the wizard),
+        //                       /api/cooperative/apply-loan, loan-actions.ts
+        //   cooperative_loans   _applyForLoanAction — and that is the ONLY path
+        //                       the member loan page at /cooperatives/loans
+        //                       submits through
+        //
+        // This queue read loan_applications alone. So every application a
+        // member actually filed through the UI was invisible to every admin,
+        // permanently: the member saw "application submitted", the approval
+        // queue stayed empty, and nothing anywhere reported a discrepancy.
+        // cooperative_loans is read elsewhere — for eligibility checks, reports
+        // and the member's own history — so the rows were not orphaned, just
+        // unreviewable.
+        //
+        // Both are read and merged here rather than repointing the writer,
+        // because applications already exist in both and moving the writer
+        // would strand every row filed to date.
+        //
+        // Field names differ between the two — cooperative_loans keys the
+        // borrower as `memberId` — so they are normalised to `userId`, which is
+        // what the enrichment below and the admin UI both expect.
+        try {
+            const coopLoansSnap = await db.collection(COLLECTIONS.COOPERATIVE_LOANS)
+                .limit(fetchLimit + 1)
+                .get();
+
+            const coopLoans = (serializeDocs(coopLoansSnap.docs) as unknown as any[])
+                .map(row => normaliseLoanApplication(row, COLLECTIONS.COOPERATIVE_LOANS))
+                .filter(row => {
+                    if (!options.statusFilter || options.statusFilter === "all") return true;
+                    return row.status === options.statusFilter;
+                });
+
+            if (coopLoans.length > 0) {
+                const seen = new Set(applicationsRaw.map(a => a.id));
+                const merged = [...applicationsRaw, ...coopLoans.filter(r => !seen.has(r.id))];
+
+                merged.sort((a, b) => {
+                    const aTime = new Date(a.appliedAt || a.createdAt || 0).getTime();
+                    const bTime = new Date(b.appliedAt || b.createdAt || 0).getTime();
+                    return bTime - aTime;
+                });
+
+                hasMore = merged.length > fetchLimit;
+                applicationsRaw = merged.slice(0, fetchLimit);
+                nextCursor = hasMore && applicationsRaw.length > 0
+                    ? applicationsRaw[applicationsRaw.length - 1].id
+                    : undefined;
+            }
+        } catch (coopErr: any) {
+            // A failure reading the second collection must not blank the queue —
+            // half a list is better than none, and it is logged rather than
+            // swallowed so the gap is visible.
+            logger.error("[getAdminLoanApplicationsAction] Failed to read cooperative_loans; queue is incomplete", {
+                error: coopErr?.message,
+            });
+        }
+
         // Enrich with user details
         const userIds = [...new Set(applicationsRaw.map(app => app.userId).filter(id => id && typeof id === 'string' && id.trim().length > 0))];
         const userMap = new Map<string, any>();

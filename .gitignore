@@ -71,3 +71,9 @@ exports/
 # Turborepo build cache. 66 files were tracked; caches can contain compiled
 # output and environment values and have no business in version control.
 .turbo/
+
+# Local stack (scripts/local-stack/up.sh)
+# The Postgres data directory, the fetched PostgREST binary, the generated JWT
+# secret and the service logs. All machine-local; none of it belongs in git.
+.local-stack/
+public/uploads/local/

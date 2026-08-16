@@ -109,7 +109,29 @@ async function uploadHandler(request: NextRequest) {
         const apiKey = process.env.CLOUDINARY_API_KEY;
         const apiSecret = process.env.CLOUDINARY_API_SECRET;
 
-        if (!cloudName || !apiKey || !apiSecret) {
+        // No Cloudinary configuration is a hard failure in production and a
+        // local disk write in development.
+        //
+        // WHY THE LOCAL BRANCH EXISTS
+        // ---------------------------
+        // Cloudinary was the last production dependency in the request path.
+        // Every flow that attaches a file — listing land, adding a product,
+        // submitting verification documents — 503'd without it, so those flows
+        // could only be exercised against the real Cloudinary account, and the
+        // e2e specs covering them failed on a local stack with the listing
+        // silently never created.
+        //
+        // Files are written under public/uploads/local, which `next dev`
+        // serves statically, so the returned URL behaves like the remote one.
+        //
+        // GUARDED ON NODE_ENV, NOT ON A FLAG. A production deployment that
+        // loses its Cloudinary credentials must keep failing loudly — writing
+        // customer uploads onto an ephemeral container filesystem would look
+        // like it worked and lose them at the next deploy. The 503 below is
+        // still the production behaviour.
+        const useLocalDisk = (!cloudName || !apiKey || !apiSecret) && process.env.NODE_ENV !== "production";
+
+        if (!useLocalDisk && (!cloudName || !apiKey || !apiSecret)) {
             logger.error("Upload failed: Cloudinary environment variables not configured");
             return NextResponse.json(
                 { success: false, error: "Upload service is temporarily unavailable. Please try again later or contact support." },
@@ -192,6 +214,40 @@ async function uploadHandler(request: NextRequest) {
         const safeDocType = documentType.replace(/[^a-zA-Z0-9-]/g, "-");
         const safeFolderName = folder.split("/").map(part => part.replace(/[^a-zA-Z0-9-]/g, "-")).join("/");
         const publicId = `${safeFolderName}/${userId}/${safeDocType}-${timestamp}${extension}`;
+
+        // Local disk backend. Placed AFTER the magic-byte validation above so a
+        // local upload is checked exactly as a remote one is — a permissive
+        // development path would hide a validation bug rather than surface it.
+        if (useLocalDisk) {
+            const { writeFile, mkdir } = await import("fs/promises");
+            const path = await import("path");
+
+            // publicId is already sanitised — every segment has been stripped
+            // to [a-zA-Z0-9-] — so it cannot escape the directory below.
+            const relative = path.posix.join("uploads", "local", publicId);
+            const absolute = path.join(process.cwd(), "public", relative);
+
+            await mkdir(path.dirname(absolute), { recursive: true });
+            await writeFile(absolute, buffer);
+
+            // ABSOLUTE, like Cloudinary's secure_url.
+            //
+            // A relative "/uploads/..." satisfies an <img src> but fails
+            // z.string().url(), which loanApplicationSchema applies to every
+            // document. The file uploaded, the form field was set, and step 4
+            // still refused to advance — the local backend has to honour the
+            // same contract as the remote one, not merely produce something
+            // that renders.
+            const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+            const url = `${base}/${relative}`;
+            logger.info(`File written to local disk (no Cloudinary configured): ${url}`);
+            return NextResponse.json({
+                success: true,
+                url,
+                filename: file.name,
+                path: publicId,
+            });
+        }
 
         // Sign the upload request
         // Cloudinary signature: parameters must be in alphabetical order

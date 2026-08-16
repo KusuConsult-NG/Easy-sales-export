@@ -46,12 +46,32 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 logger.info(`${authCtx} authorize start`);
                 try {
                     // ── STEP 1: Env var guard ─────────────────────────────────
-
-                    const firebaseApiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
-                    if (!firebaseApiKey || firebaseApiKey === "mock-api-key-for-build") {
-                        console.error(`${authCtx} FATAL: NEXT_PUBLIC_FIREBASE_API_KEY is missing or mock.`);
-                        throw new Error("Service configuration error. Please contact support.");
-                    }
+                    //
+                    // THIS REFUSED EVERY LOGIN WHEN NEXT_PUBLIC_FIREBASE_API_KEY
+                    // WAS ABSENT, and nothing on the primary path needs it.
+                    //
+                    // Authentication runs through Supabase (STEP 4). Firebase is
+                    // only a FALLBACK, for legacy users whose password still
+                    // lives in Firebase Auth and has not been migrated across —
+                    // and that block guards itself on the same variable further
+                    // down, as it must, because it is the only code that uses it.
+                    //
+                    // Requiring it here turned a fallback's optional credential
+                    // into a hard prerequisite for the primary path. Unsetting
+                    // NEXT_PUBLIC_FIREBASE_API_KEY — the obvious housekeeping
+                    // when migrating off Firebase, which this codebase has
+                    // otherwise done — locked every user out of the platform
+                    // with "Service configuration error. Please contact
+                    // support.", a message that names nothing and points
+                    // nowhere. Nothing in the unit suite could see it: these
+                    // tests never reach authorize(), and a missing env var is
+                    // not a code change.
+                    //
+                    // Found by running the application against a local stack
+                    // that, correctly, has no Firebase credentials at all.
+                    //
+                    // The guard the primary path DOES need is on Supabase, and
+                    // it is below where the client is built.
 
                     // ── STEP 2: Validate credentials ─────────────────────────
                     const { email, password } = loginSchema.parse(credentials);
@@ -141,6 +161,23 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     } else {
                         // Fallback: Verify credentials against Firebase Auth for JIT migration
                         logger.info(`${authCtx} Supabase Login failed (${sbError?.message}). Checking Firebase Auth for JIT migration...`);
+
+                        // The Firebase credential is read HERE, in the only block
+                        // that uses it, and its absence ends this fallback rather
+                        // than the whole login. A deployment with no Firebase
+                        // configuration is a legitimate one — Supabase is the
+                        // primary authenticator — and it must reject bad
+                        // credentials, not refuse everyone.
+                        //
+                        // Without this check the URL below interpolated
+                        // `key=undefined` and Google answered 400, which the
+                        // catch turned into a generic failure that read like a
+                        // wrong password.
+                        const firebaseApiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+                        if (!firebaseApiKey || firebaseApiKey === "mock-api-key-for-build") {
+                            logger.info(`${authCtx} No Firebase credential configured; no legacy fallback available.`);
+                            throw new Error("Invalid email or password");
+                        }
 
                         const responseData = await runQueryWithRetry(async () => {
                             const authEmulatorHost = process.env.FIREBASE_AUTH_EMULATOR_HOST;

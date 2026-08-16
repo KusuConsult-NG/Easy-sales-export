@@ -43,8 +43,45 @@ test.describe('Loan Application Flow', () => {
         await page.click('text=Next');
         console.log("Wizard Step 3 Next clicked. URL:", page.url());
 
-        // Step 4: Documents (simplified/default documents used)
-        console.log("Wizard Step 4: Clicking Next for documents...");
+        // Step 4: Documents.
+        //
+        // This clicked Next with the comment "simplified/default documents
+        // used". There are no defaults: loanApplicationSchema requires
+        // `documents` to have at least one entry, and step 4 validates that
+        // field before advancing. So the wizard never left step 4, and the
+        // failure surfaced two steps later as "Submit Application not visible",
+        // which reads like a broken step 5.
+        console.log("Wizard Step 4: Uploading a document...");
+        // Wait for the SERVER ACTION, not for /api/upload.
+        //
+        // The wizard uploads through uploadDocumentAction, a server action —
+        // it never touches /api/upload. A previous attempt waited on that
+        // route and blocked until its own timeout, so the document was still
+        // unattached when Next was clicked, and step 4 refused to advance.
+        // Zero /api/upload requests was the correct observation and the wrong
+        // conclusion: the path simply is not that one.
+        //
+        // Server actions POST to the current URL, so that is the signal.
+        const uploadResponse = page.waitForResponse(
+            r => r.request().method() === 'POST' && r.url().includes('/loans/apply'),
+            { timeout: 30000 },
+        );
+        // Scoped to the Government-issued ID uploader rather than "the first
+        // file input on the page" — the layout renders others, and picking the
+        // wrong one silently uploads nothing.
+        await page.locator('label:has-text("Government-issued ID") >> xpath=.. >> input[type="file"]').first().setInputFiles({
+            name: 'id.pdf',
+            mimeType: 'application/pdf',
+            buffer: Buffer.from('%PDF-1.4 e2e identity document'),
+        });
+        // Wait for the upload REQUEST, not for text on the page.
+        //
+        // A first attempt waited for /uploaded|id\.pdf/i and passed instantly
+        // against the word "Upload" already in the step's own heading — a
+        // vacuous assertion that let the test continue with no document
+        // attached and fail two steps later. The response is the only
+        // unambiguous signal that `documents` has been populated.
+        await uploadResponse;
         await page.click('text=Next');
         console.log("Wizard Step 4 Next clicked. URL:", page.url());
 
@@ -65,11 +102,39 @@ test.describe('Loan Application Flow', () => {
     });
 
     test('should show validation errors for invalid amounts', async ({ page }) => {
+        // Its own borrower, deliberately.
+        //
+        // The describe's beforeEach logs in as USERS.user, and the test above
+        // SUBMITS an application as that user. A borrower with an open
+        // application is refused a second one, so /loans/apply does not present
+        // a fresh wizard afterwards — and the two tests then alternate: whichever
+        // ran first passed and the other failed, on every run, in both
+        // directions. The seed only resets between files, not between tests.
+        //
+        // This test needs nothing but the form, so it uses a borrower nobody
+        // else files an application for.
+        await loginAs(page, USERS.wave.email, USERS.wave.password);
         await page.goto('/loans/apply');
 
+        // Wait for react-hook-form to APPLY ITS DEFAULT before typing.
+        //
+        // useForm gives amount a defaultValue of 10000, and RHF writes it into
+        // the input after mount. Filling before that lands does not get
+        // overwritten — it gets MERGED: a fill of "0" into a field RHF is about
+        // to populate produced "100000", which then settled to "10000". The
+        // test asserted "0" and saw neither.
+        //
+        // Waiting for the field to be visible is not enough, and neither is
+        // waiting for the Next control: both are present before the default
+        // arrives. The default itself is the only signal that RHF has finished,
+        // so that is what is waited on.
+        const amountField = page.locator('input[name="amount"]');
+        await expect(amountField).toBeVisible({ timeout: 15000 });
+        await expect(amountField).toHaveValue('10000', { timeout: 15000 });
+
         // Try to submit with invalid amount (0)
-        await page.fill('input[name="amount"]', '0');
-        await expect(page.locator('input[name="amount"]')).toHaveValue('0');
+        await amountField.fill('0');
+        await expect(amountField).toHaveValue('0');
         await page.click('text=Next');
 
         // Should see validation error
@@ -107,8 +172,20 @@ test.describe('Loan Approval (Admin)', () => {
         const loansTable = page.locator('table');
         await expect(loansTable).toBeVisible({ timeout: 20000 });
 
-        // 3. Find first pending loan and click approve
-        const approveButton = page.locator('table button[title="Approve Loan"]').first();
+        // 3. Approve THIS TEST'S OWN ROW, not "whatever is first".
+        //
+        // The queue is ordered newest-first and the wizard test above files an
+        // application for E2E Member, so `.first()` actioned that row instead —
+        // and it has guarantorVerified false, which approveLoanAction refuses.
+        // The test passed alone and failed in sequence, which reads like a
+        // broken approval rather than a test picking the wrong row.
+        //
+        // The seeded pending application belongs to E2E Cooperative (see
+        // scripts/seed-local.ts) and carries the guarantorVerified and
+        // contributionAmount approval requires.
+        const seededRow = page.locator('table tr', { hasText: 'E2E Cooperative' }).first();
+        await expect(seededRow).toBeVisible({ timeout: 15000 });
+        const approveButton = seededRow.locator('button[title="Approve Loan"]').first();
 
         if (await approveButton.isVisible()) {
             console.log("Approve button is visible. Registering dialog handler...");

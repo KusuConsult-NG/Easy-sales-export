@@ -181,7 +181,33 @@ export async function verifyContributionPaymentAction(
             // The claim above stops one reference being counted twice. It does
             // nothing about two references arriving together, which is what this
             // increment is for.
+            //
+            // savingsBalance WAS MISSING HERE, and the comment above describes
+            // crediting it. The two fields are not interchangeable:
+            //
+            //   totalContributions — cumulative lifetime paid in. Never
+            //     decremented anywhere in src/. Drives tier and admin reports.
+            //   savingsBalance     — the spendable figure. Withdrawals debit it
+            //     (_withdrawal.ts), loan-repayment-from-savings debits it
+            //     (_loans_repayments.ts), the dashboard shows it, and the loan
+            //     limit is a multiple of it.
+            //
+            // The webhook path for the SAME payment
+            // (infrastructure/payments/service.ts, processCooperativeContribution)
+            // increments both. This one incremented only the lifetime total. And
+            // the two are mutually exclusive: claim_payment_once is keyed on the
+            // reference alone, so whichever of the browser redirect and the
+            // Paystack webhook arrives first claims it and the other returns
+            // early. Whether a member's spendable savings was credited was
+            // therefore decided by a race.
+            //
+            // A member who lost that race had their money counted in their
+            // lifetime total, in the unified ledger, in the cooperative ledger
+            // and in every admin report — but could not withdraw it, and it did
+            // not raise their borrowing limit. From the member's side that reads
+            // as "my contribution vanished", which is exactly what was reported.
             transaction.update(membershipRef, { totalContributions: FieldValue.increment(amountInNaira),
+                savingsBalance: FieldValue.increment(amountInNaira),
                 lastContributionAt: serverTimestamp(),
                 updatedAt: serverTimestamp() });
 

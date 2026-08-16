@@ -29,9 +29,25 @@ test.describe('Farm Nation Property Listings', () => {
         // Navigate to list property
         await page.goto('/farm-nation/list-land');
 
-        // Fill property details
-        await page.locator('input[placeholder="e.g., 50 Acres Farmland in Kaduna"]').fill('Prime Agricultural Land in Kano');
-        await page.locator('button:has-text("Farmland")').first().click();
+        // Wait for the form to hydrate before touching it.
+        //
+        // The category buttons are plain type="button" elements whose only
+        // effect is an onClick. Until React hydrates and binds it, a click does
+        // nothing at all — silently. The submit handler then bails at
+        // "Please select at least one land category" BEFORE its upload loop,
+        // which is why not a single /api/upload request ever reached the
+        // server while the test still appeared to fill the form and submit.
+        const titleField = page.locator('input[placeholder="e.g., 50 Acres Farmland in Kaduna"]');
+        await expect(titleField).toBeVisible({ timeout: 15000 });
+        await titleField.fill('Prime Agricultural Land in Kano');
+
+        // Click the category, then PROVE it registered. The selected state is a
+        // border colour change; asserting it is what turns a silently-dropped
+        // click into a visible failure at the point it happens, rather than an
+        // unexplained absence six steps later.
+        const farmlandCategory = page.locator('button:has-text("Farmland")').first();
+        await farmlandCategory.click();
+        await expect(farmlandCategory).toHaveClass(/border-green-600/, { timeout: 10000 });
         await page.locator('textarea[placeholder*="Describe the land"]').fill('Fertile land perfect for rice farming');
         
         // Select state and fill LGA
@@ -44,7 +60,25 @@ test.describe('Farm Nation Property Listings', () => {
         await page.locator('label:has-text("Unit") >> xpath=.. >> select').selectOption('hectares');
         await page.locator('label:has-text("Price per") >> xpath=.. >> input[type="number"]').fill('300000');
 
-        // Upload documents and photos
+        // Upload documents and photos.
+        //
+        // THE SURVEY PLAN IS REQUIRED and this test never supplied one. The
+        // submit button is disabled on
+        //   isSubmitting || media.images.length === 0
+        //     || !documents.landTitle || !documents.surveyPlan
+        // so the form could never be submitted, the handler never ran, and its
+        // upload loop never fired — which is why not a single /api/upload
+        // request reached the server while the test appeared to fill
+        // everything in.
+        //
+        // Worth noting for the page rather than the test: the button's own
+        // validation demands a survey plan, but handleSubmit's checks mention
+        // only the land category. A seller with no survey plan gets a dead
+        // button and no explanation of which field is missing.
+        await page.locator('label:has-text("Survey Plan") >> xpath=.. >> input[type="file"]').setInputFiles([
+            { name: 'survey.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 survey plan') }
+        ]);
+
         await page.locator('label:has-text("Land Title Document") >> xpath=.. >> input[type="file"]').setInputFiles([
             { name: 'title.pdf', mimeType: 'application/pdf', buffer: Buffer.from('pdf-data') }
         ]);
@@ -71,7 +105,10 @@ test.describe('Farm Nation Property Listings', () => {
 test.describe('Academy Course Enrollment', () => {
     test('User can enroll and complete a course', async ({ page }) => {
         // Login
-        await loginAs(page, USERS.academy.email, USERS.academy.password);
+        // Its own learner — courses.spec.ts drives USERS.academy through the
+        // same enrolment, and a course already started shows Resume where this
+        // spec expects Enroll.
+        await loginAs(page, USERS.academy2.email, USERS.academy2.password);
 
         // Browse courses
         await page.goto('/academy/courses');

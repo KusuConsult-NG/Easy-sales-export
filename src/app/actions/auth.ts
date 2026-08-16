@@ -201,10 +201,22 @@ export async function getPostLoginRedirect(email: string) { try {
 
 export async function preValidateLoginAction(credentials: any): Promise<{ success: boolean; error: string | null }> {
     try {
-        const firebaseApiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
-        if (!firebaseApiKey || firebaseApiKey === "mock-api-key-for-build") {
-            return { success: false, error: "Service configuration error. Please contact support." };
-        }
+        // THIS REFUSED EVERY LOGIN WHEN NEXT_PUBLIC_FIREBASE_API_KEY WAS ABSENT.
+        //
+        // The same gate stood at the top of authorize() in lib/auth.ts, and
+        // neither path needs the key: authentication runs through Supabase, and
+        // Firebase is only consulted as a fallback for legacy users whose
+        // password has not been migrated. That fallback re-reads the variable
+        // and guards itself on it a few lines below, as it must, because it is
+        // the only code that uses it.
+        //
+        // So unsetting a Firebase variable — the obvious housekeeping for a
+        // codebase that has otherwise migrated to Supabase — locked every user
+        // out with "Service configuration error. Please contact support.", a
+        // message that names nothing and points nowhere.
+        //
+        // Found by running the app against a local stack with no Firebase
+        // configuration at all, which is the correct shape for one.
 
         // 1. Validate credentials with Zod
         const parsed = loginSchema.safeParse(credentials);

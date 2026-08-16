@@ -47,7 +47,20 @@ describe("claimStatusTransition", () => {
         });
 
         expect(result).toEqual({ claimed: true, status: "payout_initiated" });
-        expect(mockRpc).toHaveBeenCalledWith("claim_status_transition", {
+        // The RPC takes a TABLE now, not just a collection.
+        //
+        // claim_status_transition wrote to document_collections and nothing
+        // else, so no transition on one of the eight dedicated tables could
+        // ever be claimed — including marketplace orders, whose state machine
+        // has four call sites. Migration 025 adds claim_status_transition_in,
+        // which names the table; the helper resolves it with the adapter's own
+        // getTableName so there is one mapping rather than two.
+        //
+        // wallet_transactions is a generic collection, so the table is
+        // document_collections and p_collection is still carried — that pair
+        // is what keeps the (id, collection_name) key intact for generic rows.
+        expect(mockRpc).toHaveBeenCalledWith("claim_status_transition_in", {
+            p_table: "document_collections",
             p_collection: "wallet_transactions",
             p_id: "txn-1",
             p_from: "pending",
@@ -102,7 +115,7 @@ describe("claimStatusTransition", () => {
         });
 
         expect(mockRpc).toHaveBeenCalledWith(
-            "claim_status_transition",
+            "claim_status_transition_in",
             expect.objectContaining({ p_patch: {} })
         );
     });

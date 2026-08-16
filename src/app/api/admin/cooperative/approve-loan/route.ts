@@ -9,6 +9,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { isAdmin } from "@/lib/admin-permissions";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { needsDualControl } from "@/lib/loan-approval-policy";
+import { resolveLoanApplication } from "@/lib/loan-application-location";
 
 /**
  * API Route: Approve Loan Application (Admin Only)
@@ -59,7 +60,12 @@ export async function POST(request: NextRequest) {
         //
         // Both are closed the same way as the others: the threshold comes from
         // the shared policy module, and the transition is claimed.
-        const applicationRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(applicationId);
+        // Resolved rather than assumed: an application filed through the member
+        // loan page lives in cooperative_loans, and this route answered 404 for
+        // it. See lib/loan-application-location.ts.
+        const resolvedApp = await resolveLoanApplication(applicationId);
+        const applicationRef = resolvedApp?.ref ?? db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(applicationId);
+        const applicationCollection = resolvedApp?.collection ?? COLLECTIONS.LOAN_APPLICATIONS;
         const applicationDoc = await applicationRef.get();
 
         if (!applicationDoc.exists) {
@@ -84,7 +90,7 @@ export async function POST(request: NextRequest) {
 
         if (requiresDualControl && !approvalChain.firstApprover) {
             const makerClaim = await claimStatusTransitionFromAny({
-                collection: COLLECTIONS.LOAN_APPLICATIONS,
+                collection: applicationCollection,
                 id: applicationId,
                 fromAny: ["pending", "reviewing"],
                 to: "partially_approved",
@@ -126,7 +132,7 @@ export async function POST(request: NextRequest) {
         }
 
         const finalClaim = await claimStatusTransitionFromAny({
-            collection: COLLECTIONS.LOAN_APPLICATIONS,
+            collection: applicationCollection,
             id: applicationId,
             fromAny: requiresDualControl ? ["partially_approved"] : ["pending", "reviewing"],
             to: "approved",

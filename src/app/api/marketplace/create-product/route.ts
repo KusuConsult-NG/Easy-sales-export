@@ -70,6 +70,39 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // Numbers must be positive and finite — truthiness is not a range check.
+        //
+        // The block above was the only validation these had, and `!value`
+        // rejects exactly two things: 0 and NaN. It accepts -100. A seller could
+        // list a product at a NEGATIVE retail price, which goes straight into
+        // pricingTiers and from there into order totals; and a negative
+        // stockQuantity becomes availableQuantity, which the checkout path
+        // decrements against.
+        //
+        // Infinity passes too. parseCurrencyStringToFloat is parseFloat
+        // underneath, so "1e400" yields Infinity, which is truthy. Every total
+        // computed from it is Infinity, and JSON.stringify writes it as null.
+        //
+        // minOrder is multiplied by 5 and by 10 below to derive the bulk and
+        // export tier thresholds, so a nonsense minOrder propagates into three
+        // tiers rather than one.
+        const numericFields: Array<[string, number]> = [
+            ["retail price", retailPrice],
+            ["bulk price", bulkPrice],
+            ["export price", exportPrice],
+            ["minimum order", minOrder],
+            ["stock quantity", stockQuantity],
+        ];
+        for (const [label, value] of numericFields) {
+            // bulk/export default to 0 when absent — 0 means "not offered".
+            if (!Number.isFinite(value) || value < 0) {
+                return NextResponse.json(
+                    { success: false, message: `The ${label} must be a positive number` },
+                    { status: 400 }
+                );
+            }
+        }
+
         // ✅ FIXED: Upload images to Firebase Storage (was placeholder stub, now supports pre-uploaded URLs)
         const productId = `product_${userId}_${Date.now()}`;
         const images: string[] = [];

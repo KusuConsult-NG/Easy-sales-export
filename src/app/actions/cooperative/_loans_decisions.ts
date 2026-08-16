@@ -10,6 +10,7 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
 import { isAdmin } from "@/lib/admin-permissions";
 import type { LoanApplication } from "@/lib/types/cooperative-loans";
+import { resolveLoanApplication } from "@/lib/loan-application-location";
 
 /**
  * Admin: Approve loan
@@ -30,7 +31,13 @@ export async function approveLoanAction(
         }
 
         const effectiveAdminId = session.user.id;
-        const appRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(applicationId);
+        // Resolved rather than assumed — see lib/loan-application-location.ts.
+        const resolved = await resolveLoanApplication(applicationId);
+        if (!resolved) {
+            return { success: false as const, error: "Application not found", data: null };
+        }
+        const appRef = resolved.ref;
+        const appCollection = resolved.collection;
 
         // "Transactional Locking to prevent Double Lending" was the label, and
         // it locked nothing. These are pre-checks, and the comment below the
@@ -108,7 +115,7 @@ export async function approveLoanAction(
 
         if (requiresDualControl && !approvalChain.firstApprover) {
             const makerClaim = await claimStatusTransitionFromAny({
-                collection: COLLECTIONS.LOAN_APPLICATIONS,
+                collection: appCollection,
                 id: applicationId,
                 fromAny: ["pending", "reviewing"],
                 to: "partially_approved",
@@ -141,7 +148,7 @@ export async function approveLoanAction(
             }
 
             const finalClaim = await claimStatusTransitionFromAny({
-                collection: COLLECTIONS.LOAN_APPLICATIONS,
+                collection: appCollection,
                 id: applicationId,
                 fromAny: requiresDualControl ? ["partially_approved"] : ["pending", "reviewing"],
                 to: "approved",
@@ -218,12 +225,14 @@ export async function rejectLoanAction(
 
         const effectiveAdminId = session.user.id;
 
-        const appRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(applicationId);
-        const appDoc = await appRef.get();
-
-        if (!appDoc.exists) {
+        // Resolved rather than assumed — see lib/loan-application-location.ts.
+        const resolved = await resolveLoanApplication(applicationId);
+        if (!resolved) {
             return { success: false as const, error: "Application not found", data: null };
         }
+        const appRef = resolved.ref;
+        const appCollection = resolved.collection;
+        const appDoc = resolved.snap;
 
         await appRef.update({
             status: "rejected",
@@ -272,7 +281,13 @@ export async function disburseLoanAction(
         }
 
         const effectiveAdminId = session.user.id;
-        const appRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(applicationId);
+        // Resolved rather than assumed — see lib/loan-application-location.ts.
+        const resolvedDisburse = await resolveLoanApplication(applicationId);
+        if (!resolvedDisburse) {
+            return { success: false as const, error: "Application not found", data: null };
+        }
+        const appRef = resolvedDisburse.ref;
+        const appCollection = resolvedDisburse.collection;
 
         // Read the status, compare it to "approved", write "disbursed" — inside
         // runTransaction, which takes no lock. Two admins clicking Disburse
@@ -286,7 +301,7 @@ export async function disburseLoanAction(
         // docs/audit/atomic-money-migration.md about the three ways this
         // codebase disburses a loan, which do not agree with one another.
         const disburseClaim = await claimStatusTransitionFromAny({
-            collection: COLLECTIONS.LOAN_APPLICATIONS,
+            collection: appCollection,
             id: applicationId,
             fromAny: ["approved"],
             to: "disbursed",

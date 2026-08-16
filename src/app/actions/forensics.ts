@@ -275,8 +275,20 @@ export async function runForensicScanAction(): Promise<
             // Both sides are corrected here, and lockedBalance is included
             // because money reserved for a pending withdrawal is still the
             // member's.
+            // fixed_savings_lock is a debit and was not written at all until
+            // now: creating a fixed savings plan reduced savingsBalance and
+            // recorded the movement in neither ledger. Unlike a withdrawal it
+            // does not move the amount into lockedBalance, so heldBalance fell
+            // with nothing on the ledger side to match it, and every member
+            // holding a plan reported as a mismatch here — permanently, and
+            // correctly, because the money genuinely was not accounted for.
+            //
+            // A check that always fails for a whole class of member is a check
+            // nobody reads, which is the same way the cooperativeProfile bug
+            // above stayed invisible. Both creation paths write the row now,
+            // and it is counted here.
             const CREDIT_TYPES = ["savings", "deposit", "contribution", "loan_repayment_excess"];
-            const DEBIT_TYPES = ["withdrawal"];
+            const DEBIT_TYPES = ["withdrawal", "fixed_savings_lock"];
 
             for (const doc of coopMembersQuery.docs) {
                 const userId = doc.id;

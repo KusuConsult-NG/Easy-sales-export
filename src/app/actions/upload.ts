@@ -66,7 +66,23 @@ export async function uploadDocumentAction(
         const apiKey = process.env.CLOUDINARY_API_KEY;
         const apiSecret = process.env.CLOUDINARY_API_SECRET;
 
-        if (!cloudName || !apiKey || !apiSecret) { logger.error("[uploadDocumentAction] Cloudinary environment variables not configured");
+        // Missing Cloudinary configuration is a hard failure in production and a
+        // local disk write in development — the same rule /api/upload applies,
+        // and for the same reason.
+        //
+        // This is a SECOND copy of that credential gate. /api/upload was fixed;
+        // this action was not, so the loan wizard's document step still could
+        // not upload anything locally and the whole application flow was
+        // untestable without a real Cloudinary account. Two upload paths with
+        // one rule between them is the duplication pattern this audit keeps
+        // finding; they now behave identically.
+        //
+        // GUARDED ON NODE_ENV, NOT A FLAG. Production must keep failing loudly:
+        // writing customer documents onto an ephemeral container filesystem
+        // would look like it worked and lose them at the next deploy.
+        const useLocalDisk = (!cloudName || !apiKey || !apiSecret) && process.env.NODE_ENV !== "production";
+
+        if (!useLocalDisk && (!cloudName || !apiKey || !apiSecret)) { logger.error("[uploadDocumentAction] Cloudinary environment variables not configured");
             return { success: false as const, error: "Upload service is temporarily unavailable. Please try again later or contact support."};
         }
 
@@ -83,6 +99,33 @@ export async function uploadDocumentAction(
         
         const safeName = baseDocType.replace(/[^a-zA-Z0-9-]/g, "-");
         const publicId = `documents/${userId}/${safeName}-${timestamp}${extension}`;
+
+        // Local disk backend, mirroring /api/upload. publicId is already
+        // sanitised to [a-zA-Z0-9-] per segment, so it cannot escape the
+        // directory below.
+        if (useLocalDisk) {
+            const { writeFile, mkdir } = await import("fs/promises");
+            const path = await import("path");
+
+            const relative = path.posix.join("uploads", "local", publicId);
+            const absolute = path.join(process.cwd(), "public", relative);
+
+            await mkdir(path.dirname(absolute), { recursive: true });
+            await writeFile(absolute, Buffer.from(await file.arrayBuffer()));
+
+            // ABSOLUTE, like Cloudinary's secure_url.
+            //
+            // A relative "/uploads/..." satisfies an <img src> but fails
+            // z.string().url(), which loanApplicationSchema applies to every
+            // document. The file uploaded, the form field was set, and step 4
+            // still refused to advance — the local backend has to honour the
+            // same contract as the remote one, not merely produce something
+            // that renders.
+            const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+            const localUrl = `${base}/${relative}`;
+            logger.info(`[uploadDocumentAction] Wrote to local disk (no Cloudinary configured): ${localUrl}`);
+            return { error: null, success: true as const, url: localUrl, data: null };
+        }
 
         const crypto = await import("crypto");
         const signatureStr = `public_id=${publicId}&timestamp=${timestamp}${apiSecret}`;

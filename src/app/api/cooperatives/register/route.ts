@@ -7,6 +7,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { generateReference } from "@/lib/paystack";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { COOPERATIVE_CONFIG } from "@/lib/constants";
 
 export async function POST(request: NextRequest) {
     try {
@@ -57,8 +58,14 @@ export async function POST(request: NextRequest) {
         const paymentReference = generateReference("COOP");
         const membershipId = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc().id;
 
-        // Determine registration fee based on tier
-        const registrationFee = 10000;
+        // The registration fee comes from COOPERATIVE_CONFIG, not from here.
+        //
+        // It was `const registrationFee = 10000` — a second copy of the number
+        // that _initiateCooperativePaymentAction already reads from
+        // lib/constants.ts. Two registration paths charging from two sources
+        // means changing the fee moves one of them, and the one left behind
+        // keeps charging the old price with nothing to say so.
+        const registrationFee = COOPERATIVE_CONFIG.registrationFee;
 
         // ── STEP 1: Initialize Paystack FIRST ──────────────────────────────────
         // Bug fix: we previously created the Firestore doc before calling Paystack.

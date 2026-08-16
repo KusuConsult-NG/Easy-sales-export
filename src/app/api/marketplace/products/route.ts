@@ -30,11 +30,37 @@ export async function GET(request: NextRequest) {
         const rawLimit = parseInt(searchParams.get("limit") || "20");
         const limit = Math.min(Math.max(rawLimit, 1), 50);
 
-        // Base query — always filter active + in-stock
+        // Base query — active products. Availability is applied after mapping;
+        // see the filter below the mapper.
+        //
+        // THIS CARRIED `.where("inStock", "==", true)` AND MATCHED NOTHING.
+        //
+        // No creation path writes `inStock`. Not /api/marketplace/create-product,
+        // not createProductAction, not the seed — they write `stockQuantity` and
+        // `availableQuantity`. The only occurrence of the name anywhere else in
+        // src/ is the optional field on the Product type and the mapper below,
+        // which COMPUTES it for the response.
+        //
+        // So the public storefront filtered on a stored field that never
+        // existed, and returned zero rows for every seller's products,
+        // permanently. A seller listed a product, got "Product listed
+        // successfully", and no buyer could ever see it.
+        //
+        // Nothing caught it: the unit suite mocks the database, and the page
+        // renders "No products found" rather than an error, so a smoke test
+        // sees a healthy 200. It took running the app against a real database
+        // with real seeded products to see an empty shop.
+        //
+        // The mapper on line ~92 already states the intended rule and states it
+        // correctly — `data.inStock !== false && quantity > 0`, i.e. absent
+        // means "in stock if there is stock". It reads `quantity` OR
+        // `availableQuantity`, which is what writers actually set. Applying
+        // that same expression is the fix; re-adding a stored `inStock` would
+        // mean a derived field to keep in step with every stock movement, which
+        // is the kind of duplication that drifts back apart.
         let baseQuery: import("@/lib/supabase-db").SupabaseQuery = db
             .collection(COLLECTIONS.PRODUCTS)
-            .where("status", "==", "active")
-            .where("inStock", "==", true);
+            .where("status", "==", "active");
 
         // Apply category filter at DB level (replaces the compound query)
         if (category && category !== "all") {
@@ -111,6 +137,16 @@ export async function GET(request: NextRequest) {
                 return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
             });
         }
+
+        // Availability, applied where the field spellings are already resolved.
+        //
+        // This is the rule the removed `.where("inStock", "==", true)` was
+        // trying to express. It has to run here rather than in the query
+        // because the mapper is what reconciles `quantity` against
+        // `availableQuantity` and treats an absent `inStock` as "in stock if
+        // there is stock" — a DB-level filter on either spelling alone would
+        // silently drop products written with the other.
+        products = products.filter(p => p.inStock);
 
         // In-memory filters for search and price (compound Firestore queries
         // require index creation for every combination — kept as in-memory)
