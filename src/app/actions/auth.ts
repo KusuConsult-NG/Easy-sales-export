@@ -188,8 +188,18 @@ export async function getPostLoginRedirect(email: string) { try {
 
                 // Fallback for unknown modules: use role-based primary app
                 const primaryApp = getPrimaryApp(userRoles as import("@/lib/types/roles").UserRole[]);
-                logger.info(`[getPostLoginRedirect] User ${email} has approved modules, role-based redirect to: ${primaryApp}`);
-                return { error: null, success: true as const, data: { redirectUrl: primaryApp } };
+
+                // getPrimaryApp answers "/" when no role names a module — a
+                // general_user, in its own words, "starts at the Hub". Landing
+                // a signed-in user on the marketing hub is not what this branch
+                // wants, and it is not what used to happen: getPrimaryApp threw
+                // for anyone carrying a legacy role, the catch below returned
+                // /dashboard, and that is where these users have always gone.
+                // Every neighbouring branch here returns /dashboard for the
+                // same case, so it is stated rather than left to an exception.
+                const redirectUrl = primaryApp === "/" ? "/dashboard" : primaryApp;
+                logger.info(`[getPostLoginRedirect] User ${email} has approved modules, role-based redirect to: ${redirectUrl}`);
+                return { error: null, success: true as const, data: { redirectUrl } };
             }
 
             // 2. Check for pending applications
@@ -204,7 +214,14 @@ export async function getPostLoginRedirect(email: string) { try {
         // User has no applications yet — go to dashboard instead of /auth/get-started
         logger.info(`[getPostLoginRedirect] No applications found, redirecting to dashboard`, { email });
         return { error: null,  success: true as const, data: { redirectUrl: '/dashboard' } };
-    } catch (error: any) { logger.error('[getPostLoginRedirect] Error determining redirect', { email, error: error.message });
+    } catch (error: any) {
+        // Passed as the ERROR argument, not folded into metadata as
+        // `error.message`. logger.error's second parameter records the stack;
+        // metadata records a string. This threw
+        // "Cannot read properties of undefined (reading 'forEach')" on every
+        // login for months with no indication of where, because the one piece
+        // of information that would have located it was being dropped here.
+        logger.error('[getPostLoginRedirect] Error determining redirect', error, { email });
         return { success: false as const, redirectUrl: '/dashboard', error: error.message || "Action failed"};
     }
 }

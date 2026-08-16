@@ -5,7 +5,7 @@
  * Users only see and access apps they've signed up for.
  */
 
-import { UserRole } from "./types/roles";
+import { UserRole, LEGACY_ROLE_MAP, type LegacyRole } from "./types/roles";
 
 /**
  * App identifiers matching route paths
@@ -106,7 +106,7 @@ export function hasAppAccess(userRoles: UserRole[], app: AppIdentifier): boolean
     }
 
     // Check if any of the user's roles grant access to this app
-    return userRoles.some(role => {
+    return normaliseRoles(userRoles).some(role => {
         const allowedApps = ROLE_APP_ACCESS[role];
         return allowedApps?.includes(app) ?? false;
     });
@@ -118,12 +118,55 @@ export function hasAppAccess(userRoles: UserRole[], app: AppIdentifier): boolean
 export function getUserAccessibleApps(userRoles: UserRole[]): AppIdentifier[] {
     const apps = new Set<AppIdentifier>(UNIVERSAL_APPS);
 
-    userRoles.forEach(role => {
-        const roleApps = ROLE_APP_ACCESS[role];
+    normaliseRoles(userRoles).forEach(role => {
+        // `?? []` because ROLE_APP_ACCESS is keyed by UserRole and `role` is
+        // whatever the database holds. This read was unguarded while the
+        // identical read in hasAppAccess above used `?.` — two functions, one
+        // lookup, one of them defensive. The unguarded one threw
+        // "Cannot read properties of undefined (reading 'forEach')" on every
+        // login by a user carrying a legacy role.
+        const roleApps = ROLE_APP_ACCESS[role] ?? [];
         roleApps.forEach(app => apps.add(app));
     });
 
     return Array.from(apps);
+}
+
+/**
+ * Translate legacy role names before looking them up.
+ *
+ * WHY THIS IS NEEDED
+ * ------------------
+ * Both functions above are typed `userRoles: UserRole[]`, and both are called
+ * with roles read straight out of the users table, where the value is whatever
+ * was written — including the pre-migration names in LEGACY_ROLE_MAP.
+ *
+ * "member" is the common one. It is on 8 of the 9 seeded accounts because that
+ * mirrors production, and it is NOT a key of ROLE_APP_ACCESS. Two things
+ * followed:
+ *
+ *   getUserAccessibleApps  threw on the undefined lookup, so getPrimaryApp
+ *                          threw, so getPostLoginRedirect fell into its catch
+ *                          and returned /dashboard. Every login by a legacy
+ *                          user landed on the generic hub instead of their
+ *                          module, and logged an error saying only
+ *                          "Cannot read properties of undefined".
+ *   hasAppAccess           did not throw — it answered FALSE. So the same
+ *                          users were quietly denied access the role was
+ *                          supposed to grant. The silent one is the worse of
+ *                          the two.
+ *
+ * Mapping rather than skipping is the point: "member" means "general_user",
+ * and treating it as unknown would drop access instead of restoring it.
+ * Unrecognised names are passed through untouched and handled by the `??`
+ * guards, so an unexpected value degrades rather than throws.
+ */
+function normaliseRoles(userRoles: UserRole[] | undefined | null): UserRole[] {
+    if (!Array.isArray(userRoles)) return [];
+
+    return userRoles
+        .filter((role): role is UserRole => typeof role === 'string')
+        .map(role => (LEGACY_ROLE_MAP as Record<string, UserRole>)[role] ?? role);
 }
 
 /**
@@ -172,7 +215,13 @@ export function canAccessEscrow(userRoles: UserRole[]): boolean {
  * This prevents a user who is both an admin and a wave_participant from
  * being sent to /admin when they should be in their module dashboard.
  */
-export function getPrimaryApp(userRoles: UserRole[]): string {
+export function getPrimaryApp(rawUserRoles: UserRole[]): string {
+    // Legacy names translated here too, for the same reason as the two
+    // functions above: without it, ["member"] matches none of the priority
+    // lists below — not even the explicit general_user branch — and falls
+    // through to the "roles are somehow unrecognised" scan at the end.
+    const userRoles = normaliseRoles(rawUserRoles);
+
     // Role priority mapping
     const rolePriorityMap: Record<UserRole, string> = {
         export_participant: "/export/dashboard",

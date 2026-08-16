@@ -107,7 +107,16 @@ test.describe('Loan Application Flow', () => {
         console.log("Reached success URL! URL:", page.url());
 
         // 5. Verify success (redirect to success page)
-        await expect(page.locator('text=Loan Application Submitted!')).toBeVisible({ timeout: 15000 });
+        //
+        // getByRole, not a bare text= locator. After a client-side navigation
+        // Next.js writes the new page's title into #__next-route-announcer__
+        // for screen readers, so `text=Loan Application Submitted!` matched TWO
+        // elements — the heading and the announcer — and failed on strict mode
+        // while the application had in fact been submitted successfully. The
+        // test was reporting a failure for a flow that worked.
+        await expect(
+            page.getByRole('heading', { name: 'Loan Application Submitted!' })
+        ).toBeVisible({ timeout: 15000 });
 
         console.log('✅ Loan application submitted via wizard');
     });
