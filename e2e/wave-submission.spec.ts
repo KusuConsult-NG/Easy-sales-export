@@ -126,6 +126,14 @@ test.describe('WAVE Application Flow', () => {
         }
 
         // Verify Content
-        await expect(page.locator('text=Your WAVE Registration Is Submitted')).toBeVisible({ timeout: 30000 });
+        //
+        // getByRole, not a bare text= locator. After a client-side navigation
+        // Next.js copies the new page's title into #__next-route-announcer__
+        // for screen readers, so the plain text matched TWO elements and failed
+        // on strict mode — while the application had in fact been submitted and
+        // the success page was on screen. Same trap as e2e/loans.spec.ts.
+        await expect(
+            page.getByRole('heading', { name: /Your WAVE Registration Is Submitted/i })
+        ).toBeVisible({ timeout: 30000 });
     });
 });
