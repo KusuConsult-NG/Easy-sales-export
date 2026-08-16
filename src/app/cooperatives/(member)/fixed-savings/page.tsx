@@ -10,6 +10,14 @@ import {
 import Link from "next/link";
 import { formatCurrency, parseCurrencyStringToFloat } from "@/lib/utils";
 import { COOPERATIVE_CONFIG, CURRENCY_CONFIG } from "@/lib/constants";
+import {
+    FIXED_SAVINGS_ANNUAL_RATE,
+    FIXED_SAVINGS_MIN_AMOUNT,
+    FIXED_SAVINGS_MIN_MONTHS,
+    FIXED_SAVINGS_MAX_MONTHS,
+    formatFixedSavingsRate,
+    validateFixedSavingsPlan,
+} from "@/lib/cooperative-savings";
 import OnboardingGuide from "@/components/onboarding/OnboardingGuide";
 import { useToast } from "@/contexts/ToastContext";
 
@@ -35,9 +43,13 @@ export default function FixedSavingsPage() {
     const [membershipStatus, setMembershipStatus] = useState<"approved" | "pending" | "not_member" | null>(null);
 
     // Calculator state
-    const [amount, setAmount] = useState("50000");
+    const [amount, setAmount] = useState(String(FIXED_SAVINGS_MIN_AMOUNT));
     const [duration, setDuration] = useState(12);
-    const [interestRate] = useState(14); // 14% annual interest for fixed savings
+    // The rate a member is QUOTED must be the rate they are PAID. This was
+    // useState(14) — a literal, with the number that actually gets stored on
+    // the plan living in the route. Same shape as the loan limit, where the
+    // figure shown and the figure enforced differed by six times.
+    const [interestRate] = useState(FIXED_SAVINGS_ANNUAL_RATE);
 
     useEffect(() => {
         checkMembership();
@@ -87,13 +99,12 @@ export default function FixedSavingsPage() {
 
     async function handleCreatePlan() {
         const targetAmount = parseCurrencyStringToFloat(amount);
-        if (targetAmount < 50000) {
-            showToast("Minimum amount is ₦50,000", "error");
-            return;
-        }
-
-        if (duration < 1 || duration > 12) {
-            showToast("Duration must be between 1 and 12 months", "error");
+        // Same rule the server applies, from the same module — so the client
+        // cannot refuse a plan the server would accept, or accept one the
+        // server will refuse with a differently-worded message.
+        const validation = validateFixedSavingsPlan(targetAmount, duration);
+        if (!validation.valid) {
+            showToast(validation.reason!, "error");
             return;
         }
 
@@ -153,7 +164,7 @@ export default function FixedSavingsPage() {
 
                     <OnboardingGuide
                         title="Fixed Savings Plans"
-                        description="Lock your savings for 1-12 months and earn guaranteed 14% annual returns. To access this feature, you must first become an approved cooperative member."
+                        description={`Lock your savings for ${FIXED_SAVINGS_MIN_MONTHS}-${FIXED_SAVINGS_MAX_MONTHS} months and earn guaranteed ${formatFixedSavingsRate()} returns. To access this feature, you must first become an approved cooperative member.`}
                         icon={<TrendingUp className="w-8 h-8 text-white" />}
                         steps={[
                             {
@@ -387,7 +398,7 @@ export default function FixedSavingsPage() {
 
                                 <button
                                     onClick={handleCreatePlan}
-                                    disabled={isCreating || amountNum < 50000}
+                                    disabled={isCreating || amountNum < FIXED_SAVINGS_MIN_AMOUNT}
                                     className="w-full mt-6 px-6 py-4 bg-linear-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                 >
                                     {isCreating ? (

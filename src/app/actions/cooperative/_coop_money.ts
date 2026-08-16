@@ -22,6 +22,11 @@ import { serializeDocs } from "@/lib/firestore-serialize";
 import { revalidatePath } from "next/cache";
 import { calculateRepaymentTerms } from "@/lib/loan-terms";
 import { isEligibleForLoan } from "@/lib/cooperative-tiers";
+import {
+    FIXED_SAVINGS_ANNUAL_RATE,
+    projectedFixedSavingsProfit,
+    fixedSavingsMaturityDate,
+} from "@/lib/cooperative-savings";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
 
 /**
@@ -670,13 +675,35 @@ async function _createFixedSavingsAction(
 
         // Create Fixed Savings Record. This is a single write; the
         // runTransaction wrapper around it bought nothing at all.
-        const fixedSavingsRef = db.collection(COLLECTIONS.COOPERATIVE_FIXED_SAVINGS).doc();
+        //
+        // THE COLLECTION WAS WRONG, and it cost the member their plan.
+        //
+        // This wrote to COLLECTIONS.COOPERATIVE_FIXED_SAVINGS. The plan list
+        // the member sees comes from /api/cooperative/fixed-savings, which
+        // reads COLLECTIONS.FIXED_SAVINGS_PLANS — the collection the sibling
+        // route writes. So this action debited the member's savings and filed
+        // the plan somewhere nothing reads: the money left the balance and the
+        // plan did not appear anywhere.
+        //
+        // Nothing in the UI calls this action today — the route is the door —
+        // but it is exported through the cooperative barrel, so the next caller
+        // would have hit it. Pointed at the collection that is actually read.
+        //
+        // The shape matches the route's exactly, projectedProfit and
+        // maturityDate included. Both were missing here, and the member page
+        // renders `plan.amount + plan.projectedProfit` — undefined would have
+        // shown as ₦NaN on the savings page.
+        const fixedSavingsRef = db.collection(COLLECTIONS.FIXED_SAVINGS_PLANS).doc();
         await fixedSavingsRef.set({ memberId: userId,
             amount,
             durationMonths,
             startDate: FieldValue.serverTimestamp(),
+            maturityDate: fixedSavingsMaturityDate(durationMonths),
             status: "active",
-            interestRate: 14, // 14% p.a.
+            // Per YEAR, unlike every other rate in this codebase. The literal 14
+            // that stood here was one of four copies. See lib/cooperative-savings.ts.
+            interestRate: FIXED_SAVINGS_ANNUAL_RATE,
+            projectedProfit: projectedFixedSavingsProfit(amount, durationMonths),
             createdAt: FieldValue.serverTimestamp() });
 
         return { error: null, success: true as const, data: { message: "Fixed savings plan created" }  };

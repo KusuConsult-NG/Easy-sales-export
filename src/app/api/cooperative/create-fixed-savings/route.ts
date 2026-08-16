@@ -5,6 +5,12 @@ import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import {
+    FIXED_SAVINGS_ANNUAL_RATE,
+    projectedFixedSavingsProfit,
+    validateFixedSavingsPlan,
+    fixedSavingsMaturityDate,
+} from "@/lib/cooperative-savings";
 import { FieldValue } from "@/lib/firestore-compat";
 import { debitJsonbBalance } from "@/lib/wallet-ledger";
 
@@ -25,17 +31,16 @@ export async function POST(request: NextRequest) {
         const userId = session.user.id;
         const { amount, durationMonths } = await request.json();
 
-        // Validation
-        if (!amount || amount < 50000) {
+        // Validation, from lib/cooperative-savings.ts rather than inline.
+        //
+        // The minimum and the term bounds were written out here as literals,
+        // and again in the member page's own checks, and again in
+        // fixedSavingsSchema, which the sibling server action uses. Three
+        // statements of what a valid plan is, free to disagree.
+        const validation = validateFixedSavingsPlan(Number(amount), Number(durationMonths));
+        if (!validation.valid) {
             return NextResponse.json(
-                { success: false, message: "Minimum amount is ₦50,000" },
-                { status: 400 }
-            );
-        }
-
-        if (!durationMonths || durationMonths < 1 || durationMonths > 12) {
-            return NextResponse.json(
-                { success: false, message: "Duration must be between 1 and 12 months" },
+                { success: false, message: validation.reason },
                 { status: 400 }
             );
         }
@@ -59,9 +64,18 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Calculate interest and maturity
-        const interestRate = 14; // 14% annual interest for fixed savings
-        const projectedProfit = (amount * interestRate * (durationMonths / 12)) / 100;
+        // Calculate interest and maturity.
+        //
+        // The rate was `const interestRate = 14` here, one of FOUR literal
+        // copies — two deciding what a member is paid, two deciding what a
+        // member is told, with nothing keeping them equal. The loan limit
+        // already showed what that costs: the figure shown and the figure
+        // enforced differed by six times and nothing noticed.
+        //
+        // It is a rate PER YEAR, unlike every other rate in this codebase,
+        // which is why the constant says so in its name. See the module header.
+        const interestRate = FIXED_SAVINGS_ANNUAL_RATE;
+        const projectedProfit = projectedFixedSavingsProfit(amount, durationMonths);
 
         // Lock the savings under a row lock before creating the plan.
         //
@@ -115,7 +129,7 @@ export async function POST(request: NextRequest) {
             memberId: userId,
             amount,
             startDate: FieldValue.serverTimestamp(),
-            maturityDate: new Date(Date.now() + durationMonths * 30 * 24 * 60 * 60 * 1000),
+            maturityDate: fixedSavingsMaturityDate(durationMonths),
             durationMonths,
             interestRate,
             projectedProfit,

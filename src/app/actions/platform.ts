@@ -13,6 +13,7 @@ import { claimIdempotencyKey, debitJsonbBalanceWithFloor } from "@/lib/wallet-le
 import { ZodError } from "zod";
 import { revalidatePath } from "next/cache";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
+import { COOPERATIVE_MINIMUM_BALANCE, formatMinimumBalance } from "@/lib/cooperative-limits";
 
 /**
  * Server Actions for Platform Forms
@@ -249,7 +250,16 @@ export async function submitWithdrawalAction(
         //
         // debit_jsonb_balance_with_floor (migration 020) is the primitive that
         // note asked for. The advisory read is gone rather than kept alongside.
-        const MIN_BALANCE = 5000;
+        //
+        // The floor itself comes from lib/cooperative-limits.ts. It was a local
+        // `const MIN_BALANCE = 5000` here — a THIRD copy of the same number,
+        // after the withdraw route and the loan-repayment-from-savings path.
+        // cooperative-limits.ts exists precisely to stop that, and its own
+        // header says why: "two copies of a money rule in two files is how the
+        // copies come to disagree". This file was written before it and never
+        // moved over, so a change to the floor would have reached two of the
+        // three paths that reduce a member's savings.
+        const MIN_BALANCE = COOPERATIVE_MINIMUM_BALANCE;
 
         // 1. Lock Funds — debited under a row lock, floor included.
         const debit = await debitJsonbBalanceWithFloor({
@@ -265,7 +275,10 @@ export async function submitWithdrawalAction(
             // and is simply not allowed to take all of it.
             return {
                 error: debit.reason === "below_floor"
-                    ? `You must maintain a minimum balance of ₦${MIN_BALANCE.toLocaleString()}`
+                    // Formatted from the same module as the value that was
+                    // enforced, so the figure a member is shown is the figure
+                    // they were refused by.
+                    ? `You must maintain a minimum balance of ${formatMinimumBalance()}`
                     : debit.reason === "insufficient_funds"
                         ? `Insufficient balance. Available: ₦${Number(debit.balance).toLocaleString()}`
                         : "You are not a member of any cooperative",

@@ -15,6 +15,9 @@ import {
     deleteAdminLoanProductAction,
     type LoanProduct 
 } from "@/app/actions/loan-products";
+// The default rate an admin sees pre-filled must be the platform's stated
+// rate, not a copy of whatever it was when this form was written.
+import { DEFAULT_MONTHLY_INTEREST_RATE } from "@/lib/cooperative-tiers";
 
 export default function LoanProductsPage() {
     const { showToast } = useToast();
@@ -50,7 +53,7 @@ export default function LoanProductsPage() {
         description: "",
         minAmount: 50000,
         maxAmount: 500000,
-        interestRate: 10,
+        interestRate: DEFAULT_MONTHLY_INTEREST_RATE,
         durationMonths: 12,
         isActive: true
     });
@@ -74,7 +77,7 @@ export default function LoanProductsPage() {
                 description: "",
                 minAmount: 50000,
                 maxAmount: 500000,
-                interestRate: 10,
+                interestRate: DEFAULT_MONTHLY_INTEREST_RATE,
                 durationMonths: 12,
                 isActive: true
             });
