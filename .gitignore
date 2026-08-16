@@ -76,3 +76,4 @@ exports/
 # The Postgres data directory, the fetched PostgREST binary, the generated JWT
 # secret and the service logs. All machine-local; none of it belongs in git.
 .local-stack/
+public/uploads/local/

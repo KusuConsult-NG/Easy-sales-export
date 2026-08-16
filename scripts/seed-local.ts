@@ -63,12 +63,34 @@ if (!isLocal && process.env.SEED_ALLOW_REMOTE !== 'yes-seed-a-remote-database') 
 
 const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
 
-/** The identities every spec defaults to (see playwright.config.ts header). */
+/**
+ * The identities every spec logs in as (see e2e/helpers/auth.ts).
+ *
+ * THE MODULE PERSONAS USED TO BE PRODUCTION ACCOUNTS. e2e/helpers/auth.ts
+ * hardcoded marketplaceuser04@gmail.com, academyuser02@gmail.com,
+ * cooperativeuser02@gmail.com, waveuser02@gmail.com and
+ * exportwindowuser@gmail.com with their real passwords, so the suite could only
+ * ever pass against production and seven specs timed out on a local stack.
+ * They are seeded here instead.
+ *
+ * `modules` drives serviceRegistrations, which is what getPostLoginRedirect
+ * reads to send a user to their module dashboard: exactly one approved module
+ * means a direct landing there, none means the generic hub at /dashboard. The
+ * status must be 'approved' or 'active' — those are the two that function
+ * accepts.
+ */
 const USERS = [
-    { key: 'user',  email: process.env.TEST_USER_EMAIL  || 'e2e.user@easysalesexport.com',  password: process.env.TEST_USER_PASSWORD  || 'E2eTest@2024!',  roles: ['member'],                name: 'E2E Member' },
-    { key: 'admin', email: process.env.TEST_ADMIN_EMAIL || 'e2e.admin@easysalesexport.com', password: process.env.TEST_ADMIN_PASSWORD || 'E2eAdmin@2024!', roles: ['admin', 'super_admin'],  name: 'E2E Admin' },
-    { key: 'buyer', email: process.env.TEST_BUYER_EMAIL || 'e2e.buyer@easysalesexport.com', password: process.env.TEST_BUYER_PASSWORD || 'E2eBuyer@2024!', roles: ['member', 'buyer'],       name: 'E2E Buyer' },
-    { key: 'seller', email: process.env.TEST_SELLER_EMAIL || 'e2e.seller@easysalesexport.com', password: process.env.TEST_SELLER_PASSWORD || 'E2eSeller@2024!', roles: ['member', 'seller'], name: 'E2E Seller' },
+    { key: 'user',   email: process.env.TEST_USER_EMAIL   || 'e2e.user@easysalesexport.com',   password: process.env.TEST_USER_PASSWORD   || 'E2eTest@2024!',   roles: ['member'],                          name: 'E2E Member',      modules: ['cooperatives'] },
+    { key: 'admin',  email: process.env.TEST_ADMIN_EMAIL  || 'e2e.admin@easysalesexport.com',  password: process.env.TEST_ADMIN_PASSWORD  || 'E2eAdmin@2024!',  roles: ['admin', 'super_admin'],            name: 'E2E Admin',       modules: [] },
+    { key: 'buyer',  email: process.env.TEST_BUYER_EMAIL  || 'e2e.buyer@easysalesexport.com',  password: process.env.TEST_BUYER_PASSWORD  || 'E2eBuyer@2024!',  roles: ['member', 'buyer'],                 name: 'E2E Buyer',       modules: ['marketplace'] },
+    // The seller also owns the seeded land listings and is the persona the
+    // "seller can list a new property" spec drives, so it needs farmNation
+    // too — without it the listing form redirects to /farm-nation/onboarding.
+    { key: 'seller', email: process.env.TEST_SELLER_EMAIL || 'e2e.seller@easysalesexport.com', password: process.env.TEST_SELLER_PASSWORD || 'E2eSeller@2024!', roles: ['member', 'seller', 'land_owner'],  name: 'E2E Seller',      modules: ['marketplace', 'farmNation'] },
+    { key: 'academy', email: process.env.TEST_ACADEMY_EMAIL || 'e2e.academy@easysalesexport.com', password: process.env.TEST_ACADEMY_PASSWORD || 'E2eAcademy@2024!', roles: ['member', 'academy_participant'], name: 'E2E Academy',  modules: ['academy'] },
+    { key: 'cooperative', email: process.env.TEST_COOPERATIVE_EMAIL || 'e2e.cooperative@easysalesexport.com', password: process.env.TEST_COOPERATIVE_PASSWORD || 'E2eCoop@2024!', roles: ['member', 'cooperative_member'], name: 'E2E Cooperative', modules: ['cooperatives'] },
+    { key: 'wave',   email: process.env.TEST_WAVE_EMAIL   || 'e2e.wave@easysalesexport.com',   password: process.env.TEST_WAVE_PASSWORD   || 'E2eWave@2024!',   roles: ['member', 'wave_participant'],      name: 'E2E Wave',        modules: ['wave'] },
+    { key: 'export', email: process.env.TEST_EXPORT_EMAIL || 'e2e.export@easysalesexport.com', password: process.env.TEST_EXPORT_PASSWORD || 'E2eExport@2024!', roles: ['member', 'export_participant'],    name: 'E2E Export',      modules: ['export'] },
 ] as const;
 
 /** Auth identity first, then the profile row with the SAME id — the order the
@@ -104,9 +126,28 @@ async function seedUser(u: (typeof USERS)[number]): Promise<string> {
         profileComplete: true,
         requiresPasswordChange: false,
         gender: 'female', state: 'Plateau', lga: 'Jos North',
-        serviceRegistrations: u.key === 'user'
-            ? { cooperatives: { status: 'active', registeredAt: now } }
-            : {},
+        // getPostLoginRedirect accepts 'approved' or 'active' and nothing else,
+        // and sends a user with exactly one approved module straight to that
+        // module's dashboard. A persona with no modules lands on the generic
+        // hub, which is what the RBAC and hub specs expect.
+        //
+        // `plan` matters for academy and nowhere else: the course catalogue
+        // filters every card through checkCourseAccess(userPlan, course.tier),
+        // read from serviceRegistrations.academy.plan. Without it the plan is
+        // "free", every paid-tier course is filtered out, and the page renders
+        // an empty catalogue that looks like a broken query. 'elite' so the
+        // persona can reach every tier.
+        serviceRegistrations: Object.fromEntries(
+            u.modules.map(m => [m, {
+                status: 'approved',
+                registeredAt: now,
+                paymentStatus: 'completed',
+                ...(m === 'academy' ? { plan: 'elite' } : {}),
+            }])
+        ),
+        // The seller specs need an approved seller; this is the flag
+        // /api/marketplace/create-product checks.
+        ...(u.key === 'seller' ? { sellerVerificationStatus: 'approved', businessName: 'E2E Seller Ltd' } : {}),
         createdAt: now, updatedAt: now,
     };
     const { error: upErr } = await admin.from('users').upsert(
@@ -160,6 +201,24 @@ async function main() {
     }, { onConflict: 'id' });
     if (walErr) fail(`wallets: ${walErr.message}`);
 
+    // The cooperative persona needs its own membership — auth-module-access
+    // logs in as this user and lands on /cooperatives/dashboard, which the
+    // member layout guards on a membership record existing.
+    const { error: coopMemErr } = await admin.from('cooperative_members').upsert({
+        id: ids.cooperative,
+        user_id: ids.cooperative,
+        status: 'active',
+        raw_data: {
+            id: ids.cooperative, userId: ids.cooperative,
+            firstName: 'E2E', lastName: 'Cooperative',
+            membershipStatus: 'active', paymentStatus: 'completed',
+            tier: 'Member', totalContributions: 60000, savingsBalance: 60000,
+            cooperativeId: 'default', memberNumber: 'E2E-0002',
+            joinedAt: now, createdAt: now, updatedAt: now,
+        },
+    }, { onConflict: 'id' });
+    if (coopMemErr) fail(`cooperative_members (cooperative persona): ${coopMemErr.message}`);
+
     // Loan product with the confirmed terms: 10% MONTHLY, max 12 months.
     await doc('loan_products', 'e2e-loan-product', {
         name: 'E2E Cooperative Loan', description: 'Seeded for e2e runs',
@@ -167,6 +226,98 @@ async function main() {
         minAmount: 5000, maxAmount: 500000,
         isActive: true, createdAt: now,
     });
+
+    // A pending loan application, so the admin approval queue has a row to
+    // render. Without one the admin spec waits for a <table> that the empty
+    // state never draws — a fixture gap that reads as a broken page.
+    // Belongs to the `cooperative` persona so it does not block the `user`
+    // persona's own application flow: claimSingleOpenLoanApplication refuses a
+    // second open application per borrower, by design.
+    await doc('cooperative_loans', 'e2e-pending-loan', {
+        memberId: ids.cooperative, userId: ids.cooperative,
+        productId: 'e2e-loan-product', productName: 'E2E Cooperative Loan',
+        amount: 20000, purpose: 'Seeded pending application for the approval queue',
+        interestRate: 10, durationMonths: 12,
+        monthlyPayment: 2935, interestAmount: 15220, totalRepayment: 35220,
+        status: 'pending',
+        guarantorName: 'E2E Guarantor', guarantorPhone: '+2348000000001',
+        appliedAt: now, createdAt: now, updatedAt: now,
+    });
+
+    // Academy courses. getCoursesAction reads academy_courses ordered by
+    // createdAt with no status filter, so any row shows up in the catalogue.
+    //
+    // `modules` MUST BE AN ARRAY OF MODULES, each with a `lessons` array.
+    //
+    // The Course type in src/types/index.ts declares `modules?: number`, and
+    // seeding it that way — following the type — made the course DETAIL page
+    // throw on render: it does `course.modules.reduce((sum, mod) => sum +
+    // mod.lessons.length, 0)` before any conditional, so a number produces
+    // "reduce is not a function" and the page renders nothing at all. The
+    // catalogue page, which never touches the field, was fine.
+    //
+    // The type and the page disagree, and the page is what runs. Worth
+    // correcting in the type, but the fixture has to match the consumer.
+    //
+    // `tier` also matters: the catalogue filters every card through
+    // checkCourseAccess(userPlan, course.tier), so a tier the persona's plan
+    // cannot reach is silently dropped from the list.
+    for (let i = 1; i <= 2; i++) {
+        await doc('academy_courses', `e2e-course-${i}`, {
+            title: `E2E Export Fundamentals ${i}`,
+            description: 'Seeded for e2e runs. Covers the basics of agro-export documentation.',
+            instructor: 'E2E Instructor',
+            duration: '4 weeks',
+            modules: [
+                {
+                    id: `e2e-course-${i}-m1`,
+                    title: 'Getting Started',
+                    description: 'Orientation and paperwork',
+                    lessons: [
+                        { id: `e2e-course-${i}-m1-l1`, title: 'Welcome', duration: '5 min', content: 'Seeded lesson content.' },
+                        { id: `e2e-course-${i}-m1-l2`, title: 'Export basics', duration: '12 min', content: 'Seeded lesson content.' },
+                    ],
+                },
+                {
+                    id: `e2e-course-${i}-m2`,
+                    title: 'Documentation',
+                    description: 'Certificates and customs',
+                    lessons: [
+                        { id: `e2e-course-${i}-m2-l1`, title: 'Certificates of origin', duration: '9 min', content: 'Seeded lesson content.' },
+                    ],
+                },
+            ],
+            price: 0,
+            currency: 'NGN',
+            category: 'export',
+            level: 'beginner',
+            tier: 'foundation',
+            enrollmentCount: 0, enrolledCount: 0, rating: 0,
+            status: 'open',
+            createdAt: now, updatedAt: now,
+        });
+    }
+
+    // Farm Nation land listings. getPublicLandListings filters on
+    // `status == "verified"` and orders by createdAt, and the browse page
+    // renders its empty state — not the property grid — when none match.
+    for (let i = 1; i <= 2; i++) {
+        await doc('land_listings', `e2e-listing-${i}`, {
+            title: `E2E Farmland Plot ${i}`,
+            description: 'Seeded for e2e runs. Arable land with road access.',
+            location: { state: 'Plateau', lga: 'Jos North', address: `Plot ${i}, Jos` },
+            size: 5, sizeInAcres: 5,
+            price: 2_500_000 * i, totalPrice: 2_500_000 * i,
+            category: 'farmland', propertyType: 'farmland', listingType: 'sale',
+            soilType: 'loamy', waterSource: 'borehole',
+            waterAccess: true, electricity: true, roadAccess: true,
+            images: [],
+            ownerId: ids.seller, ownerName: 'E2E Seller',
+            // "verified" is the only status the public browse query accepts.
+            status: 'verified', verificationStatus: 'verified',
+            createdAt: now, updatedAt: now,
+        });
+    }
 
     // Marketplace products owned by the seller.
     //
