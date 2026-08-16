@@ -1,4 +1,34 @@
 {
+  // "strict": true governs strictNullChecks and noImplicitAny. Both were
+  // previously listed below as false, which switched them back off.
+  //
+  // DO NOT DISABLE THEM AGAIN. They were turned on defect by defect, from 132
+  // errors to 0, and the errors were not noise. Among what only became visible
+  // once they were on:
+  //
+  //   db.collection(...).stream()          five call sites, method never
+  //                                        existed, every admin broadcast to
+  //                                        six audiences threw TypeError
+  //   db.collectionGroup("courses")        the academy _version backfill had
+  //                                        never once run
+  //   the whole auth layer                 declared `type Auth = any`, hiding
+  //                                        unpaginated lookups that only ever
+  //                                        saw 50 of ~41,000 accounts, so
+  //                                        password reset silently sent
+  //                                        nothing for almost every user
+  //   updateUser({ disabled: true })       accepted and dropped, so suspending
+  //                                        an account did nothing
+  //   userRecord.metadata.creationTime     read a field the record did not
+  //                                        have, throwing at the exact moment
+  //                                        the orphan scan found an orphan
+  //
+  // None of those needed a browser, a database or a reproduction. They were
+  // sitting in the compiler output, behind these two flags. Turning them off
+  // to make a build pass puts the next one back in front of a user.
+  //
+  // Enforced by `npx tsc --noEmit` in the Dockerfile, ci.yml and
+  // deploy-production.yml. next build sets ignoreBuildErrors so it does not
+  // type-check the project a second time — those three steps are the gate.
   "compilerOptions": {
     "target": "ES2017",
     "lib": [
@@ -9,8 +39,6 @@
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
-    "noImplicitAny": false,
-    "strictNullChecks": false,
     "noEmit": true,
     "esModuleInterop": true,
     "module": "esnext",

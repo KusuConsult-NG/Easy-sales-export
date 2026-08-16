@@ -126,7 +126,7 @@ describe('a migration is not a link', () => {
 });
 
 describe('dryRun still defaults to safe', () => {
-    beforeEach(() => requireSession.mockResolvedValue(SUPER_ADMIN));
+    beforeEach(() => { requireSession.mockResolvedValue(SUPER_ADMIN); });
 
     it('no parameter means a dry run', async () => {
         const { POST } = await loadRoute();

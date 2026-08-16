@@ -181,7 +181,7 @@ describe('an admin keeps full control', () => {
 });
 
 describe('roles come from the database, not the token', () => {
-    beforeEach(() => jest.clearAllMocks());
+    beforeEach(() => { jest.clearAllMocks(); });
 
     it('refuses a caller whose token would say admin but whose record does not', async () => {
         // The session in this fixture never carries roles; the record decides.

@@ -169,7 +169,7 @@ describe('getLandListings — the review queue needs an admin', () => {
 });
 
 describe('getLandListing — one listing at a time, same rule', () => {
-    beforeEach(() => jest.clearAllMocks());
+    beforeEach(() => { jest.clearAllMocks(); });
 
     it('hides a pending listing from a stranger', async () => {
         setSession(null);

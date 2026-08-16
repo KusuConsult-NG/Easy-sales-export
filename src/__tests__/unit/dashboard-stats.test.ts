@@ -228,7 +228,7 @@ describe('cooperative savings no longer sit behind a gate that never opens', () 
 });
 
 describe('access control', () => {
-    beforeEach(() => jest.clearAllMocks());
+    beforeEach(() => { jest.clearAllMocks(); });
 
     it('refuses an unauthenticated caller', async () => {
         setSession(null);
