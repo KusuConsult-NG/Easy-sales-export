@@ -5,7 +5,8 @@
  */
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-import fetch from 'node-fetch';
+// node-fetch removed: it ships no type declarations here, and Node 18+
+// has fetch built in, which is what this script runs on.
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 

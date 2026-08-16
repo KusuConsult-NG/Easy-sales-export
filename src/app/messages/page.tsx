@@ -9,6 +9,7 @@ import { getConversationsAction, getMessagesAction, sendMessageAction, startConv
 import type { Conversation, Message, UserSearchResult } from "@/lib/types/messages";
 import { format } from "date-fns";
 import { useToast } from "@/contexts/ToastContext";
+import { toMillis } from "@/lib/firestore-serialize";
 
 export default function MessagesPage() {
     const { data: session } = useSession();
@@ -78,9 +79,12 @@ export default function MessagesPage() {
                 if (isMounted && result.messages) {
                     // Sort chronologically
                     const sorted = [...result.messages].sort((a, b) => {
-                        const tA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-                        const tB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-                        return tA - tB;
+                        // toMillis handles both shapes. This was
+                        // new Date(x.timestamp).getTime(), which is NaN when
+                        // the value is a Timestamp object rather than the ISO
+                        // string serializeDocs produces — and a comparator
+                        // returning NaN leaves the order undefined.
+                        return toMillis(a.timestamp) - toMillis(b.timestamp);
                     });
 
                     setMessages(prev => {

@@ -266,7 +266,13 @@ async function uploadHandler(request: NextRequest) {
         const blob = new Blob([buffer], { type: detectedType });
         cloudinaryForm.append("file", blob, file.name);
         
-        cloudinaryForm.append("api_key", apiKey);
+        // The guard above returns unless all three credentials are present,
+        // and the local-disk branch returns before reaching here — so this is
+        // reached only when apiKey is set. The compiler cannot follow that
+        // two-step reasoning; without the narrowing, `undefined` would be
+        // appended as the string "undefined" and Cloudinary would reject the
+        // upload with an unhelpful message.
+        cloudinaryForm.append("api_key", apiKey as string);
         cloudinaryForm.append("timestamp", String(timestamp));
         cloudinaryForm.append("public_id", publicId);
         cloudinaryForm.append("signature", signature);

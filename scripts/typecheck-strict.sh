@@ -22,7 +22,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 # The number of errors remaining. Was 132 when the flags were first turned on.
-BASELINE=60
+BASELINE=41
 
 OUT="$(npx tsc -p tsconfig.strict.json --noEmit 2>&1 || true)"
 COUNT="$(printf '%s\n' "$OUT" | grep -c 'error TS' || true)"
