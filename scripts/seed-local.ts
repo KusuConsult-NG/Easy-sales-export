@@ -95,6 +95,14 @@ async function seedUser(u: (typeof USERS)[number]): Promise<string> {
     const raw = {
         id, email: u.email, name: u.name, fullName: u.name,
         roles: u.roles, isVerified: true, verified: true,
+        // profileComplete is what lib/hub-guard.ts checks, strictly against
+        // `=== true`, before allowing the dashboard or any module. Without it
+        // every seeded user logged in successfully and was bounced to
+        // /profile?notice=complete-your-hub-registration, so all 22
+        // auth-required specs failed on a redirect that looked like a broken
+        // login. The fixture has to satisfy the guard the app actually applies.
+        profileComplete: true,
+        requiresPasswordChange: false,
         gender: 'female', state: 'Plateau', lga: 'Jos North',
         serviceRegistrations: u.key === 'user'
             ? { cooperatives: { status: 'active', registeredAt: now } }
@@ -161,12 +169,35 @@ async function main() {
     });
 
     // Marketplace products owned by the seller.
+    //
+    // The shape here MATCHES WHAT /api/marketplace/create-product ACTUALLY
+    // WRITES. It used to carry `stock: 25` — a field no writer sets and no
+    // reader reads. The products API resolves quantity from `quantity` or
+    // `availableQuantity`, so every seeded product came back with quantity 0
+    // and read as out of stock.
+    //
+    // A fixture that does not match the real write shape is worse than no
+    // fixture: it makes a broken reader look correct, or a working one look
+    // broken, and either way the test measures the seed rather than the code.
+    // `pricingTiers` and `location` are here for the same reason — the mapper
+    // reads both, and a product without them renders at price 0 in "Nigeria".
     for (let i = 1; i <= 3; i++) {
         await doc('products', `e2e-product-${i}`, {
-            name: `E2E Test Product ${i}`, description: 'Seeded for e2e runs',
-            price: 1000 * i, category: 'grains', stock: 25,
+            name: `E2E Test Product ${i}`,
+            title: `E2E Test Product ${i}`,
+            description: 'Seeded for e2e runs',
+            category: 'grains',
+            unit: 'kg',
+            price: 1000 * i,
+            pricingTiers: [{ type: 'retail', price: 1000 * i, minQuantity: 1 }],
+            minOrder: 1,
+            minimumOrderQuantity: 1,
+            stockQuantity: 25,
+            availableQuantity: 25,
+            location: { state: 'Plateau', lga: 'Jos North', nearestMarket: 'Jos Main Market' },
             sellerId: ids.seller, sellerName: 'E2E Seller',
-            status: 'active', isActive: true, images: [], createdAt: now,
+            rating: 0, reviewCount: 0, totalOrders: 0, views: 0, orders: 0,
+            status: 'active', isActive: true, images: [], createdAt: now, updatedAt: now,
         });
     }
 
