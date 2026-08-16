@@ -230,7 +230,16 @@ async function uploadHandler(request: NextRequest) {
             await mkdir(path.dirname(absolute), { recursive: true });
             await writeFile(absolute, buffer);
 
-            const url = `/${relative}`;
+            // ABSOLUTE, like Cloudinary's secure_url.
+            //
+            // A relative "/uploads/..." satisfies an <img src> but fails
+            // z.string().url(), which loanApplicationSchema applies to every
+            // document. The file uploaded, the form field was set, and step 4
+            // still refused to advance — the local backend has to honour the
+            // same contract as the remote one, not merely produce something
+            // that renders.
+            const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+            const url = `${base}/${relative}`;
             logger.info(`File written to local disk (no Cloudinary configured): ${url}`);
             return NextResponse.json({
                 success: true,

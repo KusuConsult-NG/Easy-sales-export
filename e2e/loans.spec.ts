@@ -52,8 +52,18 @@ test.describe('Loan Application Flow', () => {
         // failure surfaced two steps later as "Submit Application not visible",
         // which reads like a broken step 5.
         console.log("Wizard Step 4: Uploading a document...");
+        // Wait for the SERVER ACTION, not for /api/upload.
+        //
+        // The wizard uploads through uploadDocumentAction, a server action —
+        // it never touches /api/upload. A previous attempt waited on that
+        // route and blocked until its own timeout, so the document was still
+        // unattached when Next was clicked, and step 4 refused to advance.
+        // Zero /api/upload requests was the correct observation and the wrong
+        // conclusion: the path simply is not that one.
+        //
+        // Server actions POST to the current URL, so that is the signal.
         const uploadResponse = page.waitForResponse(
-            r => r.url().includes('/api/upload') && r.request().method() === 'POST',
+            r => r.request().method() === 'POST' && r.url().includes('/loans/apply'),
             { timeout: 30000 },
         );
         // Scoped to the Government-issued ID uploader rather than "the first
