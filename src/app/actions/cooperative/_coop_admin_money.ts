@@ -269,7 +269,20 @@ export async function approveWithdrawalAction(
                 throw new Error("Withdrawal request not found");
             }
 
+            // Narrowed once, here, rather than left ambiguous.
+            //
+            // The code below mixed `withdrawalData?.field` with
+            // `withdrawalData.field` on the same value — optional access for
+            // the IDOR check, direct access for the userId and amount that
+            // decide whose money moves. That inconsistency is the author not
+            // being sure, and with strict null checks off the compiler could
+            // not say. A missing document here would have thrown
+            // "Cannot read properties of undefined" mid-way through a
+            // withdrawal, after the exists check had already passed.
             const withdrawalData = withdrawalDoc.data();
+            if (!withdrawalData) {
+                throw new Error("Withdrawal request has no data");
+            }
 
             // 🔒 Prevent IDOR on Approval
             if (adminScope && withdrawalData?.cooperativeId && withdrawalData.cooperativeId !== adminScope) {
@@ -436,7 +449,20 @@ export async function rejectWithdrawalAction(
                 throw new Error("Withdrawal request not found");
             }
 
+            // Narrowed once, here, rather than left ambiguous.
+            //
+            // The code below mixed `withdrawalData?.field` with
+            // `withdrawalData.field` on the same value — optional access for
+            // the IDOR check, direct access for the userId and amount that
+            // decide whose money moves. That inconsistency is the author not
+            // being sure, and with strict null checks off the compiler could
+            // not say. A missing document here would have thrown
+            // "Cannot read properties of undefined" mid-way through a
+            // withdrawal, after the exists check had already passed.
             const withdrawalData = withdrawalDoc.data();
+            if (!withdrawalData) {
+                throw new Error("Withdrawal request has no data");
+            }
 
             // 🔒 Prevent IDOR on Rejection
             if (adminScope && withdrawalData?.cooperativeId && withdrawalData.cooperativeId !== adminScope) {

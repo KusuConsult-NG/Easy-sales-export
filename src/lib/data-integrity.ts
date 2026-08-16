@@ -1,4 +1,5 @@
 import { db } from "./firebase-admin";
+import type { SupabaseDocumentReference } from "./supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 
 /**
@@ -8,7 +9,12 @@ import { FieldValue } from "@/lib/firestore-compat";
  * the version the client last saw.
  */
 export async function withOptimisticLock<T>(
-    docRef: any,
+    // Was `any`, which made transaction.get() below resolve to
+    // `DocumentSnapshot | QuerySnapshot` — a union with neither .exists nor
+    // .data() on it. Naming the type is what lets the compiler check the two
+    // lines that follow, on a helper that guards every optimistic-locked write
+    // in the vendor and order paths.
+    docRef: SupabaseDocumentReference,
     clientVersion: number | undefined,
     updateFn: (transaction: any, currentData: T) => void
 ) {

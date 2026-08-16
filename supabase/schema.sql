@@ -1,5 +1,17 @@
 -- Supabase Database Schema
 -- Auto-generated for Hybrid SQL + JSONB Migration
+--
+-- THIS FILE MUST STAY RE-RUNNABLE. Every table, index and extension below is
+-- already IF NOT EXISTS, but the nine updated_at triggers were plain
+-- CREATE TRIGGER, so a second run died on
+--
+--     ERROR: trigger "update_users_updated_at" for relation "users" already exists
+--
+-- and, because scripts/local-stack/up.sh runs with ON_ERROR_STOP=1, took the
+-- whole local stack down with it — PostgREST and the gateway never started.
+-- The only way to bring the stack up was to delete the database and lose
+-- whatever was seeded in it. CREATE OR REPLACE TRIGGER (PostgreSQL 14+) makes
+-- re-running a no-op. Keep new triggers in that form.
 
 -- Enable JSONB helper functions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -25,7 +37,7 @@ CREATE TABLE IF NOT EXISTS users (
     raw_data JSONB DEFAULT '{}'::jsonb
 );
 
-CREATE TRIGGER update_users_updated_at 
+CREATE OR REPLACE TRIGGER update_users_updated_at 
     BEFORE UPDATE ON users 
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
@@ -41,7 +53,7 @@ CREATE TABLE IF NOT EXISTS cooperative_members (
     raw_data JSONB DEFAULT '{}'::jsonb
 );
 
-CREATE TRIGGER update_coop_members_updated_at 
+CREATE OR REPLACE TRIGGER update_coop_members_updated_at 
     BEFORE UPDATE ON cooperative_members 
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
@@ -58,7 +70,7 @@ CREATE TABLE IF NOT EXISTS cooperative_loans (
     raw_data JSONB DEFAULT '{}'::jsonb
 );
 
-CREATE TRIGGER update_coop_loans_updated_at 
+CREATE OR REPLACE TRIGGER update_coop_loans_updated_at 
     BEFORE UPDATE ON cooperative_loans 
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
@@ -76,7 +88,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     raw_data JSONB DEFAULT '{}'::jsonb
 );
 
-CREATE TRIGGER update_transactions_updated_at 
+CREATE OR REPLACE TRIGGER update_transactions_updated_at 
     BEFORE UPDATE ON transactions 
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
@@ -93,7 +105,7 @@ CREATE TABLE IF NOT EXISTS processed_payments (
     raw_data JSONB DEFAULT '{}'::jsonb
 );
 
-CREATE TRIGGER update_processed_payments_updated_at 
+CREATE OR REPLACE TRIGGER update_processed_payments_updated_at 
     BEFORE UPDATE ON processed_payments 
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
@@ -110,7 +122,7 @@ CREATE TABLE IF NOT EXISTS marketplace_orders (
     raw_data JSONB DEFAULT '{}'::jsonb
 );
 
-CREATE TRIGGER update_marketplace_orders_updated_at 
+CREATE OR REPLACE TRIGGER update_marketplace_orders_updated_at 
     BEFORE UPDATE ON marketplace_orders 
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
@@ -125,7 +137,7 @@ CREATE TABLE IF NOT EXISTS wallets (
     raw_data JSONB DEFAULT '{}'::jsonb
 );
 
-CREATE TRIGGER update_wallets_updated_at 
+CREATE OR REPLACE TRIGGER update_wallets_updated_at 
     BEFORE UPDATE ON wallets 
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
@@ -141,7 +153,7 @@ CREATE TABLE IF NOT EXISTS academy_applications (
     raw_data JSONB DEFAULT '{}'::jsonb
 );
 
-CREATE TRIGGER update_academy_apps_updated_at 
+CREATE OR REPLACE TRIGGER update_academy_apps_updated_at 
     BEFORE UPDATE ON academy_applications 
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
@@ -157,7 +169,7 @@ CREATE TABLE IF NOT EXISTS document_collections (
     PRIMARY KEY (id, collection_name)
 );
 
-CREATE TRIGGER update_doc_collections_updated_at 
+CREATE OR REPLACE TRIGGER update_doc_collections_updated_at 
     BEFORE UPDATE ON document_collections 
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
