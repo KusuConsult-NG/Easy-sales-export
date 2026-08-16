@@ -120,7 +120,7 @@ function setWorld(opts: { roles?: string[]; review?: Record<string, any> | null 
 }
 
 describe('a super_admin can moderate reviews', () => {
-    beforeEach(() => jest.clearAllMocks());
+    beforeEach(() => { jest.clearAllMocks(); });
 
     async function moderate() {
         const { moderateReviewAction } = await import('@/app/actions/reviews');

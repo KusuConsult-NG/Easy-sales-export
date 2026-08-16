@@ -62,7 +62,7 @@ async function assertType(mime: string | undefined, fileName = 'f.png') {
 }
 
 describe('assertAllowedFileType — the policy /api/upload was missing', () => {
-    beforeEach(() => jest.clearAllMocks());
+    beforeEach(() => { jest.clearAllMocks(); });
 
     it('accepts content that really is a PNG', async () => {
         // Vacuity guard, and the one that matters: without it, a validator that

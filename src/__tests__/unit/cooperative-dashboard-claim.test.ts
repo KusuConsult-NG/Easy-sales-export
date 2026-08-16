@@ -280,7 +280,7 @@ describe('the dashboard does not demote an existing member', () => {
 });
 
 describe('access control', () => {
-    beforeEach(() => jest.clearAllMocks());
+    beforeEach(() => { jest.clearAllMocks(); });
 
     it('refuses an unauthenticated caller', async () => {
         (global as any).mockRequireSession.mockImplementation(() => Promise.resolve({
