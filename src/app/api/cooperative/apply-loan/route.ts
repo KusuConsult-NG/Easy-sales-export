@@ -6,6 +6,7 @@ import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { calculateRepaymentTerms } from "@/lib/loan-terms";
+import { isEligibleForLoan } from "@/lib/cooperative-tiers";
 import { FieldValue } from "@/lib/firestore-compat";
 import { withRateLimit } from "@/lib/rate-limit";
 
@@ -25,12 +26,45 @@ async function applyLoanHandler(request: NextRequest) {
 
         const userId = session.user.id;
         const body = await request.json();
-        const { productId, amount, purpose, guarantorName, guarantorPhone, guarantorEmail, guarantorRelationship } = body;
+        const { productId, amount: rawAmount, purpose, guarantorName, guarantorPhone, guarantorEmail, guarantorRelationship } = body;
 
         // Validate inputs
-        if (!productId || !amount || !purpose || !guarantorName || !guarantorPhone) {
+        if (!productId || !rawAmount || !purpose || !guarantorName || !guarantorPhone) {
             return NextResponse.json(
                 { success: false, message: "Missing required fields (including guarantor name and phone)" },
+                { status: 400 }
+            );
+        }
+
+        // Coerce the amount ONCE, here, and refuse anything that is not a
+        // positive finite number.
+        //
+        // `amount` came off a JSON body and was used raw. Every check below it
+        // is a comparison, and a comparison against a non-number is false, not
+        // an error — so `amount: "abc"` was neither less than minAmount nor
+        // greater than maxAmount, and `"abc" * 2` is NaN, which no savings
+        // balance is less than. Both the range check and the savings
+        // requirement passed. What stopped it was calculateRepaymentTerms
+        // throwing much further down, which surfaced as a 500 "Internal server
+        // error" — the checks themselves had already been bypassed.
+        //
+        // A string of digits was worse: "5000" coerces through every comparison
+        // and would have been STORED as a string on the application, for the
+        // approval and disbursement paths to do arithmetic on.
+        //
+        // Validating the type at the boundary is what makes the guards below
+        // mean what they read as.
+        const amount = typeof rawAmount === "number" ? rawAmount : Number(rawAmount);
+        if (!Number.isFinite(amount) || amount <= 0) {
+            return NextResponse.json(
+                { success: false, message: "Loan amount must be a positive number" },
+                { status: 400 }
+            );
+        }
+        if (typeof guarantorName !== "string" || typeof guarantorPhone !== "string") {
+            // .trim() is called on both below; a non-string there is a 500.
+            return NextResponse.json(
+                { success: false, message: "Guarantor name and phone must be text" },
                 { status: 400 }
             );
         }
@@ -68,27 +102,60 @@ async function applyLoanHandler(request: NextRequest) {
 
         const product = productDoc.data()!;
 
-        // Validate amount range
-        if (amount < product.minAmount || amount > product.maxAmount) {
+        // Validate amount range.
+        //
+        // The bounds are coerced before comparing for the same reason the
+        // amount is: a product saved without minAmount/maxAmount made both
+        // comparisons false — `x < undefined` is false, not an error — so the
+        // range check silently passed everything, and the error message it
+        // would have produced called .toLocaleString() on undefined. An
+        // unusable bound is a broken product, not an unbounded one.
+        const minAmount = Number(product.minAmount);
+        const maxAmount = Number(product.maxAmount);
+        if (!Number.isFinite(minAmount) || !Number.isFinite(maxAmount) || minAmount > maxAmount) {
+            logger.error("[apply-loan] Loan product has unusable amount bounds", {
+                productId, minAmount: product.minAmount, maxAmount: product.maxAmount,
+            });
+            return NextResponse.json(
+                { success: false, message: "This loan product is not currently available" },
+                { status: 409 }
+            );
+        }
+        if (amount < minAmount || amount > maxAmount) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: `Loan amount must be between ₦${product.minAmount.toLocaleString()} and ₦${product.maxAmount.toLocaleString()}`
+                    message: `Loan amount must be between ₦${minAmount.toLocaleString()} and ₦${maxAmount.toLocaleString()}`
                 },
                 { status: 400 }
             );
         }
 
-        // ELIGIBILITY CHECK #1: Check savings requirement (must have 2x loan amount in savings)
-        const totalSavings = membershipData.totalContributions || 0;
-        const requiredSavings = amount * 2;
-
-        if (totalSavings < requiredSavings) {
+        // ELIGIBILITY CHECK #1: savings must cover twice the loan.
+        //
+        // Two corrections, both in the same two lines.
+        //
+        // WRONG FIELD. This read `totalContributions` — the CUMULATIVE LIFETIME
+        // total, incremented on every contribution and decremented nowhere in
+        // src/. A member who paid in ₦100,000 and had already withdrawn ₦95,000
+        // still reported ₦100,000 here and qualified for a ₦50,000 loan against
+        // ₦5,000 of actual security. `savingsBalance` is the spendable figure,
+        // and it is what the withdraw route was corrected to for this exact
+        // reason (see its comment) and what the member-facing loan action uses.
+        //
+        // OPEN-CODED POLICY. The 2× requirement was written out here as
+        // `amount * 2`, a third copy of a rule that already lives in
+        // lib/cooperative-tiers.ts as maxLoanMultiplier: 0.5. That constant was
+        // corrected from 3 to 0.5; copies like this one are why such a
+        // correction does not take. isEligibleForLoan is the single place the
+        // rule is expressed, so a future change to it reaches every path at
+        // once — including the minimum-contribution floor, which this route
+        // never applied at all.
+        const totalSavings = Number(membershipData.savingsBalance) || 0;
+        const eligibility = isEligibleForLoan(totalSavings, amount, 0);
+        if (!eligibility.eligible) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: `Insufficient savings. You need at least ₦${requiredSavings.toLocaleString()} in contributions (2x loan amount). Current savings: ₦${totalSavings.toLocaleString()}`
-                },
+                { success: false, message: eligibility.reason ?? "You are not eligible for this loan amount." },
                 { status: 403 }
             );
         }

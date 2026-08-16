@@ -21,6 +21,7 @@ import type { CooperativeTransaction, MakeContributionState, GetTransactionsStat
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { revalidatePath } from "next/cache";
 import { calculateRepaymentTerms } from "@/lib/loan-terms";
+import { isEligibleForLoan } from "@/lib/cooperative-tiers";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
 
 /**
@@ -460,12 +461,40 @@ async function _applyForLoanAction(
 
         const loansRef = db.collection(COLLECTIONS.COOPERATIVE_LOANS);
 
-        // 2. Check Loan Limit (e.g., 3x Savings Balance)
-        const savingsBalance = membershipData.savingsBalance || 0;
-        const maxLoanAmount = savingsBalance * 3;
-
-        if (amount > maxLoanAmount) {
-            throw new Error(`Loan amount exceeds your limit of ₦${maxLoanAmount.toLocaleString()} (3x Savings)`);
+        // 2. Loan limit — decided by lib/cooperative-tiers.ts, not inline here.
+        //
+        // This read `savingsBalance * 3` and refused above it. The confirmed
+        // policy is the opposite direction: a member may borrow up to HALF their
+        // savings, i.e. savings must be at least twice the loan. That is what
+        // COOPERATIVE_TIERS.Member.maxLoanMultiplier (0.5) says, what
+        // getMaxLoanAmount returns, and what the benefits list rendered to
+        // members on the contribute page promises.
+        //
+        // The multiplier was corrected from 3 to 0.5 in cooperative-tiers.ts.
+        // This line was the reason that correction did not take: it never read
+        // the constant. Two other loan paths (_loans_applications.ts,
+        // _loans_decisions.ts) already go through the policy module — this one,
+        // the path the member UI actually submits through, was the hold-out. So
+        // the limit shown to a member and the limit enforced on them came from
+        // different numbers, and the enforced one was six times larger.
+        //
+        // Uncollateralised by six times, on loans whose only security is the
+        // savings being lent against.
+        //
+        // savingsBalance is the right input, and stays. It is the spendable
+        // figure the cooperative actually holds; totalContributions is a
+        // lifetime total that is never decremented, so a member who paid in
+        // ₦100,000 and withdrew ₦95,000 still reports ₦100,000 against it. The
+        // withdraw route carries the same note for the same reason.
+        //
+        // currentLoanBalance is 0 because claimSingleOpenLoanApplication below
+        // refuses outright if the borrower has any open application or loan, so
+        // there is never a balance to add here. If that guard is ever relaxed,
+        // this argument is where the outstanding balance belongs.
+        const savingsBalance = Number(membershipData.savingsBalance) || 0;
+        const eligibility = isEligibleForLoan(savingsBalance, amount, 0);
+        if (!eligibility.eligible) {
+            throw new Error(eligibility.reason ?? "You are not eligible for this loan amount.");
         }
 
         // 3. The loan is written on the terms of the product the member chose.
