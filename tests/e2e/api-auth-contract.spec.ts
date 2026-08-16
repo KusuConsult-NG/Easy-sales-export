@@ -25,10 +25,16 @@ import path from 'node:path';
  *
  * WHAT IS ASSERTED
  * ----------------
- * Each route is called with NO cookies. It must NOT answer 2xx, unless it is
- * on the PUBLIC list below with a stated reason. 401, 403, 404, 405, 400 and
- * 500 are all acceptable answers to an anonymous caller — the contract is
- * simply that an anonymous caller is not served.
+ * Each route is called with NO cookies AND WITHOUT FOLLOWING REDIRECTS. It
+ * must NOT answer 2xx, unless it is on the PUBLIC list below with a stated
+ * reason. A 3xx redirect away, a 401/403/404/405/400, and even a 500 all mean
+ * the caller was not served — the contract is simply that an anonymous caller
+ * gets no data.
+ *
+ * Not following redirects is load-bearing. This file's first run reported
+ * /api/academy/verify-payment as serving anonymous callers a 200. It does not:
+ * it answers 307 to /academy?error=missing_reference, and following that lands
+ * on the academy page, whose 200 the check then blamed on the API route.
  *
  * A 500 is allowed on purpose: many routes reject anonymous callers by
  * throwing while resolving the session. Ugly, but not a data leak, and this
@@ -99,21 +105,36 @@ test.describe('API routes refuse anonymous callers', () => {
             // and makes an unguarded route look guarded.
             const anonymous = await playwrightRequest.newContext({ baseURL, storageState: undefined });
             try {
-                const response = await anonymous.get(route, { failOnStatusCode: false });
+                // maxRedirects: 0 — do NOT follow the redirect.
+                //
+                // Without it this check reports a hole that is not there. Its
+                // first run flagged /api/academy/verify-payment as serving an
+                // anonymous caller a 200. It does not: it answers
+                // 307 -> /academy?error=missing_reference, a correct refusal,
+                // and following that lands on the academy page whose 200 the
+                // check then blamed on the API route. Verified by hand before
+                // believing it — the body was the academy page's HTML, not
+                // data.
+                //
+                // A redirect IS a refusal here, so the bar is 2xx, not 4xx.
+                const response = await anonymous.get(route, { failOnStatusCode: false, maxRedirects: 0 });
                 const status = response.status();
 
                 if (isPublic) {
                     expect(status, `${route} is listed public (${PUBLIC_ROUTES[route]}) but answered ${status}`)
-                        .toBeLessThan(400);
+                        .toBeLessThan(300);
                     return;
                 }
 
-                // The assertion this file exists for.
+                // The assertion this file exists for: anything but a 2xx.
+                // 3xx (redirected away), 4xx (refused) and 5xx (threw while
+                // resolving the session) all mean the caller was not served.
                 expect(
                     status,
-                    `${route} answered ${status} to a signed-out caller. Either it is missing a ` +
-                    `session check, or it is genuinely public and belongs in PUBLIC_ROUTES with a reason.`
-                ).toBeGreaterThanOrEqual(400);
+                    `${route} answered ${status} to a signed-out caller and served a body. Either it ` +
+                    `is missing a session check, or it is genuinely public and belongs in ` +
+                    `PUBLIC_ROUTES with a reason.`
+                ).toBeGreaterThanOrEqual(300);
             } finally {
                 await anonymous.dispose();
             }
