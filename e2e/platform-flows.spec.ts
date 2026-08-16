@@ -133,14 +133,30 @@ test.describe('Academy Course Enrollment', () => {
         // Wait for lesson page to load
         await page.waitForURL(/\/academy\/[a-zA-Z0-9_-]+\/lesson\/[a-zA-Z0-9_-]+/);
 
+        // The lesson must NOT already be complete, or there is nothing to test.
+        //
+        // A completed lesson renders "Completed" and no "Mark as Complete"
+        // button, so this spec used to time out after 90 seconds waiting for a
+        // control that would never appear again — it passed on a fresh database
+        // and was blocked on every run afterwards. scripts/seed-local.ts now
+        // clears academy progress for the seeded personas, and this asserts
+        // that it worked rather than trusting it.
+        await expect(page.getByText('Completed')).toHaveCount(0);
+
         // Complete lesson
         await page.evaluate(() => {
             window.scrollTo(0, document.body.scrollHeight);
         });
         await page.click('text=Mark as Complete');
 
-        // Verify progress
-        await expect(page.locator('text=1 /').first()).toBeVisible({ timeout: 10000 });
+        // Verify progress ADVANCED.
+        //
+        // The old assertion was `text=1 /` — which the page already showed
+        // before the click whenever a previous run had left the lesson
+        // complete, so it could pass without the click doing anything. The
+        // count is read before and after instead.
+        await expect(page.getByText(/\d+ \/ \d+ lessons/)).toContainText('1 / 3 lessons', { timeout: 10000 });
+        await expect(page.getByText('Completed').first()).toBeVisible({ timeout: 10000 });
     });
 
     test.skip('User can take quiz and get certificate', async ({ page }) => {
