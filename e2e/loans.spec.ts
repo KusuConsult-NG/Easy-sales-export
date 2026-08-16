@@ -184,16 +184,23 @@ test.describe('Loan Application Validation', () => {
 
         // Fill and RE-fill until it sticks.
         //
-        // Retrying the ASSERTION cannot help and Playwright already does it:
-        // when this goes wrong the field reverts to its default and stays
-        // there, so the fill is what has to be repeated. The layout remounts
-        // after navigation — NotificationCenter was measured issuing 6
-        // server-action POSTs in 20 idle seconds, three times the single 10s
-        // poll it schedules — and each remount re-initialises react-hook-form
-        // from defaultValues, putting 10000 back.
+        // OBSERVED: on roughly two runs in five, fill('0') reads back "10000" —
+        // the react-hook-form default — and stays there. Retrying the
+        // ASSERTION cannot help, and Playwright already does that; the fill
+        // itself is what has to be repeated.
         //
-        // Belt and braces alongside the single login above; the polling
-        // multiplication is recorded separately as a defect of its own.
+        // THE CAUSE IS NOT ESTABLISHED. An earlier version of this comment
+        // blamed the layout remounting, on the strength of NotificationCenter
+        // appearing to poll three times more often than it schedules. That
+        // measurement was wrong: it counted every server-action POST on the
+        // page, not notification polls. Counted properly — getMyNotifications
+        // calls in the server log across a 30-second idle window — it is 4
+        // against the 3 a single 10-second poller produces, i.e. one poller,
+        // behaving as written.
+        //
+        // So the retry is a tolerance for something not yet explained, not a
+        // workaround for a known defect. Left deliberately visible rather than
+        // dressed up with a cause that does not hold.
         await expect.poll(async () => {
             await amountField.fill('0');
             return amountField.inputValue();
