@@ -7,8 +7,9 @@ import { test, expect } from '@playwright/test';
  */
 
 test.describe('Cooperative Contribution', () => {
-    // NOTE: These tests require authentication
-    // They are skipped by default and should be run with authenticated session
+    // These required authentication and were skipped for want of a login
+    // helper. e2e/helpers/auth.ts and the seeded personas now exist, so they
+    // sign in and run.
 
     test('should display cooperative contribution page', async ({ page }) => {
         await loginAs(page, USERS.cooperative.email, USERS.cooperative.password);
@@ -46,6 +47,4 @@ test.describe('Cooperative Contribution', () => {
     // coming back. Standing up a fake Paystack to make a test green would
     // reopen the same hole by another route. Payment redirect belongs in a
     // sandbox-credential run, not here.
-
-    });
 });
