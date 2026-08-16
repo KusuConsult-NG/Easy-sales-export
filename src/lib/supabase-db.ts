@@ -28,7 +28,7 @@ import { logger } from './logger';
 // Maps Firestore collection names → dedicated Supabase table names.
 // Collections NOT listed here fall back to the `document_collections` generic table.
 
-const DEDICATED_TABLE_MAP: Record<string, string> = {
+export const DEDICATED_TABLE_MAP: Record<string, string> = {
     'users': 'users',
     'cooperative_members': 'cooperative_members',
     'cooperative_loans': 'cooperative_loans',
@@ -43,7 +43,7 @@ const DEDICATED_TABLE_MAP: Record<string, string> = {
 
 // Native typed columns per dedicated table (used to route .where() filters efficiently)
 // Fields NOT listed here are stored in raw_data JSONB and queried via raw_data->>'field'
-const NATIVE_COLUMNS: Record<string, string[]> = {
+export const NATIVE_COLUMNS: Record<string, string[]> = {
     'users': ['id', 'email', 'roles', 'created_at', 'updated_at'],
     'cooperative_members': ['id', 'user_id', 'status', 'created_at', 'updated_at'],
     'cooperative_loans': ['id', 'user_id', 'amount', 'status', 'created_at', 'updated_at'],
@@ -56,7 +56,7 @@ const NATIVE_COLUMNS: Record<string, string[]> = {
 
 // Firestore field name → Supabase native column name (for dedicated tables)
 // These map the app's data model field names to the actual SQL column names
-const FIELD_TO_COLUMN: Record<string, Record<string, string>> = {
+export const FIELD_TO_COLUMN: Record<string, Record<string, string>> = {
     'users': {
         'email': 'email',
         'roles': 'roles',

@@ -121,17 +121,19 @@ test.describe('Loan Application Flow', () => {
         console.log('✅ Loan application submitted via wizard');
     });
 
-    test.skip('should display user eligibility information (cooperative-only feature)', async ({ page }) => {
-        await page.goto('/loans/apply');
-
-        // Check for eligibility info
-        const eligibilityCard = page.locator('[data-testid="eligibility-info"]');
-        await expect(eligibilityCard).toBeVisible({ timeout: 5000 });
-
-        // Should show tier and max loan amount
-        await expect(page.locator('text=Your Tier')).toBeVisible();
-        await expect(page.locator('text=Max Loan Amount')).toBeVisible();
-    });
+    // 'should display user eligibility information' is REMOVED rather than
+    // enabled.
+    //
+    // It waited for [data-testid="eligibility-info"] and the strings "Your
+    // Tier" and "Max Loan Amount". None of the three exists anywhere in the
+    // codebase — checked. It describes a tier/eligibility panel that was never
+    // built, which is why it was switched off instead of fixed.
+    //
+    // Loan eligibility IS enforced, and it IS tested: isEligibleForLoan in
+    // src/lib/cooperative-loan-policy.ts, applied by
+    // src/app/actions/cooperative/_coop_money.ts, with unit coverage. What is
+    // missing is a UI that shows the borrower their limit before they apply —
+    // a feature request, not a broken test.
 });
 
 /**

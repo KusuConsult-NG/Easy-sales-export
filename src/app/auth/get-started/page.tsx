@@ -90,7 +90,18 @@ export default function GetStartedPage() {
         }
     }, [status, router]);
 
-    if (status === "loading") {
+    // Covers "unauthenticated" as well as "loading".
+    //
+    // It used to return only for "loading", so an unauthenticated visitor fell
+    // straight through to the body below with `session` null. Every block down
+    // there is driven by session data, so nothing rendered: a signed-out
+    // visitor to /auth/get-started got a COMPLETELY BLANK PAGE until the
+    // redirect in the effect above landed — and if that redirect is slow or
+    // does not fire, a blank page is all they ever get.
+    //
+    // Found by the page smoke suite, which asserts each route puts something
+    // on screen. This was the only route in the application that did not.
+    if (status !== "authenticated") {
         return (
             <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-slate-900 via-blue-900 to-slate-900">
                 <div className="inline-block animate-spin rounded-full h-16 w-16 border-b-4 border-white"></div>

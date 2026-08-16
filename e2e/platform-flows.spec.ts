@@ -158,9 +158,15 @@ test.describe('Academy Course Enrollment', () => {
         await expect(page.getByText('Completed').first()).toBeVisible({ timeout: 10000 });
     });
 
-    test.skip('User can take quiz and get certificate', async ({ page }) => {
-        // Skip course-level quiz as quizzes are module-specific in the current design
-    });
+    // 'User can take quiz and get certificate' is REMOVED.
+    //
+    // Its body was EMPTY apart from the comment "quizzes are module-specific in
+    // the current design". An empty skipped test is not coverage of anything —
+    // it is a note, and it reads on a report as though a quiz flow is tested.
+    //
+    // Module-level quizzes do exist (admin/academy/[courseId]/quiz/[quizId]).
+    // A real test of taking one and earning a certificate is worth writing and
+    // needs a seeded quiz with questions; it is not this.
 });
 
 test.describe('Admin Workflows', () => {
