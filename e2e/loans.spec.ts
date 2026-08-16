@@ -134,8 +134,20 @@ test.describe('Loan Approval (Admin)', () => {
         const loansTable = page.locator('table');
         await expect(loansTable).toBeVisible({ timeout: 20000 });
 
-        // 3. Find first pending loan and click approve
-        const approveButton = page.locator('table button[title="Approve Loan"]').first();
+        // 3. Approve THIS TEST'S OWN ROW, not "whatever is first".
+        //
+        // The queue is ordered newest-first and the wizard test above files an
+        // application for E2E Member, so `.first()` actioned that row instead —
+        // and it has guarantorVerified false, which approveLoanAction refuses.
+        // The test passed alone and failed in sequence, which reads like a
+        // broken approval rather than a test picking the wrong row.
+        //
+        // The seeded pending application belongs to E2E Cooperative (see
+        // scripts/seed-local.ts) and carries the guarantorVerified and
+        // contributionAmount approval requires.
+        const seededRow = page.locator('table tr', { hasText: 'E2E Cooperative' }).first();
+        await expect(seededRow).toBeVisible({ timeout: 15000 });
+        const approveButton = seededRow.locator('button[title="Approve Loan"]').first();
 
         if (await approveButton.isVisible()) {
             console.log("Approve button is visible. Registering dialog handler...");
