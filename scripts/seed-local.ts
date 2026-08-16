@@ -88,6 +88,15 @@ const USERS = [
     // too — without it the listing form redirects to /farm-nation/onboarding.
     { key: 'seller', email: process.env.TEST_SELLER_EMAIL || 'e2e.seller@easysalesexport.com', password: process.env.TEST_SELLER_PASSWORD || 'E2eSeller@2024!', roles: ['member', 'seller', 'land_owner'],  name: 'E2E Seller',      modules: ['marketplace', 'farmNation'] },
     { key: 'academy', email: process.env.TEST_ACADEMY_EMAIL || 'e2e.academy@easysalesexport.com', password: process.env.TEST_ACADEMY_PASSWORD || 'E2eAcademy@2024!', roles: ['member', 'academy_participant'], name: 'E2E Academy',  modules: ['academy'] },
+    // A SECOND academy identity, for the platform-flows enrolment spec.
+    //
+    // Both specs enrol the learner and advance their progress, and enrolment is
+    // not idempotent from the learner's point of view — a course already
+    // started shows "Resume" where the spec expects "Enroll". Sharing one
+    // persona made platform-flows pass in isolation and fail in sequence, which
+    // reads as a broken enrolment rather than a fixture two tests are fighting
+    // over.
+    { key: 'academy2', email: process.env.TEST_ACADEMY2_EMAIL || 'e2e.academy2@easysalesexport.com', password: process.env.TEST_ACADEMY2_PASSWORD || 'E2eAcademy@2024!', roles: ['member', 'academy_participant'], name: 'E2E Academy Two', modules: ['academy'] },
     { key: 'cooperative', email: process.env.TEST_COOPERATIVE_EMAIL || 'e2e.cooperative@easysalesexport.com', password: process.env.TEST_COOPERATIVE_PASSWORD || 'E2eCoop@2024!', roles: ['member', 'cooperative_member'], name: 'E2E Cooperative', modules: ['cooperatives'] },
     { key: 'wave',   email: process.env.TEST_WAVE_EMAIL   || 'e2e.wave@easysalesexport.com',   password: process.env.TEST_WAVE_PASSWORD   || 'E2eWave@2024!',   roles: ['member', 'wave_participant'],      name: 'E2E Wave',        modules: ['wave'] },
     { key: 'export', email: process.env.TEST_EXPORT_EMAIL || 'e2e.export@easysalesexport.com', password: process.env.TEST_EXPORT_PASSWORD || 'E2eExport@2024!', roles: ['member', 'export_participant'],    name: 'E2E Export',      modules: ['export'] },
@@ -370,6 +379,60 @@ async function main() {
             status: 'active', isActive: true, images: [], createdAt: now, updatedAt: now,
         });
     }
+
+    // An open marketplace dispute, so the admin queue has a case to review.
+    //
+    // Without one the disputes page renders its empty state and the spec waits
+    // for a "Review Case" button that is never drawn — a fixture gap that looks
+    // like a broken admin page. getAdminDisputesAction reads the generic
+    // `disputes` collection ordered by createdAt with no mandatory status
+    // filter, so any row appears; `open` is what the resolve flow expects to
+    // act on.
+    // marketplace_orders is a DEDICATED TABLE — writing it through doc() would
+    // put it in document_collections, where nothing looks for it. Same trap the
+    // seeded pending loan fell into.
+    const { error: ordErr } = await admin.from('marketplace_orders').upsert({
+        id: 'e2e-disputed-order',
+        user_id: ids.buyer,
+        status: 'disputed',
+        total_amount: 2000,
+        raw_data: {
+            id: 'e2e-disputed-order',
+            buyerId: ids.buyer, sellerId: ids.seller,
+            productId: 'e2e-product-1', productName: 'E2E Test Product 1',
+            quantity: 2, totalAmount: 2000, currency: 'NGN',
+            status: 'disputed', paymentStatus: 'paid',
+            createdAt: now, updatedAt: now,
+        },
+    }, { onConflict: 'id' });
+    if (ordErr) fail(`marketplace_orders: ${ordErr.message}`);
+
+    await doc('disputes', 'e2e-dispute-1', {
+        orderId: 'e2e-disputed-order',
+        buyerId: ids.buyer, sellerId: ids.seller,
+        buyerName: 'E2E Buyer', sellerName: 'E2E Seller',
+        reason: 'item_not_as_described',
+        description: 'Seeded dispute for the admin resolution flow.',
+        amount: 2000, currency: 'NGN',
+        status: 'open', escalated: false,
+        evidence: [], messages: [],
+        createdAt: now, updatedAt: now,
+    });
+
+    // The escrow transaction the dispute resolution acts on.
+    //
+    // updateDisputeStatusAction looks up ESCROW_TRANSACTIONS by orderId and
+    // refuses with "Associated escrow transaction not found for this dispute"
+    // without one — so the dispute rendered and opened fine and only failed at
+    // the moment of resolution. It accepts an escrow in funded, disputed or
+    // pending; `disputed` matches the order's own state.
+    await doc('escrow_transactions', 'e2e-escrow-1', {
+        orderId: 'e2e-disputed-order',
+        buyerId: ids.buyer, sellerId: ids.seller,
+        amount: 2000, currency: 'NGN',
+        status: 'disputed',
+        createdAt: now, updatedAt: now,
+    });
 
     // One notification so the bell has something real to render.
     await doc('notifications', 'e2e-notification-1', {

@@ -71,7 +71,10 @@ test.describe('Farm Nation Property Listings', () => {
 test.describe('Academy Course Enrollment', () => {
     test('User can enroll and complete a course', async ({ page }) => {
         // Login
-        await loginAs(page, USERS.academy.email, USERS.academy.password);
+        // Its own learner — courses.spec.ts drives USERS.academy through the
+        // same enrolment, and a course already started shows Resume where this
+        // spec expects Enroll.
+        await loginAs(page, USERS.academy2.email, USERS.academy2.password);
 
         // Browse courses
         await page.goto('/academy/courses');

@@ -58,6 +58,15 @@ export const USERS = {
     buyer:       { email: process.env.TEST_BUYER_EMAIL       || 'e2e.buyer@easysalesexport.com',       password: process.env.TEST_BUYER_PASSWORD       || 'E2eBuyer@2024!' },
     /** Approved for academy → lands on /academy/dashboard */
     academy:     { email: process.env.TEST_ACADEMY_EMAIL     || 'e2e.academy@easysalesexport.com',     password: process.env.TEST_ACADEMY_PASSWORD     || 'E2eAcademy@2024!' },
+    /**
+     * A SECOND academy identity, so two specs do not enrol the same learner.
+     *
+     * Enrolment is not idempotent from the learner's side — a course already
+     * started shows "Resume" where a spec expects "Enroll" — so courses.spec.ts
+     * and platform-flows.spec.ts fought over one persona and the second to run
+     * failed. Each has its own now.
+     */
+    academy2:    { email: process.env.TEST_ACADEMY2_EMAIL    || 'e2e.academy2@easysalesexport.com',    password: process.env.TEST_ACADEMY2_PASSWORD    || 'E2eAcademy@2024!' },
     /** Approved for cooperatives → lands on /cooperatives/dashboard */
     cooperative: { email: process.env.TEST_COOPERATIVE_EMAIL || 'e2e.cooperative@easysalesexport.com', password: process.env.TEST_COOPERATIVE_PASSWORD || 'E2eCoop@2024!' },
     /** Approved for wave → lands on /wave/dashboard */
