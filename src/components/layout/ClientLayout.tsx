@@ -94,13 +94,53 @@ function LayoutContent({ children }: ClientLayoutProps) {
     // Active module info for mobile top bar label
     const activeModule = getModuleConfig(pathname);
 
+    /**
+     * WAIT FOR THE SESSION BEFORE MOUNTING A MODULE PAGE.
+     *
+     * `children` appears in TWO different places below — inside the sidebar's
+     * nested flex column when showSidebar is true, and bare in a fragment when
+     * it is false. React reconciles by position, so the moment showSidebar
+     * flips, the entire page subtree is UNMOUNTED and a fresh one mounted.
+     *
+     * useSession starts at "loading" and resolves a beat later, so on every
+     * module page that flip happens shortly after first paint — and every
+     * component below loses its state.
+     *
+     * What that did to users: anything typed before the session settled was
+     * silently wiped. Measured on /farm-nation/list-land, filling the form as
+     * fast as a script can: the title, description and state fields were empty
+     * by the time Submit was pressed, while later fields survived — the
+     * signature of one remount partway through. The land listing form then
+     * refused to submit with no message at all, because an empty `required`
+     * title fails HTML5 validation and the browser blocks submit before
+     * handleSubmit ever runs. The same remount re-initialises react-hook-form
+     * from its defaults, which is what put 10000 back in the loan wizard's
+     * amount field mid-test.
+     *
+     * On a slow connection the window is wider, so a real seller is MORE
+     * likely to hit it than the test was.
+     *
+     * Gated on module pages only. Public and auth pages keep rendering
+     * immediately — they do not depend on the session for their layout, so
+     * there is no flip to wait for and no reason to delay first paint.
+     */
+    const awaitingSessionForModulePage = mode === "module" && status === "loading";
+
     return (
         <ToastProvider>
             {status === "authenticated" && <SessionActivityTracker />}
             <SessionGuard />
 
             <>
-                {showSidebar ? (
+                {awaitingSessionForModulePage ? (
+                    <div className="flex h-screen items-center justify-center bg-slate-50">
+                        <div
+                            className="w-8 h-8 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin"
+                            role="status"
+                            aria-label="Loading"
+                        />
+                    </div>
+                ) : showSidebar ? (
                     <div className="flex h-screen overflow-hidden">
                         {/* ModuleSidebar — renders desktop aside + mobile drawer internally */}
                         <ModuleSidebar

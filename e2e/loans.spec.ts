@@ -182,29 +182,21 @@ test.describe('Loan Application Validation', () => {
         await expect(amountField).toBeVisible({ timeout: 15000 });
         await expect(amountField).toHaveValue('10000', { timeout: 15000 });
 
-        // Fill and RE-fill until it sticks.
+        // A plain fill, deliberately, with no retry.
         //
-        // OBSERVED: on roughly two runs in five, fill('0') reads back "10000" —
-        // the react-hook-form default — and stays there. Retrying the
-        // ASSERTION cannot help, and Playwright already does that; the fill
-        // itself is what has to be repeated.
+        // This used to read back "10000" — the react-hook-form default — on
+        // roughly two runs in five, and was worked around by retrying the fill
+        // until it stuck. The cause was found and fixed in
+        // src/components/layout/ClientLayout.tsx: `children` appeared in two
+        // different tree positions depending on whether the sidebar showed, so
+        // the moment useSession resolved from "loading" the whole page subtree
+        // was unmounted and remounted, re-initialising the form from its
+        // defaults. Module pages now wait for the session before mounting.
         //
-        // THE CAUSE IS NOT ESTABLISHED. An earlier version of this comment
-        // blamed the layout remounting, on the strength of NotificationCenter
-        // appearing to poll three times more often than it schedules. That
-        // measurement was wrong: it counted every server-action POST on the
-        // page, not notification polls. Counted properly — getMyNotifications
-        // calls in the server log across a 30-second idle window — it is 4
-        // against the 3 a single 10-second poller produces, i.e. one poller,
-        // behaving as written.
-        //
-        // So the retry is a tolerance for something not yet explained, not a
-        // workaround for a known defect. Left deliberately visible rather than
-        // dressed up with a cause that does not hold.
-        await expect.poll(async () => {
-            await amountField.fill('0');
-            return amountField.inputValue();
-        }, { timeout: 20000, message: 'amount field kept reverting to its default' }).toBe('0');
+        // The retry is gone on purpose. Kept, it would swallow that regression
+        // if it ever came back.
+        await amountField.fill('0');
+        await expect(amountField).toHaveValue('0');
         await page.click('text=Next');
 
         // Should see validation error
