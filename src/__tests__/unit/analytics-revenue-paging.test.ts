@@ -268,7 +268,7 @@ describe('the same bug had two siblings in the same file', () => {
 });
 
 describe('the financial overview is admin-only', () => {
-    beforeEach(() => jest.clearAllMocks());
+    beforeEach(() => { jest.clearAllMocks(); });
 
     it('refuses a caller with no session', async () => {
         setSession(null);

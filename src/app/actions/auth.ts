@@ -131,7 +131,17 @@ export async function getPostLoginRedirect(email: string) { try {
                 
                 // If they are a global admin/super admin, they should land on the main /admin dashboard.
                 // Module admin roles take priority only for silo-isolated module admins.
-                const isGlobalAdmin = userRoles.includes('super_admin') || userRoles.includes('superadmin') || userRoles.includes('admin');
+                // Compared as plain strings, like the hasAdminRole check above.
+                // `roles` is declared UserRole[], but it is read straight out of
+                // the database, so at runtime it holds whatever is stored there
+                // — including the legacy 'superadmin' spelling, which is not in
+                // the UserRole union. Treating the declared type as a guarantee
+                // here would mean dropping that comparison and quietly demoting
+                // anyone still carrying it.
+                const roleStrings: string[] = userRoles as unknown as string[];
+                const isGlobalAdmin = roleStrings.includes('super_admin')
+                    || roleStrings.includes('superadmin')
+                    || roleStrings.includes('admin');
                 
                 if (!isGlobalAdmin) {
                     if (userRoles.includes('academy_admin')) adminRedirect = '/admin/academy';
@@ -539,20 +549,29 @@ export async function registerAction(prevState: any, formData: FormData) { const
             return { success: false as const, error: "Authentication system error. Please try again.", redirectUrl: "" };
         }
 
-        // Also create in Firebase Auth for legacy fallback compatibility
-        let firebaseUid: string | null = null;
-        try {
-            const userRecord = await adminAuth.createUser({
-                uid: canonicalUid, // Attempt to align Firebase UID with Supabase UUID
-                email: validatedData.email,
-                password: validatedData.password,
-                displayName: validatedData.fullName,
-                emailVerified: true,
-            });
-            firebaseUid = userRecord.uid;
-        } catch (fbCreateErr: any) {
-            logger.warn("[Register] Firebase Auth secondary creation skipped or failed:", fbCreateErr.message);
-        }
+        // A "create the account in Firebase Auth as well" block used to sit
+        // here. It could never work, and never did.
+        //
+        // package.json maps firebase-admin to src/lib/shims/firebase-admin, so
+        // adminAuth.createUser writes to the SAME Supabase auth store that the
+        // lines above just created this account in. It therefore asked Supabase
+        // to register an email it had registered moments earlier, and got back
+        //
+        //     A user with this email address has already been registered
+        //
+        // on every single registration — confirmed by calling it, not by
+        // reading. The error was caught and logged as
+        // "[Register] Firebase Auth secondary creation skipped or failed",
+        // which reads like an optional step degrading gracefully rather than a
+        // step that has never once succeeded.
+        //
+        // It also passed `uid: canonicalUid` to align the two ids. Supabase
+        // assigns account ids and its admin API has no parameter for one, so
+        // that was dropped silently too — and the resulting `firebaseUid` was
+        // assigned and never read by anything.
+        //
+        // Nothing is lost by removing it: no second identity store exists to
+        // create the account in.
 
         // SIMPLIFIED: Everyone gets only general_user role on registration
         // Additional roles are granted after application approval
@@ -814,6 +833,18 @@ export async function changePasswordAction(
         // the defect this replaces, and a partial success is not worth
         // repeating in a quieter form.
         const { supabaseAdmin } = await import("@/lib/supabase");
+
+        // Every branch above sets this, but the compiler cannot see it: the
+        // fallback assigns from a value typed `any`, which widens back to the
+        // declared `string | null`. An explicit refusal rather than a `!`,
+        // because passing null into an auth admin call is not something that
+        // should be asserted away — it would target no account and report
+        // success.
+        if (!supabaseAuthId) {
+            logger.error("[changePassword] Could not resolve the account to update", { email });
+            return { success: false as const, error: "Could not verify your account. Please sign in again.", data: null };
+        }
+
         const { error: sbUpdateError } = await supabaseAdmin.auth.admin.updateUserById(
             supabaseAuthId,
             { password: newPassword }

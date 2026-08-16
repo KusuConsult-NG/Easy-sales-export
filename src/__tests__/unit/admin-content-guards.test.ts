@@ -105,7 +105,7 @@ async function reject(type: string, reason = 'Does not meet listing standards') 
 }
 
 describe('approve and reject believe the database, not the token', () => {
-    beforeEach(() => jest.clearAllMocks());
+    beforeEach(() => { jest.clearAllMocks(); });
 
     it('refuses an approval from a token that still claims admin after revocation', async () => {
         // THE test. The JWT says admin; the user record no longer does.
@@ -227,7 +227,7 @@ describe('rejection requires a usable reason', () => {
 });
 
 describe('getPendingContentAction — guarded by delegation', () => {
-    beforeEach(() => jest.clearAllMocks());
+    beforeEach(() => { jest.clearAllMocks(); });
 
     it('refuses a non-admin even though it has no guard of its own', async () => {
         // It calls getContentApprovalItemsAction, which does the whole check.

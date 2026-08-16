@@ -110,7 +110,7 @@ const ROW = {
 };
 
 describe('exporting the audit log is a super_admin act', () => {
-    beforeEach(() => jest.clearAllMocks());
+    beforeEach(() => { jest.clearAllMocks(); });
 
     async function exportCsv() {
         const { exportAuditLogsCSV } = await import('@/app/actions/audit-log-actions');

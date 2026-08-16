@@ -74,7 +74,11 @@ export function initializeFirebaseAdmin(): App {
                 modulusLength: 2048,
                 privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
                 publicKeyEncoding: { type: 'spki', format: 'pem' },
-            }).privateKey;
+            }).privateKey as string;   // `require` types this as any, which
+            // stops the compiler narrowing `privateKey` to a string after this
+            // block — even though the only other branch returns. Stated
+            // explicitly so the narrowing holds rather than suppressing the
+            // errors downstream one by one.
         } else {
             console.warn(
                 '[firebase-admin] FIREBASE_PRIVATE_KEY is not set. Firebase is shimmed to ' +
@@ -141,11 +145,28 @@ export function initializeFirebaseAdmin(): App {
 // Compatibility shims are provided below for tests and old files.
 import { supabaseDb } from './supabase-db';
 
-export function getAdminDb(): any {
+/**
+ * `db` and `getAdminDb()` were both annotated `: any`.
+ *
+ * supabaseDb itself is fully typed — collection() returns a
+ * SupabaseCollectionReference, get() returns a SupabaseQuerySnapshot, and
+ * .docs is a SupabaseQueryDocumentSnapshot[]. None of that reached a single
+ * call site, because every one of them goes through this file and these two
+ * annotations threw the types away on the way past. That is why `doc` is
+ * implicitly `any` in ~40 `.docs.map(doc => ...)` callbacks across the app,
+ * and why a typo in a field name or a call to a method the adapter does not
+ * have compiles cleanly and fails in production instead.
+ *
+ * `typeof supabaseDb` rather than a hand-written interface: the adapter is the
+ * definition of what the app may call, so the two cannot drift apart.
+ */
+export type AdminDb = typeof supabaseDb;
+
+export function getAdminDb(): AdminDb {
     return supabaseDb;
 }
 
-export const db: any = supabaseDb;
+export const db: AdminDb = supabaseDb;
 
 
 /**

@@ -45,6 +45,7 @@ module.exports = createJestConfig({
     testMatch: [
         '<rootDir>/src/__tests__/integration/auto-approval.test.ts',
         '<rootDir>/tests/integration/data-consistency.test.ts',
+        '<rootDir>/src/__tests__/integration/broadcast-audiences.test.ts',
     ],
     setupFilesAfterEnv: ['<rootDir>/jest.integration.setup.js'],
     testEnvironment: 'node',

@@ -87,7 +87,7 @@ async function create(overrides: Record<string, any> = {}) {
 }
 
 describe('creating a notification needs a session', () => {
-    beforeEach(() => jest.clearAllMocks());
+    beforeEach(() => { jest.clearAllMocks(); });
 
     it('refuses an unauthenticated caller, and writes nothing', async () => {
         // THE test. This endpoint had no session check at all, and its output
@@ -162,7 +162,7 @@ describe('the link has to stay on the platform', () => {
 });
 
 describe('marking all as read belongs to the owner', () => {
-    beforeEach(() => jest.clearAllMocks());
+    beforeEach(() => { jest.clearAllMocks(); });
 
     async function markAll(target: string) {
         const { markAllAsReadAction } = await import('@/app/actions/notifications');
@@ -208,7 +208,7 @@ describe('marking all as read belongs to the owner', () => {
 });
 
 describe('the reads, which were already scoped', () => {
-    beforeEach(() => jest.clearAllMocks());
+    beforeEach(() => { jest.clearAllMocks(); });
 
     it('refuses to list another user\'s notifications', async () => {
         setSession(CALLER);

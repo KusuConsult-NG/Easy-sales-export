@@ -192,7 +192,7 @@ describe('searchUsersAction — finding one person, not listing everybody', () =
 });
 
 describe('the admin endpoints re-read roles from the database', () => {
-    beforeEach(() => jest.clearAllMocks());
+    beforeEach(() => { jest.clearAllMocks(); });
 
     it('getAllConversationsAdminAction refuses a non-admin', async () => {
         // Delegated into messagingService, which throws. The action catches and

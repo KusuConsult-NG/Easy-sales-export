@@ -37,7 +37,10 @@ export async function migrateLegacyUserData(
             // Fetch existing Supabase-keyed user document if any
             const activeUserDocRef = db.collection(COLLECTIONS.USERS).doc(supabaseUid);
             const activeUserDocSnap = await activeUserDocRef.get();
-            const activeData = activeUserDocSnap.exists ? activeUserDocSnap.data() : {};
+            // data() returns undefined for a missing document, and `exists`
+            // does not narrow that. `?? {}` says the same thing as the
+            // ternary did and is honest about the type.
+            const activeData = activeUserDocSnap.data() ?? {};
 
             // Merge serviceRegistrations safely, keeping whichever registration is further along
             const mergedServiceRegistrations = {
@@ -139,14 +142,14 @@ export async function migrateLegacyUserData(
             // Safely delete old member document if it is keyed by firebaseUid
             if (memberSourceRef && memberSourceRef.id === firebaseUid) {
                 await memberSourceRef.delete()
-                    .catch(e => logger.warn(`[UserMigration] Non-fatal: failed to delete old member doc:`, e));
+                    .catch((e: unknown) => logger.warn(`[UserMigration] Non-fatal: failed to delete old member doc:`, e));
             } else if (memberSourceRef) {
                 // If it was query-based (generated ID), just update its userId field to supabaseUid
                 await memberSourceRef.update({
                     userId: supabaseUid,
                     _legacyFirebaseUid: firebaseUid,
                     _migratedAt: new Date().toISOString()
-                }).catch(e => logger.warn(`[UserMigration] Non-fatal: failed to update old member doc userId:`, e));
+                }).catch((e: unknown) => logger.warn(`[UserMigration] Non-fatal: failed to update old member doc userId:`, e));
             }
         }
 

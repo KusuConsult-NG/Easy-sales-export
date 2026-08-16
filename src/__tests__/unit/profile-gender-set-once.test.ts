@@ -92,7 +92,10 @@ function setStoredUser(data: Record<string, any>) {
 
 /** The payload versionedUpdate was asked to write. */
 function written(): Record<string, any> | undefined {
-    return mockVersionedUpdate.mock.calls.at(-1)?.[3];
+    // The mock is untyped, so its recorded arguments are `unknown`. Named here
+    // rather than left implicit, because this is the value every assertion in
+    // the file reads.
+    return mockVersionedUpdate.mock.calls.at(-1)?.[3] as Record<string, any> | undefined;
 }
 
 async function updateProfile(data: Record<string, any>) {

@@ -97,7 +97,7 @@ afterEach(() => {
 });
 
 describe('a production login is counted, whatever else is in the environment', () => {
-    beforeEach(() => setNodeEnv('production'));
+    beforeEach(() => { setNodeEnv('production'); });
 
     it('an emulator variable no longer waves the attempt through', async () => {
         // THE test. This exact variable used to return allowed: true, 999.

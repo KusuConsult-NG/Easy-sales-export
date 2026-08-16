@@ -10,6 +10,7 @@ import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { NIGERIAN_LOCATIONS } from "@/lib/locations";
 import { revalidatePath } from "next/cache";
+import type { SupabaseDocumentSnapshot } from "@/lib/supabase-db";
 
 // ============================================
 // MEMBER ID CARD
@@ -59,7 +60,11 @@ export async function getCooperativeMemberIdCardAction(): Promise<
 
 
         // Sort in memory: most recent createdAt first (mirrors the removed .orderBy)
-        let sortedDocs = memberSnapshot.docs.sort((a, b) => {
+        // Typed as the BASE snapshot: the fallbacks below push results of
+        // docRef.get(), which is a DocumentSnapshot, into a list that
+        // started out as query results. Both are read with .data()!, so the
+        // runtime was always fine; the declared element type was not.
+        let sortedDocs: SupabaseDocumentSnapshot[] = memberSnapshot.docs.sort((a, b) => {
             const aTs = a.data().createdAt?.toMillis?.() ?? 0;
             const bTs = b.data().createdAt?.toMillis?.() ?? 0;
             return bTs - aTs;

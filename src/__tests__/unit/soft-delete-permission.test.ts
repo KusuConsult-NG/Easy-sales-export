@@ -139,7 +139,7 @@ describe('softDeleteUserAction — users:delete, and nothing weaker', () => {
 });
 
 describe('softDeleteUserAction — an administrator is not deleted by an administrator', () => {
-    beforeEach(() => jest.clearAllMocks());
+    beforeEach(() => { jest.clearAllMocks(); });
 
     it('refuses when the target is an admin and the caller is not super_admin', async () => {
         // Unreachable now that the guard requires users:delete, and asserted
