@@ -94,9 +94,22 @@ test.describe('Loan Application Flow', () => {
     test('should show validation errors for invalid amounts', async ({ page }) => {
         await page.goto('/loans/apply');
 
+        // Wait for the form to be live before typing into it.
+        //
+        // This filled immediately after goto() and then asserted the field held
+        // "0", which failed. The wizard is a react-hook-form client component:
+        // until it hydrates and register() binds the input, a fill can be
+        // discarded by RHF's own reset. The sibling test above never hit this
+        // because it reaches the page by clicking through, which takes long
+        // enough for hydration to finish — a timing difference that reads as
+        // "the amount field is broken".
+        const amountField = page.locator('input[name="amount"]');
+        await expect(amountField).toBeVisible({ timeout: 15000 });
+        await expect(page.locator('text=Next').first()).toBeVisible({ timeout: 15000 });
+
         // Try to submit with invalid amount (0)
-        await page.fill('input[name="amount"]', '0');
-        await expect(page.locator('input[name="amount"]')).toHaveValue('0');
+        await amountField.fill('0');
+        await expect(amountField).toHaveValue('0');
         await page.click('text=Next');
 
         // Should see validation error
