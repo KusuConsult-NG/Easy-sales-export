@@ -17,6 +17,7 @@
  * Firebase Firestore is no longer used for data — only Firebase Auth remains.
  */
 
+import { Readable } from 'stream';
 import { supabaseAdmin } from './supabase';
 import { v4 as uuidv4 } from 'uuid';
 import { Timestamp, FieldValue } from './firestore-compat';
@@ -1444,6 +1445,8 @@ export class SupabaseQuery {
     protected _orderBy: OrderByClause[] = [];
     protected _startAfterDoc: SupabaseDocumentSnapshot | null = null;
     protected _selectedFields: string[] | null = null;
+    /** Set by supabaseDb.collectionGroup(). See that method for what it means. */
+    protected _isCollectionGroup = false;
 
     constructor(collection: string) {
         this._collection = collection;
@@ -1458,6 +1461,7 @@ export class SupabaseQuery {
         q._startAfterDoc = this._startAfterDoc;
         q._selectedFields = this._selectedFields ? [...this._selectedFields] : null;
         q._unbounded = this._unbounded;
+        q._isCollectionGroup = this._isCollectionGroup;
         return q;
     }
 
@@ -1624,16 +1628,38 @@ export class SupabaseQuery {
 
 
 
-    async get(): Promise<SupabaseQuerySnapshot> {
+    /**
+     * Build the PostgREST query for this Query — table, filters, ordering,
+     * cursor. Lifted out of get() with no change in behaviour so that stream()
+     * can issue exactly the same query.
+     *
+     * It is shared rather than duplicated deliberately: the field-to-column
+     * mapping below is where this adapter's subtle bugs live (see the
+     * startAfter cursor note), and a second copy would drift from this one.
+     */
+    protected _buildQuery(): { query: any; tableName: string; isDedicated: boolean } {
         const tableName = getTableName(this._collection);
         // For dedicated tables, select ALL columns so native columns (status, user_id, etc.)
         // are available and can be merged into doc.data(). Raw-only select misses these.
         // For the generic document_collections table, 'id, raw_data' is sufficient.
         const isDedicated = isDedicatedTable(this._collection);
-        let query = supabaseAdmin.from(tableName).select(isDedicated ? '*' : 'id, raw_data');
+        // A collection group needs collection_name in the result, not just as a
+        // filter: _mapRow builds each doc.ref from it, so that a write through
+        // doc.ref lands back in the row's own subcollection.
+        let query = supabaseAdmin.from(tableName).select(
+            isDedicated ? '*' : (this._isCollectionGroup ? 'id, raw_data, collection_name' : 'id, raw_data')
+        );
 
         if (tableName === 'document_collections') {
-            query = query.eq('collection_name', this._collection);
+            if (this._isCollectionGroup) {
+                // Subcollections are stored flattened, as collection_name
+                // "user_progress/<uid>/courses". A group matches the last
+                // segment: the collection itself, or any path ending in it.
+                const name = this._collection;
+                query = query.or(`collection_name.eq.${name},collection_name.like.*/${name}`);
+            } else {
+                query = query.eq('collection_name', this._collection);
+            }
         }
 
         // Apply where filters
@@ -1704,6 +1730,12 @@ export class SupabaseQuery {
             }
         }
 
+        return { query, tableName, isDedicated };
+    }
+
+    async get(): Promise<SupabaseQuerySnapshot> {
+        const { query, isDedicated } = this._buildQuery();
+
         // Apply limit and fetch auto-paginated batches to bypass Supabase 1,000-row select caps
         const allData: any[] = [];
         // A query with no .limit() used to read the ENTIRE table, one 1,000-row
@@ -1769,7 +1801,19 @@ export class SupabaseQuery {
             }
         }
 
-        const docs = allData.map((row: any) => {
+        const docs = allData.map((row: any) => this._mapRow(row, isDedicated));
+
+        return new SupabaseQuerySnapshot(docs, truncated);
+    }
+
+    /**
+     * One database row → one QueryDocumentSnapshot. Lifted out of get()
+     * unchanged so stream() produces snapshots identical to get()'s, including
+     * the native-column merge below — a streamed doc.data() that was missing
+     * `status` or `userId` while a fetched one had them would be a difference
+     * nobody would think to look for.
+     */
+    protected _mapRow(row: any, isDedicated: boolean): SupabaseQueryDocumentSnapshot {
             const rawData = row.raw_data ?? {};
             const id = row.id || rawData.id;
             // Merge native columns into raw_data so doc.data() returns a complete view.
@@ -1809,11 +1853,96 @@ export class SupabaseQuery {
                 }
             }
             const parsedWithId = convertStringsToTimestamps(mergedData);
-            const ref = new SupabaseDocumentReference(this._collection, id);
+            // For a collection group this._collection is the group name
+            // ("courses"), which is NOT where the row lives. Using it for the
+            // ref would send every write to a single "courses" collection
+            // instead of back to "user_progress/<uid>/courses".
+            const owningCollection = (this._isCollectionGroup && row.collection_name)
+                ? row.collection_name
+                : this._collection;
+            const ref = new SupabaseDocumentReference(owningCollection, id);
             return new SupabaseQueryDocumentSnapshot(id, ref, parsedWithId);
-        });
+    }
 
-        return new SupabaseQuerySnapshot(docs, truncated);
+    /**
+     * Stream the query's results one document at a time.
+     *
+     * THIS METHOD DID NOT EXIST. Five call sites called it anyway:
+     *
+     *   src/app/actions/in-app-broadcast.ts:238   audience "marketplace_onboarded"
+     *   src/app/actions/sms-broadcast.ts:353      audience "marketplace_onboarded"
+     *   src/app/actions/sms-broadcast.ts:637      audiences "active_users",
+     *                                             "pending_users", "stalled_users",
+     *                                             "ghost_users"
+     *   src/app/actions/sms-broadcast.ts:656      audience "active_last_30_days"
+     *   src/lib/broadcast-logic.ts:849            the email recipient resolver
+     *
+     * Every one threw `TypeError: query.stream is not a function` the moment an
+     * admin selected one of those audiences. Confirmed by calling it, not by
+     * reading: `typeof supabaseDb.collection("users").select("name").stream`
+     * was `undefined`.
+     *
+     * It compiled because `db` was exported as `any` from firebase-admin.ts, so
+     * a call to a method the adapter has never had type-checked as fine. Typing
+     * `db` is what surfaced all five at once.
+     *
+     * UNBOUNDED BY DEFAULT, UNLIKE get()
+     * ---------------------------------
+     * get() caps an unlimited query at DEFAULT_QUERY_LIMIT because a page that
+     * renders 200 rows should not read 41,000. stream() exists for the opposite
+     * case — the callers above are resolving a broadcast audience across the
+     * whole users table and mean every row. Capping here would silently address
+     * a broadcast to the first DEFAULT_QUERY_LIMIT users and report success,
+     * which is worse than the crash it replaces. An explicit .limit() is still
+     * honoured, and UNBOUNDED_CEILING remains as the runaway guard.
+     *
+     * Returns a Node object-mode Readable, which is what the Firestore Admin
+     * SDK returns and covers both shapes in use here: `for await (const doc of
+     * stream)` in the broadcast actions, and `.on("data", doc => ...)` in
+     * broadcast-logic.ts.
+     */
+    stream(): Readable {
+        const self = this;
+        const limitVal = this._limit ?? UNBOUNDED_CEILING;
+        const offsetVal = this._offset ?? 0;
+        const collection = this._collection;
+
+        async function* rows() {
+            const { query, isDedicated } = self._buildQuery();
+            let fetchedSoFar = 0;
+
+            while (fetchedSoFar < limitVal) {
+                const batchLimit = Math.min(1000, limitVal - fetchedSoFar);
+                const rangeStart = offsetVal + fetchedSoFar;
+
+                const { data: batchData, error } = await query.range(
+                    rangeStart,
+                    rangeStart + batchLimit - 1,
+                );
+                if (error) throw new Error(`[supabase-db] stream ${collection}: ${error.message}`);
+                if (!batchData || batchData.length === 0) return;
+
+                // Yield per document rather than accumulating: holding all
+                // 41,000 users in memory would defeat the point of streaming.
+                for (const row of batchData) {
+                    yield self._mapRow(row, isDedicated);
+                }
+
+                fetchedSoFar += batchData.length;
+                if (batchData.length < batchLimit) return;
+            }
+
+            if (self._limit == null && fetchedSoFar >= UNBOUNDED_CEILING) {
+                // Same reasoning as .all() in get(): a sweep that quietly
+                // covers part of a collection is worse than one that fails.
+                logger.error(
+                    `[supabase-db] stream() on '${collection}' hit the ${UNBOUNDED_CEILING}-row ceiling. ` +
+                    `The result is INCOMPLETE — recipients beyond it were not seen.`
+                );
+            }
+        }
+
+        return Readable.from(rows(), { objectMode: true });
     }
 }
 
@@ -1924,6 +2053,38 @@ export const supabaseDb = {
     },
 
     /**
+     * Query one subcollection name across every parent that has one.
+     *
+     * THIS METHOD DID NOT EXIST EITHER. src/scripts/backfill_versions.ts:46
+     * calls `db.collectionGroup("courses")` to backfill `_version` on academy
+     * progress, and threw `TypeError: db.collectionGroup is not a function`
+     * every time it was run — so the academy half of that backfill has never
+     * happened. Like .stream(), it compiled only because `db` was `any`.
+     *
+     * Subcollections here are flattened into the collection name, so
+     * `db.collection("user_progress/<uid>/courses")` becomes a
+     * document_collections row with that string as collection_name. A group
+     * query is therefore "collection_name equals the name, or ends in
+     * /<name>", which is what _buildQuery issues.
+     *
+     * Only meaningful for generic collections. The eight dedicated tables have
+     * no subcollections and would silently match nothing, so ask for one and
+     * you get an error rather than an empty result that reads like "no data".
+     */
+    collectionGroup(name: string): SupabaseQuery {
+        if (isDedicatedTable(name)) {
+            throw new Error(
+                `[supabase-db] collectionGroup("${name}") is not valid: '${name}' is stored in its own ` +
+                `table and has no subcollections. Use db.collection("${name}").`
+            );
+        }
+        const q = new SupabaseQuery(name);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (q as any)._isCollectionGroup = true;
+        return q;
+    },
+
+    /**
      * Resolve a document reference.
      *
      * Accepts both call styles used across the codebase:
@@ -1983,7 +2144,7 @@ export const supabaseDb = {
     },
 };
 
-export function getAdminDb(): any {
+export function getAdminDb(): typeof supabaseDb {
     return supabaseDb;
 }
 

@@ -192,6 +192,27 @@ jest.mock('@/lib/firebase-admin', () => {
                 // is exactly what that test says it cannot catch.
                 all: () => queryObj,
 
+                // stream() and collectionGroup() did not exist on the adapter
+                // at all until the broadcast crash was found — five call sites
+                // called .stream() and threw TypeError every time. They are
+                // stubbed here so the broadcast audience-resolution tests can
+                // exercise the real code path instead of dying on the mock.
+                //
+                // stream() returns a real object-mode Readable, not a bare
+                // array or async generator, because production uses BOTH
+                // shapes: `for await (const doc of stream)` in the broadcast
+                // actions and `.on("data", ...)` in broadcast-logic.ts. A stub
+                // supporting only one would leave half the call sites untested
+                // while passing the presence check in
+                // harness-covers-adapter.test.ts.
+                stream: () => {
+                    const { Readable } = require('stream');
+                    return Readable.from((async function* () {
+                        const snap = await global.mockFirestoreGet(name);
+                        for (const d of (snap && snap.docs) || []) yield d;
+                    })(), { objectMode: true });
+                },
+
                 aggregate: () => ({
                     get: () => global.mockFirestoreGet(name + "_aggregate")
                 }),
@@ -207,6 +228,11 @@ jest.mock('@/lib/firebase-admin', () => {
         getAll: (...refs) => Promise.all(
             refs.flat().map((r) => global.mockFirestoreGet(r && r.id ? r.id : 'getAll'))
         ),
+        // A collection group reads one subcollection name across every parent.
+        // Routed to the same recorder as collection() so its reads are asserted
+        // on exactly like any other read, keyed by the group name.
+        collectionGroup: (groupName) => mockDb.collection(groupName),
+
         batch: () => {
             global.mockFirestoreBatch();
             return {
@@ -349,6 +375,27 @@ jest.mock('@/lib/supabase-db', () => {
                 // is exactly what that test says it cannot catch.
                 all: () => queryObj,
 
+                // stream() and collectionGroup() did not exist on the adapter
+                // at all until the broadcast crash was found — five call sites
+                // called .stream() and threw TypeError every time. They are
+                // stubbed here so the broadcast audience-resolution tests can
+                // exercise the real code path instead of dying on the mock.
+                //
+                // stream() returns a real object-mode Readable, not a bare
+                // array or async generator, because production uses BOTH
+                // shapes: `for await (const doc of stream)` in the broadcast
+                // actions and `.on("data", ...)` in broadcast-logic.ts. A stub
+                // supporting only one would leave half the call sites untested
+                // while passing the presence check in
+                // harness-covers-adapter.test.ts.
+                stream: () => {
+                    const { Readable } = require('stream');
+                    return Readable.from((async function* () {
+                        const snap = await global.mockFirestoreGet(name);
+                        for (const d of (snap && snap.docs) || []) yield d;
+                    })(), { objectMode: true });
+                },
+
                 aggregate: () => ({
                     get: () => global.mockFirestoreGet(name + "_aggregate")
                 }),
@@ -359,6 +406,11 @@ jest.mock('@/lib/supabase-db', () => {
             };
             return queryObj;
         },
+        // A collection group reads one subcollection name across every parent.
+        // Routed to the same recorder as collection() so its reads are asserted
+        // on exactly like any other read, keyed by the group name.
+        collectionGroup: (groupName) => mockDb.collection(groupName),
+
         batch: () => {
             global.mockFirestoreBatch();
             return {

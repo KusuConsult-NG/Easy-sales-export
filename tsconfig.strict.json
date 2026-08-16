@@ -1,0 +1,39 @@
+{
+    // Type checking with strictNullChecks and noImplicitAny ON.
+    //
+    // WHY THIS FILE EXISTS
+    // --------------------
+    // tsconfig.json has both flags OFF. That is the single mechanism most
+    // responsible for this application breaking repeatedly: with them off, the
+    // compiler accepts a call to a method that does not exist, a read of a
+    // field on a value that may be undefined, and a typo in a property name.
+    // Each one compiles, deploys, and fails in front of a user.
+    //
+    // Turning them on in tsconfig.json today would fail the build, so this is
+    // the ratchet instead: run `npm run typecheck:strict` to see what is left,
+    // and scripts/typecheck-strict.sh fails if the count goes UP. New code is
+    // held to the standard while the existing count is worked down.
+    //
+    // WHAT IT HAS ALREADY CAUGHT
+    // --------------------------
+    // Turning these on and reading the output found, among others:
+    //   - db.collection(...).stream() — five call sites, method never existed,
+    //     every admin broadcast to six audiences threw TypeError
+    //   - db.collectionGroup("courses") — the academy _version backfill had
+    //     never once run
+    //   - withOptimisticLock's docRef: any, which erased the type of every
+    //     transaction.get() in the vendor and order write paths
+    //
+    // None of these needed a browser, a database or a reproduction. They were
+    // sitting in the compiler output, behind a flag.
+    //
+    // Delete this file the day tsconfig.json can set both flags itself.
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "strictNullChecks": true,
+        "noImplicitAny": true,
+        // A separate build-info file, so running this never invalidates or
+        // corrupts the incremental state of the real build.
+        "tsBuildInfoFile": "./.next/tsconfig.strict.tsbuildinfo"
+    }
+}
