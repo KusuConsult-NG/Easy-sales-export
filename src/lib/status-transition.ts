@@ -24,6 +24,7 @@
 
 import { supabaseAdmin } from "@/lib/supabase";
 import { logger } from "@/lib/logger";
+import { getTableName } from "@/lib/supabase-db";
 
 export interface TransitionResult {
     /** True when this call performed the transition. */
@@ -48,11 +49,32 @@ export async function claimStatusTransition(params: {
     if (!id) throw new Error("claimStatusTransition: id is required");
     if (!from || !to) throw new Error("claimStatusTransition: from and to are required");
 
-    const { data, error } = await supabaseAdmin.rpc("claim_status_transition", {
-        p_collection: collection,
+    // Resolve the TABLE, not just the collection.
+    //
+    // claim_status_transition (migration 007) writes to document_collections
+    // and nothing else. Eight collections do not live there — supabase-db.ts
+    // routes them to their own tables — so for those the CAS matched zero rows
+    // and returned claimed:false with a null status, which every caller reads
+    // as "someone else got there first".
+    //
+    // Two such collections are passed here today. COLLECTIONS.COOPERATIVE_LOANS
+    // is one; COLLECTIONS.MARKETPLACE_ORDERS is the serious one, with four call
+    // sites on the order state machine, none of which could ever claim a
+    // transition. Measured, not inferred — see
+    // __tests__/db-integration/status-transition-dedicated-tables.test.ts.
+    //
+    // getTableName is the adapter's own mapping, so there is one definition of
+    // where a collection lives rather than a second copy that can drift.
+    const table = getTableName(collection);
+
+    const { data, error } = await supabaseAdmin.rpc("claim_status_transition_in", {
+        p_table: table,
         p_id: id,
         p_from: from,
         p_to: to,
+        // Only meaningful for document_collections; the function ignores it
+        // for a dedicated table, where the id alone is the key.
+        p_collection: table === "document_collections" ? collection : null,
         p_patch: patch ?? {},
     });
 
