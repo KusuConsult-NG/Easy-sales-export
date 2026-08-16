@@ -1,5 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
-import { loginAs, USERS } from '../../e2e/helpers/auth';
+import { sessionFileFor } from '../../e2e/helpers/session';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -91,9 +91,9 @@ async function assertRendered(page: Page, route: string) {
 }
 
 test.describe('Admin pages render', () => {
-    test.beforeEach(async ({ page }) => {
-        await loginAs(page, USERS.admin.email, USERS.admin.password);
-    });
+    // The admin session, signed in once by global-setup. A beforeEach login
+    // here meant 66 sign-ins for 66 page loads.
+    test.use({ storageState: sessionFileFor('admin') });
 
     test('the route list was actually discovered', () => {
         // Without this, a broken path or a rename makes every test below

@@ -77,3 +77,8 @@ exports/
 # secret and the service logs. All machine-local; none of it belongs in git.
 .local-stack/
 public/uploads/local/
+
+# Playwright persona sessions, written by e2e/global-setup.ts.
+# Real signed-in cookies for the seeded local identities — machine-local, and
+# regenerated on every run.
+.auth/

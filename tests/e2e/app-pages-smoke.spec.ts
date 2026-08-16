@@ -1,5 +1,6 @@
 import { test, expect, Page } from '@playwright/test';
-import { loginAs, USERS } from '../../e2e/helpers/auth';
+import { USERS } from '../../e2e/helpers/auth';
+import { sessionFileFor } from '../../e2e/helpers/session';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -143,12 +144,12 @@ test.describe('Application pages render', () => {
 
     for (const [persona, routes] of byPersona) {
         test.describe(`as ${persona === '__public__' ? 'a signed-out visitor' : persona}`, () => {
-            test.beforeEach(async ({ page }) => {
-                if (persona !== '__public__') {
-                    const account = USERS[persona as keyof typeof USERS];
-                    await loginAs(page, account.email, account.password);
-                }
-            });
+            // Sessions come from global-setup, one sign-in per persona. A
+            // beforeEach login here meant ~139 sign-ins for 139 page loads,
+            // which is what killed the dev server mid-run.
+            if (persona !== '__public__') {
+                test.use({ storageState: sessionFileFor(persona) });
+            }
 
             for (const route of routes) {
                 test(`renders ${route}`, async ({ page }) => {
