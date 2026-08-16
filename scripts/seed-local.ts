@@ -184,6 +184,35 @@ async function main() {
     const ids: Record<string, string> = {};
     for (const u of USERS) ids[u.key] = await seedUser(u);
 
+    // RESET WHAT THE TESTS CREATE, not just what the seed owns.
+    //
+    // Upserting fixtures is not the same as resetting state. The loan wizard
+    // spec SUBMITS an application, and a borrower with an open application is
+    // refused a second one — so that spec passed exactly once and was blocked
+    // on every run afterwards, with the seed reporting success each time. A
+    // fixture set that only ever adds rows makes a suite pass once and then
+    // look permanently broken.
+    //
+    // Scoped to the seeded personas: this deletes only rows belonging to the
+    // e2e identities, so it cannot touch anything else even if the guard above
+    // were somehow bypassed.
+    const personaIds = Object.values(ids);
+
+    const { error: clrGeneric } = await admin
+        .from('document_collections')
+        .delete()
+        .eq('collection_name', 'loan_applications')
+        .in('raw_data->>userId', personaIds);
+    if (clrGeneric) fail(`clearing loan_applications: ${clrGeneric.message}`);
+
+    // cooperative_loans is a dedicated table; the seeded pending application is
+    // re-created below, so clearing first keeps it the only open one.
+    const { error: clrCoop } = await admin
+        .from('cooperative_loans')
+        .delete()
+        .in('user_id', personaIds);
+    if (clrCoop) fail(`clearing cooperative_loans: ${clrCoop.message}`);
+
     const now = new Date().toISOString();
 
     // Cooperative membership for the member user — ACTIVE and paid, with

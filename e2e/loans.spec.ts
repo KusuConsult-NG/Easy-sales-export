@@ -102,20 +102,35 @@ test.describe('Loan Application Flow', () => {
     });
 
     test('should show validation errors for invalid amounts', async ({ page }) => {
+        // Its own borrower, deliberately.
+        //
+        // The describe's beforeEach logs in as USERS.user, and the test above
+        // SUBMITS an application as that user. A borrower with an open
+        // application is refused a second one, so /loans/apply does not present
+        // a fresh wizard afterwards — and the two tests then alternate: whichever
+        // ran first passed and the other failed, on every run, in both
+        // directions. The seed only resets between files, not between tests.
+        //
+        // This test needs nothing but the form, so it uses a borrower nobody
+        // else files an application for.
+        await loginAs(page, USERS.wave.email, USERS.wave.password);
         await page.goto('/loans/apply');
 
-        // Wait for the form to be live before typing into it.
+        // Wait for react-hook-form to APPLY ITS DEFAULT before typing.
         //
-        // This filled immediately after goto() and then asserted the field held
-        // "0", which failed. The wizard is a react-hook-form client component:
-        // until it hydrates and register() binds the input, a fill can be
-        // discarded by RHF's own reset. The sibling test above never hit this
-        // because it reaches the page by clicking through, which takes long
-        // enough for hydration to finish — a timing difference that reads as
-        // "the amount field is broken".
+        // useForm gives amount a defaultValue of 10000, and RHF writes it into
+        // the input after mount. Filling before that lands does not get
+        // overwritten — it gets MERGED: a fill of "0" into a field RHF is about
+        // to populate produced "100000", which then settled to "10000". The
+        // test asserted "0" and saw neither.
+        //
+        // Waiting for the field to be visible is not enough, and neither is
+        // waiting for the Next control: both are present before the default
+        // arrives. The default itself is the only signal that RHF has finished,
+        // so that is what is waited on.
         const amountField = page.locator('input[name="amount"]');
         await expect(amountField).toBeVisible({ timeout: 15000 });
-        await expect(page.locator('text=Next').first()).toBeVisible({ timeout: 15000 });
+        await expect(amountField).toHaveValue('10000', { timeout: 15000 });
 
         // Try to submit with invalid amount (0)
         await amountField.fill('0');
