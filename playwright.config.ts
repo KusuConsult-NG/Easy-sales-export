@@ -126,6 +126,20 @@ export default defineConfig({
         command: 'npm run dev',
         url: BASE_URL,
         reuseExistingServer: !process.env.CI,
-        timeout: 120_000,
+        // A cold Turbopack start plus the first route compile was measured at
+        // ~60s here, so 120s left almost no margin and a slow start failed the
+        // whole run before a single test.
+        timeout: 300_000,
+        // Playwright OWNS the server for the run.
+        //
+        // Starting it separately (nohup npm run dev &) and letting the suite
+        // reuse it does not survive: the process was reaped twice mid-run, and
+        // every test after that failed with ECONNREFUSED or "socket hang up" —
+        // 143 failures on one run, none of them a real defect. Memory was not
+        // short and there was no crash in its log; it simply went away.
+        //
+        // Under Playwright the server's lifetime is the run's lifetime.
+        stdout: 'ignore',
+        stderr: 'pipe',
     },
 });
