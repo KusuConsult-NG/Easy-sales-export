@@ -43,7 +43,9 @@
     "test:migrations": "bash scripts/test-migrations.sh",
     "test:db": "jest --config jest.config.db.js --runInBand",
     "build:deploy-sql": "node scripts/build-deploy-sql.mjs --out deploy.sql",
-    "test:integration:db": "bash scripts/ci-integration-db.sh"
+    "test:integration:db": "bash scripts/ci-integration-db.sh",
+    "dev:local": "bash scripts/dev-local.sh",
+    "seed:local": "tsx scripts/seed-local.ts"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",

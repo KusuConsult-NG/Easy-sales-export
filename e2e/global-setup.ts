@@ -73,18 +73,35 @@ export default async function globalSetup(config: FullConfig) {
     // ── 1. Wait for server ──────────────────────────────────────────────────────
     await waitForServer(BASE_URL);
 
-    // ── 1.5. Run E2E Cooperative Seeding Script ─────────────────────────────────
+    // ── 1.5. Seed the database ──────────────────────────────────────────────────
+    //
+    // Two corrections to what stood here, both load-bearing:
+    //
+    // MISSING SCRIPTS. This block called `node scripts/seed-test-users.js` and
+    // `npx tsx scripts/setup-e2e-coop.ts`. Neither file has ever existed on
+    // main. The try/catch logged "⚠️ Database seeding failed" and continued,
+    // so every e2e run silently skipped seeding — which is why the 22
+    // auth-required specs have never been runnable. scripts/seed-local.ts is
+    // the real seeder now.
+    //
+    // THE GUARD CHECKED THE WRONG URL. It skipped seeding when BASE_URL
+    // contained "easysalesexport.com" — the address of the BROWSER, not of the
+    // DATABASE. The configuration this repo actually has is the dangerous one:
+    // BASE_URL=localhost while .env.local points at the production Supabase
+    // project. Under the old guard, seeding would have written test users into
+    // production. The database-side guard lives in seed-local.ts itself, which
+    // refuses any non-localhost NEXT_PUBLIC_SUPABASE_URL; the check here is
+    // only the browser-side belt to that braces.
+    //
+    // Seeding failure is now FATAL. A suite that runs unseeded fails later
+    // with misleading "invalid credentials" errors — failing here, with the
+    // real reason, is cheaper every time.
     if (BASE_URL.includes('easysalesexport.com')) {
-        console.log('⚠️ Running against production URL (easysalesexport.com). Skipping database seeding to protect production data from pollution.');
+        console.log('⚠️ BASE_URL is production — skipping seeding entirely.');
     } else {
-        try {
-            console.log('Seeding E2E database records...');
-            execSync('node scripts/seed-test-users.js', { stdio: 'inherit' });
-            execSync('npx tsx scripts/setup-e2e-coop.ts', { stdio: 'inherit' });
-            console.log('✅ E2E Database seeding completed successfully.');
-        } catch (err: any) {
-            console.error('⚠️ Database seeding failed:', err.message || err);
-        }
+        console.log('Seeding E2E database records (scripts/seed-local.ts)...');
+        execSync('npx tsx scripts/seed-local.ts', { stdio: 'inherit' });
+        console.log('✅ E2E database seeding completed.');
     }
 
     console.log('✅ Playwright Global Setup complete\n');
