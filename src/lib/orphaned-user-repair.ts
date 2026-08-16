@@ -16,7 +16,15 @@ interface OrphanedUser {
     uid: string;
     email: string | undefined;
     displayName: string | undefined;
-    createdAt: string;
+    /**
+     * Optional because the auth store's creation time genuinely can be absent.
+     * This was `string`, filled from `userRecord.metadata.creationTime` — and
+     * `metadata` was not on the shim's user record at all, so that read threw
+     * a TypeError at the exact moment the scan found an orphan. Both ends are
+     * honest now: the shim always returns a metadata object, and the field it
+     * carries is allowed not to be set.
+     */
+    createdAt: string | undefined;
 }
 
 export interface OrphanedScan {

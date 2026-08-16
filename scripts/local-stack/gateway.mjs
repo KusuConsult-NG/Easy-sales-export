@@ -105,6 +105,10 @@ function userPayload(row) {
         app_metadata: { provider: 'email', providers: ['email'] },
         created_at: row.created_at,
         updated_at: row.updated_at,
+        // Read by the firebase-admin auth shim's toUserRecord().
+        phone: row.phone ?? undefined,
+        banned_until: row.banned_until ?? undefined,
+        last_sign_in_at: row.last_sign_in_at ?? undefined,
     };
 }
 
@@ -186,8 +190,55 @@ async function handleAuth(req, res, url) {
         return json(res, 200, { users: rows.map(userPayload), aud: 'authenticated' });
     }
 
+    // GET /admin/users/:id — supabase.auth.admin.getUserById
+    //
+    // Absent until the auth shim was fixed. The shim's getUser() and the new
+    // getUsers() both use it, so without it every uid lookup 404'd locally and
+    // the auth paths could not be tested against this stack at all.
+    const byId = /^\/admin\/users\/([^/]+)$/.exec(path);
+    if (req.method === 'GET' && byId) {
+        const { rows } = await pool.query('SELECT * FROM auth.users WHERE id = $1', [byId[1]]);
+        if (rows.length === 0) return json(res, 404, { code: 404, msg: 'User not found' });
+        return json(res, 200, userPayload(rows[0]));
+    }
+
+    // PUT /admin/users/:id — supabase.auth.admin.updateUserById
+    //
+    // Used by the password-change and password-reset paths, and by
+    // updateUser({ disabled }) for account suspension. Also absent before.
+    if (req.method === 'PUT' && byId) {
+        const body = await readBody(req);
+        const sets = [];
+        const args = [byId[1]];
+        const push = (frag, value) => { args.push(value); sets.push(frag.replace('?', '$' + args.length)); };
+
+        if (body.email !== undefined) push('email = lower(?)', body.email);
+        if (body.password !== undefined) push('encrypted_password = crypt(?, gen_salt(\'bf\'))', body.password);
+        if (body.user_metadata !== undefined) push('raw_user_meta_data = ?', body.user_metadata);
+        if (body.email_confirm !== undefined) push('email_confirmed_at = ?', body.email_confirm ? new Date() : null);
+        if (body.phone !== undefined) push('phone = ?', body.phone);
+        if (body.ban_duration !== undefined) {
+            // GoTrue takes a Go duration string, or the literal 'none' to lift
+            // the ban. Only the two cases the shim emits are modelled.
+            push('banned_until = ?', body.ban_duration === 'none' ? null : new Date(Date.now() + 100 * 365 * 24 * 3600 * 1000));
+        }
+
+        if (sets.length === 0) {
+            const { rows } = await pool.query('SELECT * FROM auth.users WHERE id = $1', [byId[1]]);
+            if (rows.length === 0) return json(res, 404, { code: 404, msg: 'User not found' });
+            return json(res, 200, userPayload(rows[0]));
+        }
+
+        const { rows } = await pool.query(
+            `UPDATE auth.users SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $1 RETURNING *`,
+            args,
+        );
+        if (rows.length === 0) return json(res, 404, { code: 404, msg: 'User not found' });
+        return json(res, 200, userPayload(rows[0]));
+    }
+
     // DELETE /admin/users/:id — supabase.auth.admin.deleteUser
-    const del = /^\/admin\/users\/([^/]+)$/.exec(path);
+    const del = byId;
     if (req.method === 'DELETE' && del) {
         await pool.query('DELETE FROM auth.users WHERE id = $1', [del[1]]);
         return json(res, 200, {});
