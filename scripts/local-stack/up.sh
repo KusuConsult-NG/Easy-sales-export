@@ -121,6 +121,14 @@ CREATE TABLE IF NOT EXISTS auth.users (
     created_at         TIMESTAMPTZ DEFAULT NOW(),
     updated_at         TIMESTAMPTZ DEFAULT NOW()
 );
+-- Columns real GoTrue has that the shim reads or writes. Added separately so
+-- an existing local database picks them up without being recreated.
+--   phone           getUserByPhoneNumber matches on it
+--   banned_until    updateUser({ disabled }) sets it; toUserRecord reads it
+--   last_sign_in_at toUserRecord exposes it as metadata.lastSignInTime
+ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS phone           TEXT;
+ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS banned_until    TIMESTAMPTZ;
+ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS last_sign_in_at TIMESTAMPTZ;
 GRANT USAGE ON SCHEMA auth TO anon, authenticated, service_role;
 GRANT ALL ON ALL TABLES IN SCHEMA auth TO service_role;
 SQL

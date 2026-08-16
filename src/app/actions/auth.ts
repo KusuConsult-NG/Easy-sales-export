@@ -539,20 +539,29 @@ export async function registerAction(prevState: any, formData: FormData) { const
             return { success: false as const, error: "Authentication system error. Please try again.", redirectUrl: "" };
         }
 
-        // Also create in Firebase Auth for legacy fallback compatibility
-        let firebaseUid: string | null = null;
-        try {
-            const userRecord = await adminAuth.createUser({
-                uid: canonicalUid, // Attempt to align Firebase UID with Supabase UUID
-                email: validatedData.email,
-                password: validatedData.password,
-                displayName: validatedData.fullName,
-                emailVerified: true,
-            });
-            firebaseUid = userRecord.uid;
-        } catch (fbCreateErr: any) {
-            logger.warn("[Register] Firebase Auth secondary creation skipped or failed:", fbCreateErr.message);
-        }
+        // A "create the account in Firebase Auth as well" block used to sit
+        // here. It could never work, and never did.
+        //
+        // package.json maps firebase-admin to src/lib/shims/firebase-admin, so
+        // adminAuth.createUser writes to the SAME Supabase auth store that the
+        // lines above just created this account in. It therefore asked Supabase
+        // to register an email it had registered moments earlier, and got back
+        //
+        //     A user with this email address has already been registered
+        //
+        // on every single registration — confirmed by calling it, not by
+        // reading. The error was caught and logged as
+        // "[Register] Firebase Auth secondary creation skipped or failed",
+        // which reads like an optional step degrading gracefully rather than a
+        // step that has never once succeeded.
+        //
+        // It also passed `uid: canonicalUid` to align the two ids. Supabase
+        // assigns account ids and its admin API has no parameter for one, so
+        // that was dropped silently too — and the resulting `firebaseUid` was
+        // assigned and never read by anything.
+        //
+        // Nothing is lost by removing it: no second identity store exists to
+        // create the account in.
 
         // SIMPLIFIED: Everyone gets only general_user role on registration
         // Additional roles are granted after application approval
