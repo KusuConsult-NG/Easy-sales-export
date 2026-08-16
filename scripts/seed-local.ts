@@ -233,16 +233,35 @@ async function main() {
     // Belongs to the `cooperative` persona so it does not block the `user`
     // persona's own application flow: claimSingleOpenLoanApplication refuses a
     // second open application per borrower, by design.
-    await doc('cooperative_loans', 'e2e-pending-loan', {
-        memberId: ids.cooperative, userId: ids.cooperative,
-        productId: 'e2e-loan-product', productName: 'E2E Cooperative Loan',
-        amount: 20000, purpose: 'Seeded pending application for the approval queue',
-        interestRate: 10, durationMonths: 12,
-        monthlyPayment: 2935, interestAmount: 15220, totalRepayment: 35220,
+    //
+    // cooperative_loans is a DEDICATED TABLE, not a document_collections row.
+    // Seeding it through doc() put the record where the adapter never looks —
+    // the admin queue read the real table and found nothing, which is
+    // indistinguishable from the collection-mismatch defect this fixture exists
+    // to catch. Written to the table directly, the way the adapter routes it.
+    const { error: loanErr } = await admin.from('cooperative_loans').upsert({
+        id: 'e2e-pending-loan',
+        user_id: ids.cooperative,
+        amount: 20000,
         status: 'pending',
-        guarantorName: 'E2E Guarantor', guarantorPhone: '+2348000000001',
-        appliedAt: now, createdAt: now, updatedAt: now,
-    });
+        raw_data: {
+            id: 'e2e-pending-loan',
+            memberId: ids.cooperative, userId: ids.cooperative,
+            productId: 'e2e-loan-product', productName: 'E2E Cooperative Loan',
+            amount: 20000, purpose: 'Seeded pending application for the approval queue',
+            interestRate: 10, durationMonths: 12,
+            monthlyPayment: 2935, interestAmount: 15220, totalRepayment: 35220,
+            status: 'pending',
+            guarantorName: 'E2E Guarantor', guarantorPhone: '+2348000000001',
+            // approveLoanAction refuses outright without this, and checks the
+            // amount against getMaxLoanAmount(contributionAmount) — half the
+            // savings, so 60,000 contributed covers a 20,000 loan.
+            guarantorVerified: true,
+            contributionAmount: 60000,
+            appliedAt: now, createdAt: now, updatedAt: now,
+        },
+    }, { onConflict: 'id' });
+    if (loanErr) fail(`cooperative_loans: ${loanErr.message}`);
 
     // Academy courses. getCoursesAction reads academy_courses ordered by
     // createdAt with no status filter, so any row shows up in the catalogue.

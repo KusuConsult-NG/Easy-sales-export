@@ -43,8 +43,35 @@ test.describe('Loan Application Flow', () => {
         await page.click('text=Next');
         console.log("Wizard Step 3 Next clicked. URL:", page.url());
 
-        // Step 4: Documents (simplified/default documents used)
-        console.log("Wizard Step 4: Clicking Next for documents...");
+        // Step 4: Documents.
+        //
+        // This clicked Next with the comment "simplified/default documents
+        // used". There are no defaults: loanApplicationSchema requires
+        // `documents` to have at least one entry, and step 4 validates that
+        // field before advancing. So the wizard never left step 4, and the
+        // failure surfaced two steps later as "Submit Application not visible",
+        // which reads like a broken step 5.
+        console.log("Wizard Step 4: Uploading a document...");
+        const uploadResponse = page.waitForResponse(
+            r => r.url().includes('/api/upload') && r.request().method() === 'POST',
+            { timeout: 30000 },
+        );
+        // Scoped to the Government-issued ID uploader rather than "the first
+        // file input on the page" — the layout renders others, and picking the
+        // wrong one silently uploads nothing.
+        await page.locator('label:has-text("Government-issued ID") >> xpath=.. >> input[type="file"]').first().setInputFiles({
+            name: 'id.pdf',
+            mimeType: 'application/pdf',
+            buffer: Buffer.from('%PDF-1.4 e2e identity document'),
+        });
+        // Wait for the upload REQUEST, not for text on the page.
+        //
+        // A first attempt waited for /uploaded|id\.pdf/i and passed instantly
+        // against the word "Upload" already in the step's own heading — a
+        // vacuous assertion that let the test continue with no document
+        // attached and fail two steps later. The response is the only
+        // unambiguous signal that `documents` has been populated.
+        await uploadResponse;
         await page.click('text=Next');
         console.log("Wizard Step 4 Next clicked. URL:", page.url());
 
