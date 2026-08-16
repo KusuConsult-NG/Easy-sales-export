@@ -227,4 +227,55 @@ describe('createFixedSavingsAction — where the plan is filed', () => {
         expect(res.success).toBe(false);
         expect(global.mockFirestoreSet).not.toHaveBeenCalled();
     });
+
+    it('records the lock in the cooperative ledger, which reconciliation reads', async () => {
+        // NEITHER ledger row existed. The debit reduced savingsBalance and,
+        // unlike a withdrawal, did not move the amount into lockedBalance — so
+        // the member's held total fell with nothing accounting for it.
+        //
+        // forensics.ts reconciles savingsBalance + lockedBalance against
+        // completed cooperative_transactions rows, so every member holding a
+        // plan reported as a mismatch, permanently and correctly. This is the
+        // row that closes it.
+        await create(100_000, 12);
+        expect(global.mockFirestoreCollection).toHaveBeenCalledWith(COLLECTIONS.COOPERATIVE_TRANSACTIONS);
+
+        const rows = global.mockFirestoreSet.mock.calls.map((c: any[]) => c[1]);
+        const lock = rows.find((r: any) => r?.type === 'fixed_savings_lock');
+        expect(lock).toBeDefined();
+        expect(lock.amount).toBe(100_000);
+        expect(lock.status).toBe('completed');
+    });
+
+    it('uses a debit type forensics actually counts', async () => {
+        // A ledger row of a type the reconciliation does not know about is the
+        // same as no row at all — that is how the pre-existing "savings" credit
+        // type came to be uncounted. Read from the source rather than restated,
+        // so renaming one without the other fails here.
+        const { readFileSync } = await import('fs');
+        const forensics = readFileSync('src/app/actions/forensics.ts', 'utf-8');
+        const debitTypes = /const DEBIT_TYPES = \[([^\]]*)\]/.exec(forensics)?.[1] ?? '';
+
+        await create(100_000, 12);
+        const rows = global.mockFirestoreSet.mock.calls.map((c: any[]) => c[1]);
+        const lock = rows.find((r: any) => r?.type === 'fixed_savings_lock');
+
+        expect(debitTypes).toContain(lock.type);
+    });
+
+    it('gives the unified ledger row a reference, so it can be traced back', async () => {
+        // It omitted id, module, currency and reference while every sibling
+        // writer supplies all four. Without a reference the row cannot be tied
+        // to the operation that produced it, which is where reconciliation and
+        // every support lookup begin.
+        await create(100_000, 12);
+        const rows = global.mockFirestoreSet.mock.calls.map((c: any[]) => c[1]);
+        const funding = rows.find((r: any) => r?.type === 'fixed_savings_funding');
+
+        expect(funding).toBeDefined();
+        expect(funding.reference).toBeTruthy();
+        expect(funding.id).toBe(funding.reference);
+        expect(funding.module).toBe('cooperative');
+        expect(funding.currency).toBe('NGN');
+    });
 });

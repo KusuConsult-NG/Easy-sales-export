@@ -137,13 +137,57 @@ export async function POST(request: NextRequest) {
             createdAt: FieldValue.serverTimestamp(),
         });
 
-        // Create transaction record
-        const txRef = db.collection(COLLECTIONS.TRANSACTIONS).doc();
+        // Ledger entries — TWO of them, and the second one was missing entirely.
+        //
+        // THE UNIFIED LEDGER ROW omitted id, module, currency and reference.
+        // Every other writer of TRANSACTIONS in this codebase supplies all four
+        // and uses a deterministic document id. Without `reference` the row
+        // cannot be tied back to the operation that produced it, which is what
+        // reconciliation and every support lookup start from. Without `id` the
+        // GDPR data export — which does `docs.map(doc => doc.data())` in
+        // bulk-user-operations.ts — hands the member rows with no identifier,
+        // for these rows only.
+        //
+        // THE COOPERATIVE LEDGER ROW did not exist. This is the one that
+        // matters. The debit above reduces savingsBalance and nothing else:
+        // unlike a withdrawal it does not move the money into lockedBalance, so
+        // it leaves the member's held total lower with no entry anywhere saying
+        // where the money went.
+        //
+        // forensics.ts reconciles cooperative_members.savingsBalance +
+        // lockedBalance against completed cooperative_transactions rows. With
+        // no debit row, every member holding a fixed savings plan reported as a
+        // balance mismatch — permanently, and correctly, because the ledger
+        // genuinely did not account for the money. A reconciliation check that
+        // always fails for a whole class of member is a check nobody reads.
+        const reference = `fixsav_${planRef.id}`;
+
+        const txRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(reference);
         await txRef.set({
+            id: reference,
             userId,
             type: "fixed_savings_funding",
+            module: "cooperative",
             amount,
+            currency: "NGN",
+            reference,
             description: `Funded ${durationMonths}-month fixed savings plan`,
+            status: "completed",
+            date: FieldValue.serverTimestamp(),
+        });
+
+        // The cooperative ledger, which forensics.ts reconciles against.
+        // fixed_savings_lock is in its DEBIT_TYPES.
+        const coopTxRef = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc(reference);
+        await coopTxRef.set({
+            id: reference,
+            userId,
+            cooperativeId: memberData.cooperativeId || "default",
+            type: "fixed_savings_lock",
+            amount,
+            currency: "NGN",
+            reference,
+            description: `Locked into a ${durationMonths}-month fixed savings plan`,
             status: "completed",
             date: FieldValue.serverTimestamp(),
         });

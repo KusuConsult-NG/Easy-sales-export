@@ -706,6 +706,42 @@ async function _createFixedSavingsAction(
             projectedProfit: projectedFixedSavingsProfit(amount, durationMonths),
             createdAt: FieldValue.serverTimestamp() });
 
+        // Ledger entries. Neither existed: this path debited savingsBalance and
+        // recorded the movement nowhere, so the money left the member's held
+        // total with nothing accounting for it.
+        //
+        // forensics.ts reconciles savingsBalance + lockedBalance against
+        // completed cooperative_transactions rows. A fixed savings lock is
+        // unlike a withdrawal — it does not move the amount into lockedBalance
+        // — so with no debit row the member reconciles short by the plan
+        // amount, permanently. Same rows and same shape as the route, so the
+        // two creation paths leave the same trail.
+        const reference = `fixsav_${fixedSavingsRef.id}`;
+
+        await db.collection(COLLECTIONS.TRANSACTIONS).doc(reference).set({
+            id: reference,
+            userId,
+            type: "fixed_savings_funding",
+            module: "cooperative",
+            amount,
+            currency: "NGN",
+            reference,
+            description: `Funded ${durationMonths}-month fixed savings plan`,
+            status: "completed",
+            date: FieldValue.serverTimestamp() });
+
+        await db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc(reference).set({
+            id: reference,
+            userId,
+            cooperativeId: membershipSnapshot.docs[0].data()?.cooperativeId || "default",
+            type: "fixed_savings_lock",
+            amount,
+            currency: "NGN",
+            reference,
+            description: `Locked into a ${durationMonths}-month fixed savings plan`,
+            status: "completed",
+            date: FieldValue.serverTimestamp() });
+
         return { error: null, success: true as const, data: { message: "Fixed savings plan created" }  };
     } catch (error) { logger.error("Fixed savings creation failed:", {
             error: error instanceof Error ? error.message : String(error)
