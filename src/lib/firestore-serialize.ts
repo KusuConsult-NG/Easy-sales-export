@@ -28,6 +28,58 @@ function isTimestamp(value: unknown): boolean {
 }
 
 /**
+ * Milliseconds since the epoch, from any of the timestamp shapes that reach
+ * client code — an ISO string, a Date, a Firestore Timestamp, or a plain
+ * { seconds, nanoseconds } object.
+ *
+ * WHY THIS IS NEEDED
+ * ------------------
+ * Server Actions return documents through serializeDocs(), which turns every
+ * Timestamp into an ISO string. The declared types still say `Timestamp`, so
+ * both shapes are believable at a call site and the code has been written for
+ * whichever the author had in mind.
+ *
+ * The message list sorted with
+ *
+ *     new Date(a.timestamp).getTime()
+ *
+ * which is correct for a string and gives NaN for a Timestamp object —
+ * `new Date(object)` is an Invalid Date, and a comparator returning NaN leaves
+ * the order undefined. The same files render with an explicit
+ * `typeof x.toDate === 'function' ? ... : ...` branch, so the author knew both
+ * shapes occur; only the sort assumed one.
+ *
+ * Returns 0 for null, undefined or anything unrecognisable, so a caller can
+ * sort a partially-populated list without special-casing.
+ */
+export function toMillis(value: unknown): number {
+    if (value == null) return 0;
+
+    if (value instanceof Date) return value.getTime();
+
+    if (typeof value === "number") return value;
+
+    if (typeof value === "string") {
+        const parsed = new Date(value).getTime();
+        return Number.isNaN(parsed) ? 0 : parsed;
+    }
+
+    const v = value as any;
+    if (typeof v.toDate === "function") {
+        const d = v.toDate();
+        return d instanceof Date && !Number.isNaN(d.getTime()) ? d.getTime() : 0;
+    }
+
+    const secs = typeof v._seconds === "number" ? v._seconds : v.seconds;
+    const nanos = typeof v._nanoseconds === "number" ? v._nanoseconds : v.nanoseconds;
+    if (typeof secs === "number") {
+        return secs * 1000 + (typeof nanos === "number" ? nanos / 1e6 : 0);
+    }
+
+    return 0;
+}
+
+/**
  * Convert a single Firestore Timestamp (or anything with a toDate() method)
  * to an ISO 8601 string.
  */

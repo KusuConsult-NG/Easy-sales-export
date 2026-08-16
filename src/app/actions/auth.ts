@@ -131,7 +131,17 @@ export async function getPostLoginRedirect(email: string) { try {
                 
                 // If they are a global admin/super admin, they should land on the main /admin dashboard.
                 // Module admin roles take priority only for silo-isolated module admins.
-                const isGlobalAdmin = userRoles.includes('super_admin') || userRoles.includes('superadmin') || userRoles.includes('admin');
+                // Compared as plain strings, like the hasAdminRole check above.
+                // `roles` is declared UserRole[], but it is read straight out of
+                // the database, so at runtime it holds whatever is stored there
+                // — including the legacy 'superadmin' spelling, which is not in
+                // the UserRole union. Treating the declared type as a guarantee
+                // here would mean dropping that comparison and quietly demoting
+                // anyone still carrying it.
+                const roleStrings: string[] = userRoles as unknown as string[];
+                const isGlobalAdmin = roleStrings.includes('super_admin')
+                    || roleStrings.includes('superadmin')
+                    || roleStrings.includes('admin');
                 
                 if (!isGlobalAdmin) {
                     if (userRoles.includes('academy_admin')) adminRedirect = '/admin/academy';
@@ -823,6 +833,18 @@ export async function changePasswordAction(
         // the defect this replaces, and a partial success is not worth
         // repeating in a quieter form.
         const { supabaseAdmin } = await import("@/lib/supabase");
+
+        // Every branch above sets this, but the compiler cannot see it: the
+        // fallback assigns from a value typed `any`, which widens back to the
+        // declared `string | null`. An explicit refusal rather than a `!`,
+        // because passing null into an auth admin call is not something that
+        // should be asserted away — it would target no account and report
+        // success.
+        if (!supabaseAuthId) {
+            logger.error("[changePassword] Could not resolve the account to update", { email });
+            return { success: false as const, error: "Could not verify your account. Please sign in again.", data: null };
+        }
+
         const { error: sbUpdateError } = await supabaseAdmin.auth.admin.updateUserById(
             supabaseAuthId,
             { password: newPassword }
