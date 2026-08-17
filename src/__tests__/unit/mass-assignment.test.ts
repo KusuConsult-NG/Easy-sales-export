@@ -103,6 +103,38 @@ describe('the defect it exists for', () => {
     });
 });
 
+describe('inside an API route', () => {
+    it('catches a sensitive field before a request-derived spread', () => {
+        // The blind spot both scanners in this file shared: caller data in a
+        // route handler is not a parameter, it is `await request.json()`. Every
+        // API route was therefore exempt from this gate by construction.
+        const found = scan(`
+            export async function POST(request: NextRequest) {
+                const body = await request.json();
+                const { id, ...rest } = body;
+                await db.collection("products").doc(id).update({ status: "active", ...rest });
+            }
+        `);
+
+        expect(found).toHaveLength(1);
+        expect(found[0].fields).toContain('status');
+    });
+
+    it('but not a named binding off the same body', () => {
+        // Vacuity guard for the widening. Tainting named bindings would make
+        // this gate fire on ordinary routes and it would get switched off.
+        const found = scan(`
+            export async function POST(request: NextRequest) {
+                const body = await request.json();
+                const { title } = body;
+                await db.collection("things").add({ status: "pending", title });
+            }
+        `);
+
+        expect(found).toHaveLength(0);
+    });
+});
+
 describe('what it must not flag', () => {
     it('the safe ordering — spread first', async () => {
         // Vacuity guard: a checker that flags every spread would make every

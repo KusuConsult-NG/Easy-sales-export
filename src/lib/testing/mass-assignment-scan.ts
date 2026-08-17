@@ -34,8 +34,30 @@
  *   - a spread of a document loaded from the database
  *
  * Neither is reachable by a caller, so neither is mass assignment. Restricting
- * to parameter-rooted spreads took the count from 13 to 0 — and 0 is the
- * correct answer, which the noisier version would have buried.
+ * to caller-rooted spreads took the count from 13 to 0 — and 0 is the correct
+ * answer, which the noisier version would have buried.
+ *
+ * WHAT "CALLER-ROOTED" MEANS, WIDENED LATER
+ * ----------------------------------------
+ * It used to mean "a function parameter", and that made both scanners in this
+ * file blind to every API route: a route handler's caller data does not arrive
+ * as a parameter, it arrives as `await request.json()` assigned to a local.
+ *
+ * api/marketplace/update-product wrote
+ *
+ *     const { productId, ...updateData } = body;
+ *     await productRef.update({ ...updateData, updatedAt: ... });
+ *
+ * guarded only by ownership, so a seller could set `status`, `rating`,
+ * `reviewCount` and `sellerId` on their own product. Both scanners reported
+ * nothing — correct by their own rule and useless in practice.
+ *
+ * taintedNames() now follows a request read and the REST element of a
+ * destructuring of anything already tainted. A NAMED binding is deliberately
+ * not tainted: `const { title } = body` is one field, which is the safe shape,
+ * and tainting it would fire on every route that reads a named field.
+ *
+ * The ordering gate stayed at zero after the widening, so it is still a gate.
  *
  * THE OTHER HALF, ADDED LATER
  * ---------------------------
@@ -113,7 +135,7 @@ function scanFunction(
     relPath: string,
     out: MassAssignmentLead[]
 ) {
-    const params = parameterNames(fn);
+    const params = taintedNames(fn);
     if (params.size === 0) return;
 
     const visit = (n: ts.Node) => {
@@ -233,13 +255,73 @@ function unwrap(node: ts.Node): ts.Node {
     return cur;
 }
 
+/** How caller data enters a Next.js route handler. */
+const REQUEST_READERS = new Set(["json", "formData", "text", "arrayBuffer"]);
+
+/**
+ * Names holding caller-controlled data inside a function.
+ *
+ * Parameters are the obvious source, and were the only one the first version of
+ * this scanner knew about. That made it blind to every API route, because a
+ * route handler's caller data does not arrive as a parameter — it arrives as
+ * `await request.json()`, assigned to a local. api/marketplace/update-product
+ * wrote `const { productId, ...updateData } = body` and spread `updateData`
+ * into an update, letting a seller set status, rating, reviewCount and sellerId
+ * on their own product; the scanner reported nothing, correctly by its own rule
+ * and uselessly in practice.
+ *
+ * So taint now propagates: a parameter, anything read off a request, and the
+ * rest element of a destructuring of either.
+ */
+function taintedNames(fn: ts.Node): Set<string> {
+    const tainted = parameterNames(fn);
+
+    const visit = (n: ts.Node) => {
+        if (ts.isVariableDeclaration(n) && n.initializer) {
+            let init: ts.Node = n.initializer;
+            if (ts.isAwaitExpression(init)) init = init.expression;
+
+            // const body = await request.json()
+            const fromRequest =
+                ts.isCallExpression(init) &&
+                ts.isPropertyAccessExpression(init.expression) &&
+                REQUEST_READERS.has(init.expression.name.text);
+
+            // const other = body            /  const { a, ...rest } = body
+            const initRoot = ts.isIdentifier(init) ? init.text : rootName(init);
+            const fromTainted = initRoot !== null && tainted.has(initRoot);
+
+            if (fromRequest || fromTainted) {
+                if (ts.isIdentifier(n.name)) {
+                    tainted.add(n.name.text);
+                } else if (ts.isObjectBindingPattern(n.name)) {
+                    for (const el of n.name.elements) {
+                        // Only the REST element carries the unlisted fields.
+                        // A named binding is one field, which is the safe shape.
+                        if (el.dotDotDotToken && ts.isIdentifier(el.name)) {
+                            tainted.add(el.name.text);
+                        }
+                    }
+                }
+            }
+        }
+        ts.forEachChild(n, visit);
+    };
+    // Two passes: a `const x = body` can appear before or after the declaration
+    // of `body` in nested blocks, and one pass would miss the earlier order.
+    ts.forEachChild(fn, visit);
+    ts.forEachChild(fn, visit);
+
+    return tainted;
+}
+
 function scanFunctionForSpreadWrites(
     fn: ts.Node,
     source: ts.SourceFile,
     relPath: string,
     out: CallerSpreadWrite[]
 ) {
-    const params = parameterNames(fn);
+    const params = taintedNames(fn);
     if (params.size === 0) return;
 
     // `const doc = { ...data, ... }` followed by `.add(doc)` is the same write,

@@ -31,8 +31,13 @@ export async function POST(request: NextRequest) {
 
         const quizData = await request.json();
 
-        // Validate required fields
-        if (!quizData.title || !quizData.courseId || quizData.questions.length === 0) {
+        // Validate required fields.
+        //
+        // `quizData.questions.length` was read without checking that `questions`
+        // exists, so a body missing that key threw a TypeError, was swallowed by
+        // the catch below, and came back as a 500 "Internal server error"
+        // instead of the 400 this branch is written to return.
+        if (!quizData?.title || !quizData?.courseId || !Array.isArray(quizData.questions) || quizData.questions.length === 0) {
             return NextResponse.json(
                 { success: false, message: "Missing required fields" },
                 { status: 400 }

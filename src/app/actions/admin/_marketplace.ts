@@ -15,6 +15,12 @@ import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { normalizeAggressive } from "@/lib/canonical/normalizer";
 import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
 import { safeToISOString } from "@/lib/date-utils";
+import { claimStatusTransitionFromAny } from "@/lib/status-transition";
+import {
+    PRODUCT_APPROVABLE_FROM,
+    PRODUCT_REJECTABLE_FROM,
+    normaliseProductStatus,
+} from "@/lib/product-status";
 
 // ============================================
 // Seller Verification (Marketplace)
@@ -826,3 +832,194 @@ async function _rejectMarketplaceUserAction(options: { userId: string; reason: s
 }
 
 export const rejectMarketplaceUserAction = withFlexibleSafeAction("rejectMarketplaceUserAction", _rejectMarketplaceUserAction);
+
+// ============================================
+// Product moderation
+// ============================================
+
+/**
+ * Admin: list products by status, so a moderator can see them at all.
+ *
+ * WHY THIS DID NOT EXIST
+ * ----------------------
+ * There was no admin screen or action anywhere that listed or acted on a
+ * product. createProductAction wrote `status: "pending"`, every buyer-facing
+ * reader filters on `status == "active"`, and nothing moved a product between
+ * the two — so the primary seller form produced listings no buyer could see and
+ * no admin could release. admin-content.ts COUNTED pending products, which meant
+ * the dashboard displayed the size of the backlog without offering any way to
+ * clear it.
+ *
+ * PRODUCT_INITIAL_STATUS is "active" now, so new listings are not held. This
+ * exists to release the backlog that accumulated, and to give moderation a
+ * mechanism at all — see lib/product-status.ts for the reasoning and for how to
+ * switch to approval-before-publication.
+ */
+async function _getAdminProductsAction(options: {
+    status?: string;
+    limitCount?: number;
+    lastId?: string;
+} = {}): Promise<ActionResponse<{ products: any[]; lastId?: string; hasMore: boolean; stats: Record<string, number> }>> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
+        const { session } = sessionResult;
+        if (!session?.user || !isAdmin(session.user.roles)) {
+            return { success: false as const, error: "Unauthorized", data: null };
+        }
+
+        const limitCount = Math.min(Math.max(Number(options.limitCount) || 25, 1), 100);
+        const status = normaliseProductStatus(options.status);
+
+        const col = db.collection(COLLECTIONS.PRODUCTS);
+
+        // Counts per status, so the page can show the backlog it is clearing.
+        // Server-side COUNT, not a length of a capped page — the mistake #37 and
+        // the WAVE admin list both made.
+        const countable = ["pending", "active", "rejected", "suspended", "draft"] as const;
+        const counts = await Promise.all(
+            countable.map((s) => col.where("status", "==", s).count().get()),
+        );
+        const stats: Record<string, number> = {};
+        countable.forEach((s, i) => { stats[s] = counts[i].data().count; });
+
+        let query: import("@/lib/supabase-db").SupabaseQuery = status
+            ? (col.where("status", "==", status) as any)
+            : (col as any);
+        query = query.orderBy("createdAt", "desc");
+
+        if (options.lastId) {
+            const lastDoc = await col.doc(options.lastId).get();
+            if (lastDoc.exists) query = query.startAfter(lastDoc);
+        }
+
+        const snapshot = await query.limit(limitCount + 1).get();
+        const hasMore = snapshot.docs.length > limitCount;
+        const docs = hasMore ? snapshot.docs.slice(0, limitCount) : snapshot.docs;
+
+        return {
+            success: true as const,
+            error: null,
+            data: {
+                products: serializeDocs(docs),
+                lastId: docs.length > 0 ? docs[docs.length - 1].id : undefined,
+                hasMore,
+                stats,
+            },
+        };
+    } catch (error: any) {
+        logger.error("Get admin products error:", error);
+        return { success: false as const, error: "Failed to fetch products", data: null };
+    }
+}
+
+export const getAdminProductsAction = withFlexibleSafeAction("getAdminProductsAction", _getAdminProductsAction);
+
+/**
+ * Admin: publish, reject or suspend a product listing.
+ *
+ * ON THE PRIMITIVE
+ * ----------------
+ * claimStatusTransitionFromAny, not a read-then-write and not runTransaction.
+ * supabaseDb.runTransaction takes no lock (see the note at the top of
+ * lib/types/marketplace-escrow.ts), so a status check inside it is an ordinary
+ * read and two admins acting at once would both proceed. The claim advances the
+ * status only if it still holds one of the expected values, and tells the caller
+ * whether it was the one that changed it — so exactly one admin's decision, and
+ * one audit row, results from a double-click or two moderators on the same
+ * queue.
+ *
+ * `products` is not in DEDICATED_TABLE_MAP, so it lives in
+ * document_collections and claim_status_transition can reach it. That is worth
+ * stating because #15 was exactly the opposite case.
+ */
+async function _reviewProductAction(input: {
+    productId: string;
+    action: "approve" | "reject" | "suspend";
+    reason?: string;
+}): Promise<ActionResponse<{ status: string }>> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
+        const { session } = sessionResult;
+        if (!session?.user || !isAdmin(session.user.roles)) {
+            return { success: false as const, error: "Unauthorized", data: null };
+        }
+
+        const productId = String(input?.productId ?? "").trim();
+        if (!productId) {
+            return { success: false as const, error: "A product id is required", data: null };
+        }
+        if (!["approve", "reject", "suspend"].includes(input?.action)) {
+            return { success: false as const, error: "Unknown review action", data: null };
+        }
+
+        // A rejection or suspension that does not say why leaves the seller with
+        // an unexplained dead listing and nothing to fix.
+        const reason = String(input.reason ?? "").trim();
+        if (input.action !== "approve" && reason.length < 5) {
+            return {
+                success: false as const,
+                error: "Please give a reason of at least 5 characters, so the seller knows what to change",
+                data: null,
+            };
+        }
+
+        const to = input.action === "approve" ? "active" : input.action === "reject" ? "rejected" : "suspended";
+        const from = input.action === "approve" ? PRODUCT_APPROVABLE_FROM : PRODUCT_REJECTABLE_FROM;
+
+        const claim = await claimStatusTransitionFromAny({
+            collection: COLLECTIONS.PRODUCTS,
+            id: productId,
+            fromAny: [...from],
+            to,
+            patch: {
+                reviewedBy: session.user.id,
+                reviewedAt: new Date().toISOString(),
+                ...(input.action === "approve"
+                    ? { rejectionReason: null }
+                    : { rejectionReason: reason }),
+            },
+        });
+
+        if (!claim.claimed) {
+            if (claim.status === null) {
+                return {
+                    success: false as const,
+                    error: claim.exists === false
+                        ? "Product not found"
+                        : "This product has no status recorded, so it cannot be reviewed.",
+                    data: null,
+                };
+            }
+            return {
+                success: false as const,
+                error: `This product is '${claim.status}' and cannot be ${input.action}d from that state.`,
+                data: null,
+            };
+        }
+
+        await createAdminAuditLog({
+            action: input.action === "approve"
+                ? "product_approved"
+                : input.action === "reject"
+                    ? "product_rejected"
+                    : "product_suspended",
+            userId: session.user.id,
+            targetId: productId,
+            targetType: "product",
+            metadata: { decision: input.action, from: claim.status, to, reason: reason || null },
+        });
+
+        revalidatePath("/admin/marketplace/products");
+        revalidatePath("/marketplace/buyer/products");
+        revalidatePath(`/marketplace/products/${productId}`);
+
+        return { success: true as const, error: null, data: { status: to } };
+    } catch (error: any) {
+        logger.error("Review product error:", error);
+        return { success: false as const, error: "Failed to review product", data: null };
+    }
+}
+
+export const reviewProductAction = withFlexibleSafeAction("reviewProductAction", _reviewProductAction);

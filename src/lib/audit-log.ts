@@ -93,6 +93,11 @@ export type AuditAction =
     | 'seller_badge_revoke'
     | 'approve_marketplace_user'
     | 'reject_marketplace_user'
+    // Product moderation. There was no admin path to a product at all before
+    // reviewProductAction, so there was nothing to audit and no action name.
+    | 'product_approved'
+    | 'product_rejected'
+    | 'product_suspended'
     // WAVE Actions
     | 'wave_enrollment'
     | 'wave_training_created'

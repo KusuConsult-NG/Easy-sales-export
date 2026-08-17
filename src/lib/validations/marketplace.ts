@@ -66,6 +66,21 @@ export const ProductSchema = z.object({
     }).default({ state: "Lagos", lga: "Unknown", nearestMarket: "Unknown" }),
     deliveryMethod: z.enum(["pickup", "delivery", "both"]).default("delivery"),
     estimatedDeliveryDays: z.number().optional(),
+    /**
+     * Declared, because it was collected and then silently discarded.
+     *
+     * Both product forms gather certifications and both creators parse them out
+     * of the request — and this schema did not have the field, so Zod stripped
+     * it from `validatedData` and createProductAction wrote a product without
+     * them. marketplace/products/[id] has a whole section that renders
+     * `product.certifications`, and it could only ever be empty for a product
+     * created through the server action.
+     *
+     * (/api/marketplace/create-product does not run this schema, which is why
+     * products from that path DID have certifications — the same
+     * two-writers-disagree shape as the status defect.)
+     */
+    certifications: z.array(z.string()).default([]),
     status: z.enum(["draft", "active", "suspended", "out_of_stock", "deleted", "pending", "rejected"]).default("draft"),
     bulkAvailable: z.boolean().default(false),
     exportReady: z.boolean().default(false),

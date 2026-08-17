@@ -67,7 +67,7 @@
 
 import { describe, it, expect } from '@jest/globals';
 import { join } from 'path';
-import { mkdtempSync, writeFileSync, rmSync } from 'fs';
+import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import {
     scanFileForCallerSpreadWrites,
@@ -139,6 +139,52 @@ describe('the shape it exists for', () => {
         `);
 
         expect(found).toHaveLength(1);
+    });
+
+    it('follows caller data in through await request.json()', () => {
+        // THE blind spot. A route handler's caller data is not a parameter, so
+        // the first version of this scanner reported nothing for every API route
+        // in the codebase — correctly by its own rule, and uselessly.
+        //
+        // api/marketplace/update-product was exactly this shape, and let a
+        // seller write status, rating, reviewCount and sellerId on their own
+        // product.
+        const found = scan(`
+            export async function POST(request: NextRequest) {
+                const body = await request.json();
+                const { productId, ...updateData } = body;
+                await db.collection("products").doc(productId).update({ ...updateData, updatedAt: now() });
+            }
+        `);
+
+        expect(found).toHaveLength(1);
+        expect(found[0].spread).toBe('updateData');
+    });
+
+    it('follows it through formData() as well', () => {
+        const found = scan(`
+            export async function POST(request: NextRequest) {
+                const form = await request.formData();
+                await db.collection("things").add({ ...form, createdAt: now() });
+            }
+        `);
+
+        expect(found).toHaveLength(1);
+    });
+
+    it('taints only the REST element of a destructuring, not a named one', () => {
+        // `const { title } = body` is one field, which is the shape that is
+        // safe. Tainting it would make the scan fire on every route that pulls
+        // named fields out of a body — noise that would get the pin disabled.
+        const found = scan(`
+            export async function POST(request: NextRequest) {
+                const body = await request.json();
+                const { title } = body;
+                await db.collection("things").add({ title, status: "pending" });
+            }
+        `);
+
+        expect(found).toHaveLength(0);
     });
 
     it('reports the ordering-safe form too — that is the whole point', () => {
@@ -229,6 +275,11 @@ const KNOWN: Record<string, number> = {
     'app/actions/export-admin.ts': 1,
     'app/actions/wave/_wv_admin_resources.ts': 4,
     'app/actions/academy/_ac_catalog.ts': 1,
+    // Admin-only route (isAdmin, incl. super_admin) spreading its own JSON body
+    // into a quiz document. An admin can write these fields directly, so the
+    // spread grants nothing. Surfaced only once the scanner learned to follow
+    // `await request.json()` — see the note in mass-assignment-scan.ts.
+    'app/api/admin/academy/quiz/create/route.ts': 1,
 
     // Server-built objects, not request payloads.
     'app/actions/academy/_ac_applications.ts': 1,
@@ -270,6 +321,33 @@ describe('the codebase', () => {
         }
 
         expect({ added, grown }).toEqual({ added: [], grown: [] });
+    });
+
+    it('the product update route writes a whitelist, not the body', () => {
+        // The worst instance the widened scan found. Checked by content as well
+        // as by absence from `leads`, because replacing the spread with
+        // `Object.assign(patch, updateData)` would satisfy the scanner and
+        // reintroduce the whole defect.
+        const src = readFileSync(
+            join(process.cwd(), 'src/app/api/marketplace/update-product/route.ts'),
+            'utf-8',
+        );
+
+        expect(src).toContain('SELLER_EDITABLE_FIELDS');
+        expect(src).not.toMatch(/update\(\{\s*\.\.\.updateData/);
+        expect(src).not.toContain('Object.assign');
+
+        // The fields a seller must NOT be able to set on their own product.
+        const forbidden = ['status', 'rating', 'reviewCount', 'sellerId', 'sellerVerified', '_version'];
+        const list = src.slice(src.indexOf('SELLER_EDITABLE_FIELDS = ['), src.indexOf('] as const'));
+        for (const field of forbidden) {
+            expect(list).not.toContain(`"${field}"`);
+        }
+
+        // And the ones it must still allow, or the edit form stops working.
+        for (const field of ['title', 'description', 'pricingTiers', 'images', 'availableQuantity']) {
+            expect(list).toContain(`"${field}"`);
+        }
     });
 
     it('has kept the five that were narrowed narrow', () => {

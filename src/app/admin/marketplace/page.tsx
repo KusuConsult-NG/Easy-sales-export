@@ -1,6 +1,6 @@
 "use client";
 
-import { ShoppingBag, Users, AlertTriangle, CheckSquare, Zap, Wallet, Shield, Star } from "lucide-react";
+import { ShoppingBag, Users, AlertTriangle, CheckSquare, Zap, Wallet, Shield, Star, Package } from "lucide-react";
 import Link from "next/link";
 
 export default function AdminMarketplacePage() {
@@ -20,6 +20,18 @@ export default function AdminMarketplacePage() {
             href: "/admin/marketplace/buyers",
             color: "text-blue-600",
             bg: "bg-blue-100"
+        },
+        {
+            // Distinct from "Product Reviews" below, which moderates buyer
+            // REVIEWS. There was no admin screen for the products themselves at
+            // all, so a product left in "pending" was invisible to buyers and
+            // unreachable by an admin.
+            title: "Product Listings",
+            description: "Publish held listings, or suspend one that should not be live",
+            icon: Package,
+            href: "/admin/marketplace/products",
+            color: "text-green-600",
+            bg: "bg-green-100"
         },
         {
             title: "Product Reviews",

@@ -9,6 +9,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { uploadFileToStorage } from "@/lib/storage-admin";
 
 import { parseCurrencyStringToFloat } from "@/lib/utils";
+import { PRODUCT_INITIAL_STATUS } from "@/lib/product-status";
 
 /**
  * API Route: Create Product Listing
@@ -186,7 +187,12 @@ export async function POST(request: NextRequest) {
             views: 0,
             orders: 0,
             reviewCount: 0,
-            status: "active",
+            // ONE answer for both creators, from lib/product-status.ts. This
+            // wrote "active" while createProductAction wrote "pending", so which
+            // of the two seller forms was used decided whether the listing was
+            // ever visible. Its value is unchanged today; the point is that it is
+            // now the same value in both places, changeable in one.
+            status: PRODUCT_INITIAL_STATUS,
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
         });

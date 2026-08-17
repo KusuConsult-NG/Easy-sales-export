@@ -14,6 +14,7 @@ import { ProductSchema } from "@/lib/validations/marketplace";
 import { withSafeAction, ActionResponse } from "@/lib/safe-action";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
 import { newestVerification, SELLER_NAME_FALLBACK } from "@/lib/seller-trust";
+import { PRODUCT_INITIAL_STATUS } from "@/lib/product-status";
 
 // ============================================================================
 // PRODUCT MANAGEMENT
@@ -215,7 +216,20 @@ async function _createProductAction(prevState: unknown, formData: FormData): Pro
             estimatedDeliveryDays: validatedData.estimatedDeliveryDays,
             bulkAvailable: validatedData.bulkAvailable || false,
             exportReady: validatedData.exportReady || false,
-            status: "pending",
+            // Collected from the form, validated by ProductSchema — and then
+            // dropped. This object never mentioned `certifications`, so a
+            // seller's certifications were parsed and discarded, while
+            // marketplace/products/[id] has a whole section that renders them
+            // and /api/marketplace/create-product writes them.
+            certifications: validatedData.certifications ?? certifications ?? [],
+            // ONE answer for both creators, from lib/product-status.ts.
+            //
+            // This wrote "pending" while /api/marketplace/create-product wrote
+            // "active" and ProductSchema defaults to "draft". Every buyer-facing
+            // reader filters on "active" alone, and nothing anywhere released a
+            // pending product — so this action, reached from six links, produced
+            // listings no buyer could see and no admin could publish.
+            status: PRODUCT_INITIAL_STATUS,
             sellerName,
             sellerVerified,
             sellerCategory,
@@ -398,9 +412,17 @@ async function _updateProductAction(prevState: unknown, formData: FormData): Pro
             estimatedDeliveryDays: validatedData.estimatedDeliveryDays,
             bulkAvailable: validatedData.bulkAvailable || false,
             exportReady: validatedData.exportReady || false,
+            // Dropped on the update path too, so editing a product silently
+            // erased nothing and saved nothing: certifications were validated
+            // and never written on either create or update.
+            certifications: validatedData.certifications ?? certifications ?? [],
             updatedAt: FieldValue.serverTimestamp()
         };
 
+        // `status` is deliberately NOT in this patch. An edit must not change
+        // whether a listing is published — that is reviewProductAction's job,
+        // and an admin who suspended a product would otherwise see the seller
+        // republish it by saving the edit form.
         await productRef.update(updatedProduct);
 
         return { error: null, success: true as const, data: { productId } };
