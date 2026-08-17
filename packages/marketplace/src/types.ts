@@ -289,6 +289,22 @@ export interface Order {
 // ESCROW
 // ============================================================================
 
+/**
+ * Escrow status.
+ *
+ * "completed" REMOVED. It was a ninth member that nothing writes and the
+ * validator rejects: escrowStatusSchema in _escrow_actions.ts is built from
+ * ESCROW_STATUSES (eight values, no "completed"), so
+ * `escrowStatusSchema.parse("completed")` threw.
+ *
+ * Its presence here was not harmless. updateEscrowStatus's transition table
+ * named `completed` as the target from both `delivered` and `disputed`, and
+ * because the parameter type allowed it the compiler agreed — so two rows of
+ * that table were unreachable code that read as though settling an escrow were
+ * supported. The escrow vocabulary calls that state `released`.
+ *
+ * See src/lib/escrow-status.ts, which is the canonical list.
+ */
 export type EscrowStatus =
     | "pending"
     | "funded"
@@ -297,8 +313,7 @@ export type EscrowStatus =
     | "released"
     | "refunded"
     | "disputed"
-    | "cancelled"
-    | "completed";
+    | "cancelled";
 
 export interface EscrowTransaction {
     id: string;

@@ -144,6 +144,57 @@ export const ESCROW_ACTIVE_STATUSES: readonly EscrowStatus[] = [
     "disputed",
 ];
 
+/**
+ * What a BUYER or SELLER may move an escrow to, by current status.
+ *
+ * _updateEscrowStatus carried its own copy of this — a sixth hand-written escrow
+ * transition table — and it had two problems.
+ *
+ * 1. IT LET EITHER PARTY CANCEL A FUNDED ESCROW
+ *
+ *    Its `funded` row was `["in_transit", "disputed", "cancelled"]`. "cancelled"
+ *    is a SETTLED status: it is not in ESCROW_RELEASABLE_FROM, not in
+ *    ESCROW_REFUNDABLE_FROM, and not in ESCROW_ACTIVE_STATUSES. So once either
+ *    party cancelled a funded escrow, the seller could never be paid, the buyer
+ *    could never be refunded, and a dispute could not even find the record to
+ *    freeze it. Real money, stranded permanently, by one call from either side.
+ *
+ *    `cancelled` is reachable from `pending` alone here. A pending escrow holds
+ *    nothing, so cancelling it costs nobody anything. A FUNDED one leaves only
+ *    by being released, refunded, or disputed — each of which has its own action
+ *    that moves the money.
+ *
+ * 2. HALF OF IT WAS UNREACHABLE
+ *
+ *    It named `completed` as the target from both `delivered` and `disputed`.
+ *    "completed" is not an escrow status — the escrow vocabulary calls that
+ *    `released` — so `escrowStatusSchema.parse("completed")` threw before the
+ *    table was ever consulted, and both rows were dead. An escrow at `delivered`
+ *    could in practice only go to `disputed`, and the settle-the-escrow path a
+ *    reader would expect from that table did not exist.
+ *
+ * `released` and `refunded` are deliberately absent from every row: they move
+ * money and belong to releaseEscrowFunds / refundEscrowToBuyer, which claim
+ * their own transitions and write the ledger.
+ */
+export const ESCROW_PARTICIPANT_TRANSITIONS: Readonly<Record<EscrowStatus, readonly EscrowStatus[]>> = {
+    pending: ["funded", "cancelled"],
+    funded: ["in_transit", "disputed"],
+    in_transit: ["delivered", "disputed"],
+    delivered: ["disputed"],
+    // Admin-resolved, through resolveDisputeAction.
+    disputed: [],
+    released: [],
+    refunded: [],
+    cancelled: [],
+};
+
+/** The statuses from which a participant may reach `to`. */
+export function participantSourcesFor(to: EscrowStatus): EscrowStatus[] {
+    return (Object.keys(ESCROW_PARTICIPANT_TRANSITIONS) as EscrowStatus[])
+        .filter((from) => ESCROW_PARTICIPANT_TRANSITIONS[from].includes(to));
+}
+
 export function isSettledEscrowStatus(status: unknown): boolean {
     return ESCROW_SETTLED_STATUSES.includes(String(status ?? "") as EscrowStatus);
 }

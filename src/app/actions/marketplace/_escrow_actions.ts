@@ -21,6 +21,7 @@ import {
     ESCROW_DISPUTEABLE_STATUSES,
     ESCROW_RELEASABLE_FROM,
     ESCROW_REFUNDABLE_FROM,
+    participantSourcesFor,
 } from "@/lib/escrow-status";
 
 // Validation schemas
@@ -227,42 +228,78 @@ async function _updateEscrowStatus(
 
         const txRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(transactionId);
 
-        await db.runTransaction(async (tx) => { const txDoc = await tx.get(txRef);
-            if (!txDoc.exists) throw new Error("Transaction not found");
+        // Money-moving statuses are not this action's job.
+        //
+        // The old table named `completed` as a target, which is not an escrow
+        // status at all — the vocabulary calls it `released` — so
+        // escrowStatusSchema.parse threw before the table was consulted and both
+        // rows mentioning it were dead. Saying so explicitly is better than
+        // failing with "Invalid status value" on a status that IS valid but
+        // belongs elsewhere.
+        if (status === "released" || status === "refunded") {
+            return {
+                success: false as const,
+                error: `Use the ${status === "released" ? "release" : "refund"} action for this — it moves money and writes the ledger.`,
+                data: null,
+            };
+        }
 
-            const txData = txDoc.data()!;
+        // Participation is checked before the claim, because the claim cannot
+        // express "and the caller is one of these two parties".
+        const preRead = await txRef.get();
+        if (!preRead.exists) {
+            return { success: false as const, error: "Transaction not found", data: null };
+        }
+        const preData = preRead.data()!;
+        if (preData.buyerId !== userId && preData.sellerId !== userId) {
+            return { success: false as const, error: "Not authorized to update this transaction", data: null };
+        }
 
-            // Verify user is participant
-            if (txData.buyerId !== userId && txData.sellerId !== userId) {
-                throw new Error("Not authorized to update this transaction");
-            }
+        // Leaving `disputed` is an admin decision, made through dispute
+        // resolution. The old guard was
+        // `(currentStatus === "disputed" || status === "completed")`, and since
+        // "completed" could never arrive, only the first half ever did anything.
+        if (preData.status === "disputed" && !isAdmin(session.user.roles)) {
+            return { success: false as const, error: "Admin access required to perform this transition", data: null };
+        }
 
-            // Validate state transitions
-            const currentStatus = txData.status;
-            const validTransitions: Record<string, string[]> = { pending: ["funded", "cancelled"],
-                funded: ["in_transit", "disputed", "cancelled"],
-                in_transit: ["delivered", "disputed"],
-                delivered: ["completed", "disputed"],
-                completed: [],
-                disputed: ["completed", "cancelled"],
-                cancelled: [] };
+        // Claimed, not checked-then-written.
+        //
+        // The participant check, the transition check, the admin check and the
+        // write all sat inside runTransaction — which takes NO lock in this
+        // adapter — so two callers both passed every check and both wrote. This
+        // is the primitive every other escrow path in this codebase was moved
+        // onto; this one was missed.
+        //
+        // The from-set comes from ESCROW_PARTICIPANT_TRANSITIONS, which no longer
+        // permits cancelling a FUNDED escrow. That let either party strand real
+        // money permanently: `cancelled` is settled, so the seller could not be
+        // paid, the buyer could not be refunded, and a dispute could not find the
+        // record to freeze. See lib/escrow-status.ts.
+        const sources = participantSourcesFor(status);
+        if (sources.length === 0) {
+            return {
+                success: false as const,
+                error: `'${status}' is not a status a buyer or seller can set.`,
+                data: null,
+            };
+        }
 
-            if (!validTransitions[currentStatus]?.includes(status)) {
-                throw new Error(`Invalid status transition from ${currentStatus} to ${status}`);
-            }
-
-            if (
-                (currentStatus === "disputed" || status === "completed") &&
-                !isAdmin(session.user.roles)
-            ) { throw new Error("Admin access required to perform this transition");
-            }
-
-            tx.update(txRef, {
-                status,
-                updatedAt: FieldValue.serverTimestamp(),
-                [`${status}At`]: FieldValue.serverTimestamp(),
-                _version: FieldValue.increment(1) });
+        const claim = await claimStatusTransitionFromAny({
+            collection: COLLECTIONS.ESCROW_TRANSACTIONS,
+            id: transactionId,
+            fromAny: [...sources],
+            to: status,
+            patch: { [`${status}At`]: new Date().toISOString() },
         });
+
+        if (!claim.claimed) {
+            return {
+                success: false as const,
+                error: `Invalid status transition from ${claim.status ?? "missing"} to ${status}`,
+                data: null,
+            };
+        }
 
         // Notifications
         const txDoc = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(transactionId).get();

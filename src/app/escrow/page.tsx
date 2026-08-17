@@ -34,7 +34,15 @@ const STEPS = [
         description: "Product being delivered"
     },
     {
-        key: "completed" as EscrowStatus,
+        // "released", not "completed".
+        //
+        // No escrow is ever written with status "completed" — the vocabulary
+        // calls this state `released`, and escrowStatusSchema rejects
+        // "completed". The step keyed on it was therefore unreachable, and
+        // getStepIndex below fell through to `default: return 0` for a released
+        // escrow: a transaction whose funds had been paid out displayed as step
+        // 0, "Payment Pending". See src/lib/escrow-status.ts.
+        key: "released" as EscrowStatus,
         label: "Complete",
         icon: CheckCircle,
         description: "Funds released to seller"
@@ -55,7 +63,12 @@ function EscrowStepper({ currentStatus, transactionId, onStatusChange }: EscrowS
             case "in_transit": return 2;
             case "delivered": return 2; // Show as part of delivery phase
             case "disputed": return 2; // Show warning in delivery phase
-            case "completed": return 3;
+            // The two real terminal states. This switch had `completed`, which no
+            // escrow holds, and neither `released` nor `refunded` — so every
+            // finished transaction fell through to `default: return 0` and was
+            // shown as "Payment Pending".
+            case "released": return 3;
+            case "refunded": return -1; // Money returned; the delivery track ended
             case "cancelled": return -1;
             default: return 0;
         }
