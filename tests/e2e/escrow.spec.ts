@@ -78,7 +78,7 @@ test.describe('Loan Application', () => {
     test('should display loan application form', async ({ page }) => {
         await page.goto('/loans/apply');
 
-        await expect(page.locator('h1')).toContainText(/loan|apply/i);
+        await expect(page.getByRole('heading', { level: 1 })).toContainText(/loan|apply/i);
         await expect(page.locator('input[name="amount"]')).toBeVisible();
     });
 
@@ -112,7 +112,7 @@ test.describe('Admin Dashboards', () => {
         await page.goto('/admin/feature-toggles');
 
         // Should show feature toggles dashboard
-        await expect(page.locator('h1')).toContainText(/feature toggles/i);
+        await expect(page.getByRole('heading', { level: 1 })).toContainText(/feature toggles/i);
     });
 
     // 'should filter feature toggles' is REMOVED rather than enabled.

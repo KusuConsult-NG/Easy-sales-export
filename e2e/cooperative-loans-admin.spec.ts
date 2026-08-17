@@ -150,7 +150,7 @@ test.describe('Loan Application Flow', () => {
         await page.goto('/loans');
 
         // Loans list or status should be visible
-        await expect(page.locator('h1')).toContainText(/Loan|Application/i);
+        await expect(page.getByRole('heading', { level: 1 })).toContainText(/Loan|Application/i);
 
         // Status badges should exist
         const statusBadges = page.locator('text=/Pending|Approved|Rejected|Active/i');
@@ -173,7 +173,7 @@ test.describe('Admin Review Flow', () => {
         await expect(page.locator('text=Loading dashboard...').first()).not.toBeVisible({ timeout: 90000 });
 
         // Admin dashboard should load
-        await expect(page.locator('h1').first()).toContainText(/Admin|Dashboard|Welcome/i, { timeout: 30000 });
+        await expect(page.getByRole('heading', { level: 1 }).first()).toContainText(/Admin|Dashboard|Welcome/i, { timeout: 30000 });
 
         console.log('✅ Admin dashboard accessible');
     });

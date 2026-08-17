@@ -63,6 +63,6 @@ test.describe('RBAC Security Enforcement', () => {
 
         // Access admin health page
         await page.goto('/admin/system-health');
-        await expect(page.locator('h1')).toContainText('System Health Monitor');
+        await expect(page.getByRole('heading', { level: 1 })).toContainText('System Health Monitor');
     });
 });

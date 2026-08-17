@@ -49,7 +49,7 @@ test.describe('Registration → MFA → Dashboard Flow', () => {
 
         // Step 2: Verify get-started page loaded
         await expect(page).toHaveURL(/auth\/get-started/);
-        await expect(page.locator('h1')).toContainText(/Choose Your Module/i);
+        await expect(page.getByRole('heading', { level: 1 })).toContainText(/Choose Your Module/i);
 
         console.log('✅ Registration and module selection page loaded successfully');
     });
