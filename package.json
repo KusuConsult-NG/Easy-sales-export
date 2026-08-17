@@ -48,6 +48,7 @@
     "dev:local": "bash scripts/dev-local.sh",
     "seed:local": "tsx scripts/seed-local.ts",
     "repair:savings": "tsx scripts/repair-savings-balance.ts",
+    "backfill:fixsav": "tsx scripts/backfill-fixed-savings-ledger.ts",
     "stack:up": "bash scripts/local-stack/up.sh",
     "stack:down": "bash scripts/local-stack/down.sh"
   },
