@@ -198,7 +198,17 @@ export default function QuizBuilderPage(props: QuizBuilderPageProps) {
 
             if (data.success) {
                 showToast("Quiz saved successfully", "success");
-                router.push(`/ admin / academy / courses / ${params.courseId} `);
+                // Two things were wrong here.
+                //
+                // The spaces were literal, so this pushed
+                // "/%20admin%20/%20academy%20/%20courses%20/<id>%20". Removing
+                // them gave `/admin/academy/courses/<id>`, which does not exist
+                // either — the admin course detail route is
+                // `/admin/academy/[courseId]`, with no `courses` segment. (This
+                // page's own path has one, which is presumably where the mistake
+                // came from.) So saving a quiz has always navigated somewhere
+                // that 404s.
+                router.push(`/admin/academy/${params.courseId}`);
             } else {
                 showToast(data.message || "Failed to save quiz", "error");
             }
