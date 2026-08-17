@@ -8,6 +8,7 @@ import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { ACADEMY_CONFIG } from "@/lib/constants";
 import { normalizeUserDoc } from "@/lib/schema-normalizer";
 import { claimPaymentOnce, incrementWithinCeiling, CLAIM_TYPE, markFulfilmentFailed } from "@/lib/wallet-ledger";
+import { checkOrderPaymentAmount } from "@/lib/order-payment-amount";
 
 /**
  * Handle Marketplace Order Fulfillment
@@ -28,12 +29,38 @@ export async function processMarketplaceOrder(reference: string, amount: number,
     const orderDoc = orderQuery.docs[0];
     const orderData = orderDoc.data();
 
-    // Verify Amount (Security Check)
-    if (Math.abs(amount - orderData.totalAmount) > 1) {
-        logger.warn(`[Paystack Webhook] Amount mismatch for ${reference}. Paid: ${amount}, Expected: ${orderData.totalAmount}`);
-        if (amount < orderData.totalAmount) {
-            throw new Error("Payment amount insufficient");
-        }
+    /**
+     * Verify Amount — through the rule the interactive path also uses.
+     *
+     * This checked only underpayment; _payment_verify.ts refused ANY mismatch and
+     * also re-applied the platform's min/max order bounds. Same payment, two
+     * answers, decided by which path arrived first — and they race by design.
+     *
+     * The overpayment case was the one with no record at all: it logged a warning
+     * and fulfilled at the order amount, leaving the surplus untracked. Export
+     * investments already route an overpayment to `overfunded_review` and keep it
+     * out of revenue; a marketplace order had no equivalent.
+     */
+    const amountVerdict = checkOrderPaymentAmount(amount, orderData.totalAmount);
+
+    if (!amountVerdict.ok) {
+        logger.error(
+            `[Paystack Webhook] Payment ${reference} refused on amount: ${amountVerdict.reason}. ` +
+            `Paid ₦${amount}, order total ₦${orderData.totalAmount}.`
+        );
+        throw new Error(
+            amountVerdict.reason === "underpaid"
+                ? "Payment amount insufficient"
+                : "Order total missing; payment cannot be matched"
+        );
+    }
+
+    if (amountVerdict.overpaidBy > 0) {
+        logger.warn(
+            `[Paystack Webhook] Payment ${reference} OVERPAID by ₦${amountVerdict.overpaidBy} ` +
+            `(paid ₦${amount}, order total ₦${orderData.totalAmount}). Fulfilling the order and ` +
+            `recording the surplus for review — refusing would leave a charged buyer with nothing.`
+        );
     }
 
     // Fetch buyer and seller emails first (outside transaction, to satisfy read-before-write)
@@ -117,8 +144,39 @@ export async function processMarketplaceOrder(reference: string, amount: number,
             paymentVerifiedAt: paymentTimestamp,
             paidAmount: amount,
             updatedAt: FieldValue.serverTimestamp(),
-            paymentMethod: "paystack_webhook"
+            paymentMethod: "paystack_webhook",
+            // The surplus, recorded on the order rather than only in a log line.
+            // It was previously untracked entirely: the warning said the amounts
+            // differed and nothing carried the difference forward, so nobody could
+            // find the money owed back without re-reading Paystack.
+            ...(amountVerdict.overpaidBy > 0
+                ? {
+                    overpaidBy: amountVerdict.overpaidBy,
+                    overpaymentStatus: "pending_review",
+                    overpaymentRecordedAt: paymentTimestamp,
+                }
+                : {}),
         });
+
+        // And a FAILED_PAYMENTS row for the surplus, matching how an overfunded
+        // export investment is routed to review. That collection is what an admin
+        // works from, and platform_revenue_totals() does not count these rows.
+        if (amountVerdict.overpaidBy > 0) {
+            await db.collection(COLLECTIONS.FAILED_PAYMENTS).doc(`${reference}-overpayment`).set({
+                reference,
+                type: "marketplace_order_overpayment",
+                userId: buyerId,
+                orderId: orderData.orderId || orderDoc.id,
+                amount: amountVerdict.overpaidBy,
+                amountPaid: amount,
+                orderTotal: orderData.totalAmount,
+                status: "overfunded_review",
+                gatewayResponse: "Buyer paid more than the order total; order fulfilled, surplus owed back",
+                failedAt: paymentTimestamp,
+            }, { merge: true }).catch((e) => logger.error(
+                `[Paystack Webhook] Could not record the ₦${amountVerdict.overpaidBy} overpayment on ${reference}`, e
+            ));
+        }
 
         // 2. (The processed_payments row is written by claimPaymentOnce above.
         //    Writing it here as well was what made the marker land AFTER the

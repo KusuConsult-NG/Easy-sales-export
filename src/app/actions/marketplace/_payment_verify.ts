@@ -9,6 +9,7 @@ import { revalidatePath } from "next/cache";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { claimPaymentOnce, decrementManyOrFail } from "@/lib/wallet-ledger";
 import { getPlatformFees } from "@/lib/system-settings";
+import { checkOrderPaymentAmount } from "@/lib/order-payment-amount";
 import { rateLimit } from "@/lib/rate-limiter";
 import { rateLimitConfig } from "@/lib/rate-limits.config";
 import { notifyPaymentReceived } from "@/lib/marketplace-notifications";
@@ -73,21 +74,13 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
         const metadata = paymentData.data.metadata as Record<string, any>;
         const paystackUserId = metadata.userId;
         const amountInNaira = paymentData.data.amount / 100;
-        const expectedAmount = metadata.totalAmount;
+        // `metadata.totalAmount` is deliberately no longer used to validate the
+        // amount: it is the gateway's copy, and the ORDER's total is the record
+        // the goods ship against. See order-payment-amount.ts.
 
         // Verify user match
         if (paystackUserId !== userId) { 
             return { error: "Payment verification failed: User mismatch", success: false as const, data: null };
-        }
-
-        const fees = await getPlatformFees();
-        if (amountInNaira < fees.minOrderAmount || amountInNaira > fees.maxOrderAmount) { 
-            return { error: "Invalid payment amount", success: false as const, data: null };
-        }
-
-        // Verify amount matches metadata (allow 1 naira variance for rounding)
-        if (expectedAmount && Math.abs(amountInNaira - expectedAmount) > 1) { 
-            return { error: "Payment amount mismatch", success: false as const, data: null };
         }
 
         // Find order record
@@ -102,6 +95,52 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
 
         const orderDoc = orderQuery.docs[0];
         const orderData = orderDoc.data();
+
+        /**
+         * The amount check, shared with the webhook path.
+         *
+         * WHAT THIS REPLACES, AND WHY
+         * ---------------------------
+         * Two checks used to sit ABOVE the order lookup:
+         *
+         *   1. `amountInNaira < fees.minOrderAmount || > fees.maxOrderAmount`
+         *      Placement-time bounds, re-applied after the money was taken.
+         *      minOrderAmount is already enforced in three places in
+         *      _payment_orders.ts when the order is created, so re-checking here
+         *      prevents nothing — and an admin changing the fee configuration
+         *      between placement and payment turned a charged buyer's valid order
+         *      into "Invalid payment amount".
+         *
+         *   2. `Math.abs(amountInNaira - expectedAmount) > 1` against
+         *      `metadata.totalAmount` — the gateway's copy of the total, and a
+         *      refusal in BOTH directions. processMarketplaceOrder, which the
+         *      webhook and the reconciler use, compared against the ORDER's total
+         *      and refused only underpayment. Same payment, two answers, decided
+         *      by whichever path arrived first — and they race by design, as the
+         *      fast-path comment above says.
+         *
+         * Worse, a payment refused here never reached claimPaymentOnce, so it had
+         * no processed_payments row — and reconcile-paystack treats a Paystack
+         * success with no row as missing and AUTO-HEALS it through
+         * processMarketplaceOrder, fulfilling exactly what was just rejected.
+         *
+         * See order-payment-amount.ts for the rules and the reasoning behind each.
+         */
+        // Still fetched — `platformFeePercentage` is used to split the escrow
+        // below. It is only the min/max ORDER BOUNDS that are no longer re-applied
+        // after the money has been taken.
+        const fees = await getPlatformFees();
+
+        const amountVerdict = checkOrderPaymentAmount(amountInNaira, orderData.totalAmount);
+
+        if (!amountVerdict.ok) {
+            logger.error(
+                `[Marketplace] Payment ${reference} refused on amount: ${amountVerdict.reason}. ` +
+                `Paid ₦${amountInNaira}, order total ₦${orderData.totalAmount}. The buyer has been ` +
+                `charged — this needs a refund.`
+            );
+            return { error: amountVerdict.message, success: false as const, data: null };
+        }
 
         // Fetch buyer and seller emails first (outside transaction, to satisfy read-before-write)
         const buyerDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
