@@ -4,7 +4,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
-import { claimPaymentOnce, claimIdempotencyKey, debitJsonbBalanceWithFloor } from "@/lib/wallet-ledger";
+import { claimPaymentOnce, claimIdempotencyKey, debitJsonbBalanceWithFloor , markFulfilmentFailed } from "@/lib/wallet-ledger";
 import {
     COOPERATIVE_MINIMUM_BALANCE,
     formatMinimumBalance,
@@ -371,6 +371,17 @@ export async function submitRepaymentAction(data: {
 
         return { error: null,  success: true as const, penalty: calculatedPenalty , data: null };
     } catch (error: any) {
+        // Reaching here means the payment was CLAIMED and then fulfilment failed:
+        // the function returns early when the claim is lost, so every path to
+        // this catch is past that point. Two things throw in that window —
+        // installment not found, and installment already fully paid.
+        //
+        // Milder here than at the sites that take the default status: this claim
+        // sets `status: "loan_repayment"` on purpose, so the row never pretends to
+        // be a completed payment. But nothing looks for a claimed repayment that
+        // was never credited either, so it is still invisible. Marking makes it
+        // findable alongside the rest.
+        await markFulfilmentFailed(data.paymentReference, error?.message ?? String(error));
         logger.error("Repayment submission error:", error);
         return { success: false as const, error: error.message || "Failed to submit repayment" , data: null };
     }

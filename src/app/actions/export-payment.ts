@@ -11,7 +11,7 @@ import { Timestamp } from "@/lib/firestore-compat";
 import { getBaseUrl } from "@/lib/server-utils";
 import { getExchangeRates } from "@/lib/system-settings";
 import { writeGuard, PaymentStatusWriteSchema } from "@/lib/write-guard";
-import { claimPaymentOnce, decrementManyOrFail, incrementWithinCeiling } from "@/lib/wallet-ledger";
+import { claimPaymentOnce, decrementManyOrFail, incrementWithinCeiling , markFulfilmentFailed } from "@/lib/wallet-ledger";
 
 // Helper function to convert Naira to Kobo (Paystack uses kobo)
 function nairaToKobo(naira: number): number { return Math.round(naira * 100); }
@@ -632,6 +632,16 @@ export async function verifyInvestmentPaymentAction(reference: string) { try {
             data: { investmentId: investmentDoc.id }
         };
     } catch (error: any) { // 🔒 SECURITY FIX #2: Sanitized error logging
+        // Past the claim, necessarily: the function returns early when the claim
+        // is lost. claim_payment_once wrote status 'completed' at claim time, so a
+        // failure here leaves a payment that looks settled with no investment
+        // recorded, invisible to reconcilePendingFulfillments.
+        //
+        // Two things throw in that window: export window not found, and the
+        // funding goal being exceeded — and the second is the one that matters,
+        // because an investor whose money was taken and rejected for overfunding
+        // currently leaves no findable record.
+        await markFulfilmentFailed(reference, error?.message ?? String(error));
         logger.error('[Payment Verification Error]', {
             timestamp: new Date().toISOString(),
             action: 'verifyInvestment',

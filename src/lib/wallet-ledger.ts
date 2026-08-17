@@ -156,6 +156,88 @@ export interface ClaimResult {
 }
 
 /**
+ * Record that fulfilment FAILED after the payment was already claimed.
+ *
+ * THE PROBLEM THIS SOLVES
+ * -----------------------
+ * claim_payment_once writes `status` at claim time, and its default is
+ * 'completed' (migration 009, `p_status TEXT DEFAULT 'completed'`). Claiming
+ * before fulfilling is deliberate — for money, a stuck payment somebody has to
+ * look at beats one that silently fulfils twice — but it means the row says
+ * "completed" from the instant of the claim, BEFORE any work has happened.
+ *
+ * So when the work then throws, the outcome is the worst of both worlds:
+ *
+ *   - the money was collected
+ *   - nothing was delivered
+ *   - processed_payments says `completed`
+ *   - reconcilePendingFulfillments only looks for `pending_fulfilment`, so it
+ *     never finds these
+ *
+ * A defect that leaves no trace is the one nobody fixes. This is the same
+ * category the savings-balance repair had to label STRANDED and refuse to
+ * touch, because a claim with no fulfilment cannot be safely guessed at.
+ *
+ * Measured across the codebase: of nineteen claim sites, fifteen take the
+ * default status, and six of those have throw paths after the claim — eleven in
+ * total, spanning Farm Nation escrow, cooperative contributions (both paths),
+ * loan repayments, export investments and WAVE registration.
+ *
+ * WHAT THIS DOES, AND WHAT IT DELIBERATELY DOES NOT
+ * ------------------------------------------------
+ * It marks the row `fulfilment_failed` and records the reason and the time. It
+ * does NOT release the claim: releasing it would let a webhook retry fulfil a
+ * payment whose failure might be non-deterministic, and double-fulfilment is
+ * the thing claiming exists to prevent. It does NOT refund, and it does NOT
+ * retry. It makes the payment FINDABLE:
+ *
+ *     SELECT id, raw_data->>'type', raw_data->>'fulfilmentError'
+ *     FROM processed_payments
+ *     WHERE raw_data->>'status' = 'fulfilment_failed';
+ *
+ * Never throws. It is called from a catch block on the way to re-raising the
+ * original error, and an error while recording an error must not replace it —
+ * that would lose the reason the payment failed in the first place.
+ */
+export async function markFulfilmentFailed(reference: string, reason: string): Promise<void> {
+    try {
+        const { error } = await supabaseAdmin.rpc("apply_document_patch", {
+            p_table: "processed_payments",
+            p_id: reference,
+            p_collection: null,
+            p_patch: {
+                status: "fulfilment_failed",
+                fulfilmentError: String(reason).slice(0, 500),
+                fulfilmentFailedAt: new Date().toISOString(),
+            },
+            p_paths: {},
+            p_deletes: [],
+        });
+
+        if (error) {
+            logger.error(
+                `[wallet-ledger] Payment ${reference} was claimed, fulfilment FAILED, and the ` +
+                `failure could not be recorded: ${error.message}. This payment is now invisible ` +
+                `to reconciliation — money was taken and nothing was delivered.`
+            );
+            return;
+        }
+
+        logger.error(
+            `[wallet-ledger] Payment ${reference} claimed but fulfilment FAILED: ${reason}. ` +
+            `Marked fulfilment_failed. Money was collected and nothing was delivered — this ` +
+            `needs a person.`
+        );
+    } catch (err: any) {
+        // Swallowed on purpose. See the note above: the caller is mid-catch and
+        // about to rethrow the real error.
+        logger.error(
+            `[wallet-ledger] Could not mark ${reference} fulfilment_failed: ${err?.message ?? err}`
+        );
+    }
+}
+
+/**
  * The `type` written onto a claimed payment, for events with more than one
  * confirmation path.
  *

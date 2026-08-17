@@ -10,7 +10,7 @@ import { logger } from '@/lib/logger';
 import { initializePaystackPayment } from '@/lib/paystack-server';
 import { rateLimit } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
-import { claimPaymentOnce, CLAIM_TYPE } from '@/lib/wallet-ledger';
+import { claimPaymentOnce, CLAIM_TYPE , markFulfilmentFailed } from '@/lib/wallet-ledger';
 import { FieldValue } from '@/lib/firestore-compat';
 
 const paymentLimiter = rateLimit(rateLimitConfig.payment);
@@ -280,6 +280,14 @@ export async function verifyContributionPaymentAction(
         return { error: null, success: true as const, message: `Payment successful! Your contribution of ₦${amountInNaira.toLocaleString() } has been recorded.`, data: undefined
         };
     } catch (error: any) { // 🔒 SECURITY FIX #2: Sanitized error logging
+        // Past the claim, necessarily: the function returns early when the claim
+        // is lost. claim_payment_once wrote status 'completed' at claim time, so
+        // a failure here leaves a payment that looks settled with no contribution
+        // credited, invisible to reconcilePendingFulfillments.
+        //
+        // Two things throw in that window: membership not found, and membership
+        // data missing.
+        await markFulfilmentFailed(reference, error?.message ?? String(error));
         logger.error('[Payment Verification Error]', {
             timestamp: new Date().toISOString(),
             action: 'verifyContribution',

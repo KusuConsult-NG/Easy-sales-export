@@ -7,7 +7,7 @@ import { generateAndSendWhatsAppInvite } from "@/lib/whatsapp-invites";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { ACADEMY_CONFIG } from "@/lib/constants";
 import { normalizeUserDoc } from "@/lib/schema-normalizer";
-import { claimPaymentOnce, incrementWithinCeiling, CLAIM_TYPE } from "@/lib/wallet-ledger";
+import { claimPaymentOnce, incrementWithinCeiling, CLAIM_TYPE, markFulfilmentFailed } from "@/lib/wallet-ledger";
 
 /**
  * Handle Marketplace Order Fulfillment
@@ -1006,6 +1006,18 @@ export async function processCooperativeContribution(reference: string, amount: 
         return;
     }
 
+    // Wrapped because everything in here runs AFTER the claim.
+    //
+    // claim_payment_once wrote status 'completed' (its default), and the only
+    // try/catch further down covers a cache clear, not fulfilment. So a throw in
+    // here — the member record being missing is the one that can happen —
+    // propagates to the webhook handler leaving a payment that reads as a
+    // completed cooperative contribution with nothing credited, and
+    // reconcilePendingFulfillments only looks for 'pending_fulfilment' so it
+    // never finds it.
+    //
+    // Marked and rethrown: the webhook handler still sees the original error, and
+    // Paystack still gets its non-2xx, but the payment is now findable.
     const result = await (async () => {
         const memberDoc = await memberRef.get();
         if (!memberDoc.exists) {
@@ -1065,7 +1077,13 @@ export async function processCooperativeContribution(reference: string, amount: 
         });
 
         return { success: true };
-    })();
+    })().catch(async (fulfilmentError: any) => {
+        await markFulfilmentFailed(
+            reference,
+            fulfilmentError?.message ?? String(fulfilmentError)
+        );
+        throw fulfilmentError;
+    });
 
     if (!result?.success) {
         // The reference is already claimed, so this will not be retried

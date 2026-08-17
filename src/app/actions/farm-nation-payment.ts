@@ -9,7 +9,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { rateLimit } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
-import { claimPaymentOnce } from "@/lib/wallet-ledger";
+import { claimPaymentOnce, markFulfilmentFailed } from "@/lib/wallet-ledger";
 import { getBaseUrl } from "@/lib/server-utils";
 
 const paymentLimiter = rateLimit(rateLimitConfig.payment);
@@ -245,7 +245,16 @@ async function _verifyPropertyPaymentAction(reference: string): Promise<ActionRe
             } as any;
         }
 
-        {
+        // Everything below runs AFTER the claim, so a failure here means the
+        // money was taken and nothing was delivered. claim_payment_once already
+        // wrote status 'completed' (its default), and
+        // reconcilePendingFulfillments only looks for 'pending_fulfilment' — so
+        // without the catch below, a throw here leaves a payment that looks
+        // settled, delivered nothing, and is invisible to reconciliation.
+        //
+        // Three things in this block throw: property missing, wrong status, and
+        // underpayment.
+        try {
             const freshPropertyDoc = await propertyRef.get();
             if (!freshPropertyDoc.exists) {
                 throw new Error("Property not found");
@@ -334,9 +343,18 @@ async function _verifyPropertyPaymentAction(reference: string): Promise<ActionRe
                     status: "payment_confirmed",
                     escrowStatus: "held",
                     paymentVerifiedAt: FieldValue.serverTimestamp(),
-                    updatedAt: FieldValue.serverTimestamp() 
+                    updatedAt: FieldValue.serverTimestamp()
                 });
             }
+        } catch (fulfilmentError: any) {
+            // Marked, then rethrown unchanged. The outer catch still turns this
+            // into the user-facing "contact support with reference" response;
+            // this only makes the payment findable so somebody can act on it.
+            await markFulfilmentFailed(
+                reference,
+                fulfilmentError?.message ?? String(fulfilmentError)
+            );
+            throw fulfilmentError;
         }
 
         return {
