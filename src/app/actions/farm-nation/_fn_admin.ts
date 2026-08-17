@@ -229,13 +229,59 @@ async function _verifyPropertyAction(propertyId: string, verified: boolean): Pro
             }
         }
 
-        await propertyRef.update({ 
+        /**
+         * Which statuses this may act on, and why it writes "verified".
+         *
+         * TWO DEFECTS WERE HERE
+         * --------------------
+         * 1. It wrote `status: "available"`. That is a for-sale status, but it was
+         *    NOT in PUBLIC_LAND_STATUSES, so verifying a property through this
+         *    action made it invisible to /api/farm-nation/listings and /land —
+         *    the opposite of what "verify" means to whoever clicked it. The other
+         *    admin path, /api/admin/farm-nation/approve-land, writes "verified".
+         *    Two admin routes for one decision, producing different visibility.
+         *
+         *    PUBLIC_LAND_STATUSES now derives from PURCHASABLE_STATUSES so all
+         *    three spellings are honoured, but this writes the canonical
+         *    "verified" so both admin paths agree.
+         *
+         * 2. No status guard, and the trailing comment admitted the author was
+         *    unsure ("Keep existing if un-verifying, or reset?"). The code did not
+         *    do what the comment mused about: it overwrote unconditionally. On a
+         *    listing in pending_escrow that discarded the escrow's state while a
+         *    buyer's money was held — the same defect as approve-land,
+         *    reject-land and dispatch-inspector.
+         */
+        const VERIFIABLE_FROM = [
+            "pending",
+            "pending_verification",
+            "inspection_scheduled",
+            "rejected",
+            "available",
+            "approved",
+            "verified",
+        ];
+
+        if (!VERIFIABLE_FROM.includes(String(property.status))) {
+            return {
+                success: false as const,
+                error:
+                    `This property is '${property.status}' and its verification cannot be changed ` +
+                    `from that state. A listing with a purchase in progress must be resolved first.`,
+                data: null,
+                meta: null,
+            };
+        }
+
+        await propertyRef.update({
             verified: verified,
             verifiedAt: verified ? FieldValue.serverTimestamp() : null,
             verifiedBy: verified ? session.user.id : null,
             updatedAt: FieldValue.serverTimestamp(),
-            // Ensure status reflects verification
-            status: verified ? "available" : property.status // Keep existing if un-verifying, or reset? Let's leave status alone unless it was explicitly pending.
+            // "verified" — the canonical public spelling, matching approve-land.
+            // Un-verifying leaves the status alone rather than guessing, which is
+            // what the old comment wanted and the old code did not do.
+            status: verified ? "verified" : property.status,
         });
 
         // 📜 Audit Log

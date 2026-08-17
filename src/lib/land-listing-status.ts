@@ -39,6 +39,7 @@ export type LandListingStatus =
     | "pending_verification"
     | "verified"          // land-actions: admin approved
     | "available"         // farm-nation: created and for sale
+    | "approved"          // land-visibility.ts's spelling of the same thing
     | "pending"           // farm-nation: reserved by a buyer mid-purchase
     | "sold"
     | "leased"
@@ -48,10 +49,33 @@ export type LandListingStatus =
 /**
  * Statuses meaning "approved and for sale".
  *
- * Two spellings of one idea. `verified` comes from the land module's admin
- * approval, `available` from farm-nation's own creation path.
+ * THREE spellings of one idea, not two. `verified` comes from the land module's
+ * admin approval, `available` from farm-nation's own creation path, and
+ * `approved` from land-visibility.ts — which maintained its OWN list,
+ * PUBLIC_LAND_STATUSES = ["verified", "approved"], while this file said
+ * ["verified", "available"].
+ *
+ * Two files each claiming to be the single definition, disagreeing on two of the
+ * three values, and the mismatch was live in both directions:
+ *
+ *   "available"  purchasable here, NOT public there — so every listing
+ *                farm-nation created was buyable but absent from
+ *                /api/farm-nation/listings and /land. Invisible inventory,
+ *                reachable only with a direct URL.
+ *
+ *   "approved"   public there, NOT purchasable here — so a listing an admin
+ *                marked approved was shown to buyers and then refused at
+ *                isPurchasable(), failing at the end of the flow.
+ *
+ * All three are honoured now, and land-visibility.ts derives PUBLIC_LAND_STATUSES
+ * from this constant rather than keeping a second copy. That is what makes this
+ * file's closing promise — "the single place that has to change" — true.
  */
-export const PURCHASABLE_STATUSES: readonly LandListingStatus[] = ["verified", "available"];
+export const PURCHASABLE_STATUSES: readonly LandListingStatus[] = [
+    "verified",
+    "available",
+    "approved",
+];
 
 /**
  * Statuses a buyer may see when browsing.

@@ -14,6 +14,7 @@
 
 import {
     PURCHASABLE_STATUSES,
+    BROWSABLE_STATUSES,
     isPurchasable,
     isBrowsable,
     statusAfterCancellation,
@@ -97,6 +98,33 @@ describe("PURCHASABLE_STATUSES", () => {
         // farm-nation spreads this into claimStatusTransitionFromAny. If a
         // third spelling is ever added, the reservation must pick it up without
         // a second edit.
-        expect([...PURCHASABLE_STATUSES].sort()).toEqual(["available", "verified"]);
+        //
+        // "approved" IS that third spelling, and this assertion is what caught it
+        // being added. It came from land-visibility.ts, which kept its own
+        // PUBLIC_LAND_STATUSES = ["verified", "approved"] while this file held
+        // ["verified", "available"] — two files each documented as the single
+        // definition, disagreeing on two of three values, with the mismatch live
+        // in both directions: "available" was purchasable but not public, and
+        // "approved" was public but not purchasable.
+        expect([...PURCHASABLE_STATUSES].sort()).toEqual(["approved", "available", "verified"]);
+    });
+
+    it("IS the public set — one definition, not two", () => {
+        // The invariant that stops the split recurring. land-visibility.ts now
+        // derives PUBLIC_LAND_STATUSES from PURCHASABLE_STATUSES rather than
+        // holding a literal, so a listing can never be visible-but-unbuyable or
+        // buyable-but-invisible again.
+        //
+        // Asserted as identity, not equality of contents: a copy that happens to
+        // match today is exactly how the two drifted apart in the first place.
+        const { PUBLIC_LAND_STATUSES } = require("@/lib/land-visibility");
+
+        expect(PUBLIC_LAND_STATUSES).toBe(PURCHASABLE_STATUSES);
+    });
+
+    it("and browsable is the same set too", () => {
+        // Showing a listing that cannot be bought sends buyers down a flow that
+        // fails at the end — this file's own reasoning, asserted.
+        expect(BROWSABLE_STATUSES).toBe(PURCHASABLE_STATUSES);
     });
 });

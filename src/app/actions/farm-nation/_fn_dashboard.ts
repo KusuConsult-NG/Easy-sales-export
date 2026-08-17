@@ -1,5 +1,6 @@
 "use server";
 
+import { isPurchasable } from "@/lib/land-listing-status";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
@@ -83,7 +84,15 @@ async function _getFarmNationDashboardStatsAction(): Promise<ActionResponse<Farm
         });
 
         // Derive stats from listings (Seller)
-        const activeListings = properties.filter(p => p.status === 'available').length;
+        //
+        // A THIRD vocabulary for "for sale" lived here: `status === 'available'`
+        // alone. So a listing an admin had verified — the status the land module's
+        // approval writes, and the one /api/farm-nation/listings publishes — was
+        // NOT counted as active on its own seller's dashboard. The seller saw a
+        // lower number than the market did.
+        //
+        // isPurchasable is the shared definition, and it honours every spelling.
+        const activeListings = properties.filter(p => isPurchasable(p.status)).length;
         const completedDeals = properties.filter(p => p.status === 'sold' || p.status === 'leased').length;
         const totalHectares = properties.reduce((sum, p) => sum + p.size, 0);
         const portfolioValue = properties.reduce((sum, p) => sum + p.price, 0);

@@ -1,3 +1,5 @@
+import { PURCHASABLE_STATUSES } from "@/lib/land-listing-status";
+
 /**
  * What a stranger may see of a land listing.
  *
@@ -34,9 +36,27 @@
 /**
  * Statuses a stranger may see.
  *
+ * DERIVED, no longer a second copy.
+ *
+ * This was its own literal, ["verified", "approved"], while
+ * land-listing-status.ts held ["verified", "available"] as PURCHASABLE_STATUSES.
+ * Two files each documented as the single definition of one idea, disagreeing on
+ * two of the three values — and the mismatch was live in both directions:
+ *
+ *   "available"  purchasable there, not public here. Every listing farm-nation
+ *                created was buyable but absent from /api/farm-nation/listings
+ *                and /land — invisible inventory, reachable only by direct URL.
+ *
+ *   "approved"   public here, not purchasable there. A listing an admin marked
+ *                approved was shown to buyers and then refused at the purchase.
+ *
+ * Public and purchasable are now the same set by construction, which is what
+ * land-listing-status.ts already argued for: showing a listing that cannot be
+ * bought sends buyers down a flow that fails at the end.
+ *
  * Everything else is a review queue.
  */
-export const PUBLIC_LAND_STATUSES: readonly string[] = ["verified", "approved"];
+export const PUBLIC_LAND_STATUSES: readonly string[] = PURCHASABLE_STATUSES;
 
 /**
  * Fields that exist for the review process and are nobody else's business.
