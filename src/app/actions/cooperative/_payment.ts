@@ -10,7 +10,7 @@ import { logger } from '@/lib/logger';
 import { initializePaystackPayment } from '@/lib/paystack-server';
 import { rateLimit } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
-import { claimPaymentOnce } from '@/lib/wallet-ledger';
+import { claimPaymentOnce, CLAIM_TYPE } from '@/lib/wallet-ledger';
 import { FieldValue } from '@/lib/firestore-compat';
 
 const paymentLimiter = rateLimit(rateLimitConfig.payment);
@@ -140,7 +140,10 @@ export async function verifyContributionPaymentAction(
             reference,
             userId,
             amount: amountInNaira,
-            type: "cooperative_contribution",
+            // Was the literal "cooperative_contribution" — the only claim type in
+            // the codebase with two spellings, the webhook path using
+            // "contribution" for the same event. See CLAIM_TYPE.
+            type: CLAIM_TYPE.COOPERATIVE_CONTRIBUTION,
             source: "client_verify",
             metadata: { module: "cooperative" },
         });

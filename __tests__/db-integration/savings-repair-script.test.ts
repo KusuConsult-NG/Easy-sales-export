@@ -39,11 +39,19 @@ declare const maybeDescribe: jest.Describe;
 const PREFIX = "jest-repair-";
 const MEMBER = `${PREFIX}member-1`;
 const REF_REPAIRABLE = `${PREFIX}ref-with-ledger`;
+const REF_REPAIRABLE_LEGACY = `${PREFIX}ref-legacy-type`;
 const REF_STRANDED = `${PREFIX}ref-no-ledger`;
 
 const STARTING_BALANCE = 1000;
 const REPAIRABLE_AMOUNT = 5000;
+const LEGACY_AMOUNT = 3000;
 const STRANDED_AMOUNT = 7000;
+
+/** Both spellings must be repaired — see claim-type-single-spelling.test.ts. */
+const CURRENT_TYPE = "contribution";
+const LEGACY_TYPE = "cooperative_contribution";
+
+const TOTAL_REPAIRABLE = REPAIRABLE_AMOUNT + LEGACY_AMOUNT;
 
 async function cleanup() {
     await supabaseAdmin.from("processed_payments").delete().like("id", `${PREFIX}%`);
@@ -66,13 +74,12 @@ async function seedFixture() {
         raw_data: {
             userId: MEMBER,
             savingsBalance: STARTING_BALANCE,
-            // Short by both contributions: this is the state the defect left.
-            totalContributions: STARTING_BALANCE + REPAIRABLE_AMOUNT + STRANDED_AMOUNT,
+            // Short by every contribution: this is the state the defect left.
+            totalContributions: STARTING_BALANCE + TOTAL_REPAIRABLE + STRANDED_AMOUNT,
         },
     });
 
     const base = {
-        type: "cooperative_contribution",
         source: "client_verify",
         userId: MEMBER,
         processedAt: new Date().toISOString(),
@@ -84,28 +91,47 @@ async function seedFixture() {
             user_id: MEMBER,
             amount: REPAIRABLE_AMOUNT,
             reference: REF_REPAIRABLE,
-            raw_data: { ...base, amount: REPAIRABLE_AMOUNT },
+            raw_data: { ...base, type: CURRENT_TYPE, amount: REPAIRABLE_AMOUNT },
+        },
+        {
+            // The SAME event under the spelling used before the two claim types
+            // were unified. Rows like this exist in history, and a repair that
+            // stopped recognising them would report "nothing to do" for exactly
+            // the rows it exists to fix.
+            id: REF_REPAIRABLE_LEGACY,
+            user_id: MEMBER,
+            amount: LEGACY_AMOUNT,
+            reference: REF_REPAIRABLE_LEGACY,
+            raw_data: { ...base, type: LEGACY_TYPE, amount: LEGACY_AMOUNT },
         },
         {
             id: REF_STRANDED,
             user_id: MEMBER,
             amount: STRANDED_AMOUNT,
             reference: REF_STRANDED,
-            raw_data: { ...base, amount: STRANDED_AMOUNT },
+            raw_data: { ...base, type: CURRENT_TYPE, amount: STRANDED_AMOUNT },
         },
     ]);
 
-    // The unified-ledger row exists ONLY for the repairable one. Its presence is
-    // how the script knows the totalContributions credit ran, so its absence is
-    // what makes the other payment stranded.
-    await supabaseAdmin.from("transactions").insert({
+    // Unified-ledger rows for the two repairable payments and NOT for the
+    // stranded one. Their presence is how the script knows the
+    // totalContributions credit ran; the absence is what makes the third payment
+    // stranded.
+    await supabaseAdmin.from("transactions").insert([{
         id: REF_REPAIRABLE,
         user_id: MEMBER,
         amount: REPAIRABLE_AMOUNT,
-        type: "cooperative_contribution",
+        type: CURRENT_TYPE,
         status: "completed",
         raw_data: { userId: MEMBER, amount: REPAIRABLE_AMOUNT },
-    });
+    }, {
+        id: REF_REPAIRABLE_LEGACY,
+        user_id: MEMBER,
+        amount: LEGACY_AMOUNT,
+        type: CURRENT_TYPE,
+        status: "completed",
+        raw_data: { userId: MEMBER, amount: LEGACY_AMOUNT },
+    }]);
 }
 
 async function savingsBalance(): Promise<number> {
@@ -154,7 +180,9 @@ maybeDescribe("the savings-balance repair script, executed for real", () => {
         const output = runRepair(false);
 
         // It saw both, and classified them differently.
-        expect(output).toContain("1 have a ledger row");
+        // Two repairable — one under each spelling of the claim type — and one
+        // stranded. If the repair narrowed to a single spelling this would read 1.
+        expect(output).toContain("2 have a ledger row");
         expect(output).toContain("1 have none");
         expect(output).toContain("Report only");
         expect(output).toContain(REF_STRANDED);
@@ -167,8 +195,18 @@ maybeDescribe("the savings-balance repair script, executed for real", () => {
     it("--apply credits exactly the repairable amount", async () => {
         runRepair(true);
 
-        // 1000 + 5000. NOT 1000 + 5000 + 7000: the stranded payment is excluded.
-        expect(await savingsBalance()).toBe(STARTING_BALANCE + REPAIRABLE_AMOUNT);
+        // 1000 + 5000 + 3000. NOT + 7000: the stranded payment is excluded.
+        //
+        // The 3000 is the payment stored under the LEGACY claim type, so this
+        // also proves the repair reads both spellings. Narrow it to one and this
+        // becomes 6000 or 4000.
+        expect(await savingsBalance()).toBe(STARTING_BALANCE + TOTAL_REPAIRABLE);
+    });
+
+    it("credits the payment stored under the legacy claim type too", async () => {
+        // Stated as its own case so a failure names the cause rather than just a
+        // wrong total.
+        expect(await repairStamp(REF_REPAIRABLE_LEGACY)).toEqual(expect.any(String));
     });
 
     it("stamps the repaired payment, so a later run can tell", async () => {

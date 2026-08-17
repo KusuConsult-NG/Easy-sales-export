@@ -156,6 +156,51 @@ export interface ClaimResult {
 }
 
 /**
+ * The `type` written onto a claimed payment, for events with more than one
+ * confirmation path.
+ *
+ * WHY THIS EXISTS
+ * ---------------
+ * A cooperative contribution can be confirmed two ways, and each passed its own
+ * literal:
+ *
+ *   infrastructure/payments/service.ts   the Paystack webhook   "contribution"
+ *   actions/cooperative/_payment.ts      the browser redirect   "cooperative_contribution"
+ *
+ * One business event, two names, decided by which of the two won a race. Every
+ * other claim type in this codebase has exactly one spelling; this was the only
+ * one that did not.
+ *
+ * Found by querying production: processed_payments holds rows of
+ * type='contribution' and NOT ONE of 'cooperative_contribution', which is how
+ * the second spelling stayed invisible — the browser path has never won a claim
+ * race in production, so nothing has yet been filed under a name the rest of the
+ * system does not use.
+ *
+ * "contribution" is the surviving spelling because it is the one already in the
+ * database, the one both writers use for the cooperative LEDGER row
+ * (_payment.ts, `type: "contribution"`), and the one every consumer matches on.
+ *
+ * Only the divergent type is defined here. The rest are unambiguous and adding
+ * them would be churn without a defect behind it.
+ */
+export const CLAIM_TYPE = {
+    /** A cooperative savings contribution, whichever path confirms it. */
+    COOPERATIVE_CONTRIBUTION: "contribution",
+} as const;
+
+/**
+ * The spelling the browser-redirect path used before CLAIM_TYPE existed.
+ *
+ * Kept ONLY so repairs can still find historical rows. Nothing may write it —
+ * src/__tests__/unit/claim-type-single-spelling.test.ts enforces that. A repair
+ * script that stopped recognising the old name would silently report "nothing to
+ * do" for exactly the rows it was written to fix, which is the worst possible
+ * failure mode for a money repair.
+ */
+export const LEGACY_COOPERATIVE_CONTRIBUTION_CLAIM_TYPE = "cooperative_contribution";
+
+/**
  * Claim a payment reference without moving any money.
  *
  * For fulfilment that marks an order paid, creates escrow rows or writes a

@@ -32,11 +32,19 @@
  * claim_payment_once stamps `source` onto processed_payments.raw_data. The
  * affected payments are therefore EXACTLY:
  *
- *     type = 'cooperative_contribution' AND source = 'client_verify'
+ *     source = 'client_verify'
  *
  * No estimation, no ledger-vs-balance diffing, no judgement call about which
  * side is right. Every such row credited totalContributions and not
  * savingsBalance, and every other row credited both.
+ *
+ * `source` alone is the discriminator, and the query narrows on `type` only as a
+ * secondary filter accepting BOTH spellings. The two confirmation paths once
+ * passed different type literals for this one event — "contribution" from the
+ * webhook, "cooperative_contribution" from the browser — and they have since
+ * been unified onto CLAIM_TYPE. Historical rows carry the old name and new rows
+ * carry the new one, so matching a single value would miss half of them and
+ * report "nothing to do" for exactly the rows this exists to fix.
  *
  * THE ONE CASE THAT IS NOT REPAIRED AUTOMATICALLY
  * ----------------------------------------------
@@ -74,6 +82,10 @@ import {
     buildRepairPlan,
     type AffectedPayment,
 } from '../src/lib/savings-repair-plan';
+import {
+    CLAIM_TYPE,
+    LEGACY_COOPERATIVE_CONTRIBUTION_CLAIM_TYPE,
+} from '../src/lib/wallet-ledger';
 import { existsSync } from 'fs';
 import { config as loadEnv } from 'dotenv';
 
@@ -106,10 +118,29 @@ async function findAffectedPayments(): Promise<AffectedPayment[]> {
     const PAGE = 1000;
 
     for (let from = 0; ; from += PAGE) {
+        // BOTH spellings of the type, and `source` is the real discriminator.
+        //
+        // This matched only 'cooperative_contribution'. That was the literal the
+        // browser-redirect path passed, so it was right — until the two spellings
+        // of one event were unified onto CLAIM_TYPE ("contribution", the name
+        // already in the database and the one every consumer matches).
+        //
+        // Narrowing to either single value would now be wrong in one direction or
+        // the other: rows written before the unification carry the legacy name,
+        // rows written after carry the new one. A repair that recognised only one
+        // would report "nothing to do" for precisely the rows it exists to fix,
+        // which is the worst failure mode a money repair has.
+        //
+        // `source = 'client_verify'` is what actually identifies the defect —
+        // only that path credited totalContributions without savingsBalance — so
+        // the type filter is a secondary narrowing and is deliberately generous.
         const { data, error } = await admin
             .from('processed_payments')
             .select('id, user_id, amount, raw_data')
-            .eq('raw_data->>type', 'cooperative_contribution')
+            .in('raw_data->>type', [
+                CLAIM_TYPE.COOPERATIVE_CONTRIBUTION,
+                LEGACY_COOPERATIVE_CONTRIBUTION_CLAIM_TYPE,
+            ])
             .eq('raw_data->>source', 'client_verify')
             .order('created_at', { ascending: true })
             .range(from, from + PAGE - 1);

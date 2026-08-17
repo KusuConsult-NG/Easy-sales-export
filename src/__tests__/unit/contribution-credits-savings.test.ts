@@ -60,6 +60,10 @@ const mockVerifyPaystack = jest.fn() as jest.Mock<any>;
 
 jest.mock('@/lib/wallet-ledger', () => ({
     claimPaymentOnce: (...a: any[]) => mockClaimPaymentOnce(...a),
+    // Real values — _payment.ts claims with CLAIM_TYPE.COOPERATIVE_CONTRIBUTION,
+    // and a mock without it throws inside the action under test.
+    CLAIM_TYPE: { COOPERATIVE_CONTRIBUTION: 'contribution' },
+    LEGACY_COOPERATIVE_CONTRIBUTION_CLAIM_TYPE: 'cooperative_contribution',
     claimSingleOpenLoanApplication: jest.fn(),
     debitJsonbBalance: jest.fn(),
     creditWalletOnce: jest.fn(),

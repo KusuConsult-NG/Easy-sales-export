@@ -7,7 +7,7 @@ import { generateAndSendWhatsAppInvite } from "@/lib/whatsapp-invites";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { ACADEMY_CONFIG } from "@/lib/constants";
 import { normalizeUserDoc } from "@/lib/schema-normalizer";
-import { claimPaymentOnce, incrementWithinCeiling } from "@/lib/wallet-ledger";
+import { claimPaymentOnce, incrementWithinCeiling, CLAIM_TYPE } from "@/lib/wallet-ledger";
 
 /**
  * Handle Marketplace Order Fulfillment
@@ -995,7 +995,9 @@ export async function processCooperativeContribution(reference: string, amount: 
         reference,
         userId: activeUserId,
         amount,
-        type: "contribution",
+        // Same constant the browser-redirect path uses, so one event cannot be
+        // filed under two names depending on which path wins the race.
+        type: CLAIM_TYPE.COOPERATIVE_CONTRIBUTION,
         source: "webhook",
     });
 
