@@ -11,6 +11,7 @@ import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { isAdmin } from "@/lib/role-utils";
 import { checkModuleAccess } from "@/lib/module-access-check";
 import { checkWaveEligibility } from "@/lib/wave-eligibility";
+import { toMillis } from "@/lib/firestore-serialize";
 
 /**
  * Check WAVE application status for current user
@@ -130,8 +131,8 @@ async function _checkWaveStatusAction(): Promise<ActionResponse<{ status: string
 
         if (!legacySnap.empty) {
             const sortedDocs = legacySnap.docs.map(d => d.data()).sort((a: any, b: any) => {
-                const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
-                const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
+                const aTime = toMillis(a.createdAt);
+                const bTime = toMillis(b.createdAt);
                 return bTime - aTime;
             });
             const legacyData = sortedDocs[0];

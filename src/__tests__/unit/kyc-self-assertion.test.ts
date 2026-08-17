@@ -94,6 +94,33 @@ jest.mock('@/lib/cache-invalidation', () => ({
     invalidateProductCache: jest.fn(async () => ({})),
 }));
 
+/**
+ * The resubmission's status transition.
+ *
+ * `existing.status !== "rejected"` used to be an ordinary read followed by a
+ * write inside runTransaction, which takes no lock — so two resubmissions both
+ * passed, and one racing an admin's approval could move an APPROVED verification
+ * back to "pending". It is a claim now.
+ *
+ * The claim answers from `currentStatus`, which each test sets alongside the
+ * document fixture, so "refuses anything not rejected" still exercises the real
+ * refusal rather than a mocked-away one. Without this mock the claim reached a
+ * real fetch and every assertion failed with "TypeError: fetch failed".
+ */
+let currentStatus = 'rejected';
+jest.mock('@/lib/status-transition', () => ({
+    claimStatusTransition: jest.fn(async (p: any) => (
+        currentStatus === p.from
+            ? { claimed: true, status: p.to }
+            : { claimed: false, status: currentStatus }
+    )),
+    claimStatusTransitionFromAny: jest.fn(async (p: any) => (
+        p.fromAny.includes(currentStatus)
+            ? { claimed: true, status: p.to }
+            : { claimed: false, status: currentStatus }
+    )),
+}));
+
 function setSession(id: string, roles: string[] = []) {
     (global as any).mockRequireSession.mockImplementation(() => Promise.resolve({
         session: { user: { id, email: `${id}@e.com`, name: id, roles } },
@@ -102,6 +129,9 @@ function setSession(id: string, roles: string[] = []) {
 }
 
 function setDoc(data: Record<string, any>) {
+    // Keep the claim mock in step with the fixture, so the two cannot disagree
+    // about what state the record is in.
+    currentStatus = String(data.status ?? 'rejected');
     (global as any).mockFirestoreGet.mockImplementation(() => Promise.resolve({
         exists: true, empty: false,
         docs: [{ id: 'ver-1', ref: { id: 'ver-1' }, data: () => data }],

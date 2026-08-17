@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
+import { toMillis } from "@/lib/firestore-serialize";
 
 export const dynamic = "force-dynamic";
 
@@ -29,8 +30,8 @@ export async function GET(
 
         if (!verSnap.empty) {
             verSnap.docs.sort((a, b) => {
-                const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
-                const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+                const aTime = toMillis(a.data().createdAt);
+                const bTime = toMillis(b.data().createdAt);
                 return bTime - aTime;
             });
         }

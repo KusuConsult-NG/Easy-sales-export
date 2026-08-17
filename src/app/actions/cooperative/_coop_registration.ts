@@ -12,7 +12,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { cooperativeMembershipSchema, type MembershipRegistrationState } from "@/lib/types/cooperative";
 import { parseFormData } from "@/lib/form-validation";
 import type { JoinCooperativeState } from "@/lib/types/cooperative";
-import { serializeValue } from "@/lib/firestore-serialize";
+import { serializeValue, toMillis } from "@/lib/firestore-serialize";
 import { revalidatePath } from "next/cache";
 
 /**
@@ -431,8 +431,8 @@ export async function getCooperativeApplicationAction(): Promise<
             }
         }
 
-        const sortedDocs = snap.docs.map(d => d.data()).sort((a: any, b: any) => { const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
-            const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
+        const sortedDocs = snap.docs.map(d => d.data()).sort((a: any, b: any) => { const aTime = toMillis(a.createdAt);
+            const bTime = toMillis(b.createdAt);
             return bTime - aTime;
         });
         const data = serializeValue(sortedDocs[0]);
@@ -520,8 +520,8 @@ export async function resubmitCooperativeApplicationAction(
                 existingMemberData = {};
             }
         } else {
-            const sortedDocs = snap.docs.sort((a, b) => { const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
-                const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+            const sortedDocs = snap.docs.sort((a, b) => { const aTime = toMillis(a.data().createdAt);
+                const bTime = toMillis(b.data().createdAt);
                 return bTime - aTime;
             });
             memberRef = sortedDocs[0].ref;

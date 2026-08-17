@@ -8,7 +8,7 @@ import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
-import { serializeValue } from "@/lib/firestore-serialize";
+import { serializeValue, toMillis } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { AcademyApplicationInputSchema, AcademyApplicationInput } from "@/lib/validations/academy";
 import type { AcademyApplicationData } from "@/lib/types/academy-actions";
@@ -196,8 +196,8 @@ async function _getAcademyApplicationAction(): Promise<ActionResponse<any>> {
 
             if (!snap.empty) {
                 const sortedDocs = snap.docs.sort((a: any, b: any) => {
-                    const aTime = a.data().submittedAt?.toMillis?.() || a.data().submittedAt?.seconds * 1000 || a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
-                    const bTime = b.data().submittedAt?.toMillis?.() || b.data().submittedAt?.seconds * 1000 || b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+                    const aTime = a.data().submittedAt?.toMillis?.() || a.data().submittedAt?.seconds * 1000 || toMillis(a.data().createdAt);
+                    const bTime = b.data().submittedAt?.toMillis?.() || b.data().submittedAt?.seconds * 1000 || toMillis(b.data().createdAt);
                     return bTime - aTime;
                 });
                 appDoc = sortedDocs[0];
@@ -436,8 +436,8 @@ async function _resubmitAcademyApplicationAction(
             const sortedDocs = snap.docs.sort((a, b) => {
                 const aData = a.data();
                 const bData = b.data();
-                const aTime = aData.createdAt?.toMillis?.() || aData.createdAt?.seconds * 1000 || 0;
-                const bTime = bData.createdAt?.toMillis?.() || bData.createdAt?.seconds * 1000 || 0;
+                const aTime = toMillis(aData.createdAt);
+                const bTime = toMillis(bData.createdAt);
                 return bTime - aTime;
             });
 

@@ -7,7 +7,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { CooperativeMembership, CooperativeTransaction } from "@/lib/types/cooperative";
-import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
+import { serializeDoc, serializeDocs, toMillis } from "@/lib/firestore-serialize";
 import { runQueryWithRetry } from "@/lib/firestore-utils";
 
 /**
@@ -251,8 +251,8 @@ export async function getDashboardDataAction() {
         logger.info(`[getDashboardData] Found ${membershipSnapshot.size} membership docs for user: ${userId}`);
 
         const sortedDocs = membershipSnapshot.docs.sort((a, b) => {
-            const aTime = a.data().createdAt?.toMillis?.() || (a.data().createdAt?.seconds ?? 0) * 1000;
-            const bTime = b.data().createdAt?.toMillis?.() || (b.data().createdAt?.seconds ?? 0) * 1000;
+            const aTime = toMillis(a.data().createdAt);
+            const bTime = toMillis(b.data().createdAt);
             return bTime - aTime;
         });
         const membershipDoc = sortedDocs[0];

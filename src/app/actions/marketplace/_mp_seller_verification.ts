@@ -10,10 +10,11 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { SellerVerification } from "@/lib/types/marketplace";
-import { serializeDoc } from "@/lib/firestore-serialize";
+import { serializeDoc, toMillis } from "@/lib/firestore-serialize";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { SellerVerificationSchema } from "@/lib/validations/marketplace";
 import { withSafeAction, ActionResponse } from "@/lib/safe-action";
+import { claimStatusTransition } from "@/lib/status-transition";
 
 // ============================================================================
 // SELLER VERIFICATION
@@ -237,8 +238,8 @@ async function _getSellerVerificationAction(): Promise<ActionResponse<{ verifica
 
             if (!snapshot.empty) {
                 const sortedDocs = snapshot.docs.sort((a, b) => { 
-                    const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
-                    const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+                    const aTime = toMillis(a.data().createdAt);
+                    const bTime = toMillis(b.data().createdAt);
                     return bTime - aTime;
                 });
                 verDoc = sortedDocs[0];
@@ -340,8 +341,8 @@ async function _resubmitSellerVerificationAction(data: unknown): Promise<ActionR
 
             if (!snapshot.empty) {
                 const sortedDocs = snapshot.docs.sort((a, b) => {
-                    const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
-                    const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+                    const aTime = toMillis(a.data().createdAt);
+                    const bTime = toMillis(b.data().createdAt);
                     return bTime - aTime;
                 });
                 docRef = sortedDocs[0].ref;
@@ -354,18 +355,52 @@ async function _resubmitSellerVerificationAction(data: unknown): Promise<ActionR
             return { success: false as const, error: "No verification record found to resubmit.", data: null };
         }
         
-        if (existing?.status !== "rejected") {
-            return { success: false as const, error: `Can only resubmit rejected verifications (Current: ${existing?.status})`, data: null };
+        // Claimed, not checked then written.
+        //
+        // `existing.status !== "rejected"` was read outside the transaction, and
+        // runTransaction takes no lock in this adapter — so two resubmissions
+        // both passed and both wrote, and a resubmission racing an admin's
+        // approval could move an APPROVED verification back to "pending".
+        const resubmitClaim = await claimStatusTransition({
+            collection: COLLECTIONS.SELLER_VERIFICATIONS,
+            id: docRef.id,
+            from: "rejected",
+            to: "pending",
+            patch: { resubmittedAt: new Date().toISOString() },
+        });
+
+        if (!resubmitClaim.claimed) {
+            return {
+                success: false as const,
+                error: `Can only resubmit rejected verifications (Current: ${resubmitClaim.status ?? "unknown"})`,
+                data: null,
+            };
         }
 
         await db.runTransaction(async (transaction) => {
-            transaction.update(docRef, { 
+            transaction.update(docRef, {
                 ...validatedData,
                 userId, // Ensure userId is populated
-                status: "pending",
+                // The rejection, kept rather than erased.
+                //
+                // This wrote `rejectionReason: null` and overwrote the submitted
+                // fields in place, so the record of WHY the application was
+                // rejected — and what it said when it was — was destroyed by the
+                // resubmission. An admin reviewing the new version had nothing to
+                // compare it against and no note of their own earlier decision.
+                //
+                // `status` is not written here: claimStatusTransition above
+                // already moved it, and writing it again would let this update
+                // undo a decision made in between.
+                rejectionReason: null,
+                previousRejection: {
+                    reason: existing?.rejectionReason ?? null,
+                    rejectedAt: existing?.reviewedAt ?? existing?.updatedAt ?? null,
+                    rejectedBy: existing?.reviewedBy ?? null,
+                },
+                resubmissionCount: (Number(existing?.resubmissionCount) || 0) + 1,
                 submittedAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
-                rejectionReason: null
             });
 
             // Update user record
@@ -549,8 +584,8 @@ async function _updateSellerCategoryAction(
                 const sortedDocs = verSnap.docs.sort((a, b) => {
                     const aData = a.data();
                     const bData = b.data();
-                    const aTime = aData.createdAt?.toMillis?.() || aData.createdAt?.seconds * 1000 || 0;
-                    const bTime = bData.createdAt?.toMillis?.() || bData.createdAt?.seconds * 1000 || 0;
+                    const aTime = toMillis(aData.createdAt);
+                    const bTime = toMillis(bData.createdAt);
                     return bTime - aTime;
                 });
                 transaction.update(sortedDocs[0].ref, { 

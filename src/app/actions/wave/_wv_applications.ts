@@ -15,6 +15,7 @@ import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { hashData } from "@/lib/security";
 import { checkWaveEligibility } from "@/lib/wave-eligibility";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
+import { toMillis } from "@/lib/firestore-serialize";
 
 // Validation Schema for WAVE Application (OFFICIAL BENEFICIARY APPLICATION FORM)
 const waveApplicationSchema = z.object({ // SECTION A: Personal Identification
@@ -579,8 +580,8 @@ async function _getWaveApplicationStatusAction(userId?: string): Promise<ActionR
         }
 
         const sortedDocs = snapshot.docs.map(d => d.data()).sort((a: any, b: any) => {
-            const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
-            const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
+            const aTime = toMillis(a.createdAt);
+            const bTime = toMillis(b.createdAt);
             return bTime - aTime;
         });
 
@@ -641,8 +642,8 @@ async function _getWaveApplicationAction(): Promise<ActionResponse<any | null>> 
 
             if (!snap.empty) {
                 const sortedDocs = snap.docs.sort((a: any, b: any) => {
-                    const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
-                    const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+                    const aTime = toMillis(a.data().createdAt);
+                    const bTime = toMillis(b.data().createdAt);
                     return bTime - aTime;
                 });
                 appDoc = sortedDocs[0];

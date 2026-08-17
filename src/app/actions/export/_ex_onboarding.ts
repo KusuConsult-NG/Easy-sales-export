@@ -7,7 +7,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
 import { checkModuleAccess } from "@/lib/module-access-check";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { serializeValue } from "@/lib/firestore-serialize";
+import { serializeValue, toMillis } from "@/lib/firestore-serialize";
 // ============================================
 // Submit Export Onboarding Action
 // ============================================
@@ -253,8 +253,8 @@ export async function checkExportStatusAction(): Promise<string | null> { try {
             .get();
 
         if (!legacySnap.empty) { const sortedDocs = legacySnap.docs.map(d => d.data()).sort((a: any, b: any) => {
-                const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
-                const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
+                const aTime = toMillis(a.createdAt);
+                const bTime = toMillis(b.createdAt);
                 return bTime - aTime;
             });
             const legacyData = sortedDocs[0];
@@ -317,8 +317,8 @@ export async function getExportApplicationAction(): Promise<
 
             if (!snap.empty) {
                 const sortedDocs = snap.docs.sort((a, b) => {
-                    const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
-                    const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+                    const aTime = toMillis(a.data().createdAt);
+                    const bTime = toMillis(b.data().createdAt);
                     return bTime - aTime;
                 });
                 appDoc = sortedDocs[0];
@@ -549,8 +549,8 @@ export async function resubmitExportApplicationAction(
 
             if (!snap.empty) {
                 const sortedDocs = snap.docs.sort((a, b) => {
-                    const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
-                    const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+                    const aTime = toMillis(a.data().createdAt);
+                    const bTime = toMillis(b.data().createdAt);
                     return bTime - aTime;
                 });
                 appRef = sortedDocs[0].ref;

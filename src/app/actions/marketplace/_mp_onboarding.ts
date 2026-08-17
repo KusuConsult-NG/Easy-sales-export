@@ -13,6 +13,7 @@ import type { Product } from "@/lib/types/marketplace";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { MarketplaceOnboardingSchema } from "@/lib/validations/marketplace";
 import { withSafeAction, ActionResponse } from "@/lib/safe-action";
+import { toMillis } from "@/lib/firestore-serialize";
 
 // ============================================
 // Check Marketplace Application Status Action
@@ -40,8 +41,8 @@ async function _checkMarketplaceStatusAction(): Promise<ActionResponse<{ status:
 
             if (!verSnap.empty) {
                 const sortedDocs = verSnap.docs.sort((a, b) => {
-                    const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
-                    const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+                    const aTime = toMillis(a.data().createdAt);
+                    const bTime = toMillis(b.data().createdAt);
                     return bTime - aTime;
                 });
                 verDoc = sortedDocs[0];
@@ -127,8 +128,8 @@ async function _checkMarketplaceStatusAction(): Promise<ActionResponse<{ status:
             .get();
 
         if (!verificationSnap.empty) { const sortedDocs = verificationSnap.docs.map(d => d.data()).sort((a, b) => {
-                const aTime = (a as any).createdAt?.toMillis?.() || (a as any).createdAt?.seconds * 1000 || 0;
-                const bTime = (b as any).createdAt?.toMillis?.() || (b as any).createdAt?.seconds * 1000 || 0;
+                const aTime = toMillis((a as any).createdAt);
+                const bTime = toMillis((b as any).createdAt);
                 return bTime - aTime;
             });
             const vData = sortedDocs[0];

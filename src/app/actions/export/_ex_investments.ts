@@ -8,6 +8,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { claimPaymentOnce } from "@/lib/wallet-ledger";
 import { revalidatePath } from "next/cache";
+import { toMillis } from "@/lib/firestore-serialize";
 
 // ============================================
 // Get User Export Investments Action
@@ -36,17 +37,12 @@ export async function getUserExportInvestmentsAction(
         // Robust Sort: Handle both Timestamps and String dates gracefully
         const allDocs = snapshotRaw.docs.sort((a, b) => { const dataA = a.data();
              const dataB = b.data();
-             const getMillis = (val: any) => {
-                 if (!val) return 0;
-                 if (typeof val.toMillis === 'function') return val.toMillis();
-                 if (val instanceof Date) return val.getTime();
-                 if (typeof val === 'string') return new Date(val).getTime();
-                 if (val.seconds) return val.seconds * 1000;
-                 return 0;
-             };
-
-             const tA = getMillis(dataA.createdAt) || getMillis(dataA.bookedAt) || 0;
-             const tB = getMillis(dataB.createdAt) || getMillis(dataB.bookedAt) || 0;
+             // A local getMillis lived here and was CORRECT — it handled all four
+             // shapes. It was a fourth copy of lib/firestore-serialize's toMillis,
+             // which is why the sort 340 lines below, written without it, was the
+             // one that threw. One implementation.
+             const tA = toMillis(dataA.createdAt) || toMillis(dataA.bookedAt);
+             const tB = toMillis(dataB.createdAt) || toMillis(dataB.bookedAt);
              return tB - tA;
         });
 
@@ -370,8 +366,15 @@ export async function getMyExportInvestmentsAction() { try {
             .where("investorId", "==", session.user.id)
             .get();
         // Use in-memory sort to avoid index compilation errors
-        const allDocs = snapshot.docs.sort((a, b) => { const tA = a.data().createdAt?.toMillis() || a.data().bookedAt?.toMillis() || 0;
-             const tB = b.data().createdAt?.toMillis() || b.data().bookedAt?.toMillis() || 0;
+        // toMillis, not `x?.toMillis()`.
+        //
+        // `createdAt?.toMillis()` guards against createdAt being null — and NOT
+        // against it being a string, which is what the JSONB writer stores for a
+        // `new Date()`. `"2026-08-01..."?.toMillis` is undefined, and calling it
+        // THROWS. So this comparator did not merely mis-sort on an ISO createdAt,
+        // it threw inside the sort and the whole action fell into its catch.
+        const allDocs = snapshot.docs.sort((a, b) => { const tA = toMillis(a.data().createdAt) || toMillis(a.data().bookedAt);
+             const tB = toMillis(b.data().createdAt) || toMillis(b.data().bookedAt);
              return tB - tA;
         });
 
