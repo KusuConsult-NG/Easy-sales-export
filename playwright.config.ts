@@ -5,6 +5,36 @@ import path from 'node:path';
 import { detectChromium } from './e2e/helpers/chromium';
 
 /**
+ * The local stack's environment, loaded explicitly for the server Playwright
+ * starts.
+ *
+ * scripts/local-stack/up.sh writes .env.development.local, and Next reads that
+ * file ONLY in development. `next start` does not, so a production build came
+ * up with no Supabase URL and no NEXTAUTH_SECRET and every request died with
+ *
+ *     [auth][error] MissingSecret: Please define a `secret`
+ *
+ * Passing it through webServer.env is what makes a production build usable
+ * against the local stack. Read here rather than renamed on disk, so nothing
+ * has to change about how up.sh works or which file `next dev` picks up.
+ *
+ * Absent — a CI runner with real environment variables, or a staging URL —
+ * this contributes nothing and the process environment is used as-is.
+ */
+function localStackEnv(): Record<string, string> {
+    const file = path.resolve(__dirname, '.env.development.local');
+    if (!fs.existsSync(file)) return {};
+
+    const parsed: Record<string, string> = {};
+    for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+        const match = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
+        if (!match) continue;
+        parsed[match[1]] = match[2].trim().replace(/^["']|["']$/g, '');
+    }
+    return parsed;
+}
+
+/**
  * Playwright E2E Test Configuration
  *
  * Directory layout:
@@ -153,6 +183,11 @@ export default defineConfig({
          */
         command: 'npm run build && npm run start',
         url: BASE_URL,
+        // See localStackEnv(): `next start` ignores .env.development.local, so
+        // without this a production build has no database and no auth secret.
+        // Process environment wins, so a CI runner's real values are not
+        // overridden by whatever is on this machine's disk.
+        env: { ...localStackEnv(), ...process.env } as Record<string, string>,
         reuseExistingServer: !process.env.CI,
         /**
          * Build plus start, with room to spare.
