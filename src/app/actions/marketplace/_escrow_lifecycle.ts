@@ -4,7 +4,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from '@/lib/logger';
 import { requireAdmin } from "@/lib/require-admin";
 import { claimStatusTransition } from "@/lib/status-transition";
-import { claimPaymentOnce } from "@/lib/wallet-ledger";
+import { claimPaymentOnce, markFulfilmentFailed } from "@/lib/wallet-ledger";
 import { FieldValue } from "@/lib/firestore-compat";
 import { createAdminAuditLog, logAdminFinancialAction } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
@@ -50,17 +50,32 @@ async function _createEscrowAction(data: { buyerId: string;
             return { success: false as const, error: "Invalid seller", data: null };
         }
 
-        // NOTE ON THE ORDERING BELOW, which is load-bearing.
-        //
-        // `...data` is spread FIRST and the security-relevant fields are set
-        // AFTER, so a caller who sends `status: "funded"` has it overwritten.
-        // Reversing these lines would turn this into a privilege escalation:
-        // an escrow could be created already funded, without payment.
-        //
-        // Fourteen sites in this codebase spread caller data into a write and
-        // every one of them is safe for exactly this reason. That is a property
-        // of field order in an object literal, which is a thin thing to rest on.
-        const escrow: Omit<EscrowTransaction, "id"> & { _version: number } = { ...data,
+        /**
+         * Named fields, not the caller's object.
+         *
+         * This spread `...data` and then set the security-relevant fields AFTER,
+         * relying on later keys winning in an object literal. That worked, and the
+         * comment here said so — while also saying it was "a thin thing to rest
+         * on", because reversing two lines turns it into a privilege escalation: an
+         * escrow created already `funded`, without payment.
+         *
+         * It is not only ordering. `data` is whatever arrived over the wire — a
+         * server action's parameter type is erased — so the spread also wrote any
+         * OTHER field a caller invented onto the escrow document: `netAmount`,
+         * `platformFee`, `releasedAt`, `disputeId`. None of those are overwritten
+         * below, because nothing below mentions them.
+         *
+         * Listing the fields removes both problems, and the safety no longer
+         * depends on line order.
+         */
+        const escrow: Omit<EscrowTransaction, "id"> & { _version: number } = {
+            buyerId: data.buyerId,
+            buyerEmail: data.buyerEmail,
+            sellerId: data.sellerId,
+            sellerEmail: data.sellerEmail,
+            amount: data.amount,
+            productName: data.productName,
+            productDescription: data.productDescription,
             participants: [data.buyerId, data.sellerId],
             status: "pending",
             _version: 0,
@@ -223,11 +238,43 @@ async function _confirmEscrowPaymentAction(
         });
 
         if (!statusClaim.claimed) {
+            /**
+             * The payment is claimed and the escrow was NOT funded.
+             *
+             * The reference is burned at this point: claimPaymentOnce ran above and
+             * succeeded, so a retry takes the "already applied" branch and the buyer
+             * can never fund this escrow with the money they have paid. Returning a
+             * bare error leaves a real payment recorded as `escrow_funding` against
+             * an escrow that is not funded — money in, nothing held, and nothing to
+             * find it by.
+             *
+             * Reachable whenever the escrow moved between the read above and this
+             * claim: cancelled by the other party, or already funded.
+             *
+             * markFulfilmentFailed patches the processed_payments row to
+             * `fulfilment_failed` with the reason. It does not release the claim —
+             * releasing it would let the same reference fund something else — and it
+             * does not refund. It makes the payment visible to reconcile-fulfilment,
+             * which is what an admin acts on. Same treatment as the Farm Nation
+             * fulfilment failures.
+             */
+            const reason = statusClaim.status === null
+                ? "Escrow transaction not found when applying payment"
+                : `Escrow was '${statusClaim.status}', not 'pending', when the payment was applied`;
+
+            await markFulfilmentFailed(paymentReference, reason);
+
+            logger.error(
+                `[confirmEscrowPayment] PAID BUT NOT FUNDED — escrow ${escrowId}, reference ` +
+                `${paymentReference}, ₦${paidAmountNaira} taken from ${callerId}. ${reason}. Needs refund.`
+            );
+
             return {
                 success: false as const,
                 error: statusClaim.status === null
-                    ? "Escrow transaction not found"
-                    : `Invalid state transition: expected 'pending', got '${statusClaim.status}'`,
+                    ? "Escrow transaction not found. You have been charged — this payment has been flagged for refund."
+                    : `This escrow is no longer awaiting payment (it is '${statusClaim.status}'). ` +
+                      `You have been charged — this payment has been flagged for refund.`,
             };
         }
 
