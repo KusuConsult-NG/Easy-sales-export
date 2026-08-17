@@ -24,6 +24,7 @@ import type {
 } from "@/lib/types/marketplace";
 import { notifyVillageMarketCreated } from "@/lib/marketplace-notifications";
 import { isAdmin } from "@/lib/admin-permissions";
+import { hydrateSellerTrust } from "@/lib/seller-trust";
 
 // ---------------------------------------------------------------------------
 // Admin: Create a Village Market Event
@@ -457,26 +458,19 @@ export async function getActiveFlashSaleProductsAction(): Promise<FlashSaleProdu
 
         const products = serializeDocs(snap.docs) as unknown as FlashSaleProduct[];
         
-        // Fetch seller names to populate sellerName
-        const uniqueSellerIds = Array.from(new Set(products.map(p => p.sellerId).filter(Boolean)));
-        const sellerNames: Record<string, string> = {};
-        
-        if (uniqueSellerIds.length > 0) {
-            const sellerDocs = await Promise.all(
-                uniqueSellerIds.map(id => db.collection(COLLECTIONS.USERS).doc(id).get())
-            );
-            sellerDocs.forEach(doc => {
-                if (doc.exists) {
-                    const data = doc.data();
-                    sellerNames[doc.id] = data?.displayName || data?.businessName || data?.name || "Verified Seller";
-                }
-            });
-        }
-        
-        return products.map(p => ({
-            ...p,
-            sellerName: sellerNames[p.sellerId] || "Verified Seller"
-        }));
+        // Seller name AND badge, one read per unique seller.
+        //
+        // This already batched by unique sellerId — the pattern is unchanged. Two
+        // things are different. The fallback name was "Verified Seller", so a
+        // seller with no name recorded was labelled verified in the name field
+        // itself. And the badge was not resolved at all: the buyer products page
+        // mapped these rows into a Product with `sellerVerified: true` hardcoded,
+        // so every Village Market listing showed the verified shield. Returning
+        // the real value here is what lets that page stop inventing one.
+        return hydrateSellerTrust(products as any[], async (id) => {
+            const snap = await db.collection(COLLECTIONS.USERS).doc(id).get();
+            return snap.exists ? (snap.data() ?? null) : null;
+        });
     } catch (err) {
         logger.error("getActiveFlashSaleProductsAction error:", err);
         return [];

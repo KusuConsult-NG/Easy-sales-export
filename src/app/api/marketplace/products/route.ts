@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { hydrateSellerTrust, SELLER_NAME_FALLBACK } from "@/lib/seller-trust";
 
 /**
  * GET /api/marketplace/products
@@ -119,11 +120,20 @@ export async function GET(request: NextRequest) {
                 quantity: quantity,
                 images: data.images || [],
                 sellerId: data.sellerId || "",
-                sellerName: data.sellerName || data.storeName || "Verified Seller",
+                sellerName: data.sellerName || data.storeName || SELLER_NAME_FALLBACK,
                 sellerLocation: locationString,
                 rating: data.rating || 0,
                 reviews: data.reviewCount || 0,
-                verified: data.verified !== false,
+                // `verified: data.verified !== false` — a field NO writer of this
+                // collection sets, so the expression was `undefined !== false`
+                // and this endpoint reported every product it has ever served as
+                // verified. `verified` is a land-listing field; products carry
+                // `sellerVerified`, and even that is a create-time snapshot.
+                //
+                // Hydrated from the seller's live badge below, like every other
+                // read path. Defaulting a trust claim to true is the shape worth
+                // naming here: a missing field became an assertion.
+                verified: false,
                 createdAt: data.createdAt?.toDate?.()?.toISOString() ?? new Date().toISOString(),
             };
         });
@@ -162,6 +172,18 @@ export async function GET(request: NextRequest) {
         }
         if (minPrice) products = products.filter(p => p.price >= parseInt(minPrice));
         if (maxPrice) products = products.filter(p => p.price <= parseInt(maxPrice));
+
+        // The `verified` flag, resolved from the seller's live badge.
+        //
+        // Placed after every filter so the reads are only spent on rows that are
+        // actually being returned, and batched by unique seller by
+        // hydrateSellerTrust. It writes sellerName/sellerVerified, so `verified`
+        // is copied across from the latter to keep this endpoint's field name.
+        const hydrated = await hydrateSellerTrust(products as any[], async (id) => {
+            const snap = await db.collection(COLLECTIONS.USERS).doc(id).get();
+            return snap.exists ? (snap.data() ?? null) : null;
+        });
+        products = hydrated.map((p: any) => ({ ...p, verified: p.sellerVerified === true }));
 
         const nextCursor = hasMore && docs.length > 0
             ? docs[docs.length - 1].data().createdAt?.toDate?.()?.toISOString() ?? null

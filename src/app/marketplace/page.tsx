@@ -6,6 +6,7 @@ import BackToHub from "@/components/common/BackToHub";
 import MarketplaceRouteGuard from "@/components/marketplace/MarketplaceRouteGuard";
 import ProductImage from "@/components/marketplace/ProductImage";
 import type { Metadata } from "next";
+import { SELLER_NAME_FALLBACK } from "@/lib/seller-trust";
 
 export const metadata: Metadata = {
     title: "Easy Market Nigeria — Buy & Sell Agricultural Products",
@@ -160,7 +161,7 @@ export default async function MarketplaceLandingPage() {
                                                 <span className="text-sm font-semibold">{product.rating || "N/A"}</span>
                                             </div>
                                             <span className="text-slate-400 text-sm">•</span>
-                                            <span className="text-sm text-slate-500">{product.sellerName || "Verified Seller"}</span>
+                                            <span className="text-sm text-slate-500">{product.sellerName || SELLER_NAME_FALLBACK}</span>
                                         </div>
                                         <div className="pt-4 border-t border-slate-200 flex justify-between items-center">
                                             <div>

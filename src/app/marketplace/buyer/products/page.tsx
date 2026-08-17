@@ -23,6 +23,7 @@ import Image from "next/image";
 import { getProductsAction } from "@/app/actions/marketplace";
 import { getActiveFlashSaleProductsAction } from "@/app/actions/village-market";
 import type { Product, ProductCategory } from "@/lib/types/marketplace";
+import { SELLER_NAME_FALLBACK } from "@/lib/seller-trust";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -154,10 +155,24 @@ export default function ProductsPage() {
                 deliveryMethod: "delivery",
                 status: fp.availableQuantity === 0 ? "out_of_stock" : "active",
                 bulkAvailable: false,
-                rating: 5.0,
+                // Was `rating: 5.0` with reviewCount 0, so every Village Market
+                // card showed a perfect score with no reviews behind it — the
+                // card only renders a rating when `rating > 0` — and "Highest
+                // Rated" sorted all of them above real products with genuine
+                // ratings below 5.
+                rating: 0,
                 reviewCount: 0,
-                sellerName: fp.sellerName || "Verified Seller",
-                sellerVerified: true,
+                // Both taken from the server now.
+                //
+                // `sellerVerified: true` was hardcoded here, and the shield
+                // below renders from it, so every Village Market listing claimed
+                // a verified seller regardless of whether that seller had ever
+                // been verified. getActiveFlashSaleProductsAction resolves the
+                // real badge from the seller's user document; this page has no
+                // seller data of its own, so inventing a value was the only way
+                // it could have got one.
+                sellerName: fp.sellerName || SELLER_NAME_FALLBACK,
+                sellerVerified: fp.sellerVerified === true,
                 isFlashSale: true,
                 originalPrice: fp.price,
                 flashPrice: fp.flashPrice,

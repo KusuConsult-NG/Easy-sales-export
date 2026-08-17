@@ -13,6 +13,7 @@ import { hasRole } from "@/lib/role-utils";
 import { ProductSchema } from "@/lib/validations/marketplace";
 import { withSafeAction, ActionResponse } from "@/lib/safe-action";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
+import { newestVerification, SELLER_NAME_FALLBACK } from "@/lib/seller-trust";
 
 // ============================================================================
 // PRODUCT MANAGEMENT
@@ -170,10 +171,25 @@ async function _createProductAction(prevState: unknown, formData: FormData): Pro
         ]);
 
         const vendorData = vendorDoc.data();
-        const verificationData = verificationSnap.empty ? null : verificationSnap.docs[0].data();
 
-        const sellerName = vendorData?.storeInfo?.name || session.user.name || "Easy Sales Seller";
-        const sellerVerified = verificationData?.isVerifiedBadge || false;
+        // NEWEST verification, not docs[0].
+        //
+        // The query has no ordering, so a seller with more than one verification
+        // record got whichever row the database happened to return first — which
+        // is how a superseded verification could decide the badge and the
+        // category. marketplace/seller/layout.tsx sorts this exact query by
+        // createdAt for the same reason.
+        const verificationData = newestVerification(
+            verificationSnap.docs.map((d: any) => d.data()),
+        );
+
+        const sellerName = vendorData?.storeInfo?.name || session.user.name || SELLER_NAME_FALLBACK;
+        // Written for the shape's other readers (the export catalog, the admin
+        // views). NO buyer-facing path trusts this copy any more: it is a
+        // snapshot taken now and never refreshed, so granting the badge would
+        // not add it to this product and revoking would not remove it. Every
+        // read path resolves the badge live — see lib/seller-trust.ts.
+        const sellerVerified = verificationData?.isVerifiedBadge === true;
         const sellerCategory = verificationData?.sellerCategory || "retail";
 
         // Create product

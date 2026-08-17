@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useDebounce } from './useDebounce';
 import { searchProductsAction } from '@/app/actions/marketplace';
+import { SELLER_NAME_FALLBACK } from '@/lib/seller-trust';
 
 interface Product {
     id: string;
@@ -49,7 +50,9 @@ export function useMarketplaceSearch() {
                     description: p.description,
                     price: p.pricingTiers?.[0]?.price ?? 0,
                     images: p.images || [],
-                    sellerName: p.sellerName || "Verified Seller",
+                    // Not "Verified Seller": that labelled an unnamed seller
+                    // verified in the name field itself. See lib/seller-trust.ts.
+                    sellerName: p.sellerName || SELLER_NAME_FALLBACK,
                     location: { state: p.location?.state || "Nigeria" },
                     pricingTiers: p.pricingTiers || [],
                     unit: p.unit,

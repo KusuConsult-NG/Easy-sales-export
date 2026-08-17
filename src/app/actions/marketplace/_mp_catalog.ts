@@ -10,6 +10,13 @@ import type { Product } from "@/lib/types/marketplace";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { ProductSchema } from "@/lib/validations/marketplace";
 import { withSafeAction, ActionResponse } from "@/lib/safe-action";
+import { hydrateSellerTrust, resolveSellerTrust, SELLER_NAME_FALLBACK } from "@/lib/seller-trust";
+
+/** Reads a seller's user document, for hydrateSellerTrust. */
+async function readSeller(sellerId: string): Promise<Record<string, any> | null> {
+    const snap = await db.collection(COLLECTIONS.USERS).doc(sellerId).get();
+    return snap.exists ? (snap.data() ?? null) : null;
+}
 
 /**
  * Get Marketplace Products
@@ -125,7 +132,18 @@ async function _getMarketplaceProductsAction(params: {
             newLastId = snapshot.docs[snapshot.docs.length - 1].id;
         }
 
-        return { error: null, success: true as const, data: { products, lastId: newLastId, hasMore } };
+        // The badge is read live, not served from the product document.
+        //
+        // `sellerVerified` is copied onto a product when it is created and never
+        // updated, so this list showed the badge a seller had at the time of each
+        // listing. Granting the badge did not add it to existing products, and
+        // revoking it did not remove it from any. See lib/seller-trust.ts.
+        //
+        // One read per unique seller, after pagination — so at most `limitCount`
+        // extra reads, and normally far fewer.
+        const withTrust = await hydrateSellerTrust(products as any[], readSeller);
+
+        return { error: null, success: true as const, data: { products: withTrust, lastId: newLastId, hasMore } };
     } catch (error) { 
         logger.error("Get products error:", {
             error: error instanceof Error ? error.message : String(error)
@@ -163,17 +181,23 @@ async function _getProductByIdAction(productId: string): Promise<ActionResponse<
         let product: Product;
 
         if (isFlashSale && data) {
-            // Map to standard product structure
-            let sellerName = "Verified Seller";
+            // Map to standard product structure.
+            //
+            // The fallback name was "Verified Seller", so a flash-sale seller
+            // with no name recorded was LABELLED verified in the name field —
+            // and `sellerVerified` below was the literal `true`, so the shield
+            // was shown too. Neither had anything to do with the seller's badge.
+            // One rule now, in lib/seller-trust.ts, reading the live user doc.
+            let sellerName = SELLER_NAME_FALLBACK;
+            let sellerVerified = false;
             try {
                 if (data.sellerId) {
-                    const sellerDoc = await db.collection(COLLECTIONS.USERS).doc(data.sellerId).get();
-                    if (sellerDoc.exists) {
-                        sellerName = sellerDoc.data()?.businessName || sellerDoc.data()?.displayName || "Verified Seller";
-                    }
+                    const trust = resolveSellerTrust(await readSeller(data.sellerId));
+                    sellerName = trust.sellerName;
+                    sellerVerified = trust.sellerVerified;
                 }
             } catch (err) {
-                logger.error("Failed to fetch seller name for flash sale product:", err);
+                logger.error("Failed to read seller for flash sale product:", err);
             }
 
             const mappedData = {
@@ -198,10 +222,15 @@ async function _getProductByIdAction(productId: string): Promise<ActionResponse<
                 exportReady: false,
                 views: 0,
                 orders: 0,
-                rating: 5,
+                // Was `rating: 5` with reviewCount 0. The card renders a rating
+                // only when `rating > 0`, so every flash-sale product displayed a
+                // perfect score with nothing behind it, and "Highest Rated"
+                // sorting placed all of them above real products with genuine
+                // ratings below 5. Zero means "no reviews yet", which is true.
+                rating: 0,
                 reviewCount: 0,
                 sellerName: sellerName,
-                sellerVerified: true,
+                sellerVerified,
                 createdAt: data.createdAt || new Date(),
                 updatedAt: data.createdAt || new Date(),
                 isFlashSale: true,
@@ -487,25 +516,19 @@ async function _searchProductsAction(params: { query?: string;
             }
         });
 
-        // Fetch seller names (optimize this with a separate user index/cache later)
-        const productsWithSellers = await Promise.all(
-            products.map(async (product) => { 
-                let sellerName = "Unknown Seller";
-                if (product.sellerId) {
-                    if (product.sellerName) {
-                        sellerName = product.sellerName; 
-                    } else { 
-                        const userRef = db.collection(COLLECTIONS.USERS).doc(product.sellerId);
-                        const userSnap = await userRef.get();
-                        if (userSnap.exists) {
-                            const userData = userSnap.data();
-                            sellerName = userData?.businessName || userData?.displayName || "Unknown Seller";
-                        }
-                    }
-                }
-                return { ...product, sellerName };
-            })
-        );
+        // Seller name AND badge, both live, one read per unique seller.
+        //
+        // This block used to read a user document per PRODUCT that had no
+        // denormalised sellerName — the comment said "optimize this with a
+        // separate user index/cache later" — and it never touched
+        // sellerVerified, so search results served the create-time snapshot of
+        // the badge. Batching by unique sellerId fixes both at once: fewer reads
+        // than before AND a badge that reflects a revocation.
+        //
+        // "Unknown Seller" was a fourth spelling of the missing-name fallback,
+        // after "Verified Seller", "Easy Sales Seller" and the ProductSchema
+        // default. One spelling now, and not a claim.
+        const productsWithSellers = await hydrateSellerTrust(products as any[], readSeller);
 
         let finalProducts = productsWithSellers;
         if (params.query) { 
