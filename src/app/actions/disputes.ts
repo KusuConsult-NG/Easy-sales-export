@@ -6,7 +6,7 @@
 
 import { requireSession, isAdmin } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
-import { claimStatusTransitionFromAny } from "@/lib/status-transition";
+import { claimStatusTransition, claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { creditWalletOnce } from "@/lib/wallet-ledger";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -144,6 +144,93 @@ async function _createDisputeAction(params: { orderId: string;
                     : "Cannot dispute completed or cancelled orders");
         }
 
+        /**
+         * FREEZE THE MONEY, not just the order.
+         *
+         * THE DEFECT
+         * ----------
+         * This claimed the ORDER into "disputed" and never touched
+         * ESCROW_TRANSACTIONS. The auto-release cron
+         * (api/cron/release-escrow) selects escrows on
+         *
+         *     status == "funded" AND releaseRequestedAt <= threshold
+         *
+         * and its comment states the guard it relies on: "a buyer filing a
+         * dispute moves the status off 'funded', and this then refuses to
+         * release." That is true of the OTHER dispute path —
+         * marketplace/_escrow_disputes.ts sets `status: "disputed"` on the escrow
+         * — and it was false here.
+         *
+         * Both paths are live. /escrow/[id]/dispute uses the escrow-keyed one;
+         * /dashboard/disputes/new uses this one. So a buyer who disputed from the
+         * dashboard had the order marked disputed while the money stayed
+         * releasable, and the cron paid the seller out from under an open
+         * dispute.
+         *
+         * It then compounded: resolveDisputeAction claims the escrow from
+         * ["funded", "disputed", "pending"], so once the cron had moved it to
+         * "released" the dispute could not be resolved either — a refund decision
+         * with no way to execute it.
+         *
+         * The escrow is located exactly as resolveDisputeAction locates it — by
+         * orderId, taking the active row — so the two agree on which record the
+         * money hangs off.
+         */
+        let escrowFrozen = false;
+        let escrowAlreadySettled: string | null = null;
+
+        try {
+            const escrowQuery = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
+                .where("orderId", "==", orderId)
+                .limit(10)
+                .get();
+
+            const activeEscrow = escrowQuery.docs.find(doc => {
+                const status = doc.data()?.status;
+                return status === "funded" || status === "disputed" || status === "pending";
+            });
+
+            if (activeEscrow) {
+                const status = String(activeEscrow.data()?.status ?? "");
+
+                if (status === "funded") {
+                    const escrowClaim = await claimStatusTransition({
+                        collection: COLLECTIONS.ESCROW_TRANSACTIONS,
+                        id: activeEscrow.id,
+                        from: "funded",
+                        to: "disputed",
+                        patch: {
+                            disputeId: disputeRef.id,
+                            disputedAt: new Date().toISOString(),
+                        },
+                    });
+                    escrowFrozen = escrowClaim.claimed;
+
+                    if (!escrowClaim.claimed) {
+                        // It moved between the read and the claim. `released` here is
+                        // the case that matters and is recorded below.
+                        escrowAlreadySettled = escrowClaim.status ?? null;
+                    }
+                } else {
+                    // `disputed` already — the other path got there first, which is
+                    // fine. `pending` means the escrow was never funded, so there is
+                    // nothing for the cron to release.
+                    escrowFrozen = status === "disputed";
+                }
+            } else if (!escrowQuery.empty) {
+                // Every escrow on this order is already released or refunded. The
+                // dispute is still valid — a buyer may dispute a completed order —
+                // but an admin resolving it cannot move money that has gone, and
+                // must not discover that only when the refund fails.
+                escrowAlreadySettled = String(escrowQuery.docs[0].data()?.status ?? "settled");
+            }
+        } catch (e) {
+            logger.error("[createDispute] Could not freeze the escrow for the disputed order", {
+                orderId,
+                error: e instanceof Error ? e.message : String(e),
+            });
+        }
+
         {
             const disputeData: Partial<Dispute> = { orderId,
                 buyerId: userId,
@@ -153,11 +240,28 @@ async function _createDisputeAction(params: { orderId: string;
                 evidenceUrls,
                 status: "open",
                 _version: 0,
+                // Recorded on the dispute so the admin resolving it knows whether
+                // there is money left to move, before choosing a resolution.
+                escrowFrozen,
+                escrowAlreadySettled,
                 createdAt: FieldValue.serverTimestamp() as any,
                 updatedAt: FieldValue.serverTimestamp() as any };
 
             await disputeRef.set(disputeData);
             await orderRef.update({ _version: FieldValue.increment(1) });
+
+            if (escrowAlreadySettled) {
+                logger.warn(
+                    `[createDispute] Dispute ${disputeRef.id} filed on order ${orderId} whose escrow ` +
+                    `is already '${escrowAlreadySettled}'. The funds have left escrow; a refund ` +
+                    `resolution cannot be executed against it.`
+                );
+            } else if (!escrowFrozen) {
+                logger.warn(
+                    `[createDispute] Dispute ${disputeRef.id} filed on order ${orderId} but no funded ` +
+                    `escrow was frozen. Verify the auto-release cron cannot pay this out.`
+                );
+            }
         }
 
         return { error: null, success: true as const, data: null };

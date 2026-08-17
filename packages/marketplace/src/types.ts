@@ -378,6 +378,28 @@ export interface Dispute {
     // Status
     status: DisputeStatus;
 
+    /**
+     * Whether the escrow behind this dispute was frozen when it was filed.
+     *
+     * Filing a dispute must take the escrow off `funded`, or the auto-release
+     * cron (api/cron/release-escrow) pays the seller while the dispute is open —
+     * which is what happened to every dispute raised from
+     * /dashboard/disputes/new, because actions/disputes.ts claimed only the
+     * ORDER. Recorded here so an admin can see, BEFORE choosing a resolution,
+     * whether there is money left to move.
+     */
+    escrowFrozen?: boolean;
+
+    /**
+     * Set when the escrow had already been released or refunded before the
+     * dispute was filed.
+     *
+     * resolveDisputeAction claims the escrow from ["funded","disputed","pending"],
+     * so a refund resolution cannot be executed against a settled one. The admin
+     * should not discover that only when the refund fails.
+     */
+    escrowAlreadySettled?: string | null;
+
     // Admin Review
     adminId?: string;
     adminNotes?: string;
