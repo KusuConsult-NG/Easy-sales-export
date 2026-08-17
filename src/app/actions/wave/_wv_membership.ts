@@ -10,6 +10,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { isAdmin } from "@/lib/role-utils";
 import { checkModuleAccess } from "@/lib/module-access-check";
+import { checkWaveEligibility } from "@/lib/wave-eligibility";
 
 /**
  * Check WAVE application status for current user
@@ -178,46 +179,17 @@ async function _checkWaveEligibilityAction(userId: string): Promise<ActionRespon
             return { error: null, success: true as const, data: null };
         }
 
-        const userData = userDoc.data();
-        const roles = userData?.roles || [];
-        const { isAdmin } = await import("@/lib/admin-permissions");
-        const isUserAdmin = isAdmin(roles);
+        /**
+         * The shared rule. This function held one of four hand-written copies —
+         * see wave-eligibility.ts for how they differed and which one won.
+         */
+        const verdict = checkWaveEligibility(userDoc.data());
 
-        // Check if the user is an Academy Elite member
-        const academyReg = userData?.serviceRegistrations?.academy;
-        const isAcademyElite = academyReg?.plan === 'elite' && (academyReg?.status === 'approved' || academyReg?.status === 'active');
-
-        // 🔒 SECURITY: Strict Gender Enforcement for standard users
-        // Admins (including module-specific admins) and Academy Elite members are always eligible.
-        const existingGender = userData?.gender;
-        const hasWaveRole = roles.includes("wave_participant");
-        const hasWaveReg = userData?.serviceRegistrations?.wave?.status !== undefined;
-        
-        // Only explicitly block male users who do not have admin, elite, or pre-existing WAVE status/role.
-        const isMale = existingGender?.toLowerCase() === "male";
-
-        const userCreatedAt = userData?.createdAt;
-        const CUTOFF_DATE = new Date("2026-06-17T00:00:00.000Z");
-        let registeredOnOrAfterCutoff = false;
-        if (userCreatedAt) {
-            const dateVal = typeof userCreatedAt.toDate === "function" 
-                ? userCreatedAt.toDate() 
-                : (userCreatedAt.seconds ? new Date(userCreatedAt.seconds * 1000) : new Date(userCreatedAt));
-            registeredOnOrAfterCutoff = dateVal >= CUTOFF_DATE;
-        }
-        const isNewMaleUser = isMale && registeredOnOrAfterCutoff;
-
-        // Block if male AND (new user OR doesn't have pre-existing wave access)
-        const isWaveBlocked = isMale && (isNewMaleUser || (!hasWaveRole && !hasWaveReg));
-        
-        if (isWaveBlocked && !isUserAdmin && !isAcademyElite) {
+        if (!verdict.eligible) {
             return {
                 error: null,
                 success: true as const,
-                data: {
-                    eligible: false,
-                    reason: "WAVE program is exclusively for women entrepreneurs"
-                }
+                data: { eligible: false, reason: verdict.reason },
             };
         }
 

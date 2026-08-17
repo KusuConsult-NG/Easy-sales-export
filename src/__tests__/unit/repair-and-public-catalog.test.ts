@@ -127,12 +127,25 @@ describe('the repair does not guess a protected attribute', () => {
     });
 
     it('an unset gender does not block WAVE', () => {
-        // Why leaving it unset is safe rather than merely honest: the
-        // eligibility check tests for "male", so null is not male.
-        const eligibility = source('src/app/api/wave/check-eligibility/route.ts');
+        // Why leaving it unset is safe rather than merely honest: the eligibility
+        // rule tests for "male", so an absent gender is not male.
+        //
+        // This used to pin the literal `const isMale = gender?.toLowerCase() ===
+        // "male"` inside the route. The route carried a line-for-line copy of the
+        // rule and now calls the shared one, so the claim is asserted where it
+        // actually lives — and as behaviour, which is stronger than matching the
+        // text that implements it.
+        const { checkWaveEligibility } = require('@/lib/wave-eligibility');
 
-        expect(eligibility).toContain('const isMale = gender?.toLowerCase() === "male"');
-        expect(eligibility).toContain('userData.gender || null');
+        expect(checkWaveEligibility({ roles: [] }).eligible).toBe(true);
+        expect(checkWaveEligibility({ gender: null, roles: [] }).eligible).toBe(true);
+        expect(checkWaveEligibility({ gender: '', roles: [] }).eligible).toBe(true);
+        // Not vacuous: a recorded male IS blocked, so "absent is fine" is a
+        // statement about absence and not about the rule doing nothing.
+        expect(checkWaveEligibility({ gender: 'male', roles: [] }).eligible).toBe(false);
+
+        const eligibility = source('src/app/api/wave/check-eligibility/route.ts');
+        expect(eligibility).toContain('checkWaveEligibility(userData)');
     });
 
     it('records that WAVE eligibility is what read the guess', () => {

@@ -13,6 +13,7 @@ import { Resend } from "resend";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { hashData } from "@/lib/security";
+import { checkWaveEligibility } from "@/lib/wave-eligibility";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 
 // Validation Schema for WAVE Application (OFFICIAL BENEFICIARY APPLICATION FORM)
@@ -264,10 +265,28 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
         const hasWaveRole = userRoles.includes("wave_participant");
         const hasWaveReg = userData?.serviceRegistrations?.wave?.status !== undefined;
 
-        const applicantGender = userData?.gender;
-        const isMale = applicantGender?.toLowerCase() === "male";
-        if (isMale && !isUserAdmin && !isAcademyElite && !hasWaveRole && !hasWaveReg) {
-            return { success: false as const, error: "Only female applicants are eligible to enroll in the WAVE program.", data: null };
+        /**
+         * Eligibility through the shared rule.
+         *
+         * This was the loosest of four copies: no date cutoff, so a male account
+         * created after WAVE closed to new male participants was admitted as long
+         * as it held `wave_participant` or a wave registration. Both gates in front
+         * of this action — the /wave/application page and
+         * /api/wave/check-eligibility — applied the cutoff and reported such an
+         * account ineligible, while this accepted its application. A gate refusing
+         * what the action behind it allows is the worse of the two arrangements,
+         * because a server action is reachable without the page.
+         *
+         * Now the same rule as the gates. See wave-eligibility.ts for the four
+         * copies and which behaviour was adopted.
+         */
+        const eligibility = checkWaveEligibility(userData);
+        if (!eligibility.eligible) {
+            return {
+                success: false as const,
+                error: eligibility.reason ?? "Only female applicants are eligible to enroll in the WAVE program.",
+                data: null,
+            };
         }
 
         const existingStatus = userData?.serviceRegistrations?.wave?.status;
