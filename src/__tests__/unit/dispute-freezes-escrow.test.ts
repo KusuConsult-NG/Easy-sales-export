@@ -35,6 +35,11 @@
 import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import {
+    ESCROW_FREEZABLE_STATUSES,
+    ESCROW_RELEASABLE_FROM,
+    ESCROW_REFUNDABLE_FROM,
+} from '@/lib/escrow-status';
 
 const DISPUTES = 'src/app/actions/disputes.ts';
 const ESCROW_DISPUTES = 'src/app/actions/marketplace/_escrow_disputes.ts';
@@ -64,13 +69,30 @@ function createDisputeBody(): string {
 }
 
 describe('the order-keyed dispute path freezes the escrow', () => {
-    it('claims the escrow off funded', () => {
+    it('claims the escrow off EVERY freezable status', () => {
         // THE test. Without this the cron releases the money mid-dispute.
+        //
+        // It used to assert `from: "funded"` — which is what the code did, and
+        // which was not enough. An escrow at "in_transit" or "delivered" was not
+        // even located, so a dispute raised after the goods shipped, or after the
+        // buyer confirmed receipt, froze nothing at all. Both release paths
+        // release from "delivered", so the seller was paid anyway.
         const body = createDisputeBody();
 
         expect(body).toContain('COLLECTIONS.ESCROW_TRANSACTIONS');
-        expect(body).toContain('from: "funded"');
+        expect(body).toContain('fromAny: [...ESCROW_FREEZABLE_STATUSES]');
         expect(body).toContain('to: "disputed"');
+        expect(body).not.toContain('from: "funded"');
+    });
+
+    it('and the freezable set covers everything a release can pay out of', () => {
+        // The property that makes the freeze meaningful. If a status can be
+        // released FROM but not frozen, the dispute is decorative on that status
+        // — which is exactly what "funded" alone meant.
+        for (const status of ESCROW_RELEASABLE_FROM) {
+            if (status === 'disputed') continue; // already frozen by definition
+            expect(ESCROW_FREEZABLE_STATUSES).toContain(status);
+        }
     });
 
     it('claims rather than blind-writes', () => {
@@ -79,7 +101,7 @@ describe('the order-keyed dispute path freezes the escrow', () => {
         // record that the money had gone.
         const body = createDisputeBody();
 
-        expect(body).toContain('claimStatusTransition({');
+        expect(body).toContain('claimStatusTransitionFromAny({');
         expect(body).not.toMatch(/escrowRef\.update\(\{\s*status:\s*"disputed"/);
     });
 
@@ -87,10 +109,14 @@ describe('the order-keyed dispute path freezes the escrow', () => {
         // resolveDisputeAction finds it by orderId and takes the active row. If the
         // two disagreed about which escrow a dispute is against, freezing one and
         // resolving another would be worse than not freezing at all.
+        //
+        // This assertion earned its keep: widening the freeze to every active
+        // status without touching the resolution would have made the two
+        // disagree, and this is what failed and said so.
         const body = createDisputeBody();
 
         expect(body).toContain('.where("orderId", "==", orderId)');
-        expect(body).toMatch(/status === "funded" \|\| status === "disputed" \|\| status === "pending"/);
+        expect(body).toContain('isActiveEscrowStatus(doc.data()?.status)');
 
         // The resolution lives in _updateDisputeStatusAction, not in a function
         // called _resolveDisputeAction — the first version of this test guessed the
@@ -102,7 +128,21 @@ describe('the order-keyed dispute path freezes the escrow', () => {
 
         const resolve = src.slice(resolveAt);
         expect(resolve).toContain('.where("orderId", "==", dispute.orderId)');
-        expect(resolve).toMatch(/status === "funded" \|\| status === "disputed" \|\| status === "pending"/);
+        expect(resolve).toContain('isActiveEscrowStatus(doc.data()?.status)');
+    });
+
+    it('and the resolution never pays out of an unfunded escrow', () => {
+        // It claimed `["funded", "disputed", "pending"]` for both outcomes, and
+        // both branches credit a wallet with the escrow's `amount` — which is
+        // written at creation whether or not the payment ever arrived. So
+        // resolving a dispute on a never-funded escrow paid real money for a
+        // payment that never happened.
+        const src = code(DISPUTES);
+        const resolve = src.slice(src.indexOf('_updateDisputeStatusAction'));
+
+        expect(resolve).not.toContain('fromAny: ["funded", "disputed", "pending"]');
+        expect(ESCROW_RELEASABLE_FROM).not.toContain('pending');
+        expect(ESCROW_REFUNDABLE_FROM).not.toContain('pending');
     });
 
     it('links the dispute onto the escrow it froze', () => {
@@ -225,8 +265,27 @@ describe('createDisputeAction, executed', () => {
                 if (opts.claimThrows) throw new Error('boom');
                 return opts.claimResult ?? { claimed: true, status: p.to };
             }),
+            // claimThrows / claimResult apply HERE too.
+            //
+            // They used to be wired to claimStatusTransition alone, because that
+            // is what the freeze called. When the freeze moved to the FromAny
+            // variant, this mock kept returning unconditional success and two
+            // assertions — "records the dispute when the freeze throws" and
+            // "records a lost race as unfrozen" — started testing a freeze that
+            // could no longer fail. They failed loudly, which is the only reason
+            // this was noticed.
             claimStatusTransitionFromAny: jest.fn(async (p: any) => {
                 claimCalls.push(p);
+                // Scoped to the ESCROW claim, which is what claimThrows and
+                // claimResult describe. createDisputeAction also claims the
+                // DISPUTE's own status through this same function, so applying
+                // the failure to every call aborted dispute creation before the
+                // freeze was reached — and the two assertions below then failed
+                // for the wrong reason.
+                if (p.collection === 'escrow_transactions') {
+                    if (opts.claimThrows) throw new Error('boom');
+                    if (opts.claimResult) return opts.claimResult;
+                }
                 return { claimed: true, status: p.to };
             }),
         }));
@@ -336,18 +395,28 @@ describe('createDisputeAction, executed', () => {
         } as any);
     }
 
-    it('claims the funded escrow into disputed', async () => {
-        // Kills "if (false)": a dead branch makes no call.
-        loadAction({ escrowStatus: 'funded' });
-        await fileDispute();
+    it.each(['funded', 'in_transit', 'delivered'])(
+        'claims a %s escrow into disputed',
+        async (escrowStatus: string) => {
+            // Kills "if (false)": a dead branch makes no call.
+            //
+            // Parameterised over every freezable status. It used to run for
+            // "funded" alone, matching code that only handled "funded" — so the
+            // two agreed with each other and both were wrong. A dispute raised
+            // after the goods shipped, or after the buyer confirmed receipt (which
+            // is what writes "delivered"), froze nothing while both release paths
+            // still paid out from that state.
+            loadAction({ escrowStatus });
+            await fileDispute();
 
-        const escrowClaim = claimCalls.find(
-            (c) => c.collection === 'escrow_transactions' && c.to === 'disputed',
-        );
-        expect(escrowClaim).toBeDefined();
-        expect(escrowClaim.from).toBe('funded');
-        expect(escrowClaim.id).toBe(ESCROW_ID);
-    });
+            const escrowClaim = claimCalls.find(
+                (c) => c.collection === 'escrow_transactions' && c.to === 'disputed',
+            );
+            expect(escrowClaim).toBeDefined();
+            expect(escrowClaim.fromAny).toEqual(expect.arrayContaining([escrowStatus]));
+            expect(escrowClaim.id).toBe(ESCROW_ID);
+        },
+    );
 
     it('looks the escrow up by orderId', async () => {
         // The resolution finds it the same way. If the two disagreed about which

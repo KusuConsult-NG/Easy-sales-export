@@ -17,6 +17,13 @@ import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { smsDisputeResolved } from "@/lib/africastalking";
 import { pushDisputeResolved } from "@/lib/fcm";
+import {
+    ESCROW_FREEZABLE_STATUSES,
+    ESCROW_RELEASABLE_FROM,
+    ESCROW_REFUNDABLE_FROM,
+    isActiveEscrowStatus,
+    isFreezableEscrowStatus,
+} from "@/lib/escrow-status";
 
 function serializeTimestamp(ts: any): string | null {
     if (!ts) return null;
@@ -185,19 +192,30 @@ async function _createDisputeAction(params: { orderId: string;
                 .limit(10)
                 .get();
 
-            const activeEscrow = escrowQuery.docs.find(doc => {
-                const status = doc.data()?.status;
-                return status === "funded" || status === "disputed" || status === "pending";
-            });
+            // EVERY active status, not three of them.
+            //
+            // This searched for `funded | disputed | pending` and froze only from
+            // `"funded"`. An escrow at `in_transit` or `delivered` was not even
+            // FOUND here, so a dispute raised after the goods shipped — or after
+            // the buyer confirmed receipt, which is what moves an escrow to
+            // "delivered" — froze nothing and recorded nothing.
+            //
+            // Both release paths (_escrow_actions.ts, order-management.ts) release
+            // from "delivered". So the dispute existed, the escrow stayed
+            // releasable, and the seller was paid anyway: the exact hole the
+            // freeze was written to close, left open for two of the three
+            // statuses a dispute can be raised from. See lib/escrow-status.ts.
+            const activeEscrow = escrowQuery.docs.find(doc =>
+                isActiveEscrowStatus(doc.data()?.status));
 
             if (activeEscrow) {
                 const status = String(activeEscrow.data()?.status ?? "");
 
-                if (status === "funded") {
-                    const escrowClaim = await claimStatusTransition({
+                if (isFreezableEscrowStatus(status)) {
+                    const escrowClaim = await claimStatusTransitionFromAny({
                         collection: COLLECTIONS.ESCROW_TRANSACTIONS,
                         id: activeEscrow.id,
-                        from: "funded",
+                        fromAny: [...ESCROW_FREEZABLE_STATUSES],
                         to: "disputed",
                         patch: {
                             disputeId: disputeRef.id,
@@ -587,11 +605,15 @@ async function _updateDisputeStatusAction(
             return { success: false as const, error: "Associated escrow transaction not found for this dispute", data: null };
         }
 
-        // Find the active escrow transaction (funded or disputed or pending)
-        const escrowDocSnap = escrowQuery.docs.find(doc => {
-            const status = doc.data().status;
-            return status === "funded" || status === "disputed" || status === "pending";
-        }) || escrowQuery.docs[0];
+        // Find the active escrow transaction — every active status.
+        //
+        // The same three-status list createDisputeAction used, and it has to stay
+        // the same, or the freeze and the resolution attach to different rows.
+        // Neither included "in_transit" or "delivered", so a dispute on a shipped
+        // or received order was resolved against whichever escrow happened to be
+        // first in the result set.
+        const escrowDocSnap = escrowQuery.docs.find(doc =>
+            isActiveEscrowStatus(doc.data()?.status)) || escrowQuery.docs[0];
         const escrowId = escrowDocSnap.id;
         const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId);
 
@@ -629,10 +651,29 @@ async function _updateDisputeStatusAction(
         const finalEscrowStatus = resolution === "release_seller" ? "released" : "refunded";
         const nowIso = new Date().toISOString();
 
+        // The shared sets, and NOT from "pending".
+        //
+        // This claimed `["funded", "disputed", "pending"]` for both outcomes.
+        // Two problems.
+        //
+        // "pending" means the escrow was never funded — no money reached the
+        // platform — and both branches below credit a wallet with
+        // `freshEscrow.amount`, which is written at creation regardless. So
+        // resolving a dispute on an unfunded escrow paid out real money for a
+        // payment that never happened.
+        //
+        // And it omitted "in_transit" and "delivered", so a dispute on a shipped
+        // or received order could not be resolved at all — the admin got
+        // "Cannot transition" on the only escrows a dispute is usually about,
+        // since confirming receipt is what moves an escrow to "delivered".
+        const resolvableFrom = resolution === "release_seller"
+            ? ESCROW_RELEASABLE_FROM
+            : ESCROW_REFUNDABLE_FROM;
+
         const escrowClaim = await claimStatusTransitionFromAny({
             collection: COLLECTIONS.ESCROW_TRANSACTIONS,
             id: escrowId,
-            fromAny: ["funded", "disputed", "pending"],
+            fromAny: [...resolvableFrom],
             to: finalEscrowStatus,
             patch: {
                 releasedBy: userId,

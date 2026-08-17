@@ -16,10 +16,24 @@ import { serializeValue, serializeDocs } from "@/lib/firestore-serialize";
 import { smsEscrowReleased } from "@/lib/africastalking";
 import { pushEscrowReleased } from "@/lib/fcm";
 import { isAdmin } from "@/lib/admin-permissions";
+import {
+    ESCROW_STATUSES,
+    ESCROW_DISPUTEABLE_STATUSES,
+    ESCROW_RELEASABLE_FROM,
+    ESCROW_REFUNDABLE_FROM,
+} from "@/lib/escrow-status";
 
 // Validation schemas
 const escrowAmountSchema = z.number().min(100).max(100000000); // ₦100 to ₦100M
-const escrowStatusSchema = z.enum(["pending", "funded", "in_transit", "delivered", "released", "refunded", "disputed", "cancelled"]);
+/**
+ * The shared union, not a second copy.
+ *
+ * This enum listed eight statuses while EscrowTransaction.status declared five,
+ * and the two disagreed about in_transit, delivered and cancelled — which this
+ * application writes. Every caller then hand-wrote its own from-set and they
+ * drifted apart. See lib/escrow-status.ts.
+ */
+const escrowStatusSchema = z.enum(ESCROW_STATUSES);
 
 /**
  * Get user's escrow transactions
@@ -311,8 +325,7 @@ async function _createEscrowDispute(
                 throw new Error("Not authorized to dispute this transaction");
             }
 
-            const disputeableStatuses = ["funded", "in_transit", "delivered"];
-            if (!disputeableStatuses.includes(txData.status)) {
+            if (!ESCROW_DISPUTEABLE_STATUSES.includes(txData.status)) {
                 throw new Error(`Cannot dispute transaction in ${txData.status} status`);
             }
 
@@ -386,7 +399,7 @@ async function _releaseEscrowFunds(
         const claim = await claimStatusTransitionFromAny({
             collection: COLLECTIONS.ESCROW_TRANSACTIONS,
             id: transactionId,
-            fromAny: ["delivered", "disputed", "funded"],
+            fromAny: [...ESCROW_RELEASABLE_FROM],
             to: "released",
             patch: { releasedBy: userId, releasedAt: new Date().toISOString() },
         });
@@ -619,7 +632,10 @@ async function _refundEscrowToBuyer(
         const refundClaim = await claimStatusTransitionFromAny({
             collection: COLLECTIONS.ESCROW_TRANSACTIONS,
             id: transactionId,
-            fromAny: ["funded", "in_transit", "disputed"],
+            // "delivered" was missing here, so a buyer who had confirmed
+            // receipt could not be refunded at all — which is exactly when a
+            // problem with the goods comes to light. See lib/escrow-status.ts.
+            fromAny: [...ESCROW_REFUNDABLE_FROM],
             to: "refunded",
             patch: { refundedAt: new Date().toISOString(), refundedBy: userId },
         });

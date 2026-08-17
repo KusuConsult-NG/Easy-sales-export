@@ -6,7 +6,8 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Product, Order, ProductCategory } from "@/lib/types/marketplace";
 import { withSafeAction } from "@/lib/safe-action";
 import { FieldValue } from "@/lib/firestore-compat";
-import { claimStatusTransition } from "@/lib/status-transition";
+import { claimStatusTransition, claimStatusTransitionFromAny } from "@/lib/status-transition";
+import { isActiveEscrowStatus } from "@/lib/escrow-status";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import type { ActionResponse } from "@/lib/safe-action";
 import { ProductSchema } from "@/lib/validations/marketplace";
@@ -291,30 +292,58 @@ async function _confirmOrderReceiptAction(orderId: string): Promise<ActionRespon
             return { success: false as const, error: "Unauthorized", data: null };
         }
 
+        // Claimed, not checked-then-written.
+        //
+        // The status check was an ordinary read followed by an update inside
+        // runTransaction — which takes NO lock in this adapter (see the note at
+        // the top of lib/types/marketplace-escrow.ts). Two clicks both passed the
+        // check and both wrote, incrementing _version twice and confirming
+        // receipt twice.
         const allowedStatuses = ["in_transit", "processing", "shipped"];
-        if (!allowedStatuses.includes(orderData?.status)) { 
-            return { success: false as const, error: "Order is not in a confirmable state", data: null };
+        const orderClaim = await claimStatusTransitionFromAny({
+            collection: COLLECTIONS.MARKETPLACE_ORDERS,
+            id: orderId,
+            fromAny: allowedStatuses,
+            to: "delivered",
+            patch: {
+                buyerConfirmed: true,
+                buyerConfirmedAt: new Date().toISOString(),
+            },
+        });
+
+        if (!orderClaim.claimed) {
+            return {
+                success: false as const,
+                error: orderClaim.status
+                    ? `This order is '${orderClaim.status}' and receipt cannot be confirmed from that state`
+                    : "Order is not in a confirmable state",
+                data: null,
+            };
         }
 
+        // Only the escrow that is still live for this order.
+        //
+        // This updated EVERY escrow row matching the orderId, including ones
+        // already released or refunded — writing "delivered" over a settled
+        // status and making a finished transaction look unfinished.
         const escrowQuery = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("orderId", "==", orderId).get();
 
-        await db.runTransaction(async (transaction) => { 
-            transaction.update(orderRef, {
-                status: "delivered",
-                buyerConfirmed: true,
-                buyerConfirmedAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
-                _version: FieldValue.increment(1) 
-            });
+        for (const doc of escrowQuery.docs) {
+            if (!isActiveEscrowStatus(doc.data()?.status)) continue;
 
-            escrowQuery.docs.forEach(doc => { 
-                transaction.update(doc.ref, {
-                    status: "delivered",
-                    updatedAt: FieldValue.serverTimestamp(),
-                    _version: FieldValue.increment(1) 
-                });
+            // "delivered" is a real escrow status — see lib/escrow-status.ts —
+            // and every release path accepts it. It did NOT accept it before:
+            // the admin release claimed from "funded" alone, so confirming
+            // receipt used to make the escrow unreleasable by an admin, and a
+            // dispute raised afterwards did not freeze it.
+            await claimStatusTransitionFromAny({
+                collection: COLLECTIONS.ESCROW_TRANSACTIONS,
+                id: doc.id,
+                fromAny: ["funded", "in_transit"],
+                to: "delivered",
+                patch: { deliveredAt: new Date().toISOString() },
             });
-        });
+        }
 
         return { error: null, success: true as const, data: { success: true } };
     } catch (error) { 

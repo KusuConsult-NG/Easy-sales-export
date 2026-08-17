@@ -3,7 +3,8 @@
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from '@/lib/logger';
 import { requireAdmin } from "@/lib/require-admin";
-import { claimStatusTransition } from "@/lib/status-transition";
+import { claimStatusTransition, claimStatusTransitionFromAny } from "@/lib/status-transition";
+import { ESCROW_RELEASABLE_FROM } from "@/lib/escrow-status";
 import { claimPaymentOnce, markFulfilmentFailed } from "@/lib/wallet-ledger";
 import { FieldValue } from "@/lib/firestore-compat";
 import { createAdminAuditLog, logAdminFinancialAction } from "@/lib/audit-log";
@@ -427,10 +428,21 @@ async function _releaseEscrowAction(
         }
         escrowData = preClaim.data() as EscrowTransaction;
 
-        const claim = await claimStatusTransition({
+        // Every releasable status, not "funded" alone.
+        //
+        // This claimed `from: "funded"`, so the moment a buyer confirmed receipt —
+        // which moves the escrow to "delivered" — this admin release failed with
+        // "Invalid state transition: expected 'funded', got 'delivered'". The
+        // normal, expected flow disabled the admin's release, and the seller's
+        // money sat there.
+        //
+        // The other two release paths (_escrow_actions.ts, order-management.ts)
+        // already released from delivered, in_transit and disputed. Three release
+        // paths, three different opinions; one set now. See lib/escrow-status.ts.
+        const claim = await claimStatusTransitionFromAny({
             collection: COLLECTIONS.ESCROW_TRANSACTIONS,
             id: escrowId,
-            from: "funded",
+            fromAny: [...ESCROW_RELEASABLE_FROM],
             to: "released",
             patch: { releasedBy: adminId, releasedAt: new Date().toISOString() },
         });
@@ -438,7 +450,7 @@ async function _releaseEscrowAction(
         if (!claim.claimed) {
             return {
                 success: false as const,
-                error: `Invalid state transition: expected 'funded', got '${claim.status ?? "missing"}'`,
+                error: `Invalid state transition: this escrow is '${claim.status ?? "missing"}' and cannot be released from that state`,
                 data: null,
             };
         }

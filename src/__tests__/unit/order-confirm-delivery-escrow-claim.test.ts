@@ -39,6 +39,7 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { ESCROW_RELEASABLE_FROM } from '@/lib/escrow-status';
 
 const BUYER = 'buyer-1';
 const SELLER = 'seller-1';
@@ -133,10 +134,28 @@ describe('_confirmDeliveryAction — releasing an escrow the admin already relea
     it('accepts release from the same states the admin path accepts', async () => {
         // If the two paths disagree on the valid from-states, one can pay out
         // of a state the other refuses — which is how the divergence started.
+        //
+        // Compared against the SHARED set rather than a literal list. This test
+        // used to hardcode ['delivered','disputed','funded'], which is what it
+        // observed at the time; the admin path in _escrow_lifecycle.ts was
+        // meanwhile claiming from "funded" ALONE, so "the same states" was never
+        // actually true and this assertion could not tell. Asserting against
+        // ESCROW_RELEASABLE_FROM makes the two paths provably identical, and
+        // widening the set updates both at once instead of failing here.
         await confirm();
 
         const [args] = mockClaimFromAny.mock.calls[0] as [any];
-        expect([...args.fromAny].sort()).toEqual(['delivered', 'disputed', 'funded']);
+        expect([...args.fromAny].sort()).toEqual([...ESCROW_RELEASABLE_FROM].sort());
+    });
+
+    it('and in_transit is one of them', async () => {
+        // Pinned explicitly because it is the value the old literal omitted. An
+        // escrow that shipped but whose receipt was never confirmed still has to
+        // be releasable.
+        await confirm();
+
+        const [args] = mockClaimFromAny.mock.calls[0] as [any];
+        expect(args.fromAny).toContain('in_transit');
     });
 
     it('does NOT pay the seller when the escrow was already released', async () => {

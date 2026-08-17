@@ -29,6 +29,7 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { ESCROW_RELEASABLE_FROM, ESCROW_REFUNDABLE_FROM } from '@/lib/escrow-status';
 
 const mockClaim = jest.fn() as jest.Mock<any>;
 const mockClaimFromAny = jest.fn() as jest.Mock<any>;
@@ -188,8 +189,40 @@ describe('updateDisputeStatusAction', () => {
         await updateDisputeStatusAction('dsp-1', 'release_seller' as any, 'ok');
 
         const call = mockClaimFromAny.mock.calls[0][0] as any;
-        expect(call.fromAny).toEqual(['funded', 'disputed', 'pending']);
+        expect(call.fromAny).toEqual([...ESCROW_RELEASABLE_FROM]);
         expect(call.to).toBe('released');
+    });
+
+    it('and NEVER from an unfunded escrow', async () => {
+        // The set used to be ['funded', 'disputed', 'pending'], and this test
+        // pinned it verbatim. "pending" means no payment ever reached the
+        // platform, while both branches below credit a wallet with the escrow's
+        // `amount` — which is written at creation regardless. So a dispute on a
+        // never-funded escrow paid out real money, and this assertion locked
+        // that in rather than catching it.
+        expect(ESCROW_RELEASABLE_FROM).not.toContain('pending');
+        expect(ESCROW_REFUNDABLE_FROM).not.toContain('pending');
+    });
+
+    it('and can resolve a dispute on a delivered order', async () => {
+        // The old set omitted "delivered" and "in_transit". Confirming receipt is
+        // what writes "delivered", so the admin could not resolve a dispute on
+        // precisely the orders disputes are usually about.
+        expect(ESCROW_RELEASABLE_FROM).toContain('delivered');
+        expect(ESCROW_REFUNDABLE_FROM).toContain('delivered');
+    });
+
+    it('a refund uses the refundable set, not the releasable one', async () => {
+        // Two different questions. They happen to have the same members today;
+        // asserting the refund path reads the refund set is what keeps them from
+        // silently sharing a definition if one changes.
+        mockClaimFromAny.mockClear();
+        const { updateDisputeStatusAction } = await import('@/app/actions/disputes');
+        await updateDisputeStatusAction('dsp-1', 'refund_buyer' as any, 'ok');
+
+        const call = mockClaimFromAny.mock.calls[0][0] as any;
+        expect(call.fromAny).toEqual([...ESCROW_REFUNDABLE_FROM]);
+        expect(call.to).toBe('refunded');
     });
 
     it('keys the credit on the dispute so a retry cannot pay twice', async () => {

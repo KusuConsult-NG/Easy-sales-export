@@ -15,6 +15,7 @@ import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { getLogisticsProvider } from "@/lib/logistics";
 import { runQueryWithRetry } from "@/lib/firestore-utils";
+import { ESCROW_RELEASABLE_FROM } from "@/lib/escrow-status";
 
 /**
  * Get all orders for a seller
@@ -356,7 +357,7 @@ async function _confirmDeliveryAction(orderId: string) { let sessionResult;
                 const escrowClaim = await claimStatusTransitionFromAny({
                     collection: COLLECTIONS.ESCROW_TRANSACTIONS,
                     id: escrowId,
-                    fromAny: ["delivered", "disputed", "funded"],
+                    fromAny: [...ESCROW_RELEASABLE_FROM],
                     to: "released",
                     patch: { releasedBy: userId, releasedAt: new Date().toISOString() },
                 });
