@@ -55,6 +55,28 @@ function localStackEnv(): Record<string, string> {
  *   full      → All specs in both e2e/ and tests/e2e/ — requires running server + seed data
  */
 
+/**
+ * The same variables, also given to the TEST PROCESS — not just the server.
+ *
+ * webServer.env below configures the server Playwright starts. It does nothing
+ * for this process, and specs read process.env directly to decide what they can
+ * assert. tests/e2e/public-routes.spec.ts computes
+ *
+ *     const DB_CONFIGURED = ... process.env.NEXT_PUBLIC_SUPABASE_URL ...
+ *
+ * and calls test.skip() when it is absent. So "Marketplace public catalog loads
+ * without auth" skipped itself in both the smoke and chromium projects — the two
+ * skips in an otherwise green run — even though the database was up and the
+ * server could see it. A spec that silently opts out is worse than one that
+ * fails: the run reports success having not checked the thing.
+ *
+ * Assigned only where the process does not already have a value, so a CI
+ * runner's real environment still wins.
+ */
+for (const [key, value] of Object.entries(localStackEnv())) {
+    if (process.env[key] === undefined) process.env[key] = value;
+}
+
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
 
 /**
