@@ -399,6 +399,63 @@ async function _updatePropertyAction(propertyId: string, updates: Partial<Proper
             if (updates.lga) updateData.lga = newLGA;
         }
 
+        /**
+         * The COMMERCIAL terms are frozen once money is committed.
+         *
+         * THE DEFECT
+         * ----------
+         * `price` was writable at any time, by the owner, with no reference to the
+         * listing's status — and verifyPropertyPaymentAction compares what the
+         * buyer paid against the LIVE listing price:
+         *
+         *     if (amountInNaira + 1 < listedPrice) throw new Error("Payment ... does not cover ...")
+         *
+         * So this sequence took a buyer's money and refused them:
+         *
+         *   1. owner lists at ₦5,000,000; an admin verifies it
+         *   2. buyer initialises — charged the listed ₦5,000,000, and the listing
+         *      moves to pending_escrow
+         *   3. buyer pays on Paystack
+         *   4. owner updates price to ₦50,000,000
+         *   5. the buyer returns, verification reads the NEW price, and throws
+         *
+         * The payment is claimed by then, so the buyer has paid and received
+         * nothing. It works as deliberate griefing, but it does not need malice:
+         * an owner legitimately repricing between a buyer's initialisation and
+         * their return from Paystack breaks that purchase the same way.
+         *
+         * Descriptive fields — name, description, location, features — stay
+         * editable, because correcting a typo mid-sale harms nobody. It is the
+         * terms the buyer was quoted on that must not move under them.
+         */
+        const TERMS_LOCKED_IN = [
+            "pending_escrow",
+            "pending_payment",
+            "payment_confirmed",
+            "pending_transfer",
+            "sold",
+            "completed",
+        ];
+
+        const changesTerms =
+            updates.price !== undefined ||
+            updates.size !== undefined ||
+            updates.type !== undefined ||
+            updates.category !== undefined ||
+            updates.leaseDuration !== undefined;
+
+        if (changesTerms && TERMS_LOCKED_IN.includes(String(property?.status))) {
+            return {
+                success: false as const,
+                error:
+                    `This property has a purchase in progress (${property?.status}), so its price, ` +
+                    `size, type and lease terms cannot be changed. Descriptive details can still be ` +
+                    `edited, or resolve the purchase first.`,
+                data: null,
+                meta: null,
+            };
+        }
+
         if (updates.price !== undefined) updateData.price = updates.price;
         if (updates.size !== undefined) updateData.size = updates.size;
         if (updates.type) updateData.type = updates.type;

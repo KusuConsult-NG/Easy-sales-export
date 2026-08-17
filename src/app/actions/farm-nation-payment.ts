@@ -276,13 +276,45 @@ async function _verifyPropertyPaymentAction(reference: string): Promise<ActionRe
             //
             // ₦1 of tolerance, matching confirmWalletFundingAction and the
             // cooperative contribution path.
-            const listedPrice = Number(freshData.price || 0);
-            if (Number.isFinite(listedPrice) && listedPrice > 0 && amountInNaira + 1 < listedPrice) {
+            //
+            // COMPARED AGAINST THE PRICE THE BUYER WAS QUOTED, NOT THE LIVE ONE.
+            //
+            // This read `freshData.price`, the listing's CURRENT price, which the
+            // owner can change. So an owner who repriced between a buyer's
+            // initialisation and their return from Paystack made the buyer's
+            // payment look like an underpayment, and this threw — after the claim,
+            // so the buyer had paid and received nothing.
+            //
+            // The purchase record written at initialisation holds `propertyPrice`,
+            // which IS the figure Paystack was asked to collect. That is the
+            // contract, so that is what the payment is checked against.
+            // updatePropertyAction now also refuses to move these terms while a
+            // purchase is in flight; this is the half that does not depend on
+            // winning a race with the status write.
+            //
+            // Falls back to the listing price when no purchase record exists —
+            // a reference arriving from outside the normal flow, which is the case
+            // the original check was added for.
+            const quotedSnap = await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS)
+                .where("paymentReference", "==", reference)
+                .limit(1)
+                .get();
+
+            const quotedPrice = quotedSnap.empty
+                ? Number(freshData.price || 0)
+                : Number(quotedSnap.docs[0].data()?.propertyPrice ?? freshData.price ?? 0);
+
+            if (Number.isFinite(quotedPrice) && quotedPrice > 0 && amountInNaira + 1 < quotedPrice) {
                 logger.error("[FarmNationPayment] Underpayment for property", {
-                    propertyId, paid: amountInNaira, listed: listedPrice, reference,
+                    propertyId,
+                    paid: amountInNaira,
+                    quoted: quotedPrice,
+                    listedNow: Number(freshData.price || 0),
+                    quoteSource: quotedSnap.empty ? "listing (no purchase record)" : "purchase record",
+                    reference,
                 });
                 throw new Error(
-                    `Payment of ₦${amountInNaira.toLocaleString()} does not cover the property price of ₦${listedPrice.toLocaleString()}.`
+                    `Payment of ₦${amountInNaira.toLocaleString()} does not cover the property price of ₦${quotedPrice.toLocaleString()}.`
                 );
             }
 
