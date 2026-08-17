@@ -13,6 +13,38 @@ import { ProductSchema } from "@/lib/validations/marketplace";
 import { notifyOrderCancelled } from "@/lib/marketplace-notifications";
 
 import { runQueryWithRetry } from "@/lib/firestore-utils";
+import { hydrateSellerTrust } from "@/lib/seller-trust";
+
+/**
+ * Reads a seller's user document, for hydrateSellerTrust.
+ *
+ * THIS FILE WAS MISSED THE FIRST TIME
+ * -----------------------------------
+ * The seller-badge fix covered _mp_catalog.ts, village-market.ts and the public
+ * products API — and not this file, which is where getProductsAction lives. That
+ * is the action /marketplace/buyer/products calls, and that page is the one
+ * rendering the verified shield. So the three readers that were fixed are not
+ * the reader that feeds the page the defect was reported against, and the badge
+ * there was still the create-time snapshot for every non-flash product.
+ *
+ * Fixing readers by hand from a list is what allowed that. The test now
+ * enumerates every action in this directory that returns products and requires
+ * each one to hydrate, rather than naming three.
+ */
+async function readSeller(sellerId: string): Promise<Record<string, any> | null> {
+    const snap = await db.collection(COLLECTIONS.USERS).doc(sellerId).get();
+    return snap.exists ? (snap.data() ?? null) : null;
+}
+
+/**
+ * The most a single unpaginated product query may return.
+ *
+ * _getProductsAction's primary query had NO limit — only its index-error
+ * fallback did, at 300. So the healthy path was unbounded and the degraded path
+ * was capped, which is backwards: every active product was loaded and then
+ * filtered in memory for price, search term and LGA.
+ */
+const PRODUCT_QUERY_CAP = 300;
 
 // ============================================================================
 // PRODUCT BROWSING
@@ -77,7 +109,7 @@ async function _getProductsAction(filters?: ProductFilters): Promise<ActionRespo
         let snapshot;
         let indexError = false;
         try {
-            snapshot = await runQueryWithRetry(() => query.get());
+            snapshot = await runQueryWithRetry(() => query.limit(PRODUCT_QUERY_CAP).get());
         } catch (e: any) {
             const errMsg = e.message ? e.message.toLowerCase() : "";
             if (errMsg.includes("index") || errMsg.includes("failed_precondition") || String(e.code) === "9" || String(e.code) === "failed_precondition" || errMsg.includes("precondition")) {
@@ -94,7 +126,7 @@ async function _getProductsAction(filters?: ProductFilters): Promise<ActionRespo
                         fallbackQuery = fallbackQuery.where("category", "==", mapped[0]);
                     }
                 }
-                snapshot = await runQueryWithRetry(() => fallbackQuery.limit(300).get());
+                snapshot = await runQueryWithRetry(() => fallbackQuery.limit(PRODUCT_QUERY_CAP).get());
             } else {
                 throw e;
             }
@@ -139,11 +171,16 @@ async function _getProductsAction(filters?: ProductFilters): Promise<ActionRespo
             );
         }
 
-        if (filters?.lga) { 
+        if (filters?.lga) {
             products = products.filter(product => product.location.lga === filters.lga);
         }
 
-        return { error: null, success: true as const, data: { products } };
+        // Seller name and badge, live — see readSeller above for why this file
+        // in particular needed it. Applied after every filter, so the reads are
+        // only spent on rows actually being returned.
+        const withTrust = await hydrateSellerTrust(products as any[], readSeller);
+
+        return { error: null, success: true as const, data: { products: withTrust as Product[] } };
     } catch (error) { 
         logger.error("Get products error:", { filters, error: error instanceof Error ? error.message : String(error) });
         return { success: false as const, error: "Failed to fetch products", data: null };
@@ -191,8 +228,10 @@ async function _getFeaturedProductsAction(): Promise<ActionResponse<{ products: 
             products = products.slice(0, 8);
         }
         
-        return { error: null, success: true as const, data: { products: serializeValue(products) } };
-    } catch (error) { 
+        const withTrust = await hydrateSellerTrust(products as any[], readSeller);
+
+        return { error: null, success: true as const, data: { products: serializeValue(withTrust) } };
+    } catch (error) {
         logger.error("Get featured products error:", error);
         return { success: false as const, error: "Failed to fetch featured products", data: null };
     }
@@ -207,9 +246,15 @@ async function _getProductsByCategoryAction(category: string): Promise<ActionRes
         const snapshot = await db.collection(COLLECTIONS.PRODUCTS)
             .where("status", "==", "active")
             .where("category", "==", category)
+            .limit(PRODUCT_QUERY_CAP)
             .get();
 
-        return { error: null, success: true as const, data: { products: serializeDocs<Product>(snapshot.docs) } };
+        const withTrust = await hydrateSellerTrust(
+            serializeDocs<Product>(snapshot.docs) as any[],
+            readSeller,
+        );
+
+        return { error: null, success: true as const, data: { products: withTrust as Product[] } };
     } catch (error) { 
         logger.error("Get products by category error:", { category, error: error instanceof Error ? error.message : String(error) });
         return { success: false as const, error: "Failed to fetch products by category", data: null };

@@ -245,10 +245,23 @@ async function _getProductByIdAction(productId: string): Promise<ActionResponse<
                 product = serializeValue(mappedData) as Product;
             }
         } else {
+            // The badge, live, on the ordinary product branch too.
+            //
+            // The first pass at this fixed the FLASH branch above and left this
+            // one serving the product document's own `sellerVerified` — the
+            // create-time snapshot. So the product detail page still showed a
+            // revoked seller as verified. Fixing readers from a hand-written
+            // list is what allowed that; the test now enumerates them.
+            const raw: Record<string, any> = { id: doc.id, ...(data ?? {}) };
+            const trust = resolveSellerTrust(
+                raw.sellerId ? await readSeller(String(raw.sellerId)) : null,
+            );
+            const hydrated = { ...raw, sellerName: raw.sellerName || trust.sellerName, sellerVerified: trust.sellerVerified };
+
             try {
-                product = serializeValue(ProductSchema.parse({ id: doc.id, ...data })) as Product;
+                product = serializeValue(ProductSchema.parse(hydrated)) as Product;
             } catch (e) {
-                product = serializeValue({ id: doc.id, ...data }) as Product;
+                product = serializeValue(hydrated) as Product;
             }
         }
 
@@ -317,8 +330,10 @@ async function _getRecommendedProductsAction(limitCount: number = 3): Promise<Ac
             });
         }
 
-        return { error: null, success: true as const, data: { products } };
-    } catch (error) { 
+        const withTrust = await hydrateSellerTrust(products as any[], readSeller);
+
+        return { error: null, success: true as const, data: { products: withTrust } };
+    } catch (error) {
         logger.error("Get recommended products error:", {
             error: error instanceof Error ? error.message : String(error)
         });
@@ -354,9 +369,11 @@ async function _getRelatedProductsAction(productId: string, limit: number = 4): 
         const products = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }))
             .filter((p: any) => p.id !== productId);
 
-        return { error: null, success: true as const, data: { 
-                products: serializeValue(products.slice(0, limit)) 
- } 
+        const withTrust = await hydrateSellerTrust(products.slice(0, limit) as any[], readSeller);
+
+        return { error: null, success: true as const, data: {
+                products: serializeValue(withTrust)
+ }
         };
     } catch (error: any) { 
         logger.error("Get related products error:", error);

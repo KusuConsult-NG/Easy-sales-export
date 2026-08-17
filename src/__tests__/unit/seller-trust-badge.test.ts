@@ -216,13 +216,135 @@ describe('hydrating a list', () => {
     });
 });
 
+/**
+ * EVERY product reader, found rather than listed.
+ *
+ * WHY THIS IS A SCAN AND NOT A LIST
+ * ---------------------------------
+ * The first version of this suite named three files — _mp_catalog.ts,
+ * village-market.ts and the products API — and asserted each hydrated. All three
+ * did. It still missed:
+ *
+ *   _buyer.ts::getProductsAction        the action /marketplace/buyer/products
+ *                                       actually calls. That page renders the
+ *                                       verified shield, so the reader feeding
+ *                                       the page the defect was reported against
+ *                                       was the one reader not fixed.
+ *   _buyer.ts::getFeaturedProductsAction
+ *   _buyer.ts::getProductsByCategoryAction
+ *   _mp_catalog.ts::getProductByIdAction — the NON-flash branch. The flash branch
+ *                                       was fixed; the ordinary one, which is the
+ *                                       product detail page, was not.
+ *   _mp_catalog.ts::getRecommendedProductsAction
+ *   _mp_catalog.ts::getRelatedProductsAction
+ *
+ * Six readers, in the two files that had already been "fixed". A hand-written
+ * list of call sites is exactly as reliable as the person writing it, which is
+ * the lesson every scanner in this repository exists for.
+ *
+ * So: find every function that queries the products collection for display, and
+ * require each to resolve the badge. A new reader fails until it does.
+ */
+describe('every product reader resolves the badge', () => {
+    const READER_FILES = [
+        'src/app/actions/marketplace/_buyer.ts',
+        'src/app/actions/marketplace/_mp_catalog.ts',
+        'src/app/actions/village-market.ts',
+        'src/app/api/marketplace/products/route.ts',
+    ];
+
+    /**
+     * Function bodies in a file that query PRODUCTS or FLASH_SALE_PRODUCTS for
+     * display, keyed by name.
+     *
+     * A `.count()` aggregation is not a display read — it returns a number, and
+     * there is nothing to attach a badge to.
+     */
+    function readersIn(rel: string): Array<{ name: string; body: string }> {
+        const src = code(rel);
+        const out: Array<{ name: string; body: string }> = [];
+
+        const fnPattern = /(?:async function|export async function)\s+(\w+)/g;
+        const starts: Array<{ name: string; at: number }> = [];
+        for (const m of src.matchAll(fnPattern)) {
+            starts.push({ name: m[1], at: m.index ?? 0 });
+        }
+
+        starts.forEach((s, i) => {
+            const body = src.slice(s.at, i + 1 < starts.length ? starts[i + 1].at : src.length);
+            const queriesProducts =
+                /COLLECTIONS\.(PRODUCTS|FLASH_SALE_PRODUCTS)/.test(body) &&
+                !/\.count\(\)/.test(body);
+            // Writers and stock adjusters are not display reads.
+            const isWrite = /\.(set|add)\(|\.update\(\s*\{/.test(body);
+
+            // Must return something Product-SHAPED.
+            //
+            // `\bProduct\b` does not match "FlashSaleProduct" — there is no word
+            // boundary before "Product" in it — and that distinction is the
+            // point. getVillageMarketEventAction returns raw FlashSaleProduct
+            // rows, which carry no sellerName or sellerVerified for anything to
+            // resolve, and its page renders no seller at all. Requiring it to
+            // hydrate would be N reads for a field nobody displays.
+            //
+            // If such a row is ever mapped into Product shape, that happens in
+            // the CALLER — which is where `sellerVerified: true` was hardcoded,
+            // and those mappers now read the value through instead.
+            // A fixed prefix, not "up to the first brace": these signatures are
+            // `Promise<ActionResponse<{ products: Product[] }>>`, so the first
+            // `{` lands INSIDE the return type and cutting there hid the word
+            // `Product` from the test — which reported one reader instead of
+            // seven and would have passed the real assertion vacuously.
+            const signature = body.slice(0, 400);
+            const returnsProducts = /\bProduct\b/.test(signature);
+
+            if (queriesProducts && !isWrite && returnsProducts) out.push({ name: s.name, body });
+        });
+
+        return out;
+    }
+
+    it('finds readers to check (sanity)', () => {
+        const total = READER_FILES.flatMap(readersIn).length;
+        // If the parser stops finding functions, every assertion below passes
+        // vacuously — which is exactly how the hand-written list failed.
+        expect(total).toBeGreaterThanOrEqual(6);
+    });
+
+    it('and every one of them resolves the seller badge', () => {
+        const offenders: string[] = [];
+
+        for (const rel of READER_FILES) {
+            for (const { name, body } of readersIn(rel)) {
+                const resolves =
+                    body.includes('hydrateSellerTrust(') || body.includes('resolveSellerTrust(');
+                if (!resolves) offenders.push(`${rel} :: ${name}`);
+            }
+        }
+
+        if (offenders.length > 0) {
+            throw new Error(
+                `\n\n⚠️  ${offenders.length} product reader(s) serve the product document's own\n` +
+                `sellerVerified, which is a snapshot taken when the product was created:\n\n` +
+                offenders.map((o) => `  ${o}`).join('\n') +
+                `\n\nGranting the badge does not reach these, and revoking it does not\n` +
+                `remove it. Call hydrateSellerTrust (lists) or resolveSellerTrust (one\n` +
+                `product) before returning. See lib/seller-trust.ts.\n`
+            );
+        }
+
+        expect(offenders).toEqual([]);
+    });
+});
+
 describe('every read path uses it', () => {
     const CATALOG = 'src/app/actions/marketplace/_mp_catalog.ts';
     const VILLAGE = 'src/app/actions/village-market.ts';
     const API = 'src/app/api/marketplace/products/route.ts';
+    const BUYER = 'src/app/actions/marketplace/_buyer.ts';
     const BUYER_PAGE = 'src/app/marketplace/buyer/products/page.tsx';
 
-    it.each([CATALOG, VILLAGE, API])('%s hydrates the badge', (rel: string) => {
+    it.each([CATALOG, VILLAGE, API, BUYER])('%s hydrates the badge', (rel: string) => {
         expect(code(rel)).toContain('hydrateSellerTrust(');
     });
 
