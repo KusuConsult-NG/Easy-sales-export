@@ -8,6 +8,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
 import { isAdmin } from "@/lib/admin-permissions";
+import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 
 /**
  * API Route: Reject Land Listing (Admin)
@@ -50,18 +51,65 @@ export async function POST(request: NextRequest) {
 
         const previous = listingDoc.data() ?? {};
 
-        await listingRef.update({
-            status: "rejected",
-            verificationStatus: {
-                // See approve-land: the prior decision is kept, not overwritten.
-                ...(previous.verificationStatus ?? {}),
-                verified: false,
-                rejectionReason: reason,
-                verifiedBy: session.user.id,
-                verifiedAt: FieldValue.serverTimestamp()
+        /**
+         * Which statuses a rejection may legitimately start from.
+         *
+         * Same defect as approve-land, same shape: this checked only that the
+         * listing exists, then wrote `status: "rejected"` unconditionally.
+         *
+         * The damaging case here is the mirror of approval's. Rejecting a listing
+         * that is `pending_escrow` — a purchase in flight, the buyer's money held
+         * — took the parcel off the market while the escrow stayed open, leaving
+         * a buyer who has paid for land that is now marked rejected, with nothing
+         * in the flow to release or refund them.
+         *
+         * `verified` is included on purpose: revoking a verification is a real
+         * admin action. `pending_escrow`, `pending_transfer`, `sold` and
+         * `deleted` are not — a listing with money against it has to be resolved
+         * through the escrow flow first.
+         */
+        const REJECTABLE_FROM = [
+            "pending",
+            "pending_verification",
+            "inspection_scheduled",
+            "verified",
+        ];
+
+        const transition = await claimStatusTransitionFromAny({
+            collection: COLLECTIONS.LAND_LISTINGS,
+            id: verificationId,
+            fromAny: REJECTABLE_FROM,
+            to: "rejected",
+            patch: {
+                verificationStatus: {
+                    // See approve-land: the prior decision is kept, not overwritten.
+                    ...(previous.verificationStatus ?? {}),
+                    verified: false,
+                    rejectionReason: reason,
+                    verifiedBy: session.user.id,
+                    verifiedAt: FieldValue.serverTimestamp()
+                },
+                updatedAt: FieldValue.serverTimestamp(),
             },
-            updatedAt: FieldValue.serverTimestamp(),
+            recordPreviousAs: "statusBeforeRejection",
         });
+
+        if (!transition.claimed) {
+            logger.warn(
+                `[reject-land] Refused: listing ${verificationId} is '${transition.status}', ` +
+                `which is not a rejectable state (${REJECTABLE_FROM.join(", ")}).`
+            );
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: transition.status === null
+                        ? "Listing not found"
+                        : `This listing is '${transition.status}' and cannot be rejected from that state. ` +
+                          `A listing with a purchase in progress must be resolved first.`,
+                },
+                { status: transition.status === null ? 404 : 409 }
+            );
+        }
 
         await createAdminAuditLog({
             action: "land_rejected",
