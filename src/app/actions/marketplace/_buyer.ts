@@ -8,6 +8,7 @@ import { withSafeAction } from "@/lib/safe-action";
 import { FieldValue } from "@/lib/firestore-compat";
 import { claimStatusTransition, claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { isActiveEscrowStatus } from "@/lib/escrow-status";
+import { ORDER_CONFIRMABLE_FROM } from "@/lib/order-status";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import type { ActionResponse } from "@/lib/safe-action";
 import { ProductSchema } from "@/lib/validations/marketplace";
@@ -299,11 +300,13 @@ async function _confirmOrderReceiptAction(orderId: string): Promise<ActionRespon
         // the top of lib/types/marketplace-escrow.ts). Two clicks both passed the
         // check and both wrote, incrementing _version twice and confirming
         // receipt twice.
-        const allowedStatuses = ["in_transit", "processing", "shipped"];
+        // The shared set. This was `["in_transit", "processing", "shipped"]`, and
+        // "in_transit" is an ESCROW status — no order ever holds it, so the list
+        // read as though a fourth state were supported when it was a dead entry.
         const orderClaim = await claimStatusTransitionFromAny({
             collection: COLLECTIONS.MARKETPLACE_ORDERS,
             id: orderId,
-            fromAny: allowedStatuses,
+            fromAny: [...ORDER_CONFIRMABLE_FROM],
             to: "delivered",
             patch: {
                 buyerConfirmed: true,
