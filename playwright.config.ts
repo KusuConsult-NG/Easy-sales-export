@@ -123,23 +123,55 @@ export default defineConfig({
     ],
 
     webServer: {
-        command: 'npm run dev',
+        /**
+         * A PRODUCTION BUILD, not `next dev`.
+         *
+         * WHY, measured rather than assumed:
+         *
+         *   `next dev` took 256 SECONDS to answer its first request on this
+         *   machine, because Turbopack compiles each route on demand and the
+         *   root page is the first one asked for. Then it does that again for
+         *   every one of the ~205 pages the smoke suites visit, which is why
+         *   full runs took 27–32 minutes.
+         *
+         *   A build compiles everything once. The server then answers
+         *   immediately and every page is already built.
+         *
+         * This was not possible until sign-ins came down. consumeLoginAttempt
+         * enforces 5 attempts per 15 minutes PER EMAIL once NODE_ENV is
+         * production, and the suite used to sign in ~205 times, so a production
+         * build would have rate-limited itself and the failures would have read
+         * as broken authentication. global-setup now signs in nine times, once
+         * per persona — comfortably inside the limit, and each a different
+         * address.
+         *
+         * It also means the suite exercises what users actually get: the
+         * production bundle, with production's rate limiting and no dev overlay.
+         *
+         * Override with PLAYWRIGHT_BASE_URL to point at a server you started
+         * yourself; reuseExistingServer means an already-running one is adopted.
+         */
+        command: 'npm run build && npm run start',
         url: BASE_URL,
         reuseExistingServer: !process.env.CI,
-        // A cold Turbopack start plus the first route compile was measured at
-        // ~60s here, so 120s left almost no margin and a slow start failed the
-        // whole run before a single test.
-        timeout: 300_000,
-        // Playwright OWNS the server for the run.
-        //
-        // Starting it separately (nohup npm run dev &) and letting the suite
-        // reuse it does not survive: the process was reaped twice mid-run, and
-        // every test after that failed with ECONNREFUSED or "socket hang up" —
-        // 143 failures on one run, none of them a real defect. Memory was not
-        // short and there was no crash in its log; it simply went away.
-        //
-        // Under Playwright the server's lifetime is the run's lifetime.
-        stdout: 'ignore',
+        /**
+         * Build plus start, with room to spare.
+         *
+         * 120s failed here, then 300s failed too — and a webServer timeout
+         * fails the ENTIRE run before a single test, which is an expensive way
+         * to find out the machine was busy. The build is the long pole at a few
+         * minutes; the server itself starts in seconds once it exists.
+         */
+        timeout: 900_000,
+        /**
+         * Both streams piped.
+         *
+         * stdout was 'ignore', which hid the one thing needed when this times
+         * out: whether the server was starting slowly or failing outright. The
+         * 300s timeout above produced a log with nothing in it but Sentry
+         * deprecation notices.
+         */
+        stdout: 'pipe',
         stderr: 'pipe',
     },
 });
