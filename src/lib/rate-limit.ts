@@ -1,8 +1,8 @@
 import { Ratelimit } from '@upstash/ratelimit';
-import { redis } from './redis';
+import { redis, isRedisConfigured } from './redis';
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimitConfig } from './security';
-import { checkFallbackLimit } from './rate-limiter-fallback';
+import { checkFallbackLimit, resetFallbackLimit } from './rate-limiter-fallback';
 import { auth } from '@/lib/auth';
 
 /**
@@ -38,6 +38,12 @@ export async function rateLimit(
         request.headers.get('x-forwarded-for')?.split(',')[0] ||
         'anonymous';
 
+    // See the note in consumeLoginAttempt: with no Upstash configured, the
+    // limiter below cannot work and threw once per request.
+    if (!isRedisConfigured) {
+        return apiFallbackDecision(key);
+    }
+
     try {
         const { success, limit, remaining, reset } = await rateLimiter.limit(key);
 
@@ -59,20 +65,28 @@ export async function rateLimit(
     } catch (error) {
         console.error("Rate limit error (falling back to in-memory):", error);
         // Fall back to a conservative in-memory rate limiter instead of failing fully open
-        const fallback = checkFallbackLimit(key, rateLimitConfig.maxRequests, rateLimitConfig.windowMs);
-        if (fallback.success) {
-            return {
-                success: true,
-                remaining: fallback.remaining,
-            };
-        } else {
-            const retryAfterSeconds = Math.ceil((fallback.reset - Date.now()) / 1000);
-            return {
-                success: false,
-                error: `Too many requests (Redis connection failed). Please try again in ${retryAfterSeconds} seconds.`,
-            };
-        }
+        return apiFallbackDecision(key);
     }
+}
+
+/** The in-memory API decision — see loginFallbackDecision for why it is shared. */
+function apiFallbackDecision(
+    key: string
+): { success: boolean; remaining?: number; error?: string } {
+    const fallback = checkFallbackLimit(key, rateLimitConfig.maxRequests, rateLimitConfig.windowMs);
+
+    if (fallback.success) {
+        return {
+            success: true,
+            remaining: fallback.remaining,
+        };
+    }
+
+    const retryAfterSeconds = Math.ceil((fallback.reset - Date.now()) / 1000);
+    return {
+        success: false,
+        error: `Too many requests (Redis connection failed). Please try again in ${retryAfterSeconds} seconds.`,
+    };
 }
 
 /**
@@ -178,7 +192,19 @@ export async function consumeLoginAttempt(
         return { allowed: true, remainingAttempts: 999 };
     }
 
-    const key = `login_${email.toLowerCase()}`;
+    // Same identifier resetLoginAttempts clears — see loginLimitIdentifier.
+    const key = loginLimitIdentifier(email);
+
+    // No Upstash configured — go straight to the in-memory limiter.
+    //
+    // Without this the code below builds a Redis sliding window against the
+    // four-method stub in lib/redis.ts, which has no `evalsha`, so it threw
+    // TypeError on every single login and landed in the catch anyway. Same
+    // decision, minus an exception and a log line per request, and a genuine
+    // Redis failure is now the only thing that reaches that console.error.
+    if (!isRedisConfigured) {
+        return loginFallbackDecision(key);
+    }
 
     try {
         const { success, remaining, reset } = await loginLimiter.limit(key);
@@ -199,22 +225,36 @@ export async function consumeLoginAttempt(
     } catch (error) {
         console.error("Login rate limit error (falling back to in-memory):", error);
         // Fall back to a conservative in-memory rate limiter instead of failing fully open
-        const maxAttempts = parseInt(process.env.MAX_LOGIN_ATTEMPTS || '5', 10);
-        const fallback = checkFallbackLimit(key, maxAttempts, LOGIN_WINDOW_MS);
-        if (fallback.success) {
-            return {
-                allowed: true,
-                remainingAttempts: fallback.remaining,
-            };
-        } else {
-            const now = Date.now();
-            const minutesRemaining = Math.ceil((fallback.reset - now) / 1000 / 60);
-            return {
-                allowed: false,
-                error: `Too many failed login attempts. If you cannot remember your credentials, please contact support at support@easysalesexport.com, or try again in ${minutesRemaining} minutes.`,
-            };
-        }
+        return loginFallbackDecision(key);
     }
+}
+
+/**
+ * The in-memory login decision, used both when Upstash is absent and when it
+ * errors.
+ *
+ * One copy on purpose: this used to exist only inside the catch block, and the
+ * short-circuit above would otherwise have been a second, drifting copy of the
+ * limit, the window and the message.
+ */
+function loginFallbackDecision(
+    key: string
+): { allowed: boolean; remainingAttempts?: number; error?: string } {
+    const maxAttempts = parseInt(process.env.MAX_LOGIN_ATTEMPTS || '5', 10);
+    const fallback = checkFallbackLimit(key, maxAttempts, LOGIN_WINDOW_MS);
+
+    if (fallback.success) {
+        return {
+            allowed: true,
+            remainingAttempts: fallback.remaining,
+        };
+    }
+
+    const minutesRemaining = Math.ceil((fallback.reset - Date.now()) / 1000 / 60);
+    return {
+        allowed: false,
+        error: `Too many failed login attempts. If you cannot remember your credentials, please contact support at support@easysalesexport.com, or try again in ${minutesRemaining} minutes.`,
+    };
 }
 
 /**
@@ -247,8 +287,21 @@ export async function consumeLoginAttempt(
  * `:${Math.floor(now / windowMs)}`; it consults the current bucket and the one
  * before it, and nothing else. Two deletes, no scan, and both are exact.
  */
+/**
+ * The identifier both limiter paths count against.
+ *
+ * One definition on purpose. This string was written out separately in
+ * consumeLoginAttempt (as the in-memory fallback's key) and in
+ * loginRateLimitKeys (as the Redis identifier). Two copies of the key a reset
+ * has to match is how a reset ends up clearing the wrong thing, which is the
+ * bug being fixed here.
+ */
+export function loginLimitIdentifier(email: string): string {
+    return `login_${email.toLowerCase()}`;
+}
+
 export function loginRateLimitKeys(email: string, now: number = Date.now()): string[] {
-    const identifier = `login_${email.toLowerCase()}`;
+    const identifier = loginLimitIdentifier(email);
     const currentWindow = Math.floor(now / LOGIN_WINDOW_MS);
 
     // The only two buckets a sliding window reads.
@@ -259,6 +312,20 @@ export function loginRateLimitKeys(email: string, now: number = Date.now()): str
 }
 
 export async function resetLoginAttempts(email: string): Promise<void> {
+    // The in-memory store first, and OUTSIDE the try below.
+    //
+    // consumeLoginAttempt counts into this store on every path where Redis is
+    // not answering, and until now nothing ever cleared it: the reset deleted
+    // Redis keys only. Because the attempt is consumed before the password is
+    // verified, that turned "five failed attempts" into "five logins" whenever
+    // Upstash was unconfigured, down, or merely slower than the client's
+    // 2-second timeout — and refused the fifth with a message blaming failures
+    // that had not happened.
+    //
+    // It runs first and unguarded so that a Redis error below cannot skip it;
+    // Map.delete cannot throw.
+    resetFallbackLimit(loginLimitIdentifier(email));
+
     try {
         await redis.del(...loginRateLimitKeys(email));
     } catch (error) {

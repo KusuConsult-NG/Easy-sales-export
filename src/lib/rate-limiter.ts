@@ -5,7 +5,7 @@
  * NOW SUPPORTS DISTRIBUTED RATE LIMITING via Upstash Redis
  */
 
-import { redis } from './redis';
+import { redis, isRedisConfigured } from './redis';
 import { Ratelimit } from '@upstash/ratelimit';
 import { checkFallbackLimit } from './rate-limiter-fallback';
 
@@ -29,6 +29,20 @@ export function rateLimit(config: RateLimitConfig) {
     return {
         check: async (identifier: string): Promise<{ success: boolean; limit: number; remaining: number; reset: number }> => {
             const now = Date.now();
+
+            // No Upstash configured: the sliding window below runs against the
+            // four-method stub in lib/redis.ts, which has no `evalsha`, and so
+            // threw once per request before reaching this same fallback.
+            if (!isRedisConfigured) {
+                const fallback = checkFallbackLimit(identifier, config.maxRequests, config.interval);
+                return {
+                    success: fallback.success,
+                    limit: config.maxRequests,
+                    remaining: fallback.remaining,
+                    reset: fallback.reset,
+                };
+            }
+
             try {
                 const { success, limit, remaining, reset } = await limiter.limit(identifier);
                 return {

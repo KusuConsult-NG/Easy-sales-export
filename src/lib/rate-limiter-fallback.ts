@@ -48,3 +48,45 @@ export function checkFallbackLimit(
         reset: record.resetTime,
     };
 }
+
+/**
+ * Clear a key's counter — the reset half of the login limiter, which this file
+ * did not have.
+ *
+ * WHY THIS EXISTS
+ * ---------------
+ * The login limiter counts an attempt BEFORE the password is checked
+ * (src/lib/auth.ts STEP 3 precedes STEP 4), so a SUCCESSFUL login consumes a
+ * token exactly like a failed one. What makes the limit mean "five failures"
+ * rather than "five logins" is resetLoginAttempts() clearing the counter on
+ * success.
+ *
+ * That reset only ever cleared REDIS keys. This store had no reset at all. So
+ * on every path that lands here — Upstash not configured, an outage, or just
+ * the client's own AbortSignal.timeout(2000) firing on a slow response — the
+ * count went up on success and never came down, and the fifth login inside
+ * fifteen minutes was refused with "Too many failed login attempts" when none
+ * of them had failed.
+ *
+ * It is worth being precise about how that presents in production, because it
+ * is nearly impossible to reproduce on purpose: it needs Redis to be
+ * unavailable, it counts per process instance so it hits some users and not
+ * others, it looks identical to broken authentication, and it clears itself
+ * after fifteen minutes.
+ *
+ * Found because a production-build e2e run locked its own test accounts out
+ * after five sign-ins. That is the same defect, not a test artefact.
+ */
+export function resetFallbackLimit(key: string): void {
+    fallbackStore.delete(key);
+}
+
+/**
+ * The count currently held for a key, or 0. Exists so a test can observe that a
+ * reset actually happened rather than inferring it from a later allow.
+ */
+export function peekFallbackCount(key: string): number {
+    const record = fallbackStore.get(key);
+    if (!record || Date.now() > record.resetTime) return 0;
+    return record.count;
+}

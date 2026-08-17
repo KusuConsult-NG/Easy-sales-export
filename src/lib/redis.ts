@@ -43,6 +43,40 @@ const redis = (redisUrl && redisToken && !isTestRun)
         // Add other methods as needed by rate-limit
     } as unknown as Redis;
 
+/**
+ * Whether `redis` above is a real Upstash client or the stub.
+ *
+ * WHY CALLERS NEED TO KNOW
+ * ------------------------
+ * The stub implements four methods — get, setex, del, keys — and is cast
+ * `as unknown as Redis`, so it type-checks as the full client while being
+ * nothing like it. @upstash/ratelimit drives its sliding window through
+ * `evalsha`/`scriptLoad`, neither of which is here, so every rate limiter on
+ * the platform threw
+ *
+ *     TypeError: a.redis.evalsha is not a function
+ *
+ * on EVERY request, caught it, logged "Redis error (falling back to
+ * in-memory)", and used the in-memory fallback. The outcome was right; the cost
+ * was a thrown exception and a log line per request, and real Redis failures
+ * were indistinguishable from "no Redis configured" in the logs.
+ *
+ * The stub deliberately does NOT gain the missing methods: a no-op evalsha
+ * would make rate limiting silently allow everything, which is worse than
+ * throwing. Callers check this flag and go straight to their in-memory fallback
+ * instead.
+ */
+export const isRedisConfigured = !!(redisUrl && redisToken && !isTestRun);
+
+if (!isRedisConfigured && !isTestRun) {
+    // Once, at module load — not once per request.
+    console.warn(
+        '[Redis] UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN are not set. ' +
+        'Caching is disabled and every rate limiter is using its per-instance ' +
+        'in-memory fallback, which does NOT share state between server instances.'
+    );
+}
+
 export { redis };
 
 // Cache TTL constants (in seconds)

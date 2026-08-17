@@ -66,6 +66,11 @@ jest.mock('@upstash/ratelimit', () => {
 
 jest.mock('@/lib/redis', () => ({
     redis: {},
+    // Upstash IS configured here. consumeLoginAttempt short-circuits straight to
+    // the in-memory limiter when it is not, and every assertion below is about
+    // the REDIS limiter being consulted — without this the mock would describe
+    // an unconfigured deployment and `limit` would never be called.
+    isRedisConfigured: true,
     CACHE_TTL: {},
 }));
 
