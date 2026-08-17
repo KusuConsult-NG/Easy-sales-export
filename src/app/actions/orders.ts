@@ -12,6 +12,7 @@ import type { Order, Product } from "@/lib/types/marketplace";
 import { getPlatformFees } from "@/lib/system-settings";
 import { withOptimisticLock } from "@/lib/data-integrity";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
+import { pickOrderEscrow } from "@/lib/escrow-status";
 
 /**
  * Server Actions for Order Management
@@ -246,9 +247,17 @@ async function _getOrderByIdAction(orderId: string) { let sessionResult;
         const { serializeDoc } = await import("@/lib/firestore-serialize");
         const order = serializeDoc(orderDoc.id, orderDoc.data()) as unknown as any;
 
-        if (!escrowQuery.empty) {
-            order.escrowTransactionId = escrowQuery.docs[0].id;
-            order.escrowReleased = escrowQuery.docs.every(doc => doc.data().status === "released");
+        // The ACTIVE escrow, not whichever row came back first.
+        //
+        // An order can carry more than one escrow — a refunded attempt beside a
+        // live one — and `docs[0]` meant the order page could link to the
+        // refunded one as though it were the escrow holding the money.
+        const orderEscrow = pickOrderEscrow(escrowQuery.docs);
+        if (orderEscrow) {
+            order.escrowTransactionId = orderEscrow.id;
+            // Released means THE escrow was released. `.every()` over all rows
+            // reported false whenever any earlier attempt had been refunded.
+            order.escrowReleased = orderEscrow.data()?.status === "released";
         } else {
             order.escrowTransactionId = null;
             order.escrowReleased = false;

@@ -195,6 +195,43 @@ export function participantSourcesFor(to: EscrowStatus): EscrowStatus[] {
         .filter((from) => ESCROW_PARTICIPANT_TRANSITIONS[from].includes(to));
 }
 
+/**
+ * Which of an order's escrow rows is THE escrow.
+ *
+ * An order can have more than one — a refunded attempt and a live one, or a
+ * duplicate created before the claim primitives went in. Three read paths took
+ * `escrowQuery.docs[0]`, which is whichever row the database returned first:
+ *
+ *   orders.ts / order-management.ts   set `order.escrowTransactionId` from it,
+ *                                     so the order page could link to a
+ *                                     REFUNDED escrow as though it were the
+ *                                     live one.
+ *   _escrow_messages.ts               returned it from
+ *                                     getEscrowTransactionByOrderIdAction, and
+ *                                     then ran the participant check against
+ *                                     that arbitrary row.
+ *
+ * The active one wins; if every row is settled, the most recent settled row is
+ * a more honest answer than the first one returned.
+ */
+export function pickOrderEscrow<T extends { data(): any }>(docs: readonly T[]): T | null {
+    if (!docs || docs.length === 0) return null;
+
+    const active = docs.find((d) => isActiveEscrowStatus(d.data()?.status));
+    if (active) return active;
+
+    const millis = (v: any): number => {
+        if (!v) return 0;
+        if (typeof v?.toMillis === "function") return v.toMillis();
+        if (typeof v?.seconds === "number") return v.seconds * 1000;
+        if (v instanceof Date) return v.getTime();
+        const parsed = Date.parse(String(v));
+        return Number.isFinite(parsed) ? parsed : 0;
+    };
+
+    return [...docs].sort((a, b) => millis(b.data()?.createdAt) - millis(a.data()?.createdAt))[0];
+}
+
 export function isSettledEscrowStatus(status: unknown): boolean {
     return ESCROW_SETTLED_STATUSES.includes(String(status ?? "") as EscrowStatus);
 }

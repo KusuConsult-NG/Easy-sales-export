@@ -8,6 +8,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import type { EscrowTransaction, Message } from "@/lib/types/marketplace-escrow";
+import { pickOrderEscrow } from "@/lib/escrow-status";
 
 /**
  * Send message in escrow chat.
@@ -164,14 +165,26 @@ export async function getEscrowTransactionByOrderIdAction(orderId: string): Prom
 
         const escrowQuery = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
             .where("orderId", "==", orderId)
-            .limit(1)
+            // Not `.limit(1)`. With one row fetched there is nothing for
+            // pickOrderEscrow to choose between, and the "pick the active one"
+            // fix below would be decorative — the single row would still be
+            // whichever the database returned first.
+            .limit(10)
             .get();
 
         if (escrowQuery.empty) {
             return { success: false as const, error: "Escrow transaction not found", data: null };
         }
 
-        const escrowDoc = escrowQuery.docs[0];
+        // The active escrow for this order.
+        //
+        // The query is `.limit(1)` with no ordering, so this returned an
+        // arbitrary row when an order had several — and the participant check
+        // below then ran against THAT row rather than the live one.
+        const escrowDoc = pickOrderEscrow(escrowQuery.docs);
+        if (!escrowDoc) {
+            return { success: false as const, error: "Escrow transaction not found", data: null };
+        }
         const data = escrowDoc.data() as EscrowTransaction;
         const userId = session.user.id;
         const isAdminUser = session.user.roles?.includes("admin") || session.user.roles?.includes("super_admin") || session.user.roles?.includes("marketplace_admin");

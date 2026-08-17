@@ -15,7 +15,7 @@ import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { getLogisticsProvider } from "@/lib/logistics";
 import { runQueryWithRetry } from "@/lib/firestore-utils";
-import { ESCROW_RELEASABLE_FROM } from "@/lib/escrow-status";
+import { ESCROW_RELEASABLE_FROM, pickOrderEscrow } from "@/lib/escrow-status";
 
 /**
  * Get all orders for a seller
@@ -500,7 +500,9 @@ async function _getOrderDetailsAction(orderId: string) { let sessionResult;
         }
 
         if (!escrowQuery.empty) {
-            order.escrowTransactionId = escrowQuery.docs[0].id;
+            // The active escrow, not whichever row came back first — see
+            // pickOrderEscrow in lib/escrow-status.ts.
+            order.escrowTransactionId = (pickOrderEscrow(escrowQuery.docs) ?? escrowQuery.docs[0]).id;
             order.escrowReleased = escrowQuery.docs.every(doc => doc.data().status === "released");
         } else {
             order.escrowTransactionId = null;
