@@ -2,10 +2,25 @@
  * The WAVE application collection: who may read one, who may resubmit one, and
  * which one is "the latest".
  *
- * There are over ten thousand applications in this collection, and that number is
- * what turns two of the defects below from untidiness into the thing an admin
- * sees as "it's broken again": a list ordered by a field nothing writes, and a
- * cap that does not say it capped.
+ * THE NUMBERS, SO THE REASONING BELOW CAN BE CHECKED
+ * --------------------------------------------------
+ * Measured in production:
+ *
+ *     480      applications in WAVE_APPLICATIONS
+ *     474      approved,  6 pending,  0 rejected
+ *  15,128      accounts holding the `wave_participant` role
+ *
+ * Both figures are real and they measure different things, which is the point.
+ * The admin "approved" tab counts the second and calls it the first — see the
+ * last block in this file — so an earlier version of this comment said there were
+ * "over ten thousand applications". There are 480. The 15,128 are members, and
+ * 14,654 of them have no application on record.
+ *
+ * The sort defect below is not scale-dependent either way: ordering 480 rows by a
+ * key that is NULL on all of them returns an arbitrary order just as surely as
+ * ordering fifteen thousand would, and the 1,000-row cap never truncated the
+ * applications list at all. What made it worth finding is that the ordering was
+ * never meaningful, not that rows were being dropped.
  */
 
 import { describe, it, expect } from '@jest/globals';
@@ -266,5 +281,79 @@ describe('a date range has both ends in the same timezone', () => {
 
         expect(dateRangeStart('2026-05-18').toISOString()).toBe('2026-05-18T00:00:00.000Z');
         expect(dateRangeEnd('2026-05-18').toISOString()).toBe('2026-05-18T23:59:59.999Z');
+    });
+});
+
+describe('the approved tab does not call a role holder an applicant', () => {
+    /**
+     * Measured in production: 480 applications, 474 of them approved, and 15,128
+     * accounts holding `wave_participant`. The approved tab reads USERS by role and
+     * synthesises an application-shaped row per user, so it reported 15,128
+     * "approved applications" — and an admin could not tell which of those rows
+     * belonged to somebody who had actually applied.
+     *
+     * The rows are deliberately still shown. `wave_participant` was auto-assigned
+     * by an earlier registration flow and is granted by the legacy import, so the
+     * 14,654 without an application may be real members; hiding them would hide the
+     * people whose status has to be decided. What changes is that each row says
+     * where it came from and the meta reports both counts.
+     */
+    it('marks each row with its provenance', () => {
+        const src = code(ADMIN_APPLICATIONS);
+
+        expect(src).toContain('source: hasApplication ? "application" : "role_only"');
+        expect(src).toContain('hasApplication,');
+    });
+
+    it('resolves provenance from the applications collection, not from the role', () => {
+        // The claim has to be checked against WAVE_APPLICATIONS, or `source` is
+        // just another unverified label.
+        const src = code(ADMIN_APPLICATIONS);
+
+        expect(src).toContain('const backedByApplication = new Set<string>()');
+        expect(src).toMatch(/COLLECTIONS\.WAVE_APPLICATIONS\)\s*\n\s*\.where\("userId", "in", chunk\)/);
+        expect(src).toContain('if (appData.status === "approved")');
+
+        // And the flag has to be READ from that set. The first version of this test
+        // checked only that the set was built, so replacing the derivation with
+        // `const hasApplication = true` — marking all 15,128 as applicants again,
+        // the exact defect — still passed.
+        expect(src).toContain('const hasApplication = backedByApplication.has(uid);');
+    });
+
+    it('resolves it for the page slice only', () => {
+        // Fifteen thousand lookups per page load would be a different defect.
+        const src = code(ADMIN_APPLICATIONS);
+
+        expect(src).toContain('const pageUserIds = slicedDocs.map((d: any) => d.id)');
+        expect(src).toMatch(/for \(let i = 0; i < pageUserIds\.length; i \+= 30\)/);
+    });
+
+    it('links a backed row to its real application id', () => {
+        // `legacy-${uid}` is an id no collection contains, so a row an admin clicks
+        // through led nowhere for the 474 who did apply.
+        const src = code(ADMIN_APPLICATIONS);
+
+        expect(src).toContain('id: applicationIdFor.get(uid) ?? `legacy-${uid}`');
+    });
+
+    it('reports both counts rather than one standing in for two', () => {
+        const src = code(ADMIN_APPLICATIONS);
+
+        expect(src).toContain('roleHolderCount: totalCount');
+        expect(src).toContain('approvedApplicationCount,');
+        expect(src).toContain('countsDifferentPopulations: true');
+    });
+
+    it('counts approved applications from the applications collection', () => {
+        const src = code(ADMIN_APPLICATIONS);
+        const block = src.slice(src.indexOf('let approvedApplicationCount = 0'));
+
+        expect(block.slice(0, 900)).toMatch(/COLLECTIONS\.WAVE_APPLICATIONS\)[\s\S]{0,120}\.where\("status", "==", "approved"\)/);
+    });
+
+    it('warns when the two populations differ', () => {
+        const src = source(ADMIN_APPLICATIONS);
+        expect(src).toContain('members have no application on record');
     });
 });

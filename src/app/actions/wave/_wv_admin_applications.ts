@@ -57,10 +57,10 @@ async function _getWaveApplicationsAction(): Promise<
          * WAVE_APPLICATIONS lives in the JSONB table, so the sort key resolves to
          * `raw_data->>'submittedAt'`, which is NULL for every row. Ordering by a
          * column that is uniformly NULL is not an error and does not warn: it
-         * returns rows in whatever order the plan produces. Combined with the cap
-         * below, on a collection of this size that made the admin list an
-         * ARBITRARY subset presented as "the most recent" — and which rows an
-         * admin saw could change between two identical requests.
+         * returns rows in whatever order the plan produces. So this list was
+         * presented as "the most recent" and was in no particular order at all —
+         * and which rows appeared first could differ between two identical
+         * requests.
          *
          * data-recovery.ts had the same sort on this collection, and then copied
          * `waveData.submittedAt` — undefined — into the user's registration as the
@@ -69,9 +69,14 @@ async function _getWaveApplicationsAction(): Promise<
          * THE CAP
          * -------
          * Kept, because the response hydrates a user record per applicant, but no
-         * longer silent. A cap that is not reported reads as a complete list, and
-         * "there are 1,000 applications" is a materially different statement from
-         * "here are 1,000 of them".
+         * longer silent.
+         *
+         * Stated accurately, because an earlier version of this comment did not:
+         * the collection holds 480 applications, so the 1,000-row cap has never
+         * truncated anything. The ordering was the live defect; the cap is a
+         * latent one, and it is reported now so that it stays visible if the
+         * collection grows past it. A cap that is not reported reads as a complete
+         * list.
          */
         const APPLICATION_SCAN_LIMIT = 1000;
 
@@ -523,6 +528,43 @@ async function _getStandardWaveApplicationsAction(options: {
         let hasMoreRaw = false;
         let nextCursor: string | undefined = undefined;
 
+        /**
+         * The "approved" tab counts a DIFFERENT POPULATION from every other tab.
+         *
+         * THE NUMBERS, MEASURED IN PRODUCTION
+         * -----------------------------------
+         *   480    applications in WAVE_APPLICATIONS
+         *   474    of them approved
+         *     6    pending, 0 rejected
+         *  15,128  users holding the `wave_participant` role
+         *
+         * Every other tab reads WAVE_APPLICATIONS. This branch reads USERS by role
+         * and synthesises an application-shaped row per user, `legacy-${uid}`, and
+         * caches the count under `admin:wave-members-count:approved`. So the tab
+         * labelled "approved" reported 15,128 approved applications when 474
+         * exist, and an admin looking at it could not tell which rows represented
+         * somebody who had actually applied.
+         *
+         * WHY THE ROWS ARE STILL SHOWN
+         * ----------------------------
+         * Because the 14,654 without an application may well be real members —
+         * `wave_participant` was auto-assigned by an earlier registration flow (see
+         * the comment at auth.ts:38) and is also granted by the legacy import — and
+         * removing them from the admin's view would hide the very people whose
+         * status has to be decided. Hiding data is not a fix for mislabelling it.
+         *
+         * WHAT CHANGES
+         * ------------
+         * Each row now says where it came from, and the meta reports both counts
+         * instead of one number standing in for two. That is what makes the
+         * question answerable from the screen: how many of these people applied.
+         *
+         * The access consequence is NOT addressed here, deliberately.
+         * module-access-check Layer 1 admits the whole WAVE member area — earnings
+         * included — on this role alone, so every one of the 15,128 can reach it.
+         * Whether that is correct depends on whether those roles were legitimately
+         * provisioned, which is the owner's call and not a code fix.
+         */
         if (options.status === "approved") {
             let q = db.collection(COLLECTIONS.USERS)
                 .where("roles", "array-contains", "wave_participant")
@@ -559,14 +601,44 @@ async function _getStandardWaveApplicationsAction(options: {
             const hasMoreRaw = userDocs.length > fetchLimit;
             const slicedDocs = hasMoreRaw ? userDocs.slice(0, fetchLimit) : userDocs;
 
+            /**
+             * Which of the users on THIS PAGE actually have an approved application.
+             *
+             * Resolved for the page slice only — fifty ids, chunked into `in`
+             * queries — rather than for all 15,128, so the tab stays as cheap as it
+             * was while no longer asserting something it had not checked.
+             */
+            const pageUserIds = slicedDocs.map((d: any) => d.id);
+            const backedByApplication = new Set<string>();
+            const applicationIdFor = new Map<string, string>();
+
+            for (let i = 0; i < pageUserIds.length; i += 30) {
+                const chunk = pageUserIds.slice(i, i + 30);
+                if (chunk.length === 0) continue;
+                const appSnap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                    .where("userId", "in", chunk)
+                    .get();
+                appSnap.docs.forEach((d: any) => {
+                    const appData = d.data() ?? {};
+                    if (appData.status === "approved") {
+                        backedByApplication.add(String(appData.userId));
+                        applicationIdFor.set(String(appData.userId), d.id);
+                    }
+                });
+            }
+
             const finalForms = slicedDocs.map((uDoc: any) => {
                 const uData = uDoc.data();
                 const uid = uDoc.id;
                 const canonical = extractCanonicalUser(uData);
+                const hasApplication = backedByApplication.has(uid);
 
                 const approvalDate = uData.createdAt ? new Date(uData.createdAt.seconds ? uData.createdAt.seconds * 1000 : uData.createdAt) : new Date();
                 const mockApp = {
-                    id: `legacy-${uid}`,
+                    // The real application id where there is one, so a row an admin
+                    // clicks through leads to the actual record rather than to a
+                    // synthesised `legacy-` id that no collection contains.
+                    id: applicationIdFor.get(uid) ?? `legacy-${uid}`,
                     userId: uid,
                     status: "approved",
                     createdAt: Timestamp.fromDate(approvalDate),
@@ -596,21 +668,53 @@ async function _getStandardWaveApplicationsAction(options: {
                         bankDetails: canonical.bankDetails
                     },
                     status: "approved",
+                    // Where this row came from. `role_only` means the account holds
+                    // wave_participant with no approved application behind it — the
+                    // 14,654-strong majority of this tab, previously indistinguishable
+                    // from the 474 who applied.
+                    source: hasApplication ? "application" : "role_only",
+                    hasApplication,
                     data: mockApp
                 };
             });
 
             const nextCursor = finalForms.length > 0 ? finalForms[finalForms.length - 1].user.id as string : undefined;
 
+            // Both counts, because one number was standing in for two different
+            // things. `totalCount` stays the role-holder total so pagination keeps
+            // working against the query that produced it; `approvedApplicationCount`
+            // is the number of people who actually applied and were approved.
+            let approvedApplicationCount = 0;
             if (totalCount === 0) {
-                const countSnap = await db.collection(COLLECTIONS.USERS)
-                    .where("roles", "array-contains", "wave_participant")
-                    .count()
-                    .get();
-                totalCount = countSnap.data().count;
+                const [roleCountSnap, appCountSnap] = await Promise.all([
+                    db.collection(COLLECTIONS.USERS)
+                        .where("roles", "array-contains", "wave_participant")
+                        .count()
+                        .get(),
+                    db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                        .where("status", "==", "approved")
+                        .count()
+                        .get(),
+                ]);
+                totalCount = roleCountSnap.data().count;
+                approvedApplicationCount = appCountSnap.data().count;
                 try {
                     await setCache(cacheKey, totalCount, 120);
+                    await setCache("admin:wave-approved-application-count", approvedApplicationCount, 120);
                 } catch (e) { }
+            } else {
+                try {
+                    approvedApplicationCount = (await getCached<number>("admin:wave-approved-application-count")) ?? 0;
+                } catch (e) { }
+            }
+
+            if (approvedApplicationCount && totalCount > approvedApplicationCount) {
+                logger.warn(
+                    `[WAVE Admin] ${totalCount} accounts hold wave_participant but only ` +
+                    `${approvedApplicationCount} approved applications exist — ` +
+                    `${totalCount - approvedApplicationCount} members have no application on record. ` +
+                    `Rows are marked source: "role_only".`
+                );
             }
 
             const { serializeValue } = await import("@/lib/firestore-serialize");
@@ -623,7 +727,12 @@ async function _getStandardWaveApplicationsAction(options: {
                 meta: {
                     totalFetched: finalForms.length,
                     totalCount,
-                    hasMore: hasMoreRaw
+                    hasMore: hasMoreRaw,
+                    // Named so a screen can say "15,128 members, 474 of them from an
+                    // application" rather than calling all of them applications.
+                    roleHolderCount: totalCount,
+                    approvedApplicationCount,
+                    countsDifferentPopulations: true,
                 }
             };
         }
