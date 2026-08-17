@@ -1902,13 +1902,28 @@ export class SupabaseQuery {
      * broadcast-logic.ts.
      */
     stream(): Readable {
-        const self = this;
+        // Arrow functions rather than `const self = this`.
+        //
+        // An async generator cannot be an arrow function, so it does not inherit
+        // `this` — which is why this started as a `self` alias. Arrows capture
+        // `this` lexically, so binding the two members the generator needs gives
+        // the same access without the alias, and keeps the query LAZY: it is
+        // still built on first iteration rather than when stream() is called.
+        //
+        // Not cosmetic. @typescript-eslint/no-this-alias is an error in this
+        // project's config, so the alias failed `npm run lint` in CI while
+        // passing tsc, jest and the browser suite locally.
+        const buildQuery = () => this._buildQuery();
+        const mapRow = (row: Record<string, unknown>, isDedicated: boolean) =>
+            this._mapRow(row, isDedicated);
+        const explicitLimit = this._limit;
+
         const limitVal = this._limit ?? UNBOUNDED_CEILING;
         const offsetVal = this._offset ?? 0;
         const collection = this._collection;
 
         async function* rows() {
-            const { query, isDedicated } = self._buildQuery();
+            const { query, isDedicated } = buildQuery();
             let fetchedSoFar = 0;
 
             while (fetchedSoFar < limitVal) {
@@ -1925,14 +1940,14 @@ export class SupabaseQuery {
                 // Yield per document rather than accumulating: holding all
                 // 41,000 users in memory would defeat the point of streaming.
                 for (const row of batchData) {
-                    yield self._mapRow(row, isDedicated);
+                    yield mapRow(row, isDedicated);
                 }
 
                 fetchedSoFar += batchData.length;
                 if (batchData.length < batchLimit) return;
             }
 
-            if (self._limit == null && fetchedSoFar >= UNBOUNDED_CEILING) {
+            if (explicitLimit == null && fetchedSoFar >= UNBOUNDED_CEILING) {
                 // Same reasoning as .all() in get(): a sweep that quietly
                 // covers part of a collection is worse than one that fails.
                 logger.error(
@@ -2079,7 +2094,7 @@ export const supabaseDb = {
             );
         }
         const q = new SupabaseQuery(name);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         (q as any)._isCollectionGroup = true;
         return q;
     },
