@@ -54,25 +54,51 @@ async function _checkWaveStatusAction(): Promise<ActionResponse<{ status: string
                     }
                 }
             } else if (session.user.email || userData?.email) {
+                /**
+                 * Claiming a legacy application by email — narrowed twice.
+                 *
+                 * WHAT THIS PATH IS FOR
+                 * ---------------------
+                 * Applications exist with no `userId` — the self-healing branches
+                 * above and in _getWaveApplicationAction are there because of them
+                 * — and this lets their owner claim one by signing in with the
+                 * matching address. That is legitimate and is kept.
+                 *
+                 * DEFECT 1: IT MATCHED A FIELD THE APPLICANT TYPES
+                 * When the `userEmail` query came back empty it fell back to
+                 * `email`, which is the OPTIONAL address on the application form —
+                 * spread onto the document from validatedData. Attacker-controlled.
+                 * So an applicant could type somebody else's address into that
+                 * field and, since the block below promotes an `approved`
+                 * application's status onto the caller, hand that person her
+                 * approved WAVE enrolment. `userEmail` comes from
+                 * `session.user.email` and is the address the account actually
+                 * authenticated as.
+                 *
+                 * DEFECT 2: IT ADOPTED APPLICATIONS THAT ALREADY HAD AN OWNER
+                 * The `!appData.userId` test guarded only the backfill WRITE. The
+                 * document was assigned to `appDoc` either way, so an application
+                 * belonging to a different user id was still read, and its status
+                 * still promoted onto the caller. Only an unclaimed application can
+                 * be claimed.
+                 */
                 const userEmail = (session.user.email || userData?.email || "").toLowerCase().trim();
                 if (userEmail) {
-                    let emailQuery = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                    const emailQuery = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
                         .where("userEmail", "==", userEmail)
-                        .limit(1)
+                        .limit(5)
                         .get();
-                    if (emailQuery.empty) {
-                        emailQuery = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
-                            .where("email", "==", userEmail)
-                            .limit(1)
-                            .get();
-                    }
-                    if (!emailQuery.empty) {
-                        appDoc = emailQuery.docs[0];
-                        // Self-healing: backfill userId on direct application doc if missing
-                        const appData = appDoc.data()!;
-                        if (!appData.userId) {
-                            await appDoc.ref.update({ userId: session.user.id });
-                        }
+
+                    const unclaimed = emailQuery.docs.find(d => !d.data()?.userId);
+
+                    if (unclaimed) {
+                        appDoc = unclaimed;
+                        await unclaimed.ref.update({ userId: session.user.id });
+                    } else if (!emailQuery.empty) {
+                        logger.warn(
+                            `[checkWaveStatus] ${emailQuery.docs.length} application(s) match ` +
+                            `${userEmail} but every one already belongs to another account; none claimed.`
+                        );
                     }
                 }
             }
@@ -245,15 +271,58 @@ async function _enrollInWaveAction(userId: string): Promise<ActionResponse<null>
         // or not.
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
-        const existingStatus = String(userData?.serviceRegistrations?.wave?.status || "");
 
-        const REVIEW_OWNS = ["pending", "rejected", "revision_required", "suspended"];
-        if (REVIEW_OWNS.includes(existingStatus)) {
+        /**
+         * The guard reads the APPLICATION as well as the registration.
+         *
+         * THE HOLE IN THE PREVIOUS VERSION OF THIS GUARD
+         * ----------------------------------------------
+         * It checked `serviceRegistrations.wave.status` alone — the user document's
+         * derived copy. checkWaveStatusAction, two hundred lines above in this same
+         * file, goes to the application row and calls it "AUTHORITATIVE" precisely
+         * because the two drift.
+         *
+         * And they drift in the direction that matters here. Both admin verdict
+         * paths claim the application FIRST and write the user document after, in a
+         * separate call: if that second write fails, the application is rejected
+         * and the registration status is untouched. An untouched registration is
+         * the empty string, the empty string is not in REVIEW_OWNS, and enrolment
+         * then wrote "approved" straight over the rejection — the exact defect the
+         * guard was added to close, reachable through the exact drift the function
+         * above it exists to work around.
+         *
+         * Either source saying a review owns this decision is enough.
+         */
+        const REVIEW_OWNS = ["pending", "under_review", "rejected", "revision_required", "suspended"];
+
+        const registrationStatus = String(userData?.serviceRegistrations?.wave?.status || "");
+
+        let applicationStatus = "";
+        const ownApps = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+            .where("userId", "==", session.user.id)
+            .limit(25)
+            .get();
+
+        if (!ownApps.empty) {
+            // Any application in a review-owned state blocks, not just the newest
+            // one — picking "the latest" would need a reliable ordering key, and
+            // this collection is the one whose sort key turned out not to exist.
+            const blocking = ownApps.docs
+                .map(d => String(d.data()?.status ?? ""))
+                .find(s => REVIEW_OWNS.includes(s));
+            if (blocking) applicationStatus = blocking;
+        }
+
+        const blockedBy = REVIEW_OWNS.includes(registrationStatus)
+            ? registrationStatus
+            : applicationStatus;
+
+        if (blockedBy) {
             return {
                 success: false as const,
-                error: existingStatus === "pending"
+                error: blockedBy === "pending" || blockedBy === "under_review"
                     ? "Your WAVE application is awaiting review."
-                    : `Your WAVE application is ${existingStatus.replace(/_/g, " ")}. Enrolling cannot override a review decision.`,
+                    : `Your WAVE application is ${blockedBy.replace(/_/g, " ")}. Enrolling cannot override a review decision.`,
                 data: null,
             };
         }

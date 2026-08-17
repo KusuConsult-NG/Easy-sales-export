@@ -15,7 +15,13 @@ import { paystackPayout } from "@/lib/paystack-transfer";
 import { extractCanonicalUser } from "@/lib/canonical/normalizer";
 
 async function _getStandardWaveWithdrawalsAction(options: {
-    status?: "pending" | "processing" | "approved" | "approved_pending_payout" | "completed" | "rejected" | "all";
+    // The union the admin screen can filter by. `approved_processing` and
+    // `payout_dispatched_unconfirmed` are both states this file WRITES, and
+    // neither was selectable — so a withdrawal stuck mid-payout, which is exactly
+    // the one an admin needs to find, appeared only under "all".
+    status?: "pending" | "processing" | "approved" | "approved_processing"
+        | "approved_pending_payout" | "payout_dispatched_unconfirmed"
+        | "completed" | "rejected" | "all";
     limit?: number;
     lastDocId?: string;
     search?: string;
@@ -173,6 +179,82 @@ export const getStandardWaveWithdrawalsAction = withFlexibleSafeAction("getStand
 
 
 /**
+ * Mirrors the outcome onto the WALLET_TRANSACTIONS row, without being able to fail
+ * the action.
+ *
+ * WHY NON-FATAL
+ * -------------
+ * These updates ran after the status claim and after the balance restore, with no
+ * catch, so a missing or unwritable mirror row threw from inside the try and the
+ * admin was told the action failed — when the withdrawal had in fact been
+ * rejected or completed and, for a rejection, the member's balance had already
+ * been restored. Retrying then hit the claim and reported "Only pending
+ * withdrawals can be rejected", which is true and completely unhelpful.
+ *
+ * The row can legitimately be absent: it is written by _withdrawEarningsAction,
+ * which has been disabled, so any withdrawal created outside that path — or before
+ * it wrote one — has no mirror. The withdrawal record is the authoritative one;
+ * this is a copy for the wallet view.
+ */
+async function mirrorWithdrawalStatus(withdrawalId: string, status: string): Promise<void> {
+    try {
+        await db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc(withdrawalId).update({
+            status,
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+    } catch (e) {
+        logger.warn(
+            `[WAVE:Withdrawal] Could not mirror status '${status}' onto wallet transaction ` +
+            `${withdrawalId}; the withdrawal record itself is correct.`,
+            { error: e instanceof Error ? e.message : String(e) }
+        );
+    }
+}
+
+/**
+ * Returns a locked withdrawal to `pending`, so it can be retried.
+ *
+ * ONLY safe when nothing has been dispatched to Paystack. The caller tracks that;
+ * see `payoutDispatched`.
+ *
+ * A compare-and-swap FROM `approved_processing`, not a blind write. The three
+ * rollback sites each did `ref.update({ status: "pending" })` unconditionally,
+ * which is the same shape as the writes the claim above replaced: if anything had
+ * moved the record on — a `complete` from another admin, a second approval that
+ * had already dispatched — this reopened it regardless, and reopening a
+ * withdrawal is reopening a payment.
+ *
+ * A refused claim is logged rather than thrown: the caller is already returning an
+ * error about the payout, and a rollback that could not apply because the record
+ * moved on is information, not a second failure to report.
+ */
+async function returnWithdrawalToPending(
+    ref: { id: string },
+    reason: string,
+    adminNotes?: string,
+): Promise<void> {
+    const claim = await claimStatusTransition({
+        collection: COLLECTIONS.WAVE_WITHDRAWALS,
+        id: ref.id,
+        from: "approved_processing",
+        to: "pending",
+        patch: {
+            payoutError: reason,
+            adminNotes: (adminNotes ? adminNotes + " - " : "") + `Payout failed: ${reason}`,
+            updatedAt: new Date().toISOString(),
+        },
+    });
+
+    if (!claim.claimed) {
+        logger.warn(
+            `[WAVE:Payout] Could not return ${ref.id} to pending: it is now '${claim.status}'. ` +
+            `Reason for the rollback was: ${reason}`
+        );
+    }
+}
+
+
+/**
  * processWaveWithdrawalAction
  * Standardized hardened action for processing WAVE withdrawals.
  * Handles approve (auto-payout via Paystack), reject, and complete actions.
@@ -227,7 +309,6 @@ async function _processWaveWithdrawalAction(data: {
 
         const nowIso = new Date().toISOString();
         const userRef = db.collection(COLLECTIONS.USERS).doc(withdrawalData.userId);
-        const walletTxnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc(withdrawalId);
 
         if (action === "complete") {
             const claim = await claimStatusTransitionFromAny({
@@ -256,10 +337,7 @@ async function _processWaveWithdrawalAction(data: {
                 updatedAt: FieldValue.serverTimestamp()
             });
 
-            await walletTxnRef.update({
-                status: "completed",
-                updatedAt: FieldValue.serverTimestamp()
-            });
+            await mirrorWithdrawalStatus(withdrawalId, "completed");
         } else if (action === "reject") {
             const claim = await claimStatusTransition({
                 collection: COLLECTIONS.WAVE_WITHDRAWALS,
@@ -287,10 +365,7 @@ async function _processWaveWithdrawalAction(data: {
                 updatedAt: FieldValue.serverTimestamp()
             });
 
-            await walletTxnRef.update({
-                status: "rejected",
-                updatedAt: FieldValue.serverTimestamp()
-            });
+            await mirrorWithdrawalStatus(withdrawalId, "rejected");
         } else if (action === "approve") {
             // The real lock for processing, this time.
             const claim = await claimStatusTransition({
@@ -336,40 +411,96 @@ async function _processWaveWithdrawalAction(data: {
 
         // PHASE 2: SIDE-EFFECT (PAYOUT)
         // If we reached here, the action is "approve" and the record is locked as 'approved_processing'
+        //
+        /**
+         * Whether the transfer has been handed to Paystack.
+         *
+         * THE DEFECT THIS EXISTS FOR
+         * --------------------------
+         * The catch at the bottom of this block reverted the withdrawal to
+         * `pending` on ANY throw. But `paystackPayout` sits inside that block, and
+         * so does the batch.commit() that records its success. So the sequence
+         *
+         *     payout succeeds  →  batch.commit() throws  →  catch  →  status: "pending"
+         *
+         * left the money gone and the request back in the queue, where an admin
+         * could approve it again — a second Paystack transfer for one withdrawal.
+         * The compare-and-swap above exists specifically to make double payouts
+         * impossible, and the error handler undid it.
+         *
+         * Once this flag is set, the record is NEVER returned to a payable state.
+         * A finalisation failure after a successful transfer is a reconciliation
+         * problem for a human, not a retry.
+         */
+        let payoutDispatched = false;
+        let dispatchedReference: string | null = null;
+
         try {
             const userDoc = await db.collection(COLLECTIONS.USERS).doc(withdrawalData.userId).get();
             const userData = userDoc.data();
-            if (!userData?.bankAccountNumber || !userData?.bankCode) {
-                // Rollback to pending
-                await ref.update({ 
-                    status: "pending", 
-                    payoutError: "User bank details not configured",
-                    adminNotes: (adminNotes ? adminNotes + " - " : "") + "Payout failed: Missing bank details.",
-                    updatedAt: FieldValue.serverTimestamp(),
-                });
-                return { success: false as const, error: "User bank details missing" };
+
+            /**
+             * Bank details read through the canonical resolver.
+             *
+             * This read `userData.bankCode` — a TOP-LEVEL field that no WAVE path
+             * writes. The application stores `bankDetails.bankCode`, and the admin
+             * approval stores `bankDetails.bankCode` too; the only writers of the
+             * top-level field are the legacy provisioning tool and the admin
+             * correction screen.
+             *
+             * So for a member enrolled through the WAVE application the guard below
+             * could not pass, and every automated payout returned "User bank
+             * details missing" — the whole Paystack path unreachable for the people
+             * it was built for.
+             *
+             * extractCanonicalUser is this file's own resolver: it is already
+             * imported and already used, forty lines up, to build the bank details
+             * shown in the admin LIST. The list could see the account and the
+             * payout could not.
+             */
+            const canonical = extractCanonicalUser(userData ?? {});
+            const accountNumber = canonical.bankDetails.accountNumber || userData?.bankAccountNumber || "";
+            const bankCode = canonical.bankDetails.bankCode || "";
+            const accountName = canonical.bankDetails.accountName || userData?.bankAccountName || canonical.name;
+
+            if (!accountNumber || !bankCode) {
+                // Returned to pending — nothing has been dispatched, so this is a
+                // legitimate retry once the details are filled in. Named precisely,
+                // because "missing bank details" was reported for an account number
+                // that was present and a code that was stored elsewhere.
+                const missing = [
+                    !accountNumber ? "account number" : null,
+                    !bankCode ? "bank code" : null,
+                ].filter(Boolean).join(" and ");
+
+                await returnWithdrawalToPending(
+                    ref,
+                    `User bank details incomplete: no ${missing} on record`,
+                    adminNotes,
+                );
+                return { success: false as const, error: `Cannot pay out: no ${missing} on record for this member.` };
             }
 
+            payoutDispatched = true;
             const payoutResult = await paystackPayout(
                  {
-                     accountNumber: userData.bankAccountNumber,
-                     bankCode: userData.bankCode,
-                     accountName: userData.bankAccountName || userData.name,
+                     accountNumber,
+                     bankCode,
+                     accountName,
                  },
                  withdrawalData.amount,
                  `WAVE Withdrawal payout - ${withdrawalId}`
             );
 
             if (!payoutResult.success) {
-                // Rollback status to pending with error message
-                await ref.update({ 
-                    status: "pending", 
-                    payoutError: payoutResult.error,
-                    adminNotes: (adminNotes ? adminNotes + " - " : "") + `Payout failed: ${payoutResult.error}`,
-                    updatedAt: FieldValue.serverTimestamp(),
-                });
+                // Paystack answered, and the answer was no. Nothing left the
+                // account, so returning it to pending is correct here.
+                payoutDispatched = false;
+                await returnWithdrawalToPending(ref, payoutResult.error ?? "unknown error", adminNotes);
                 return { success: false as const, error: `Paystack payout failed: ${payoutResult.error}` };
             }
+
+            dispatchedReference = payoutResult.reference ?? null;
 
             // PHASE 3: FINAL COMMIT
             // Payout succeeded! Mark as completed and clear user lock.
@@ -392,14 +523,12 @@ async function _processWaveWithdrawalAction(data: {
                 updatedAt: FieldValue.serverTimestamp()
             });
 
-            // Update Wallet Transaction
-            const walletTxnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc(withdrawalId);
-            batch.update(walletTxnRef, {
-                status: "completed",
-                updatedAt: FieldValue.serverTimestamp()
-            });
-
             await batch.commit();
+
+            // Mirrored after the commit, and non-fatal. It was inside the batch,
+            // so a missing wallet row failed the whole commit — including the
+            // record of a payout that had already been made.
+            await mirrorWithdrawalStatus(withdrawalId, "completed");
 
             // Invalidate cache
             if (withdrawalData?.userId) {
@@ -413,12 +542,54 @@ async function _processWaveWithdrawalAction(data: {
 
         } catch (error: any) {
             logger.error(`[WAVE:Payout] Critical error during payout for ${withdrawalId}:`, error);
-            // Revert to pending so it can be re-tried
-            await ref.update({ 
-                status: "pending", 
-                payoutError: "Critical error during payout side-effect",
-                updatedAt: FieldValue.serverTimestamp(),
-            }).catch(e => logger.error(`[WAVE:Rollback] Failed to rollback status for ${withdrawalId}:`, e));
+
+            if (payoutDispatched) {
+                /**
+                 * The transfer was handed to Paystack and we do not know the
+                 * outcome. This must NOT go back to pending.
+                 *
+                 * Reverting here is what turned a finalisation failure into a
+                 * second transfer: the money may well have left, and an admin
+                 * looking at a pending withdrawal would approve it again.
+                 *
+                 * Parked in a terminal state instead, naming what has to be
+                 * checked. No status guard on this write on purpose — the record
+                 * is in `approved_processing` and only this code path leaves it, so
+                 * there is no competing writer, and refusing to record the parked
+                 * state because of a status mismatch would be strictly worse than
+                 * recording it.
+                 */
+                await ref.update({
+                    status: "payout_dispatched_unconfirmed",
+                    payoutError:
+                        `Transfer was submitted to Paystack but the result could not be recorded: ` +
+                        `${error?.message ?? String(error)}`,
+                    payoutReference: dispatchedReference,
+                    needsReconciliation: true,
+                    needsReconciliationAt: FieldValue.serverTimestamp(),
+                    adminNotes: (adminNotes ? adminNotes + " - " : "") +
+                        "PAYOUT DISPATCHED, RESULT UNRECORDED — verify on Paystack before any retry.",
+                    updatedAt: FieldValue.serverTimestamp(),
+                }).catch(e => logger.error(`[WAVE:Payout] Failed to park ${withdrawalId} for reconciliation:`, e));
+
+                logger.error(
+                    `[WAVE:Payout] RECONCILE ${withdrawalId}: transfer submitted for ` +
+                    `₦${withdrawalData.amount} to user ${withdrawalData.userId}, reference ` +
+                    `${dispatchedReference ?? "unknown"}, but the completion could not be written. ` +
+                    `Do NOT re-approve until checked against Paystack.`
+                );
+
+                return {
+                    success: false as const,
+                    error:
+                        "The transfer was submitted but its result could not be recorded. This " +
+                        "withdrawal has been held for reconciliation — check Paystack before retrying.",
+                    data: null,
+                };
+            }
+
+            // Nothing was dispatched, so a retry is safe.
+            await returnWithdrawalToPending(ref, "Critical error before the transfer was submitted", adminNotes);
             return { success: false as const, error: "Critical payout failure. Status reverted to pending." , data: null };
         }
 

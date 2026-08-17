@@ -148,9 +148,33 @@ async function _calculateEarningsAction(userId: string): Promise<ActionResponse<
             });
         });
 
+        /**
+         * Every status in which the money is committed or gone.
+         *
+         * `approved_processing` and `payout_dispatched_unconfirmed` were MISSING.
+         * Both are states the payout path sets: the first is the lock it takes
+         * before calling Paystack, the second is where a transfer whose result
+         * could not be recorded is parked.
+         *
+         * A withdrawal in either was not subtracted here — so if the balance
+         * backfill ran during a payout, it computed the member's balance as though
+         * that withdrawal did not exist, and credited her the amount again.
+         *
+         * `rejected` is correctly absent: a rejection restores the balance
+         * separately, and counting it here would deduct it twice.
+         */
+        const COMMITTED_WITHDRAWAL_STATUSES = [
+            "pending",
+            "approved",
+            "approved_processing",
+            "approved_pending_payout",
+            "payout_dispatched_unconfirmed",
+            "completed",
+        ];
+
         const withdrawalsSnap = await db.collection(COLLECTIONS.WAVE_WITHDRAWALS)
             .where("userId", "==", userId)
-            .where("status", "in", ["pending", "approved", "approved_pending_payout", "completed"])
+            .where("status", "in", COMMITTED_WITHDRAWAL_STATUSES)
             .get();
         
         let withdrawnAmount = 0;
