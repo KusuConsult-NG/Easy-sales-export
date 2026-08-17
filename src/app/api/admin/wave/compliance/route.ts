@@ -97,8 +97,23 @@ export async function GET(request: NextRequest) {
 
         const averageLoanSize = approved > 0 ? totalDisbursed / approved : 0;
 
-        // --- Repayment rate: COUNT queries on LOANS collection ---
-        let repaymentRate = 85; // reasonable default when no data
+        /**
+         * --- Repayment rate: COUNT queries on LOANS collection ---
+         *
+         * NO DEFAULT. This was `let repaymentRate = 85; // reasonable default when
+         * no data`, and 85 was returned whenever the LOANS collection was empty or
+         * either count threw — reported to a COMPLIANCE screen as the programme's
+         * repayment rate, in a field the page renders as `{stats.repaymentRate}%`.
+         *
+         * A made-up compliance figure is worse than a missing one. It is
+         * indistinguishable from a measurement, and it is the number somebody would
+         * quote.
+         *
+         * null means "not measured", which the response now states separately so a
+         * reader cannot mistake it for zero either.
+         */
+        let repaymentRate: number | null = null;
+        let repaymentBasis: { totalLoans: number; repaidLoans: number } | null = null;
         try {
             const [totalLoansSnap, repaidLoansSnap] = await Promise.all([
                 db.collection(COLLECTIONS.LOANS).count().get(),
@@ -109,21 +124,42 @@ export async function GET(request: NextRequest) {
             ]);
             const totalLoans = totalLoansSnap.data().count ?? 0;
             const repaidLoans = repaidLoansSnap.data().count ?? 0;
+            repaymentBasis = { totalLoans, repaidLoans };
             if (totalLoans > 0) {
                 repaymentRate = Math.round((repaidLoans / totalLoans) * 100);
             }
-        } catch {
-            // fall back to default
+        } catch (e) {
+            logger.error("[WAVE Compliance] Repayment rate could not be computed", e);
         }
 
         // --- Demographics: still needs full doc fetch (no GROUP BY in Firestore) ---
         // Only fetch the fields we need via .select() to minimise payload size.
+        /**
+         * The fields selected here have to be fields the collection HAS.
+         *
+         * It selected `state` and `businessType`. A WAVE application carries
+         * neither — the schema has `stateOfResidence`, `stateOfOrigin` and
+         * `currentOccupation`; `businessType` is an EXPORT field the legacy import
+         * writes. So every row fell to the `|| "Unknown"` and `|| "Other"`
+         * fallbacks, and the compliance screen's state breakdown read
+         * "Unknown: 480" while its business-type breakdown read "Other: 480".
+         *
+         * Two of the three demographic breakdowns on a compliance report were
+         * measuring nothing, and the fallbacks made that look like data.
+         */
+        const DEMOGRAPHIC_FIELDS = [
+            "age",
+            "stateOfResidence",
+            "stateOfOrigin",
+            "currentOccupation",
+        ] as const;
+
         const demographicsQuery = dateFilter
             ? db.collection(COLLECTIONS.WAVE_APPLICATIONS)
                 .where("createdAt", ">=", dateFilter)
-                .select("age", "state", "businessType")
+                .select(...DEMOGRAPHIC_FIELDS)
             : db.collection(COLLECTIONS.WAVE_APPLICATIONS)
-                .select("age", "state", "businessType");
+                .select(...DEMOGRAPHIC_FIELDS);
 
         const demographicsSnap = await demographicsQuery.get();
 
@@ -146,10 +182,16 @@ export async function GET(request: NextRequest) {
             else if (age >= 46 && age <= 55) ageGroups["46-55"]++;
             else if (age >= 56) ageGroups["56+"]++;
 
-            const state = data.state || "Unknown";
+            // Residence first, origin as the fallback: the programme is delivered
+            // where a participant lives.
+            const state = data.stateOfResidence || data.stateOfOrigin || "Unknown";
             states[state] = (states[state] || 0) + 1;
 
-            const businessType = data.businessType || "Other";
+            // `currentOccupation` is what the application actually asks for. The
+            // page labels this panel "Business Types", which is close enough to the
+            // question on the form to be honest, and infinitely closer than the
+            // all-"Other" it displayed before.
+            const businessType = data.currentOccupation || "Unspecified";
             businessTypes[businessType] = (businessTypes[businessType] || 0) + 1;
         });
 
@@ -161,8 +203,43 @@ export async function GET(request: NextRequest) {
             totalDisbursed,
             averageLoanSize,
             repaymentRate,
+            // The count of APPROVED APPLICATIONS, which is not the same as the
+            // number of accounts holding the WAVE role — see
+            // _wv_admin_applications.ts for the two populations and why they differ
+            // by an order of magnitude. Named for what it counts.
             activeMembers: approved,
+            approvedApplications: approved,
         };
+
+        /**
+         * What the numbers above are actually based on.
+         *
+         * Three of them cannot be measured from this collection and were being
+         * returned as 0 or as a default, indistinguishable from a real reading:
+         *
+         *   totalDisbursed / averageLoanSize  `amountDisbursed` is not a field on a
+         *                                     WAVE application, and no writer sets
+         *                                     it, so the `> 0` filter matched
+         *                                     nothing and both were always 0.
+         *   repaymentRate                     defaulted to 85 with no loans at all.
+         *
+         * Reported rather than silently zeroed, so a reader can tell "nil" from
+         * "not tracked".
+         */
+        const dataAvailability = {
+            disbursementTracked: totalDisbursed > 0,
+            disbursementNote: totalDisbursed > 0
+                ? null
+                : "WAVE applications do not record a disbursed amount; this figure is not tracked, not nil.",
+            repaymentMeasured: repaymentRate !== null,
+            repaymentBasis,
+        };
+
+        if (totalDisbursed === 0) {
+            logger.info(
+                "[WAVE Compliance] No disbursement data — `amountDisbursed` is not written on WAVE applications."
+            );
+        }
 
         const demographics = {
             ageGroups,
@@ -174,6 +251,7 @@ export async function GET(request: NextRequest) {
             success: true,
             stats,
             demographics,
+            dataAvailability,
         });
     } catch (error) {
         logger.error("Failed to fetch compliance data:", error);

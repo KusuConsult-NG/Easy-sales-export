@@ -12,7 +12,9 @@ type ComplianceStats = {
     pending: number;
     totalDisbursed: number;
     averageLoanSize: number;
-    repaymentRate: number;
+    // Nullable, because it is now only present when it was actually measured.
+    // The API used to return a hardcoded 85 when there were no loans at all.
+    repaymentRate: number | null;
     activeMembers: number;
 };
 
@@ -25,6 +27,19 @@ type DemographicBreakdown = {
 export default function WAVECompliancePage() {
     const [stats, setStats] = useState<ComplianceStats | null>(null);
     const [demographics, setDemographics] = useState<DemographicBreakdown | null>(null);
+    /**
+     * Which figures above were actually measured.
+     *
+     * The API returned 0 for disbursement — a field WAVE applications do not carry
+     * — and a hardcoded 85 for the repayment rate when there were no loans at all.
+     * Both rendered as ordinary numbers, so a compliance screen showed invented
+     * data. This tells the tiles which of them to render as a figure.
+     */
+    const [dataAvailability, setDataAvailability] = useState<{
+        disbursementTracked: boolean;
+        disbursementNote: string | null;
+        repaymentMeasured: boolean;
+    } | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [timeframe, setTimeframe] = useState("all");
 
@@ -42,6 +57,7 @@ export default function WAVECompliancePage() {
             if (data.success) {
                 setStats(data.stats);
                 setDemographics(data.demographics);
+                setDataAvailability(data.dataAvailability ?? null);
             }
         } catch (error) {
             logger.error("Failed to fetch compliance data:", error);
@@ -61,7 +77,29 @@ export default function WAVECompliancePage() {
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `wave_compliance_report_${Date.now()}.${format}`;
+                /**
+                 * The extension follows what the SERVER actually sent.
+                 *
+                 * `format=pdf` does not produce a PDF: the route renders an HTML
+                 * document and returns `Content-Type: text/html` with a `.html`
+                 * filename. This line then saved those bytes as
+                 * `wave_compliance_report_….pdf`, so the download was an HTML file
+                 * wearing a PDF extension — no reader would open it.
+                 *
+                 * Naming it for its real type makes the file usable now. Producing
+                 * a genuine PDF would mean adding a renderer, which is a feature
+                 * rather than a fix, so it is not attempted here.
+                 */
+                const contentType = response.headers.get("Content-Type") || "";
+                const extension = contentType.includes("text/csv")
+                    ? "csv"
+                    : contentType.includes("text/html")
+                        ? "html"
+                        : contentType.includes("application/pdf")
+                            ? "pdf"
+                            : format;
+
+                a.download = `wave_compliance_report_${Date.now()}.${extension}`;
                 document.body.appendChild(a);
                 a.click();
                 window.URL.revokeObjectURL(url);
@@ -197,7 +235,14 @@ export default function WAVECompliancePage() {
                                 <DollarSign className="w-8 h-8 opacity-80" />
                                 <div>
                                     <p className="text-sm opacity-90">Total Disbursed</p>
-                                    <p className="text-3xl font-bold">{formatCurrency(stats.totalDisbursed)}</p>
+                                    {/* "Not tracked" rather than ₦0. WAVE applications carry no
+                                        amountDisbursed field, so zero here has never meant
+                                        "nothing was disbursed" — it meant nobody records it. */}
+                                    <p className="text-3xl font-bold">
+                                        {dataAvailability && !dataAvailability.disbursementTracked
+                                            ? "Not tracked"
+                                            : formatCurrency(stats.totalDisbursed)}
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -207,7 +252,11 @@ export default function WAVECompliancePage() {
                                 <BarChart3 className="w-8 h-8 opacity-80" />
                                 <div>
                                     <p className="text-sm opacity-90">Average Loan Size</p>
-                                    <p className="text-3xl font-bold">{formatCurrency(stats.averageLoanSize)}</p>
+                                    <p className="text-3xl font-bold">
+                                        {dataAvailability && !dataAvailability.disbursementTracked
+                                            ? "Not tracked"
+                                            : formatCurrency(stats.averageLoanSize)}
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -217,7 +266,15 @@ export default function WAVECompliancePage() {
                                 <TrendingUp className="w-8 h-8 opacity-80" />
                                 <div>
                                     <p className="text-sm opacity-90">Repayment Rate</p>
-                                    <p className="text-3xl font-bold">{stats.repaymentRate}%</p>
+                                    {/* No figure at all when it was not measured. This read
+                                        `{stats.repaymentRate}%` against an API that defaulted to
+                                        85 with zero loans on record — a fabricated compliance
+                                        statistic, and the one somebody would quote. */}
+                                    <p className="text-3xl font-bold">
+                                        {stats.repaymentRate === null || stats.repaymentRate === undefined
+                                            ? "No data"
+                                            : `${stats.repaymentRate}%`}
+                                    </p>
                                 </div>
                             </div>
                         </div>
