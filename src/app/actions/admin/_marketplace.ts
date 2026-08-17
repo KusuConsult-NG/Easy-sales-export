@@ -11,11 +11,12 @@ import { FieldPath } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log";
-import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
+import { serializeDocs, serializeValue, toMillis } from "@/lib/firestore-serialize";
 import { normalizeAggressive } from "@/lib/canonical/normalizer";
 import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
 import { safeToISOString } from "@/lib/date-utils";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
+import { normaliseSellerVerification } from "@/lib/seller-verification-shape";
 import {
     PRODUCT_APPROVABLE_FROM,
     PRODUCT_REJECTABLE_FROM,
@@ -74,7 +75,22 @@ async function _approveSellerVerificationAction(
                 verifiedBy: session.user.id,
                 verifiedAt: FieldValue.serverTimestamp(),
                 roles: FieldValue.arrayUnion("seller"),
-                "serviceRegistrations.marketplace.status": "active",
+                // "approved", not "active".
+                //
+                // Two approval implementations write this field:
+                // /api/admin/marketplace/approve-seller writes "approved", and
+                // this action wrote "active". Every reader tests for "approved"
+                // — marketplace/seller/layout.tsx redirects to /onboarding when
+                // `registration.status !== "approved"`, and
+                // checkMarketplaceStatusAction re-queries the verification
+                // record for the same reason.
+                //
+                // NOT a live lockout: the admin sellers page calls the API
+                // route, so approvals made through the UI have always written
+                // the value readers accept. This action is exported from the
+                // admin barrel and reachable, and would have locked an approved
+                // seller out of their own dashboard.
+                "serviceRegistrations.marketplace.status": "approved",
                 "serviceRegistrations.marketplace.accountType": verificationData.accountType || "seller",
                 "serviceRegistrations.marketplace.paymentStatus": "completed",
                 "serviceRegistrations.marketplace.approvedAt": FieldValue.serverTimestamp(),
@@ -448,6 +464,12 @@ async function _getStandardSellerVerificationsAction(
                 null  // WAVE data (not needed for seller view)
             );
 
+            // Typed as a Record: NormalisedSellerVerification carries an index
+            // signature so unknown fields pass through, but TypeScript drops
+            // index signatures across an object spread — without this the
+            // downstream sort on `data.createdAt` stops compiling.
+            const canonical: Record<string, any> = normaliseSellerVerification(app);
+
             return {
                 id: app.id,
                 user: {
@@ -463,10 +485,36 @@ async function _getStandardSellerVerificationsAction(
                     documents: normalized.verificationProfile?.documents
                 },
                 status: normalized.verificationProfile?.status || "pending",
+                // Normalised onto the shape the admin screen reads.
+                //
+                // SELLER_VERIFICATIONS has two writers and neither produces what
+                // this screen expects. Address, state and LGA were blank for both
+                // paths; business name and phone were blank for applications
+                // submitted through the verification form; and the detail modal
+                // renders `{data.address}` directly, which for that path is an
+                // OBJECT — React throws "Objects are not valid as a React child"
+                // and the admin screen came down.
+                //
+                // Normalising on READ rather than migrating: records already
+                // exist in both shapes, so changing the writers fixes nothing
+                // already stored. See lib/seller-verification-shape.ts.
+                //
+                // Applied BEFORE the normalizeAggressive fields, so those still
+                // win — they draw on the user document as well as the
+                // application, which is a wider source than this adapter has.
                 data: {
-                    ...app,
-                    bankDetails: normalized.verificationProfile?.bankDetails,
-                    documents: normalized.verificationProfile?.documents
+                    ...canonical,
+                    // normalizeAggressive draws on the USER document as well as
+                    // the application, which is a wider source than the adapter
+                    // has, so it wins where it has a value.
+                    bankDetails: normalized.verificationProfile?.bankDetails ?? canonical.bankDetails,
+                    documents: {
+                        // Its own keys (businessCert / idCard) are kept for the
+                        // raw view; the three the screen reads come from the
+                        // adapter, which is the only place they line up.
+                        ...(normalized.verificationProfile?.documents ?? {}),
+                        ...canonical.documents,
+                    }
                 }
             };
         });
@@ -487,9 +535,17 @@ async function _getStandardSellerVerificationsAction(
 
             // Sort the final forms in memory
             const dir = sortOrder || "desc";
-            finalForms.sort((a, b) => {
-                const dateA = new Date(a.data?.createdAt?.toDate ? a.data.createdAt.toDate().toISOString() : a.data?.createdAt || 0).getTime();
-                const dateB = new Date(b.data?.createdAt?.toDate ? b.data.createdAt.toDate().toISOString() : b.data?.createdAt || 0).getTime();
+            finalForms.sort((a: any, b: any) => {
+                // toMillis, not another hand-rolled coercion.
+                //
+                // This read `new Date(x?.toDate ? x.toDate().toISOString() : x || 0)`,
+                // which covers a Timestamp with toDate() and a string — and not a
+                // plain `{seconds}` object, for which `new Date({...})` is an
+                // Invalid Date, getTime() is NaN, and a comparator returning NaN
+                // does not order anything. Same family as the 34 sort keys fixed
+                // in de0a1a87.
+                const dateA = toMillis(a.data?.createdAt);
+                const dateB = toMillis(b.data?.createdAt);
                 return dir === "desc" ? dateB - dateA : dateA - dateB;
             });
         }
