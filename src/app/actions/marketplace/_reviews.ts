@@ -13,6 +13,12 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { isAdmin } from "@/lib/admin-permissions";
 import { withSafeAction } from "@/lib/safe-action";
 import type { ActionResponse } from "@/lib/safe-action";
+import {
+    recalculateProductRating,
+    reviewerIdentityFields,
+    hasExistingReview,
+    isReviewableOrderStatus,
+} from "@/lib/product-rating";
 
 // ---------------------------------------------------------------------------
 // SUBMIT: Product Review (buyer, post-delivery)
@@ -43,7 +49,10 @@ async function _submitProductReviewAction(data: {
         if (orderData.buyerId !== buyerId) { 
             return { success: false as const, error: "Unauthorized: not your order", data: null };
         }
-        if (orderData.status !== "delivered" && orderData.status !== "completed") {
+        // The same rule createReviewAction now uses. That one required
+        // "completed" only, so a delivered order was reviewable here and not
+        // there. See REVIEWABLE_ORDER_STATUSES.
+        if (!isReviewableOrderStatus(orderData.status)) {
             return { success: false as const, error: "You can only review orders that have been delivered", data: null };
         }
 
@@ -73,21 +82,27 @@ async function _submitProductReviewAction(data: {
             return { success: false as const, error: "That product was not part of this order", data: null };
         }
 
-        const existingSnap = await db.collection(COLLECTIONS.PRODUCT_REVIEWS)
-            .where("buyerId", "==", buyerId)
-            .where("orderId", "==", data.orderId)
-            .where("productId", "==", data.productId)
-            .limit(1)
-            .get();
-
-        if (!existingSnap.empty) { 
+        // Checked against BOTH identity spellings.
+        //
+        // This queried `buyerId` and createReviewAction's guard queried `userId`,
+        // because the two modules write a different field for the same person. So
+        // each guard was blind to the other's reviews and a buyer could leave one
+        // review per product per order through EACH page.
+        if (await hasExistingReview(db as any, {
+            userId: buyerId,
+            productId: String(data.productId),
+            orderId: String(data.orderId),
+        })) {
             return { success: false as const, error: "You have already reviewed this product for this order", data: null };
         }
 
         const reviewRef = db.collection(COLLECTIONS.PRODUCT_REVIEWS).doc();
-        await reviewRef.set({ 
+        await reviewRef.set({
             productId: data.productId,
-            buyerId,
+            // Both spellings, so createReviewAction's duplicate guard finds this
+            // row too, and so updateReviewAction's ownership check — which reads
+            // `userId` — does not refuse this review's own author.
+            ...reviewerIdentityFields(buyerId),
             orderId: data.orderId,
             rating: data.rating,
             comment: data.comment || null,
@@ -148,10 +163,11 @@ async function _submitSellerReviewAction(data: {
         if (orderData.buyerId !== buyerId) { 
             return { success: false as const, error: "Unauthorized: not your order", data: null };
         }
-        if (orderData.status !== "delivered" && orderData.status !== "completed") { 
+        // The shared rule, same as the product path above.
+        if (!isReviewableOrderStatus(orderData.status)) {
             return { success: false as const, error: "You can only review orders that have been delivered", data: null };
         }
-        
+
         const sellerIds = orderData.sellerIds || [];
         if (!sellerIds.includes(data.sellerId)) { 
             return { success: false as const, error: "Seller does not match this order", data: null };
@@ -205,8 +221,23 @@ async function _getProductReviewsAction(
     try {
         // Public action, session is optional
         sessionResult = await requireSession().catch(() => ({ session: null }));
-        
-        const status = options?.status || "approved";
+
+        // Only an admin may ask for anything but approved reviews.
+        //
+        // `status` came from the caller and went straight into the query. The
+        // default is "approved", and any caller could pass "pending" or
+        // "rejected" instead — so reviews a moderator had not approved, and ones
+        // they had explicitly REJECTED, were publicly readable with their
+        // comments and images. The pending queue two functions below is
+        // admin-gated; this served the same rows to anyone who asked.
+        //
+        // _getSellerReviewSummaryAction hardcodes "approved" and was never
+        // exposed this way — the same two-siblings-disagree shape as everything
+        // else in this cluster.
+        const requested = options?.status || "approved";
+        const callerIsAdmin = isAdmin((sessionResult as any)?.session?.user?.roles);
+        const status = requested === "approved" || callerIsAdmin ? requested : "approved";
+
         const pageSize = options?.limit || 20;
 
         const snap = await db.collection(COLLECTIONS.PRODUCT_REVIEWS)
@@ -331,8 +362,12 @@ async function _moderateReviewAction(
             _version: FieldValue.increment(1) 
         });
 
-        // If approving a product review, recalculate rating
-        if (action === "approved" && collection === "product_reviews") { 
+        // Recalculate on EITHER decision, not only on approval.
+        //
+        // Rejecting a review that had already been approved left its contribution
+        // in the product's average, so a moderator removing a fake five-star
+        // changed nothing a buyer could see — the one thing this queue is for.
+        if (collection === "product_reviews") {
             const productId = reviewSnap.data()?.productId;
             if (productId) await _recalculateProductRating(productId);
         }
@@ -399,27 +434,24 @@ export const getPendingReviewsAction = withSafeAction("getPendingReviewsAction",
 // Internal: Recalculate and denormalize product average rating
 // ---------------------------------------------------------------------------
 
-async function _recalculateProductRating(productId: string): Promise<void> { 
-    try {
-        const snap = await db.collection(COLLECTIONS.PRODUCT_REVIEWS)
-            .where("productId", "==", productId)
-            .where("status", "==", "approved")
-            .get();
-
-        const count = snap.size;
-        if (count === 0) return;
-
-        const total = snap.docs.reduce((sum, d) => sum + (d.data().rating || 0), 0);
-        const avg = Math.round((total / count) * 10) / 10;
-
-        await db.collection(COLLECTIONS.PRODUCTS).doc(productId).update({
-            rating: avg,
-            reviewCount: count,
-            updatedAt: FieldValue.serverTimestamp(),
-            _version: FieldValue.increment(1) 
-        });
-    } catch (err) { 
-        logger.error("_recalculateProductRating error:", err);
-    }
+/**
+ * Delegates to the shared implementation.
+ *
+ * This function WAS the only code anywhere that wrote `products.rating` — and it
+ * was reachable only from this file's moderateReviewAction, which no page calls.
+ * The admin reviews page uses the moderator in actions/reviews.ts, which did not
+ * recalculate at all, so no product's rating was ever written.
+ *
+ * It also had two bugs of its own, both fixed in the shared version: it returned
+ * early on `count === 0`, so withdrawing the last approved review left the old
+ * rating in place permanently; and it was invoked only on approval, so rejecting
+ * an already-approved review left its contribution in the average.
+ *
+ * Kept as a thin wrapper rather than deleted, because the two call sites in this
+ * file read better with the local name and removing it would make this diff
+ * larger than the fix.
+ */
+async function _recalculateProductRating(productId: string): Promise<void> {
+    await recalculateProductRating(db as any, productId);
 }
 
