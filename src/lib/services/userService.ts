@@ -25,12 +25,43 @@ const PROTECTED_FIELDS = [
  * Perform deep validation on an aggregated User object BEFORE it's committed.
  * This guarantees the Anti-Corruption rules across the Firebase database.
  */
-function validateUserState(user: any) {
+function validateUserState(user: any, previous?: any) {
     // Safely get roles as an array (handle FieldValue.arrayUnion which is an object, not an array)
     const roles = Array.isArray(user.roles) ? user.roles : [];
+    const previousRoles = Array.isArray(previous?.roles) ? previous.roles : [];
 
-    // 1. Role / Verification integrity check
-    if (roles.includes("seller") && user.sellerVerificationStatus !== "approved" && user.isVerified !== true) {
+    /**
+     * 1. Role / Verification integrity check
+     *
+     * TWO THINGS WERE WRONG WITH THIS
+     * -------------------------------
+     * The message says "Cannot ASSIGN 'seller' role without 'approved'
+     * verification status". The condition said something weaker and something
+     * broader, and both mattered.
+     *
+     * WEAKER: it also required `user.isVerified !== true`. Registration sets
+     * `isVerified: true` on every account it creates — see the userProfile in
+     * actions/auth.ts — so that clause was false for essentially every real user
+     * and the whole guard never fired. A rule that cannot trigger is not a rule,
+     * and this one's docstring claims it "guarantees the Anti-Corruption rules
+     * across the Firebase database".
+     *
+     * BROADER: it ran on the MERGED document, so it judged every update to an
+     * EXISTING seller, not the assignment the message describes. That is why the
+     * escape hatch was load-bearing: without it, tightening the rule would start
+     * throwing on ordinary admin edits to any seller whose status is not
+     * "approved" — breaking admin tooling to enforce a rule about something that
+     * happened in the past.
+     *
+     * Now it fires on the transition, which is what it always said it was for:
+     * the role is being added by THIS update and the verification is not
+     * approved. Updating a seller who is already in that state is left alone —
+     * that is a data-repair problem, not something to make unfixable by refusing
+     * every write to the record.
+     */
+    const isBecomingSeller = roles.includes("seller") && !previousRoles.includes("seller");
+
+    if (isBecomingSeller && user.sellerVerificationStatus !== "approved") {
         throw new Error("Data Integrity Error: Cannot assign 'seller' role without 'approved' verification status.");
     }
     
@@ -82,8 +113,11 @@ export async function atomicUpdateUser(userId: string, updates: Record<string, a
             updatedAt: new Date()
         };
 
-        // Enforce global platform validation rules
-        validateUserState(newData);
+        // Enforce global platform validation rules.
+        //
+        // `currentData` is passed so the rules can tell an ASSIGNMENT from an
+        // update to a record that already had the role.
+        validateUserState(newData, currentData);
 
         // Commit transaction
         transaction.update(userRef, {
