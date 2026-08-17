@@ -69,9 +69,23 @@ async function _submitQuoteRequestAction(data: QuoteRequestData): Promise<Action
             return { success: false as const, error: "Quantity must be a positive number", data: null };
         }
 
-        const quoteRef = await db.collection(COLLECTIONS.MARKETPLACE_QUOTES).add({ 
-            ...data,
-            // After the spread, so the caller's copies are recorded nowhere.
+        // Fields listed, not spread.
+        //
+        // `...data` came first and the derived values after it, so the caller's
+        // own sellerId and productName were recorded nowhere — which is what the
+        // comment above is about. That is the OVERWRITE half. The spread still
+        // wrote any field the caller invented, because the declared parameter
+        // type is erased before the request arrives, and nothing below mentions
+        // the fields a future seller-response flow would add (a quoted price, a
+        // response, an accepted-at). Seven fields are wanted from the request;
+        // seven are written.
+        const quoteRef = await db.collection(COLLECTIONS.MARKETPLACE_QUOTES).add({
+            productId: data.productId,
+            ...(data.unit !== undefined ? { unit: data.unit } : {}),
+            ...(data.notes !== undefined ? { notes: data.notes } : {}),
+            ...(data.preferredDeliveryDate !== undefined
+                ? { preferredDeliveryDate: data.preferredDeliveryDate }
+                : {}),
             sellerId,
             productName,
             quantity,

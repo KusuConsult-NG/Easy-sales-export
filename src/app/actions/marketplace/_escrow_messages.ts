@@ -38,7 +38,26 @@ async function _sendEscrowMessageAction(data: { escrowId: string;
             return { success: false as const, error: "Not a participant of this escrow"};
         }
 
-        const messageData: Omit<Message, "id"> & { createdAt: any } = { ...data,
+        // Fields listed, not spread.
+        //
+        // `data` is whatever JSON arrived at this server action — the declared
+        // parameter type is erased at runtime — so `{ ...data, ... }` wrote every
+        // key a caller invented into the message document, on top of the four
+        // this function means to store.
+        //
+        // senderName is also DERIVED now rather than accepted. It was the one
+        // caller-supplied string that reaches another human's screen: the chat
+        // renders `message.senderName` verbatim, so a participant could post as
+        // "EasySales Support" while senderId — which nothing renders — correctly
+        // recorded them. The client already sent exactly this value
+        // (escrow/[id]/chat/page.tsx), so nothing changes for honest callers.
+        const senderName = session.user.name || session.user.email || "Unknown";
+
+        const messageData: Omit<Message, "id"> & { createdAt: any } = {
+            escrowId: data.escrowId,
+            senderId: data.senderId,
+            senderName,
+            message: data.message,
             timestamp: FieldValue.serverTimestamp(),
             createdAt: FieldValue.serverTimestamp(),
             read: false };

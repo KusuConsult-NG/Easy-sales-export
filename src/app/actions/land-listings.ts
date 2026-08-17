@@ -101,9 +101,34 @@ async function _createLandListingAction(data: {
         const { session } = sessionResult;
         const ownerId = session.user.id;
 
+        // Fields listed, not spread.
+        //
+        // `...data` came first and the trusted values after it, so a
+        // caller-supplied ownerId could not survive. That handled callers
+        // OVERWRITING the fields below; it did nothing about callers ADDING
+        // fields these lines never mention. `LandListing` declares
+        // `verified`, `verificationStatus`, `verifiedBy`, `verifiedAt` and
+        // `escrowAvailable` — all of them records of an admin decision made in
+        // verifyLandListingAction — and a create request could simply include
+        // them. The listing still could not reach a purchasable status without
+        // the admin transition, so this was a false badge rather than a false
+        // sale, but a create endpoint has no business writing the verification
+        // record at all.
+        //
+        // The parameter contract is eleven fields. Those eleven are what gets
+        // written. `type` and the availableFor* flags are on the interface but
+        // not on this signature, so they were never accepted here either — the
+        // API route at api/farm-nation/create-listing is the writer that
+        // handles them.
         const listing: Omit<LandListing, "id"> = {
-            ...data,
-            // After the spread, so a caller-supplied ownerId cannot survive.
+            title: data.title,
+            description: data.description,
+            location: data.location,
+            size: data.size,
+            price: data.price,
+            ...(data.category !== undefined ? { category: data.category } : {}),
+            ...(data.soilType !== undefined ? { soilType: data.soilType } : {}),
+            ...(data.waterSource !== undefined ? { waterSource: data.waterSource } : {}),
             ownerId,
             ownerName: session.user.name || data.ownerName,
             ownerEmail: session.user.email || data.ownerEmail,

@@ -97,13 +97,25 @@ async function _createDisputeAction(data: { escrowId: string;
 
             escrowSnapData = escrowData;
 
-            // The derived identities are written AFTER the spread, so a
-            // forged initiatorId or respondentId in the request cannot survive
-            // into the stored dispute. Field order is doing real work here —
-            // reversed, this reintroduces the whole defect. That fragility is
-            // the mass-assignment caveat recorded in
-            // security-review-2026-08-10.md.
-            const dispute: Omit<Dispute, "id"> & { _version: number } = { ...data,
+            // Fields listed, not spread.
+            //
+            // This used to be `{ ...data, initiatedBy, initiatorId, ... }`, with
+            // a comment explaining that the derived identities came after the
+            // spread so a forged initiatorId could not survive. That was true,
+            // and it was half the problem: field order stopped a caller
+            // OVERWRITING the fields named below, but nothing stopped them
+            // ADDING fields those lines never mention. `Dispute` declares
+            // `resolution`, `resolvedBy` and `resolvedAt`, so a caller opening
+            // an ordinary dispute could plant a resolution and attribute it to
+            // an admin — the status would still read "open", but the admin
+            // dispute view renders those fields.
+            //
+            // Two fields are wanted from the request. They are named. The
+            // mass-assignment caveat in security-review-2026-08-10.md no longer
+            // applies to this write.
+            const dispute: Omit<Dispute, "id"> & { _version: number } = {
+                escrowId: data.escrowId,
+                reason: data.reason,
                 initiatedBy,
                 initiatorId,
                 respondentId,

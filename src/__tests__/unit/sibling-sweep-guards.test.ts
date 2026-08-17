@@ -17,8 +17,10 @@
  * ---------------------------------
  * Read-adjust-write on a balance (#109, #110): no sites remain. Closed.
  *
- * Sensitive field before a caller spread: 154 literals spread caller data into
- * a write, and every one puts its security-critical keys AFTER the spread. Five
+ * Sensitive field before a caller spread: 154 literals match the caller-spread
+ * regex (see "ON THE COUNT" below — that is a wider net than "spread caller
+ * data into a write"), and every one puts its security-critical keys AFTER the
+ * spread. Five
  * apparent violations were all false positives on inspection — a nested
  * `metadata: { ...data }` inside an audit call, two reads where `data` is
  * `doc.data()`, and a literal with no spread at all. Nothing to fix, so nothing
@@ -37,7 +39,25 @@
  *     order in an object literal, which is a thin thing to rest on.
  *
  * It is right. A reorder during a refactor removes the guard silently and
- * nothing fails. There are 154 such sites now, not fourteen.
+ * nothing fails.
+ *
+ * ON THE COUNT — CORRECTED
+ * ------------------------
+ * This file used to say "there are 154 such sites now, not fourteen". That
+ * overstates what it measures. The 154 is every `...data`-shaped spread this
+ * regex finds in any object literal in an action file: response objects, audit
+ * metadata, nested literals, and spreads of variables that merely share a name
+ * with the CALLER_VARS list. It does not establish that any of them reaches a
+ * write, nor that the spread variable is a parameter.
+ *
+ * An AST scan restricted to parameter-rooted spreads that reach a
+ * .set/.add/.update finds 18 — so "fourteen" was approximately right, and this
+ * comment was not. That scan lives in mass-assignment-scan.ts
+ * (scanForCallerSpreadWrites) and is pinned by caller-spread-writes.test.ts.
+ *
+ * The regex below is still worth keeping: it is a wide net over ORDER, and a
+ * wide net is the right shape for a property that must never be violated
+ * anywhere. It is the count in the prose that was wrong, not the guard.
  *
  * The admin-role guard exists because the same narrow check has been fixed
  * three times — #115 (land verification), #122 (dispute assignee), #134
