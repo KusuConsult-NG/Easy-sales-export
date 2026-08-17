@@ -9,6 +9,9 @@ import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
+import { FieldValue } from "@/lib/firestore-compat";
+import { extractCanonicalUser } from "@/lib/canonical/normalizer";
+import { WAVE_CERTIFICATE as WAVE_CERTIFICATE_RECORD_TYPE } from "@/lib/certificate-kind";
 import type { WaveCertificate } from "@/lib/types/wave-actions";
 
 /**
@@ -34,22 +37,89 @@ async function _generateCertificateAction(
         }
 
         const userData = userDoc.data();
-        const certNumber = `WAVE-${new Date().getFullYear()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+
+        /**
+         * The member's name, resolved the way the rest of the platform resolves it.
+         *
+         * This read `userData?.name || "Member"`, and NOTHING writes `name` onto a
+         * user. Registration writes `fullName`, `firstName` and `lastName` — there
+         * is no `name` field in the profile it creates — so the fallback always
+         * won and every certificate this action has ever issued was made out to
+         * "Member".
+         *
+         * extractCanonicalUser is the shared resolver, used by the admin lists, the
+         * withdrawal payout and the application screens. A certificate is the one
+         * artefact where the name is the entire point.
+         */
+        const canonical = extractCanonicalUser(userData ?? {});
+        const memberName = canonical.name || "Member";
+
+        if (!canonical.name) {
+            logger.warn(
+                `[WAVE Certificate] No name could be resolved for ${userId}; issuing to "Member". ` +
+                `Fill in the member's name before this certificate is presented anywhere.`
+            );
+        }
+
+        /**
+         * A certificate number nobody can guess, and no two certificates share.
+         *
+         * It was `Math.random().toString(36).substring(2, 8)` — six base-36
+         * characters, from a generator that is not cryptographically random and is
+         * seeded predictably enough that sequences can be reconstructed. For a
+         * number whose purpose is to let a third party confirm a credential is
+         * genuine, guessable is the wrong property to have.
+         *
+         * Six characters is also about 2.2 billion values, so at fifteen thousand
+         * certificates the chance of a collision is a few percent — and nothing
+         * checked for one before writing.
+         *
+         * randomUUID gives 122 bits. Twelve hex characters of it is 48 bits, which
+         * makes a collision negligible at any volume this programme will reach while
+         * staying short enough to read off a printed page.
+         */
+        const { randomUUID } = await import("crypto");
+        const certNumber = `WAVE-${new Date().getFullYear()}-${randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase()}`;
         const certId = `cert_${userId}_${Date.now()}`;
         const issuedDate = new Date();
 
         const certificate: WaveCertificate = {
             id: certId,
             memberId: userId,
-            memberName: userData?.name || "Member",
+            memberName,
             certificateType,
             programName,
             issuedDate,
             certificateNumber: certNumber,
-            verificationUrl: `/wave/verify-certificate/${certNumber}`
+            // Keyed on the document id, and pointing at a verifier that exists.
+            //
+            // It was `/wave/verify-certificate/${certNumber}` — a route with no
+            // page and no handler anywhere in the app, so every certificate ever
+            // issued carried a verification link that 404s. The public verifier is
+            // /api/academy/verify/[certificateId], which now looks in this
+            // collection too; the path keeps its historical name because the
+            // academy certificate URLs already in circulation use it.
+            verificationUrl: `/academy/verify/${certId}`
         };
 
-        await db.collection(COLLECTIONS.WAVE_CERTIFICATES).doc(certId).set(certificate);
+        await db.collection(COLLECTIONS.WAVE_CERTIFICATES).doc(certId).set({
+            ...certificate,
+            // The fields the unified certificates endpoint reads. It queried this
+            // collection on `userId` while this writer stored `memberId`, and read
+            // `type`, `issuedAt` and `certificateUrl` where this writer stored
+            // `certificateType`, `issuedDate` and nothing — four field names, none
+            // of them matching, so its WAVE branch returned no rows at all and
+            // could not have rendered them if it had.
+            //
+            // Written alongside rather than instead of, so the member page — which
+            // reads the names above — keeps working on old and new rows alike.
+            userId,
+            type: certificateType,
+            issuedAt: issuedDate,
+            recordType: WAVE_CERTIFICATE_RECORD_TYPE,
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
 
         await createAdminAuditLog({
             action: "user_update",

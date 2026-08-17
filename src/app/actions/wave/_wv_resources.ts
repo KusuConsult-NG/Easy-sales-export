@@ -12,6 +12,7 @@ import { serializeDocs } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { isAdmin } from "@/lib/role-utils";
 import type { WaveResource, WaveTrainingEvent } from "@/lib/types/wave-actions";
+import { isResourceWithdrawn } from "@/lib/wave-resource-visibility";
 
 /**
  * Get WAVE resources
@@ -74,9 +75,21 @@ async function _getWaveResourcesAction(
             }
         }
 
+        // Withdrawn resources are excluded here too.
+        //
+        // This listing filtered on neither visibility field, so it showed resources
+        // an admin had removed through either delete path — while the OTHER member
+        // listing, getResourcesAction, filtered `isActive == true` and so showed
+        // none of the ones created from the WAVE admin screen. Two member-facing
+        // lists over one collection, one showing too much and one too little.
+        //
+        // Filtered after the page slice would drop rows from a page; filtered
+        // before it changes what `hasMore` means. Applied first, so the page is a
+        // page of visible resources.
         const snapshot = await queryRef.get();
-        const hasMore = snapshot.docs.length > pageSize;
-        const docs = hasMore ? snapshot.docs.slice(0, pageSize) : snapshot.docs;
+        const visibleDocs = snapshot.docs.filter((doc: any) => !isResourceWithdrawn(doc.data()));
+        const hasMore = visibleDocs.length > pageSize;
+        const docs = hasMore ? visibleDocs.slice(0, pageSize) : visibleDocs;
 
         const data = serializeDocs<WaveResource>(docs);
         const nextCursor = hasMore && docs.length > 0

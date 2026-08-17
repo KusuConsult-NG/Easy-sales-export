@@ -73,19 +73,56 @@ export async function GET(request: NextRequest) {
             }
         }
 
-        // 2. WAVE program certificates
-        const waveSnap = await db.collection(COLLECTIONS.WAVE_CERTIFICATES).where("userId", "==", userId).get();
+        /**
+         * 2. WAVE program certificates
+         *
+         * FOUR FIELD NAMES, NONE OF THEM MATCHING THE WRITER
+         * --------------------------------------------------
+         * This queried `userId` and read `type`, `issuedAt` and `certificateUrl`.
+         * _wv_certificates.ts writes `memberId`, `certificateType`, `issuedDate`
+         * and a `verificationUrl`. Every single field disagreed, so:
+         *
+         *   - the query matched nothing, and this branch returned no rows at all;
+         *   - had it matched, `courseName` would have read "WAVE – undefined";
+         *   - and `issuedAt` would have fallen through to `new Date()`, dating
+         *     every certificate today.
+         *
+         * The writer now stores both spellings, so new rows are found either way.
+         * Existing rows carry only the original names — hence the `in` over both
+         * fields here, and the fallbacks below. Neither half is dropped, because
+         * the member's own certificates page reads the writer's names and the rows
+         * predate the fix.
+         */
+        const [waveByUserId, waveByMemberId] = await Promise.all([
+            db.collection(COLLECTIONS.WAVE_CERTIFICATES).where("userId", "==", userId).get(),
+            db.collection(COLLECTIONS.WAVE_CERTIFICATES).where("memberId", "==", userId).get(),
+        ]);
 
-        for (const doc of waveSnap.docs) {
+        const seenWaveIds = new Set<string>();
+        const waveDocs = [...waveByUserId.docs, ...waveByMemberId.docs].filter((doc) => {
+            if (seenWaveIds.has(doc.id)) return false;
+            seenWaveIds.add(doc.id);
+            return true;
+        });
+
+        for (const doc of waveDocs) {
             const d = doc.data();
+            const kind = d.certificateType ?? d.type ?? "";
+            const issued = d.issuedDate ?? d.issuedAt ?? d.createdAt ?? null;
+
             certificates.push({
                 id: doc.id,
-                courseName: d.type === "completion" ? "WAVE Export Programme" : `WAVE – ${d.type}`,
+                courseName: d.programName
+                    || (kind === "completion" ? "WAVE Export Programme" : kind ? `WAVE – ${kind}` : "WAVE Programme"),
                 courseId: "wave",
                 issuedAt:
-                    d.issuedAt?.toDate?.()?.toISOString() ??
-                    (typeof d.issuedAt === "string" ? d.issuedAt : new Date().toISOString()),
-                certificateUrl: d.pdfUrl || d.certificateUrl || undefined,
+                    issued?.toDate?.()?.toISOString()
+                    ?? (typeof issued === "string" ? issued : null)
+                    ?? (issued instanceof Date ? issued.toISOString() : null)
+                    // Only when the row genuinely carries no date. Defaulting to
+                    // "now" silently made every certificate look freshly issued.
+                    ?? new Date(0).toISOString(),
+                certificateUrl: d.pdfUrl || d.certificateUrl || d.verificationUrl || undefined,
                 grade: d.grade || undefined,
                 source: "wave",
             });

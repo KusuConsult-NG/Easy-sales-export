@@ -43,6 +43,17 @@ export const ACADEMY_CERTIFICATE = "academy_certificate";
 export const USER_UPLOADED_DOCUMENT = "user_upload";
 
 /**
+ * A WAVE programme certificate, in COLLECTIONS.WAVE_CERTIFICATES.
+ *
+ * A separate collection from the academy's, so the upload-vs-issued ambiguity this
+ * file exists for does not arise there — nothing lets a user attach a file to it.
+ * The marker is written anyway, so the public verifier can state what kind of
+ * credential it is confirming rather than inferring it from which collection the
+ * row happened to be found in.
+ */
+export const WAVE_CERTIFICATE = "wave_certificate";
+
+/**
  * Is this row a credential the platform issued?
  *
  * Only these may be publicly verified or counted as earned.

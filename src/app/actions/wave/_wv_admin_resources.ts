@@ -9,6 +9,7 @@ import { serializeDocs } from "@/lib/firestore-serialize";
 import { FieldValue } from "@/lib/firestore-compat";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { createAdminAuditLog } from "@/lib/audit-log";
+import { RESOURCE_LIVE_FIELDS, RESOURCE_WITHDRAWN_FIELDS } from "@/lib/wave-resource-visibility";
 
 // ============================================================================
 // RESOURCES MANAGEMENT
@@ -40,6 +41,12 @@ async function _createResourceAction(data: {
 
         const resourceRef = await db.collection(COLLECTIONS.WAVE_RESOURCES).add({
             ...data,
+            // Marked live explicitly. This wrote neither visibility field, and
+            // getResourcesAction — the listing behind /wave/(member)/resources —
+            // queries `.where("isActive", "==", true)`. So every resource uploaded
+            // through this screen was invisible to members while showing up in the
+            // admin's own list. See wave-resource-visibility.ts.
+            ...RESOURCE_LIVE_FIELDS,
             downloads: 0,
             uploadedAt: FieldValue.serverTimestamp(),
             uploadedBy: session.user.id,
@@ -141,7 +148,11 @@ async function _deleteResourceAction(
         }
 
         await db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId).update({
-            deleted: true,
+            // `deleted: true` alone was read by NOTHING — not the listings, not the
+            // download guard — so this button removed a resource from nowhere. Both
+            // spellings now, because two readers query `isActive` in SQL and cannot
+            // call a predicate.
+            ...RESOURCE_WITHDRAWN_FIELDS,
             deletedAt: FieldValue.serverTimestamp(),
             deletedBy: session.user.id,
             updatedAt: FieldValue.serverTimestamp(),
