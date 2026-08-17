@@ -121,15 +121,50 @@ async function uploadHandler(request: NextRequest) {
         // e2e specs covering them failed on a local stack with the listing
         // silently never created.
         //
-        // Files are written under public/uploads/local, which `next dev`
-        // serves statically, so the returned URL behaves like the remote one.
+        // Files are written under public/uploads/local, which both `next dev`
+        // and `next start` serve statically — public/ is read at request time,
+        // not baked into the build — so a file written after the build is still
+        // served and the returned URL behaves like the remote one. That matters
+        // now that the e2e suite runs a production build.
         //
         // GUARDED ON NODE_ENV, NOT ON A FLAG. A production deployment that
         // loses its Cloudinary credentials must keep failing loudly — writing
         // customer uploads onto an ephemeral container filesystem would look
         // like it worked and lose them at the next deploy. The 503 below is
         // still the production behaviour.
-        const useLocalDisk = (!cloudName || !apiKey || !apiSecret) && process.env.NODE_ENV !== "production";
+        // A WHOLLY LOCAL STACK COUNTS AS DEVELOPMENT, EVEN ON A PRODUCTION BUILD.
+        //
+        // The NODE_ENV test above was the only gate, and it stopped working the
+        // moment the e2e suite moved to a production build for speed: `next
+        // start` sets NODE_ENV=production, so the local-disk branch became
+        // unreachable and EVERY upload answered 503. Two specs failed on it —
+        // the loan wizard's document step and Farm Nation's land listing, which
+        // needs a survey plan — and both failed as a missing confirmation
+        // message rather than as "uploads are switched off", which is how it
+        // cost an afternoon to find.
+        //
+        // WHY THIS SIGNAL AND NOT A FLAG
+        // ------------------------------
+        // The warning in the comment above is still right: a flag like
+        // ALLOW_LOCAL_UPLOADS is harmless until somebody copies a .env into a
+        // deploy config, and then customer uploads land on an ephemeral
+        // container disk and vanish at the next deploy, looking like success.
+        //
+        // So the discriminator is one that cannot be set by accident on a real
+        // deployment: the database this process is pointed at. No production
+        // deployment of this app has NEXT_PUBLIC_SUPABASE_URL on loopback.
+        // scripts/seed-local.ts already draws exactly this line — it refuses to
+        // seed any host that is not localhost — so this is the codebase's
+        // existing definition of "local", not a new concept.
+        //
+        // Cloudinary still wins whenever it is configured; this only decides
+        // what happens in its ABSENCE. A real deployment that loses its
+        // credentials still gets the loud 503 below.
+        const isLocalStack = /^https?:\/\/(127\.0\.0\.1|localhost|0\.0\.0\.0|\[::1\])(:\d+)?(\/|$)/i
+            .test(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "");
+
+        const useLocalDisk = (!cloudName || !apiKey || !apiSecret)
+            && (process.env.NODE_ENV !== "production" || isLocalStack);
 
         if (!useLocalDisk && (!cloudName || !apiKey || !apiSecret)) {
             logger.error("Upload failed: Cloudinary environment variables not configured");

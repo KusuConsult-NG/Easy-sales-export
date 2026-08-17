@@ -79,6 +79,22 @@ const PUBLIC_ROUTES: Record<string, string> = {
     '/api/marketplace/products': 'the public product catalogue',
     '/api/academy/courses': 'the public course catalogue',
     '/api/csrf': 'issues the CSRF token the login form needs',
+
+    // ── Added after the first full run flagged them ───────────────────────────
+    //
+    // Three catalogue endpoints answered anonymous callers and were absent from
+    // this list. Each was read before being added, and each is public BY DESIGN
+    // with an explicit allow-list of the fields it returns — the whitelist above
+    // was written from a partial reading of the API surface, not from these
+    // routes changing.
+    '/api/cooperative/loan-products':
+        'public loan product catalogue: filters isActive and returns only PUBLIC_PRODUCT_FIELDS',
+    '/api/export/catalog':
+        'public export catalogue: filters isActive and returns only PUBLIC_CATALOG_FIELDS',
+    '/api/farm-nation/listings':
+        'public land listings, feeding /land and /farm-nation/map: filters on PUBLIC_LAND_STATUSES ' +
+        'and runs stripInternalLandFields, which removes verifiedBy, rejectionReason, ' +
+        'verificationNotes and the owner email',
 };
 
 const allGetRoutes = Array.from(new Set(collectApiRoutes(API_DIR)))
@@ -123,6 +139,34 @@ test.describe('API routes refuse anonymous callers', () => {
                 if (isPublic) {
                     expect(status, `${route} is listed public (${PUBLIC_ROUTES[route]}) but answered ${status}`)
                         .toBeLessThan(300);
+
+                    // Being on the list is permission to answer, NOT permission
+                    // to answer with anything.
+                    //
+                    // Without this, adding a route above would be a blanket
+                    // pass forever: a future change that started spreading the
+                    // stored document instead of an allow-list would leak
+                    // internal fields to strangers and this file would stay
+                    // green. That is precisely what happened to
+                    // /api/farm-nation/listings once already — it spread the
+                    // document while land-actions.ts had been stripping these
+                    // fields for months.
+                    const body = await response.text();
+                    for (const forbidden of [
+                        'rejectionReason',
+                        'verificationNotes',
+                        'verifiedBy',
+                        'internalNotes',
+                        'passwordHash',
+                        'bvn',
+                        'accountNumber',
+                    ]) {
+                        expect(
+                            body.includes(`"${forbidden}"`),
+                            `${route} is public but its body contains "${forbidden}", which must not ` +
+                            `reach an anonymous caller. Either strip it or the route is not public.`
+                        ).toBe(false);
+                    }
                     return;
                 }
 

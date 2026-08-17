@@ -108,7 +108,20 @@ export default function ContributePage() {
 
                         {/* Amount Input */}
                         <div className="mb-6">
-                            <label className="block text-sm font-medium text-slate-900 mb-2">
+                            {/*
+                              * htmlFor + id, because this label was attached to
+                              * nothing.
+                              *
+                              * The input below had no id and no name, and this
+                              * label had no htmlFor, so nothing associated the
+                              * words "Amount (₦)" with the field. A screen
+                              * reader announces an unlabelled number box on the
+                              * page where a member types how much money to
+                              * contribute. Clicking the label also did not focus
+                              * the field, and browser autofill had nothing to
+                              * key on.
+                              */}
+                            <label htmlFor="amount" className="block text-sm font-medium text-slate-900 mb-2">
                                 Amount (₦)
                             </label>
                             <div className="relative">
@@ -117,6 +130,8 @@ export default function ContributePage() {
                                 </span>
                                 <input
                                     type="number"
+                                    id="amount"
+                                    name="amount"
                                     value={amount}
                                     onChange={(e) => setAmount(e.target.value)}
                                     placeholder="10,000"

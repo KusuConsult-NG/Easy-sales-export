@@ -25,8 +25,24 @@ test.describe('Marketplace Purchase Flow', () => {
         await page.goto('/marketplace');
         await expect(page).toHaveURL(/.*marketplace/);
 
-        // Verify page header is visible
-        await expect(page.locator('h1')).toContainText(/Easy Market|Featured|Marketplace/i);
+        // Asserted through the accessibility tree, not through locator('h1').
+        //
+        // locator('h1') hit a strict mode violation: "resolved to 2 elements",
+        // both <h1>Easy Market Nigeria</h1> with identical classes. That is a
+        // TRANSIENT during hydration, and it was measured rather than guessed —
+        // sampling document.querySelectorAll('h1').length every 50ms from
+        // navigation-commit gives a series like 1,2,1,1,1,... The server sends
+        // exactly one h1, the source contains exactly one, and the settled DOM
+        // has exactly one; React briefly holds both while it reconciles.
+        //
+        // Only one of the two is in the accessibility tree — Playwright's own
+        // error named the second one getByText(...).nth(1) rather than
+        // getByRole('heading'), and the captured aria snapshot lists a single
+        // heading. So a role-based locator resolves to one element throughout,
+        // and it also asserts the thing that matters: what a user, and a screen
+        // reader, actually perceive as the page's heading.
+        await expect(page.getByRole('heading', { level: 1 }))
+            .toContainText(/Easy Market|Featured|Marketplace/i);
 
         // Navigate to products catalog
         await page.goto('/marketplace/products');

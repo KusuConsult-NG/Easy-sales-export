@@ -187,9 +187,23 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                     animate={{ opacity: 1, y: 0 }}
                     className="mb-8"
                 >
-                    <h2 className="text-3xl font-bold text-slate-900 mb-2">
+                    {/*
+                      * h1, not h2 — /loans/apply had NO h1 at all.
+                      *
+                      * This is the page's main heading and the only heading at
+                      * the top of it, but it was marked up as a subheading, so
+                      * the loan application page had no document title in its
+                      * heading structure. A screen reader user navigating by
+                      * headings lands on a level-2 with no level-1 above it, and
+                      * "skip to main heading" has nothing to reach.
+                      *
+                      * Safe to promote: LoanWizard is rendered in exactly one
+                      * place, src/app/loans/apply/page.tsx, so this cannot
+                      * introduce a second h1 on some other page.
+                      */}
+                    <h1 className="text-3xl font-bold text-slate-900 mb-2">
                         Loan Application
-                    </h2>
+                    </h1>
                     <p className="text-slate-600">
                         Complete all steps to submit your application
                     </p>
