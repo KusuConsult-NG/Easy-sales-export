@@ -1,4 +1,5 @@
 import { logger } from "@/lib/logger";
+import { shouldUseLocalDiskStorage, writeToLocalDisk } from "@/lib/storage-backend";
 
 /**
  * Server-side file upload.
@@ -87,7 +88,19 @@ export async function uploadFileToStorage(
     const apiKey = process.env.CLOUDINARY_API_KEY;
     const apiSecret = process.env.CLOUDINARY_API_SECRET;
 
-    if (!cloudName || !apiKey || !apiSecret) {
+    // THIS WAS THE THIRD COPY OF THE RULE, AND THE ONE WITH NO LOCAL BRANCH.
+    //
+    // /api/upload and actions/upload.ts both fall back to a local disk write
+    // when Cloudinary is absent. This function just threw, and it is the
+    // uploader behind certificates, marketplace product images, seller
+    // verification and marketplace onboarding — so all of those were
+    // impossible to exercise without a real Cloudinary account, which is a
+    // large hole in what can be tested locally.
+    //
+    // The rule is now shared: see src/lib/storage-backend.ts.
+    const useLocalDisk = shouldUseLocalDiskStorage();
+
+    if (!useLocalDisk && (!cloudName || !apiKey || !apiSecret)) {
         logger.error('[storage-admin] Cloudinary credentials are not configured');
         throw new Error('Upload service is not configured. Please contact support.');
     }
@@ -112,7 +125,27 @@ export async function uploadFileToStorage(
     const timestamp = Math.floor(Date.now() / 1000);
     const publicId = `${safeFolder}/${safeName}-${timestamp}${extension}`;
 
+    // Local disk backend. Deliberately placed AFTER assertAllowedFileType above
+    // so a local upload is validated exactly as a remote one is — a permissive
+    // local path would hide a validation bug rather than surface it. safeFolder
+    // and safeName are stripped to [a-zA-Z0-9-_], so publicId cannot traverse
+    // out of the uploads directory.
+    if (useLocalDisk) {
+        return writeToLocalDisk(publicId, buffer);
+    }
+
     // Signed upload — parameters must be sorted alphabetically before hashing.
+    // Past both guards above, Cloudinary IS configured: the first throws when a
+    // credential is missing and local disk is not an option, and the second
+    // returns when it is. The compiler cannot follow that two-step reasoning, so
+    // state it rather than cast — without the narrowing, `undefined` would be
+    // appended as the string "undefined" and Cloudinary would reject the upload
+    // with an unhelpful message.
+    if (!cloudName || !apiKey || !apiSecret) {
+        logger.error('[storage-admin] Cloudinary credentials are not configured');
+        throw new Error('Upload service is not configured. Please contact support.');
+    }
+
     // Matches the scheme already used by /api/upload.
     const crypto = await import('crypto');
     const signature = crypto

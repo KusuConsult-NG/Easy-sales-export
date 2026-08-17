@@ -171,6 +171,30 @@ export default function ContributePage() {
                             </div>
                         )}
 
+                        {/*
+                          * WHY THE PAY BUTTON IS DEAD, SAID OUT LOUD.
+                          *
+                          * The button below is disabled whenever the amount is
+                          * empty or under ₦1,000, and nothing announced that. A
+                          * member who typed 500 got an unresponsive button and a
+                          * static "Min: ₦1,000" line further up the page that
+                          * does not change, is not associated with the button,
+                          * and is not announced when the state flips.
+                          *
+                          * This is the same defect already fixed on the Farm
+                          * Nation land listing form, where the submit button
+                          * demanded a survey plan and the validation never said
+                          * so. role="status" makes it a live region, so the
+                          * reason is announced the moment it applies.
+                          */}
+                        {(!amountNum || amountNum < 1000) && (
+                            <p role="status" className="mb-3 text-sm text-amber-700">
+                                {!amountNum
+                                    ? "Enter an amount of ₦1,000 or more to continue."
+                                    : `₦${amountNum.toLocaleString()} is below the ₦1,000 minimum contribution.`}
+                            </p>
+                        )}
+
                         {/* Pay Button */}
                         <LoadingButton
                             onClick={handlePayment}

@@ -28,11 +28,39 @@ test.describe('Cooperative Contribution', () => {
 
         const amount = page.locator('input[name="amount"]');
         await expect(amount).toBeVisible({ timeout: 15000 });
-        await amount.fill('500');
-        await page.click('button[type="submit"]');
 
-        // Below the minimum must be refused, and the page must stay put.
-        await expect(page).toHaveURL(/\/cooperatives\/contribute/);
+        // Asserted against the guard the page ACTUALLY has.
+        //
+        // This used to fill 500, click button[type="submit"], and check the URL
+        // had not changed. Three things were wrong with that, and together they
+        // made it a test that could only ever time out:
+        //
+        //   1. There is no <form> on this page. The action is an onClick
+        //      handler, so nothing is "submitted" and the URL was never going to
+        //      change — the assertion would have passed even with the minimum
+        //      not enforced at all.
+        //   2. The only button[type="submit"] on the page belongs to
+        //      AiChatWidget, the floating chat widget rendered on EVERY page.
+        //      Its send button is disabled and hidden while the widget is
+        //      closed, so the click waited 90 seconds for an invisible element.
+        //   3. The real guard is `disabled={!amountNum || amountNum < 1000}` on
+        //      the pay button, which the old test never looked at.
+        //
+        // Addressed by accessible name so it cannot pick up a widget again.
+        const pay = page.getByRole('button', { name: /Pay with Paystack/i });
+
+        await amount.fill('500');
+        await expect(pay, 'below the ₦1,000 minimum the pay button must be disabled').toBeDisabled();
+
+        // And the page must SAY why, not merely refuse. A dead button with no
+        // explanation is the defect this audit already fixed on the land
+        // listing form.
+        await expect(page.getByRole('status')).toContainText(/1,?000/);
+
+        // The guard must also let a valid amount through — otherwise "disabled"
+        // above would pass on a page whose button is permanently dead.
+        await amount.fill('5000');
+        await expect(pay).toBeEnabled();
     });
 
     // 'should redirect to Paystack for payment' is REMOVED, deliberately.
