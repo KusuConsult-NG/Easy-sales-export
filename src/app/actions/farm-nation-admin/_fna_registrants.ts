@@ -154,16 +154,14 @@ async function _getStandardFarmNationRegistrantsAction(options: {
                 applications = applications.filter(app => app.status === options.status);
             }
             if (options.dateFrom) {
-                const from = new Date(options.dateFrom);
-                from.setHours(0, 0, 0, 0);
+                const from = dateRangeStart(options.dateFrom);
                 applications = applications.filter(app => {
                     const d = app.submittedAt?.seconds ? new Date(app.submittedAt.seconds * 1000) : new Date(app.submittedAt);
                     return d >= from;
                 });
             }
             if (options.dateTo) {
-                const to = new Date(options.dateTo);
-                to.setHours(23, 59, 59, 999);
+                const to = dateRangeEnd(options.dateTo);
                 applications = applications.filter(app => {
                     const d = app.submittedAt?.seconds ? new Date(app.submittedAt.seconds * 1000) : new Date(app.submittedAt);
                     return d <= to;
@@ -305,16 +303,14 @@ async function _getStandardFarmNationRegistrantsAction(options: {
 
         // ALWAYS apply date filters in memory as a definitive backstop.
         if (options.dateFrom) {
-            const from = new Date(options.dateFrom);
-            from.setHours(0, 0, 0, 0);
+            const from = dateRangeStart(options.dateFrom);
             finalApplications = finalApplications.filter((app: any) => {
                 const d = app.submittedAt?.seconds ? new Date(app.submittedAt.seconds * 1000) : new Date(app.submittedAt);
                 return d >= from;
             });
         }
         if (options.dateTo) {
-            const to = new Date(options.dateTo);
-            to.setHours(23, 59, 59, 999);
+            const to = dateRangeEnd(options.dateTo);
             finalApplications = finalApplications.filter((app: any) => {
                 const d = app.submittedAt?.seconds ? new Date(app.submittedAt.seconds * 1000) : new Date(app.submittedAt);
                 return d <= to;

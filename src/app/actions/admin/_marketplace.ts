@@ -490,13 +490,11 @@ async function _getStandardSellerVerificationsAction(
 
         // ALWAYS apply date filters in memory as a definitive backstop.
         if (dateFrom) {
-            const from = new Date(dateFrom);
-            from.setHours(0, 0, 0, 0);
+            const from = dateRangeStart(dateFrom);
             finalForms = finalForms.filter((app: any) => new Date(app.data?.createdAt?.toDate ? app.data.createdAt.toDate().toISOString() : app.data?.createdAt || 0) >= from);
         }
         if (dateTo) {
-            const to = new Date(dateTo);
-            to.setHours(23, 59, 59, 999);
+            const to = dateRangeEnd(dateTo);
             finalForms = finalForms.filter((app: any) => new Date(app.data?.createdAt?.toDate ? app.data.createdAt.toDate().toISOString() : app.data?.createdAt || 0) <= to);
         }
 
@@ -641,13 +639,11 @@ async function _getMarketplaceUsersAction(options: {
 
         // ALWAYS apply date filters in memory as a definitive backstop.
         if (options.dateFrom) {
-            const from = new Date(options.dateFrom);
-            from.setHours(0, 0, 0, 0);
+            const from = dateRangeStart(options.dateFrom);
             users = users.filter((u: any) => new Date(u.createdAt) >= from);
         }
         if (options.dateTo) {
-            const to = new Date(options.dateTo);
-            to.setHours(23, 59, 59, 999);
+            const to = dateRangeEnd(options.dateTo);
             users = users.filter((u: any) => new Date(u.createdAt) <= to);
         }
 

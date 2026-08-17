@@ -33,10 +33,76 @@ async function _calculateEarningsAction(userId: string): Promise<ActionResponse<
         // Source of Truth: Persistent Balance
         let availableBalance = waveReg?.waveEarningsBalance;
 
-        // Heavy calculation for Transaction History and Initial Backfill
-        const snapshot = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
+        /**
+         * Commission is computed from the ESCROW rows, not from the order.
+         *
+         * FOUR DEFECTS IN THE OLD BASIS
+         * -----------------------------
+         * It queried MARKETPLACE_ORDERS on `sellerId` and took 5% of
+         * `order.totalAmount`. Both halves were wrong, in four separate ways.
+         *
+         * 1. AN ORDER HAS SEVERAL SELLERS. `_payment_orders.ts` writes
+         *    `sellerIds` — an array — and then `sellerId: sellerIds[0]`, purely as
+         *    a convenience field. So this credited whoever happened to be listed
+         *    FIRST with 5% of every other seller's items.
+         *
+         * 2. AND THE OTHER SELLERS GOT NOTHING. The query filters the scalar
+         *    `sellerId`, so a WAVE member who was the second seller on an order
+         *    earned no commission at all from a sale she genuinely made.
+         *
+         * 3. CANCELLATION DID NOT REMOVE IT. `isPaid` was
+         *    `paymentStatus === "paid" || status === "completed"`, and
+         *    cancelOrder claims the ORDER to "cancelled" without touching
+         *    `paymentStatus`. A paid-then-cancelled order kept paying 5%.
+         *
+         * 4. NEITHER DID A REFUND. refundEscrowToBuyer updates the ESCROW row
+         *    only — the order keeps `paymentStatus: "paid"` forever — so a fully
+         *    refunded sale still earned commission.
+         *
+         * And `totalAmount` includes the whole delivery fee, so the programme
+         * paid a commission on shipping.
+         *
+         * WHY ESCROW IS THE RIGHT SOURCE
+         * ------------------------------
+         * `_payment_orders.ts` already computes the per-seller split — the same
+         * `sellerTotals` map, three lines after it sets that scalar `sellerId` —
+         * and writes one ESCROW_TRANSACTIONS row per seller carrying `sellerId`,
+         * `amount` (that seller's goods plus her share of delivery) and a status
+         * that tracks the money: pending → funded → released, or refunded.
+         *
+         * So the escrow row answers all four questions the order could not: whose
+         * sale it was, how much of it was hers, whether the money reached her, and
+         * whether it was given back.
+         *
+         * `amount` rather than `netAmount` keeps a single-seller order's figure
+         * identical to what it was before — for one seller, her gross IS the order
+         * total — so this corrects the multi-seller and refund cases without
+         * silently restating everybody else's history.
+         */
+        const ESCROW_PAID_STATUSES = ["released"];
+        const ESCROW_PENDING_STATUSES = ["pending", "funded", "delivered", "disputed", "processing"];
+
+        // Bounded, and it says so when it truncates.
+        //
+        // The old query had no limit and returned every order plus a transaction
+        // row for each, so a busy seller's response grew without bound. A silent
+        // cap would be worse than no cap: the totals would quietly stop being
+        // totals.
+        const ESCROW_SCAN_LIMIT = 2000;
+
+        const snapshot = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
             .where("sellerId", "==", userId)
+            .limit(ESCROW_SCAN_LIMIT + 1)
             .get();
+
+        const escrowDocs = snapshot.docs.slice(0, ESCROW_SCAN_LIMIT);
+        const truncated = snapshot.docs.length > ESCROW_SCAN_LIMIT;
+        if (truncated) {
+            logger.warn(
+                `[WAVE Earnings] Seller ${userId} has more than ${ESCROW_SCAN_LIMIT} escrow rows; ` +
+                `the figures below cover the first ${ESCROW_SCAN_LIMIT} only and are UNDERSTATED.`
+            );
+        }
 
         const commissionRate = 0.05;
         let totalSales = 0;
@@ -45,11 +111,23 @@ async function _calculateEarningsAction(userId: string): Promise<ActionResponse<
         let calculatedPaidAmount = 0;
         const transactions: any[] = [];
 
-        snapshot.docs.forEach(doc => {
-            const order = doc.data();
-            const saleAmount = order.totalAmount || 0;
+        escrowDocs.forEach(doc => {
+            const escrow = doc.data();
+            const status = String(escrow.status ?? "");
+
+            const isPaid = ESCROW_PAID_STATUSES.includes(status);
+            const isPending = ESCROW_PENDING_STATUSES.includes(status);
+
+            // Anything else — refunded, cancelled, or a status this list does not
+            // know — earns nothing and is not shown as pending either. Unrecognised
+            // is treated as "not owed", which is the safe direction for a balance
+            // somebody can withdraw against.
+            if (!isPaid && !isPending) return;
+
+            const saleAmount = Number(escrow.amount ?? escrow.grossAmount ?? 0);
+            if (!Number.isFinite(saleAmount) || saleAmount <= 0) return;
+
             const commission = saleAmount * commissionRate;
-            const isPaid = order.paymentStatus === "paid" || order.status === "completed";
 
             totalSales += saleAmount;
             totalEarnings += commission;
@@ -61,8 +139,9 @@ async function _calculateEarningsAction(userId: string): Promise<ActionResponse<
             }
 
             transactions.push({
-                date: order.createdAt?.toDate ? order.createdAt.toDate() : new Date(),
-                orderId: doc.id,
+                date: escrow.createdAt?.toDate ? escrow.createdAt.toDate() : new Date(escrow.createdAt ?? Date.now()),
+                // The order, so a member can still tie a row back to a purchase.
+                orderId: escrow.orderId || doc.id,
                 saleAmount,
                 commission,
                 status: isPaid ? "paid" : "pending"
@@ -80,14 +159,47 @@ async function _calculateEarningsAction(userId: string): Promise<ActionResponse<
             withdrawnAmount += (w.amount || 0);
         });
 
+        const entitlement = Math.max(0, calculatedPaidAmount - withdrawnAmount);
+
         // AUTO-BACKFILL: If persistent balance is missing, initialize it
-        if (availableBalance === undefined) {
-            availableBalance = Math.max(0, calculatedPaidAmount - withdrawnAmount);
+        //
+        // Skipped when the scan truncated. Writing a persistent balance from
+        // figures known to be understated would turn a display problem into a
+        // stored one, and the field is only initialised once.
+        if (availableBalance === undefined && !truncated) {
+            availableBalance = entitlement;
             await userRef.update({
                 'serviceRegistrations.wave.waveEarningsBalance': availableBalance,
                 updatedAt: FieldValue.serverTimestamp()
             });
             logger.info(`Backfilled WAVE earnings balance for user ${userId}: ${availableBalance}`);
+        } else if (availableBalance === undefined) {
+            availableBalance = entitlement;
+        }
+
+        /**
+         * A stored balance above the recomputed entitlement is REPORTED, not
+         * corrected.
+         *
+         * Balances backfilled before this function's basis was fixed were
+         * computed from whole multi-seller order totals and counted cancelled and
+         * refunded sales, so some are too high. Silently writing the lower number
+         * would be adjusting somebody's money on the strength of a calculation
+         * change, inside a read action, with no audit entry and no decision from
+         * anyone. That is not this function's call to make.
+         *
+         * Logged so the discrepancy is findable, and left alone so it is the
+         * owner's to resolve. Withdrawals are disabled, so nothing can be paid
+         * out against the difference in the meantime.
+         */
+        const storedBalance = Number(availableBalance);
+        if (Number.isFinite(storedBalance) && !truncated && storedBalance > entitlement + 1) {
+            logger.warn(
+                `[WAVE Earnings] Stored balance for ${userId} is ₦${storedBalance.toFixed(2)} but the ` +
+                `escrow-derived entitlement is ₦${entitlement.toFixed(2)} ` +
+                `(paid commission ₦${calculatedPaidAmount.toFixed(2)} less withdrawals ₦${withdrawnAmount.toFixed(2)}). ` +
+                `Left unchanged — balances backfilled from the old order-total basis are overstated.`
+            );
         }
 
         const result: MemberEarnings = {

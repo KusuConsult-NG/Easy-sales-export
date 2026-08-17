@@ -7,6 +7,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isAdmin } from "@/lib/admin-permissions";
 import { csvDocument } from "@/lib/csv-safe";
+import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
 
 export async function GET(request: NextRequest) {
     try {
@@ -28,13 +29,15 @@ export async function GET(request: NextRequest) {
 
         let query: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
 
+        // Both boundaries from the shared helpers. `from` was `new Date(fromDate)`
+        // — UTC midnight — while `to` used setHours, which is LOCAL end of day. The
+        // two ends of one range were computed in different timezones, so the range
+        // was the wrong length by the process's UTC offset.
         if (fromDate) {
-            query = query.where("createdAt", ">=", new Date(fromDate));
+            query = query.where("createdAt", ">=", dateRangeStart(fromDate));
         }
         if (toDate) {
-            const tDate = new Date(toDate);
-            tDate.setHours(23, 59, 59, 999);
-            query = query.where("createdAt", "<=", tDate);
+            query = query.where("createdAt", "<=", dateRangeEnd(toDate));
         }
 
         const snapshot = await query.get();

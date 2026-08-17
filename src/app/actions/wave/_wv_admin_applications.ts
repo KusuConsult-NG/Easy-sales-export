@@ -43,11 +43,43 @@ async function _getWaveApplicationsAction(): Promise<
             details: JSON.stringify({})
         });
 
+        /**
+         * Ordered by `createdAt`, which is a field that exists.
+         *
+         * THE DEFECT
+         * ----------
+         * This ordered by `submittedAt`, and NOTHING writes `submittedAt` onto a
+         * WAVE application. The submit path writes `applicationDate`, `createdAt`
+         * and `updatedAt`; the resubmit path adds `resubmittedAt`. `submittedAt`
+         * is written only onto the USER record, under
+         * `serviceRegistrations.wave.submittedAt` — a different document.
+         *
+         * WAVE_APPLICATIONS lives in the JSONB table, so the sort key resolves to
+         * `raw_data->>'submittedAt'`, which is NULL for every row. Ordering by a
+         * column that is uniformly NULL is not an error and does not warn: it
+         * returns rows in whatever order the plan produces. Combined with the cap
+         * below, on a collection of this size that made the admin list an
+         * ARBITRARY subset presented as "the most recent" — and which rows an
+         * admin saw could change between two identical requests.
+         *
+         * data-recovery.ts had the same sort on this collection, and then copied
+         * `waveData.submittedAt` — undefined — into the user's registration as the
+         * recovered submission date.
+         *
+         * THE CAP
+         * -------
+         * Kept, because the response hydrates a user record per applicant, but no
+         * longer silent. A cap that is not reported reads as a complete list, and
+         * "there are 1,000 applications" is a materially different statement from
+         * "here are 1,000 of them".
+         */
+        const APPLICATION_SCAN_LIMIT = 1000;
+
         let snapshot;
         try {
             snapshot = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
-                .orderBy("submittedAt", "desc")
-                .limit(1000)
+                .orderBy("createdAt", "desc")
+                .limit(APPLICATION_SCAN_LIMIT + 1)
                 .get();
         } catch (error: any) {
              if (error.code === 9 || error.message?.includes("FAILED_PRECONDITION")) {
@@ -61,7 +93,16 @@ async function _getWaveApplicationsAction(): Promise<
             throw error;
         }
 
-        const rawApplications = serializeDocs(snapshot.docs);
+        const truncated = snapshot.docs.length > APPLICATION_SCAN_LIMIT;
+        const rawApplications = serializeDocs(snapshot.docs.slice(0, APPLICATION_SCAN_LIMIT));
+
+        if (truncated) {
+            logger.warn(
+                `[WAVE Admin] More than ${APPLICATION_SCAN_LIMIT} WAVE applications exist; ` +
+                `returning the ${APPLICATION_SCAN_LIMIT} most recent. Use ` +
+                `getStandardWaveApplicationsAction for a paginated view.`
+            );
+        }
 
         // HYDRATION: Batch-resolve user profiles
         const userIds = [...new Set(rawApplications.map((app: any) => app.userId).filter(Boolean))];
@@ -95,7 +136,13 @@ async function _getWaveApplicationsAction(): Promise<
             };
         });
 
-        return { error: null, success: true as const, data: { applications } };
+        return {
+            error: null,
+            success: true as const,
+            data: { applications },
+            // Reported to the caller, not only to the log, so a screen can say so.
+            meta: { truncated, scanLimit: APPLICATION_SCAN_LIMIT },
+        };
     } catch (error) {
         logger.error("Get applications error:", {
             userId: sessionResult?.session?.user?.id,
@@ -607,16 +654,14 @@ async function _getStandardWaveApplicationsAction(options: {
                 applications = applications.filter(app => app.status === options.status);
             }
             if (options.dateFrom) {
-                const from = new Date(options.dateFrom);
-                from.setHours(0, 0, 0, 0);
+                const from = dateRangeStart(options.dateFrom);
                 applications = applications.filter(app => {
                     const d = app.createdAt?.seconds ? new Date(app.createdAt.seconds * 1000) : new Date(app.createdAt);
                     return d >= from;
                 });
             }
             if (options.dateTo) {
-                const to = new Date(options.dateTo);
-                to.setHours(23, 59, 59, 999);
+                const to = dateRangeEnd(options.dateTo);
                 applications = applications.filter(app => {
                     const d = app.createdAt?.seconds ? new Date(app.createdAt.seconds * 1000) : new Date(app.createdAt);
                     return d <= to;
@@ -724,16 +769,14 @@ async function _getStandardWaveApplicationsAction(options: {
 
         // ALWAYS apply date filters in memory as a definitive backstop.
         if (options.dateFrom) {
-            const from = new Date(options.dateFrom);
-            from.setHours(0, 0, 0, 0);
+            const from = dateRangeStart(options.dateFrom);
             finalForms = finalForms.filter((f: any) => {
                 const d = f.data?.createdAt?.seconds ? new Date(f.data.createdAt.seconds * 1000) : new Date(f.data?.createdAt);
                 return d >= from;
             });
         }
         if (options.dateTo) {
-            const to = new Date(options.dateTo);
-            to.setHours(23, 59, 59, 999);
+            const to = dateRangeEnd(options.dateTo);
             finalForms = finalForms.filter((f: any) => {
                 const d = f.data?.createdAt?.seconds ? new Date(f.data.createdAt.seconds * 1000) : new Date(f.data?.createdAt);
                 return d <= to;

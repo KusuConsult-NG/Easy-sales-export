@@ -220,16 +220,14 @@ async function _getStandardAcademyApplicationsAction(options: {
         if (useMemoryPagination) {
             // Apply date filters in memory if they were not applied in Firestore query
             if (options.dateFrom) {
-                const from = new Date(options.dateFrom);
-                from.setHours(0, 0, 0, 0);
+                const from = dateRangeStart(options.dateFrom);
                 applications = applications.filter(app => {
                     const d = app.submittedAt?.seconds ? new Date(app.submittedAt.seconds * 1000) : new Date(app.submittedAt);
                     return d >= from;
                 });
             }
             if (options.dateTo) {
-                const to = new Date(options.dateTo);
-                to.setHours(23, 59, 59, 999);
+                const to = dateRangeEnd(options.dateTo);
                 applications = applications.filter(app => {
                     const d = app.submittedAt?.seconds ? new Date(app.submittedAt.seconds * 1000) : new Date(app.submittedAt);
                     return d <= to;

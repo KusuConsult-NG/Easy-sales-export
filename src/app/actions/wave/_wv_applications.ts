@@ -13,6 +13,7 @@ import { Resend } from "resend";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { hashData } from "@/lib/security";
+import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 
 // Validation Schema for WAVE Application (OFFICIAL BENEFICIARY APPLICATION FORM)
 const waveApplicationSchema = z.object({ // SECTION A: Personal Identification
@@ -115,6 +116,106 @@ function identityFieldsToSetOnce(
 
 
 /**
+ * Refuses an identity already registered under a different account.
+ *
+ * WHY THIS IS A SHARED FUNCTION NOW
+ * ---------------------------------
+ * Enrolment ran these three checks; resubmission ran none. Resubmission writes
+ * the same phone, NIN and email onto the application AND onto the user record,
+ * so an applicant asked for revisions could come back with a phone number or NIN
+ * already registered to somebody else, and the gate that exists to stop one
+ * person enrolling twice was simply not in the path. Nothing exotic was needed
+ * — just editing those fields on the resubmission form.
+ *
+ * TWO DEFECTS IN THE CHECK ITSELF
+ * -------------------------------
+ * The queries were `.limit(1)` while the comparison looped over `snap.docs`. The
+ * loop is the author's intent — examine every application sharing this identity
+ * — and the limit made it examine exactly one, arbitrarily chosen. So when two
+ * applications shared a phone number, whether the duplicate was caught depended
+ * on which row the database happened to return: if it returned the caller's own
+ * rejected application, the check passed and the other account's went unseen.
+ *
+ * The limit is raised to a small bound rather than removed. An identity legitimately
+ * appears on at most a couple of applications (the applicant's own, across
+ * revisions); a larger number is itself a signal, and is logged.
+ */
+const DUPLICATE_SCAN_LIMIT = 25;
+
+async function findConflictingApplication(params: {
+    callerId: string;
+    email: string;
+    phone: string;
+    nin: string;
+    /**
+     * The caller's own application, excluded from the same-owner status check.
+     *
+     * Resubmission needs this and enrolment does not. The status half of the
+     * check refuses an identity whose application is already `pending` — that is
+     * the point on the enrolment path, where a second application is not wanted.
+     * On resubmission the pending row IS the row being updated, and
+     * _resubmitWaveApplicationAction deliberately allows resubmitting from
+     * `pending`, so without this exclusion the shared check would refuse every
+     * resubmission with "your application is currently pending".
+     *
+     * Only the status half is relaxed. A foreign owner is still a conflict.
+     */
+    ignoreApplicationId?: string;
+}): Promise<string | null> {
+    const { callerId, email, phone, nin, ignoreApplicationId } = params;
+
+    const [phoneSnap, ninSnap, emailSnap] = await Promise.all([
+        phone
+            ? db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                .where("phone", "==", phone).limit(DUPLICATE_SCAN_LIMIT).get()
+            : Promise.resolve(null),
+        nin
+            ? db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                .where("nin", "==", hashData(nin)).limit(DUPLICATE_SCAN_LIMIT).get()
+            : Promise.resolve(null),
+        email
+            ? db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                .where("userEmail", "==", email).limit(DUPLICATE_SCAN_LIMIT).get()
+            : Promise.resolve(null),
+    ]);
+
+    const checkDuplicate = (snap: any, field: string): string | null => {
+        if (!snap || snap.empty) return null;
+
+        if (snap.docs.length >= DUPLICATE_SCAN_LIMIT) {
+            logger.warn(
+                `[WAVE] ${snap.docs.length} applications share one ${field}; ` +
+                `only the first ${DUPLICATE_SCAN_LIMIT} were checked.`
+            );
+        }
+
+        // Another account's application always wins, whichever order the rows
+        // arrive in — so the whole set is scanned for a foreign owner before any
+        // same-owner row is allowed to clear the check.
+        for (const doc of snap.docs) {
+            if (doc.data().userId !== callerId) {
+                return `An application with this ${field} already exists in the WAVE program under a different account.`;
+            }
+        }
+
+        for (const doc of snap.docs) {
+            if (ignoreApplicationId && doc.id === ignoreApplicationId) continue;
+            const status = doc.data().status;
+            if (status !== "rejected" && status !== "revision_required") {
+                return `Your application using this ${field} is currently ${status}.`;
+            }
+        }
+
+        return null;
+    };
+
+    return checkDuplicate(emailSnap, "email address")
+        ?? checkDuplicate(phoneSnap, "phone number")
+        ?? (nin ? checkDuplicate(ninSnap, "NIN") : null);
+}
+
+
+/**
  * Submit multi-step WAVE application
  * Accepts object data from multi-step form (not FormData)
  */
@@ -154,26 +255,7 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
         const applicantNin = validatedData.nin ? validatedData.nin.trim() : "";
         const applicantBvn = validatedData.bvn ? validatedData.bvn.trim() : "";
 
-        const [userDoc, phoneSnap, ninSnap] = await Promise.all([
-            db.collection(COLLECTIONS.USERS).doc(session.user.id).get(),
-            db.collection(COLLECTIONS.WAVE_APPLICATIONS)
-                .where("phone", "==", applicantPhone)
-                .limit(1)
-                .get(),
-            applicantNin ? db.collection(COLLECTIONS.WAVE_APPLICATIONS)
-                .where("nin", "==", hashData(applicantNin))
-                .limit(1)
-                .get() : Promise.resolve(null),
-        ]);
-
-        let emailSnap = null;
-        if (applicantEmail !== "") {
-            emailSnap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
-                .where("userEmail", "==", applicantEmail)
-                .limit(1)
-                .get();
-        }
-
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
         const userRoles = userData?.roles || [];
         const isUserAdmin = userRoles.includes("admin") || userRoles.includes("super_admin");
@@ -197,28 +279,13 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
             return { success: false as const, error: "You are already enrolled in the WAVE program.", data: null };
         }
 
-        const checkDuplicate = (snap: any, field: string) => {
-            if (!snap || snap.empty) return null;
-            for (const doc of snap.docs) {
-                const data = doc.data();
-                if (data.userId !== session.user.id) {
-                    return `An application with this ${field} already exists in the WAVE program under a different account.`;
-                }
-                if (data.status !== 'rejected' && data.status !== 'revision_required') {
-                    return `Your application using this ${field} is currently ${data.status}.`;
-                }
-            }
-            return null;
-        };
-
-        const emailErr = checkDuplicate(emailSnap, 'email address');
-        if (emailErr) return { success: false as const, error: emailErr, data: null };
-
-        const phoneErr = checkDuplicate(phoneSnap, 'phone number');
-        if (phoneErr) return { success: false as const, error: phoneErr, data: null };
-
-        const ninErr = applicantNin ? checkDuplicate(ninSnap, 'NIN') : null;
-        if (ninErr) return { success: false as const, error: ninErr, data: null };
+        const conflict = await findConflictingApplication({
+            callerId: session.user.id,
+            email: applicantEmail,
+            phone: applicantPhone,
+            nin: applicantNin,
+        });
+        if (conflict) return { success: false as const, error: conflict, data: null };
 
         let applicationId = userDoc.data()?.serviceRegistrations?.wave?.applicationId;
         if (!applicationId) {
@@ -424,15 +491,71 @@ async function _getWaveApplicationStatusAction(userId?: string): Promise<ActionR
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user) return { success: false as const, error: "Unauthorized", data: null };
-        const targetId = userId || session.user.id;
+
+        /**
+         * Whose application this is.
+         *
+         * It was `userId || session.user.id`, with nothing checking the two
+         * against each other — so any authenticated caller could pass any user id
+         * and read that person's WAVE application status and submission date.
+         *
+         * There is no UI caller, which is why it went unnoticed and is not why it
+         * was safe: an exported server action is an HTTP endpoint, reachable by
+         * anyone with a session whether a page calls it or not.
+         *
+         * The parameter is kept so existing callers compile, and an admin may
+         * still use it — the admin screens have a legitimate need to look up an
+         * applicant. Anyone else asking about somebody else is refused rather than
+         * silently redirected to their own record, so a caller cannot mistake
+         * another person's status for their own.
+         */
+        const { isAdmin } = await import("@/lib/admin-permissions");
+        const requestedId = userId?.trim();
+        if (requestedId && requestedId !== session.user.id && !isAdmin(session.user.roles)) {
+            return { success: false as const, error: "Unauthorized", data: null };
+        }
+        const targetId = requestedId || session.user.id;
 
         const snapshot = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
             .where("userId", "==", targetId)
             .get();
 
         if (snapshot.empty) {
+            /**
+             * No application row, but the registration may still record a status.
+             *
+             * This branch read the user's `serviceRegistrations.wave` into a
+             * variable called `reg` and then returned null without looking at it.
+             * The dead read is the clue to what was meant: the review-pending page
+             * calls this to show an applicant where she stands, and an applicant
+             * whose registration says `pending` while no application row can be
+             * found was told nothing at all.
+             *
+             * That combination is reachable — the enrolment path writes the
+             * application and the registration in one transaction, but
+             * `_getWaveApplicationAction` right below this exists precisely to
+             * repair broken links between the two, so the codebase already knows
+             * they come apart.
+             *
+             * The registration status is reported with no date, because there is
+             * no application row to take one from and inventing one would be worse
+             * than showing none.
+             */
             const userDoc = await db.collection(COLLECTIONS.USERS).doc(targetId).get();
             const reg = userDoc.data()?.serviceRegistrations?.wave;
+
+            if (reg?.status) {
+                const { serializeValue } = await import("@/lib/firestore-serialize");
+                return {
+                    error: null,
+                    success: true as const,
+                    data: {
+                        status: String(reg.status),
+                        submittedAt: serializeValue(reg.submittedAt ?? null),
+                    },
+                };
+            }
+
             return { error: null, success: true as const, data: null };
         }
 
@@ -576,23 +699,59 @@ async function _requestWaveRevisionAction(
 
         const userId = appDoc.data()?.userId;
 
-        await db.runTransaction(async (transaction) => {
-            transaction.update(appRef, {
-                status: 'revision_required',
+        /**
+         * A revision may only be asked for on an application still under review.
+         *
+         * This was an existence check followed by an unconditional write — the
+         * third verdict on this collection, and the only one without a guard.
+         * approveWaveApplicationAction and rejectWaveApplicationAction both claim
+         * from ["pending", "under_review"] precisely because they raced each
+         * other; this one could overwrite either of their outcomes afterwards.
+         *
+         * On an APPROVED application the damage goes past the record. It also
+         * writes `serviceRegistrations.wave.status` on the user, and
+         * module-access-check.ts Layer 2 admits a member on
+         * `status === "approved"` — so asking a live member for revisions revoked
+         * her access to the programme she had been admitted to, while leaving her
+         * `wave_participant` role and WAVE_MEMBERS row in place. A half-enrolled
+         * member is harder to notice than a rejected one.
+         *
+         * `revision_required` is included so an admin can correct the note on a
+         * request already sent.
+         */
+        const claim = await claimStatusTransitionFromAny({
+            collection: COLLECTIONS.WAVE_APPLICATIONS,
+            id: applicationId,
+            fromAny: ['pending', 'under_review', 'revision_required'],
+            to: 'revision_required',
+            patch: {
                 revisionNote: reason,
-                revisionRequestedAt: FieldValue.serverTimestamp(),
+                revisionRequestedAt: new Date().toISOString(),
                 revisionRequestedBy: session.user.id,
+                updatedAt: new Date().toISOString(),
+            },
+            recordPreviousAs: 'statusBeforeRevisionRequest',
+        });
+
+        if (!claim.claimed) {
+            return {
+                success: false as const,
+                error: claim.status === null
+                    ? (claim.exists
+                        ? 'This application has no status recorded, so a revision cannot be requested on it.'
+                        : 'Application not found')
+                    : `This application is '${claim.status}' and a revision cannot be requested on it. ` +
+                      `An approved or rejected application has already been decided.`,
+                data: null,
+            };
+        }
+
+        if (userId) {
+            await db.collection(COLLECTIONS.USERS).doc(userId).update({
+                'serviceRegistrations.wave.status': 'revision_required',
                 updatedAt: FieldValue.serverTimestamp()
             });
-
-            if (userId) {
-                const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
-                transaction.update(userRef, {
-                    'serviceRegistrations.wave.status': 'revision_required',
-                    updatedAt: FieldValue.serverTimestamp()
-                });
-            }
-        });
+        }
 
         await createAdminAuditLog({
             action: 'user_update',
@@ -643,6 +802,68 @@ async function _resubmitWaveApplicationAction(
         const applicantPhone = validatedData.phone.replace(/\s+/g, '').trim();
         const applicantNin = validatedData.nin ? validatedData.nin.trim() : "";
         const applicantBvn = validatedData.bvn ? validatedData.bvn.trim() : "";
+        const applicantEmail = (session.user.email || validatedData.email || '').toLowerCase().trim();
+
+        // The same duplicate gate as enrolment, which this path did not have.
+        //
+        // Resubmission writes phone, NIN and email onto both the application and
+        // the user record, so without this an applicant asked for revisions could
+        // return with an identity already registered to another account — walking
+        // straight around the check enrolment performs. Nothing clever was
+        // required: just editing those fields on the revision form.
+        const resubmitConflict = await findConflictingApplication({
+            callerId: session.user.id,
+            email: applicantEmail,
+            phone: applicantPhone,
+            nin: applicantNin,
+            ignoreApplicationId: applicationId,
+        });
+        if (resubmitConflict) {
+            return { success: false as const, error: resubmitConflict, data: null };
+        }
+
+        /**
+         * The APPLICATION's status decides whether it may be resubmitted, not the
+         * user record's copy of it.
+         *
+         * The guard above reads `serviceRegistrations.wave.status` off the user
+         * document — a derived duplicate that the two admin verdict paths write
+         * separately, AFTER their claim on the application succeeds. So the two
+         * can disagree, and `_getWaveApplicationAction` further down this file
+         * exists specifically to repair broken links between them, which is the
+         * codebase already saying they come apart.
+         *
+         * When they disagreed the wrong one won: a user record still reading
+         * `revision_required` while the application had since been APPROVED let a
+         * resubmission overwrite the approval and put the applicant back to
+         * pending — undoing an admin decision from the applicant's side.
+         *
+         * `allowSameStatus` covers pending → pending, which this action
+         * deliberately permits. It does not weaken the guard against racing a
+         * verdict: an application already moved to `approved` or `rejected`
+         * matches neither starting status and is refused.
+         */
+        const resubmitClaim = await claimStatusTransitionFromAny({
+            collection: COLLECTIONS.WAVE_APPLICATIONS,
+            id: applicationId,
+            fromAny: ['revision_required', 'pending'],
+            to: 'pending',
+            patch: { resubmitClaimedAt: new Date().toISOString() },
+            allowSameStatus: true,
+        });
+
+        if (!resubmitClaim.claimed) {
+            return {
+                success: false as const,
+                error: resubmitClaim.status === null
+                    ? (resubmitClaim.exists
+                        ? 'This application has no status recorded and cannot be resubmitted.'
+                        : 'No existing application found to resubmit')
+                    : `This application is '${resubmitClaim.status}' and can no longer be resubmitted. ` +
+                      `Only an application awaiting review or asked for revisions can be.`,
+                data: null,
+            };
+        }
 
         await db.runTransaction(async (transaction) => {
             const appRef = db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId);
