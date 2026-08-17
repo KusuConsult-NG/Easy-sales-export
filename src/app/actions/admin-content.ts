@@ -8,6 +8,12 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { isAdmin } from "@/lib/admin-permissions";
 import { FieldValue } from "@/lib/firestore-compat";
 import { serializeValue } from "@/lib/firestore-serialize";
+import {
+    AWAITING_REVIEW_STATUSES,
+    PURCHASABLE_STATUSES,
+    APPROVABLE_FROM_STATUSES,
+    REJECTABLE_FROM_STATUSES,
+} from "@/lib/land-listing-status";
 
 export type ContentType = "products" | "land" | "certificates" | "resources" | "courses" | "export";
 export type ApprovalStatus = "pending" | "approved" | "rejected";
@@ -61,7 +67,18 @@ export async function getContentApprovalItemsAction(
         // products
         const productStatus = status === "pending" ? "pending" : status === "approved" ? "active" : "rejected";
         // land listings
-        const landStatus = status === "pending" ? "pending_verification" : status === "approved" ? "verified" : "rejected";
+        //
+        // Sets, not single values. "pending" meant `pending_verification` alone,
+        // omitting `inspection_scheduled` — a listing with an inspector
+        // dispatched and no decision yet — and "approved" meant `verified`
+        // alone, omitting the `available` that farm-nation's own creation path
+        // writes and the `approved` that land-visibility.ts honours. So this
+        // console's approved tab and its counts showed a subset of the approved
+        // inventory, and its pending tab a subset of the queue.
+        const landStatuses: readonly string[] =
+            status === "pending" ? [...AWAITING_REVIEW_STATUSES]
+            : status === "approved" ? [...PURCHASABLE_STATUSES]
+            : ["rejected"];
         // export catalog
         const exportStatus = status === "pending" ? "pending" : status === "approved" ? "live" : "rejected";
 
@@ -87,7 +104,7 @@ export async function getContentApprovalItemsAction(
 
         // 2. Land Listings
         const landQuery = db.collection(COLLECTIONS.LAND_LISTINGS)
-            .where("status", "==", landStatus)
+            .where("status", "in", [...landStatuses])
             .limit(500);
         const landSnap = await landQuery.get();
         landSnap.forEach((doc) => {
@@ -141,8 +158,9 @@ export async function getContentApprovalItemsAction(
             db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "pending").count().get(),
             db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active").count().get(),
             db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "rejected").count().get(),
-            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "pending_verification").count().get(),
-            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "verified").count().get(),
+            // The same sets as the list above, so the tab and its badge agree.
+            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "in", [...AWAITING_REVIEW_STATUSES]).count().get(),
+            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "in", [...PURCHASABLE_STATUSES]).count().get(),
             db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "rejected").count().get(),
             db.collection(COLLECTIONS.EXPORT_CATALOG).where("status", "==", "pending").count().get(),
             db.collection(COLLECTIONS.EXPORT_CATALOG).where("status", "==", "live").count().get(),
@@ -248,12 +266,32 @@ export async function approveContentAction(
                     if (!docSnap.exists) {
                         return { success: false as const, error: "Land listing not found" };
                     }
+
+                    // The state check the other land decision paths do, done here
+                    // too. This is a transaction, so the read above and the write
+                    // below cannot be raced — what was missing is any check on
+                    // WHICH state it read. Approving a listing in pending_escrow
+                    // put the parcel back on the public market with a buyer's
+                    // money held against it; approving one already `sold`
+                    // reopened it outright.
+                    const landStatusNow = String(docSnap.data()?.status ?? "");
+                    if (!APPROVABLE_FROM_STATUSES.includes(landStatusNow)) {
+                        return {
+                            success: false as const,
+                            error: `This land listing is '${landStatusNow}' and cannot be approved ` +
+                                `from that state. A listing with a purchase in progress must be ` +
+                                `resolved first.`,
+                        };
+                    }
+
                     transaction.update(docRef, {
                         status: "verified",
                         verificationStatus: "approved",
                         verified: true,
                         verifiedAt: timestamp,
                         verifiedBy: adminId,
+                        rejectionReason: null,
+                        statusBeforeVerification: landStatusNow,
                     });
                     break;
                 }
@@ -366,6 +404,20 @@ export async function rejectContentAction(
                     if (!docSnap.exists) {
                         return { success: false as const, error: "Land listing not found" };
                     }
+
+                    // See the approval case above. Rejecting from pending_escrow
+                    // took the parcel off the market while the buyer's money
+                    // stayed held, with nothing in the flow to release it.
+                    const landStatusNow = String(docSnap.data()?.status ?? "");
+                    if (!REJECTABLE_FROM_STATUSES.includes(landStatusNow)) {
+                        return {
+                            success: false as const,
+                            error: `This land listing is '${landStatusNow}' and cannot be rejected ` +
+                                `from that state. A listing with a purchase in progress must be ` +
+                                `resolved first.`,
+                        };
+                    }
+
                     transaction.update(docRef, {
                         status: "rejected",
                         verificationStatus: "rejected",
@@ -373,6 +425,8 @@ export async function rejectContentAction(
                         rejectionReason: reason,
                         rejectedAt: timestamp,
                         rejectedBy: adminId,
+                        verified: false,
+                        statusBeforeRejection: landStatusNow,
                     });
                     break;
                 }

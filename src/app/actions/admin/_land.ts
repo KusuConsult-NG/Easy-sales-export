@@ -15,6 +15,12 @@ import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { LandListingVerificationSchema } from "@/lib/schemas";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { requireAdmin } from "@/lib/require-admin";
+import { claimStatusTransitionFromAny } from "@/lib/status-transition";
+import {
+    APPROVABLE_FROM_STATUSES,
+    REJECTABLE_FROM_STATUSES,
+    AWAITING_REVIEW_STATUSES,
+} from "@/lib/land-listing-status";
 
 // ============================================
 // Land Verification (Admin)
@@ -29,9 +35,30 @@ async function _getPendingLandListings(limit = 50): Promise<ActionResponse<any[]
             return { error: "Unauthorized: Permission required - land:verify_listings", success: false as const, data: null };
         }
 
-        // Pending lists are usually small, but let's cap it anyway
+        /**
+         * Queried on `status`, not on `verificationStatus`.
+         *
+         * WHAT THIS QUEUE USED TO MISS
+         * ----------------------------
+         * It asked for `verificationStatus == "pending"`, and that field is a
+         * derived duplicate of `status` that four writers spelled four ways:
+         *
+         *   create-listing    the string "pending"          — matched
+         *   _fn_listings      the string "pending_review"   — never matched, so a
+         *                     listing whose owner added the missing documents
+         *                     after a rejection dropped out of the review queue
+         *                     for good
+         *   land-listings,    an OBJECT — a value no string comparison matches,
+         *   approve/reject    so any listing ever decided through those paths
+         *                     could not come back into this queue
+         *
+         * `status` is the authoritative field. AWAITING_REVIEW_STATUSES is what
+         * _fna_verifications.ts — the other admin review queue — already counts,
+         * so the two now return the same listings instead of two different
+         * subsets of the same collection.
+         */
         const snapshot = await db.collection(COLLECTIONS.LAND_LISTINGS)
-            .where("verificationStatus", "==", "pending")
+            .where("status", "in", [...AWAITING_REVIEW_STATUSES])
             .orderBy("createdAt", "desc")
             .limit(limit)
             .get();
@@ -114,15 +141,63 @@ async function _verifyLandListing(
         const listingDoc = await listingRef.get();
         const ownerId = listingDoc.exists ? listingDoc.data()?.ownerId : null;
 
-        await listingRef.update({
-            status: decision === "approved" ? "verified" : "rejected",
-            verificationStatus: decision,
-            verified: decision === "approved",
-            verifiedBy: session.user.id,
-            verifiedAt: FieldValue.serverTimestamp(),
-            rejectionReason: decision === "rejected" ? reason : null,
-            updatedAt: FieldValue.serverTimestamp(),
+        /**
+         * The FIFTH blind land status write, and the most exposed of the five.
+         *
+         * The others at least checked that the listing existed and returned an
+         * error if it did not. This one read the document only to pick up
+         * `ownerId` for the cache invalidation below, ignored `exists`
+         * completely, and then wrote the status unconditionally — so calling it
+         * with a nonexistent id reported "Land listing approved successfully"
+         * and, on the JSONB-backed collections, created the row.
+         *
+         * With the write unconditional it also overwrote whatever state the
+         * listing was in. Farm Nation holds a buyer's money against
+         * `pending_escrow`; approving from there put the parcel back on the
+         * public market with the escrow still open, and rejecting from there took
+         * it off the market with the buyer's money still held and nothing in the
+         * flow to release it.
+         *
+         * Everything this wrote is preserved — this file already had the shape
+         * the other four are now converted to: the `verificationStatus` string
+         * plus the top-level decision fields. What changes is that the check and
+         * the write are one operation.
+         */
+        const transition = await claimStatusTransitionFromAny({
+            collection: COLLECTIONS.LAND_LISTINGS,
+            id: listingId,
+            fromAny: decision === "approved"
+                ? [...APPROVABLE_FROM_STATUSES]
+                : [...REJECTABLE_FROM_STATUSES],
+            to: decision === "approved" ? "verified" : "rejected",
+            patch: {
+                verificationStatus: decision,
+                verified: decision === "approved",
+                verifiedBy: session.user.id,
+                verifiedAt: FieldValue.serverTimestamp(),
+                rejectionReason: decision === "rejected" ? reason : null,
+                updatedAt: FieldValue.serverTimestamp(),
+            },
+            recordPreviousAs: decision === "approved"
+                ? "statusBeforeVerification"
+                : "statusBeforeRejection",
         });
+
+        if (!transition.claimed) {
+            logger.warn(
+                `[verifyLandListing] Refused: listing ${listingId} is '${transition.status}', ` +
+                `which is not a ${decision === "approved" ? "approvable" : "rejectable"} state.`
+            );
+            return {
+                success: false as const,
+                error: transition.status === null
+                    ? (transition.exists
+                        ? "This land listing has no status recorded, so a decision cannot be made on it."
+                        : "Land listing not found")
+                    : `This listing is '${transition.status}' and cannot be ${decision} from that ` +
+                      `state. A listing with a purchase in progress must be resolved first.`,
+            };
+        }
 
         // CLEAR CACHE - Owner's Farm Nation status changed
         if (ownerId && decision === "approved") {

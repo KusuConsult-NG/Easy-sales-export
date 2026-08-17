@@ -84,9 +84,19 @@ export function stripInternalLandFields<T extends Record<string, any>>(listing: 
     const copy: Record<string, any> = { ...listing };
     for (const field of INTERNAL_LAND_FIELDS) delete copy[field];
 
-    // The nested object too. approve-land and reject-land write the decision
-    // under verificationStatus, so removing only the top-level keys leaves the
-    // same information one level down.
+    // The nested object too — for the LEGACY shape.
+    //
+    // approve-land, reject-land and land-listings.ts used to write the decision
+    // as an object under `verificationStatus`, so stripping only the top-level
+    // keys left the same information one level down. They now write a string and
+    // put the detail in the top-level fields this function already removes, but
+    // rows written before that still hold the object, and this is what keeps an
+    // admin's id and review notes out of the public payload for them.
+    //
+    // The `typeof === "object"` guard is what makes it safe to do on a field that
+    // holds a string on most rows — and its absence in the writers was the defect
+    // that motivated the change: they spread the same field unguarded, turning
+    // the string "pending" into indexed characters.
     if (copy.verificationStatus && typeof copy.verificationStatus === "object") {
         const nested: Record<string, any> = { ...copy.verificationStatus };
         for (const field of INTERNAL_LAND_FIELDS) delete nested[field];

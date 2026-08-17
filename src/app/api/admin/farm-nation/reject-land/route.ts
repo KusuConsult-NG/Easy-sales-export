@@ -9,6 +9,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
 import { isAdmin } from "@/lib/admin-permissions";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
+import { REJECTABLE_FROM_STATUSES } from "@/lib/land-listing-status";
 
 /**
  * API Route: Reject Land Listing (Admin)
@@ -67,28 +68,26 @@ export async function POST(request: NextRequest) {
          * admin action. `pending_escrow`, `pending_transfer`, `sold` and
          * `deleted` are not — a listing with money against it has to be resolved
          * through the escrow flow first.
+         *
+         * The set is shared with the other four admin decision paths rather than
+         * written out here; this copy was one of five that disagreed. See
+         * REJECTABLE_FROM_STATUSES.
          */
-        const REJECTABLE_FROM = [
-            "pending",
-            "pending_verification",
-            "inspection_scheduled",
-            "verified",
-        ];
-
         const transition = await claimStatusTransitionFromAny({
             collection: COLLECTIONS.LAND_LISTINGS,
             id: verificationId,
-            fromAny: REJECTABLE_FROM,
+            fromAny: [...REJECTABLE_FROM_STATUSES],
             to: "rejected",
             patch: {
-                verificationStatus: {
-                    // See approve-land: the prior decision is kept, not overwritten.
-                    ...(previous.verificationStatus ?? {}),
-                    verified: false,
-                    rejectionReason: reason,
-                    verifiedBy: session.user.id,
-                    verifiedAt: FieldValue.serverTimestamp()
-                },
+                // A string, and the decision detail at the top level. See
+                // approve-land for why: the object shape this replaced was
+                // unqueryable, and spreading the previous value forward broke on
+                // the string create-listing writes.
+                verificationStatus: "rejected",
+                verified: false,
+                verifiedBy: session.user.id,
+                verifiedAt: FieldValue.serverTimestamp(),
+                rejectionReason: reason,
                 updatedAt: FieldValue.serverTimestamp(),
             },
             recordPreviousAs: "statusBeforeRejection",
@@ -97,13 +96,16 @@ export async function POST(request: NextRequest) {
         if (!transition.claimed) {
             logger.warn(
                 `[reject-land] Refused: listing ${verificationId} is '${transition.status}', ` +
-                `which is not a rejectable state (${REJECTABLE_FROM.join(", ")}).`
+                `which is not a rejectable state (${REJECTABLE_FROM_STATUSES.join(", ")}).`
             );
             return NextResponse.json(
                 {
                     success: false,
                     message: transition.status === null
-                        ? "Listing not found"
+                        ? (transition.exists
+                            ? "This listing has no status recorded, so it cannot be rejected. " +
+                              "Its status has to be set before a decision can be made on it."
+                            : "Listing not found")
                         : `This listing is '${transition.status}' and cannot be rejected from that state. ` +
                           `A listing with a purchase in progress must be resolved first.`,
                 },

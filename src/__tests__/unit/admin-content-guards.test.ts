@@ -74,13 +74,31 @@ function setCaller(opts: { sessionRoles: string[]; dbRoles: string[]; id?: strin
         session: { user: { id, email: `${id}@e.com`, name: id, roles: opts.sessionRoles } },
         error: null,
     }));
+    // `status: 'pending_verification'` matters, and its absence used to be
+    // invisible.
+    //
+    // The land branches now check the status they read before writing a decision
+    // — approving a listing in pending_escrow put a parcel back on the public
+    // market with a buyer's money held against it. This fixture's listing had no
+    // status at all, so the guard refused it and every land assertion below
+    // started failing with `undefined`. That is the guard working: a document
+    // whose state is unknown is not one to decide on.
+    //
+    // The fixture now describes a listing actually awaiting review, which is what
+    // the approval console is for.
+    const listing = () => ({
+        ownerId: OWNER,
+        title: 'A listing',
+        status: 'pending_verification',
+    });
+
     (global as any).mockFirestoreGet.mockImplementation((docId: string) => Promise.resolve(
         docId === id
             ? { exists: true, empty: false, docs: [], data: () => ({ roles: opts.dbRoles }) }
-            : { exists: true, empty: false, docs: [], data: () => ({ ownerId: OWNER, title: 'A listing' }) }
+            : { exists: true, empty: false, docs: [], data: listing }
     ));
     (global as any).mockFirestoreTxGet.mockImplementation(() => Promise.resolve({
-        exists: true, empty: false, docs: [], data: () => ({ ownerId: OWNER, title: 'A listing' }),
+        exists: true, empty: false, docs: [], data: listing,
     }));
 }
 

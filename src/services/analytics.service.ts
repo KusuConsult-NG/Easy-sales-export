@@ -298,8 +298,9 @@ export class AnalyticsService implements AnalyticsServiceContract {
             db.collection(COLLECTIONS.SELLER_VERIFICATIONS).where("status", "==", "pending").count().get(),
             // The sibling of the count in global-aggregation.ts. `pending` on a
             // land listing means "reserved by a buyer mid-purchase", not
-            // "awaiting approval" — see land-listing-status.ts.
-            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", AWAITING_REVIEW_STATUSES[0]).count().get(),
+            // "awaiting approval" — see land-listing-status.ts. `in` over the
+            // whole set: `[0]` undercounted by every outstanding inspection.
+            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "in", [...AWAITING_REVIEW_STATUSES]).count().get(),
             db.collection(COLLECTIONS.LOAN_APPLICATIONS).where("status", "==", "pending").count().get(),
             db.collection(COLLECTIONS.WAVE_WITHDRAWALS).where("status", "==", "pending").count().get(),
             db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).where("status", "==", "pending").count().get()

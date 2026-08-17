@@ -151,27 +151,47 @@ describe('every admin approval decision is recorded', () => {
 });
 
 describe('reversing a decision does not erase the previous one', () => {
-    it('the land routes carry the prior verificationStatus forward', () => {
+    /**
+     * WHERE THE PRIOR DECISION IS KEPT CHANGED, AND WHY
+     * -------------------------------------------------
+     * These two tests used to pin `...(previous.verificationStatus ?? {})` — the
+     * routes carrying the old decision object forward into the new one. That
+     * mechanism was withdrawn because it was broken: four other writers put a
+     * STRING on `verificationStatus`, including create-listing, which sets
+     * "pending" on every listing made through the API. Spreading a string into an
+     * object literal yields its indexed characters, so approving a newly created
+     * listing wrote `{0:"p", 1:"e", 2:"n", ..., verified:true}` to the database.
+     *
+     * The requirement these tests exist for has not changed: reversing a
+     * rejection must not destroy the record of it. It is now met by the audit
+     * entry, which is where a superseded decision belongs — the record shows the
+     * current decision and the log shows what it replaced, instead of a verified
+     * listing carrying the reason it was once rejected.
+     *
+     * So the assertions move from the patch to the audit metadata, and the shape
+     * that broke is asserted absent rather than present.
+     */
+    it('the land routes no longer spread a value that may be a string', () => {
         for (const file of [ROUTES.approveLand, ROUTES.rejectLand]) {
-            expect(source(file)).toContain('...(previous.verificationStatus ?? {})');
+            expect(source(file)).not.toContain('...(previous.verificationStatus ?? {})');
+            expect(source(file)).toMatch(/verificationStatus: "(approved|rejected)"/);
         }
     });
 
-    it('approving clears the rejection reason rather than leaving it stale', () => {
-        // Carrying the object forward without this would leave a verified
-        // listing displaying why it was rejected.
-        expect(source(ROUTES.approveLand)).toContain('rejectionReason: null');
+    it('approving records the reason it reverses in the audit entry', () => {
+        // The replacement mechanism, asserted. Without this line the reversal is
+        // the one moment the reason is needed and the only moment nothing holds it.
+        const approve = source(ROUTES.approveLand);
+
+        expect(approve).toContain('reversedRejectionReason:');
+        // Both shapes are read, because rows written under either are live.
+        expect(approve).toContain('previous.rejectionReason');
+        expect(approve).toContain('.rejectionReason');
     });
 
-    it('the new decision still wins', () => {
-        // Vacuity guard: spreading the old object AFTER the new fields would
-        // preserve history by discarding the change.
-        const approve = source(ROUTES.approveLand);
-        const spreadAt = approve.indexOf('...(previous.verificationStatus');
-        const verifiedAt = approve.indexOf('verified: true,', spreadAt);
-
-        expect(spreadAt).toBeGreaterThan(-1);
-        expect(verifiedAt).toBeGreaterThan(spreadAt);
+    it('approving clears the rejection reason on the record rather than leaving it stale', () => {
+        // A verified listing must not display why it was rejected.
+        expect(source(ROUTES.approveLand)).toContain('rejectionReason: null');
     });
 
     it('the previous status is recorded in the audit entry', () => {

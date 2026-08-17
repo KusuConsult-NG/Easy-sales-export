@@ -34,15 +34,36 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import {
+    APPROVABLE_FROM_STATUSES,
+    REJECTABLE_FROM_STATUSES,
+} from "@/lib/land-listing-status";
 
 declare const maybeDescribe: jest.Describe;
 
 const PREFIX = "jest-land-guard-";
 
-/** Copied from the routes deliberately: if any changes, these must be revisited. */
-const APPROVABLE_FROM = ["pending", "pending_verification", "inspection_scheduled", "rejected"];
-const REJECTABLE_FROM = ["pending", "pending_verification", "inspection_scheduled", "verified"];
-const DISPATCHABLE_FROM = ["pending", "pending_verification", "inspection_scheduled", "rejected", "verified"];
+/**
+ * The shared sets, no longer copied.
+ *
+ * These were copied from the routes with a note saying they must be revisited if
+ * the routes changed — and the routes did change, because each of the five admin
+ * decision paths turned out to be carrying its own different copy of this list.
+ * approve-land's omitted `available`, the status farm-nation's creation path
+ * writes, so a farm-nation listing could not be approved from the admin queue at
+ * all.
+ *
+ * Importing them means this file cannot drift from what the routes do. What it
+ * gives up is pinning the CONTENTS of the sets — if `pending_escrow` were ever
+ * added to the approvable set, the escrow tests below would start passing
+ * vacuously. That is asserted separately and directly, in
+ * __tests__/unit/land-decision-vocabulary.ts: the approvable and rejectable sets
+ * must not intersect DECISION_LOCKED_STATUSES, and that set must name the escrow
+ * statuses explicitly.
+ */
+const APPROVABLE_FROM = [...APPROVABLE_FROM_STATUSES];
+const REJECTABLE_FROM = [...REJECTABLE_FROM_STATUSES];
+const DISPATCHABLE_FROM = [...APPROVABLE_FROM_STATUSES];
 
 /**
  * The statuses that must be refused by ALL THREE admin actions.
@@ -216,7 +237,35 @@ maybeDescribe("land listing status guard, against real Postgres", () => {
     });
 
     it("allows an inspection to be rescheduled", async () => {
+        // The one same-status write in this module, and this test is what found
+        // that the shared vocabulary had broken it.
+        //
+        // claimStatusTransitionFromAny now filters the target out of the starting
+        // set, because leaving it in lets two concurrent callers both claim — see
+        // the concurrency test above, which caught exactly that after
+        // APPROVABLE_FROM_STATUSES came to include `verified`. Rescheduling is a
+        // patch guarded by a status rather than a transition, so it opts in
+        // explicitly, as dispatch-inspector does.
         const id = `${PREFIX}reschedule`;
+        await seedListing(id, "inspection_scheduled");
+
+        const result = await claimStatusTransitionFromAny({
+            collection: COLLECTIONS.LAND_LISTINGS,
+            id,
+            fromAny: DISPATCHABLE_FROM,
+            to: "inspection_scheduled",
+            allowSameStatus: true,
+        });
+
+        expect(result.claimed).toBe(true);
+    });
+
+    it("refuses a same-status write without the explicit opt-in", async () => {
+        // The other side of it. Without this, the opt-in could be removed from
+        // dispatch-inspector and the test above would be the only thing that
+        // noticed — by starting to fail, but with no statement of what the default
+        // is supposed to be.
+        const id = `${PREFIX}reschedule-no-optin`;
         await seedListing(id, "inspection_scheduled");
 
         const result = await claimStatusTransitionFromAny({
@@ -226,7 +275,23 @@ maybeDescribe("land listing status guard, against real Postgres", () => {
             to: "inspection_scheduled",
         });
 
-        expect(result.claimed).toBe(true);
+        expect(result.claimed).toBe(false);
+        // Reported as the status it is already in, which is the useful answer.
+        expect(result.status).toBe("inspection_scheduled");
+    });
+
+    it("throws rather than silently doing nothing when every start equals the target", async () => {
+        // A caller error, and the filter must not turn it into a quiet no-claim
+        // that reads like a lost race.
+        const id = `${PREFIX}all-same`;
+        await seedListing(id, "verified");
+
+        await expect(claimStatusTransitionFromAny({
+            collection: COLLECTIONS.LAND_LISTINGS,
+            id,
+            fromAny: ["verified"],
+            to: "verified",
+        })).rejects.toThrow(/no transition to claim/);
     });
 
     describe.each(MONEY_STATES)("a listing in '%s'", (money) => {
@@ -275,5 +340,98 @@ maybeDescribe("land listing status guard, against real Postgres", () => {
             .maybeSingle();
         expect((data!.raw_data as Record<string, string>).statusBeforeVerification)
             .toBe("inspection_scheduled");
+    });
+    describe("a row with no status recorded", () => {
+        /**
+         * WHY THIS CASE EXISTS AT ALL
+         * ---------------------------
+         * land_listings lives in `document_collections`, so `status` is a plain
+         * JSONB key with no NOT NULL behind it. A row can simply lack one.
+         *
+         * The compare-and-swap matches `raw_data->>'status' = p_from`. For such a
+         * row that expression is NULL, `NULL = anything` is never true, so no
+         * transition can ever be claimed on it — and the function then reports its
+         * status as NULL, which is exactly what it reports for a row that is not
+         * there.
+         *
+         * Every caller read that one null as "not found". The blind writes these
+         * guards replaced DID work on such rows, so converting to the CAS turned a
+         * working admin action into the message "Listing not found" for a listing
+         * the admin was looking at. `exists` on the result is what lets the two be
+         * told apart, and only the real function can demonstrate it.
+         */
+        it("cannot be claimed, and is reported as existing rather than missing", async () => {
+            const id = `${PREFIX}no-status`;
+            await supabaseAdmin.from("document_collections").insert({
+                id,
+                collection_name: COLLECTIONS.LAND_LISTINGS,
+                // No `status` key at all.
+                raw_data: { id, title: "Parcel with no status", ownerId: `${PREFIX}owner` },
+            });
+
+            const result = await claimStatusTransitionFromAny({
+                collection: COLLECTIONS.LAND_LISTINGS,
+                id,
+                fromAny: APPROVABLE_FROM,
+                to: "verified",
+            });
+
+            expect(result.claimed).toBe(false);
+            expect(result.status).toBeNull();
+            // The discriminator. Without it this is indistinguishable from the
+            // absent-row case below, and the caller reports the wrong thing.
+            expect(result.exists).toBe(true);
+            // And nothing was written — the guard did not fall back to a write.
+            expect(await statusOf(id)).toBeNull();
+        });
+
+        it("a genuinely absent row reports exists false", async () => {
+            // The other half. If both cases returned the same thing, the test
+            // above would be pinning a constant rather than a distinction.
+            const result = await claimStatusTransitionFromAny({
+                collection: COLLECTIONS.LAND_LISTINGS,
+                id: `${PREFIX}definitely-not-there`,
+                fromAny: APPROVABLE_FROM,
+                to: "verified",
+            });
+
+            expect(result.claimed).toBe(false);
+            expect(result.status).toBeNull();
+            expect(result.exists).toBe(false);
+        });
+
+        it("does not pay for the probe when a claim succeeds", async () => {
+            // The probe is an extra round trip, and it must only happen on the
+            // ambiguous refusal path. `exists` being absent is how a caller — and
+            // this test — can tell it was not run.
+            const id = `${PREFIX}no-probe`;
+            await seedListing(id, "pending_verification");
+
+            const result = await claimStatusTransitionFromAny({
+                collection: COLLECTIONS.LAND_LISTINGS,
+                id,
+                fromAny: APPROVABLE_FROM,
+                to: "verified",
+            });
+
+            expect(result.claimed).toBe(true);
+            expect(result.exists).toBeUndefined();
+        });
+
+        it("does not pay for the probe when a refusal already names the status", async () => {
+            const id = `${PREFIX}no-probe-escrow`;
+            await seedListing(id, "pending_escrow");
+
+            const result = await claimStatusTransitionFromAny({
+                collection: COLLECTIONS.LAND_LISTINGS,
+                id,
+                fromAny: APPROVABLE_FROM,
+                to: "verified",
+            });
+
+            expect(result.claimed).toBe(false);
+            expect(result.status).toBe("pending_escrow");
+            expect(result.exists).toBeUndefined();
+        });
     });
 });

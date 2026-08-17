@@ -10,6 +10,11 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { FieldPath } from "@/lib/firestore-compat";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { createAdminAuditLog } from "@/lib/audit-log";
+import {
+    AWAITING_REVIEW_STATUSES,
+    PURCHASABLE_STATUSES,
+    isPurchasable,
+} from "@/lib/land-listing-status";
 
 /**
  * Get aggregate counts for land_listings by verification status.
@@ -34,17 +39,20 @@ async function _getFarmNationVerificationStatsAction(): Promise<ActionResponse<{
             // Redis error should not block the action
         }
 
-        const [totalSnap, pendingSnap1, pendingSnap2, verifiedSnap, rejectedSnap] = await Promise.all([
+        const [totalSnap, pendingSnap, verifiedSnap, rejectedSnap] = await Promise.all([
             db.collection(COLLECTIONS.LAND_LISTINGS).count().get(),
-            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "pending_verification").count().get(),
-            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "inspection_scheduled").count().get(),
-            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "verified").count().get(),
+            // The shared sets. `verified` alone omitted the `available` that
+            // farm-nation's creation path writes and the `approved` that
+            // land-visibility.ts publishes, so this panel counted fewer
+            // verified listings than were actually on sale.
+            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "in", [...AWAITING_REVIEW_STATUSES]).count().get(),
+            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "in", [...PURCHASABLE_STATUSES]).count().get(),
             db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "rejected").count().get(),
         ]);
 
         const stats = {
             total: totalSnap.data().count,
-            pending: pendingSnap1.data().count + pendingSnap2.data().count,
+            pending: pendingSnap.data().count,
             verified: verifiedSnap.data().count,
             rejected: rejectedSnap.data().count
         };
@@ -74,6 +82,22 @@ export const getFarmNationVerificationStatsAction = withFlexibleSafeAction("getF
 
 
 /**
+ * The statuses behind each tab of the admin land verification queue.
+ *
+ * One definition for the database filter, the index-error fallback and the
+ * in-memory filter used when a search is active — three places that each
+ * resolved the tab label independently, and did not agree.
+ */
+function statusesForTab(tab: string): string[] {
+    if (tab === "pending") return [...AWAITING_REVIEW_STATUSES];
+    if (tab === "verified") return [...PURCHASABLE_STATUSES];
+    if (tab === "rejected") return ["rejected"];
+    // An unrecognised tab is passed through as itself rather than silently
+    // widened, so a new tab shows nothing instead of showing everything.
+    return [tab];
+}
+
+/**
  * Get land listings for admin verification
  */
 async function _getAdminLandVerificationsAction(options: { 
@@ -98,16 +122,15 @@ async function _getAdminLandVerificationsAction(options: {
         let queryRef: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.LAND_LISTINGS).orderBy("createdAt", orderDirection);
 
         if (options.status && options.status !== "all" && !useMemoryPagination) {
-            const mappedStatus = options.status === "pending" ? "pending_verification" : options.status;
-            if (mappedStatus === "pending_verification") {
-                queryRef = db.collection(COLLECTIONS.LAND_LISTINGS)
-                    .where("status", "in", ["pending_verification", "inspection_scheduled"])
-                    .orderBy("createdAt", orderDirection);
-            } else {
-                queryRef = db.collection(COLLECTIONS.LAND_LISTINGS)
-                    .where("status", "==", mappedStatus)
-                    .orderBy("createdAt", orderDirection);
-            }
+            // Each tab maps to a SET of statuses. "verified" resolved to the
+            // single literal "verified", so the verified tab omitted every
+            // listing farm-nation created as `available` and every one an admin
+            // marked `approved` — the same listings the stats above now count,
+            // which meant the badge and the list it labelled disagreed.
+            const tabStatuses = statusesForTab(options.status);
+            queryRef = db.collection(COLLECTIONS.LAND_LISTINGS)
+                .where("status", "in", tabStatuses)
+                .orderBy("createdAt", orderDirection);
         }
 
         if (options.lastDocId && !useMemoryPagination) {
@@ -128,12 +151,7 @@ async function _getAdminLandVerificationsAction(options: {
                 
                 let fallbackQuery: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.LAND_LISTINGS);
                 if (options.status && options.status !== "all" && !useMemoryPagination) {
-                    const mappedStatus = options.status === "pending" ? "pending_verification" : options.status;
-                    if (mappedStatus === "pending_verification") {
-                        fallbackQuery = fallbackQuery.where("status", "in", ["pending_verification", "inspection_scheduled"]);
-                    } else {
-                        fallbackQuery = fallbackQuery.where("status", "==", mappedStatus);
-                    }
+                    fallbackQuery = fallbackQuery.where("status", "in", statusesForTab(options.status));
                 }
                 
                 if (options.lastDocId && !useMemoryPagination) {
@@ -150,11 +168,42 @@ async function _getAdminLandVerificationsAction(options: {
         }
 
         const rawVerifications = serializeDocs(snapshot.docs).map((doc: any) => {
-            let mappedVerificationStatus = "pending";
-            if (doc.status === "verified") mappedVerificationStatus = "verified";
+            /**
+             * What the admin queue calls each listing.
+             *
+             * THE DEFAULT WAS THE DEFECT
+             * --------------------------
+             * This started at "pending" and only moved off it for `verified`,
+             * `rejected`, `pending_verification` and `inspection_scheduled`. Every
+             * other status fell through to "pending" — including
+             *
+             *   available, approved   already for sale
+             *   sold, leased          done
+             *   pending_escrow,       a buyer's money is held against the parcel
+             *   pending_payment,
+             *   payment_confirmed,
+             *   pending_transfer
+             *   deleted               the owner withdrew it
+             *
+             * and the page renders Approve and Reject buttons on anything it is
+             * told is "pending" (land-verification/page.tsx:475). So an admin
+             * working this queue was shown sold parcels and parcels with live
+             * escrows as awaiting review, and invited to decide on them. The
+             * cohort counts below inherited the same default, inflating "pending"
+             * by every listing in the collection that was not in one of the four
+             * recognised states.
+             *
+             * The status guards added to the decision paths now refuse those
+             * writes, so the button no longer succeeds — but it should not be
+             * offered. Unrecognised is reported as "unavailable", not "pending".
+             */
+            let mappedVerificationStatus: string;
+            if (isPurchasable(doc.status)) mappedVerificationStatus = "verified";
             else if (doc.status === "rejected") mappedVerificationStatus = "rejected";
-            else if (doc.status === "pending_verification" || doc.status === "inspection_scheduled") mappedVerificationStatus = "pending";
-            
+            else if (AWAITING_REVIEW_STATUSES.includes(doc.status)) mappedVerificationStatus = "pending";
+            else mappedVerificationStatus = "unavailable";
+
+
             let docsObj = { landTitle: "", surveyPlan: "", taxClearance: "" };
             if (doc.documents) {
                 if (Array.isArray(doc.documents)) {
@@ -212,25 +261,23 @@ async function _getAdminLandVerificationsAction(options: {
 
             // Apply status filter in memory
             if (options.status && options.status !== "all") {
-                const mappedStatus = options.status === "pending" ? "pending_verification" : options.status;
-                filteredVerifications = filteredVerifications.filter((v: any) => {
-                    if (mappedStatus === "pending_verification") {
-                        return v.status === "pending_verification" || v.status === "inspection_scheduled";
-                    }
-                    return v.status === mappedStatus;
-                });
+                // The same sets as the database filter above, so searching within
+                // a tab returns the same cohort the tab itself does.
+                const tabStatuses = statusesForTab(options.status);
+                filteredVerifications = filteredVerifications.filter(
+                    (v: any) => tabStatuses.includes(String(v.status))
+                );
             }
         } else {
-            const [totalSnap, pendingSnap1, pendingSnap2, verifiedSnap, rejectedSnap] = await Promise.all([
+            const [totalSnap, pendingSnap, verifiedSnap, rejectedSnap] = await Promise.all([
                 db.collection(COLLECTIONS.LAND_LISTINGS).count().get(),
-                db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "pending_verification").count().get(),
-                db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "inspection_scheduled").count().get(),
-                db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "verified").count().get(),
+                db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "in", [...AWAITING_REVIEW_STATUSES]).count().get(),
+                db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "in", [...PURCHASABLE_STATUSES]).count().get(),
                 db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "rejected").count().get(),
             ]);
             stats = {
                 total: totalSnap.data().count,
-                pending: pendingSnap1.data().count + pendingSnap2.data().count,
+                pending: pendingSnap.data().count,
                 verified: verifiedSnap.data().count,
                 rejected: rejectedSnap.data().count
             };

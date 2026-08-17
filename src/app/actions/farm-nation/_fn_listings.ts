@@ -5,7 +5,8 @@ import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { isBrowsable } from "@/lib/land-listing-status";
+import { isBrowsable, AWAITING_VERIFICATION_STATUS } from "@/lib/land-listing-status";
+import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { isValidState, isValidLGA, normalizeLocation } from "@/lib/locations";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
@@ -511,11 +512,66 @@ async function _uploadPropertyDocumentsAction(
         const currentDocs = property?.documents || {};
         const newDocs = { ...currentDocs, ...documents };
 
-        await propertyRef.update({ 
+        await propertyRef.update({
             documents: newDocs,
             updatedAt: FieldValue.serverTimestamp(),
-            verificationStatus: "pending_review" // Reset verification status if new docs added
         });
+
+        /**
+         * Re-entering the review queue, which the comment here claimed to do and
+         * the code did not.
+         *
+         * It wrote `verificationStatus: "pending_review"` and called that
+         * "Reset verification status if new docs added". Two things were wrong
+         * with it:
+         *
+         *   1. "pending_review" is a value nothing reads. The review queues
+         *      match "pending" (admin/_land.ts, before it moved to `status`) or
+         *      derive their state from `status` (_fna_verifications.ts). So the
+         *      reset resolved to nothing anywhere.
+         *
+         *   2. It never touched `status`, which is what the queues actually
+         *      select on. This action exists for an owner whose listing was
+         *      REJECTED for missing documents — the whole reason to upload them —
+         *      and after uploading, the listing stayed `rejected`. It never came
+         *      back to an admin, and the owner had no way to make it. That is a
+         *      listing permanently stuck one action away from approval.
+         *
+         * Only `rejected` and `draft` are resubmitted. A listing that is already
+         * live must not be pulled off the market because its owner attached
+         * another document, and one with money against it is not this action's to
+         * move.
+         */
+        const RESUBMITTABLE_FROM = ["rejected", "draft"];
+
+        if (RESUBMITTABLE_FROM.includes(String(property?.status))) {
+            const resubmitted = await claimStatusTransitionFromAny({
+                collection: COLLECTIONS.LAND_LISTINGS,
+                id: propertyId,
+                fromAny: RESUBMITTABLE_FROM,
+                to: "pending_verification",
+                patch: {
+                    verificationStatus: AWAITING_VERIFICATION_STATUS,
+                    verified: false,
+                    // The reason is cleared because it has been addressed. The
+                    // admin audit log holds the history.
+                    rejectionReason: null,
+                    resubmittedAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp(),
+                },
+                recordPreviousAs: "statusBeforeResubmission",
+            });
+
+            // A refusal here is not an error for the caller: the documents were
+            // saved, which is what they asked for. It means the listing moved on
+            // between the read and the write.
+            if (!resubmitted.claimed) {
+                logger.warn(
+                    `[uploadPropertyDocuments] Documents saved for ${propertyId} but ` +
+                    `resubmission skipped: status is '${resubmitted.status}'.`
+                );
+            }
+        }
 
         return { error: null, success: true as const, data: null };
     } catch (error: any) { 

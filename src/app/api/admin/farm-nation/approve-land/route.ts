@@ -9,6 +9,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
 import { isAdmin } from "@/lib/admin-permissions";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
+import { APPROVABLE_FROM_STATUSES } from "@/lib/land-listing-status";
 
 /**
  * API Route: Approve Land Listing (Admin)
@@ -68,19 +69,13 @@ export async function POST(request: NextRequest) {
          * buyer's purchase silently invalidated because the listing reads as
          * available.
          *
-         * `sold`, `pending_transfer` and `deleted` are excluded for the same
-         * reason: none of them should be reopened by an approval.
-         *
-         * `rejected` IS included — reversing a rejection is a real admin
-         * action, and the block below deliberately preserves the prior
-         * rejection reason when it happens.
+         * The set is shared with the other four admin decision paths.
+         * This route's own copy omitted `available` — the status farm-nation's
+         * creation path writes — so a farm-nation listing could not be approved
+         * from the admin land queue at all, while _fn_admin.verifyPropertyAction
+         * approved it happily. See APPROVABLE_FROM_STATUSES for the five copies
+         * and where each of them differed.
          */
-        const APPROVABLE_FROM = [
-            "pending",
-            "pending_verification",
-            "inspection_scheduled",
-            "rejected",
-        ];
 
         // Compare-and-swap, not a blind write. Two admins clicking approve on
         // the same listing cannot both proceed, and neither can an approval race
@@ -88,22 +83,31 @@ export async function POST(request: NextRequest) {
         const transition = await claimStatusTransitionFromAny({
             collection: COLLECTIONS.LAND_LISTINGS,
             id: verificationId,
-            fromAny: APPROVABLE_FROM,
+            fromAny: [...APPROVABLE_FROM_STATUSES],
             to: "verified",
             patch: {
-            verificationStatus: {
-                // The prior decision is carried forward rather than replaced.
+                // A STRING, and this is the fix to a defect the previous version
+                // of this block introduced.
                 //
-                // This assigned a fresh object, so approving a listing that had
-                // been rejected erased the rejection reason and who gave it —
-                // the record of the earlier decision disappeared at the moment
-                // it was reversed, which is exactly when it matters.
-                ...(previous.verificationStatus ?? {}),
+                // It spread the prior value forward — `...(previous
+                // .verificationStatus ?? {})` — to keep a rejection reason from
+                // being erased when a rejection was reversed. But four other
+                // writers put a STRING on this field, including create-listing,
+                // which sets "pending" on every listing made through the API.
+                // Spreading a string into an object literal yields its indexed
+                // characters, so approving a newly created listing wrote
+                // `{0:"p", 1:"e", 2:"n", ..., verified:true}`.
+                //
+                // The string is the canonical shape: it is what admin/_land.ts
+                // QUERIES the database for and what the shared type declares.
+                // The decision detail goes to the top-level fields, and the prior
+                // reason is preserved where a reversed decision belongs — the
+                // audit log written below, which records previousStatus too.
+                verificationStatus: "approved",
                 verified: true,
-                rejectionReason: null,
                 verifiedBy: session.user.id,
-                verifiedAt: FieldValue.serverTimestamp()
-            },
+                verifiedAt: FieldValue.serverTimestamp(),
+                rejectionReason: null,
                 updatedAt: FieldValue.serverTimestamp(),
             },
             // So a later reversal can put the listing back where it came from
@@ -118,13 +122,16 @@ export async function POST(request: NextRequest) {
             // exactly the case that used to be silently overwritten.
             logger.warn(
                 `[approve-land] Refused: listing ${verificationId} is '${transition.status}', ` +
-                `which is not an approvable state (${APPROVABLE_FROM.join(", ")}).`
+                `which is not an approvable state (${APPROVABLE_FROM_STATUSES.join(", ")}).`
             );
             return NextResponse.json(
                 {
                     success: false,
                     message: transition.status === null
-                        ? "Listing not found"
+                        ? (transition.exists
+                            ? "This listing has no status recorded, so it cannot be approved. " +
+                              "Its status has to be set before a decision can be made on it."
+                            : "Listing not found")
                         : `This listing is '${transition.status}' and cannot be approved from that state. ` +
                           `A listing with a purchase in progress must be resolved first.`,
                 },
@@ -144,7 +151,18 @@ export async function POST(request: NextRequest) {
             targetType: "land_listing",
             targetId: verificationId,
             details: `Approved land listing ${verificationId}`,
-            metadata: { previousStatus: previous.status ?? null },
+            metadata: {
+                previousStatus: previous.status ?? null,
+                // The reason this approval reverses, if it reverses one. The
+                // record itself no longer carries it forward — an approved
+                // listing showing a rejection reason is what the object shape
+                // produced — so the audit entry is where a reversed decision is
+                // kept, and the claim in the patch above depends on this line.
+                reversedRejectionReason:
+                    previous.rejectionReason
+                    ?? (previous.verificationStatus as any)?.rejectionReason
+                    ?? null,
+            },
         }).catch((e) => logger.error("[approve-land] audit log failed", e));
 
         // Invalidate cache

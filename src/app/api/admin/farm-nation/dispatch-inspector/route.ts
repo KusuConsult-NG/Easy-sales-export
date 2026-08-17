@@ -88,6 +88,13 @@ export async function POST(request: NextRequest) {
             id: verificationId,
             fromAny: DISPATCHABLE_FROM,
             to: "inspection_scheduled",
+            // Rescheduling is dispatching from `inspection_scheduled` to itself,
+            // which is not a transition — so the helper filters the target out of
+            // the starting set unless a caller asks for it. This is the only
+            // caller that does, and the only one where it is right: dispatching
+            // twice sends another inspector and moves no money. See
+            // claimStatusTransitionFromAny's allowSameStatus for what it gives up.
+            allowSameStatus: true,
             patch: {
                 inspectionDetails: {
                     inspectorName,
