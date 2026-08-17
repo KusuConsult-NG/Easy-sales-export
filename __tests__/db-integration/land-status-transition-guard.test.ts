@@ -39,9 +39,23 @@ declare const maybeDescribe: jest.Describe;
 
 const PREFIX = "jest-land-guard-";
 
-/** Copied from the routes deliberately: if either changes, these must be revisited. */
+/** Copied from the routes deliberately: if any changes, these must be revisited. */
 const APPROVABLE_FROM = ["pending", "pending_verification", "inspection_scheduled", "rejected"];
 const REJECTABLE_FROM = ["pending", "pending_verification", "inspection_scheduled", "verified"];
+const DISPATCHABLE_FROM = ["pending", "pending_verification", "inspection_scheduled", "rejected", "verified"];
+
+/**
+ * The statuses that must be refused by ALL THREE admin actions.
+ *
+ * Every one of these means money is committed against the parcel, or it is gone.
+ * The three routes each used to overwrite them.
+ */
+const MONEY_STATES = [
+    "pending_escrow",
+    "pending_payment",
+    "payment_confirmed",
+    "pending_transfer",
+];
 
 async function cleanup() {
     await supabaseAdmin.from("document_collections").delete().like("id", `${PREFIX}%`);
@@ -182,6 +196,61 @@ maybeDescribe("land listing status guard, against real Postgres", () => {
 
         expect(result.claimed).toBe(false);
         expect(result.status).toBeNull();
+    });
+
+    it("REFUSES to dispatch an inspector to a listing in escrow", async () => {
+        // inspection_scheduled is not a public status, so this write DELISTS the
+        // parcel — while a buyer's money is held against it.
+        const id = `${PREFIX}escrow-dispatch`;
+        await seedListing(id, "pending_escrow");
+
+        const result = await claimStatusTransitionFromAny({
+            collection: COLLECTIONS.LAND_LISTINGS,
+            id,
+            fromAny: DISPATCHABLE_FROM,
+            to: "inspection_scheduled",
+        });
+
+        expect(result.claimed).toBe(false);
+        expect(await statusOf(id)).toBe("pending_escrow");
+    });
+
+    it("allows an inspection to be rescheduled", async () => {
+        const id = `${PREFIX}reschedule`;
+        await seedListing(id, "inspection_scheduled");
+
+        const result = await claimStatusTransitionFromAny({
+            collection: COLLECTIONS.LAND_LISTINGS,
+            id,
+            fromAny: DISPATCHABLE_FROM,
+            to: "inspection_scheduled",
+        });
+
+        expect(result.claimed).toBe(true);
+    });
+
+    describe.each(MONEY_STATES)("a listing in '%s'", (money) => {
+        // The table that matters. All three admin actions must refuse every state
+        // where money is committed — not just pending_escrow, which is the one
+        // that happened to be noticed first.
+        it.each([
+            ["approved", APPROVABLE_FROM, "verified"],
+            ["rejected", REJECTABLE_FROM, "rejected"],
+            ["dispatched to", DISPATCHABLE_FROM, "inspection_scheduled"],
+        ])("cannot be %s", async (_label, fromAny, to) => {
+            const id = `${PREFIX}${money}-${to}`;
+            await seedListing(id, money);
+
+            const result = await claimStatusTransitionFromAny({
+                collection: COLLECTIONS.LAND_LISTINGS,
+                id,
+                fromAny: fromAny as string[],
+                to: to as string,
+            });
+
+            expect(result.claimed).toBe(false);
+            expect(await statusOf(id)).toBe(money);
+        });
     });
 
     it("records which status the approval came from", async () => {
