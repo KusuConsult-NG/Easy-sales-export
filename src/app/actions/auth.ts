@@ -394,6 +394,40 @@ export async function preValidateLoginAction(credentials: any): Promise<{ succes
 
         const uid = responseData.user.id;
 
+        // 3b. Reset the rate limit — the password is now proven correct.
+        //
+        // THIS ACTION CONSUMED AN ATTEMPT AND NEVER GAVE IT BACK
+        // -----------------------------------------------------
+        // Step 2 above calls consumeLoginAttempt, and the limit is deliberately
+        // consumed BEFORE the password is checked. lib/auth.ts does the same and
+        // then clears the counter at its STEP 5 on success. This action did not,
+        // so it only ever counted upwards.
+        //
+        // In production with Upstash reachable, both paths share one Redis
+        // counter, so authorize()'s reset happened to cover this one too and the
+        // gap was invisible. It stops being invisible the moment either path
+        // falls back to the in-memory store, because Next compiles this Server
+        // Action and the NextAuth route handler into SEPARATE server bundles —
+        // separate module instances, separate Maps. authorize()'s reset then
+        // clears its own Map and cannot reach this one, so this counter climbs
+        // by one per successful login and locks the account out on the sixth
+        // with "Too many failed login attempts" after five clean sign-ins.
+        //
+        // Measured, not reasoned about: a production-build Playwright run
+        // allowed e2e.user exactly five sign-ins and refused the sixth, with the
+        // correct password on screen.
+        //
+        // Placed here rather than at the `success: true` return so that a
+        // correct password clears the counter even when a later profile check
+        // fails — the limiter bounds password guessing, and the guessing is over.
+        try {
+            const { resetLoginAttempts } = await import("@/lib/rate-limit");
+            await resetLoginAttempts(email);
+        } catch (err: any) {
+            // Never block a login on a reset failure, same as lib/auth.ts.
+            logger.error(`[PreValidate:Fallback] resetLoginAttempts failed. Error: ${err.message}`);
+        }
+
         // 4. Fetch user profile and check status
         let userDoc = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS).doc(uid).get());
 
