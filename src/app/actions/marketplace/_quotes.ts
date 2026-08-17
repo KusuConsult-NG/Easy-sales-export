@@ -46,20 +46,66 @@ async function _submitQuoteRequestAction(data: QuoteRequestData): Promise<Action
         // exactly this; and createReviewAction reads the product to attribute a
         // review to "the ACTUAL seller". This is the third instance.
         //
-        // Both values come from the product now, and the product has to exist —
+        // Both values come from the record now, and the record has to exist —
         // which it never had to before, so a quote could be raised against a
         // productId that was never a product.
-        const productSnap = await db.collection(COLLECTIONS.PRODUCTS).doc(data.productId).get();
-        if (!productSnap.exists) {
-            return { success: false as const, error: "Product not found", data: null };
-        }
-        const product = productSnap.data() ?? {};
+        //
+        // TWO KINDS OF SUBJECT, AND A REGRESSION THIS AUDIT CAUSED
+        // --------------------------------------------------------
+        // QuoteRequestModal is mounted in TWO places. marketplace/products/[id]
+        // passes a marketplace product. export/(app)/opportunities passes an
+        // EXPORT WINDOW — `item.id` is a document in `exportWindows`, and
+        // `sellerId` is the literal string "admin_export".
+        //
+        // When #161 added the PRODUCTS lookup above, it looked up an export
+        // window id in the products collection, found nothing, and returned
+        // "Product not found". Every RFQ raised from the export opportunities
+        // page has failed since that commit. The fix that closed a real
+        // phishing primitive broke a second caller nobody checked for — the
+        // exact shape of "we fix it and it breaks somewhere else".
+        //
+        // It was not working before either, for a different reason: the
+        // notification below was addressed to `sellerId`, so export RFQs were
+        // being filed against a user id of "admin_export" that no account has.
+        // They were written and delivered to nobody.
+        //
+        // An export window HAS a real counterparty — `createdBy`, the admin who
+        // opened it, written from the session by createExportWindowAction. That
+        // is who the quote is with, so that is who it is recorded against and
+        // notified.
+        let sellerId: string;
+        let productName: string;
+        let subjectType: "product" | "export_window";
 
-        const sellerId = String(product.sellerId ?? "");
-        if (!sellerId) {
-            return { success: false as const, error: "This product has no seller to contact", data: null };
+        const productSnap = await db.collection(COLLECTIONS.PRODUCTS).doc(data.productId).get();
+        if (productSnap.exists) {
+            const product = productSnap.data() ?? {};
+            sellerId = String(product.sellerId ?? "");
+            if (!sellerId) {
+                return { success: false as const, error: "This product has no seller to contact", data: null };
+            }
+            productName = String(product.title ?? product.name ?? "this product");
+            subjectType = "product";
+        } else {
+            const windowSnap = await db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(data.productId).get();
+            if (!windowSnap.exists) {
+                return { success: false as const, error: "Product not found", data: null };
+            }
+            const exportWindow = windowSnap.data() ?? {};
+            sellerId = String(exportWindow.createdBy ?? "");
+            if (!sellerId) {
+                // Older windows predate createdBy being written from the
+                // session. Refusing is better than filing a quote against "",
+                // which _getMyQuotesAction would hand to nobody.
+                return {
+                    success: false as const,
+                    error: "This export window has no contact recorded. Please use the booking form instead.",
+                    data: null,
+                };
+            }
+            productName = String(exportWindow.title ?? "this export window");
+            subjectType = "export_window";
         }
-        const productName = String(product.title ?? product.name ?? "this product");
 
         // A quote for zero or minus one is not a quote. The field is a number in
         // the interface and that is a TypeScript claim, erased before the request
@@ -88,6 +134,10 @@ async function _submitQuoteRequestAction(data: QuoteRequestData): Promise<Action
                 : {}),
             sellerId,
             productName,
+            // Which collection productId points into. Without it a reader
+            // cannot tell a marketplace quote from an export-window one, and
+            // the two link to different places.
+            subjectType,
             quantity,
             buyerId: userId,
             buyerName: session.user.name || "Unknown Buyer",
@@ -99,17 +149,31 @@ async function _submitQuoteRequestAction(data: QuoteRequestData): Promise<Action
         });
 
         await db.collection(COLLECTIONS.NOTIFICATIONS).add({
-            // The product's seller, not the caller's nominee.
+            // The record's counterparty, not the caller's nominee.
             userId: sellerId,
             type: "marketplace",
             title: "New Quote Request",
             message: `You have received a new quote request for "${productName}" from ${session.user.name || "a buyer"}.`,
-            link: `/marketplace/seller/quotes/${quoteRef.id}`,
+            // The LIST, not a per-quote detail page.
+            //
+            // This linked to `/marketplace/seller/quotes/${quoteRef.id}`, and
+            // no such route exists — nor did `/marketplace/seller/quotes`, nor
+            // `/marketplace/buyer/quotes`, which the revalidatePath below
+            // named. A seller clicking the notification got a 404, and
+            // getMyQuotesAction had no UI caller at all: an RFQ was written,
+            // the buyer was told it succeeded, and neither party could ever
+            // see it.
+            //
+            // Both list pages exist now. A per-quote detail page does not, and
+            // is not invented here — there is no seller-response flow for it
+            // to show.
+            link: `/marketplace/seller/quotes`,
             read: false,
-            createdAt: FieldValue.serverTimestamp() 
+            createdAt: FieldValue.serverTimestamp()
         });
 
         revalidatePath("/marketplace/buyer/quotes");
+        revalidatePath("/marketplace/seller/quotes");
         revalidatePath(`/marketplace/products/${data.productId}`);
 
         return { error: null, success: true as const, data: { message: "Quote request submitted successfully" } };
