@@ -633,7 +633,26 @@ async function _getStandardWaveApplicationsAction(options: {
                 const canonical = extractCanonicalUser(uData);
                 const hasApplication = backedByApplication.has(uid);
 
-                const approvalDate = uData.createdAt ? new Date(uData.createdAt.seconds ? uData.createdAt.seconds * 1000 : uData.createdAt) : new Date();
+                /**
+                 * The account's creation date, or NOTHING.
+                 *
+                 * This fell back to `new Date()`, so a user record with no
+                 * `createdAt` produced an approvalTimestamp of "now" — and the admin
+                 * members page, which reads exactly this field, showed and exported
+                 * that member as having enrolled today. Two fabrications stacked:
+                 * this one, and the page's own `|| new Date()` behind it.
+                 *
+                 * A synthesised row for a legacy member has no real approval date to
+                 * give. Saying so lets the screen print "Unknown" instead of a date
+                 * somebody might act on.
+                 */
+                const rawCreated = uData.createdAt;
+                const approvalDate = rawCreated
+                    ? new Date(rawCreated.seconds ? rawCreated.seconds * 1000 : rawCreated)
+                    : null;
+                const approvalTs = approvalDate && !Number.isNaN(approvalDate.getTime())
+                    ? Timestamp.fromDate(approvalDate)
+                    : null;
                 const mockApp = {
                     // The real application id where there is one, so a row an admin
                     // clicks through leads to the actual record rather than to a
@@ -641,9 +660,9 @@ async function _getStandardWaveApplicationsAction(options: {
                     id: applicationIdFor.get(uid) ?? `legacy-${uid}`,
                     userId: uid,
                     status: "approved",
-                    createdAt: Timestamp.fromDate(approvalDate),
-                    reviewedAt: Timestamp.fromDate(approvalDate),
-                    approvalTimestamp: Timestamp.fromDate(approvalDate),
+                    createdAt: approvalTs,
+                    reviewedAt: approvalTs,
+                    approvalTimestamp: approvalTs,
                     fullName: canonical.name,
                     firstName: uData.firstName || "",
                     surname: uData.lastName || uData.surname || "",

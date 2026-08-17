@@ -255,3 +255,103 @@ describe('the approved count is named for what it counts', () => {
         expect(src).toContain('approvedApplications: approved');
     });
 });
+
+describe('an enrolment date is never invented', () => {
+    /**
+     * Two fabrications were stacked on one field.
+     *
+     * getStandardWaveApplicationsAction's approved branch synthesises a row per
+     * role-holder and set `approvalTimestamp` from `uData.createdAt` — falling back
+     * to `new Date()`. The admin members page then read that field and applied its
+     * OWN `|| new Date()` behind it. So a member with no recorded creation date was
+     * shown, and exported to CSV twice, as having enrolled today.
+     */
+    const ADMIN_APPS = 'src/app/actions/wave/_wv_admin_applications.ts';
+    const MEMBERS_PAGE = 'src/app/admin/wave/members/page.tsx';
+
+    it('the action leaves the synthesised timestamp null', () => {
+        const src = code(ADMIN_APPS);
+
+        expect(src).not.toMatch(/const approvalDate = uData\.createdAt \?[^;]*: new Date\(\);/);
+        expect(src).toContain('const approvalTs = approvalDate && !Number.isNaN(approvalDate.getTime())');
+        expect(src).toContain('approvalTimestamp: approvalTs,');
+    });
+
+    it('and guards against an unparseable date as well as a missing one', () => {
+        // `new Date(garbage)` is an Invalid Date, not a throw, and
+        // Timestamp.fromDate on it would have produced NaN seconds.
+        const src = code(ADMIN_APPS);
+        expect(src).toContain('!Number.isNaN(approvalDate.getTime())');
+    });
+
+    it('the page no longer falls back to today either', () => {
+        const src = code(MEMBERS_PAGE);
+
+        expect(src).not.toContain('data.createdAt?.toDate?.() || new Date()');
+        expect((src.match(/data\.createdAt\?\.toDate\?\.\(\) \|\| null/g) || []).length).toBe(2);
+        expect(src).toContain('enrolledAt: Date | null');
+    });
+
+    it('every place that renders it handles the absence', () => {
+        // The list, the detail panel and both CSV writers. One unguarded
+        // `new Date(null)` renders as 1 January 1970, which is a different lie.
+        const src = code(MEMBERS_PAGE);
+
+        expect(src).not.toMatch(/\{new Date\(member\.enrolledAt\)\.toLocaleDateString/);
+        expect(src).not.toMatch(/value: new Date\(selectedMember\.enrolledAt\)/);
+        expect((src.match(/"Unknown"/g) || []).length).toBeGreaterThanOrEqual(4);
+    });
+});
+
+describe('the training-sessions route resolves access from the database too', () => {
+    /**
+     * It read serviceRegistrations.wave.status off the SESSION alone. That value is
+     * minted at login and refreshed hourly, which is why module-access-check.ts
+     * carries a database fallback for exactly this field. The /wave/(member) layout
+     * uses that fallback and admits a newly approved member; this route had none and
+     * answered 403 for up to an hour, so she sat inside the programme looking at a
+     * screen telling her she had no access to it.
+     */
+    const SESSIONS_ROUTE = 'src/app/api/wave/training-sessions/route.ts';
+
+    it('falls back to the stored record when the session does not grant access', () => {
+        const src = code(SESSIONS_ROUTE);
+
+        expect(src).toContain('let allowed = canReadWaveProgramme(');
+        expect(src).toContain('if (!allowed) {');
+        expect(src).toContain('.collection(COLLECTIONS.USERS)');
+    });
+
+    it('re-reads the stored roles, not only the status', () => {
+        // An admin whose role was granted after login is in the same position.
+        const src = code(SESSIONS_ROUTE);
+        expect(src).toContain('roles: Array.isArray(fresh.roles) ? fresh.roles : session.user.roles,');
+    });
+
+    it('keeps the same rule, rather than swapping in a stricter one', () => {
+        // canReadWaveProgramme deliberately admits someone mid-application;
+        // checkModuleAccess requires "approved". Only the source of the status
+        // changed.
+        const src = code(SESSIONS_ROUTE);
+
+        expect(src).toContain('canReadWaveProgramme');
+        expect(src).not.toContain('checkModuleAccess');
+    });
+
+    it('does not query on the ordinary request', () => {
+        // The fallback sits inside the refusal branch, so a member whose session
+        // already grants access costs no extra read.
+        const src = code(SESSIONS_ROUTE);
+        const firstCheck = src.indexOf('let allowed = canReadWaveProgramme(');
+        const fallback = src.indexOf('.collection(COLLECTIONS.USERS)');
+        const guard = src.indexOf('if (!allowed) {');
+
+        expect(guard).toBeGreaterThan(firstCheck);
+        expect(fallback).toBeGreaterThan(guard);
+    });
+
+    it('logs a failed fallback rather than swallowing it', () => {
+        const src = code(SESSIONS_ROUTE);
+        expect(src).toContain('Access fallback lookup failed');
+    });
+});
