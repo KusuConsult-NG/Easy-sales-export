@@ -14,7 +14,12 @@ import { rateLimit } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { getBaseUrl } from "@/lib/server-utils";
-import { ACADEMY_CONFIG } from "@/lib/constants";
+import {
+    checkAcademyPayment,
+    normaliseAcademyPlan,
+    academyPlanFee,
+    DEFAULT_ACADEMY_PLAN,
+} from "@/lib/academy-plan";
 
 const paymentLimiter = rateLimit(rateLimitConfig.payment);
 
@@ -302,17 +307,18 @@ async function _initiateAcademyPaymentAction(plan: "foundation" | "standard" | "
             return { error: "Payment system not configured", success: false as const , data: null };
         }
 
-        let amount: number = ACADEMY_CONFIG.plans.foundation.fee; // Default to Foundation
-        let planToStore = plan;
-
-        if (plan === "foundation") {
-            amount = ACADEMY_CONFIG.plans.foundation.fee;
-        } else if (plan === "standard" || (plan as string) === "advanced") {
-            amount = ACADEMY_CONFIG.plans.standard.fee;
-            planToStore = "standard";
-        } else if (plan === "elite") {
-            amount = ACADEMY_CONFIG.plans.elite.fee;
-        }
+        // The plan charged for and the plan recorded, from the same rule the two
+        // fulfilment paths verify against.
+        //
+        // This is a "use server" export, so `plan` is whatever the caller sent
+        // regardless of its declared type. The if/else chain here fell through to
+        // the Foundation FEE for an unrecognised plan while storing the
+        // unrecognised STRING in the Paystack metadata — so a registration could
+        // be charged ₦45,000 and carry a plan no fee lookup answers. Normalising
+        // here means the amount charged and the plan stored always agree, and
+        // agree with what checkAcademyPayment will compare them to later.
+        const planToStore = normaliseAcademyPlan(plan) ?? DEFAULT_ACADEMY_PLAN;
+        const amount: number = academyPlanFee(planToStore);
 
         const baseUrl = await getBaseUrl();
         const callbackUrl = `${baseUrl}/academy/payment/callback`;
@@ -365,6 +371,40 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<ActionRes
         }
 
         const paidAmount = verify.data.amount / 100;
+
+        // The amount, checked against what the plan costs.
+        //
+        // This path had NO amount validation. It read verify.data.amount, wrote
+        // it as paymentAmount, marked paymentStatus "completed", granted the
+        // academy_participant role and isVerified, auto-approved the application
+        // and wrote a completed ledger row — without ever comparing what was paid
+        // against what the plan costs.
+        //
+        // The WEBHOOK (processAcademyRegistration) has always derived the fee from
+        // the plan and thrown on underpayment. The two race by design: the webhook
+        // usually finishes before the user is redirected back. So which one reached
+        // a payment first decided whether an underpaid registration was accepted.
+        // Same shape as the marketplace order defect, with the permissive path on
+        // the other side. See lib/academy-plan.ts.
+        const amountVerdict = checkAcademyPayment(paidAmount, metadata.plan);
+        if (!amountVerdict.ok) {
+            logger.error("[verifyAcademyPaymentAction] Academy payment refused on amount", {
+                reference,
+                reason: amountVerdict.reason,
+                paidAmount,
+                plan: metadata.plan,
+            });
+            return { success: false as const, error: amountVerdict.message, data: null };
+        }
+
+        // A real plan, never the string "registration".
+        //
+        // The user update below stored `metadata.plan || "registration"`, and
+        // "registration" is not one of the three plans sold — so a record carrying
+        // it matches no plan lookup and the fee it was meant to cover cannot be
+        // determined afterwards.
+        const resolvedPlan = amountVerdict.plan;
+
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
 
         // ✅ FIX: If the Paystack webhook already processed this payment, return SUCCESS.
@@ -378,14 +418,22 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<ActionRes
         if (existingProcessed.exists) {
             logger.info(`[verifyAcademyPaymentAction] Payment ${reference} already processed by webhook — syncing USERS doc and returning success.`);
             try {
-                const processedData = existingProcessed.data();
+                // The amount and plan already in hand, not a re-read of the
+                // processed_payments row.
+                //
+                // That row lives in a DEDICATED table and the plan was passed as
+                // `metadata: { plan }`, so it is stored in raw_data rather than as
+                // a column — `processedData?.plan` was undefined and this wrote
+                // `plan: null` over a registration that had one. `paidAmount` and
+                // `resolvedPlan` are derived above from the Paystack response,
+                // which is the same source the webhook uses.
                 await db.collection(COLLECTIONS.USERS).doc(session.user.id).set({
                     serviceRegistrations: {
                         academy: {
                             paymentStatus: "completed",
                             paymentReference: reference,
-                            paymentAmount: processedData?.amount ?? null,
-                            plan: processedData?.plan ?? null,
+                            paymentAmount: paidAmount,
+                            plan: resolvedPlan,
                         }
                     },
                     updatedAt: FieldValue.serverTimestamp(),
@@ -415,7 +463,7 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<ActionRes
             amount: paidAmount,
             type: "academy_registration",
             source: "client_verify",
-            metadata: { plan: metadata.plan || "foundation" },
+            metadata: { plan: resolvedPlan },
         });
 
         if (!claim.claimed) {
@@ -439,7 +487,7 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<ActionRes
                 "serviceRegistrations.academy.paymentStatus": "completed",
                 "serviceRegistrations.academy.paymentReference": reference,
                 "serviceRegistrations.academy.paymentAmount": paidAmount,
-                "serviceRegistrations.academy.plan": metadata.plan || "registration",
+                "serviceRegistrations.academy.plan": resolvedPlan,
                 "serviceRegistrations.academy.paidAt": FieldValue.serverTimestamp(),
                 "serviceRegistrations.academy.status": hasApp ? "approved" : "pending",
                 "updatedAt": FieldValue.serverTimestamp(),
@@ -463,7 +511,7 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<ActionRes
                     status: "approved",
                     paymentStatus: "completed",
                     paymentAmount: paidAmount,
-                    plan: metadata.plan || "foundation",
+                    plan: resolvedPlan,
                     paymentVerifiedAt: FieldValue.serverTimestamp(),
                     reviewedAt: FieldValue.serverTimestamp(),
                     reviewedBy: "paystack_auto_approval",

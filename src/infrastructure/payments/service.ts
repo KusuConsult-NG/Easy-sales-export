@@ -5,10 +5,10 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { generateAndSendWhatsAppInvite } from "@/lib/whatsapp-invites";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
-import { ACADEMY_CONFIG } from "@/lib/constants";
 import { normalizeUserDoc } from "@/lib/schema-normalizer";
 import { claimPaymentOnce, incrementWithinCeiling, CLAIM_TYPE, markFulfilmentFailed } from "@/lib/wallet-ledger";
 import { checkOrderPaymentAmount } from "@/lib/order-payment-amount";
+import { checkAcademyPayment } from "@/lib/academy-plan";
 
 /**
  * Handle Marketplace Order Fulfillment
@@ -738,18 +738,25 @@ export async function processCooperativeRegistration(reference: string, amount: 
  * Handle Academy Registration Fulfillment
  */
 export async function processAcademyRegistration(reference: string, amount: number, userId: string, plan: string, paidAt?: Date) {
-    const normalisedPlan = (plan || "foundation").toLowerCase();
-
-    let expectedAmount = ACADEMY_CONFIG.plans.foundation.fee;
-    if (normalisedPlan === "standard" || normalisedPlan === "advanced") expectedAmount = ACADEMY_CONFIG.plans.standard.fee;
-    if (normalisedPlan === "elite") expectedAmount = ACADEMY_CONFIG.plans.elite.fee;
-
-    const planToStore = (normalisedPlan === "advanced") ? "standard" : normalisedPlan;
-
-    if (amount < expectedAmount - 1) {
-        logger.error(`[Paystack Webhook] Academy Payment Underpaid. Expected ${expectedAmount}, Paid ${amount}`);
+    // The shared rule, so the two fulfilment paths cannot drift again.
+    //
+    // This logic was correct and _verifyAcademyPaymentAction had none at all, so
+    // which path reached a payment first decided whether an underpaid
+    // registration was accepted — and they race by design. The fee table, the
+    // "advanced" → "standard" mapping and the one-naira tolerance all live in
+    // lib/academy-plan.ts now; this is the same behaviour, expressed once.
+    const verdict = checkAcademyPayment(amount, plan);
+    if (!verdict.ok) {
+        logger.error(`[Paystack Webhook] Academy payment refused on amount`, {
+            reference,
+            reason: verdict.reason,
+            paid: amount,
+            expected: verdict.reason === "underpaid" ? verdict.fee : null,
+        });
         throw new Error("Insufficient payment amount");
     }
+
+    const planToStore = verdict.plan;
 
     const appQuery = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
         .where("userId", "==", userId)
