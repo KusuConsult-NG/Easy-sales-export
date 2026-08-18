@@ -5,7 +5,7 @@ import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { refuseExportStatusChange } from "@/lib/export-window-status";
+import { refuseExportStatusChange, hasExportAdminAccess } from "@/lib/export-window-status";
 import { claimIdempotencyKey } from "@/lib/wallet-ledger";
 import { revalidatePath } from "next/cache";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
@@ -245,8 +245,16 @@ export async function updateExportWindowAction(
         if (!session?.user) { return { error: "Authentication required", success: false as const, meta: null };
         }
 
-        // Verify Admin
-        if ((!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) { return { error: "Unauthorized access", success: false as const, meta: null };
+        // Verify Admin — through the shared list, which includes export_admin.
+        //
+        // This checked the session token for admin/super_admin only, while the
+        // status endpoint in this same file recognises export_admin and reads
+        // roles from the database. An export administrator could settle a window
+        // — the larger power — and not edit its description.
+        const callerDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const callerRoles: string[] = callerDoc.data()?.roles ?? [];
+        if (!hasExportAdminAccess(callerRoles)) {
+            return { error: "Unauthorized access", success: false as const, meta: null };
         }
 
         const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
@@ -256,6 +264,48 @@ export async function updateExportWindowAction(
         delete cleanData.id;
         delete cleanData.createdAt;
         delete cleanData.updatedAt;
+
+        // The fields this endpoint has no business writing.
+        //
+        // `cleanData` is spread into the update, so every key the caller sends
+        // lands on the window. Three groups of them belong to code that holds a
+        // lock or performs side effects, and writing them here silently skips
+        // that:
+        //
+        //   fundedAmount / currentFunding / currentVolume / spotsFilled
+        //     maintained by incrementWithinCeiling, which locks the row and
+        //     checks the ceiling in one statement. A plain write here desyncs
+        //     the counters from the payments and bookings that produced them,
+        //     and the desync is invisible.
+        //
+        //   status
+        //     updateExportStatusAction applies refuseExportStatusChange AND, on
+        //     "completed", emails every investor a statement of their returns
+        //     and closes their slots. Setting it here settles a window with none
+        //     of that happening.
+        //
+        // The admin edit form sends none of these — its only `status` fields are
+        // on timeline phases — so refusing them changes nothing it does.
+        const PROTECTED_FIELDS = [
+            "status",
+            "fundedAmount",
+            "currentFunding",
+            "currentVolume",
+            "spotsFilled",
+            "participantsCount",
+            "investorCount",
+            "userId",
+            "createdBy",
+        ];
+        const refused = PROTECTED_FIELDS.filter((f) => f in cleanData);
+        if (refused.length > 0) {
+            return {
+                error: `These fields cannot be edited here: ${refused.join(", ")}. `
+                    + `Use the status action for status, and the payment or booking flows for funding totals.`,
+                success: false as const,
+                meta: null,
+            };
+        }
 
         await exportRef.update({ ...cleanData,
             updatedAt: FieldValue.serverTimestamp() });
