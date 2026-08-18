@@ -262,3 +262,55 @@ describe('the registration verifier', () => {
         expect(code(CONTRIB_ACTION)).toContain('User mismatch');
     });
 });
+
+describe("the member's own withdrawal history", () => {
+    // /cooperatives/withdrawals asked getMyWithdrawals for the member's
+    // withdrawals, and that function read "withdrawals" — the platform WALLET
+    // collection. Every cooperative withdrawal request is written to
+    // cooperative_withdrawals, by all three doors that create one. So the page
+    // was handed a list that structurally could not contain a single
+    // cooperative withdrawal, and rendered "no withdrawals yet" to members
+    // whose money had already been paid out.
+    const MY_DATA = 'src/app/actions/my-data.ts';
+    const HISTORY_PAGE = 'src/app/cooperatives/(member)/withdrawals/page.tsx';
+
+    it('reads the collection cooperative withdrawals are written to', () => {
+        // THE test.
+        const myData = fn(MY_DATA, 'getMyWithdrawals');
+
+        expect(myData).toContain('db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS)');
+        expect(myData).toContain('.where("userId", "==", userId)');
+    });
+
+    it('without dropping the platform wallet ones it already returned', () => {
+        const myData = fn(MY_DATA, 'getMyWithdrawals');
+
+        expect(myData).toContain('db.collection(COLLECTIONS.WITHDRAWALS)');
+        expect(myData).toContain('source: "wallet"');
+        expect(myData).toContain('source: "cooperative"');
+    });
+
+    it('newest first, across both', () => {
+        // Each collection is ordered independently by the database; a merged
+        // list has to be re-sorted or the second one lands underneath the first
+        // regardless of date.
+        const myData = fn(MY_DATA, 'getMyWithdrawals');
+
+        expect(myData).toContain('toMillis(b.requestedAt) - toMillis(a.requestedAt)');
+    });
+
+    it('and the page it feeds really is the cooperative one', () => {
+        // Vacuity guard, and the reason this was a live defect rather than a
+        // latent one.
+        const page = readFileSync(join(process.cwd(), HISTORY_PAGE), 'utf-8');
+
+        expect(page).toContain('getMyWithdrawals');
+        expect(page).toContain('Withdrawal History');
+    });
+
+    it('which sums only completed withdrawals, so the status fix matters too', () => {
+        const page = readFileSync(join(process.cwd(), HISTORY_PAGE), 'utf-8');
+
+        expect(page).toContain('w.status === "completed"');
+    });
+});

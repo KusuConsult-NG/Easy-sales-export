@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/session-guard";
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { claimStatusTransition } from "@/lib/status-transition";
+import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { logger } from "@/lib/logger";
 import { FieldValue } from "@/lib/firestore-compat";
 import { isAdmin } from "@/lib/admin-permissions";
@@ -50,10 +50,32 @@ export async function PATCH(request: NextRequest) {
         // the one who completed it and the second overwrites the first's
         // transactionReference — the reference for a real bank transfer.
         const nowIso = new Date().toISOString();
-        const claim = await claimStatusTransition({
+        // A COOPERATIVE WITHDRAWAL COULD NEVER REACH "completed".
+        //
+        // Two admin screens approve one cooperative withdrawal, and they leave
+        // it in different states:
+        //
+        //   admin/_withdrawals.ts processWithdrawalAction  pending →
+        //       payout_initiated → "completed" or "approved_pending_payout",
+        //       depending on whether the Paystack transfer succeeded
+        //
+        //   cooperative/_coop_admin_money.ts approveWithdrawalAction
+        //       pending → "approved", with the payout made by hand
+        //
+        // This route accepted only the first path's failed-transfer state. So a
+        // withdrawal approved on the COOPERATIVE screen — the screen built for
+        // cooperative withdrawals — sat at "approved" for ever with no
+        // transition out, and the member's own withdrawal history, which sums
+        // `status === "completed"`, reported ₦0 withdrawn no matter how much had
+        // been paid to them.
+        //
+        // The platform already answers this: the WAVE equivalent claims
+        // `fromAny: ["approved_pending_payout", "approved"]`. The cooperative
+        // one was the hold-out.
+        const claim = await claimStatusTransitionFromAny({
             collection: COLLECTIONS.COOPERATIVE_WITHDRAWALS,
             id: withdrawalId,
-            from: "approved_pending_payout",
+            fromAny: ["approved_pending_payout", "approved"],
             to: "completed",
             patch: {
                 completedBy: session.user.id,

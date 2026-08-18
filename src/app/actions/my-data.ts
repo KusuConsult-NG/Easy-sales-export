@@ -28,7 +28,7 @@
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
+import { serializeDoc, serializeDocs, toMillis } from "@/lib/firestore-serialize";
 import { toDate } from "@/lib/date-utils";
 import { logger } from "@/lib/logger";
 
@@ -335,17 +335,41 @@ export async function getMyWithdrawals(): Promise<any[]> {
     if (!userId) return [];
 
     try {
-        const snap = await db
-            .collection("withdrawals")
-            .where("userId", "==", userId)
-            .orderBy("createdAt", "desc")
-            .get();
+        // THE MEMBER'S COOPERATIVE WITHDRAWAL HISTORY WAS PERMANENTLY EMPTY.
+        //
+        // This read "withdrawals" — the platform wallet collection. Every
+        // cooperative withdrawal request is written to cooperative_withdrawals,
+        // by all three of the doors that create one. And the ONLY caller of this
+        // function is /cooperatives/withdrawals, the member's cooperative
+        // withdrawal history page: it asked for their withdrawals, was handed a
+        // list that structurally could not contain any, and rendered "no
+        // withdrawals yet" to members whose money had already been paid out.
+        //
+        // Both collections, since this lives in the "my data" module and a
+        // member's own record of their withdrawals should not omit a whole class
+        // of them. `source` distinguishes the two for any caller that cares.
+        const [platformSnap, coopSnap] = await Promise.all([
+            db.collection(COLLECTIONS.WITHDRAWALS)
+                .where("userId", "==", userId)
+                .orderBy("createdAt", "desc")
+                .get(),
+            db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS)
+                .where("userId", "==", userId)
+                .get(),
+        ]);
 
-        return serializeDocs<any>(snap.docs).map((w: any) => ({
-            ...w,
-            requestedAt: w.createdAt ?? null,
-            processedAt: w.processedAt ?? null,
-        }));
+        const rows = [
+            ...serializeDocs<any>(platformSnap.docs).map((w: any) => ({ ...w, source: "wallet" })),
+            ...serializeDocs<any>(coopSnap.docs).map((w: any) => ({ ...w, source: "cooperative" })),
+        ];
+
+        return rows
+            .map((w: any) => ({
+                ...w,
+                requestedAt: w.requestedAt ?? w.createdAt ?? null,
+                processedAt: w.processedAt ?? null,
+            }))
+            .sort((a: any, b: any) => toMillis(b.requestedAt) - toMillis(a.requestedAt));
     } catch (error) {
         logger.error("[my-data] getMyWithdrawals failed", { userId, error });
         return [];
