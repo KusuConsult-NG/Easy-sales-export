@@ -18,6 +18,7 @@ import { withSafeAction, type ActionResponse } from "@/lib/safe-action";
 import { isAdmin } from "@/lib/admin-permissions";
 import { calculatePenalty } from "@/lib/calculatePenalty";
 import type { LoanApplication, RepaymentInstallment } from "@/lib/types/cooperative-loans";
+import { resolveLoanApplication, normaliseLoanApplication } from "@/lib/loan-application-location";
 
 /**
  * Get loan repayment schedule
@@ -26,14 +27,21 @@ async function _getRepaymentScheduleAction(
     loanId: string
 ): Promise<ActionResponse<{ schedule: RepaymentInstallment[] }>> { 
     try {
-        const loanRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(loanId);
-        const loanDoc = await loanRef.get();
+        // Resolved rather than assumed, and the borrower read through the same
+        // normalisation the admin queue uses: cooperative_loans keys them as
+        // `memberId`, so an un-normalised `loanData.userId` is undefined and the
+        // ownership comparison below would refuse the borrower their own loan.
+        // See lib/loan-application-location.ts.
+        const resolved = await resolveLoanApplication(loanId);
 
-        if (!loanDoc.exists) {
+        if (!resolved) {
             return { success: false as const, error: "Loan not found", data: null };
         }
 
-        const loanData = loanDoc.data() as LoanApplication;
+        const loanData = normaliseLoanApplication(
+            resolved.snap.data() as Record<string, any>,
+            resolved.collection,
+        ) as unknown as LoanApplication;
 
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
@@ -218,7 +226,17 @@ export async function submitRepaymentAction(data: {
         }
 
         const installmentRef = db.collection(COLLECTIONS.LOAN_REPAYMENTS).doc(data.installmentId);
-        const loanRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(data.loanId);
+
+        // Resolved rather than assumed — a loan filed through the member loan
+        // page lives in cooperative_loans, and the admin queue offers Record
+        // Repayment on exactly those rows. See lib/loan-application-location.ts.
+        const resolvedLoan = await resolveLoanApplication(data.loanId);
+
+        if (!resolvedLoan) {
+            return { success: false as const, error: "Loan not found", data: null };
+        }
+
+        const loanRef = resolvedLoan.ref;
 
         let calculatedPenalty = 0;
         let calculatedStatus: "pending" | "paid" | "overdue" | "partial" = "pending";
@@ -273,6 +291,43 @@ export async function submitRepaymentAction(data: {
             }
 
             const installmentData = installmentDoc.data() as Record<string, any>;
+
+            // THE INSTALMENT WAS NEVER CHECKED TO BELONG TO THE LOAN.
+            //
+            // loanId and installmentId arrive as two independent caller-supplied
+            // ids, and the only authorisation above is `session.user.id ===
+            // data.userId` — the caller asserting who they are, which is true.
+            // Nothing tied the instalment to the loan or to the borrower.
+            //
+            // The damage is not the credit itself but the sweep below it: it
+            // asks LOAN_REPAYMENTS for every instalment of data.loanId and marks
+            // the loan "repaid" if all of them are paid. Point loanId at a loan
+            // with NO instalment rows — which _getRepaymentScheduleAction
+            // deliberately refuses to generate for a loan missing its terms, so
+            // such loans exist — and `[].every()` is true. One payment against
+            // an unrelated instalment marked somebody's loan fully repaid
+            // without a naira of it being paid.
+            //
+            // Both bindings are checked, not just the loan one: an instalment
+            // belonging to a different borrower of the SAME loan is equally not
+            // this caller's to pay.
+            if (installmentData.loanId !== data.loanId) {
+                logger.error("[submitRepaymentAction] installment does not belong to the loan", {
+                    installmentId: data.installmentId,
+                    claimedLoanId: data.loanId,
+                    actualLoanId: installmentData.loanId,
+                });
+                throw new Error("That instalment does not belong to this loan");
+            }
+
+            if (installmentData.userId && installmentData.userId !== data.userId) {
+                logger.error("[submitRepaymentAction] installment belongs to another borrower", {
+                    installmentId: data.installmentId,
+                    claimedUserId: data.userId,
+                });
+                throw new Error("That instalment does not belong to this borrower");
+            }
+
             const dueDate = (installmentData.dueDate as Timestamp).toDate();
 
             if (installmentData.status === "paid") {
@@ -336,7 +391,12 @@ export async function submitRepaymentAction(data: {
             .where("loanId", "==", data.loanId)
             .get();
 
-        const allPaid = allInstallmentsSnapshot.docs.every((doc) => doc.data().status === "paid");
+        // `.every()` on an empty array is TRUE, and that is how a loan with no
+        // schedule at all was declared fully repaid. A loan with nothing to
+        // repay against has not been repaid; it has no schedule, which is a
+        // different problem and one _getRepaymentScheduleAction reports.
+        const allPaid = !allInstallmentsSnapshot.empty
+            && allInstallmentsSnapshot.docs.every((doc) => doc.data().status === "paid");
 
         if (allPaid) {
             await loanRef.update({
@@ -595,15 +655,31 @@ export async function getRepaymentHistoryAction(
             return { success: false as const, error: "Unauthorized" , data: null };
         }
 
-        // Note: For history, we should ideally check ownership of the loan first, 
-        // but skipping for now or adding a quick check would be better.
-        // Let's add a quick loan check.
-        const loanDoc = await db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(loanId).get();
-        if (loanDoc.exists) {
-            const loanData = loanDoc.data();
-            if (loanData && loanData.userId !== session.user.id && !isAdmin(session.user.roles)) {
-                return { success: false as const, error: "Unauthorized" , data: null };
-            }
+        // THE OWNERSHIP CHECK WAS SKIPPED WHENEVER THE LOOKUP MISSED.
+        //
+        // `if (loanDoc.exists)` meant a loan this reader could not find imposed
+        // no check at all, and it looked in loan_applications only — so every
+        // loan filed through the member loan page, which lives in
+        // cooperative_loans, fell straight through it. Any signed-in user who
+        // knew such a loan's id was served its full repayment history: amounts,
+        // dates, payment references, the borrower's id.
+        //
+        // Both halves are closed. The loan is resolved across both collections,
+        // and an unresolvable id is refused rather than waved through — the
+        // check now fails closed.
+        const resolvedLoan = await resolveLoanApplication(loanId);
+
+        if (!resolvedLoan) {
+            return { success: false as const, error: "Loan not found", data: null };
+        }
+
+        const loanOwner = normaliseLoanApplication(
+            resolvedLoan.snap.data() as Record<string, any>,
+            resolvedLoan.collection,
+        ).userId;
+
+        if (loanOwner !== session.user.id && !isAdmin(session.user.roles)) {
+            return { success: false as const, error: "Unauthorized" , data: null };
         }
 
         const paymentsSnapshot = await db.collection(COLLECTIONS.LOAN_PAYMENTS)

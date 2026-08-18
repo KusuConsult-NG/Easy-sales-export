@@ -3,10 +3,10 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
-import { supabaseDb as db } from "@/lib/supabase-db";
-import { COLLECTIONS } from "@/lib/types/firestore";
-import { FieldValue } from "@/lib/firestore-compat";
 import { isAdmin } from "@/lib/admin-permissions";
+import { claimStatusTransitionFromAny } from "@/lib/status-transition";
+import { LOAN_REJECTABLE_STATUSES } from "@/lib/loan-approval-policy";
+import { resolveLoanApplication } from "@/lib/loan-application-location";
 
 /**
  * API Route: Reject Loan Application (Admin Only)
@@ -38,28 +38,66 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Get application (Admin SDK)
-        const applicationRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(applicationId);
-        const applicationDoc = await applicationRef.get();
+        // AN ADMIN COULD SEE THESE APPLICATIONS AND COULD NOT REJECT ANY OF THEM
+        // ----------------------------------------------------------------------
+        // This is the route the Reject button on /admin/cooperatives/loans calls,
+        // and it opened LOAN_APPLICATIONS directly. The queue above it merges
+        // cooperative_loans — the collection the member loan page is the only
+        // path into — so every application a member actually filed through the UI
+        // appeared in the list and answered 404 "Application not found" when an
+        // admin clicked Reject on it.
+        //
+        // The approve route was taught to resolve the application when the queue
+        // was fixed. This one and verify-guarantor were left behind, so the pair
+        // of buttons on one row disagreed about whether the row existed.
+        //
+        // See lib/loan-application-location.ts.
+        const resolved = await resolveLoanApplication(applicationId);
 
-        if (!applicationDoc.exists) {
+        if (!resolved) {
             return NextResponse.json(
                 { success: false, message: "Application not found" },
                 { status: 404 }
             );
         }
 
-        const appData = applicationDoc.data();
-        const userId = appData?.userId;
+        const appData = resolved.snap.data();
+        const userId = appData?.userId ?? appData?.memberId;
 
-        // Update application status
-        await applicationRef.update({
-            status: "rejected",
-            rejectionReason: reason,
-            rejectedAt: FieldValue.serverTimestamp(),
-            rejectedBy: session.user.id,
-            updatedAt: FieldValue.serverTimestamp(),
+        // Rejection was a blind write.
+        //
+        // Read nothing, compare nothing, write "rejected" — while approval and
+        // disbursement on either side of it both claim the transition. So a
+        // disbursed loan could be marked rejected after the money had left, and a
+        // rejected one could be rejected again, the second reason and timestamp
+        // overwriting any record of the first.
+        //
+        // Which statuses may be rejected from — and why "approved" is not one of
+        // them — is in lib/loan-approval-policy.ts.
+        const rejectClaim = await claimStatusTransitionFromAny({
+            collection: resolved.collection,
+            id: applicationId,
+            fromAny: [...LOAN_REJECTABLE_STATUSES],
+            to: "rejected",
+            patch: {
+                rejectionReason: reason,
+                rejectedAt: new Date().toISOString(),
+                rejectedBy: session.user.id,
+                updatedAt: new Date().toISOString(),
+            },
         });
+
+        if (!rejectClaim.claimed) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: rejectClaim.status === null
+                        ? "Application not found"
+                        : `This application is already ${rejectClaim.status} and can no longer be rejected.`,
+                },
+                { status: 409 }
+            );
+        }
 
         if (userId) {
             try {

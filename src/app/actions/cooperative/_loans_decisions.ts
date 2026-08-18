@@ -3,9 +3,13 @@
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
-import { FieldValue } from "@/lib/firestore-compat";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
-import { needsDualControl } from "@/lib/loan-approval-policy";
+import {
+    needsDualControl,
+    guarantorBlocksApproval,
+    GUARANTOR_UNVERIFIED_MESSAGE,
+    LOAN_REJECTABLE_STATUSES,
+} from "@/lib/loan-approval-policy";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
 import { isAdmin } from "@/lib/admin-permissions";
@@ -53,8 +57,12 @@ export async function approveLoanAction(
 
             const appData = appDoc.data() as LoanApplication;
 
-            if (!appData.guarantorVerified) {
-                throw new Error("Guarantor verification required before loan approval.");
+            // Demanded unconditionally, which refused every application filed
+            // through the member loan page — that path collects no guarantor, so
+            // the field is absent and always will be. The route beside it had
+            // the opposite fault. Shared rule: lib/loan-approval-policy.ts.
+            if (guarantorBlocksApproval(appData)) {
+                throw new Error(GUARANTOR_UNVERIFIED_MESSAGE);
             }
 
             if (appData.status !== "pending" && appData.status !== "partially_approved") {
@@ -230,16 +238,40 @@ export async function rejectLoanAction(
         if (!resolved) {
             return { success: false as const, error: "Application not found", data: null };
         }
-        const appRef = resolved.ref;
         const appCollection = resolved.collection;
         const appDoc = resolved.snap;
 
-        await appRef.update({
-            status: "rejected",
-            reviewedAt: FieldValue.serverTimestamp(),
-            reviewedBy: effectiveAdminId,
-            rejectionReason: reason,
+        // Rejection was the one decision on this file that wrote blind.
+        //
+        // Approval above and disbursement below both claim their transition;
+        // this read nothing and wrote "rejected" unconditionally. So a disbursed
+        // loan could be marked rejected after the money had gone, and a rejected
+        // one re-rejected with a fresh reason replacing the record of the first.
+        //
+        // Which statuses may be rejected from, and why "approved" is not among
+        // them, is in lib/loan-approval-policy.ts.
+        const rejectClaim = await claimStatusTransitionFromAny({
+            collection: appCollection,
+            id: applicationId,
+            fromAny: [...LOAN_REJECTABLE_STATUSES],
+            to: "rejected",
+            patch: {
+                reviewedAt: new Date().toISOString(),
+                reviewedBy: effectiveAdminId,
+                rejectionReason: reason,
+                updatedAt: new Date().toISOString(),
+            },
         });
+
+        if (!rejectClaim.claimed) {
+            return {
+                success: false as const,
+                error: rejectClaim.status === null
+                    ? "Application not found"
+                    : `This application is already ${rejectClaim.status} and can no longer be rejected.`,
+                data: null,
+            };
+        }
 
         const appData = appDoc.data() as LoanApplication;
 

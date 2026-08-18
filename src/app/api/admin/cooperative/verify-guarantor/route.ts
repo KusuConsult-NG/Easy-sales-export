@@ -3,10 +3,10 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
-import { supabaseDb as db } from "@/lib/supabase-db";
-import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
 import { isAdmin } from "@/lib/admin-permissions";
+import { recordsAGuarantor } from "@/lib/loan-approval-policy";
+import { resolveLoanApplication } from "@/lib/loan-application-location";
 
 /**
  * API Route: Verify Guarantor (Admin Only)
@@ -38,21 +38,41 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const applicationRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(applicationId);
-        const applicationDoc = await applicationRef.get();
+        // Resolved rather than assumed — an application filed through the member
+        // loan page lives in cooperative_loans, and this route answered 404 for
+        // it while the queue that offered the button listed it. Same gap as the
+        // reject route beside it. See lib/loan-application-location.ts.
+        const resolved = await resolveLoanApplication(applicationId);
 
-        if (!applicationDoc.exists) {
+        if (!resolved) {
             return NextResponse.json(
                 { success: false, message: "Application not found" },
                 { status: 404 }
             );
         }
 
-        const appData = applicationDoc.data()!;
+        const applicationRef = resolved.ref;
+        const appData = resolved.snap.data()!;
 
         if (appData.status !== "pending") {
             return NextResponse.json(
                 { success: false, message: "Application is not pending" },
+                { status: 400 }
+            );
+        }
+
+        // There has to BE a guarantor to verify.
+        //
+        // The member loan page collects none, so those applications carry no
+        // guarantor fields at all. Writing guarantorVerified: true onto one
+        // records a verification that never happened and cannot have — an
+        // admin attesting to details the application does not contain.
+        if (!recordsAGuarantor(appData)) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "This application did not record a guarantor, so there is nothing to verify.",
+                },
                 { status: 400 }
             );
         }

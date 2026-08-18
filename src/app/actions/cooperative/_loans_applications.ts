@@ -11,7 +11,7 @@ import { requireSession } from "@/lib/session-guard";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { isAdmin } from "@/lib/admin-permissions";
 import type { LoanApplication } from "@/lib/types/cooperative-loans";
-import { normaliseLoanApplication } from "@/lib/loan-application-location";
+import { normaliseLoanApplication, LOAN_APPLICATION_COLLECTIONS, resolveLoanApplication } from "@/lib/loan-application-location";
 
 /**
  * Submit loan application
@@ -232,11 +232,21 @@ export async function getPendingLoanApplicationsAction(): Promise<LoanApplicatio
             return [];
         }
 
-        const snapshot = await db.collection(COLLECTIONS.LOAN_APPLICATIONS)
-            .where("status", "==", "pending")
-            .get();
+        // Both collections, for the reason set out on the admin queue below:
+        // the member loan page files into cooperative_loans and nothing else,
+        // so a reader of loan_applications alone reports no pending
+        // applications while members are waiting on theirs.
+        const snapshots = await Promise.all(
+            LOAN_APPLICATION_COLLECTIONS.map((name) =>
+                db.collection(name).where("status", "==", "pending").get()
+                    .then((snap) => ({ name, snap }))
+            )
+        );
 
-        return serializeDocs<LoanApplication>(snapshot.docs);
+        return snapshots.flatMap(({ name, snap }) =>
+            serializeDocs<LoanApplication>(snap.docs)
+                .map((row) => normaliseLoanApplication(row as any, name) as unknown as LoanApplication)
+        );
     } catch (error) {
         logger.error("Failed to fetch pending applications:", error);
         return [];
@@ -292,10 +302,22 @@ export async function getAdminLoanApplicationsAction(options: {
         // orderBy comes LAST — after all where() clauses
         query = query.orderBy("appliedAt", "desc");
 
+        // NEXT PAGE SHOWED PAGE ONE AGAIN.
+        //
+        // The cursor is the id of the last row on the page just shown, and after
+        // the merge below that row may be a cooperative_loans one. Looked up in
+        // loan_applications alone it did not exist, `startAfter` was silently
+        // skipped, and the query returned the first page — so an admin clicking
+        // Next Page saw the same applications, with the page number incrementing
+        // underneath them.
+        //
+        // Resolved across both collections. The adapter reads the ordering field
+        // off the snapshot (appliedAt, which both shapes carry), so a cursor from
+        // either collection pages the query correctly.
         if (options.lastDocId && !options.search) {
-            const lastDoc = await db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(options.lastDocId).get();
-            if (lastDoc.exists) {
-                query = query.startAfter(lastDoc);
+            const lastDoc = await resolveLoanApplication(options.lastDocId);
+            if (lastDoc) {
+                query = query.startAfter(lastDoc.snap);
             }
         }
 
@@ -398,11 +420,42 @@ export async function getAdminLoanApplicationsAction(options: {
                 .limit(fetchLimit + 1)
                 .get();
 
+            // The merged rows are filtered by the SAME criteria as the query
+            // above, rather than by status alone.
+            //
+            // Two ways that went wrong. The status filter compared to
+            // options.statusFilter directly, while the query maps "active" and
+            // "disbursed" both onto ["disbursed", "active"] — so filtering the
+            // queue to disbursed loans dropped every merged one recorded as
+            // "active", and vice versa. And the date range was not applied at
+            // all: an admin narrowing the queue to last week still saw every
+            // cooperative_loans row ever filed, mixed in with a correctly
+            // filtered list, with nothing to indicate the two halves obeyed
+            // different rules.
+            const wantedStatuses = (!options.statusFilter || options.statusFilter === "all")
+                ? null
+                : (options.statusFilter === "active" || options.statusFilter === "disbursed")
+                    ? ["disbursed", "active"]
+                    : [options.statusFilter];
+
+            const fromTime = options.dateFrom ? dateRangeStart(options.dateFrom).getTime() : null;
+            const toTime = options.dateTo ? dateRangeEnd(options.dateTo).getTime() : null;
+
             const coopLoans = (serializeDocs(coopLoansSnap.docs) as unknown as any[])
                 .map(row => normaliseLoanApplication(row, COLLECTIONS.COOPERATIVE_LOANS))
                 .filter(row => {
-                    if (!options.statusFilter || options.statusFilter === "all") return true;
-                    return row.status === options.statusFilter;
+                    if (wantedStatuses && !wantedStatuses.includes(row.status)) return false;
+
+                    if (fromTime !== null || toTime !== null) {
+                        const applied = row.appliedAt || row.createdAt;
+                        if (!applied) return false;
+                        const appTime = new Date(applied).getTime();
+                        if (!Number.isFinite(appTime)) return false;
+                        if (fromTime !== null && appTime < fromTime) return false;
+                        if (toTime !== null && appTime > toTime) return false;
+                    }
+
+                    return true;
                 });
 
             if (coopLoans.length > 0) {
@@ -570,6 +623,39 @@ export async function getAdminLoanApplicationsExportAction(options: {
             }
         }
 
+        // The export covered one of the queue's two collections.
+        //
+        // The list an admin exports from merges loan_applications and
+        // cooperative_loans; this read the first alone, so the CSV silently
+        // omitted every application a member filed through the UI. A report that
+        // is a strict subset of the screen it was taken from, with no indication
+        // that it is, is worse than no report.
+        try {
+            const coopSnap = await db.collection(COLLECTIONS.COOPERATIVE_LOANS)
+                .limit(EXPORT_ROW_CAP)
+                .get();
+
+            const coopLoans = (serializeDocs(coopSnap.docs) as any[])
+                .map(row => normaliseLoanApplication(row, COLLECTIONS.COOPERATIVE_LOANS))
+                .filter(row => !options.statusFilter
+                    || options.statusFilter === "all"
+                    || ((options.statusFilter === "active" || options.statusFilter === "disbursed")
+                        ? ["disbursed", "active"].includes(row.status)
+                        : row.status === options.statusFilter));
+
+            const seen = new Set(loans.map(l => l.id));
+            loans = [...loans, ...coopLoans.filter(r => !seen.has(r.id))];
+            loans.sort((a, b) => {
+                const aTime = new Date(a.appliedAt || a.createdAt || 0).getTime();
+                const bTime = new Date(b.appliedAt || b.createdAt || 0).getTime();
+                return bTime - aTime;
+            });
+        } catch (coopErr: any) {
+            logger.error("[LoansExport] Failed to read cooperative_loans; the export is incomplete", {
+                error: coopErr?.message,
+            });
+        }
+
         const userIds = [...new Set(loans.map(loan => loan.userId).filter(id => id && typeof id === 'string' && id.trim().length > 0))];
         const userMap = new Map<string, any>();
 
@@ -577,7 +663,7 @@ export async function getAdminLoanApplicationsExportAction(options: {
         for (let i = 0; i < userIds.length; i += 100) {
             const batchIds = userIds.slice(i, i + 100);
             const refs = batchIds.map(id => db.collection(COLLECTIONS.USERS).doc(id));
-            
+
             if (refs.length > 0) {
                 userPromises.push(
                     db.getAll(...refs).then(userDocs => {
@@ -659,22 +745,44 @@ export async function getAdminLoanStatsAction(): Promise<
             return { success: false as const, error: "Unauthorized" , stats: null };
         }
 
-        const col = db.collection(COLLECTIONS.LOAN_APPLICATIONS);
-        const [total, pending, approved, rejected] = await Promise.all([
-            col.count().get(),
-            col.where("status", "==", "pending").count().get(),
-            col.where("status", "in", ["approved", "disbursed", "active"]).count().get(),
-            col.where("status", "==", "rejected").count().get(),
-        ]);
+        // THE CARDS CONTRADICTED THE TABLE UNDERNEATH THEM.
+        //
+        // /admin/cooperatives/loans renders these four counts above a queue that
+        // merges loan_applications AND cooperative_loans. These counted the first
+        // collection alone, so an admin looking at a list of pending member
+        // applications saw "Pending: 0" over the top of them — and had no way to
+        // tell which of the two numbers was the honest one.
+        //
+        // Counted across both, the same pair the queue reads.
+        const counts = await Promise.all(
+            LOAN_APPLICATION_COLLECTIONS.map(async (name) => {
+                const col = db.collection(name);
+                const [total, pending, approved, rejected] = await Promise.all([
+                    col.count().get(),
+                    col.where("status", "==", "pending").count().get(),
+                    col.where("status", "in", ["approved", "disbursed", "active"]).count().get(),
+                    col.where("status", "==", "rejected").count().get(),
+                ]);
+                return {
+                    total: total.data().count,
+                    pending: pending.data().count,
+                    approved: approved.data().count,
+                    rejected: rejected.data().count,
+                };
+            })
+        );
+
+        const sum = (key: "total" | "pending" | "approved" | "rejected") =>
+            counts.reduce((acc, c) => acc + c[key], 0);
 
         return {
             error: null,
             success: true as const,
             stats: {
-                total: total.data().count,
-                pending: pending.data().count,
-                approved: approved.data().count,
-                rejected: rejected.data().count
+                total: sum("total"),
+                pending: sum("pending"),
+                approved: sum("approved"),
+                rejected: sum("rejected"),
             }
         };
     } catch (error: any) {

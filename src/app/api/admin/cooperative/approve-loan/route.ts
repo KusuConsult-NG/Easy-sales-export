@@ -8,7 +8,11 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
 import { isAdmin } from "@/lib/admin-permissions";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
-import { needsDualControl } from "@/lib/loan-approval-policy";
+import {
+    needsDualControl,
+    guarantorBlocksApproval,
+    GUARANTOR_UNVERIFIED_MESSAGE,
+} from "@/lib/loan-approval-policy";
 import { resolveLoanApplication } from "@/lib/loan-application-location";
 
 /**
@@ -64,20 +68,26 @@ export async function POST(request: NextRequest) {
         // loan page lives in cooperative_loans, and this route answered 404 for
         // it. See lib/loan-application-location.ts.
         const resolvedApp = await resolveLoanApplication(applicationId);
-        const applicationRef = resolvedApp?.ref ?? db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(applicationId);
-        const applicationCollection = resolvedApp?.collection ?? COLLECTIONS.LOAN_APPLICATIONS;
-        const applicationDoc = await applicationRef.get();
 
-        if (!applicationDoc.exists) {
+        if (!resolvedApp) {
             return NextResponse.json({ success: false, message: "Application not found" }, { status: 404 });
         }
 
-        const appData = applicationDoc.data()!;
+        const applicationCollection = resolvedApp.collection;
+        const appData = resolvedApp.snap.data()!;
         userId = appData.userId;
 
-        if (appData.tier && !appData.guarantorVerified) {
+        // The guarantor gate keyed on `tier`, which only the wizard writes.
+        //
+        // Every application filed through /api/cooperative/apply-loan records a
+        // guarantor and `guarantorVerified: false` and NO tier, so this check
+        // was skipped for exactly the applications that had an unverified
+        // guarantor on file. The rule is about the guarantor, not about a tier —
+        // see lib/loan-approval-policy.ts, which also explains why the sibling
+        // action's unconditional demand was wrong in the other direction.
+        if (guarantorBlocksApproval(appData)) {
             return NextResponse.json(
-                { success: false, message: "Guarantor verification required before loan approval." },
+                { success: false, message: GUARANTOR_UNVERIFIED_MESSAGE },
                 { status: 400 }
             );
         }
