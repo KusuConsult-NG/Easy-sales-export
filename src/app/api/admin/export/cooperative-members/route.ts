@@ -40,7 +40,12 @@ export async function GET(request: NextRequest) {
             query = query.where("createdAt", "<=", dateRangeEnd(toDate));
         }
 
-        const snapshot = await query.get();
+        // .all() — this is an EXPORT, so a silent cap at DEFAULT_QUERY_LIMIT
+        // (5,000) hands the admin a file that looks complete and is not.
+        const snapshot = await query.all().get();
+        if (snapshot.truncated) {
+            logger.error("[export/cooperative-members] cooperative members sweep hit the unbounded ceiling — the export below is incomplete.");
+        }
         // Fallback user mapping to get names and emails for members missing them
         const userIds = [...new Set(snapshot.docs.map(doc => doc.data().userId || doc.id))];
         const userFallbackMap = new Map<string, any>();

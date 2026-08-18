@@ -57,7 +57,12 @@ export async function POST(request: NextRequest) {
             query = query.where("createdAt", ">=", dateFilter);
         }
 
-        const applicationsSnapshot = await query.get();
+        // .all() — this is an EXPORT, so a silent cap at DEFAULT_QUERY_LIMIT
+        // (5,000) hands the admin a file that looks complete and is not.
+        const applicationsSnapshot = await query.all().get();
+        if (applicationsSnapshot.truncated) {
+            logger.error("[wave/reports/export] WAVE applications sweep hit the unbounded ceiling — the export below is incomplete.");
+        }
         
         // Fetch linked user documents
         const userIds = [...new Set(applicationsSnapshot.docs.map(doc => doc.data().userId).filter(Boolean))];

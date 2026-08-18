@@ -21,7 +21,16 @@ export async function GET(request: NextRequest) {
 
         // Fetch ALL users (Warning: Will pull up to Vercel memory limits, but avoids 500 pagination cap)
         // Usually, 34,000 JSON records fit safely in 40-50MB RAM.
-        const snapshot = await db.collection(COLLECTIONS.USERS).get();
+        //
+        // .all(), which is what the comment above always intended. A bare .get()
+        // on an unbounded query stops at DEFAULT_QUERY_LIMIT (5,000) and returns
+        // a snapshot indistinguishable from a complete one — so on a platform of
+        // ~34,000 users this exported the first 5,000 and called itself a full
+        // export. The intent was right; the mechanism silently defeated it.
+        const snapshot = await db.collection(COLLECTIONS.USERS).all().get();
+        if (snapshot.truncated) {
+            logger.error("[export/users] user sweep hit the unbounded ceiling — the CSV below is incomplete.");
+        }
         
         const headers = [
             "ID", "Name", "Email", "Phone", "Gender", "Roles", "Verified",
@@ -115,6 +124,9 @@ export async function GET(request: NextRequest) {
             status: 200,
             headers: {
                 "Content-Type": "text/csv; charset=utf-8",
+                // A truncated export looks exactly like a complete one to
+                // whoever opens the file, so say so out of band.
+                "X-Export-Truncated": String(snapshot.truncated),
                 "Content-Disposition": `attachment; filename="users_${new Date().toISOString().slice(0, 10)}.csv"`,
             },
         });
