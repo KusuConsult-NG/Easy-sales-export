@@ -70,7 +70,11 @@ async function _getAllTransactionsAction(options?: {
         if (options?.type && options.type !== "all") {
             q = q.where("type", "==", options.type);
         } else {
-            q = q.where("type", "in", ["contribution", "withdrawal", "loan", "fixed_savings"]);
+            // "fixed_savings" is not a type anything writes — the ledger row is
+            // `fixed_savings_lock`, which is also what forensics.ts reconciles
+            // against. So every fixed savings plan was excluded from the admin
+            // transactions list by a filter that looked like it included them.
+            q = q.where("type", "in", ["contribution", "withdrawal", "loan", "fixed_savings_lock"]);
         }
 
         if (options?.status && options.status !== "all") {
@@ -363,6 +367,58 @@ export async function approveWithdrawalAction(
                     }
                 }
             }
+
+            // THE MONEY LEFT AND THE LEDGER NEVER RECORDED IT.
+            //
+            // NOTHING in this codebase writes a `withdrawal` row to
+            // cooperative_transactions. Every writer of that collection produces
+            // contribution, membership_registration, fixed_savings_lock or
+            // deposit — and three separate readers depend on a withdrawal row
+            // that was never there:
+            //
+            //   forensics.ts        DEBIT_TYPES = ["withdrawal",
+            //                       "fixed_savings_lock"]. It reconciles
+            //                       savingsBalance + lockedBalance against the
+            //                       ledger. At request time the debit moves
+            //                       savings into lockedBalance so the sum is
+            //                       unchanged and reconciliation holds — but
+            //                       HERE, on approval, lockedBalance drops with
+            //                       nothing accounting for it. Every member who
+            //                       has completed a withdrawal reported a
+            //                       permanent balance mismatch, correctly,
+            //                       because the ledger genuinely did not account
+            //                       for the money. That is the same defect the
+            //                       fixed-savings pass fixed for its own rows:
+            //                       "a reconciliation check that always fails
+            //                       for a whole class of member is a check
+            //                       nobody reads".
+            //
+            //   getCooperativeStats `else if (t.type === "withdrawal")
+            //                       totalSavings -= amount` — a branch that
+            //                       never fired, so the admin dashboard reported
+            //                       the cooperative still holding money it had
+            //                       paid out.
+            //
+            //   the member history  its "Withdrawals" filter returned nothing.
+            //
+            // Written here rather than at request time because this is the point
+            // the money actually leaves: a rejection puts it back, and a pending
+            // request is still the member's. Keyed on the withdrawal id so a
+            // retry overwrites rather than duplicates, as the fixed-savings row
+            // is keyed on its plan id.
+            const ledgerReference = `coopwd_${withdrawalId}`;
+            await db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc(ledgerReference).set({
+                id: ledgerReference,
+                userId,
+                cooperativeId: withdrawalData.cooperativeId || "default",
+                type: "withdrawal",
+                amount,
+                currency: "NGN",
+                reference: ledgerReference,
+                description: "Cooperative savings withdrawal",
+                status: "completed",
+                date: FieldValue.serverTimestamp(),
+            });
 
             return { email, name, amount, userId };
         })();
