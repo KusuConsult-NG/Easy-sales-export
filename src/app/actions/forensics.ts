@@ -7,6 +7,7 @@ import { logger } from "@/lib/logger";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { EXPORT_WINDOW_INVESTABLE_STATUSES } from "@/lib/export-window-status";
 
 interface ScanResult { module: string;
     check: string;
@@ -381,9 +382,23 @@ export async function runForensicScanAction(): Promise<
 
         // CHECK: Investment Cap Breach
         try {
+            // The statuses an export window can actually hold, not "active" —
+            // which NOTHING writes to this collection. Every write that lands
+            // on export_windows is accounted for in lib/export-window-status.ts;
+            // "active" appears only on EXPORT_SLOTS and EXPORT_INVESTMENTS. So
+            // this check inspected zero windows and reported clean every time
+            // it ran, which is the same shape of defect as an integrity report
+            // that never built the index it consulted.
+            //
+            // .all(), because a forensic sweep that stops at the default cap
+            // reports "no breaches" for the windows it did not read.
             const activeWindows = await db.collection(COLLECTIONS.EXPORT_WINDOWS)
-                .where("status", "==", "active")
+                .where("status", "in", [...EXPORT_WINDOW_INVESTABLE_STATUSES])
+                .all()
                 .get();
+            if (activeWindows.truncated) {
+                logger.error("[Forensics] export window sweep truncated — the cap-breach check below is incomplete.");
+            }
 
             const breachedIds: string[] = [];
 

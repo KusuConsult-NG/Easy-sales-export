@@ -40,6 +40,62 @@ export const EXPORT_WINDOW_STATUSES = [
     "completed",
 ] as const;
 
+/**
+ * ONE COLLECTION, TWO ENTITIES, TWO VOCABULARIES.
+ *
+ * export_windows holds two different things, told apart by nothing but which
+ * fields they happen to carry. admin/_exports.ts names the split in its own
+ * comment — "Safe mapping for Split-Schema (Private Requests vs Crowdfunded
+ * Opportunities)" — and the two have separate creators writing separate
+ * statuses:
+ *
+ *   the SHIPMENT      _ex_windows.ts::createExportWindowAction. Carries
+ *                     orderId, commodity, quantity, deliveryDate, userId.
+ *                     Created "pending"; moves through the four statuses above.
+ *   the AGGREGATION   export-aggregation.ts. Carries slotPrice, currentVolume,
+ *                     startDate/endDate, createdBy. Created "open"; investors
+ *                     buy slots in it.
+ *
+ * So the statuses a window can actually hold are the union, not the four above.
+ * That matters wherever code decides what a window IS by its status:
+ *
+ *   - the browse query filters `status == "open"`, which only aggregations ever
+ *     have, so a shipment is invisible to it — correct by accident rather than
+ *     by design.
+ *   - EXPORT_WINDOW_STATUSES cannot express "open", so once an admin moves an
+ *     aggregation onto one of the four, refuseExportStatusChange rejects "open"
+ *     as "Invalid status value" and there is no way back. Recorded rather than
+ *     fixed: merging the two entities is a schema decision, not an audit's.
+ *
+ * Listed here so anything reasoning about a window's status has one place to
+ * look, instead of a fifth hand-written set.
+ */
+export const EXPORT_WINDOW_ALL_STATUSES = [
+    ...EXPORT_WINDOW_STATUSES,
+    "open",
+    "closed",
+] as const;
+
+/**
+ * A window that accepts investment.
+ *
+ * _ex_investments.ts spells this `status !== "open" && status !== "active"`,
+ * and forensics.ts's investment-cap check asked for `"active"` ALONE —
+ * a value nothing in the codebase ever writes to export_windows. Every write
+ * that lands on this collection is accounted for: "open" and "pending" from the
+ * two creators, the four statuses above from the two updateExportStatusAction
+ * endpoints, and "completed" from the escrow cron. "active" appears only on
+ * EXPORT_SLOTS and EXPORT_INVESTMENTS.
+ *
+ * So that check inspected zero windows and reported clean every time it ran —
+ * the same shape as an integrity report that never built the index it consulted.
+ *
+ * "active" is kept here because the investability check already honours it: if
+ * a writer ever starts producing it, the cap check should see those windows too
+ * rather than silently resume ignoring them.
+ */
+export const EXPORT_WINDOW_INVESTABLE_STATUSES = ["open", "active"] as const;
+
 export type ExportWindowStatus = (typeof EXPORT_WINDOW_STATUSES)[number];
 
 /** Settled. Reopening one puts money back into a dashboard total. */

@@ -5,7 +5,8 @@ import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { refuseExportStatusChange, hasExportAdminAccess } from "@/lib/export-window-status";
+import { claimStatusTransitionFromAny } from "@/lib/status-transition";
+import { refuseExportStatusChange, hasExportAdminAccess, EXPORT_WINDOW_ALL_STATUSES } from "@/lib/export-window-status";
 import { claimIdempotencyKey } from "@/lib/wallet-ledger";
 import { revalidatePath } from "next/cache";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
@@ -178,13 +179,39 @@ export async function updateExportStatusAction(
         }
 
         // Prevent duplicate status updates to avoid multiple completion emails
-        if (data?.status === newStatus) {
-            return { error: `Status is already ${newStatus}`, success: false as const };
-        }
+        //
+        // This was a read of `data.status` followed by an unguarded update, and
+        // the comment above states exactly what that costs: two callers landing
+        // together both read a status that is not yet `newStatus`, both pass,
+        // and both proceed to email EVERY investor a statement of their returns.
+        // The check existed for the emails and did not survive concurrency —
+        // which is the only condition it was there for.
+        //
+        // Claimed instead, so exactly one caller wins and only the winner
+        // notifies. `fromAny` is every status a window can hold except the
+        // target: export_windows carries two vocabularies, because it holds two
+        // different entities — see lib/export-window-status.ts.
+        const claim = await claimStatusTransitionFromAny({
+            collection: COLLECTIONS.EXPORT_WINDOWS,
+            id: exportId,
+            fromAny: EXPORT_WINDOW_ALL_STATUSES.filter((s) => s !== newStatus),
+            to: newStatus,
+            patch: { updatedAt: FieldValue.serverTimestamp() },
+        });
 
-        // Update status
-        await exportRef.update({ status: newStatus,
-            updatedAt: FieldValue.serverTimestamp() });
+        if (!claim.claimed) {
+            if (claim.status === newStatus) {
+                return { error: `Status is already ${newStatus}`, success: false as const };
+            }
+            if (claim.exists === false) {
+                return { error: "Export window not found", success: false as const, data: null };
+            }
+            return {
+                error: `This export is '${claim.status ?? "in an unrecorded state"}' and cannot be moved to ${newStatus}.`,
+                success: false as const,
+                data: null,
+            };
+        }
 
         // When a window completes, email all investors with their returns
         if (newStatus === "completed") { try {

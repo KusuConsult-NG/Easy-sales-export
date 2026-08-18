@@ -154,13 +154,21 @@ describe('both endpoints apply it', () => {
     });
 
     it('refusing before the status is written', () => {
-        for (const rel of [WINDOWS, STATUS]) {
+        // The two endpoints write differently now. The positional one claims
+        // the transition instead of updating, because on "completed" it emails
+        // every investor and a read-then-write let two callers both send — see
+        // export-window-status-vocabulary.test.ts. Either way the authorization
+        // rule has to come first: the claim decides who WINS, not who MAY.
+        for (const [rel, write] of [
+            [WINDOWS, 'claimStatusTransitionFromAny({'],
+            [STATUS, 'exportRef.update({ status: newStatus'],
+        ] as const) {
             const src = code(rel);
             const refuse = src.indexOf('refuseExportStatusChange({');
-            const write = src.indexOf('exportRef.update({ status: newStatus');
+            const writeAt = src.indexOf(write);
 
             expect(refuse).toBeGreaterThan(-1);
-            expect(write).toBeGreaterThan(refuse);
+            expect(writeAt).toBeGreaterThan(refuse);
         }
     });
 
