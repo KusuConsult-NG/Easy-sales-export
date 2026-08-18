@@ -5,9 +5,9 @@
 /**
  * Buttons that promised an action and performed none.
  *
- * Four controls across the cooperative pages had no onClick, no type="submit"
- * and no disabled state — they rendered, they hovered, and clicking them did
- * nothing at all:
+ * Five controls across the cooperative pages — four on the member side, one on
+ * the admin side — had no onClick, no type="submit" and no disabled state. They
+ * rendered, they hovered, and clicking them did nothing at all:
  *
  *   onboarding/pending-payment  "Upload Receipt", under the promise "Upload
  *                               your payment receipt to speed up verification".
@@ -24,19 +24,25 @@
  *   history                     "Export" — no CSV, no download — and a
  *                               date-filter button with no date state behind it.
  *
+ *   admin/contributions         "Export Report", the same thing on the admin
+ *                               side: an admin clicked it and no report was
+ *                               exported.
+ *
  * Building a receipt upload or a CSV export is a feature. Removing a control
  * that lies about one is the fix, and the pending-payment copy now says what
  * actually happens instead.
  *
- * The scan is structural rather than a list, so a fifth inert button added
- * later cannot slip in behind these.
+ * The scan is structural rather than a list, and covers both halves of the
+ * module, so a sixth inert button added later cannot slip in behind these.
  */
 
 import { describe, it, expect } from '@jest/globals';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join, relative } from 'path';
 
-const ROOT = 'src/app/cooperatives';
+// Both halves of the module: the member pages and the admin ones. The admin
+// contributions screen carried the same inert "Export Report" button.
+const ROOTS = ['src/app/cooperatives', 'src/app/admin/cooperatives'];
 
 function walk(dir: string, out: string[] = []): string[] {
     for (const entry of readdirSync(dir)) {
@@ -62,7 +68,7 @@ interface InertButton { file: string; line: number; label: string }
 function inertButtons(): InertButton[] {
     const found: InertButton[] = [];
 
-    for (const file of walk(join(process.cwd(), ROOT))) {
+    for (const file of ROOTS.flatMap((r) => walk(join(process.cwd(), r)))) {
         const src = strip(readFileSync(file, 'utf-8'));
 
         for (const m of src.matchAll(/<button\b((?:[^>]|\n)*?)>/g)) {
@@ -85,7 +91,7 @@ function inertButtons(): InertButton[] {
     return found;
 }
 
-describe('the cooperative pages', () => {
+describe('the cooperative pages, member and admin', () => {
     it('offer no button that does nothing when clicked', () => {
         // THE test.
         const inert = inertButtons();
