@@ -243,3 +243,41 @@ describe('what /vendor is', () => {
         expect(code('src/app/actions/vendor.ts')).toContain('throw new Error("Unauthorized");');
     });
 });
+
+describe('the activity feed limit', () => {
+    const feed = fn(DASHBOARD, '_getVendorActivityFeedAction');
+
+    it('was a dead parameter and is now honoured', () => {
+        // THE test. The signature took `limit` and defaulted it to 20, and the
+        // body never read it: orders were hardcoded to ten and every low-stock
+        // product was appended after them.
+        expect(feed).toContain('const feedLimit =');
+        expect(feed).toContain('.slice(0, feedLimit)');
+        expect(feed).not.toContain('.slice(0, 10)');
+    });
+
+    it('applied to the merged list, not to the orders alone', () => {
+        // Otherwise a recent stock alert always loses to an older order, and
+        // the caller still receives more entries than it asked for.
+        expect(feed).toContain('activities: activities.slice(0, feedLimit)');
+    });
+
+    it('falling back to 20 on a value that is not a positive number', () => {
+        expect(feed).toContain('Number.isFinite(Number(limit)) && Number(limit) > 0');
+        expect(feed).toContain(': 20;');
+    });
+
+    it('and the callers really do pass one, so it was reachable', () => {
+        // Vacuity guard: /vendor asks for 5 and /vendor/overview for 10, and
+        // neither got what it asked for.
+        expect(source('src/app/vendor/page.tsx')).toContain('getVendorActivityFeedAction(5)');
+        expect(source('src/app/vendor/overview/page.tsx')).toContain('getVendorActivityFeedAction(10)');
+    });
+
+    it('which its neighbour already honoured', () => {
+        // Vacuity guard: _getTopSellingProductsAction takes the same kind of
+        // parameter and slices by it, so this was an oversight rather than a
+        // convention.
+        expect(fn(DASHBOARD, '_getTopSellingProductsAction')).toContain('.slice(0, limit)');
+    });
+});

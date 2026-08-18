@@ -346,6 +346,21 @@ async function _getVendorActivityFeedAction(limit: number = 20) { let sessionRes
 
         // Sorted and limited in memory: the two queries are merged, so a
         // per-query limit would cut the wrong ten.
+        //
+        // `limit` was a DEAD PARAMETER. The signature takes one and defaults it
+        // to 20, and nothing in the body ever read it: orders were hardcoded to
+        // ten and every low-stock product was appended after them. Both callers
+        // pass a number — /vendor asks for 5, /vendor/overview for 10 — and
+        // neither got what it asked for; the landing page asking for five could
+        // receive ten orders plus one entry per low-stock product.
+        //
+        // Honoured now, and applied to the merged, sorted list at the end rather
+        // than to the orders alone, so a recent stock alert can displace an
+        // older order instead of always losing to it.
+        const feedLimit = Number.isFinite(Number(limit)) && Number(limit) > 0
+            ? Math.floor(Number(limit))
+            : 20;
+
         const allOrderDocs = await fetchVendorOrderDocs(vendorId);
         const orderDocs = allOrderDocs
             .sort((a: any, b: any) => {
@@ -353,7 +368,7 @@ async function _getVendorActivityFeedAction(limit: number = 20) { let sessionRes
                 const bt = b.data()?.createdAt?.toDate?.()?.getTime?.() ?? 0;
                 return bt - at;
             })
-            .slice(0, 10);
+            .slice(0, feedLimit);
 
         orderDocs.forEach(doc => {
             const data = doc.data();
@@ -387,7 +402,7 @@ async function _getVendorActivityFeedAction(limit: number = 20) { let sessionRes
         });
 
         activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-        return { error: null, success: true as const, data: { activities } };
+        return { error: null, success: true as const, data: { activities: activities.slice(0, feedLimit) } };
     } catch (error: any) { logger.error("getVendorActivityFeedAction error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
