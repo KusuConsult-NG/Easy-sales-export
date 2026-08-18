@@ -425,3 +425,59 @@ describe('repayment history', () => {
         expect(read).toBeGreaterThan(guard);
     });
 });
+
+describe("the member's own view of their own applications", () => {
+    // The admin queue was taught to merge both collections. The two readers a
+    // MEMBER sees were not, and they are the more visible half: a member filed
+    // an application on /cooperatives/loans, which submits into
+    // cooperative_loans, and then watched the list underneath that very form
+    // stay empty. Their loan history on /cooperatives/my-loans was empty too,
+    // while the loan itself was live.
+    const MEMBER_ROUTE = 'src/app/api/cooperative/my-loan-applications/route.ts';
+
+    it('the applications list covers both collections', () => {
+        // THE test.
+        const route = code(MEMBER_ROUTE);
+
+        expect(route).toContain('db.collection(COLLECTIONS.COOPERATIVE_LOANS)');
+        expect(route).toContain('.where("memberId", "==", userId)');
+        expect(route).toContain('normaliseLoanApplication(');
+    });
+
+    it('and so does the loan history action beside it', () => {
+        const history = fn(APPLICATIONS, 'getUserLoanApplicationsAction');
+
+        expect(history).toContain('db.collection(COLLECTIONS.COOPERATIVE_LOANS).where("memberId", "==", userId)');
+        expect(history).toContain('normaliseLoanApplication(');
+    });
+
+    it('each using the borrower key its own collection carries', () => {
+        // Vacuity guard: querying cooperative_loans by `userId` would return
+        // nothing and look exactly like a fix.
+        const route = code(MEMBER_ROUTE);
+        const history = fn(APPLICATIONS, 'getUserLoanApplicationsAction');
+
+        // Whitespace-collapsed: the route writes its two queries across lines.
+        const flat = (s: string) => s.replace(/\s+/g, ' ');
+
+        for (const src of [flat(route), flat(history)]) {
+            expect(src).toMatch(/COLLECTIONS\.LOAN_APPLICATIONS\)\s*\.where\("userId", "==", userId\)/);
+            expect(src).toMatch(/COLLECTIONS\.COOPERATIVE_LOANS\)\s*\.where\("memberId", "==", userId\)/);
+        }
+    });
+
+    it('and the page really does submit into the collection they were missing', () => {
+        // Vacuity guard, and the whole reason this is a live defect.
+        const page = readFileSync(join(process.cwd(), 'src/app/cooperatives/(member)/loans/page.tsx'), 'utf-8');
+
+        expect(page).toContain('/api/cooperative/my-loan-applications');
+        expect(page).toContain('applyForLoanAction');
+        expect(fn(COOP_MONEY, '_applyForLoanAction')).toContain('table: "cooperative_loans"');
+    });
+
+    it('with the newest application first', () => {
+        const route = code(MEMBER_ROUTE);
+
+        expect(route).toContain('new Date(b.appliedAt).getTime() - new Date(a.appliedAt).getTime()');
+    });
+});

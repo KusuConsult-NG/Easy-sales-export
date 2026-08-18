@@ -208,11 +208,26 @@ export async function getUserLoanApplicationsAction(userId: string): Promise<Loa
             return [];
         }
 
-        const snapshot = await db.collection(COLLECTIONS.LOAN_APPLICATIONS)
-            .where("userId", "==", userId)
-            .get();
+        // The member's own list, missing the applications they actually filed.
+        //
+        // /cooperatives/my-loans renders this. Applications submitted through
+        // /cooperatives/loans go to cooperative_loans keyed by `memberId`, so a
+        // query of loan_applications by `userId` returned none of them — a
+        // member's loan history showed nothing while their loan was live.
+        //
+        // Both collections, with the borrower key each one uses. Same split the
+        // admin queue was fixed for; see lib/loan-application-location.ts.
+        const [generalSnap, coopSnap] = await Promise.all([
+            db.collection(COLLECTIONS.LOAN_APPLICATIONS).where("userId", "==", userId).get(),
+            db.collection(COLLECTIONS.COOPERATIVE_LOANS).where("memberId", "==", userId).get(),
+        ]);
 
-        return serializeDocs<LoanApplication>(snapshot.docs);
+        return [
+            ...serializeDocs<LoanApplication>(generalSnap.docs),
+            ...serializeDocs<LoanApplication>(coopSnap.docs).map(
+                (row) => normaliseLoanApplication(row as any, COLLECTIONS.COOPERATIVE_LOANS) as unknown as LoanApplication
+            ),
+        ];
     } catch (error) {
         logger.error("Failed to fetch user applications:", error);
         return [];
