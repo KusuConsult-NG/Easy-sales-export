@@ -6,9 +6,11 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log";
-import { claimPaymentOnce } from "@/lib/wallet-ledger";
+import { claimPaymentOnce, incrementWithinCeiling } from "@/lib/wallet-ledger";
+import { checkOrderPaymentAmount } from "@/lib/order-payment-amount";
 import { revalidatePath } from "next/cache";
 import { toMillis } from "@/lib/firestore-serialize";
+import { getBaseUrl } from "@/lib/server-utils";
 
 // ============================================
 // Get User Export Investments Action
@@ -184,6 +186,26 @@ export async function investInExportAction(
         if (exportData?.totalSpots && exportData?.spotsFilled >= exportData?.totalSpots) { return { success: false as const, error: "Investment slots are full"};
         }
 
+        // A callback that is a page, on the base URL everything else uses.
+        //
+        // This was `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/export/verify`.
+        // There is no /dashboard/export route segment at all — the export
+        // dashboard is /export/(app)/dashboard — so an investor who paid through
+        // this action was charged and landed on a 404, and the verification that
+        // would have created their slot never ran.
+        //
+        // NEXT_PUBLIC_APP_URL was also read bare: unset, the callback becomes
+        // the literal string "undefined/dashboard/export/verify". getBaseUrl()
+        // is what the other export payment initiator uses.
+        //
+        // `flow=window` selects this pair's verifier on the callback page. That
+        // page calls verifyInvestmentPaymentAction by default, which looks for
+        // an EXPORT_INVESTMENTS record created at initiation — a record this
+        // action does not create — so without it the investor would have been
+        // told "Investment record not found" instead of hitting a 404.
+        const baseUrl = await getBaseUrl();
+        const callbackUrl = `${baseUrl}/export/payment/callback?flow=window`;
+
         // Initialize Paystack
         const { initializePaystackPayment } = await import("@/lib/paystack-server");
         const initResult = await initializePaystackPayment(
@@ -193,9 +215,10 @@ export async function investInExportAction(
                 exportId,
                 userId: session.user.id,
                 amount,
-                email: session.user.email
+                email: session.user.email,
+                callback_url: callbackUrl
             },
-            `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/export/verify`
+            callbackUrl
         );
 
         return { error: null, success: true as const, data: initResult };
@@ -231,9 +254,37 @@ export async function verifyExportInvestmentAction(reference: string): Promise<
 
         const userId = metadata.userId;
         const exportId = metadata.exportId;
-        const amount = metadata.amount;
 
         if (userId !== session.user.id) return { success: false as const, error: "User mismatch"};
+
+        // The amount PAID, not the amount requested.
+        //
+        // This read `const amount = metadata.amount` — the figure the investor
+        // asked to invest when the payment was initialised — and then used it as
+        // the slot's amount, as the window's funding increment, as the basis for
+        // expectedReturn and as the ledger row's amount. What Paystack actually
+        // collected was never looked at, and the two were never compared.
+        //
+        // Both other paths that fulfil this same payment do use the paid figure:
+        // the webhook is handed `data.amount / 100`, and
+        // verifyInvestmentPaymentAction reads `paymentData.data.amount / 100`
+        // and refuses a mismatch against the metadata in either direction. This
+        // was the third path and the only permissive one — the same shape as the
+        // marketplace order and academy registration defects, with the loose
+        // side here.
+        const paidAmount = verify.data.amount / 100;
+        const requestedAmount = Number(metadata.amount);
+
+        const amountVerdict = checkOrderPaymentAmount(paidAmount, requestedAmount);
+        if (!amountVerdict.ok) {
+            logger.error("[verifyExportInvestmentAction] investment payment refused on amount", {
+                reference, exportId, paidAmount, requestedAmount, reason: amountVerdict.reason,
+            });
+            return { success: false as const, error: "Payment amount does not match the investment that was initiated." };
+        }
+
+        // Everything below settles on what was collected.
+        const amount = paidAmount;
 
         // WHAT WAS WRONG HERE
         // -------------------
@@ -326,8 +377,64 @@ export async function verifyExportInvestmentAction(reference: string): Promise<
             });
 
             // 2. Update Export Window Stats
-            await exportRef.update({ spotsFilled: FieldValue.increment(1),
-                fundedAmount: FieldValue.increment(amount),
+            //
+            // TWO PROBLEMS, BOTH VISIBLE BY COMPARISON WITH THE OTHER TWO PATHS.
+            //
+            // The increment carried no ceiling. The overfunding check above is
+            // an advisory READ — its own comment says two investments that each
+            // fit but together exceed the goal can both pass — and a plain
+            // increment then pushes fundedAmount past the goal regardless. The
+            // webhook and verifyInvestmentPaymentAction both use
+            // incrementWithinCeiling, which locks the row and checks the ceiling
+            // held on that same record, so the check is the write.
+            //
+            // And `currentFunding` was never touched. Both other paths keep it
+            // in step with fundedAmount, and it is the counter
+            // initializeInvestmentPaymentAction reads to decide whether a window
+            // still has room. So money taken through this path was invisible to
+            // that gate: the window kept accepting new investors after its goal
+            // was met, and each of them then hit the ceiling on fundedAmount and
+            // was refused after being charged.
+            const ceilingField = exportWindow?.fundingGoal !== undefined ? "fundingGoal" : "goal";
+            const raised = await incrementWithinCeiling({
+                collection: COLLECTIONS.EXPORT_WINDOWS,
+                id: exportId,
+                field: "fundedAmount",
+                amount,
+                ceilingField,
+            });
+
+            if (!raised.ok) {
+                // Charged, and the window filled in between. Recorded for review
+                // rather than silently dropped — the same treatment the
+                // overfunded branch above gives.
+                await db.collection(COLLECTIONS.FAILED_PAYMENTS).doc(reference).set({
+                    reference,
+                    type: "export_investment",
+                    userId,
+                    exportId,
+                    amount,
+                    status: "overfunded_review",
+                    gatewayResponse: "Funding goal reached before this investment was applied",
+                    failedAt: FieldValue.serverTimestamp(),
+                }, { merge: true });
+
+                logger.warn("[verifyExportInvestmentAction] funding ceiling reached — routed to review", {
+                    reference, exportId, amount, fundingGoal,
+                });
+
+                return {
+                    success: false as const,
+                    error: "This window reached its funding goal before your investment was applied. You have been charged and will be contacted.",
+                };
+            }
+
+            // The remaining counters carry no ceiling. currentFunding duplicates
+            // fundedAmount and is kept in step deliberately — both names are read
+            // elsewhere.
+            await exportRef.update({
+                spotsFilled: FieldValue.increment(1),
+                currentFunding: FieldValue.increment(amount),
                 updatedAt: FieldValue.serverTimestamp()
             });
 
