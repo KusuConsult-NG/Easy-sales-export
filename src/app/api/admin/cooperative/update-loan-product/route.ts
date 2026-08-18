@@ -6,7 +6,7 @@ import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 
 /**
  * API Route: Update Loan Product (Admin Only)
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Check if user is admin
-        if (!isAdmin(session.user.roles)) {
+        if (!hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }

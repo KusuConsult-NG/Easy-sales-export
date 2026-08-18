@@ -7,7 +7,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { logger } from "@/lib/logger";
 import { FieldValue } from "@/lib/firestore-compat";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 
 /**
  * PATCH /api/admin/cooperative/mark-withdrawal-completed
@@ -22,7 +22,7 @@ export async function PATCH(request: NextRequest) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
 
-        if (!isAdmin(session.user.roles)) {
+        if (!hasAdminPermission(session.user.roles, "finance:process_withdrawals")) {
             return NextResponse.json({ success: false, error: "Admin access required" }, { status: 403 });
         }
 

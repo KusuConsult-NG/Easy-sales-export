@@ -13,7 +13,7 @@ import { sendBatchEmailNotifications } from "@/lib/email-notifications";
 import { FieldValue } from "@/lib/firestore-compat";
 import { collectRecipients } from "@/app/actions/broadcast";
 import { logger } from "@/lib/logger";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { rateLimit, createRateLimitResponse } from "@/lib/rate-limiter";
 import { rateLimitConfig } from "@/lib/rate-limits.config";
 
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
         const db = getAdminDb();
 
         // Verify admin role
-        if (!isAdmin(session.user.roles)) {
+        if (!hasAdminPermission(session.user.roles, "announcements:manage")) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
         }
 

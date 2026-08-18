@@ -7,7 +7,7 @@ import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { REJECTABLE_FROM_STATUSES } from "@/lib/land-listing-status";
 
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        if (!isAdmin(session.user.roles)) {
+        if (!hasAdminPermission(session.user.roles, "land:verify_listings")) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }

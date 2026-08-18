@@ -288,7 +288,7 @@ describe('there is one answer to what a role is', () => {
     });
 });
 
-describe('recorded: isAdmin() is ten roles and the matrix means two', () => {
+describe('isAdmin() is ten roles and the matrix means two', () => {
     /** Routes under /api/admin whose only authority check is isAdmin(). */
     function isAdminGatedRoutes(): string[] {
         return execSync(
@@ -310,15 +310,21 @@ describe('recorded: isAdmin() is ten roles and the matrix means two', () => {
         expect(isAdmin([])).toBe(false);
     });
 
-    it('most admin routes gate on it', () => {
-        // Recorded as a number so that moving routes onto the matrix is a
-        // visible change to this expectation rather than a silent one.
-        expect(isAdminGatedRoutes().length).toBeGreaterThanOrEqual(25);
+    it('and the routes that WRITE no longer gate on it', () => {
+        // FIXED. This recorded ">= 25 admin routes gated on isAdmin()"; the
+        // write-side of that is now on the matrix, and the remainder are reads.
+        // Kept as a ceiling so that adding a route back onto isAdmin() is a
+        // visible change to this number rather than a silent one.
+        //
+        // grep -l matches comments too, so two of the survivors are files whose
+        // prose mentions the old guard. The structural, per-function assertion
+        // lives in admin-permission-gates.test.ts.
+        expect(isAdminGatedRoutes().length).toBeLessThanOrEqual(15);
     });
 
-    it('the cooperative money routes are among them', () => {
-        // The concrete consequence: an academy_admin can price and delete
-        // cooperative loan products and reject applications.
+    it('the cooperative money routes among them', () => {
+        // These were THE concrete consequence: an academy_admin could price and
+        // delete cooperative loan products and reject applications.
         for (const r of [
             'cooperative/create-loan-product',
             'cooperative/update-loan-product',
@@ -326,14 +332,28 @@ describe('recorded: isAdmin() is ten roles and the matrix means two', () => {
             'cooperative/reject-loan',
             'cooperative/approve-loan',
         ]) {
-            expect(source(`src/app/api/admin/${r}/route.ts`)).toContain('isAdmin(');
+            expect(source(`src/app/api/admin/${r}/route.ts`))
+                .toContain('hasAdminPermission(session.user.roles, "cooperatives:approve_loans")');
         }
     });
 
-    it('so are both bulk exports of personal data', () => {
+    it('but the two bulk exports of personal data still do — RECORDED, not fixed', () => {
+        // Both hand back every user's personal details, and any of the ten roles
+        // can call them. They are READS, so they are outside the write-side
+        // sweep, and every admin role holds "users:read" — the matrix has no
+        // narrower answer to offer without inventing one. "audit:export" would
+        // fit the act but is withheld from the plain `admin` role, so adopting
+        // it would deny the platform's own administrators a bulk export they can
+        // perform today.
+        //
+        // Narrowing who may export the entire user base is a policy decision,
+        // and it is the owner's.
         for (const r of ['export/users', 'export/cooperative-members']) {
             expect(source(`src/app/api/admin/${r}/route.ts`)).toContain('isAdmin(');
         }
+
+        expect(hasAdminPermission(['academy_admin'], 'users:read' as any)).toBe(true);
+        expect(hasAdminPermission(['admin'], 'audit:export' as any)).toBe(false);
     });
 
     it('the permission that would express the boundary is checked nowhere', () => {

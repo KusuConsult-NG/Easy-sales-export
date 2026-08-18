@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { FieldValue } from "@/lib/firestore-compat";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { recordsAGuarantor } from "@/lib/loan-approval-policy";
 import { resolveLoanApplication } from "@/lib/loan-application-location";
 
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Check if user is admin
-        if (!isAdmin(session.user.roles)) {
+        if (!hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }

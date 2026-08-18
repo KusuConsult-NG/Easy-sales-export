@@ -8,7 +8,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { sendSellerRejectionEmail } from "@/lib/email-notifications";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 
 /**
  * API Route: Reject Seller Verification (Admin Only)
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Check if user is admin
-        if (!isAdmin(session.user.roles)) {
+        if (!hasAdminPermission(session.user.roles, "marketplace:suspend_sellers")) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }

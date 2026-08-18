@@ -248,7 +248,10 @@ export async function approveWithdrawalAction(
         if (!hasAdminPermission(roles, "finance:process_withdrawals")) {
             const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
             const liveRoles = liveUserDoc.data()?.roles;
-            if (isAdmin(liveRoles)) {
+            // The SAME question as the gate above. This asked isAdmin(), so a
+            // caller the gate refused could be admitted by the stale-session
+            // retry — a fallback that is wider than what it falls back from.
+            if (hasAdminPermission(liveRoles, "finance:process_withdrawals")) {
                 roles = liveRoles;
             } else {
                 return { success: false as const, error: "Unauthorized", data: null };
@@ -475,7 +478,10 @@ export async function rejectWithdrawalAction(
         if (!hasAdminPermission(roles, "finance:process_withdrawals")) {
             const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
             const liveRoles = liveUserDoc.data()?.roles;
-            if (isAdmin(liveRoles)) {
+            // The SAME question as the gate above. This asked isAdmin(), so a
+            // caller the gate refused could be admitted by the stale-session
+            // retry — a fallback that is wider than what it falls back from.
+            if (hasAdminPermission(liveRoles, "finance:process_withdrawals")) {
                 roles = liveRoles;
             } else {
                 return { success: false as const, error: "Unauthorized", data: null };

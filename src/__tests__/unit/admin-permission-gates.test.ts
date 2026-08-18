@@ -73,7 +73,10 @@ import {
 import { isAdmin as roleUtilsIsAdmin } from '@/lib/role-utils';
 import { ALL_USER_ROLES, isUserRole } from '@/lib/types/roles';
 
-const ACTIONS = 'src/app/actions';
+// Server actions AND route handlers. Both are reachable over HTTP; a route is
+// if anything the more exposed of the two, and thirteen of them carried the
+// same coarse gate.
+const GUARDED_TREES = ['src/app/actions', 'src/app/api'];
 
 const MODULE_ADMINS = [
     'cooperative_admin',
@@ -113,7 +116,10 @@ function strip(src: string): string {
  * primitives.
  */
 const DB_WRITE = new RegExp(
-    String.raw`(?:db\.[^\n;]*|[A-Za-z0-9_]*[Rr]ef|transaction|batch|\)\s*)\.(?:update|set|add|delete)\s*\(`
+    // `txn`/`tx` receivers matter: api/admin/cooperative/approve-member writes
+    // through `txn.update(memberRef, ...)` and escaped the first version of
+    // this scan entirely.
+    String.raw`(?:db\.[^\n;]*|[A-Za-z0-9_]*[Rr]ef|transaction|txn|tx|batch|\)\s*)\.(?:update|set|add|delete)\s*\(`
     + String.raw`|\b(?:claimStatusTransition|claimStatusTransitionFromAny|versionedUpdate|claimVersionedUpdate`
     + String.raw`|debitJsonbBalance|debitJsonbBalanceWithFloor|compensateJsonbDebit|decrementManyOrFail`
     + String.raw`|claimPaymentOnce|claimSingleOpenLoanApplication)\s*\(`,
@@ -142,7 +148,7 @@ function soleIsAdminGates(): Gate[] {
     const found: Gate[] = [];
     const FN = /^(?:export\s+)?(?:async\s+)?function\s+([A-Za-z0-9_]+)\s*\(/gm;
 
-    for (const file of walk(join(process.cwd(), ACTIONS))) {
+    for (const file of GUARDED_TREES.flatMap((t) => walk(join(process.cwd(), t)))) {
         const src = readFileSync(file, 'utf-8');
         const heads = [...src.matchAll(FN)];
 
@@ -168,7 +174,7 @@ function soleIsAdminGates(): Gate[] {
 function permissionsUsedInGates(): { file: string; permission: string }[] {
     const used: { file: string; permission: string }[] = [];
 
-    for (const file of walk(join(process.cwd(), ACTIONS))) {
+    for (const file of GUARDED_TREES.flatMap((t) => walk(join(process.cwd(), t)))) {
         const src = strip(readFileSync(file, 'utf-8'));
         for (const m of src.matchAll(/hasAdminPermission\s*\([^,]+,\s*"([^"]+)"\s*\)/g)) {
             used.push({ file: relative(process.cwd(), file), permission: m[1] });
@@ -359,6 +365,73 @@ describe('no admin write is gated on "is some kind of admin" alone', () => {
         ]) {
             expect(found).not.toContain(fn);
         }
+    });
+});
+
+describe('the stale-session fallback asks the gate\'s own question', () => {
+    /**
+     * Thirteen guards across the cooperative admin surface have the shape:
+     *
+     *     if (!<gate>(roles)) {
+     *         const liveRoles = (await db...get()).data()?.roles;   // re-read
+     *         if (<fallback>(liveRoles)) { roles = liveRoles }
+     *         else return Unauthorized;
+     *     }
+     *
+     * It exists because a session token can carry roles granted before the
+     * user's last sign-in. That is legitimate — but only while <fallback> asks
+     * exactly what <gate> asked. Where the gate was tightened to a permission
+     * and the fallback was left on isAdmin(), the retry became WIDER than the
+     * check it retries: a caller the gate refused would be re-read and then
+     * admitted, and the tightening bought nothing at all.
+     *
+     * That is not a hypothetical — narrowing the gates in this pass introduced
+     * it in four places before this assertion caught them.
+     */
+    function fallbackMismatches(): string[] {
+        const bad: string[] = [];
+        const BLOCK = /if \(!(isAdmin\(roles\)|hasAdminPermission\(roles, "([a-z_]+:[a-z_]+)"\))\)[\s\S]{0,600}?if \((isAdmin\(liveRoles\)|hasAdminPermission\(liveRoles, "([a-z_]+:[a-z_]+)"\))\)/g;
+
+        for (const file of GUARDED_TREES.flatMap((t) => walk(join(process.cwd(), t)))) {
+            const src = strip(readFileSync(file, 'utf-8'));
+            if (!src.includes('liveRoles')) continue;
+
+            for (const m of src.matchAll(BLOCK)) {
+                const gatePerm = m[2] ?? null;       // null => the gate is isAdmin
+                const backPerm = m[4] ?? null;
+                if (gatePerm === backPerm) continue; // same question, either form
+                bad.push(`${relative(process.cwd(), file)}  gate ${m[1]}  fallback ${m[3]}`);
+            }
+        }
+
+        return bad;
+    }
+
+    it('never falling back to a wider check than the one it retries', () => {
+        // THE test.
+        const bad = fallbackMismatches();
+
+        if (bad.length) {
+            throw new Error(
+                '\n\n⚠️  Stale-session fallback(s) asking a WIDER question than the '
+                + 'gate they fall back from — the retry admits callers the gate refused:\n\n'
+                + bad.map((b) => `  ${b}`).join('\n')
+                + '\n\nThe fallback must repeat the gate\'s own check against liveRoles.\n',
+            );
+        }
+
+        expect(bad).toEqual([]);
+    });
+
+    it('and there really are fallbacks to check, so this is not vacuous', () => {
+        // If the shape were refactored away this assertion would pass by
+        // matching nothing.
+        let files = 0;
+        for (const file of GUARDED_TREES.flatMap((t) => walk(join(process.cwd(), t)))) {
+            if (strip(readFileSync(file, 'utf-8')).includes('liveRoles')) files++;
+        }
+
+        expect(files).toBeGreaterThanOrEqual(6);
     });
 });
 

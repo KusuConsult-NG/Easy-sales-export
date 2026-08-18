@@ -6,7 +6,7 @@ import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 
 /**
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        if (!isAdmin(session.user.roles)) {
+        if (!hasAdminPermission(session.user.roles, "farm_nation:verify_applications")) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }

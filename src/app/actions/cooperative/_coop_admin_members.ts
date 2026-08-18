@@ -211,7 +211,10 @@ async function _updateMemberStatusAction(
         if (!hasAdminPermission(roles, "cooperatives:approve_members")) {
             const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
             const liveRoles = liveUserDoc.data()?.roles;
-            if (isAdmin(liveRoles)) {
+            // The SAME question as the gate above. This asked isAdmin(), so a
+            // caller the gate refused could be admitted by the stale-session
+            // retry — a fallback that is wider than what it falls back from.
+            if (hasAdminPermission(liveRoles, "cooperatives:approve_members")) {
                 roles = liveRoles;
             } else {
                 return { success: false as const, error: "Unauthorized", data: null };
@@ -468,7 +471,10 @@ export async function requestCooperativeRevisionAction(
         if (!hasAdminPermission(roles, "cooperatives:approve_members")) {
             const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
             const liveRoles = liveUserDoc.data()?.roles;
-            if (isAdmin(liveRoles)) {
+            // The SAME question as the gate above. This asked isAdmin(), so a
+            // caller the gate refused could be admitted by the stale-session
+            // retry — a fallback that is wider than what it falls back from.
+            if (hasAdminPermission(liveRoles, "cooperatives:approve_members")) {
                 roles = liveRoles;
             } else {
                 return { success: false as const, error: 'Admin access required', data: null };

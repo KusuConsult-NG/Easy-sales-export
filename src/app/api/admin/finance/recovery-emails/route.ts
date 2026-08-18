@@ -3,7 +3,7 @@ import { requireSession } from "@/lib/session-guard";
 import { getAdminDb } from "@/lib/supabase-db";
 import { Resend } from "resend";
 import { logger } from "@/lib/logger";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
 export const dynamic = "force-dynamic";
@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
     try {
         // ── Auth guard ──
         const session = (await requireSession()).session;
-        if (!isAdmin(session?.user?.roles)) {
+        if (!hasAdminPermission(session?.user?.roles, "finance:reconcile")) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 

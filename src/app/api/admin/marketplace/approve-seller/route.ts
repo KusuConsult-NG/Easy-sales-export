@@ -10,7 +10,7 @@ import { rateLimit, createRateLimitResponse } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 import { sendSellerApprovalEmail } from "@/lib/email-notifications";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 
 // Rate limiter for admin actions (moderate - legitimate admin workload)
 const adminLimiter = rateLimit(rateLimitConfig.admin);
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Check if user is admin
-        if (!isAdmin(session.user.roles)) {
+        if (!hasAdminPermission(session.user.roles, "marketplace:approve_sellers")) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }

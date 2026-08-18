@@ -6,7 +6,7 @@ import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 
 /**
  * API Route: Reject Cooperative Membership Application
@@ -23,10 +23,14 @@ export async function POST(request: NextRequest) {
 
         // Check if user is admin (with live Firestore roles fallback query)
         let roles = session.user.roles;
-        if (!isAdmin(roles)) {
+        if (!hasAdminPermission(roles, "cooperatives:approve_members")) {
             const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
             const liveRoles = liveUserDoc.data()?.roles;
-            if (isAdmin(liveRoles)) {
+            // The SAME question as the gate above. This asked isAdmin(), so the
+            // stale-session fallback was wider than the check it was falling
+            // back from: a caller the primary gate refused could be admitted by
+            // the retry, which is the opposite of what a fallback is for.
+            if (hasAdminPermission(liveRoles, "cooperatives:approve_members")) {
                 roles = liveRoles;
             } else {
                 return NextResponse.json(
