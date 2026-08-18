@@ -400,6 +400,34 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         }
 
                         if (cachedProfile) {
+                            /**
+                             * Sessions opened before the password was reset are
+                             * no longer this account's sessions.
+                             *
+                             * resetPasswordAction stamps `sessionsValidFrom` on
+                             * the profile. Anything minted before that point was
+                             * authenticated with a credential that no longer
+                             * exists — including, in the case this protects
+                             * against, whoever prompted the reset.
+                             *
+                             * FAILS OPEN, deliberately. A token with no issue
+                             * time recorded, or a profile with no revocation
+                             * point, is left alone: the cost of a false positive
+                             * here is signing out every user on the platform,
+                             * and the cost of a false negative is one stale
+                             * session that still expires within maxAge.
+                             *
+                             * Revocation lands within SYNC_INTERVAL rather than
+                             * instantly — the same latency the ban check has,
+                             * and for the same reason: this is the only place
+                             * the profile is re-read.
+                             */
+                            const revokedBefore = Number((cachedProfile as any).sessionsValidFrom) || 0;
+                            const issuedAtMs = typeof token.authAt === "number"
+                                ? token.authAt
+                                : (typeof token.iat === "number" ? token.iat * 1000 : 0);
+                            token.sessionRevoked = revokedBefore > 0 && issuedAtMs > 0 && issuedAtMs < revokedBefore;
+
                             token.roles = cachedProfile.roles || [];
                             token.verified = cachedProfile.displayName ? (cachedProfile as any).verified ?? true : true; // default to true if legacy profile structure
                             token.onboardingCompleted = (cachedProfile as any).onboardingCompleted;
@@ -437,8 +465,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
             // 2. Node-specific Firebase logic
             if (session.user) {
-                // Instantly block session and clear Firebase custom token if user is banned (M-10)
-                if (token.isBanned) {
+                // Instantly block session and clear Firebase custom token if user is banned (M-10),
+                // or if this session predates a password reset — see the sync
+                // block above. Same mechanism, because the answer is the same:
+                // this token no longer represents anyone who may act.
+                if (token.isBanned || token.sessionRevoked) {
                     session.firebaseToken = undefined;
                     token.firebaseToken = undefined;
                     session.user = null as any;

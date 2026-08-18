@@ -267,6 +267,9 @@ export async function resetPasswordAction(
         // that failure and logs a warning. So the Supabase id is resolved from
         // the user profile, falling back to Firebase only if needed.
         let targetUserId: string | null = null;
+        // The PROFILE document id, which is what a session's token.id holds —
+        // distinct from targetUserId, which may be the Supabase Auth id.
+        let profileDocId: string | null = null;
         try {
             const profileSnap = await db.collection(COLLECTIONS.USERS)
                 .where("email", "==", resetData.email)
@@ -274,6 +277,7 @@ export async function resetPasswordAction(
                 .get();
             if (!profileSnap.empty) {
                 const profile = profileSnap.docs[0];
+                profileDocId = profile.id;
                 targetUserId = profile.data()?.supabaseAuthId || profile.id;
             }
         } catch (lookupErr) {
@@ -304,6 +308,45 @@ export async function resetPasswordAction(
             await adminAuth.updateUser(fbUser.uid, { password });
         } catch (fbErr: any) {
             logger.warn('[reset] legacy Firebase password update skipped:', fbErr?.message);
+        }
+
+        // End the sessions that were opened with the old password.
+        //
+        // NOTHING DID THIS. `passwordChangedAt` is written by
+        // changePasswordAction and read by no one, and this action did not even
+        // write that. Sessions are stateless JWTs with an 8-hour maxAge, so
+        // somebody holding a stolen session cookie kept full access for up to
+        // eight hours AFTER the victim did the one thing the platform tells
+        // people to do about a compromise. The reset changed the password and
+        // left the intruder signed in.
+        //
+        // `sessionsValidFrom` is the revocation point: the jwt callback in
+        // lib/auth.ts compares it against when each session was authenticated
+        // and refuses the older ones, within its existing 2-minute profile
+        // re-read.
+        //
+        // Best-effort, and deliberately after the password writes. The password
+        // is already changed in both stores by this line; failing the whole
+        // reset because a revocation stamp did not write would tell somebody
+        // their password had not changed when it had. A failure here is logged
+        // loudly because it leaves old sessions alive.
+        if (profileDocId) {
+            try {
+                await db.collection(COLLECTIONS.USERS).doc(profileDocId).update({
+                    sessionsValidFrom: Date.now(),
+                    passwordChangedAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+            } catch (revokeErr: any) {
+                logger.error('[reset] password changed but existing sessions were NOT revoked', {
+                    profileDocId,
+                    error: revokeErr?.message,
+                });
+            }
+        } else {
+            logger.error('[reset] password changed but no profile found to revoke sessions on', {
+                email: resetData.email,
+            });
         }
 
         // Also clear requiresPasswordChange if it exists (e.g. for legacy members)
