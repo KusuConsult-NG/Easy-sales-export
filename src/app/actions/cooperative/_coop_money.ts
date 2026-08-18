@@ -269,7 +269,11 @@ async function _makeContributionAction(
         });
 
         revalidatePath("/cooperatives");
-        revalidatePath("/dashboard/cooperatives");
+        // /dashboard/cooperatives has no route — the cooperative dashboard is
+        // /cooperatives/dashboard, which is revalidated on the line below. A
+        // revalidatePath on a path with no route is a silent no-op, so this
+        // line invalidated nothing at all. Same as the academy and export
+        // dashboards, fixed in their own passes.
         revalidatePath("/cooperatives/dashboard");
         return { error: null, success: true as const, data: { message: "Contribution successful" }, meta: null };
     } catch (error) { logger.error("Contribution failed:", {

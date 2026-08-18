@@ -233,10 +233,7 @@ describe('the marketplace and escrow surfaces', () => {
  * here, which is the review conversation this property needs.
  */
 const KNOWN_DEAD: Record<string, number> = {
-    '/dashboard/cooperatives': 3,
-    '/loans/[dyn]': 2,
     '/vendor/products/new': 2,
-    '/admin/cooperative/members': 1,
     '/admin/wallets/withdrawals': 1,
     '/admin/users/[dyn]': 1,
     '/farm-nation/properties/[dyn]': 1,
@@ -244,6 +241,33 @@ const KNOWN_DEAD: Record<string, number> = {
     '/vendor/orders/[dyn]': 1,
     '/vendor/products/[dyn]': 1,
 };
+
+/**
+ * The cooperative entries are gone, fixed in the cooperative pass. They were:
+ *
+ *   /dashboard/cooperatives      3x  every one a revalidatePath. The cooperative
+ *                                    dashboard is /cooperatives/dashboard — the
+ *                                    (member) segment is a route group and does
+ *                                    not appear in the URL — and revalidatePath
+ *                                    on a path with no route is a silent no-op.
+ *                                    So contributing, registering and
+ *                                    withdrawing each invalidated nothing, and a
+ *                                    member could keep seeing a cached balance
+ *                                    after their money moved.
+ *   /loans/[dyn]                 2x  the "View Loan" link on every Funds
+ *                                    Disbursed and Repayment Recorded
+ *                                    notification. /loans exists with apply,
+ *                                    approve and success beneath it and no [id]
+ *                                    segment, so every one of those led to a
+ *                                    404. They point at /cooperatives/my-loans,
+ *                                    which is where the platform actually shows
+ *                                    a borrower their loans.
+ *   /admin/cooperative/members   1x  a revalidatePath with the collection name
+ *                                    in the singular. The route is
+ *                                    /admin/cooperatives/members, so the admin
+ *                                    member list kept serving a stale cache
+ *                                    after an approval.
+ */
 
 /**
  * The export entries are gone too, fixed in the export pass. They were:
@@ -313,10 +337,13 @@ describe('the rest of the tree', () => {
     it('still finds the ones already known, so the gate is not vacuous', () => {
         // A scanner returning [] passes every assertion above and proves nothing.
         //
-        // Was 20 when twenty-six links were dead. Eight were academy's and four
-        // export's; the floor tracks what is genuinely left rather than being a
-        // number nobody revisits.
-        expect(dead.length).toBeGreaterThanOrEqual(14);
+        // Was 20 when twenty-six links were dead. Eight were academy's, four
+        // export's and six the cooperative's; the floor tracks what is genuinely
+        // left rather than being a number nobody revisits.
+        //
+        // What remains is vendor (4), plus one each in admin wallets, admin
+        // users, farm-nation and help — none of them cooperative's business.
+        expect(dead.length).toBeGreaterThanOrEqual(8);
     });
 
     it('and the quiz-save redirect with literal spaces is gone', () => {

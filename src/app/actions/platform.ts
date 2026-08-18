@@ -330,7 +330,10 @@ export async function submitWithdrawalAction(
         // (The idempotency key row is written by claimIdempotencyKey above.)
 
         revalidatePath("/cooperatives");
-        revalidatePath("/dashboard/cooperatives");
+        // /dashboard/cooperatives has no route; the cooperative dashboard is
+        // /cooperatives/dashboard. revalidatePath on a path with no route is a
+        // silent no-op, so a member who withdrew kept seeing a cached balance.
+        revalidatePath("/cooperatives/dashboard");
         revalidatePath("/admin/withdrawals");
 
         return {

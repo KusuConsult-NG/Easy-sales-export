@@ -382,7 +382,12 @@ export async function disburseLoanAction(
             type: "success",
             title: "Funds Disbursed",
             message: `Your loan of ₦${appData.amount.toLocaleString()} has been disbursed.`,
-            link: `/loans/${applicationId}`,
+            // `/loans/${id}` had no route behind it. /loans exists, with apply,
+            // approve and success beneath it, and no [id] segment — so every
+            // notification telling a borrower about their loan led to a 404.
+            // /cooperatives/my-loans is the member's loan list, which is where
+            // the platform actually shows a borrower their loans.
+            link: "/cooperatives/my-loans",
             linkText: "View Loan",
         });
 

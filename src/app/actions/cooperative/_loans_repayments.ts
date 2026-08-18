@@ -425,7 +425,12 @@ export async function submitRepaymentAction(data: {
             type: "success",
             title: "Repayment Recorded",
             message: `Your payment of ₦${data.amount.toLocaleString()} has been recorded.${calculatedPenalty > 0 ? ` Penalty: ₦${calculatedPenalty.toLocaleString()}` : ""}`,
-            link: `/loans/${data.loanId}`,
+            // `/loans/${id}` had no route behind it. /loans exists, with apply,
+            // approve and success beneath it, and no [id] segment — so every
+            // notification telling a borrower about their loan led to a 404.
+            // /cooperatives/my-loans is the member's loan list, which is where
+            // the platform actually shows a borrower their loans.
+            link: "/cooperatives/my-loans",
             linkText: "View Loan",
         });
 
