@@ -410,39 +410,49 @@ export async function updatePassportPhotoAction(
             .limit(1)
             .get();
 
-        if (memberSnapshot.empty) { 
+        // AN ACADEMY SUBSCRIPTION MINTED A PAID COOPERATIVE MEMBERSHIP.
+        //
+        // When no member document existed and the caller held an academy plan,
+        // this endpoint — for uploading a passport photograph — created one:
+        //
+        //     membershipStatus: "active",
+        //     status: "active",
+        //     paymentStatus: "completed",
+        //
+        // A completed payment that never happened. The cooperative registration
+        // fee was simply skipped, and _checkCooperativeStatusAction then does
+        // the rest: it reads a member document at "active", heals the user
+        // document from it, and grants `roles: arrayUnion("cooperative_member")`
+        // — full cooperative access, from an academy plan, through a photo
+        // upload.
+        //
+        // The platform HAS sanctioned auto-provisioning, and both of its paths
+        // are tightly gated: autoProvisionZereCooperative on
+        // isPaymentBypassAccount, autoProvisionLegacyCooperative on an
+        // admin-set `legacyOnboardedBy` marker, under the comment "Restrict
+        // strictly to legacy onboarded members only to prevent
+        // auto-provisioning normal users". That module's own header explains it
+        // lives outside "use server" precisely so that "provision a paid
+        // membership" cannot be reached as an RPC. This was that RPC, two files
+        // away, gated on nothing but a subscription.
+        //
+        // It was not serving a real user either: cooperative access needs the
+        // `cooperative_member` role or a cooperatives registration of
+        // approved/active, and an academy plan is neither — so the page this
+        // branch existed for, /cooperatives/id-card, is unreachable to the
+        // subscribers it was written for. The only way in was to call the
+        // action directly.
+        //
+        // Refused now, exactly as it already was for everybody else.
+        if (memberSnapshot.empty) {
             if (isPremiumSubscriber) {
-                const resolvedName = (userData?.name || userData?.fullName || session.user.name || "").trim();
-                const firstName = userData?.firstName || resolvedName.split(" ")[0] || "Cooperative";
-                const lastName = userData?.lastName || resolvedName.split(" ").slice(1).join(" ") || "Member";
-                
-                await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).set({
-                    userId,
-                    firstName,
-                    lastName,
-                    fullName: resolvedName || `${firstName} ${lastName}`,
-                    email: session.user.email || userData?.email || "",
-                    phone: userData?.phone || userData?.phoneNumber || "08000000000",
-                    membershipTier: userPlan.charAt(0).toUpperCase() + userPlan.slice(1),
-                    membershipStatus: "active",
-                    status: "active",
-                    paymentStatus: "completed",
-                    onboardingCompleted: false,
-                    documents: {
-                        passportPhoto: {
-                            name: passportName,
-                            url: passportUrl
-                        }
-                    },
-                    createdAt: FieldValue.serverTimestamp(),
-                    updatedAt: FieldValue.serverTimestamp()
-                });
-                
-                revalidatePath("/cooperatives/id-card");
-                return { error: null, success: true as const, data: { message: "Passport photo updated" }, meta: null };
-            } else {
-                return { success: false as const, error: "No cooperative membership found. Please register first.", data: null };
+                logger.warn(
+                    "[updatePassportPhoto] academy subscriber with no cooperative membership — "
+                    + "refused rather than provisioning one",
+                    { userId, userPlan }
+                );
             }
+            return { success: false as const, error: "No cooperative membership found. Please register first.", data: null };
         }
 
         const memberDoc = memberSnapshot.docs[0];
@@ -537,32 +547,17 @@ export async function updateMemberProfileDetailsAction(
         });
 
         if (sortedDocs.length === 0) {
+            // The second copy of the same fee bypass — see the note in
+            // updatePassportPhotoAction above. Identical fabricated record,
+            // reached from the gender/state editor instead of the photo upload.
             if (isPremiumSubscriber) {
-                // Synthesize member record if premium subscriber but no doc exists
-                const resolvedName = (userData?.name || userData?.fullName || session.user.name || "").trim();
-                const firstName = userData?.firstName || resolvedName.split(" ")[0] || "Cooperative";
-                const lastName = userData?.lastName || resolvedName.split(" ").slice(1).join(" ") || "Member";
-
-                await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).set({
-                    userId,
-                    firstName,
-                    lastName,
-                    fullName: resolvedName || `${firstName} ${lastName}`,
-                    email: session.user.email || userData?.email || "",
-                    phone: userData?.phone || userData?.phoneNumber || "08000000000",
-                    membershipTier: userPlan.charAt(0).toUpperCase() + userPlan.slice(1),
-                    membershipStatus: "active",
-                    status: "active",
-                    paymentStatus: "completed",
-                    onboardingCompleted: false,
-                    gender: normalizedGender,
-                    stateOfOrigin: normalizedState,
-                    createdAt: FieldValue.serverTimestamp(),
-                    updatedAt: FieldValue.serverTimestamp()
-                });
-            } else {
-                return { success: false as const, error: "No cooperative membership found. Please register first.", data: null };
+                logger.warn(
+                    "[updateMemberProfileDetails] academy subscriber with no cooperative membership — "
+                    + "refused rather than provisioning one",
+                    { userId, userPlan }
+                );
             }
+            return { success: false as const, error: "No cooperative membership found. Please register first.", data: null };
         } else {
             // Update the existing member doc
             const memberDoc = sortedDocs[0];
