@@ -122,7 +122,17 @@ async function _upsertAcademyCourseAction(
             _version: FieldValue.increment(1),
         };
 
-        if (courseId === "new") {
+        // Which of the two this is, decided BEFORE courseId is reassigned.
+        //
+        // The audit call below asked `courseId === "new"` — but the create
+        // branch sets `courseId = newRef.id` first, so by the time the question
+        // was put it could never be "new". Every course creation was recorded as
+        // UPDATE_COURSE, and the audit log has never contained a CREATE_COURSE
+        // entry for this action. A log that cannot distinguish a course being
+        // created from one being edited is the half that matters missing.
+        const isNew = courseId === "new";
+
+        if (isNew) {
             const newRef = db.collection(COLLECTIONS.ACADEMY_COURSES).doc();
             await newRef.set({
                 ...cleanData,
@@ -139,7 +149,7 @@ async function _upsertAcademyCourseAction(
 
         await logAuditAction({
             userId: session.user.id,
-            action: courseId === "new" ? "CREATE_COURSE" : "UPDATE_COURSE",
+            action: isNew ? "CREATE_COURSE" : "UPDATE_COURSE",
             resourceId: courseId,
             resourceType: "academy_course",
             metadata: { title: courseData.title },

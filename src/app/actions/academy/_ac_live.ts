@@ -168,8 +168,27 @@ async function _endAcademyLiveSessionAction(
         const ref = db.collection(COLLECTIONS.ACADEMY_LIVE_SESSIONS);
         let snapshot = await ref.where("courseId", "==", courseId).where("status", "==", "live").get();
 
+        // Attaching a recording after the fact touches ONE session.
+        //
+        // The fallback below fetched every session of the course that had
+        // already ended, and the loop then stamped `recordingUrl` onto all of
+        // them. A course with a weekly live class had one recording overwrite
+        // the recording link of every previous week — /academy/live lists
+        // recordings as `status === "ended" && s.recordingUrl`, so every past
+        // week pointed at the newest video.
+        //
+        // The most recently ended session is the one an admin uploading a
+        // recording means. Ordering by scheduledAt rather than taking whatever
+        // the database returned first, for the reason set out in
+        // lib/escrow-status.ts: `docs[0]` is not a choice.
         if (snapshot.empty && recordingUrl) {
-            snapshot = await ref.where("courseId", "==", courseId).where("status", "==", "ended").get();
+            const ended = await ref
+                .where("courseId", "==", courseId)
+                .where("status", "==", "ended")
+                .orderBy("scheduledAt", "desc")
+                .limit(1)
+                .get();
+            snapshot = ended;
         }
 
         for (const doc of snapshot.docs) {

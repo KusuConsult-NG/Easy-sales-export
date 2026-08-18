@@ -424,78 +424,54 @@ export const requestAcademyRevisionAction = withFlexibleSafeAction("requestAcade
 
 
 /**
- * Admin: Approve an academy application — sets status + sends approval email
+ * Admin: Approve an academy application.
+ *
+ * TWO APPROVALS, DOING DIFFERENT THINGS
+ * -------------------------------------
+ * There are two functions with this name. academy/index.ts says so, and calls
+ * the one in _ac_admin_review.ts "canonical" while excluding this one from the
+ * barrel as "a legacy duplicate".
+ *
+ * Excluding it from the barrel does nothing. This file is "use server", so every
+ * export of it is a reachable HTTP endpoint whether the barrel names it or not
+ * — the same reasoning that applies to autoEnrollPaidUser in _ac_enrollment.ts.
+ * So the platform had two live approval endpoints that did not agree:
+ *
+ *   GUARD          canonical: hasAdminPermission(users:update) OR academy_admin
+ *                  this one:  the literal roles 'admin' or 'super_admin'
+ *                  — an academy_admin could approve through one and not the
+ *                    other.
+ *
+ *   FIELD NAMES    canonical writes reviewedAt / reviewedBy
+ *                  this one wrote approvedAt / approvedBy
+ *                  — so which admin approved an application, and when, was
+ *                    recorded under whichever pair of names the caller happened
+ *                    to hit, and a screen reading one pair showed nothing for
+ *                    applications approved through the other.
+ *
+ *   isVerified     canonical sets it; this one did not.
+ *   CACHE          canonical invalidates the academy service cache; this one did
+ *                  not, so the approval did not take effect until it expired.
+ *   AUDIT LOG      canonical writes one; this one wrote nothing at all.
+ *
+ * Rather than delete a reachable endpoint, it delegates. One implementation, so
+ * the two cannot drift again, and any caller still pointing here gets the
+ * behaviour the platform considers correct.
  */
 async function _approveAcademyApplicationAction(
     applicationId: string
 ): Promise<ActionResponse<null>> {
-    try {
-        const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: 'Unauthorized', data: null };
-        const { session } = sessionResult;
-        if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
-            return { success: false as const, error: 'Admin access required', data: null };
-        }
-
-        const appRef = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId);
-        let userId: string | undefined;
-        let appData: any;
-
-        // Atomic update using a transaction
-        await db.runTransaction(async (transaction) => {
-            const appDoc = await transaction.get(appRef);
-            if (!appDoc.exists) throw new Error('Application not found');
-
-            appData = appDoc.data();
-            userId = appData?.userId;
-
-            // 1. Update application status
-            transaction.update(appRef, {
-                status: 'approved',
-                approvedAt: FieldValue.serverTimestamp(),
-                approvedBy: session.user.id,
-                updatedAt: FieldValue.serverTimestamp(),
-            });
-
-            // 2. Update user document
-            if (userId) {
-                const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
-                transaction.update(userRef, {
-                    'serviceRegistrations.academy.status': 'approved',
-                    roles: FieldValue.arrayUnion('academy_participant'),
-                    updatedAt: FieldValue.serverTimestamp(),
-                });
-            }
-        });
-
-        if (userId) {
-            try {
-                const { Resend } = await import('resend');
-                const resend = new Resend(process.env.RESEND_API_KEY);
-                const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-                const email = userDoc.data()?.email;
-            const name = appData?.personalInfo?.firstName ? `${appData.personalInfo.firstName} ${appData.personalInfo.lastName || ''}`.trim() : appData?.personalInfo?.fullName || 'Learner';
-            if (email) {
-                const { data, error } = await resend.emails.send({
-                    from: process.env.EMAIL_FROM || 'Easy Sales Export Academy <info@easysalesexport.com>',
-                    to: email,
-                    subject: 'Congratulations! Your Academy Application is Approved',
-                    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;"><div style="background:linear-gradient(135deg,#2563eb,#4f46e5);padding:32px;border-radius:12px;text-align:center;margin-bottom:24px;"><h1 style="color:white;margin:0;">You are Accepted!</h1></div><p>Dear <strong>${name}</strong>,</p><p>Your <strong>Easy Sales Export Academy</strong> application has been <strong>approved</strong>!</p><div style="text-align:center;margin:24px 0;"><a href="${process.env.NEXTAUTH_URL || 'https://easysalesexport.com'}/academy/dashboard" style="background:#2563eb;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;">Go to Academy Dashboard</a></div></div>`,
-                });
-                if (error) {
-                    logger.error("Resend API Error (Academy approval email):", error);
-                }
-            }
-            } catch (emailError) {
-                logger.error('Academy approval email failed (non-blocking):', emailError);
-            }
-        }
-
-        return { success: true, error: null, data: null };
-    } catch (error) {
-        logger.error('approveAcademyApplicationAction error:', error);
-        return { success: false as const, error: 'Failed to approve application' , data: null };
+    // Fails fast for an anonymous caller; the AUTHORISATION decision — which
+    // roles may approve — belongs to the canonical implementation alone, so
+    // there is still only one answer to it. This is a strictly weaker
+    // precondition, not a second rule that could disagree with the first.
+    const sessionResult = await requireSession();
+    if (!sessionResult.session?.user?.id) {
+        return { success: false as const, error: 'Unauthorized', data: null };
     }
+
+    const { approveAcademyApplicationAction: canonical } = await import("./_ac_admin_review");
+    return canonical(applicationId) as Promise<ActionResponse<null>>;
 }
 
 
