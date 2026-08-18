@@ -163,6 +163,69 @@ export function gradeModuleQuiz(
     };
 }
 
+/** A question as the admin quiz editor stores it, in COLLECTIONS.ACADEMY_QUIZZES. */
+export interface EditorQuizQuestion {
+    id: string;
+    text: string;
+    options: Array<{ id: string; text: string; isCorrect: boolean }>;
+}
+
+/**
+ * Converts the admin editor's questions into the shape the learner is graded on.
+ *
+ * A THIRD QUIZ STORE, WHICH NOTHING READ
+ * --------------------------------------
+ * The header above names two storages, COLLECTIONS.QUIZZES and
+ * course.modules[].quiz. There is a third: COLLECTIONS.ACADEMY_QUIZZES.
+ *
+ * saveQuizAction writes it, getQuizAction reads it back, and both are called by
+ * one page — /admin/academy/[courseId]/quiz/[quizId], the editor reached from
+ * the "Edit Quiz" button on every quiz lesson in the course editor. That is the
+ * ONLY quiz-authoring screen the admin UI links to.
+ *
+ * No learner path reads that collection. /academy/[courseId]/quiz/[moduleId]
+ * loads the quiz from course.modules[].quiz through getCourseByIdAction, and
+ * _submitQuizScoreAction grades against the same place. So an admin could write
+ * a quiz, be told it was saved, read it back in the editor unchanged — and the
+ * learners were served nothing, because `module.quiz` was still undefined.
+ *
+ * `if (courseModule?.quiz && graded.passed)` in _submitQuizScoreAction is why
+ * this was quiet: with no quiz on the module the submission scored zero out of
+ * zero and the module was simply never completed.
+ *
+ * The editor's shape carries the correct answer as a flag on each option; the
+ * graded shape carries it as the index of the correct option. saveQuizAction
+ * already refuses a question that does not have exactly one correct option, so
+ * the index below is always found.
+ */
+export function editorQuestionsToModuleQuiz(
+    questions: EditorQuizQuestion[]
+): ModuleQuizQuestion[] {
+    return (questions ?? []).map((q) => {
+        const options = q.options ?? [];
+        const index = options.findIndex((o) => o.isCorrect);
+
+        return {
+            id: q.id,
+            question: q.text,
+            options: options.map((o) => o.text),
+            // NOT -1 when nothing is marked correct.
+            //
+            // gradeModuleQuiz scores a question when
+            // `typeof correctAnswer === "number" && answers[id] === correctAnswer`,
+            // so storing -1 makes a submission of -1 a correct answer — a free
+            // point on a question that has no right answer at all. Leaving it
+            // undefined is what that guard was written for, and matches the
+            // reasoning already applied to gradeStoredQuiz's missing points.
+            //
+            // saveQuizAction refuses a question without exactly one correct
+            // option, so this arises only if the helper is reused elsewhere.
+            // That is precisely when a quiet -1 would be missed.
+            correctAnswer: index >= 0 ? index : undefined,
+        };
+    }) as ModuleQuizQuestion[];
+}
+
 /**
  * Removes the answer key from a course before it is sent to a learner.
  *
