@@ -105,8 +105,28 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
         const sixtyDaysAgo = new Date();
         sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
 
-        const txnStream = txnQuery.select("type", "status", "amount", "date").get();
-        for (const doc of (await txnStream).docs) {
+        // THESE ARE MONEY TOTALS OVER A SILENTLY CAPPED QUERY.
+        //
+        // `.get()` with no `.limit()` stops at the adapter's DEFAULT_QUERY_LIMIT
+        // — 5,000 rows — and returns them looking exactly like a complete
+        // result. Every figure below is a running sum over whatever came back:
+        // totalContributions, totalSavings, totalTransactionAmount, the 30-day
+        // and 60-day buckets that produce monthlyGrowth.
+        //
+        // So on the day cooperative_transactions passed five thousand rows, the
+        // admin dashboard began under-reporting the cooperative's contributions,
+        // with nothing on the screen to say so and no figure moving in a way
+        // anybody would notice. The rows it drops are the OLDEST or newest
+        // depending on nothing in particular — there is no orderBy either.
+        //
+        // `.all()` is the adapter's own answer for a caller that genuinely needs
+        // every row — an aggregation is exactly that — and it reports at error
+        // level if it hits its far higher runaway ceiling. The snapshot's
+        // `truncated` flag is surfaced in the payload as well, so a partial total
+        // can be told from a complete one by the caller rather than only in a log.
+        const txnSnapshot = await txnQuery.select("type", "status", "amount", "date").all().get();
+        const txnTruncated = Boolean((txnSnapshot as any).truncated);
+        for (const doc of txnSnapshot.docs) {
             const t = doc.data();
             
             // Exclude platform onboarding fees from cooperative financial stats
@@ -146,8 +166,9 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
         if (adminScope) {
             loansQuery = loansQuery.where("cooperativeId", "==", adminScope);
         }
-        const loansStream = await loansQuery.get();
-        
+        const loansStream = await loansQuery.all().get();
+        const loansTruncated = Boolean((loansStream as any).truncated);
+
         let totalLoans = 0;
         let activeLoans = 0;
         let pendingLoans = 0;
@@ -190,10 +211,20 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
                     completedTransactions,
                     pendingTransactions,
                     failedTransactions,
+                    // A partial total must be distinguishable from a complete one.
+                    truncated: txnTruncated || loansTruncated,
                 }
             },
             meta: null
         };
+
+        if (txnTruncated || loansTruncated) {
+            logger.error(
+                "[getCooperativeStats] hit the row ceiling — the cooperative financial totals on the "
+                + "admin dashboard are INCOMPLETE and understate the real figures.",
+                { txnTruncated, loansTruncated, adminScope }
+            );
+        }
 
         try {
             await setCache(cacheKey, payload, 120);
@@ -216,10 +247,22 @@ export const getCooperativeStatsAction = withFlexibleSafeAction("getCooperativeS
 // CONTRIBUTION REPORTS
 // ============================================================================
 
-export async function getContributionReportsAction(options?: {
-    month?: number;
-    year?: number;
-}): Promise<ActionResponse<any>> {
+/**
+ * A `month`/`year` parameter used to sit on this signature and filter nothing.
+ *
+ * Neither value was read anywhere in the body, and the Redis key is
+ * `admin:coop-reports:{scope}` with no month in it — so a caller passing
+ * `{ month: 3 }` received the all-time report, and would have received a CACHED
+ * all-time report even if the filtering were added later without touching the
+ * key. Both callers, /admin/cooperatives/contributions and the admin dashboard,
+ * pass nothing.
+ *
+ * Removed rather than implemented: a parameter that quietly ignores what it is
+ * given is worse than one that does not exist, and adding month filtering is a
+ * feature decision, not an audit fix. The six-month trend below already answers
+ * the question it was presumably reaching for.
+ */
+export async function getContributionReportsAction(): Promise<ActionResponse<any>> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
@@ -278,10 +321,15 @@ export async function getContributionReportsAction(options?: {
             });
         }
 
-        const stream = q.select("type", "amount", "userId", "date", "paidAt").get();
+        // .all(), for the reason set out in getCooperativeStatsAction above:
+        // totalContributions, memberCount, averageContribution, topContributors
+        // and every month of the trend are sums over this stream, and a plain
+        // .get() stops at the adapter's default cap without saying so.
+        const stream = await q.select("type", "amount", "userId", "date", "paidAt").all().get();
+        const reportTruncated = Boolean((stream as any).truncated);
         const seenUserIds = new Set<string>();
 
-        for (const doc of (await stream).docs) {
+        for (const doc of stream.docs) {
             const t = doc.data();
             if (t.type === "contribution") {
                 const amount = Number(t.amount) || 0;
@@ -327,10 +375,18 @@ export async function getContributionReportsAction(options?: {
                     averageContribution,
                     topContributors,
                     monthlyTrend,
+                    truncated: reportTruncated,
                 }
             },
             meta: null
         };
+
+        if (reportTruncated) {
+            logger.error(
+                "[getContributionReports] hit the row ceiling — the contribution report is INCOMPLETE.",
+                { adminScope }
+            );
+        }
 
         try {
             await setCache(cacheKey, payload, 120);

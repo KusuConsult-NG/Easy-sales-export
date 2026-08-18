@@ -207,11 +207,30 @@ export async function getDashboardDataAction() {
         }
 
         // ── Transactions ───────────────────────────────────────────────────────
-        // Note: Removed .orderBy('date') to bypass missing index error while index is provisioning
+        //
+        // THE "RECENT TRANSACTIONS" LIST WAS NOT THE RECENT ONES.
+        //
+        // The note here read "Removed .orderBy('date') to bypass missing index
+        // error while index is provisioning", and the limit below it said "Fetch
+        // extra to allow in-memory sort". Those two together are the defect: the
+        // database returned an arbitrary 50 of the member's transactions and the
+        // sort then picked the newest TEN OF THOSE FIFTY. For any member with
+        // more than fifty transactions — which is a member who has contributed
+        // monthly for four years, or weekly for one — the dashboard's recent
+        // activity could be entirely stale while newer entries existed.
+        //
+        // Truncating before sorting is only safe when the truncation is itself
+        // ordered. The index the note was waiting on is not a live concern: the
+        // two other readers of this exact collection, _getTransactionsAction and
+        // getAdminTransactionsAction, both order by this exact field with no
+        // fallback today.
+        //
+        // The in-memory sort below is kept as a belt, since it costs nothing.
         const transactionsSnapshot = await runQueryWithRetry(() =>
             db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS)
                 .where('userId', '==', userId)
-                .limit(50) // Fetch extra to allow in-memory sort
+                .orderBy('date', 'desc')
+                .limit(50)
                 .get()
         );
 

@@ -11,7 +11,12 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from '@/lib/types/firestore';
 import { FieldValue } from "@/lib/firestore-compat";
 import { createAdminAuditLog } from '@/lib/audit-log';
-import { debitJsonbBalance, compensateJsonbDebit } from "@/lib/wallet-ledger";
+import { debitJsonbBalanceWithFloor, compensateJsonbDebit } from "@/lib/wallet-ledger";
+import {
+    COOPERATIVE_MINIMUM_BALANCE,
+    formatMinimumBalance,
+    availableAboveFloor,
+} from "@/lib/cooperative-limits";
 import { revalidatePath } from 'next/cache';
 
 interface WithdrawalRequestData { amount: number;
@@ -65,17 +70,40 @@ async function _submitWithdrawalRequestAction(
         // Same conversion as _submitWithdrawalAction in _actions.ts and
         // submitWithdrawalAction in platform.ts. This was the third door onto
         // the same balance; see docs/audit/integrity-sweep-2026-08-10.md.
-        const debit = await debitJsonbBalance({
+        //
+        // AND THE MINIMUM BALANCE APPLIED TO TWO OF THE THREE.
+        //
+        // COOPERATIVE_MINIMUM_BALANCE exists because a member must leave ₦5,000
+        // in their savings. /api/cooperative/withdraw enforces it through
+        // debitJsonbBalanceWithFloor, and so does repayLoanFromSavingsAction,
+        // which reduces the same balance for a different reason. This door — a
+        // plain withdrawal, the same operation the route performs — used
+        // debitJsonbBalance, which enforces "not negative" and nothing more.
+        //
+        // A member could empty their savings to zero here and be refused at
+        // ₦4,999 there, for the same request. cooperative-limits.ts was written
+        // for precisely this and its own header names the shape: "the recurring
+        // shape in this codebase is a rule applied to one path and not to its
+        // sibling".
+        const debit = await debitJsonbBalanceWithFloor({
             table: "cooperative_members",
             id: userId,
             field: "savingsBalance",
             amount: validatedData.amount,
+            floor: COOPERATIVE_MINIMUM_BALANCE,
         });
 
         if (!debit.ok) {
-            throw new Error(debit.reason === "insufficient_funds"
-                ? `Insufficient balance. Available: ₦${Number(debit.balance).toLocaleString()}`
-                : 'You are not a member of any cooperative');
+            // below_floor is not insufficient_funds — the member HAS the money
+            // and is not permitted to take all of it, which is the distinction
+            // the route already draws.
+            throw new Error(
+                debit.reason === "below_floor"
+                    ? `You must keep a minimum balance of ${formatMinimumBalance()}. Available to withdraw: ₦${availableAboveFloor(Number(debit.balance)).toLocaleString()}`
+                    : debit.reason === "insufficient_funds"
+                        ? `Insufficient balance. Available: ₦${Number(debit.balance).toLocaleString()}`
+                        : 'You are not a member of any cooperative'
+            );
         }
 
         // From here the member's savings are ALREADY DOWN.

@@ -12,7 +12,12 @@ import { requireSession } from "@/lib/session-guard";
 import { logAuditAction } from "@/app/actions/audit";
 import { invalidateCooperativeCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { debitJsonbBalance, claimSingleOpenLoanApplication, compensateJsonbDebit } from "@/lib/wallet-ledger";
+import { debitJsonbBalance, debitJsonbBalanceWithFloor, claimSingleOpenLoanApplication, compensateJsonbDebit } from "@/lib/wallet-ledger";
+import {
+    COOPERATIVE_MINIMUM_BALANCE,
+    formatMinimumBalance,
+    availableAboveFloor,
+} from "@/lib/cooperative-limits";
 import { COOPERATIVE_CONFIG } from "@/lib/constants";
 import { contributionSchema, loanApplicationSchema, fixedSavingsSchema, type MembershipRegistrationState, type LoanApplicationState, type FixedSavingsState, type WithdrawalActionState } from "@/lib/types/cooperative";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
@@ -316,19 +321,31 @@ async function _submitWithdrawalAction(
         // Migration 010 made that worse rather than better: the increments used
         // to lose one another, which accidentally hid the overdraft. Once they
         // apply correctly, both deductions land.
-        const debit = await debitJsonbBalance({
+        //
+        // The minimum balance applies here too, and did not.
+        //
+        // This is a withdrawal — the same operation /api/cooperative/withdraw
+        // performs, which refuses below COOPERATIVE_MINIMUM_BALANCE through
+        // debitJsonbBalanceWithFloor, as repayLoanFromSavingsAction does for the
+        // same balance. Two of the paths that reduce a member's savings enforced
+        // the floor and two did not, so which answer a member got depended on
+        // which screen they withdrew from. See lib/cooperative-limits.ts.
+        const debit = await debitJsonbBalanceWithFloor({
             table: "cooperative_members",
             id: userId,
             field: "savingsBalance",
             amount,
+            floor: COOPERATIVE_MINIMUM_BALANCE,
         });
 
         if (!debit.ok) {
             return {
                 success: false as const,
-                error: debit.reason === "insufficient_funds"
-                    ? "Insufficient savings balance"
-                    : "You are not an active cooperative member",
+                error: debit.reason === "below_floor"
+                    ? `You must keep a minimum balance of ${formatMinimumBalance()}. Available to withdraw: ₦${availableAboveFloor(Number(debit.balance)).toLocaleString()}`
+                    : debit.reason === "insufficient_funds"
+                        ? "Insufficient savings balance"
+                        : "You are not an active cooperative member",
                 data: null,
             };
         }
