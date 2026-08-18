@@ -85,14 +85,56 @@ export async function POST(request: NextRequest) {
             },
             body: JSON.stringify({
                 email: session.user.email,
-                amount: amount * 100, // Convert to kobo
+                // Math.round, as nairaToKobo in cooperative/_payment.ts does.
+                // `amount * 100` on a fractional naira figure produces a
+                // non-integer kobo value, which Paystack rejects.
+                amount: Math.round(amount * 100),
                 channels: ["bank_transfer"],
+                // THE MONEY WAS NEVER CREDITED, AND THE MEMBER LANDED ON A 404.
+                //
+                // Two independent faults, either one fatal.
+                //
+                // 1. THE WRONG SPELLING OF THE EVENT. The Paystack webhook
+                //    resolves `const type = metadata.type || metadata.purpose`
+                //    and credits a member's savings on `type === "contribution"`.
+                //    This route sent no `type` and a `purpose` of
+                //    'cooperative_contribution' — so the fallback handed the
+                //    dispatcher a value that matches no branch, and the payment
+                //    fell through to the unknown-type path: recorded with a
+                //    deliberately non-completed status, logged, and never
+                //    fulfilled. The member paid and their savings did not move.
+                //
+                //    contribution vs cooperative_contribution is the SAME split
+                //    an earlier pass fixed in CLAIM_TYPE — "the only claim type
+                //    in the codebase with two spellings". It was settled in the
+                //    claim layer and left standing here, in the layer that
+                //    decides whether the money is credited at all.
+                //
+                //    `purpose` is kept as well as `type`: it is what this route
+                //    has always recorded, and dropping it would change what
+                //    existing reconciliation sees.
+                //
+                // 2. `amount` was absent from the metadata, so
+                //    verifyContributionPaymentAction's amount cross-check
+                //    (`if (expectedAmount && Math.abs(...) > 1)`) was skipped
+                //    for every payment started here — the one guard that catches
+                //    a tampered payment page.
+                //
+                // 3. callback_url pointed at /cooperatives/contribute/callback,
+                //    which does not exist. There is no `callback` segment under
+                //    that route, only the page itself. Paystack redirected the
+                //    member there after they paid and they got a 404.
+                //    /cooperatives/verify-payment is the page that verifies a
+                //    contribution — it calls verifyContributionPaymentAction —
+                //    and it is the default paystack-server.ts already uses.
                 metadata: {
                     userId,
+                    type: 'contribution',
+                    amount,
                     purpose: 'cooperative_contribution',
                     contributionType,
                 },
-                callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/cooperatives/contribute/callback`,
+                callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/cooperatives/verify-payment`,
             }),
         });
 
