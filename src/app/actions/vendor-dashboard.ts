@@ -4,7 +4,7 @@ import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { Timestamp } from "@/lib/firestore-compat";
-import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
+import { serializeDocs, serializeValue, toMillis } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { logger } from "@/lib/logger";
 
@@ -88,18 +88,45 @@ async function _getVendorSalesStatsAction() { let sessionResult;
             thisMonth: { orders: 0, revenue: 0 },
             allTime: { orders: orders.length, revenue: 0 } };
 
-        orders.forEach((order: any) => { const createdAt = order.createdAt;
+        // TODAY, THIS WEEK AND THIS MONTH WERE ALWAYS ZERO.
+        //
+        // serializeDocs turns a Timestamp into an ISO STRING, and the three
+        // comparisons below were `createdAt >= startOfToday` — a string against
+        // a Date. JavaScript resolves that by stringifying the Date through
+        // toString(), giving "Tue Aug 18 2026 00:00:00 GMT+0000...", and then
+        // comparing lexicographically:
+        //
+        //     "2026-08-18T10:00:00.000Z" >= "Tue Aug 18 2026 ..."   →  false
+        //
+        // "2" sorts before "T", so it is false for every order on every day —
+        // not merely wrong at boundaries. So a vendor with sales an hour ago saw
+        // Today ₦0, This Week ₦0, This Month ₦0, while All Time was correct
+        // because it sums unconditionally.
+        //
+        // The sibling in this file, _getVendorRevenueTrendsAction, reads
+        // doc.data() and coerces with `createdAt?.toDate ? ... : new Date(...)`
+        // — so the file already had the right answer one function away.
+        //
+        // toMillis is the shared coercion this codebase uses for exactly this:
+        // it takes a Date, a number, an ISO string, a Timestamp or a {seconds}
+        // shape, so it cannot be defeated by whichever of those the adapter
+        // hands back.
+        const todayMs = startOfToday.getTime();
+        const weekMs = startOfWeek.getTime();
+        const monthMs = startOfMonth.getTime();
+
+        orders.forEach((order: any) => { const createdAtMs = toMillis(order.createdAt);
             const amount = order.totalAmount || 0;
             stats.allTime.revenue += amount;
 
-            if (createdAt >= startOfToday) {
+            if (createdAtMs >= todayMs) {
                 stats.today.orders++;
                 stats.today.revenue += amount;
             }
-            if (createdAt >= startOfWeek) { stats.thisWeek.orders++;
+            if (createdAtMs >= weekMs) { stats.thisWeek.orders++;
                 stats.thisWeek.revenue += amount;
             }
-            if (createdAt >= startOfMonth) { stats.thisMonth.orders++;
+            if (createdAtMs >= monthMs) { stats.thisMonth.orders++;
                 stats.thisMonth.revenue += amount;
             }
         });

@@ -276,10 +276,19 @@ async function _updateVendorProductInventoryAction(
 
             // `newStock === 0 ? "out_of_stock" : "active"` labelled NEGATIVE
             // stock as active, so a product nobody could buy stayed listed as
-            // available. A buyer reaching checkout on one of those is charged
-            // before the stock decrement runs — decrementManyOrFail refuses at
-            // verification, after claimPaymentOnce has claimed the reference —
-            // which is the charge-with-no-order failure described in #113.
+            // available. Still worth `<= 0`.
+            //
+            // CORRECTION to what this comment used to claim. It said a buyer
+            // reaching checkout on one of these is charged before
+            // decrementManyOrFail refuses, "the charge-with-no-order failure
+            // described in #113". That chain does not exist. Marketplace
+            // checkout decrements COLLECTIONS.PRODUCTS (or FLASH_SALE_PRODUCTS)
+            // on `availableQuantity` — see marketplace/_payment_verify.ts.
+            // vendor_products is a different collection with a different field
+            // and checkout never reads it, so nothing here can reach a buyer's
+            // payment. The overstated impact is corrected rather than left
+            // standing: a note that inflates severity is as misleading as one
+            // that hides it.
             const status = newStock <= 0 ? "out_of_stock" : "active";
 
             transaction.update(productRef, { stock: newStock,
