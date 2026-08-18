@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getAdminExportOrdersAction, updateAdminExportOrderStatusAction } from "@/app/actions/export-admin";
 import { Ship, DollarSign, Package, CheckCircle, Clock, AlertCircle, FileText, Upload } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
@@ -13,6 +13,9 @@ export default function AdminExportOrdersPage() {
     const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
     const [isUpdating, setIsUpdating] = useState(false);
     const [updateStatus, setUpdateStatus] = useState("");
+    const [isUploading, setIsUploading] = useState(false);
+    const [uploadError, setUploadError] = useState<string | null>(null);
+    const documentInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         fetchOrders();
@@ -50,6 +53,63 @@ export default function AdminExportOrdersPage() {
             alert("An error occurred");
         } finally {
             setIsUpdating(false);
+        }
+    }
+
+    /**
+     * Attach a shipping document to the selected order.
+     *
+     * Every piece of this already existed and none of them were joined up:
+     * updateAdminExportOrderStatusAction has always taken an optional
+     * `documentData` and arrayUnion'd it onto `documents`, the panel above
+     * renders `documents` as {name, url}, /api/upload stores a file and returns
+     * exactly that pair — and the "Upload Document" button had no handler at
+     * all. So the panel said "No documents uploaded yet" for every order,
+     * permanently, and the one control offered to change that did nothing when
+     * clicked.
+     *
+     * The status is re-sent unchanged because the action requires one; this
+     * attaches a document, it does not move the order.
+     */
+    async function handleUploadDocument(file: File) {
+        if (!selectedOrder || !file) return;
+        setUploadError(null);
+        setIsUploading(true);
+        try {
+            const body = new FormData();
+            body.append("file", file);
+            body.append("folder", "export-orders");
+            body.append("documentType", "shipping_document");
+
+            const res = await fetch("/api/upload", { method: "POST", body });
+            const uploaded = await res.json();
+            if (!res.ok || !uploaded?.success || !uploaded?.url) {
+                setUploadError(uploaded?.error || "Upload failed");
+                return;
+            }
+
+            const result = await updateAdminExportOrderStatusAction(
+                selectedOrder.id,
+                selectedOrder.status,
+                { name: uploaded.filename || file.name, url: uploaded.url, type: file.type },
+            );
+            if (!result.success) {
+                setUploadError(result.error || "Could not attach the document to this order");
+                return;
+            }
+
+            // Refresh, and keep the panel on the same order so the new document
+            // appears in the list the admin is looking at.
+            const refreshed = await getAdminExportOrdersAction();
+            if (refreshed.success && refreshed.data) {
+                setOrders(refreshed.data);
+                const updated = refreshed.data.find((o: any) => o.id === selectedOrder.id);
+                if (updated) setSelectedOrder(updated);
+            }
+        } catch {
+            setUploadError("An error occurred while uploading");
+        } finally {
+            setIsUploading(false);
         }
     }
 
@@ -208,10 +268,31 @@ export default function AdminExportOrdersPage() {
                                     <p className="text-sm text-slate-500 mb-4">No documents uploaded yet.</p>
                                 )}
 
-                                <button className="w-full py-2 border border-dashed border-slate-300 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 flex items-center justify-center gap-2 transition-colors">
+                                <input
+                                    ref={documentInputRef}
+                                    type="file"
+                                    className="hidden"
+                                    accept=".pdf,image/jpeg,image/png,image/webp"
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        // Clear the input so re-picking the same
+                                        // file fires change again.
+                                        e.target.value = "";
+                                        if (file) handleUploadDocument(file);
+                                    }}
+                                />
+                                <button
+                                    type="button"
+                                    disabled={isUploading}
+                                    onClick={() => documentInputRef.current?.click()}
+                                    className="w-full py-2 border border-dashed border-slate-300 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+                                >
                                     <Upload className="w-4 h-4" />
-                                    Upload Document (Bill of Lading, Invoice)
+                                    {isUploading ? "Uploading…" : "Upload Document (Bill of Lading, Invoice)"}
                                 </button>
+                                {uploadError && (
+                                    <p className="mt-2 text-sm text-red-600">{uploadError}</p>
+                                )}
                             </div>
                         </div>
 

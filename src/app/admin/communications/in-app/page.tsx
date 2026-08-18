@@ -356,8 +356,17 @@ export default function InAppBroadcastPage() {
                                 <div className="flex-1 min-w-0">
                                     <p className="text-white text-sm font-semibold">{title || "Notification Title"}</p>
                                     <p className="text-white/60 text-xs mt-0.5 leading-relaxed">{message || "Your message will appear here."}</p>
+                                    {/*
+                                      * A <span>, not a <button>. This is the live
+                                      * PREVIEW of the notification the admin is
+                                      * composing, so the link is meant to be inert
+                                      * here — but a <button> is announced as
+                                      * actionable and takes focus, so a keyboard or
+                                      * screen-reader user was offered a control that
+                                      * does nothing by design.
+                                      */}
                                     {linkText && (
-                                        <button className="mt-2 text-xs text-emerald-400 font-medium hover:underline">{linkText} →</button>
+                                        <span className="mt-2 inline-block text-xs text-emerald-400 font-medium">{linkText} →</span>
                                     )}
                                 </div>
                             </div>
