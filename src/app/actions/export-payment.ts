@@ -366,11 +366,36 @@ export async function initializeInvestmentPaymentAction(
         if (windowData.status !== "open" && windowData.status !== "active") { return { error: "This export window is no longer accepting investments", success: false as const, data: undefined, meta: null };
         }
 
-        // Check if funding goal exceeded
+        // Check if funding goal exceeded — WHEN there is one.
+        //
+        // This read `windowData.fundingGoal || 0` and then refused whenever
+        // `currentFunding + investmentAmount > fundingGoal`. Nothing anywhere in
+        // the codebase writes `fundingGoal` onto an export window: neither of
+        // the two createExportWindowAction implementations does, the seeder is
+        // deprecated, and the field appears only in reads, comments and tests.
+        //
+        // So fundingGoal was always 0, the minimum investment is ₦50,000, and
+        // `0 + 50000 > 0` is true. EVERY investment on EVERY window was refused,
+        // with "Investment exceeds available slots. Maximum available: ₦0" — the
+        // export investment feature could not take a single payment.
+        //
+        // An absent ceiling means uncapped, which is not an invention here: it
+        // is what incrementWithinCeiling does with a missing ceiling field
+        // (migration 015, and the comment at the fulfilment end of this same
+        // file), and what the sibling path in export/_ex_investments.ts already
+        // does with its `fundingGoal > 0 &&` guard. `goal` is read as a fallback
+        // for the same reason both fulfilment paths read it: older windows
+        // recorded it under that name.
+        //
+        // NOTE FOR THE OWNER: because no window carries a goal, no window is
+        // capped. Deciding which of the two window shapes should record one, and
+        // from what — the aggregation windows carry targetVolume and slotPrice,
+        // whose product would be a natural goal — is a product decision, not one
+        // to make inside a bug fix.
         const currentFunding = windowData.currentFunding || 0;
-        const fundingGoal = windowData.fundingGoal || 0;
+        const fundingGoal = Number(windowData.fundingGoal ?? windowData.goal ?? 0);
 
-        if (currentFunding + investmentAmount > fundingGoal) {
+        if (fundingGoal > 0 && currentFunding + investmentAmount > fundingGoal) {
             return {
                 error: `Investment exceeds available slots. Maximum available: ₦${(fundingGoal - currentFunding).toLocaleString()}`,
                 success: false as const,
@@ -416,9 +441,18 @@ export async function initializeInvestmentPaymentAction(
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp() });
 
+        // The authorization URL, returned.
+        //
+        // This returned `data: null` — discarding the very URL it had just asked
+        // Paystack for. Its one caller, /export/windows/[id], reads
+        // `result.data?.authorizationUrl` and shows "Failed to initialize
+        // investment: No authorization URL" when it is missing, which is what
+        // every investor saw on the rare path where the funding gate above did
+        // not refuse them first. Two independent faults, either of which alone
+        // made investing impossible.
         return { error: null, success: true as const,
-            meta: null
-        , data: null };
+            meta: null,
+            data: { authorizationUrl, reference } };
     } catch (error: any) { logger.error("Investment payment initialization error:", error);
         return { error: "Failed to initialize investment payment. Please try again.", success: false as const, data: undefined, meta: null
  };
