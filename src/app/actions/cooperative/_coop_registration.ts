@@ -14,6 +14,7 @@ import { parseFormData } from "@/lib/form-validation";
 import type { JoinCooperativeState } from "@/lib/types/cooperative";
 import { serializeValue, toMillis } from "@/lib/firestore-serialize";
 import { claimStatusTransition } from "@/lib/status-transition";
+import { mayClaimMembershipByEmail } from "@/lib/cooperative-membership-claim";
 import { revalidatePath } from "next/cache";
 
 /**
@@ -488,7 +489,15 @@ export async function getCooperativeApplicationAction(): Promise<
                     .limit(1)
                     .get();
                 if (!emailQuery.empty) {
+                    // See lib/cooperative-membership-claim.ts — this returns the
+                    // application for editing, KYC and documents included.
                     const memberDoc = emailQuery.docs[0];
+                    const mayClaim = await mayClaimMembershipByEmail(
+                        db, { data: memberDoc.data(), id: memberDoc.id }, session.user.id,
+                    );
+                    if (!mayClaim) {
+                        return { success: false as const, error: 'No application found'};
+                    }
                     if (!memberDoc.data().userId) {
                         await memberDoc.ref.update({ userId: session.user.id });
                     }

@@ -9,6 +9,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import type { CooperativeMembership, CooperativeTransaction } from "@/lib/types/cooperative";
 import { serializeDoc, serializeDocs, toMillis } from "@/lib/firestore-serialize";
 import { runQueryWithRetry } from "@/lib/firestore-utils";
+import { mayClaimMembershipByEmail } from "@/lib/cooperative-membership-claim";
 
 /**
  * Optimized dashboard data loader
@@ -97,18 +98,14 @@ export async function getDashboardDataAction() {
                     // reference matches this membership AND whose userId is the
                     // caller. That ties the record to the caller's money rather than
                     // to a string they can edit.
-                    let mayClaim = false;
-                    if (memberData.userId === userId) {
-                        mayClaim = true; // already theirs
-                    } else if (!memberData.userId && memberData.paymentReference) {
-                        const proof = await runQueryWithRetry(() =>
-                            db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
-                                .where("reference", "==", memberData.paymentReference)
-                                .limit(1)
-                                .get()
-                        );
-                        mayClaim = !proof.empty && proof.docs[0].data()?.userId === userId;
-                    }
+                    // The rule this file introduced, now shared — it was the only
+                    // one of FIVE email fallbacks that had it, and the other four
+                    // could bind the row before this one ever ran, after which
+                    // `memberData.userId === userId` passed trivially here.
+                    // See lib/cooperative-membership-claim.ts.
+                    const mayClaim = await mayClaimMembershipByEmail(
+                        db, { data: memberData, id: memberDoc.id }, userId,
+                    );
 
                     if (mayClaim) {
                         logger.info(`[getDashboardData] Found membership via Email fallback for user: ${userId}`);

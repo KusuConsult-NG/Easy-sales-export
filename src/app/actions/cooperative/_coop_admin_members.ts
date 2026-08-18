@@ -153,7 +153,35 @@ async function _getAllMembersAction(options?: {
             });
         }
 
-        return { error: null, success: true as const, data: { members }, meta: { hasMore: false, cursor: null } };
+        // `hasMore: false`, hardcoded, over a query that caps at fetchLimit and
+        // then slices to options.limit. So this reader always told its caller it
+        // had returned every member, whatever it had actually returned — and the
+        // 500-row default cap on the underlying query was never reported either.
+        //
+        // Both are answered honestly now. This action has no caller in the app
+        // today (the members page uses getStandardCooperativeMembersAction), but
+        // it is an exported server action returning member PII and a reader that
+        // lies about completeness is how "the list is missing people" reaches
+        // production.
+        const truncated = snapshot.docs.length >= fetchLimit;
+        if (truncated) {
+            logger.warn(
+                `[getAllMembers] hit the ${fetchLimit}-row cap — the member list returned is INCOMPLETE`,
+                { adminScope, status: options?.status }
+            );
+        }
+
+        return {
+            error: null,
+            success: true as const,
+            data: { members },
+            meta: {
+                hasMore: truncated || (!options?.search && !!options?.limit && membersRaw.length > options.limit),
+                cursor: null,
+                truncated,
+                rowCap: fetchLimit,
+            },
+        };
     } catch (error) {
         logger.error("Get all members error:", {
             userId: sessionResult?.session?.user?.id,
@@ -894,7 +922,41 @@ export async function getStandardCooperativeMembersAction(
             });
         }
 
-        return paginatedOk(standardForms, _nextCursor, stats ? { stats } : undefined);
+        // A COHORT CAPPED AT 5,000 REPORTED ITSELF AS COMPLETE.
+        //
+        // Any filtered view — a search, a date range, a state, an LGA, a
+        // registry, or a gender sort — switches to in-memory pagination and
+        // fetches fetchLimit + 1 rows. `hasMoreRaw` records whether that cap was
+        // reached, and then the memory branch computed _hasMore purely from the
+        // length of what it had:
+        //
+        //     offset + limitCount < applications.length
+        //
+        // So on a cooperative larger than the cap, an admin paged to the end of
+        // the first 5,000, was told there was no more, and never saw the rest —
+        // and the cohort `stats` beside the list counted only those 5,000 while
+        // presenting as the whole cohort.
+        //
+        // Reported rather than silently paged past, the same way the loans
+        // export and the cooperative financial totals now report theirs.
+        const cohortTruncated = useMemoryPagination && hasMoreRaw;
+        if (cohortTruncated) {
+            logger.error(
+                `[getStandardCooperativeMembers] the filtered cohort hit the ${fetchLimit}-row cap — `
+                + `the list AND the stats beside it are INCOMPLETE. Narrow the filters.`,
+                { adminScope, statusFilter, paymentFilter }
+            );
+        }
+
+        return paginatedOk(
+            standardForms,
+            _nextCursor,
+            {
+                ...(stats ? { stats } : {}),
+                truncated: cohortTruncated,
+                rowCap: fetchLimit,
+            },
+        );
     } catch (error) {
         logger.error(`getStandardCooperativeMembersAction error:`, error);
         return paginatedErr("Failed to load cooperative members");

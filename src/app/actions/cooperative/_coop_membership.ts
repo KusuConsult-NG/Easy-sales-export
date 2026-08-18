@@ -13,6 +13,7 @@ import type { CooperativeMembership, GetMembershipState } from "@/lib/types/coop
 import { serializeDoc } from "@/lib/firestore-serialize";
 import { registerCooperativeMemberAction } from "./_coop_registration";
 import { isAdmin } from "@/lib/admin-permissions";
+import { mayClaimMembershipByEmail } from "@/lib/cooperative-membership-claim";
 
 /** How many members one directory read will return. */
 const DIRECTORY_ROW_CAP = 2000;
@@ -60,8 +61,16 @@ async function _getMembershipAction(): Promise<GetMembershipState> { try {
                     .limit(1)
                     .get();
                 if (!emailQuery.empty) {
+                    // See lib/cooperative-membership-claim.ts: an email match is
+                    // not proof of ownership, and this bound the row permanently.
                     const emailDocRef = emailQuery.docs[0].ref;
                     const emailDocData = emailQuery.docs[0].data();
+                    const mayClaim = await mayClaimMembershipByEmail(
+                        db, { data: emailDocData, id: emailQuery.docs[0].id }, userId,
+                    );
+                    if (!mayClaim) {
+                        return { error: "No membership found", success: false as const, data: null };
+                    }
                     if (!emailDocData.userId) {
                         await emailDocRef.update({ userId });
                     }
@@ -208,8 +217,19 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
                     .limit(1)
                     .get();
                 if (!emailQuery.empty) {
-                    memberDocData = emailQuery.docs[0].data();
-                    memberRef = emailQuery.docs[0].ref;
+                    // Same rule as the reader above: this branch feeds a healing
+                    // path that writes the cooperative_member ROLE onto the user
+                    // document, so adopting a stranger's membership here granted
+                    // module access as well as visibility.
+                    const mayClaim = await mayClaimMembershipByEmail(
+                        db,
+                        { data: emailQuery.docs[0].data(), id: emailQuery.docs[0].id },
+                        session.user.id,
+                    );
+                    if (mayClaim) {
+                        memberDocData = emailQuery.docs[0].data();
+                        memberRef = emailQuery.docs[0].ref;
+                    }
                 }
             }
         }

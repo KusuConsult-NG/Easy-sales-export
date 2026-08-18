@@ -2,6 +2,7 @@
 
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { runQueryWithRetry } from "@/lib/firestore-utils";
+import { mayClaimMembershipByEmail } from "@/lib/cooperative-membership-claim";
 import { normalizeUserUpdate } from "@/lib/schema-normalizer";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
@@ -94,13 +95,25 @@ export async function getCooperativeMemberIdCardAction(): Promise<
                         .limit(1)
                         .get()
                 );
+                    // A matching email is not proof of ownership — the caller's
+                    // address comes from their own profile and profile.ts lets
+                    // them change it. Binding an ORPHANED membership to them on
+                    // that alone handed over another person's savings, loans and
+                    // KYC. getDashboardDataAction was hardened against exactly
+                    // this and its four siblings were not. See
+                    // lib/cooperative-membership-claim.ts.
                 if (!emailQuery.empty) {
-                    logger.info(`[getCooperativeMemberIdCardAction] Found membership via Email fallback for user: ${userId}`);
                     const memberDoc = emailQuery.docs[0];
-                    if (!memberDoc.data().userId) {
-                        await memberDoc.ref.update({ userId });
+                    const mayClaim = await mayClaimMembershipByEmail(
+                        db, { data: memberDoc.data(), id: memberDoc.id }, userId,
+                    );
+                    if (mayClaim) {
+                        logger.info(`[getCooperativeMemberIdCardAction] Found membership via Email fallback for user: ${userId}`);
+                        if (!memberDoc.data().userId) {
+                            await memberDoc.ref.update({ userId });
+                        }
+                        sortedDocs = [memberDoc];
                     }
-                    sortedDocs = [memberDoc];
                 }
             }
         }
