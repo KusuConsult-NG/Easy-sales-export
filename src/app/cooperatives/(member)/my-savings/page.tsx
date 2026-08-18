@@ -48,9 +48,13 @@ export default function MySavingsPage() {
                         type: "fixed",
                         balance: plan.amount,
                         interestRate: plan.interestRate,
+                        // The interest the SERVER computed and stored, pro-rated
+                        // over the plan's term. See below for why this page must
+                        // not work it out for itself.
+                        projectedProfit: Number(plan.projectedProfit) || 0,
                         startDate: new Date(plan.startDate),
                         maturityDate: new Date(plan.maturityDate),
-                        monthlyContribution: plan.amount / plan.durationMonths,
+                        durationMonths: plan.durationMonths,
                         status: plan.status,
                         targetAmount: null, // Fixed savings don't have targets
                     }));
@@ -85,10 +89,24 @@ export default function MySavingsPage() {
     }
 
     const totalSavings = savings.reduce((sum, s) => sum + s.balance, 0);
-    const totalInterest = savings.reduce(
-        (sum, s) => sum + (s.balance * s.interestRate) / 100,
-        0
-    );
+    // A FULL YEAR'S INTEREST, WHATEVER THE TERM.
+    //
+    // This was `balance * interestRate / 100`. interestRate on a fixed savings
+    // plan is FIXED_SAVINGS_ANNUAL_RATE — a rate PER YEAR, and the one field in
+    // this codebase that is, which is why cooperative-savings.ts carries a
+    // header warning that "a bare percentage next to this number is what makes
+    // the mistake possible".
+    //
+    // So a three-month plan of ₦100,000 was shown ₦14,000 of interest against a
+    // real projected profit of ₦3,500 — overstated four times. The sibling page
+    // /cooperatives/fixed-savings renders the stored projectedProfit and gets it
+    // right, so one member saw two different figures for the same plans on two
+    // screens.
+    //
+    // The server already computes this, with projectedFixedSavingsProfit, and
+    // stores it on the plan. Reading it is the fix: a figure a member is shown
+    // and a figure the cooperative pays must come from one calculation.
+    const totalInterest = savings.reduce((sum, s) => sum + s.projectedProfit, 0);
 
     if (loading) {
         return (
@@ -184,7 +202,7 @@ export default function MySavingsPage() {
                                             </div>
                                             <div>
                                                 <p className="text-sm text-green-100 mb-1">Interest Rate</p>
-                                                <p className="text-2xl font-bold">{plan.interestRate}% APR</p>
+                                                <p className="text-2xl font-bold">{plan.interestRate}% p.a.</p>
                                             </div>
                                         </div>
 
@@ -248,11 +266,23 @@ export default function MySavingsPage() {
                                                     <DollarSign className="w-5 h-5 text-green-600" />
                                                 </div>
                                                 <div>
+                                                    {/*
+                                                      * Was "Monthly Contribution",
+                                                      * showing amount / durationMonths.
+                                                      * A fixed savings plan is a lump
+                                                      * sum locked away — the member
+                                                      * paid the whole amount once and
+                                                      * owes nothing monthly — so this
+                                                      * told them they were contributing
+                                                      * ₦33,333 a month against a
+                                                      * ₦100,000 plan they had already
+                                                      * paid in full.
+                                                      */}
                                                     <p className="font-semibold text-slate-900 mb-1">
-                                                        Monthly Contribution
+                                                        Amount Locked
                                                     </p>
                                                     <p className="text-sm text-slate-600">
-                                                        {formatCurrency(plan.monthlyContribution)}
+                                                        {formatCurrency(plan.balance)} for {plan.durationMonths} months
                                                     </p>
                                                 </div>
                                             </div>
@@ -266,7 +296,7 @@ export default function MySavingsPage() {
                                                         Projected Interest
                                                     </p>
                                                     <p className="text-sm text-slate-600">
-                                                        {formatCurrency((plan.balance * plan.interestRate) / 100)}
+                                                        {formatCurrency(plan.projectedProfit)}
                                                     </p>
                                                 </div>
                                             </div>
