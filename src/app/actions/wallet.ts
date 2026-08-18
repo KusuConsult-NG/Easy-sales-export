@@ -145,9 +145,20 @@ async function _getWalletAction(): Promise<ActionResponse<Wallet & {
     const wallet = await _getOrCreateWallet(userId);
 
     // Fetch aggregate stats over all transactions
+    //
+    // .all(), because "over all transactions" is what these three figures
+    // claim to be. A bare .get() on an unbounded query stops at
+    // DEFAULT_QUERY_LIMIT (5,000) and hands back a snapshot indistinguishable
+    // from a complete one, so a long-standing account would silently see a
+    // Total Funded and Total Spent that stopped counting — and a
+    // Pending Withdrawals that could omit a real pending payout.
     const txnsSnap = await db.collection(TXN_COLLECTION)
         .where("userId", "==", userId)
+        .all()
         .get();
+    if (txnsSnap.truncated) {
+        logger.error(`[Wallet] transaction sweep truncated for user ${userId} — the lifetime totals below understate the true figures.`);
+    }
 
     let totalFunded = 0;
     let totalSpent = 0;
