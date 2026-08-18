@@ -64,6 +64,7 @@ import { describe, it, expect } from '@jest/globals';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join, relative } from 'path';
 import {
+    canAccessAdminRoute,
     hasAdminPermission,
     isAdmin,
     permissionForContentType,
@@ -221,6 +222,77 @@ describe('the matrix already had the answer nobody asked it', () => {
         for (const role of MODULE_ADMINS) {
             expect(ALL_USER_ROLES as readonly string[]).toContain(role);
             expect(isUserRole(role)).toBe(true);
+        }
+    });
+});
+
+describe('the platform already siloed module admins — at one layer only', () => {
+    /**
+     * This is what makes the fix an alignment rather than an invention.
+     *
+     * canAccessAdminRoute implements strict silo isolation: a cooperative_admin
+     * reaches /admin/cooperatives and nothing else, and BOTH the admin layout
+     * and AdminSidebar consult it. So the platform's own answer to "may this
+     * module admin act on another module?" was already NO.
+     *
+     * But a route guard is a navigation guard. Every export of a "use server"
+     * module is an HTTP endpoint whose UI caller is irrelevant, so the silo
+     * stopped at the sidebar and the actions behind it accepted any admin role.
+     * The two layers disagreed, and the one that mattered was the permissive
+     * one.
+     */
+    const MODULE_ROUTES: [string, string][] = [
+        ['cooperative_admin', '/admin/cooperatives'],
+        ['wave_admin', '/admin/wave'],
+        ['marketplace_admin', '/admin/marketplace'],
+        ['export_admin', '/admin/export'],
+        ['farm_nation_admin', '/admin/farm-nation'],
+        ['academy_admin', '/admin/academy'],
+    ];
+
+    it('each module admin reaches its own section', () => {
+        for (const [role, route] of MODULE_ROUTES) {
+            expect(canAccessAdminRoute([role], route)).toBe(true);
+        }
+    });
+
+    it('and no other module admin reaches it', () => {
+        // THE premise: the route layer already said no.
+        for (const [role, route] of MODULE_ROUTES) {
+            for (const [other] of MODULE_ROUTES) {
+                if (other === role) continue;
+                expect(canAccessAdminRoute([other], route)).toBe(false);
+            }
+        }
+    });
+
+    it('and both the layout and the sidebar enforce it', () => {
+        // Vacuity guard: an unused rule is not a policy.
+        expect(readFileSync(join(process.cwd(), 'src/app/admin/layout.tsx'), 'utf-8'))
+            .toContain('canAccessAdminRoute');
+        expect(readFileSync(join(process.cwd(), 'src/components/admin/AdminSidebar.tsx'), 'utf-8'))
+            .toContain('canAccessAdminRoute(roles, item.href)');
+    });
+
+    it('so the permission gates now agree with the routes, rather than inventing a rule', () => {
+        // The same pairs, asked of the matrix instead of the router. Both layers
+        // must give the same answer — that is the whole point of the fix.
+        const OWN: [string, AdminPermission][] = [
+            ['cooperative_admin', 'cooperatives:approve_loans'],
+            ['wave_admin', 'wave:manage_training'],
+            ['marketplace_admin', 'marketplace:approve_sellers'],
+            ['export_admin', 'export:approve_applications'],
+            ['farm_nation_admin', 'farm_nation:verify_applications'],
+            ['academy_admin', 'academy:manage_courses'],
+        ];
+
+        for (const [role, permission] of OWN) {
+            expect(hasAdminPermission([role], permission)).toBe(true);
+
+            for (const [other] of OWN) {
+                if (other === role) continue;
+                expect(hasAdminPermission([other], permission)).toBe(false);
+            }
         }
     });
 });
