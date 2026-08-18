@@ -148,7 +148,13 @@ describe('the course list and the answer key', () => {
     it('and keeps it for an admin, because the editor needs it', () => {
         const body = fn(CATALOG, 'getCoursesAction');
 
-        expect(body).toContain('viewerIsAdmin ? raw : raw.map');
+        // The admin branch returns the rows untouched; everyone else goes
+        // through the strip. (The expression gained a second step when paid
+        // lesson material was gated too — see academy-content-gating.test.ts —
+        // so this asserts the branch rather than one exact line of it.)
+        expect(body).toContain('viewerIsAdmin');
+        expect(body).toContain('? raw');
+        expect(body).toContain('stripAnswerKey(');
     });
 
     it('the same rule as its sibling — not a second, different one', () => {

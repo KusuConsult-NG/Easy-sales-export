@@ -163,6 +163,60 @@ export function gradeModuleQuiz(
     };
 }
 
+/**
+ * Removes the paid material from a course the viewer's plan does not open.
+ *
+ * THE TIER GATE WAS APPLIED EVERYWHERE EXCEPT WHERE THE CONTENT IS SERVED
+ * ----------------------------------------------------------------------
+ * checkCourseAccess decides which tiers a learner's plan opens, and it is
+ * consulted in three places: the enrolment action refuses on it, the course page
+ * redirects on it, and the catalogue draws a padlock on it.
+ *
+ * getCourseByIdAction consulted it nowhere. It returned the whole course
+ * document — every lesson's videoUrl, documentUrl, excelUrl and body text — to
+ * any caller, and getCoursesAction returned up to `limit` of them the same way.
+ * Neither requires a session at all.
+ *
+ * So the padlock on the catalogue card and the redirect on the course page were
+ * drawn AFTER the browser already held the material they were hiding, and a
+ * caller who never loaded either page could ask for it directly. The tier a
+ * learner pays for gated the enrolment record and not the videos.
+ *
+ * The outline survives — module and lesson titles, ordering, durations, the
+ * quiz's existence — because that is the course description a prospective buyer
+ * is meant to see. What goes is the material itself.
+ *
+ * `locked: true` is set on each stripped lesson so a client can tell "this
+ * lesson has no video" apart from "you cannot see this lesson's video yet".
+ */
+export function stripLockedContent<T>(course: T): T {
+    const c = course as any;
+    if (!c || !Array.isArray(c.modules)) return course;
+
+    return {
+        ...c,
+        modules: c.modules.map((mod: any) => ({
+            ...mod,
+            lessons: Array.isArray(mod?.lessons)
+                ? mod.lessons.map((lesson: any) => {
+                    // Deleted, not blanked: a client reading `videoUrl` cannot
+                    // tell an empty string from a withheld one, and anything
+                    // iterating keys would still see the field. Same reasoning
+                    // as stripAnswerKey below.
+                    const {
+                        content: _content,
+                        videoUrl: _video,
+                        documentUrl: _document,
+                        excelUrl: _excel,
+                        ...rest
+                    } = lesson ?? {};
+                    return { ...rest, locked: true };
+                })
+                : mod?.lessons,
+        })),
+    };
+}
+
 /** A question as the admin quiz editor stores it, in COLLECTIONS.ACADEMY_QUIZZES. */
 export interface EditorQuizQuestion {
     id: string;

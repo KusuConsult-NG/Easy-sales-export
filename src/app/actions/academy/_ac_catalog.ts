@@ -7,7 +7,8 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
 import { revalidatePath } from "next/cache";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { stripAnswerKey } from "@/lib/academy-grading";
+import { stripAnswerKey, stripLockedContent } from "@/lib/academy-grading";
+import { checkCourseAccess } from "@/lib/academy-plan";
 import { isAdmin } from "@/lib/admin-permissions";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
@@ -50,8 +51,20 @@ async function _getCoursesAction(
         const sessionResult = await requireSession();
         const viewerIsAdmin = isAdmin(sessionResult.session?.user?.roles);
 
+        // Same two rules as the single-course read below: the answer key, and
+        // the paid material of a tier this viewer's plan does not open.
+        const viewerPlan = (sessionResult.session?.user as any)
+            ?.serviceRegistrations?.academy?.plan;
+
         const raw = serializeDocs<Course>(snapshot.docs);
-        const courses = viewerIsAdmin ? raw : raw.map((c) => stripAnswerKey(c));
+        const courses = viewerIsAdmin
+            ? raw
+            : raw.map((c) => {
+                const visible = checkCourseAccess(viewerPlan, (c as any)?.tier)
+                    ? c
+                    : stripLockedContent(c);
+                return stripAnswerKey(visible);
+            });
 
         const newLastDocId = snapshot.docs.length === limit ? snapshot.docs[snapshot.docs.length - 1].id : null;
         const hasMore = snapshot.docs.length === limit;
@@ -114,10 +127,25 @@ async function _getCourseByIdAction(courseId: string): Promise<ActionResponse<an
         const sessionResult = await requireSession();
         const viewerIsAdmin = isAdmin(sessionResult.session?.user?.roles);
 
+        // And the paid material does not go to a plan that does not open it.
+        //
+        // The tier gate is consulted by the enrolment action, by the course
+        // page's redirect and by the catalogue's padlock — but not here, and
+        // this is where the content is served. The redirect and the padlock were
+        // drawn after the browser already held the videos they were hiding, and
+        // a caller who loaded neither page could ask for them directly.
+        const viewerPlan = (sessionResult.session?.user as any)
+            ?.serviceRegistrations?.academy?.plan;
+        const opensThisTier = checkCourseAccess(viewerPlan, (formattedCourse as any)?.tier);
+
+        const visible = viewerIsAdmin || opensThisTier
+            ? formattedCourse
+            : stripLockedContent(formattedCourse);
+
         return {
             error: null,
             success: true as const,
-            data: viewerIsAdmin ? formattedCourse : stripAnswerKey(formattedCourse),
+            data: viewerIsAdmin ? visible : stripAnswerKey(visible),
         };
     } catch (error) {
         logger.error("[getCourseByIdAction] Failed to fetch course:", {
