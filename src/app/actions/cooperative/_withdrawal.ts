@@ -11,7 +11,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from '@/lib/types/firestore';
 import { FieldValue } from "@/lib/firestore-compat";
 import { createAdminAuditLog } from '@/lib/audit-log';
-import { debitJsonbBalance } from "@/lib/wallet-ledger";
+import { debitJsonbBalance, compensateJsonbDebit } from "@/lib/wallet-ledger";
 import { revalidatePath } from 'next/cache';
 
 interface WithdrawalRequestData { amount: number;
@@ -78,6 +78,19 @@ async function _submitWithdrawalRequestAction(
                 : 'You are not a member of any cooperative');
         }
 
+        // From here the member's savings are ALREADY DOWN.
+        //
+        // The debit above is one round trip; everything after it is several
+        // more, and the adapter flushes them one at a time. A timeout between
+        // them used to leave the savings reduced with nothing to show for it: no
+        // locked balance, no pending request, nothing for an admin to approve or
+        // reject, and the member told only "Failed to submit withdrawal
+        // request". The money was simply gone.
+        //
+        // `locked` tracks how far this got, so the compensation reverses exactly
+        // what happened and not more.
+        let locked = false;
+        try {
         // Move the reserved funds into lockedBalance. The admin approve/reject
         // paths both decrement it, so a request that never incremented it drives
         // the field negative.
@@ -86,6 +99,7 @@ async function _submitWithdrawalRequestAction(
             updatedAt: FieldValue.serverTimestamp(),
             _version: FieldValue.increment(1),
         });
+        locked = true;
 
         const withdrawalRef = db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).doc();
         await withdrawalRef.set({ userId,
@@ -102,6 +116,18 @@ async function _submitWithdrawalRequestAction(
             requestedAt: FieldValue.serverTimestamp(),
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp() });
+
+        } catch (workError) {
+            await compensateJsonbDebit({
+                table: "cooperative_members",
+                id: userId,
+                field: "savingsBalance",
+                amount: validatedData.amount,
+                reason: "withdrawal request could not be recorded after the debit",
+                ...(locked ? { also: { lockedBalance: -validatedData.amount } } : {}),
+            });
+            throw workError;
+        }
 
         await createAdminAuditLog({
             action: 'payment_initiated',

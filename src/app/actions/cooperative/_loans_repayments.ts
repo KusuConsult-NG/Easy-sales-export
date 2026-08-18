@@ -535,9 +535,22 @@ export async function repayLoanFromSavingsAction(data: {
         });
 
         if (!recorded.success) {
-            // Savings were debited and the instalment was not credited. Nothing
-            // here can put the money back, so it is logged at error with the
-            // reference an admin needs to settle it by hand.
+            // Savings were debited and the instalment was not credited.
+            //
+            // DELIBERATELY NOT COMPENSATED, unlike the six sibling debit sites.
+            //
+            // compensateJsonbDebit exists now and puts a debited amount back
+            // when the work after it fails. It is correct at every site where
+            // that work is purely local writes. This is the one site where it is
+            // not: submitRepaymentAction claims `reference` through
+            // claimPaymentOnce, so a failure here may have come AFTER the claim
+            // landed. Crediting the savings back would then leave the member
+            // with their money and a claimed repayment reference that
+            // reconciliation can later treat as paid — the same double-credit
+            // hazard that made the WAVE payout rollback a defect.
+            //
+            // So this stays a manual settlement, and the log carries everything
+            // needed for one.
             logger.error("[repayLoanFromSavingsAction] SAVINGS DEBITED BUT INSTALMENT NOT CREDITED", {
                 reference,
                 loanId: data.loanId,

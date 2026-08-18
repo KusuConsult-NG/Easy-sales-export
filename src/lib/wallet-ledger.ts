@@ -431,6 +431,97 @@ export async function debitJsonbBalance(params: {
     };
 }
 
+/**
+ * Puts a debited amount back when the work that followed it failed.
+ *
+ * THE WINDOW THIS EXISTS FOR
+ * --------------------------
+ * debitJsonbBalance takes the money under a row lock, and that part is sound.
+ * What follows it is not one operation but several separate round trips — move
+ * the amount into lockedBalance, write the request row, write the audit entry —
+ * and the Firestore-compat adapter flushes them one at a time. The comment in
+ * cooperative/_coop_money.ts says so outright: "the adapter flushes them one by
+ * one regardless".
+ *
+ * So a timeout or a dropped connection after the debit leaves the member's
+ * savings reduced with nothing to show for it: no locked balance, no pending
+ * request, nothing for an admin to approve or reject, and no error the member
+ * can act on beyond "Failed to submit withdrawal request". The money is simply
+ * gone from their balance.
+ *
+ * Every one of the nine debit sites had a bare `catch` that logged and
+ * returned. None put the money back.
+ *
+ * WHY A CREDIT AND NOT A TRANSACTION
+ * ----------------------------------
+ * The writes span the RPC and the adapter, which do not share a transaction, so
+ * there is nothing to roll back. A compensating credit is what is available.
+ *
+ * It is safe here in a way it was NOT for the WAVE payout: there the rollback
+ * followed a completed external transfer, and undoing it locally allowed a
+ * second payout. Everything between a debit and its record is internal database
+ * writes with no external side effect, so putting the money back is exactly
+ * correct.
+ *
+ * WHEN THE COMPENSATION ITSELF FAILS
+ * ----------------------------------
+ * That is the irreducible case, and it is logged at error level with every
+ * identifier needed to settle it by hand. It does not throw: the caller is
+ * already handling a failure, and masking that with a second one helps nobody.
+ * forensics.ts reconciles maintained balances against the ledger and will
+ * surface the discrepancy.
+ */
+export async function compensateJsonbDebit(params: {
+    table: string;
+    id: string;
+    field: string;
+    amount: number;
+    /** What this was reversing, for the log. */
+    reason: string;
+    /**
+     * Other counters to move in the same write — typically
+     * `{ lockedBalance: -amount }` when the debit had already been reserved.
+     * Omit any the failing work never got as far as changing.
+     */
+    also?: Record<string, number>;
+    collection?: string;
+}): Promise<void> {
+    const { table, id, field, amount, reason, also, collection } = params;
+
+    try {
+        // Through the compat adapter, so the credit uses the very mechanism the
+        // reject path already uses to restore a balance —
+        // `FieldValue.increment`, which migration 010 applies in SQL via
+        // apply_increments. Writing a second, parallel way to move the same
+        // number is how two paths come to disagree.
+        //
+        // Imported lazily: wallet-ledger is imported by much of the money layer,
+        // and this keeps the dependency off the module-initialisation path.
+        const { supabaseDb } = await import("./supabase-db");
+        const { FieldValue } = await import("./firestore-compat");
+
+        const patch: Record<string, unknown> = {
+            [field]: FieldValue.increment(amount),
+            updatedAt: FieldValue.serverTimestamp(),
+        };
+        for (const [otherField, delta] of Object.entries(also ?? {})) {
+            patch[otherField] = FieldValue.increment(delta);
+        }
+
+        await supabaseDb.collection(collection ?? table).doc(id).update(patch);
+
+        logger.warn("[wallet-ledger] debit compensated", { table, id, field, amount, reason });
+    } catch (err) {
+        // The one case that cannot be resolved in code. Everything needed to
+        // settle it by hand is here.
+        logger.error(
+            "[wallet-ledger] COMPENSATION FAILED — balance debited and not restored. "
+            + "Needs manual reconciliation.",
+            { table, id, field, amount, reason, also, error: err instanceof Error ? err.message : String(err) }
+        );
+    }
+}
+
 export interface BoundedCounterResult {
     ok: boolean;
     /** The counter after the call, where one counter was changed. */

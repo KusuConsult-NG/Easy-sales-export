@@ -8,6 +8,7 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { debitJsonbBalance } from "@/lib/wallet-ledger";
+import { compensateJsonbDebit } from "@/lib/wallet-ledger";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { isAdmin } from "@/lib/role-utils";
 import type { MemberEarnings } from "@/lib/types/wave-actions";
@@ -331,6 +332,12 @@ async function _withdrawEarningsAction(
             };
         }
 
+        // From here the earnings balance is ALREADY DOWN. Everything below is
+        // local writes with no external effect and nothing claimed, so a failure
+        // between them left the member's WAVE earnings reduced with no
+        // withdrawal record, no ledger row and no pending flag — and the catch
+        // below only logged it.
+        try {
         await db.runTransaction(async (transaction) => {
             // Create WAVE Withdrawal Record
             transaction.set(withdrawalRef, {
@@ -369,6 +376,17 @@ async function _withdrawEarningsAction(
                 updatedAt: FieldValue.serverTimestamp()
             });
         });
+
+        } catch (workError) {
+            await compensateJsonbDebit({
+                table: "users",
+                id: userId,
+                field: "serviceRegistrations.wave.waveEarningsBalance",
+                amount,
+                reason: "WAVE withdrawal request could not be recorded after the debit",
+            });
+            throw workError;
+        }
 
         // AUDIT LOG
         await createAdminAuditLog({

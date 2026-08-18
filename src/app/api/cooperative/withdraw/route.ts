@@ -7,6 +7,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
 import { debitJsonbBalanceWithFloor } from "@/lib/wallet-ledger";
+import { compensateJsonbDebit } from "@/lib/wallet-ledger";
 import { COOPERATIVE_MINIMUM_BALANCE } from "@/lib/cooperative-limits";
 import { rateLimit, createRateLimitResponse } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
@@ -171,14 +172,24 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ success: false, message }, { status: 400 });
         }
 
+        // From here the balance is ALREADY DOWN.
+        //
+        // The debit is one round trip and the writes below are separate ones,
+        // flushed by the adapter one at a time. A timeout between them left the
+        // member's savings reduced with nothing recorded — no plan, no request,
+        // nothing for anyone to act on — and the catch below only logged it.
+        let locked = false;
         const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
+        // Declared outside the try so the response below can still name it.
+        const withdrawalRef = db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).doc();
+        try {
         await memberRef.update({
             lockedBalance: FieldValue.increment(amount),
             updatedAt: FieldValue.serverTimestamp(),
         });
+        locked = true;
 
         // Create withdrawal request (Admin SDK with server timestamps)
-        const withdrawalRef = db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).doc();
         const withdrawalData = {
             userId,
             userEmail: session.user.email,
@@ -200,6 +211,17 @@ export async function POST(request: NextRequest) {
         };
 
         await withdrawalRef.set(withdrawalData);
+        } catch (workError) {
+            await compensateJsonbDebit({
+                table: "cooperative_members",
+                id: userId,
+                field: "savingsBalance",
+                amount,
+                reason: "withdrawal request could not be recorded after the debit",
+                ...(locked ? { also: { lockedBalance: -amount } } : {}),
+            });
+            throw workError;
+        }
 
         return NextResponse.json({
             success: true,

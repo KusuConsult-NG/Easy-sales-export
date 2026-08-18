@@ -12,7 +12,7 @@ import { requireSession } from "@/lib/session-guard";
 import { logAuditAction } from "@/app/actions/audit";
 import { invalidateCooperativeCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { debitJsonbBalance, claimSingleOpenLoanApplication } from "@/lib/wallet-ledger";
+import { debitJsonbBalance, claimSingleOpenLoanApplication, compensateJsonbDebit } from "@/lib/wallet-ledger";
 import { COOPERATIVE_CONFIG } from "@/lib/constants";
 import { contributionSchema, loanApplicationSchema, fixedSavingsSchema, type MembershipRegistrationState, type LoanApplicationState, type FixedSavingsState, type WithdrawalActionState } from "@/lib/types/cooperative";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
@@ -346,10 +346,21 @@ async function _submitWithdrawalAction(
         // Ordering: after the debit, never before. The debit is the step that
         // can legitimately fail on insufficient funds; incrementing first would
         // lock funds that were never taken.
+        //
+        // And from here the savings are ALREADY DOWN. Everything below is
+        // several separate round trips which, as the comment further down says,
+        // "the adapter flushes one by one" — so a timeout between them left the
+        // member's savings reduced with no locked balance and no request row,
+        // and the bare catch at the end of this function simply logged it. The
+        // money was gone. `locked` records how far this got so the compensation
+        // reverses exactly that much.
+        let locked = false;
+        try {
         await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).update({
             lockedBalance: FieldValue.increment(amount),
             updatedAt: FieldValue.serverTimestamp(),
         });
+        locked = true;
 
         // The funds are already reserved by the debit above, which is the only
         // thing here that took a lock. Wrapping the two writes below in
@@ -373,6 +384,18 @@ async function _submitWithdrawalAction(
             "withdrawal",
             { amount, reason }
         );
+
+        } catch (workError) {
+            await compensateJsonbDebit({
+                table: "cooperative_members",
+                id: userId,
+                field: "savingsBalance",
+                amount,
+                reason: "withdrawal request could not be recorded after the debit",
+                ...(locked ? { also: { lockedBalance: -amount } } : {}),
+            });
+            throw workError;
+        }
 
         revalidatePath("/cooperatives/withdrawals");
         return { error: null,  success: true as const,
@@ -673,6 +696,9 @@ async function _createFixedSavingsAction(
             };
         }
 
+        // From here the balance is ALREADY DOWN. A failure below left the
+        // member's savings reduced with no plan recorded.
+        try {
         // Create Fixed Savings Record. This is a single write; the
         // runTransaction wrapper around it bought nothing at all.
         //
@@ -741,6 +767,16 @@ async function _createFixedSavingsAction(
             description: `Locked into a ${durationMonths}-month fixed savings plan`,
             status: "completed",
             date: FieldValue.serverTimestamp() });
+        } catch (workError) {
+            await compensateJsonbDebit({
+                table: "cooperative_members",
+                id: membershipId,
+                field: "savingsBalance",
+                amount,
+                reason: "fixed savings plan could not be recorded after the debit",
+            });
+            throw workError;
+        }
 
         return { error: null, success: true as const, data: { message: "Fixed savings plan created" }  };
     } catch (error) { logger.error("Fixed savings creation failed:", {
