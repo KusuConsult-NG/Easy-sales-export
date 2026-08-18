@@ -37,7 +37,8 @@ export async function GET(request: NextRequest) {
     try {
         revalidatePath(path);
         revalidatePath('/academy');
-        revalidatePath('/dashboard/academy');
+        // /dashboard/academy has no route; the academy dashboard is here.
+        revalidatePath('/academy/dashboard');
         logger.info(`[Revalidate] Cache revalidated for path: ${path}`);
         return NextResponse.json({ revalidated: true, now: Date.now(), path });
     } catch (err) {

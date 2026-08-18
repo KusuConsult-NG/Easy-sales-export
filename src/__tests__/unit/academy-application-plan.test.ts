@@ -206,8 +206,11 @@ describe('the plan is an access key, so it is normalised before storage', () => 
 
 describe('course access reads the shared vocabulary', () => {
     it('checkCourseAccess no longer compares plan strings literally', () => {
-        const src = code(ENROLMENT);
-        const fn = src.slice(src.indexOf('function checkCourseAccess'));
+        // It has since moved into lib/academy-plan.ts, so that the two
+        // client-side replicas could import it instead of copying it — see
+        // academy-course-access.test.ts. The rule being asserted is unchanged.
+        const src = code('src/lib/academy-plan.ts');
+        const fn = src.slice(src.indexOf('export function checkCourseAccess'));
         const body = fn.slice(0, fn.indexOf('\n}\n'));
 
         expect(body).toContain('normaliseAcademyPlan(userPlan)');

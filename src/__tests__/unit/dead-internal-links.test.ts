@@ -233,15 +233,11 @@ describe('the marketplace and escrow surfaces', () => {
  * here, which is the review conversation this property needs.
  */
 const KNOWN_DEAD: Record<string, number> = {
-    '/dashboard/academy': 3,
     '/dashboard/cooperatives': 3,
     '/dashboard/export': 3,
-    '/academy/courses/[dyn]': 2,
     '/loans/[dyn]': 2,
     '/vendor/products/new': 2,
-    '/academy/courses/[dyn]/quiz/results?attemptId=[dyn]': 1,
     '/admin/cooperative/members': 1,
-    '/courses/[dyn]/certificate': 1,
     '/admin/export/orders/[dyn]': 1,
     '/admin/wallets/withdrawals': 1,
     '/admin/users/[dyn]': 1,
@@ -250,6 +246,32 @@ const KNOWN_DEAD: Record<string, number> = {
     '/vendor/orders/[dyn]': 1,
     '/vendor/products/[dyn]': 1,
 };
+
+/**
+ * The academy entries are gone, fixed in the academy pass. They were:
+ *
+ *   /dashboard/academy                    3x  every one a revalidatePath. The
+ *                                             academy dashboard is at
+ *                                             /academy/dashboard, and
+ *                                             revalidatePath on a path with no
+ *                                             route is a silent no-op — so
+ *                                             enrolling invalidated nothing and
+ *                                             a learner could keep seeing a
+ *                                             cached dashboard without their
+ *                                             new course on it.
+ *   /academy/courses/[dyn]                2x  also revalidatePath. The course
+ *                                             page is /academy/{id}; the only
+ *                                             route under /academy/courses is
+ *                                             .../quiz.
+ *   /academy/courses/[dyn]/quiz/results   1x  a router.push after a graded quiz
+ *                                             submission, straight to a 404 —
+ *                                             taking the learner's score with
+ *                                             it. The response already carries
+ *                                             the score and the verdict.
+ *   /courses/[dyn]/certificate            1x  the certificate notification's
+ *                                             link. There is no /courses route
+ *                                             segment anywhere in the app.
+ */
 
 describe('the rest of the tree', () => {
     const dead = scanForDeadLinks([join(SRC, 'app'), join(SRC, 'components'), join(SRC, 'lib')], SRC, APP);
@@ -277,7 +299,11 @@ describe('the rest of the tree', () => {
 
     it('still finds the ones already known, so the gate is not vacuous', () => {
         // A scanner returning [] passes every assertion above and proves nothing.
-        expect(dead.length).toBeGreaterThanOrEqual(20);
+        //
+        // Was 20 when twenty-six links were dead. Eight of those were academy's
+        // and are fixed; the floor tracks what is genuinely left rather than
+        // being a number nobody revisits.
+        expect(dead.length).toBeGreaterThanOrEqual(18);
     });
 
     it('and the quiz-save redirect with literal spaces is gone', () => {

@@ -10,7 +10,7 @@ import { revalidatePath } from "next/cache";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import type { Course, EnrolledCourseWithDetails, UserProgress } from "@/lib/types/academy-actions";
-import { normaliseAcademyPlan, type AcademyPlan } from "@/lib/academy-plan";
+import { normaliseAcademyPlan, checkCourseAccess } from "@/lib/academy-plan";
 
 /**
  * Check Academy application status for current user
@@ -115,44 +115,6 @@ async function _checkAcademyStatusAction(): Promise<ActionResponse<string | null
 export const checkAcademyStatusAction = withFlexibleSafeAction("checkAcademyStatusAction", _checkAcademyStatusAction);
 
 
-/**
- * Which course tiers a learner's plan opens.
- *
- * The plan strings were compared literally here — `userPlan === "elite"` and so
- * on — which made this a private copy of the vocabulary that
- * lib/academy-plan.ts now owns, and the copy that decides what content someone
- * actually gets. It default-denied anything it did not recognise, so any
- * spelling the rest of the system tolerated ("Elite", "elite " with a trailing
- * space, the "registration" the admin payment form could write) silently
- * revoked every paid course, with the refusal blaming the learner's "current
- * package".
- *
- * normaliseAcademyPlan maps the spellings — including the legacy "advanced" —
- * onto the three real plans, and returns null for anything else. Null still
- * default-denies: registration itself is free, so "registered, no tier bought"
- * genuinely has no access to paid content, and that is the same answer this
- * function gave before.
- */
-function checkCourseAccess(userPlan: string, courseTier: string): boolean {
-    // Treat undefined or 'free' tier as open to all
-    if (!courseTier || courseTier === "free") return true;
-
-    const plan = normaliseAcademyPlan(userPlan);
-    if (!plan) return false;
-
-    const tier = String(courseTier).trim().toLowerCase();
-
-    // Elite opens everything; standard opens foundation and standard;
-    // foundation opens foundation.
-    const opens: Record<AcademyPlan, readonly string[]> = {
-        elite: ["foundation", "standard", "elite"],
-        standard: ["foundation", "standard"],
-        foundation: ["foundation"],
-    };
-
-    return opens[plan].includes(tier);
-}
-
 
 /**
  * Enroll in course (Gated by Academy Tier)
@@ -247,8 +209,15 @@ async function _enrollInCourseAction(
         });
 
         revalidatePath("/academy");
-        revalidatePath("/dashboard/academy");
-        revalidatePath(`/academy/courses/${courseId}`);
+        // /dashboard/academy is not a route — the academy dashboard is at
+        // /academy/dashboard. revalidatePath on a path with no route behind it
+        // is a silent no-op, so this invalidated nothing and a learner who had
+        // just enrolled could keep seeing the cached dashboard without the new
+        // course on it.
+        revalidatePath("/academy/dashboard");
+        // Likewise /academy/courses/{id} — the course page is /academy/{id}.
+        // The only route under /academy/courses is .../quiz.
+        revalidatePath(`/academy/${courseId}`);
 
         return { success: true, error: null, data: null };
     } catch (error) {

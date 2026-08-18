@@ -100,6 +100,48 @@ export function academyPlanFee(plan: unknown): number {
     return ACADEMY_CONFIG.plans[normalised].fee;
 }
 
+/**
+ * Which course tiers a plan opens — the one copy.
+ *
+ * There were THREE, and the two client-side ones each carried the comment
+ * "Helper client-side check replicated from checkCourseAccess inside
+ * _actions.ts". _actions.ts no longer exists; the server copy had moved to
+ * _ac_enrollment.ts, and the replicas stayed where they were.
+ *
+ *   _ac_enrollment.ts                 the decision. Refuses the enrolment.
+ *   academy/[courseId]/page.tsx       decides whether to redirect the learner.
+ *   academy/(learner)/courses/page.tsx  decides which cards show a lock.
+ *
+ * Copies of an access rule drift, and this one drifted the moment the server
+ * copy was normalised: the server began accepting a plan with stray whitespace
+ * or capitals that the two replicas still rejected, so the catalogue would have
+ * shown a lock on a course the enrolment endpoint would happily grant.
+ *
+ * Living here rather than in _ac_enrollment.ts because that file is "use
+ * server" — every export of it must be an async server action, so a client
+ * component cannot import a plain predicate from it. That constraint is why the
+ * copies existed.
+ */
+export const ACADEMY_TIERS_OPENED: Readonly<Record<AcademyPlan, readonly string[]>> = {
+    elite: ["foundation", "standard", "elite"],
+    standard: ["foundation", "standard"],
+    foundation: ["foundation"],
+};
+
+export function checkCourseAccess(userPlan: unknown, courseTier: unknown): boolean {
+    const tier = String(courseTier ?? "").trim().toLowerCase();
+
+    // An absent or free tier is open to everybody, signed in or not.
+    if (!tier || tier === "free") return true;
+
+    const plan = normaliseAcademyPlan(userPlan);
+    // Default deny. "Registered, no tier bought" is a real state — registration
+    // itself is free — and it grants no paid content.
+    if (!plan) return false;
+
+    return ACADEMY_TIERS_OPENED[plan].includes(tier);
+}
+
 /** Naira of rounding slack, matching what the webhook already allowed. */
 export const ACADEMY_AMOUNT_TOLERANCE = 1;
 

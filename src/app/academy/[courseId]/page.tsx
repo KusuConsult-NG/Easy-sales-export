@@ -16,25 +16,9 @@ import {
     type UserProgress
 } from "@/app/actions/academy";
 import { useToast } from "@/contexts/ToastContext";
+import { checkCourseAccess } from "@/lib/academy-plan";
 
-// Helper client-side check replicated from checkCourseAccess inside _actions.ts
-function checkCourseAccess(userPlan: string, courseTier: string): boolean {
-    const normalizedTier = (courseTier || "free").toLowerCase();
-    const normalizedPlan = (userPlan || "free").toLowerCase();
 
-    if (normalizedTier === "free") return true;
-    if (normalizedPlan === "elite") return true;
-    
-    if (normalizedPlan === "standard" || normalizedPlan === "advanced") {
-        return normalizedTier === "foundation" || normalizedTier === "standard";
-    }
-    
-    if (normalizedPlan === "foundation") {
-        return normalizedTier === "foundation";
-    }
-    
-    return false;
-}
 
 interface CourseDetailPageProps {
     params: Promise<{ courseId: string }>;
@@ -112,7 +96,11 @@ export default function CourseDetailPage(props: CourseDetailPageProps) {
         fetchCourse();
 
         return () => { mounted = false; };
-    }, [courseId, session, status]);
+        // router and showToast were missing. Both are stable — useRouter's
+        // instance is, and showToast is useCallback-memoised in ToastContext —
+        // so naming them changes no behaviour and stops the effect closing over
+        // stale copies.
+    }, [courseId, session, status, router, showToast]);
 
 
     // Function to manually refresh data

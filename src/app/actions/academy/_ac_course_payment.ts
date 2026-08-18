@@ -208,8 +208,15 @@ async function _verifyCoursePaymentAction(reference: string): Promise<ActionResp
         });
 
         revalidatePath("/academy");
-        revalidatePath("/dashboard/academy");
-        revalidatePath(`/academy/courses/${courseId}`);
+        // /dashboard/academy is not a route — the academy dashboard is at
+        // /academy/dashboard. revalidatePath on a path with no route behind it
+        // is a silent no-op, so this invalidated nothing and a learner who had
+        // just enrolled could keep seeing the cached dashboard without the new
+        // course on it.
+        revalidatePath("/academy/dashboard");
+        // Likewise /academy/courses/{id} — the course page is /academy/{id}.
+        // The only route under /academy/courses is .../quiz.
+        revalidatePath(`/academy/${courseId}`);
 
         return { success: true, error: null, data: null };
     } catch (error) {
