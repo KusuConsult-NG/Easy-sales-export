@@ -12,9 +12,19 @@ import { serializeValue, toMillis } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { AcademyApplicationInputSchema, AcademyApplicationInput } from "@/lib/validations/academy";
 import { normaliseAcademyPlan } from "@/lib/academy-plan";
+import { normalisePhone } from "@/lib/phone";
 import type { AcademyApplicationData } from "@/lib/types/academy-actions";
 
 const ACADEMY_REGISTRATION_FEE = 0;
+
+/**
+ * How many rows sharing one identity the dedup guard examines.
+ *
+ * The check used `.limit(1)`, so whichever row the database returned first
+ * decided the answer. With one of the caller's own rows and one belonging to
+ * somebody else, the outcome depended on row order.
+ */
+const DUPLICATE_SCAN_LIMIT = 20;
 
  // Registration is now free, users pay only for tiers
 
@@ -33,7 +43,9 @@ async function _submitAcademyApplicationAction(
         }
 
         const phone = applicationData.personalInfo.phone;
-        const email = applicationData.personalInfo.email;
+        // Lowercased and trimmed, because that is the form every other reader
+        // looks for. See the dedup guard below.
+        const normalisedEmail = String(applicationData.personalInfo.email ?? "").trim().toLowerCase() || null;
         const userRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
 
         let finalApplicationId: string = "";
@@ -82,21 +94,83 @@ async function _submitAcademyApplicationAction(
             );
 
             // 🔒 DEDUP GUARD: Collection-level phone and email check within transaction
+            //
+            // WHAT WAS WRONG
+            // --------------
+            // Both halves refused on ANY match, including the caller's own row.
+            //
+            // _rejectAcademyApplicationAction sets the application to "rejected"
+            // and emails the applicant a list headed "What You Can Do" whose last
+            // item is "Re-apply after making necessary improvements". Neither of
+            // the blocks above stops a rejected applicant — line 52 only blocks
+            // pending/under_review, line 55 only blocks approved — so they reach
+            // here, their own rejected row matches on phone, and they are told
+            // "An Academy application with this phone number already exists."
+            // The platform invited them to reapply and then made it impossible,
+            // permanently, with a message that reads like someone else took
+            // their number.
+            //
+            // The rule below is the one WAVE already uses
+            // (_wv_applications.ts): another account's application is always a
+            // conflict, and the caller's own is a conflict only while it is
+            // still live. `rejected` and `revision_required` are finished, so
+            // they do not block a fresh application.
+            //
+            // AND THE MATCHES WERE LITERAL
+            // ----------------------------
+            // The form stores what the applicant typed. Three separate lookups —
+            // checkAcademyStatusAction, checkAcademyPaymentStatusAction and
+            // module-access-check Layer 2.7, which GRANTS academy access — query
+            // `personalInfo.email == userData.email.toLowerCase()`, and user
+            // emails are lowercased at registration. So an applicant who typed a
+            // capital letter was invisible to all three, and could also submit a
+            // second application by varying the case. The email is normalised
+            // before it is stored and before it is queried; the phone is matched
+            // in both the typed and the E.164 form, since rows already exist in
+            // each.
             const collectionsContext = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS);
-            if (phone) {
-                const phoneQuery = collectionsContext.where("personalInfo.phone", "==", phone).limit(1);
-                const phoneSnap = await t.get(phoneQuery);
-                if (!phoneSnap.empty) {
-                    throw new Error("An Academy application with this phone number already exists.");
+
+            /**
+             * Refuses a live application, whoever owns it — and refuses another
+             * account's application whatever its status.
+             */
+            const conflict = (snap: any, field: string): string | null => {
+                if (!snap || snap.empty) return null;
+
+                // A foreign owner wins whichever order the rows arrive in, so the
+                // whole set is scanned before any of the caller's own rows can
+                // clear the check.
+                for (const doc of snap.docs) {
+                    if (doc.data()?.userId && doc.data().userId !== session.user.id) {
+                        return `An Academy application with this ${field} already exists under a different account.`;
+                    }
                 }
+
+                for (const doc of snap.docs) {
+                    const status = doc.data()?.status;
+                    if (status !== "rejected" && status !== "revision_required") {
+                        return `Your Academy application using this ${field} is currently ${status || "open"}.`;
+                    }
+                }
+
+                return null;
+            };
+
+            if (phone) {
+                const phoneForms = [...new Set([phone, normalisePhone(phone)].filter(Boolean))] as string[];
+                const phoneSnap = await t.get(
+                    collectionsContext.where("personalInfo.phone", "in", phoneForms).limit(DUPLICATE_SCAN_LIMIT)
+                );
+                const message = conflict(phoneSnap, "phone number");
+                if (message) throw new Error(message);
             }
 
-            if (email) {
-                const emailQuery = collectionsContext.where("personalInfo.email", "==", email).limit(1);
-                const emailSnap = await t.get(emailQuery);
-                if (!emailSnap.empty) {
-                    throw new Error("An Academy application with this email already exists.");
-                }
+            if (normalisedEmail) {
+                const emailSnap = await t.get(
+                    collectionsContext.where("personalInfo.email", "==", normalisedEmail).limit(DUPLICATE_SCAN_LIMIT)
+                );
+                const message = conflict(emailSnap, "email address");
+                if (message) throw new Error(message);
             }
 
             // Generate unique application ID
@@ -109,6 +183,13 @@ async function _submitAcademyApplicationAction(
             // Save to Firestore
             t.set(appRef, {
                 ...applicationData,
+                // Overwrites the typed casing from the spread above. The three
+                // recovery lookups all query the lowercased form, and one of
+                // them grants academy module access.
+                personalInfo: {
+                    ...applicationData.personalInfo,
+                    email: normalisedEmail,
+                },
                 userId: session.user.id,
                 applicationId,
                 status: isPaid ? "approved" : "pending",
