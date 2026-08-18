@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/session-guard";
+import { recordAdminAction } from "@/lib/audit-log";
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
@@ -106,6 +107,17 @@ export async function PATCH(request: NextRequest) {
                 logger.error('[Mark Withdrawal Completed Route Cache] Cache clear error:', cacheError);
             }
         }
+
+        // The moment the money is recorded as gone. A logger.info line is not a
+        // record an owner can query, filter or export — audit_logs is, and this
+        // path wrote nothing to it.
+        await recordAdminAction({
+            action: "withdrawal_made",
+            userId: session.user.id,
+            targetId: withdrawalId,
+            targetType: "cooperative_withdrawal",
+            metadata: { memberId: userId ?? null, transactionReference: transactionReference ?? null },
+        });
 
         logger.info(`Cooperative withdrawal ${withdrawalId} marked completed by admin ${session.user.id}`);
         return NextResponse.json({ success: true, message: "Withdrawal marked as completed" });

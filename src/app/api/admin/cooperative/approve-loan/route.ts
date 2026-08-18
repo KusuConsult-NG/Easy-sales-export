@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
+import { recordAdminAction } from "@/lib/audit-log";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
@@ -192,6 +193,26 @@ export async function POST(request: NextRequest) {
                 logger.error('[Approve Loan Route Cache] Cache clear error:', cacheError);
             }
         }
+
+        // Who approved this loan, and for how much.
+        //
+        // The audit vocabulary has named 'loan_approved' all along and nothing
+        // wrote it here — so the one question an owner asks after a loan goes
+        // wrong ("who approved it?") had no answer for approvals made through
+        // this route. recordAdminAction rather than createAdminAuditLog: the
+        // money has already moved by this line, and a failure to write the
+        // record must not report the approval as failed.
+        await recordAdminAction({
+            action: "loan_approved",
+            userId: session.user.id,
+            targetId: applicationId,
+            targetType: "loan_application",
+            metadata: {
+                borrowerId: appData.userId,
+                amount: appData.amount,
+                requiresDualControl,
+            },
+        });
 
         return NextResponse.json({
             success: true,

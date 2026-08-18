@@ -437,6 +437,37 @@ export function getSecurityContextFromHeaders(headers?: Headers): {
     };
 }
 
+/**
+ * Record an admin action WITHOUT ever failing the operation it records.
+ *
+ * createAuditLog rethrows. Every existing call site awaits it inside the same
+ * try block as the work itself, so a logging failure — a transient database
+ * error, a full disk — aborts an operation that has already happened. On a
+ * money path that is the worst possible outcome: the withdrawal was paid, the
+ * loan disbursed, and the caller is told it failed.
+ *
+ * An audit row is a record OF the operation, not a part of it. When one cannot
+ * be written the operation still succeeded and the right response is a loud log
+ * and a completed request — not a rollback of something already irreversible.
+ *
+ * Use this at new call sites. The 118 existing createAdminAuditLog calls are
+ * left as they are: changing them is a behaviour change to working paths, and
+ * is separate from adding the rows that were missing entirely.
+ */
+export async function recordAdminAction(
+    entry: Omit<AuditLogEntry, 'timestamp' | 'id' | 'severity'>,
+): Promise<void> {
+    try {
+        await createAuditLog(entry);
+    } catch (error) {
+        logger.error(
+            `[audit] Could not record ${entry.action} on ${entry.targetType ?? "?"}:${entry.targetId ?? "?"} `
+            + `by ${entry.userId} — THE OPERATION ITSELF SUCCEEDED and is not recorded.`,
+            error instanceof Error ? error : undefined,
+        );
+    }
+}
+
 // Backward compatibility exports for audit-log-admin.ts / admin-audit-log.ts
 export const createAdminAuditLog = createAuditLog;
 export { logFinancialAction as logAdminFinancialAction };

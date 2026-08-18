@@ -63,6 +63,10 @@ jest.mock('@/lib/audit-log', () => ({
     createAdminAuditLog: jest.fn(async () => ({})),
     logAdminAction: jest.fn(async () => ({})),
     logAdminFinancialAction: jest.fn(async () => ({})),
+    // The money paths record who approved or rejected. Mocking the module
+    // without this export made the call a TypeError, which the action's own
+    // catch turned into a failed response — the operation looked broken.
+    recordAdminAction: jest.fn(async () => undefined),
 }));
 jest.mock('@/app/actions/notifications', () => ({
     createNotificationAction: jest.fn(async () => ({})),

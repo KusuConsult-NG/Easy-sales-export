@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
+import { recordAdminAction } from "@/lib/audit-log";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { LOAN_REJECTABLE_STATUSES } from "@/lib/loan-approval-policy";
@@ -108,6 +109,14 @@ export async function POST(request: NextRequest) {
                 logger.error('[Reject Loan Route Cache] Cache clear error:', cacheError);
             }
         }
+
+        await recordAdminAction({
+            action: "loan_rejected",
+            userId: session.user.id,
+            targetId: applicationId,
+            targetType: "loan_application",
+            metadata: { borrowerId: userId ?? null, reason },
+        });
 
         return NextResponse.json({
             success: true,

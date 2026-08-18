@@ -4,6 +4,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
+import { recordAdminAction } from "@/lib/audit-log";
 import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { createAdminAuditLog, logAdminAction } from "@/lib/audit-log";
@@ -302,6 +303,16 @@ async function _verifyLandListingAction(
         revalidateTag(`property-${listingId}`, "page");
         await invalidateAdminGlobalStats();
 
+        // A verified listing is what a buyer trusts. Who verified it, and when,
+        // was recorded nowhere — 'land_verified' has been in the audit
+        // vocabulary all along with nothing writing it.
+        await recordAdminAction({
+            action: "land_verified",
+            userId: session.user.id,
+            targetId: listingId,
+            targetType: "land_listing",
+        });
+
         return { success: true, error: null, data: null };
     } catch (error: any) { 
         logger.error("Land verification error:", error);
@@ -379,6 +390,14 @@ async function _rejectLandListingAction(
         revalidateTag("land-listings", "page");
         revalidateTag(`property-${listingId}`, "page");
         await invalidateAdminGlobalStats();
+
+        await recordAdminAction({
+            action: "land_rejected",
+            userId: session.user.id,
+            targetId: listingId,
+            targetType: "land_listing",
+            metadata: { reason: reason ?? null },
+        });
 
         return { success: true, error: null, data: null };
     } catch (error: any) { 
@@ -929,6 +948,14 @@ async function _deleteLandListingAction(
         revalidateTag("land-listings", "page");
         revalidateTag(`property-${listingId}`, "page");
         await invalidateAdminGlobalStats();
+
+        // Irreversible, and nothing else records that the listing ever existed.
+        await recordAdminAction({
+            action: "land_deleted",
+            userId: session.user.id,
+            targetId: listingId,
+            targetType: "land_listing",
+        });
 
         return { success: true, error: null, data: null };
     } catch (error: any) { 

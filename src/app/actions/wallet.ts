@@ -15,6 +15,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
+import { recordAdminAction } from "@/lib/audit-log";
 import { getBaseUrl } from "@/lib/server-utils";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { creditWalletOnce, debitWalletOnce, debitWalletLocked } from "@/lib/wallet-ledger";
@@ -854,6 +855,24 @@ async function _processWalletWithdrawalAction(
             logger.error("Approval notification error:", notifyErr);
         }
     }
+
+    // Who approved or rejected this withdrawal, and for how much.
+    //
+    // This is the platform's wallet payout path — it moves real money out
+    // through Paystack — and it wrote nothing to audit_logs. Both branches are
+    // covered by one record because both are decisions an admin made about
+    // somebody's money.
+    //
+    // recordAdminAction, not createAdminAuditLog: by this line the transfer has
+    // already been made and the ledger row written. A failure to record must
+    // not report a completed payout as failed.
+    await recordAdminAction({
+        action: action === "approve" ? "withdrawal_approved" : "withdrawal_rejected",
+        userId: adminId,
+        targetId: transactionId,
+        targetType: "wallet_withdrawal",
+        metadata: { payeeId: txnData.userId, amount: Math.abs(Number(txnData.amount) || 0), note: note ?? null },
+    });
 
     return { error: null, success: true as const , data: null };
 }

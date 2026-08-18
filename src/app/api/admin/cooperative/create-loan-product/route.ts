@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
+import { recordAdminAction } from "@/lib/audit-log";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
@@ -60,6 +61,18 @@ export async function POST(request: NextRequest) {
             createdAt: FieldValue.serverTimestamp(),
             createdBy: session.user.id,
             updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        // A loan product sets the interest every borrower pays. Who changed
+        // it, and to what, is exactly what an audit log is for — and
+        // 'loan_product_created' has been in the action vocabulary all along
+        // with nothing writing it.
+        await recordAdminAction({
+            action: "loan_product_created",
+            userId: session.user.id,
+            targetId: productRef.id,
+            targetType: "loan_product",
+            metadata: { name, minAmount: Number(minAmount), maxAmount: Number(maxAmount), interestRate: Number(interestRate), durationMonths: Number(durationMonths), isActive: Boolean(isActive) },
         });
 
         return NextResponse.json({

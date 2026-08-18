@@ -3,6 +3,7 @@
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
+import { recordAdminAction } from "@/lib/audit-log";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { claimStatusTransition } from "@/lib/status-transition";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
@@ -327,6 +328,17 @@ async function _releaseFarmNationEscrowAction(transactionId: string): Promise<Ac
                 _version: 0
             });
         })();
+
+        // Money released AND a property's ownership transferred, in one call,
+        // and nothing recorded who did it. 'escrow_released' has been in the
+        // audit vocabulary all along.
+        await recordAdminAction({
+            action: "escrow_released",
+            userId: session.user.id,
+            targetId: transactionId,
+            targetType: "farm_nation_transaction",
+            metadata: { amount: preAmount, propertyId: preTxData.propertyId ?? null, buyerId: preTxData.buyerId ?? null },
+        });
 
         return { 
             success: true, 
