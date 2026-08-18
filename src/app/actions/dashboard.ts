@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { readCooperativeBalance } from "@/lib/cooperative-member-balance";
 import { serializeValue } from "@/lib/firestore-serialize";
 
 /**
@@ -167,8 +168,7 @@ async function _getDashboardStatsAction(): Promise<DashboardActionState> {
         const rootMemberDoc = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
 
         if (rootMemberDoc.exists) {
-            const data = rootMemberDoc.data();
-            cooperativeSavings = Number(data?.savingsBalance ?? data?.balance ?? 0) || 0;
+            cooperativeSavings = readCooperativeBalance(rootMemberDoc.data());
         } else if (userData?.cooperativeId) {
             // Legacy nested collection, kept for members whose record predates
             // the root collection. Reachable only when the user document does
@@ -181,7 +181,13 @@ async function _getDashboardStatsAction(): Promise<DashboardActionState> {
                 .get();
 
             if (nestedMemberDoc.exists) {
-                cooperativeSavings = Number(nestedMemberDoc.data()?.balance ?? 0) || 0;
+                // Read `balance` ONLY, while the root branch four lines above
+                // read `savingsBalance ?? balance` — and cron/release-escrow
+                // credits a legacy member's export ROI to `savingsBalance`. So
+                // a legacy member's export returns were paid in and then never
+                // appeared on their dashboard. Same helper both branches now:
+                // see lib/cooperative-member-balance.ts.
+                cooperativeSavings = readCooperativeBalance(nestedMemberDoc.data());
             }
         }
 

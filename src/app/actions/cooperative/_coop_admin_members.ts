@@ -197,6 +197,26 @@ async function _updateMemberStatusAction(
         }
         
         const memberData = memberDoc.data()!;
+
+        // A SCOPED ADMIN COULD ACT ON ANY COOPERATIVE'S MEMBERS.
+        //
+        // getAdminScope was called in this function, but only at the end, to
+        // pick which cache keys to clear — never to decide whether the caller
+        // was entitled to touch this member. Both withdrawal actions in the
+        // sibling file carry the check, labelled "Prevent IDOR"; this one, which
+        // grants the `cooperative_member` role and sets isVerified, did not.
+        //
+        // So an administrator scoped to one cooperative could activate, approve
+        // or suspend a member of any other.
+        const memberScope = await getAdminScope(session.user.id, roles);
+        if (memberScope && memberData.cooperativeId && memberData.cooperativeId !== memberScope) {
+            return {
+                success: false as const,
+                error: "Unauthorized: Cannot change membership status for another cooperative",
+                data: null,
+            };
+        }
+
         let targetUserId = memberData.userId;
 
         if (!targetUserId && memberData.email) {
@@ -289,6 +309,45 @@ async function _updateMemberStatusAction(
                     await userRef.set(initialData);
                 } else {
                     await userRef.update(normalizeUserUpdate(userDocUpdate));
+                }
+            } else if (status === "suspended") {
+                // SUSPENSION CHANGED A LABEL AND REVOKED NOTHING.
+                //
+                // This branch did not exist. Suspending wrote
+                // `membershipStatus: "suspended"` onto the member document and
+                // stopped, leaving the USER document exactly as it was:
+                // `roles` still containing "cooperative_member" and
+                // `serviceRegistrations.cooperatives.status` still "active".
+                //
+                // checkModuleAccess grants cooperative access from EITHER —
+                // Layer 1 is the JWT role alone, Layer 2 the registration
+                // status — so a suspended member kept the dashboard,
+                // contributions, loans, withdrawals and the member directory.
+                // An admin pressing Suspend achieved nothing except a different
+                // word on the admin's own screen.
+                //
+                // Both are revoked now, which is exactly what the Farm Nation
+                // equivalent does when it rejects a seller
+                // (farm-nation/_fn_admin.ts strips the `farmer` role the same
+                // way). Reactivating re-adds them through the arrayUnion in the
+                // branch above, so this is reversible rather than destructive.
+                const suspendUpdate: Record<string, any> = {
+                    roles: FieldValue.arrayRemove("cooperative_member"),
+                    "serviceRegistrations.cooperatives.status": "suspended",
+                    "serviceRegistrations.cooperatives.suspendedAt": FieldValue.serverTimestamp(),
+                    "serviceRegistrations.cooperatives.suspendedBy": session.user.id,
+                    updatedAt: FieldValue.serverTimestamp(),
+                    _version: FieldValue.increment(1),
+                };
+
+                if (userDoc?.exists) {
+                    await userRef.update(normalizeUserUpdate(suspendUpdate));
+                } else {
+                    logger.warn(
+                        "[updateMemberStatus] suspended a member with no user document — "
+                        + "nothing to revoke, which is expected for a legacy import",
+                        { memberId, targetUserId }
+                    );
                 }
             }
             return { notificationInfo, targetUserId };

@@ -16,6 +16,7 @@ import {
 } from "@/lib/email-notifications";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { getAdminScope } from "@/lib/cooperative-admin-scope";
+import { balanceFieldOf } from "@/lib/cooperative-member-balance";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { extractCanonicalUser } from "@/lib/canonical/normalizer";
 
@@ -521,8 +522,15 @@ export async function rejectWithdrawalAction(
 
                     const nestedDoc = await nestedMemberRef.get();
                     if (nestedDoc.exists) {
+                        // Refunded `balance` while the branch above refunds
+                        // `savingsBalance`, and cron/release-escrow credits
+                        // `savingsBalance` on this very same document. One
+                        // member's savings under two names, with the writers
+                        // split between them — the refund goes to whichever
+                        // field the document actually carries. See
+                        // lib/cooperative-member-balance.ts.
                         await nestedMemberRef.update({
-                            balance: FieldValue.increment(amount),
+                            [balanceFieldOf(nestedDoc.data())]: FieldValue.increment(amount),
                             lockedBalance: FieldValue.increment(-amount),
                             updatedAt: FieldValue.serverTimestamp(),
                         });

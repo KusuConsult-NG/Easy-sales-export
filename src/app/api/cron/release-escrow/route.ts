@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
+import { balanceFieldOf } from "@/lib/cooperative-member-balance";
 import { Timestamp } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
@@ -146,7 +147,12 @@ async function processExportWindows(now: Timestamp) {
                     .collection("members").doc(userId);
                 const memberDoc = await tx.get(memberRef);
                 if (memberDoc.exists) {
-                    tx.update(memberRef, { savingsBalance: FieldValue.increment(totalPayout), updatedAt: FieldValue.serverTimestamp() });
+                    // A legacy nested member keys their savings `balance`, not
+                    // `savingsBalance`, and the dashboard reads that name — so
+                    // crediting the fixed name here paid an export return into
+                    // a field the member could never see. See
+                    // lib/cooperative-member-balance.ts.
+                    tx.update(memberRef, { [balanceFieldOf(memberDoc.data())]: FieldValue.increment(totalPayout), updatedAt: FieldValue.serverTimestamp() });
                     const txRef = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc();
                     tx.set(txRef, {
                         type: "deposit",
