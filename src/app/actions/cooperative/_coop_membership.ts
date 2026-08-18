@@ -12,6 +12,10 @@ import { withFlexibleSafeAction } from "@/lib/safe-action";
 import type { CooperativeMembership, GetMembershipState } from "@/lib/types/cooperative";
 import { serializeDoc } from "@/lib/firestore-serialize";
 import { registerCooperativeMemberAction } from "./_coop_registration";
+import { isAdmin } from "@/lib/admin-permissions";
+
+/** How many members one directory read will return. */
+const DIRECTORY_ROW_CAP = 2000;
 
 async function _getMembershipAction(): Promise<GetMembershipState> { try {
         const sessionResult = await requireSession();
@@ -332,13 +336,58 @@ async function _getDirectoryMembersAction(): Promise<
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
         const { session } = sessionResult;
-        // Allow any logged in user? Or just admin? Assuming members can view directory.
         if (!session?.user) { return { error: "Unauthorized", success: false as const, data: null };
+        }
+
+        // THE MEMBER DIRECTORY WAS OPEN TO EVERY SIGNED-IN ACCOUNT.
+        //
+        // The guard was `if (!session?.user)` under a comment that asked the
+        // question and did not answer it: "Allow any logged in user? Or just
+        // admin? Assuming members can view directory."
+        //
+        // The page this serves, /cooperatives/directory, sits under a layout that
+        // calls checkModuleAccess(userId, roles, "cooperatives") and redirects
+        // anyone without it to onboarding. But the layout guards the PAGE, and
+        // this is an exported server action — a reachable HTTP endpoint whether or
+        // not a page calls it. Anyone with any account could ask it directly.
+        //
+        // And it is not a list of names. Every row carries the member's phone
+        // number, their passport photograph URL, their occupation and their LGA
+        // and state. That is the personal data of every cooperative member,
+        // handed to any registered stranger.
+        //
+        // Same rule as the layout, so the two cannot answer differently.
+        const { checkModuleAccess } = await import("@/lib/module-access-check");
+        const hasAccess = await checkModuleAccess(
+            session.user.id,
+            (session.user.roles || []) as any,
+            "cooperatives"
+        );
+
+        if (!hasAccess && !isAdmin(session.user.roles)) {
+            return { error: "Cooperative membership is required to view the member directory", success: false as const, data: null };
         }
 
         const membershipsRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
         // Query both "active" (canonical since May 2026) and "approved" (legacy status) — both are fully approved members.
-        const snapshot = await membershipsRef.where("membershipStatus", "in", ["approved", "active"]).get();
+        const snapshot = await membershipsRef
+            .where("membershipStatus", "in", ["approved", "active"])
+            .limit(DIRECTORY_ROW_CAP)
+            .get();
+
+        // Say so when the directory is a portion.
+        //
+        // The query was unbounded, so the adapter capped it at its default limit
+        // and the page presented whatever came back as the whole membership —
+        // the same silent truncation the loans export and the admin queue both
+        // carried. The cap is explicit now and reported.
+        const truncated = snapshot.docs.length >= DIRECTORY_ROW_CAP
+            || Boolean((snapshot as any).truncated);
+        if (truncated) {
+            logger.warn(
+                `[getDirectoryMembers] hit the ${DIRECTORY_ROW_CAP}-row cap — the directory shown is incomplete`
+            );
+        }
 
         const members = snapshot.docs
             .map((doc: any) => {
@@ -363,7 +412,7 @@ async function _getDirectoryMembersAction(): Promise<
             })
             .filter(Boolean); // Remove nulls (corrupted)
 
-        return { error: null, success: true as const, data: members, meta: null };
+        return { error: null, success: true as const, data: members, truncated, rowCap: DIRECTORY_ROW_CAP, meta: null };
 
     } catch (error) { logger.error("Failed to fetch directory:", {
             error: error instanceof Error ? error.message : String(error)

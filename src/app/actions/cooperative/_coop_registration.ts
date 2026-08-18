@@ -13,6 +13,7 @@ import { cooperativeMembershipSchema, type MembershipRegistrationState } from "@
 import { parseFormData } from "@/lib/form-validation";
 import type { JoinCooperativeState } from "@/lib/types/cooperative";
 import { serializeValue, toMillis } from "@/lib/firestore-serialize";
+import { claimStatusTransition } from "@/lib/status-transition";
 import { revalidatePath } from "next/cache";
 
 /**
@@ -21,7 +22,11 @@ import { revalidatePath } from "next/cache";
  */
 export async function registerCooperativeMemberAction(
     formData: FormData
-): Promise<MembershipRegistrationState> { try {
+): Promise<MembershipRegistrationState> {
+    /** Set once an invite token has been consumed, so a later failure can return it. */
+    let claimedInvite: string | null = null;
+
+    try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
         const { session } = sessionResult;
@@ -57,6 +62,41 @@ export async function registerCooperativeMemberAction(
             if (!inviteRes.success) { return { error: inviteRes.error || "Invalid invitation token", success: false as const, data: null };
             }
             isLegacyImport = true;
+
+            // ONE TOKEN, ONE MEMBERSHIP.
+            //
+            // The token was read here and marked "used" much later, by a blind
+            // `transaction.update` inside runTransaction — which takes no lock on
+            // this adapter. Two registrations submitted with the same link both
+            // read `status: "pending"` and both wrote "used", and an invite is
+            // what waives the ₦ registration fee: `paymentStatus: "completed"` is
+            // set from `if (inviteToken)` alone. So one invitation could admit
+            // two fee-free members.
+            //
+            // Claimed here rather than in the transaction, because a claim made
+            // after the membership is written cannot refuse anything — the member
+            // is already recorded as paid by then. Burning the token on a later
+            // failure is the cost, and it is compensated below.
+            const inviteClaim = await claimStatusTransition({
+                collection: COLLECTIONS.COOPERATIVES_INVITES,
+                id: inviteToken,
+                from: "pending",
+                to: "used",
+                patch: {
+                    usedBy: userId,
+                    usedAt: new Date().toISOString(),
+                },
+            });
+
+            if (!inviteClaim.claimed) {
+                return {
+                    error: "This invitation has already been used or revoked.",
+                    success: false as const,
+                    data: null,
+                };
+            }
+
+            claimedInvite = inviteToken;
         } else { // Legacy check
             if (memberData?.onboardingCompleted && memberData?.paymentStatus === "completed") { return { error: "You have already completed onboarding. Profile updates require admin approval.", success: false as const, data: null };
             }
@@ -197,13 +237,8 @@ export async function registerCooperativeMemberAction(
             // 1. Save/Merge Member Data
             transaction.set(existingMemberRef, updatedData, { merge: true });
 
-            // 2. If an invite token was used, mark it as completed
-            if (inviteToken) { transaction.update(db.collection(COLLECTIONS.COOPERATIVES_INVITES).doc(inviteToken), {
-                    status: "used",
-                    usedBy: userId,
-                    usedAt: FieldValue.serverTimestamp()
-                });
-            }
+            // The invite was marked used here, blind. It is claimed before the
+            // transaction now — see the note at the claim.
 
             // 3. Update user service registration and sync profile data
             transaction.update(db.collection(COLLECTIONS.USERS).doc(userId), normalizeUserUpdate({ 
@@ -264,9 +299,40 @@ export async function registerCooperativeMemberAction(
     } catch (error) { logger.error("Membership registration failed:", {
             error: error instanceof Error ? error.message : String(error)
         });
+
+        // Give the invitation back.
+        //
+        // The token is claimed before the writes, which is the only order that
+        // can refuse a second use — but it means a failure afterwards would
+        // otherwise leave an invited member holding a link that now reports
+        // "already used", with no way to register and no fee waiver. The most
+        // common failure here is the transient network one this very handler
+        // classifies below, where retrying is exactly what the member is told
+        // to do.
+        //
+        // Released only from "used", so a token some other registration has
+        // since consumed is left alone.
+        if (claimedInvite) {
+            try {
+                await claimStatusTransition({
+                    collection: COLLECTIONS.COOPERATIVES_INVITES,
+                    id: claimedInvite,
+                    from: "used",
+                    to: "pending",
+                    patch: { usedBy: null, usedAt: null },
+                });
+            } catch (releaseError) {
+                logger.error(
+                    "[registerCooperativeMember] invitation could not be released after a failed "
+                    + "registration — the member cannot retry with this link and needs a new invite.",
+                    { token: claimedInvite, error: releaseError instanceof Error ? releaseError.message : String(releaseError) }
+                );
+            }
+        }
+
         const errMsg = error instanceof Error ? error.message : String(error);
-        const isTransient = errMsg.includes("Premature close") || 
-                            errMsg.includes("socket hang up") || 
+        const isTransient = errMsg.includes("Premature close") ||
+                            errMsg.includes("socket hang up") ||
                             errMsg.includes("ECONNRESET") ||
                             errMsg.includes("Client network socket disconnected") ||
                             errMsg.includes("FetchError") ||
@@ -276,8 +342,8 @@ export async function registerCooperativeMemberAction(
                             errMsg.includes("UNAVAILABLE") ||
                             errMsg.includes("stream terminated") ||
                             errMsg.includes("ERR_STREAM_PREMATURE_CLOSE");
-        const userFriendlyMessage = isTransient 
-            ? "A temporary connection issue occurred. Please try again." 
+        const userFriendlyMessage = isTransient
+            ? "A temporary connection issue occurred. Please try again."
             : errMsg;
         return { error: userFriendlyMessage, success: false as const, data: null };
     }

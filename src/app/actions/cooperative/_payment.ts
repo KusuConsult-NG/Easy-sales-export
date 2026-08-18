@@ -273,7 +273,12 @@ export async function verifyContributionPaymentAction(
                 previousTotal: result.currentTotal,
                 newTotal,
                 previousTier: result.previousTier,
-                newTier: result.newTier,
+                // `result.newTier` — the transaction returns { currentTotal,
+                // previousTier } and nothing else, so every contribution audit
+                // entry recorded newTier: undefined while the computed value sat
+                // in scope one line above. A tier change is the one thing this
+                // entry exists to evidence.
+                newTier,
                 paymentReference: reference },
             details: `Contribution of ₦${amountInNaira.toLocaleString()} processed successfully` });
 
