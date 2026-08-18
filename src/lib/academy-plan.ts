@@ -64,6 +64,36 @@ export function normaliseAcademyPlan(plan: unknown): AcademyPlan | null {
     return (ACADEMY_PLANS as readonly string[]).includes(raw) ? (raw as AcademyPlan) : null;
 }
 
+/**
+ * The tier an APPLICATION represents, repairing the rows already in production.
+ *
+ * _submitAcademyApplicationAction wrote `plan: "registration"` on every
+ * application it created, unconditionally. The form pays first — step 5 only
+ * renders Submit once paymentStatus is "paid" — so the row was always created
+ * AFTER checkout, and because no application existed at payment time both
+ * fulfilment paths skipped their `if (appDoc)` update. Nothing ever corrected
+ * it.
+ *
+ * So the admin applications screen, its plan badge and its CSV export said
+ * "Registration" for every learner, including everyone who paid the elite fee,
+ * with the correct amount displayed in the next column.
+ *
+ * Every one of those rows is still in the database. `normaliseAcademyPlan`
+ * already returns null for "registration", so falling back to the tier on the
+ * learner's user document repairs them on read — no migration, and no guessing:
+ * the user document is where the fulfilment paths write the plan they verified
+ * the payment against.
+ *
+ * null means what it says: registered, no tier bought. Registration itself is
+ * free, so that is a real state and not a missing value.
+ */
+export function resolveApplicationPlan(
+    applicationPlan: unknown,
+    userAcademyPlan: unknown,
+): AcademyPlan | null {
+    return normaliseAcademyPlan(applicationPlan) ?? normaliseAcademyPlan(userAcademyPlan);
+}
+
 /** What a plan costs, in naira. */
 export function academyPlanFee(plan: unknown): number {
     const normalised = normaliseAcademyPlan(plan) ?? DEFAULT_ACADEMY_PLAN;

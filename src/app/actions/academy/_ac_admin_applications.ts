@@ -10,6 +10,7 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { ActionResponse, withFlexibleSafeAction } from "@/lib/safe-action";
+import { resolveApplicationPlan } from "@/lib/academy-plan";
 
 /**
  * Get Pending Academy Applications (Admin)
@@ -345,7 +346,18 @@ async function _getStandardAcademyApplicationsAction(options: {
                     stateOfOrigin: app.stateOfOrigin || pi.stateOfOrigin || uData.state || uData.stateOfOrigin || (typeof uData.address === 'object' ? uData.address?.state : uData.stateOfOrigin) || uData.verificationProfile?.address?.state || null,
                     lga: app.lga || pi.lga || uData.lga || (typeof uData.address === 'object' ? uData.address?.lga : uData.lga) || null,
                     residentialAddress: app.residentialAddress || pi.residentialAddress || (typeof uData.address === 'object' ? uData.address?.street : uData.address) || null,
-                    fullName: userName
+                    fullName: userName,
+                    // The tier, repaired on read. `...app` above carries the
+                    // literal "registration" that every application row was
+                    // written with, so the badge and the CSV said "Registration"
+                    // for every learner — including everyone who paid the elite
+                    // fee, with the correct amount displayed beside it. The user
+                    // document holds the plan the fulfilment paths verified the
+                    // payment against. See lib/academy-plan.ts.
+                    plan: resolveApplicationPlan(
+                        app.plan,
+                        uData?.serviceRegistrations?.academy?.plan,
+                    ),
                 };
 
                 const bankDetails = uData.bankDetails || {
@@ -423,7 +435,18 @@ async function _getStandardAcademyApplicationsAction(options: {
                     stateOfOrigin: app.stateOfOrigin || pi.stateOfOrigin || uData.state || uData.stateOfOrigin || (typeof uData.address === 'object' ? uData.address?.state : uData.stateOfOrigin) || uData.verificationProfile?.address?.state || null,
                     lga: app.lga || pi.lga || uData.lga || (typeof uData.address === 'object' ? uData.address?.lga : uData.lga) || null,
                     residentialAddress: app.residentialAddress || pi.residentialAddress || (typeof uData.address === 'object' ? uData.address?.street : uData.address) || null,
-                    fullName: userName
+                    fullName: userName,
+                    // The tier, repaired on read. `...app` above carries the
+                    // literal "registration" that every application row was
+                    // written with, so the badge and the CSV said "Registration"
+                    // for every learner — including everyone who paid the elite
+                    // fee, with the correct amount displayed beside it. The user
+                    // document holds the plan the fulfilment paths verified the
+                    // payment against. See lib/academy-plan.ts.
+                    plan: resolveApplicationPlan(
+                        app.plan,
+                        uData?.serviceRegistrations?.academy?.plan,
+                    ),
                 };
 
                 const bankDetails = uData.bankDetails || {

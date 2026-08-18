@@ -11,6 +11,7 @@ import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { serializeValue, toMillis } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { AcademyApplicationInputSchema, AcademyApplicationInput } from "@/lib/validations/academy";
+import { normaliseAcademyPlan } from "@/lib/academy-plan";
 import type { AcademyApplicationData } from "@/lib/types/academy-actions";
 
 const ACADEMY_REGISTRATION_FEE = 0;
@@ -58,6 +59,28 @@ async function _submitAcademyApplicationAction(
             const existingPaymentStatus = userData?.serviceRegistrations?.academy?.paymentStatus || "pending";
             const existingPaymentAmount = userData?.serviceRegistrations?.academy?.paymentAmount || 0;
 
+            // The tier the learner actually bought — not the literal "registration".
+            //
+            // This row used to be written with `plan: "registration"` unconditionally.
+            // The application form pays FIRST: step 5 only renders the Submit button
+            // once paymentStatus is "paid", so by the time this runs the learner has
+            // already been charged for foundation, standard or elite. And because no
+            // application document existed at payment time, both fulfilment paths
+            // skipped their `if (appDoc)` update — so nothing ever corrected it.
+            //
+            // The result was that the admin applications screen, its plan badge and
+            // its CSV export said "Registration" for EVERY learner, including
+            // everyone who paid the ₦270,000 elite fee. The amount column was right
+            // beside it and disagreed.
+            //
+            // null, not a placeholder, when there is genuinely no tier: registration
+            // itself is free (ACADEMY_REGISTRATION_FEE above), so "applied without
+            // buying a tier" is a real state and deserves an honest absence rather
+            // than a word that reads like a product.
+            const existingPlan = normaliseAcademyPlan(
+                userData?.serviceRegistrations?.academy?.plan
+            );
+
             // 🔒 DEDUP GUARD: Collection-level phone and email check within transaction
             const collectionsContext = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS);
             if (phone) {
@@ -91,7 +114,7 @@ async function _submitAcademyApplicationAction(
                 status: isPaid ? "approved" : "pending",
                 paymentStatus: existingPaymentStatus,
                 paymentAmount: existingPaymentAmount,
-                plan: "registration",
+                plan: existingPlan,
                 submittedAt: FieldValue.serverTimestamp(),
                 reviewedAt: isPaid ? FieldValue.serverTimestamp() : null,
                 reviewedBy: isPaid ? "system_auto_approval" : null,

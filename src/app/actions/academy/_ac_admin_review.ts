@@ -8,6 +8,7 @@ import { requireSession } from "@/lib/session-guard";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { ActionResponse, withFlexibleSafeAction } from "@/lib/safe-action";
+import { normaliseAcademyPlan } from "@/lib/academy-plan";
 
 /**
  * Academy Admin Actions - Application Approval/Rejection
@@ -309,6 +310,21 @@ async function _updateAcademyApplicationPaymentAction(
 
         const appData = appDoc.data()!;
 
+        // The plan is an ACCESS KEY, so it is normalised before it is stored.
+        //
+        // `plan` arrives here as an unvalidated string and is written straight
+        // into `serviceRegistrations.academy.plan`, which is the single field
+        // checkCourseAccess reads to decide which course tiers a learner may
+        // enrol in. A value that is not one of the three plans — "Elite" with a
+        // capital, "elite " with a trailing space, or the form's "registration"
+        // option — falls through checkCourseAccess to its default deny, so an
+        // admin recording a payment could silently revoke every paid course.
+        //
+        // null is the honest value for "registered, no tier": registration
+        // itself is free, and checkCourseAccess treats an absent plan exactly as
+        // it treated "registration", so nothing changes behaviourally.
+        const normalisedPlan = normaliseAcademyPlan(plan);
+
         // Perform atomic update in a transaction
         await db.runTransaction(async (transaction) => {
             const appSnap = await transaction.get(appRef);
@@ -317,7 +333,7 @@ async function _updateAcademyApplicationPaymentAction(
             transaction.update(appRef, {
                 paymentStatus,
                 paymentAmount,
-                plan,
+                plan: normalisedPlan,
                 paymentVerifiedAt: paymentStatus === "completed" || paymentStatus === "paid" ? FieldValue.serverTimestamp() : null,
                 paymentVerifiedBy: paymentStatus === "completed" || paymentStatus === "paid" ? session.user.id : null,
                 _version: FieldValue.increment(1),
@@ -327,7 +343,7 @@ async function _updateAcademyApplicationPaymentAction(
                 const userRef = db.collection(COLLECTIONS.USERS).doc(appData.userId);
                 transaction.update(userRef, {
                     "serviceRegistrations.academy.paymentStatus": paymentStatus,
-                    "serviceRegistrations.academy.plan": plan
+                    "serviceRegistrations.academy.plan": normalisedPlan
                 });
             }
         });
@@ -337,7 +353,7 @@ async function _updateAcademyApplicationPaymentAction(
             userId: session.user.id,
             targetId: applicationId,
             targetType: "academy_application",
-            details: `Updated Academy application payment: ${paymentStatus}, amount: ₦${paymentAmount}, plan: ${plan}`,
+            details: `Updated Academy application payment: ${paymentStatus}, amount: ₦${paymentAmount}, plan: ${normalisedPlan ?? "none"}`,
         });
 
         return { success: true, error: null, data: null };

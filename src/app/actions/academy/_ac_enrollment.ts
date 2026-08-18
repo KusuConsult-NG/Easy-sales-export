@@ -10,6 +10,7 @@ import { revalidatePath } from "next/cache";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import type { Course, EnrolledCourseWithDetails, UserProgress } from "@/lib/types/academy-actions";
+import { normaliseAcademyPlan, type AcademyPlan } from "@/lib/academy-plan";
 
 /**
  * Check Academy application status for current user
@@ -114,21 +115,42 @@ async function _checkAcademyStatusAction(): Promise<ActionResponse<string | null
 export const checkAcademyStatusAction = withFlexibleSafeAction("checkAcademyStatusAction", _checkAcademyStatusAction);
 
 
+/**
+ * Which course tiers a learner's plan opens.
+ *
+ * The plan strings were compared literally here — `userPlan === "elite"` and so
+ * on — which made this a private copy of the vocabulary that
+ * lib/academy-plan.ts now owns, and the copy that decides what content someone
+ * actually gets. It default-denied anything it did not recognise, so any
+ * spelling the rest of the system tolerated ("Elite", "elite " with a trailing
+ * space, the "registration" the admin payment form could write) silently
+ * revoked every paid course, with the refusal blaming the learner's "current
+ * package".
+ *
+ * normaliseAcademyPlan maps the spellings — including the legacy "advanced" —
+ * onto the three real plans, and returns null for anything else. Null still
+ * default-denies: registration itself is free, so "registered, no tier bought"
+ * genuinely has no access to paid content, and that is the same answer this
+ * function gave before.
+ */
 function checkCourseAccess(userPlan: string, courseTier: string): boolean {
     // Treat undefined or 'free' tier as open to all
     if (!courseTier || courseTier === "free") return true;
-    // Elite plan has access to everything
-    if (userPlan === "elite") return true;
-    // Standard/Legacy-Advanced plan has access to foundation and standard
-    if (userPlan === "standard" || userPlan === "advanced") {
-        return courseTier === "foundation" || courseTier === "standard";
-    }
-    // Foundation plan only has access to foundation
-    if (userPlan === "foundation") {
-        return courseTier === "foundation";
-    }
-    // Default deny for unrecognized plans or free users trying to access paid tiers
-    return false;
+
+    const plan = normaliseAcademyPlan(userPlan);
+    if (!plan) return false;
+
+    const tier = String(courseTier).trim().toLowerCase();
+
+    // Elite opens everything; standard opens foundation and standard;
+    // foundation opens foundation.
+    const opens: Record<AcademyPlan, readonly string[]> = {
+        elite: ["foundation", "standard", "elite"],
+        standard: ["foundation", "standard"],
+        foundation: ["foundation"],
+    };
+
+    return opens[plan].includes(tier);
 }
 
 
@@ -172,7 +194,21 @@ async function _enrollInCourseAction(
             const hasAccess = checkCourseAccess(userPlan, courseTier);
 
             if (!hasAccess) {
-                throw new Error(`Your current package (${userPlan}) does not grant access to this course. Please upgrade your package to the ${courseTier.charAt(0).toUpperCase() + courseTier.slice(1)} tier or higher.`);
+                // Two different refusals, said differently.
+                //
+                // This read `Your current package (free) does not grant access`
+                // for a learner who had never chosen a package at all — an admin
+                // can approve an application without one, and registration
+                // itself is free — so the message named a package they had not
+                // bought and told them to upgrade from it. Neither they nor
+                // support could tell which of the two situations they were in.
+                const tierName = courseTier.charAt(0).toUpperCase() + courseTier.slice(1);
+                const held = normaliseAcademyPlan(userPlan);
+                throw new Error(
+                    held
+                        ? `Your ${held} package does not grant access to this course. Please upgrade to the ${tierName} tier or higher.`
+                        : `Your Academy registration does not include a course package yet. Please choose the ${tierName} tier or higher to enrol.`
+                );
             }
 
             const progress: UserProgress = {
