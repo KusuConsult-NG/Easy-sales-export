@@ -111,3 +111,47 @@ export function refuseExportStatusChange(change: ExportStatusChange): string | n
 
     return null;
 }
+
+/**
+ * The ROI percentage a window advertises, as a number.
+ *
+ * NOTHING WRITES AN ROI ONTO A WINDOW
+ * -----------------------------------
+ * `roi` and `roiPercentage` are read in four places and written in none — the
+ * only `roi:` writes in the codebase are onto EXPORT_SLOTS, after an investment
+ * has already been made. Neither createExportWindowAction records one, the same
+ * way neither records a fundingGoal.
+ *
+ * That was not merely cosmetic. getExportOpportunityById maps
+ * `projectedROI: data.roi`, and /export/windows/[id] did
+ *
+ *     parseFloat(windowData.projectedROI.replace("%", ""))
+ *
+ * inside its invest handler — calling .replace on undefined. It threw a
+ * TypeError before the server action was reached, and the surrounding catch
+ * reported "An error occurred while processing your investment". That was the
+ * FIRST of three independent reasons export investing could not complete; the
+ * other two were in the action it never got to.
+ *
+ * 20 is not invented here: the two fulfilment paths both compute the expected
+ * return as `amount * (returnMultiplier ?? 1.20)`, so 20% is the return the
+ * platform already pays when a window records nothing. Using anything else
+ * would have the page advertise one figure and the payout compute another.
+ */
+export const DEFAULT_EXPORT_ROI_PERCENT = 20;
+
+export function exportWindowRoiPercent(value: unknown): number {
+    const cleaned = String(value ?? "").replace("%", "").trim();
+
+    // The WHOLE string has to be one number.
+    //
+    // parseFloat("15-20") returns 15 — the platform's own default ROI label is
+    // the range "15-20%", so a window carrying it would advertise 15% while the
+    // fulfilment paths pay `amount * 1.20`. Silently taking the low end of a
+    // range is a worse answer than saying the value is not a single figure and
+    // using the rate that is actually paid.
+    if (!/^\d+(\.\d+)?$/.test(cleaned)) return DEFAULT_EXPORT_ROI_PERCENT;
+
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_EXPORT_ROI_PERCENT;
+}

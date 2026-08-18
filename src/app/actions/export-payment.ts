@@ -316,7 +316,12 @@ export async function verifyExportOrderPaymentAction(reference: string) { try {
                 type: "export",
                 title: "New Export Order Received",
                 message: `Export order ${orderData.orderId} has been fully paid. Term: ${orderData.buyerDetails.shippingTerm}. Port: ${orderData.buyerDetails.portOfDestination}.`,
-                link: `/admin/export/orders/${orderData.orderId}`,
+                // /admin/export/orders/{id} is not a route — there is no [id]
+                // segment under it, only the list page. Every "New Export Order
+                // Received" notification an admin received linked to a 404. The
+                // order id is already in the message above, and the list page is
+                // where they would look it up.
+                link: `/admin/export/orders`,
                 linkText: "View Order"
             });
         } catch (e: any) { logger.warn("Failed to send export order admin notification", { error: e?.message || String(e) });

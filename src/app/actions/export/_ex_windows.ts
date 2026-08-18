@@ -104,7 +104,11 @@ export async function createExportWindowAction(
         })();
 
         revalidatePath("/export");
-        revalidatePath("/dashboard/export");
+        // /dashboard/export is not a route — the export dashboard is at
+        // /export/dashboard (the (app) segment is a route group and does not
+        // appear in the URL). revalidatePath on a path with no route behind it
+        // is a silent no-op, so this invalidated nothing.
+        revalidatePath("/export/dashboard");
 
         return { error: null, success: true as const, message: `Export window created successfully! Order ID: ${finalOrderId }`,
             meta: null

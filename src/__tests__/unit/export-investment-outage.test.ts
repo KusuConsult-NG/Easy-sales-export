@@ -24,7 +24,19 @@
  *    0 + 50000 > 0. Every investment on every window was refused, with
  *    "Investment exceeds available slots. Maximum available: ₦0".
  *
- * 2. AND THE AUTHORIZATION URL WAS THROWN AWAY
+ * 2. THE PAGE THREW BEFORE IT EVEN CALLED THE ACTION
+ *
+ *    /export/windows/[id] built its metadata with
+ *
+ *        parseFloat(windowData.projectedROI.replace("%", ""))
+ *
+ *    getExportOpportunityById maps `projectedROI: data.roi`, and nothing writes
+ *    an roi onto a window — the only `roi:` writes in the codebase are onto
+ *    EXPORT_SLOTS, after an investment already exists. So .replace ran on
+ *    undefined, threw a TypeError, and the surrounding catch reported "An error
+ *    occurred while processing your investment". This one fired FIRST.
+ *
+ * 3. AND THE AUTHORIZATION URL WAS THROWN AWAY
  *
  *    The same action returned `data: null`, discarding the URL it had just
  *    asked Paystack for. Its one caller, /export/windows/[id], reads
@@ -48,11 +60,13 @@
 import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { exportWindowRoiPercent, DEFAULT_EXPORT_ROI_PERCENT } from '@/lib/export-window-status';
 
 const PAYMENT = 'src/app/actions/export-payment.ts';
 const WINDOWS = 'src/app/actions/export/_ex_windows.ts';
 const AGGREGATION = 'src/app/actions/export-aggregation.ts';
 const LOOSE = 'src/app/actions/export/_ex_investments.ts';
+const WEBHOOK = 'src/infrastructure/payments/service.ts';
 const WINDOW_PAGE = 'src/app/export/windows/[id]/page.tsx';
 
 function source(rel: string): string {
@@ -133,6 +147,47 @@ describe('the funding gate', () => {
         const body = fn(PAYMENT, 'initializeInvestmentPaymentAction');
 
         expect(body).toContain('Investment exceeds available slots');
+    });
+});
+
+describe('the ROI the page reads', () => {
+    it('is never written onto a window', () => {
+        // THE premise. The only roi: writes are onto EXPORT_SLOTS.
+        const windows = code(WINDOWS);
+        const aggregation = code(AGGREGATION);
+
+        expect(fn(WINDOWS, 'createExportWindowAction')).not.toMatch(/\broi:/);
+        expect(fn(AGGREGATION, 'createExportWindowAction')).not.toMatch(/\broi:/);
+        expect(windows + aggregation).not.toContain('roiPercentage:');
+    });
+
+    it('so the page no longer calls .replace on undefined', () => {
+        const page = source(WINDOW_PAGE);
+
+        expect(page).not.toContain('windowData.projectedROI.replace("%", "")');
+        expect(page).toContain('exportWindowRoiPercent(windowData.projectedROI)');
+    });
+
+    it('falling back to the return the platform actually pays', () => {
+        // Not an invented number: both fulfilment paths compute the expected
+        // return as amount * (returnMultiplier ?? 1.20).
+        expect(DEFAULT_EXPORT_ROI_PERCENT).toBe(20);
+        expect(code(WEBHOOK)).toContain('expectedReturnMultiplier ?? 1.20');
+        expect(code(LOOSE)).toContain('expectedReturnMultiplier ?? 1.20');
+    });
+
+    it('and reads a real one when the window has it', () => {
+        expect(exportWindowRoiPercent('18%')).toBe(18);
+        expect(exportWindowRoiPercent(' 22 % ')).toBe(22);
+        expect(exportWindowRoiPercent(18)).toBe(18);
+    });
+
+    it('while refusing values that would poison the arithmetic', () => {
+        // expectedReturn is amount * (1 + roi/100); NaN or a negative there
+        // silently produces a nonsense return figure.
+        for (const bad of [undefined, null, '', 'N/A', '15-20%', -5, 0]) {
+            expect(exportWindowRoiPercent(bad)).toBe(DEFAULT_EXPORT_ROI_PERCENT);
+        }
     });
 });
 

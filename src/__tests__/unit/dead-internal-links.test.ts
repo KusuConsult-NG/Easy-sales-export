@@ -234,11 +234,9 @@ describe('the marketplace and escrow surfaces', () => {
  */
 const KNOWN_DEAD: Record<string, number> = {
     '/dashboard/cooperatives': 3,
-    '/dashboard/export': 3,
     '/loans/[dyn]': 2,
     '/vendor/products/new': 2,
     '/admin/cooperative/members': 1,
-    '/admin/export/orders/[dyn]': 1,
     '/admin/wallets/withdrawals': 1,
     '/admin/users/[dyn]': 1,
     '/farm-nation/properties/[dyn]': 1,
@@ -246,6 +244,21 @@ const KNOWN_DEAD: Record<string, number> = {
     '/vendor/orders/[dyn]': 1,
     '/vendor/products/[dyn]': 1,
 };
+
+/**
+ * The export entries are gone too, fixed in the export pass. They were:
+ *
+ *   /dashboard/export             3x  every one a revalidatePath. The export
+ *                                     dashboard is /export/dashboard — the
+ *                                     (app) segment is a route group and does
+ *                                     not appear in the URL — and revalidatePath
+ *                                     on a path with no route is a silent no-op.
+ *   /admin/export/orders/[dyn]    1x  the link on every "New Export Order
+ *                                     Received" admin notification. There is no
+ *                                     [id] segment under that route, only the
+ *                                     list page, so every one of those
+ *                                     notifications led to a 404.
+ */
 
 /**
  * The academy entries are gone, fixed in the academy pass. They were:
@@ -300,10 +313,10 @@ describe('the rest of the tree', () => {
     it('still finds the ones already known, so the gate is not vacuous', () => {
         // A scanner returning [] passes every assertion above and proves nothing.
         //
-        // Was 20 when twenty-six links were dead. Eight of those were academy's
-        // and are fixed; the floor tracks what is genuinely left rather than
-        // being a number nobody revisits.
-        expect(dead.length).toBeGreaterThanOrEqual(18);
+        // Was 20 when twenty-six links were dead. Eight were academy's and four
+        // export's; the floor tracks what is genuinely left rather than being a
+        // number nobody revisits.
+        expect(dead.length).toBeGreaterThanOrEqual(14);
     });
 
     it('and the quiz-save redirect with literal spaces is gone', () => {
