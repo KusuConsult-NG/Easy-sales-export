@@ -133,20 +133,61 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                                 await db.collection(COLLECTIONS.USERS).doc(newUid).set(defaultProfile, { merge: true });
                                 uid = newUid;
                             } else {
-                                let matchedDoc = userSnap.docs[0];
-                                const supabaseMatch = userSnap.docs.find(doc => doc.id === sbData.user.id);
-                                if (supabaseMatch) {
-                                    matchedDoc = supabaseMatch;
-                                } else {
-                                    const migratedMatch = userSnap.docs.find(doc => doc.data()?.email?.toLowerCase() === email.toLowerCase() && doc.data()?._migratedTo === sbData.user.id);
-                                    if (migratedMatch) {
-                                        matchedDoc = migratedMatch;
-                                    } else {
-                                        const anyMigratedMatch = userSnap.docs.find(doc => !!doc.data()?._migratedTo);
-                                        if (anyMigratedMatch) {
-                                            matchedDoc = anyMigratedMatch;
-                                        }
-                                    }
+                                /**
+                                 * WHICH profile belongs to the account that
+                                 * just authenticated.
+                                 *
+                                 * Supabase has proven who the caller is. This
+                                 * only decides which USERS document is theirs,
+                                 * and the query it works from matches on email
+                                 * alone — which is not unique here. Duplicate
+                                 * and legacy rows exist; broadcast.ts dedupes
+                                 * its recipient list by email for that reason.
+                                 *
+                                 * TWO THINGS WERE WRONG.
+                                 *
+                                 * `supabaseAuthId` was not consulted at all. It
+                                 * is the field the JIT migration writes to link
+                                 * a legacy profile to its new Supabase account
+                                 * — preValidateLoginAction writes it,
+                                 * password-reset resolves by it, and
+                                 * payments/service.ts uses exactly this order,
+                                 * `_migratedTo` then `supabaseAuthId`. The one
+                                 * place that decides who you are signed in as
+                                 * skipped the second half of it.
+                                 *
+                                 * And the last resort preferred ANY document
+                                 * carrying a `_migratedTo`, whatever it pointed
+                                 * at, over the first one. Since the code below
+                                 * then adopts that pointer as the session id, a
+                                 * caller could be signed in as an account they
+                                 * had not authenticated as — chosen because
+                                 * some unrelated row happened to carry a
+                                 * migration marker. That branch is gone: it
+                                 * preferred one arbitrary answer over another
+                                 * and dressed it as a match.
+                                 *
+                                 * What remains is three real identity matches,
+                                 * then the first row, and a loud log when it
+                                 * comes to that — an arbitrary pick should be
+                                 * visible rather than silent.
+                                 */
+                                const authedId = sbData.user.id;
+                                const matchedDoc =
+                                    userSnap.docs.find(doc => doc.id === authedId)
+                                    ?? userSnap.docs.find(doc => doc.data()?._migratedTo === authedId)
+                                    ?? userSnap.docs.find(doc => doc.data()?.supabaseAuthId === authedId)
+                                    ?? userSnap.docs[0];
+
+                                if (!userSnap.docs.some(doc =>
+                                    doc.id === authedId
+                                    || doc.data()?._migratedTo === authedId
+                                    || doc.data()?.supabaseAuthId === authedId
+                                )) {
+                                    logger.error(
+                                        `${authCtx} No profile identifies itself with the authenticated account. `
+                                        + `Falling back to the first of ${userSnap.docs.length} row(s) matching this email.`,
+                                    );
                                 }
                                 const matchedData = matchedDoc.data()!;
                                 if (matchedData._migratedTo) {
