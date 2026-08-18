@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { refuseExportStatusChange } from "@/lib/export-window-status";
 import { claimIdempotencyKey } from "@/lib/wallet-ledger";
 import { revalidatePath } from "next/cache";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
@@ -143,8 +144,33 @@ export async function updateExportStatusAction(
         }
 
         const data = exportDoc.data();
-        // Verify ownership (unless admin)
-        if (data?.userId !== session.user.id && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) { return { error: "Unauthorized to update this export", success: false as const, data: null };
+
+        // The same rule the other updateExportStatusAction applies.
+        //
+        // This one checked ownership-or-admin and nothing else: any of the four
+        // statuses could be set from any other, by the window's owner as readily
+        // as by an admin. And this endpoint does strictly MORE than change a
+        // field — on "completed" it emails every investor a statement of their
+        // returns and marks every one of their slots completed. So an owner
+        // could settle their own export, tell every investor it had paid out,
+        // and close their slots, with no admin involved.
+        //
+        // Two further divergences from the hardened sibling, both fixed by using
+        // the shared rule: roles came from the session TOKEN rather than the
+        // database, and `export_admin` was not recognised at all — so a genuine
+        // export administrator was refused here and allowed there.
+        const callerDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const callerRoles: string[] = callerDoc.data()?.roles ?? [];
+
+        const refusal = refuseExportStatusChange({
+            callerId: session.user.id,
+            callerRoles,
+            ownerId: data?.userId,
+            currentStatus: data?.status,
+            newStatus,
+        });
+        if (refusal) {
+            return { error: refusal, success: false as const, data: null };
         }
 
         // Prevent duplicate status updates to avoid multiple completion emails
