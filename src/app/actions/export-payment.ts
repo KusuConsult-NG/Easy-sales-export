@@ -147,9 +147,18 @@ export async function initializeExportOrderPaymentAction(
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp() });
 
+        // The authorization URL, returned.
+        //
+        // This returned `data: null` — the second initiator in this file to
+        // discard the URL it had just obtained from Paystack (see
+        // initializeInvestmentPaymentAction below). Its caller, the export cart,
+        // reads `result.data?.authorizationUrl` and shows "Failed to initialize
+        // payment: No authorization URL", so the export buyer checkout could not
+        // complete a single order — and the page CLEARS THE CART before it looks
+        // for the URL, so the buyer lost their basket on the way to the error.
         return { error: null, success: true as const,
-            meta: null
-        , data: null };
+            meta: null,
+            data: { authorizationUrl, reference } };
     } catch (error: any) { logger.error("Export Order payment initialization error:", error);
         return { error: "Failed to initialize payment.", success: false as const, data: undefined, meta: null
  };
