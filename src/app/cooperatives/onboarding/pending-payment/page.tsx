@@ -102,16 +102,29 @@ function PendingPaymentContent() {
 
                     {/* Upload Proof */}
                     <div className="border-2 border-dashed border-purple-300 rounded-xl p-6 text-center bg-purple-50">
+                        {/*
+                          * This was an "Upload Receipt" button with no onClick,
+                          * under the promise "Upload your payment receipt to
+                          * speed up verification". There is no receipt upload
+                          * anywhere in the platform — no endpoint, no handler,
+                          * no field on the membership. A member waiting on
+                          * their payment was told the one thing they could do
+                          * to help, given a button for it, and clicking it did
+                          * nothing at all.
+                          *
+                          * Replaced with what actually happens. Building a
+                          * receipt upload is a feature; removing a control that
+                          * lies about one is the fix.
+                          */}
                         <Upload className="w-12 h-12 text-purple-600 mx-auto mb-3" />
                         <h3 className="font-bold text-slate-900 mb-2">
-                            Upload Proof of Payment
+                            Verification Is Automatic
                         </h3>
-                        <p className="text-sm text-slate-600 mb-4">
-                            Upload your payment receipt to speed up verification
+                        <p className="text-sm text-slate-600">
+                            Your payment is confirmed with Paystack directly — there is nothing
+                            you need to send us. If it has not cleared within a few minutes,
+                            contact support with your payment reference.
                         </p>
-                        <button className="px-6 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition-all">
-                            Upload Receipt
-                        </button>
                     </div>
                 </div>
 
@@ -137,9 +150,18 @@ function PendingPaymentContent() {
                                 2
                             </div>
                             <div>
-                                <p className="font-semibold text-blue-900">Upload Receipt (Optional)</p>
+                                {/*
+                                  * The same promise a second time — "Upload
+                                  * proof of payment to speed up verification"
+                                  * as step 2 of what happens next. There is no
+                                  * receipt upload in the platform, so this step
+                                  * described something the member could not do
+                                  * and nobody was waiting for.
+                                  */}
+                                <p className="font-semibold text-blue-900">Automatic Confirmation</p>
                                 <p className="text-sm text-blue-800">
-                                    Upload proof of payment to speed up verification (optional)
+                                    Paystack tells us the moment your payment clears — you do not
+                                    need to send us anything
                                 </p>
                             </div>
                         </div>
