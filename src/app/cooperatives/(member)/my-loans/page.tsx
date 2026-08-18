@@ -50,8 +50,23 @@ export default function MyLoansPage() {
             if (result.success  && result.data?.membership) {
                 setMembership(result.data.membership);
 
-                // Fetch real loans from Firestore using membership.id (which is the User ID)
-                const loanApplications = await getUserLoanApplicationsAction(result.data.membership.id);
+                // `membership.id (which is the User ID)` — an assumption the
+                // codebase itself breaks. A membership document is usually keyed
+                // by the user id, but joinCooperativeAction creates one with an
+                // AUTO-GENERATED id, and the email and paymentReference
+                // fallbacks return whatever document they matched.
+                //
+                // When the two differ, getUserLoanApplicationsAction refuses:
+                // its guard is `session.user.id !== userId && !isAdmin`, so
+                // passing a document id that is not the caller's user id returns
+                // an empty list. The member's own loans page then showed them no
+                // loans at all, silently, while their loan was live.
+                //
+                // The membership row carries `userId`; that is the argument.
+                const membershipRecord = result.data.membership;
+                const loanApplications = await getUserLoanApplicationsAction(
+                    membershipRecord.userId || membershipRecord.id,
+                );
 
                 // Only show disbursed loans (active loans with repayment schedules)
                 const disbursedLoans = loanApplications.filter((loan: any) => loan.status === "disbursed");

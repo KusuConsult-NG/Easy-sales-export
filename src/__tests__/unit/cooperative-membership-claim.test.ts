@@ -245,3 +245,46 @@ describe('the admin member readers no longer report a partial list as complete',
         expect(admin).toContain('hasMoreRaw = applications.length > fetchLimit;');
     });
 });
+
+describe('a membership document id is not a user id', () => {
+    // The type said `id: string; // Document ID (User ID in this case)` and the
+    // member loans page believed it, passing membership.id to
+    // getUserLoanApplicationsAction — whose guard is
+    // `session.user.id !== userId && !isAdmin`. When the two differ that guard
+    // refuses and returns an empty list, so the member's own loans page showed
+    // them nothing while their loan was live.
+    const TYPES = 'src/lib/types/cooperative.ts';
+    const MY_LOANS = 'src/app/cooperatives/(member)/my-loans/page.tsx';
+    const APPLICATIONS = 'src/app/actions/cooperative/_loans_applications.ts';
+
+    it('and they really can differ', () => {
+        // THE premise: a membership created this way has an auto-generated id.
+        const registration = code('src/app/actions/cooperative/_coop_registration.ts');
+
+        expect(registration).toContain('const newMemberRef = membershipsRef.doc();');
+    });
+
+    it('so the type carries userId and no longer claims id is one', () => {
+        const types = readFileSync(join(process.cwd(), TYPES), 'utf-8');
+
+        expect(types).toContain('userId?: string;');
+        expect(types).not.toContain('id: string; // Document ID (User ID in this case)');
+    });
+
+    it('and the loans page passes the member, not the row', () => {
+        // THE test.
+        const page = code(MY_LOANS);
+
+        expect(page).toContain('membershipRecord.userId || membershipRecord.id');
+        expect(page).not.toContain('getUserLoanApplicationsAction(result.data.membership.id)');
+    });
+
+    it('which matters because the action refuses a mismatch outright', () => {
+        // Vacuity guard: if the action ignored the argument, passing the wrong
+        // id would be harmless.
+        const action = fn(APPLICATIONS, 'getUserLoanApplicationsAction');
+
+        expect(action).toContain('session.user.id !== userId && !isAdmin(session.user.roles)');
+        expect(action).toContain('return [];');
+    });
+});
