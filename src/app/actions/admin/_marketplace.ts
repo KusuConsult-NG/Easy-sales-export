@@ -813,7 +813,12 @@ async function _approveMarketplaceUserAction(userId: string): Promise<ActionResp
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null };
-        if (!isAdmin(sessionResult.session.user.roles)) return { success: false as const, error: "Unauthorized", data: null };
+        // marketplace:approve_sellers, not "is some kind of admin".
+        //
+        // isAdmin() is true for every admin role, so an academy_admin or a
+        // wave_admin could approve a marketplace seller. The matrix grants this
+        // to super_admin, admin and marketplace_admin only.
+        if (!hasAdminPermission(sessionResult.session.user.roles, "marketplace:approve_sellers")) return { success: false as const, error: "Unauthorized", data: null };
 
         await db.collection(COLLECTIONS.USERS).doc(userId).update({
             status: "active",
@@ -854,7 +859,8 @@ async function _rejectMarketplaceUserAction(options: { userId: string; reason: s
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null };
-        if (!isAdmin(sessionResult.session.user.roles)) return { success: false as const, error: "Unauthorized", data: null };
+        // marketplace:suspend_sellers — see the note on the approve path above.
+        if (!hasAdminPermission(sessionResult.session.user.roles, "marketplace:suspend_sellers")) return { success: false as const, error: "Unauthorized", data: null };
 
         await db.collection(COLLECTIONS.USERS).doc(options.userId).update({
             status: "rejected",
@@ -920,6 +926,11 @@ async function _getAdminProductsAction(options: {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
         const { session } = sessionResult;
+        // A READ, so isAdmin is the right gate here: every admin role holds
+        // "users:read" and seeing the moderation queue is not acting on it.
+        // Narrowing this to content:approve would blind marketplace_admin to
+        // its own backlog. The gate that needed tightening is the write —
+        // _reviewProductAction below.
         if (!session?.user || !isAdmin(session.user.roles)) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
@@ -998,7 +1009,11 @@ async function _reviewProductAction(input: {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
         const { session } = sessionResult;
-        if (!session?.user || !isAdmin(session.user.roles)) {
+        // content:approve — putting a product live, refusing it or suspending
+        // it is content moderation, which the matrix grants to super_admin,
+        // admin and moderator. isAdmin() is true for every admin role, so an
+        // academy_admin or an export_admin could publish a marketplace product.
+        if (!session?.user || !hasAdminPermission(session.user.roles, "content:approve")) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
 

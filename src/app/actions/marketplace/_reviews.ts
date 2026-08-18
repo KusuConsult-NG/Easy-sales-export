@@ -10,7 +10,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { isAdmin } from "@/lib/admin-permissions";
+import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { withSafeAction } from "@/lib/safe-action";
 import type { ActionResponse } from "@/lib/safe-action";
 import {
@@ -328,7 +328,7 @@ async function _moderateReviewAction(
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
         const adminId = sessionResult.session.user.id;
 
-        if (!isAdmin(sessionResult.session.user.roles)) { 
+        if (!hasAdminPermission(sessionResult.session.user.roles, "marketplace:moderate_reviews")) { 
             return { success: false as const, error: "Unauthorized", data: null };
         }
 

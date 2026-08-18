@@ -4,7 +4,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { isAdmin } from "@/lib/admin-permissions";
+import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { FieldValue } from "@/lib/firestore-compat";
 import { FieldPath } from "@/lib/firestore-compat";
@@ -389,7 +389,7 @@ async function _updateAdminLandListingAction(data: {
     if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
     
-    if (!isAdmin(session.user.roles)) {
+    if (!hasAdminPermission(session.user.roles, "land:verify_listings")) {
         return { success: false, error: "Unauthorized: Admin access required", data: null };
     }
 

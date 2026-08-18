@@ -4,7 +4,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { FieldValue } from "@/lib/firestore-compat";
 
 /**
@@ -82,7 +82,7 @@ export async function runServiceRegistrationRecoveryAction(): Promise<{ success:
 
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session || !isAdmin(sessionResult.session.user.roles)) {
+        if (!sessionResult.session || !hasAdminPermission(sessionResult.session.user.roles, "users:update")) {
             throw new Error("Unauthorized: Admin access required.");
         }
 

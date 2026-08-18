@@ -4,7 +4,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { FieldValue } from "@/lib/firestore-compat";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { createAdminAuditLog } from "@/lib/audit-log";
@@ -25,7 +25,7 @@ async function _startWaveLiveSessionAction(
             return { success: false as const, error: "Not authenticated" , data: null };
         }
 
-        if (!isAdmin(session.user.roles)) {
+        if (!hasAdminPermission(session.user.roles, "wave:manage_training")) {
             return { success: false as const, error: "Unauthorized" , data: null };
         }
 
@@ -125,7 +125,7 @@ async function _endWaveLiveSessionAction(
             return { success: false as const, error: "Not authenticated", data: null };
         }
 
-        if (!isAdmin(session.user.roles)) {
+        if (!hasAdminPermission(session.user.roles, "wave:manage_training")) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
 

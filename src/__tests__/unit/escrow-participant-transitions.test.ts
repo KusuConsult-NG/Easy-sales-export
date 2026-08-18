@@ -177,7 +177,12 @@ describe('the action claims rather than checking then writing', () => {
         const body = fn.slice(0, fn.indexOf('export const updateEscrowStatus'));
 
         expect(body).toContain('preData.buyerId !== userId && preData.sellerId !== userId');
-        expect(body).toContain('preData.status === "disputed" && !isAdmin(session.user.roles)');
+        // The admin half is now the PERMISSION rather than the role: leaving a
+        // disputed escrow is dispute resolution, and PERMISSION_MATRIX gives
+        // "finance:resolve_disputes" to super_admin and admin only. isAdmin()
+        // was true for all six module admins too, so an academy_admin could
+        // move a marketplace escrow out of dispute.
+        expect(body).toContain('preData.status === "disputed" && !hasAdminPermission(session.user.roles, "finance:resolve_disputes")');
     });
 
     it('and says so plainly when asked to move money', () => {

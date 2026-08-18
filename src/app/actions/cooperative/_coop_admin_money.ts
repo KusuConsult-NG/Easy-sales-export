@@ -4,7 +4,7 @@ import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
-import { isAdmin } from "@/lib/admin-permissions";
+import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { FieldValue } from "@/lib/firestore-compat";
 import { FieldPath } from "@/lib/firestore-compat";
 import { logAuditAction } from "@/lib/audit-log";
@@ -245,7 +245,7 @@ export async function approveWithdrawalAction(
         }
 
         let roles = session.user.roles;
-        if (!isAdmin(roles)) {
+        if (!hasAdminPermission(roles, "finance:process_withdrawals")) {
             const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
             const liveRoles = liveUserDoc.data()?.roles;
             if (isAdmin(liveRoles)) {
@@ -472,7 +472,7 @@ export async function rejectWithdrawalAction(
         }
 
         let roles = session.user.roles;
-        if (!isAdmin(roles)) {
+        if (!hasAdminPermission(roles, "finance:process_withdrawals")) {
             const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
             const liveRoles = liveUserDoc.data()?.roles;
             if (isAdmin(liveRoles)) {

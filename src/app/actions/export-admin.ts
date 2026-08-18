@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { requireSession } from "@/lib/session-guard";
-import { isAdmin } from "@/lib/admin-permissions";
+import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { logger } from "@/lib/logger";
 import { serializeDocs } from "@/lib/firestore-serialize";
 
@@ -87,7 +87,7 @@ export async function createExportCatalogAction(productData: any): Promise<
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error, data: null };
         const { session } = sessionResult;
-        if (!session?.user || !isAdmin(session.user.roles)) { return { success: false as const, error: "Unauthorized", data: null };
+        if (!session?.user || !hasAdminPermission(session.user.roles, "export:approve_applications")) { return { success: false as const, error: "Unauthorized", data: null };
         }
 
         const db = getAdminDb();
@@ -184,7 +184,7 @@ export async function deleteExportCatalogAction(productId: string): Promise<
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error, data: null };
         const { session } = sessionResult;
-        if (!session?.user || !isAdmin(session.user.roles)) { return { success: false as const, error: "Unauthorized", data: null };
+        if (!session?.user || !hasAdminPermission(session.user.roles, "export:approve_applications")) { return { success: false as const, error: "Unauthorized", data: null };
         }
 
         const db = getAdminDb();
@@ -231,7 +231,7 @@ export async function reviewExportProductAction(productId: string, action: 'appr
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error, data: null };
         const { session } = sessionResult;
-        if (!session?.user || !isAdmin(session.user.roles)) { return { success: false as const, error: "Unauthorized", data: null };
+        if (!session?.user || !hasAdminPermission(session.user.roles, "export:approve_applications")) { return { success: false as const, error: "Unauthorized", data: null };
         }
 
         const db = getAdminDb();
@@ -319,7 +319,7 @@ export async function updateAdminExportOrderStatusAction(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
-        if (!isAdmin(session.user.roles)) { return { success: false as const, error: "Unauthorized access", data: null };
+        if (!hasAdminPermission(session.user.roles, "export:approve_applications")) { return { success: false as const, error: "Unauthorized access", data: null };
         }
 
         // `status` arrived as a free string and was written straight to the

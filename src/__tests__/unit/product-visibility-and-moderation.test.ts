@@ -189,10 +189,22 @@ describe('the admin review action', () => {
 
     it('is admin-only', () => {
         const src = code(ADMIN);
-        for (const name of ['_getAdminProductsAction', '_reviewProductAction']) {
-            const fn = src.slice(src.indexOf(`async function ${name}`), src.indexOf(`async function ${name}`) + 1200);
-            expect(fn).toContain('isAdmin(session.user.roles)');
-        }
+
+        // The LIST stays on isAdmin: seeing the moderation queue is not acting
+        // on it, and every admin role holds "users:read". Narrowing it would
+        // blind marketplace_admin to its own backlog.
+        const list = src.slice(src.indexOf('async function _getAdminProductsAction'),
+            src.indexOf('async function _getAdminProductsAction') + 1200);
+        expect(list).toContain('isAdmin(session.user.roles)');
+
+        // The WRITE asks the permission matrix. isAdmin() is true for all six
+        // module admins, so an academy_admin could publish a marketplace
+        // product; "content:approve" belongs to super_admin, admin and
+        // moderator.
+        const review = src.slice(src.indexOf('async function _reviewProductAction'),
+            src.indexOf('async function _reviewProductAction') + 1200);
+        expect(review).toContain('hasAdminPermission(session.user.roles, "content:approve")');
+        expect(review).not.toContain('!isAdmin(session.user.roles)');
     });
 
     it('writes an audit row naming the decision', () => {

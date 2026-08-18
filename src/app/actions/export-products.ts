@@ -3,7 +3,8 @@
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
-import { requireSession, isAdmin } from "@/lib/session-guard";
+import { requireSession } from "@/lib/session-guard";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { serializeValue } from "@/lib/firestore-serialize";
 
@@ -129,7 +130,7 @@ export async function deleteExportProductAction(productId: string) {
         if (productData?.userId !== userId) {
             const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
             const roles = userDoc.data()?.roles || [];
-            if (!isAdmin(roles)) {
+            if (!hasAdminPermission(roles, "export:approve_applications")) {
                 return { success: false as const, error: "Unauthorized: You do not own this product", data: null };
             }
         }

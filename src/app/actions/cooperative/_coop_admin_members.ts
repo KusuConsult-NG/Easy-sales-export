@@ -5,7 +5,7 @@ import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { normalizeUserUpdate } from "@/lib/schema-normalizer";
-import { isAdmin } from "@/lib/admin-permissions";
+import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { FieldValue } from "@/lib/firestore-compat";
 import { FieldPath } from "@/lib/firestore-compat";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
@@ -208,7 +208,7 @@ async function _updateMemberStatusAction(
         }
 
         let roles = session.user.roles;
-        if (!isAdmin(roles)) {
+        if (!hasAdminPermission(roles, "cooperatives:approve_members")) {
             const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
             const liveRoles = liveUserDoc.data()?.roles;
             if (isAdmin(liveRoles)) {
@@ -465,7 +465,7 @@ export async function requestCooperativeRevisionAction(
         }
 
         let roles = session.user.roles;
-        if (!isAdmin(roles)) {
+        if (!hasAdminPermission(roles, "cooperatives:approve_members")) {
             const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
             const liveRoles = liveUserDoc.data()?.roles;
             if (isAdmin(liveRoles)) {

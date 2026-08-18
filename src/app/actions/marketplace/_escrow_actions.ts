@@ -15,7 +15,7 @@ import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { serializeValue, serializeDocs } from "@/lib/firestore-serialize";
 import { smsEscrowReleased } from "@/lib/africastalking";
 import { pushEscrowReleased } from "@/lib/fcm";
-import { isAdmin } from "@/lib/admin-permissions";
+import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import {
     ESCROW_STATUSES,
     ESCROW_DISPUTEABLE_STATUSES,
@@ -259,7 +259,7 @@ async function _updateEscrowStatus(
         // resolution. The old guard was
         // `(currentStatus === "disputed" || status === "completed")`, and since
         // "completed" could never arrive, only the first half ever did anything.
-        if (preData.status === "disputed" && !isAdmin(session.user.roles)) {
+        if (preData.status === "disputed" && !hasAdminPermission(session.user.roles, "finance:resolve_disputes")) {
             return { success: false as const, error: "Admin access required to perform this transition", data: null };
         }
 
@@ -404,7 +404,7 @@ async function _releaseEscrowFunds(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
         const { session } = sessionResult;
 
-        if (!isAdmin(session.user.roles)) { return { success: false as const, error: "Admin access required"};
+        if (!hasAdminPermission(session.user.roles, "finance:resolve_disputes")) { return { success: false as const, error: "Admin access required"};
         }
 
         const userId = session.user.id;
@@ -639,7 +639,7 @@ async function _refundEscrowToBuyer(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
         const { session } = sessionResult;
 
-        if (!isAdmin(session.user.roles)) { return { success: false as const, error: "Admin access required"};
+        if (!hasAdminPermission(session.user.roles, "finance:resolve_disputes")) { return { success: false as const, error: "Admin access required"};
         }
 
         const userId = session.user.id;

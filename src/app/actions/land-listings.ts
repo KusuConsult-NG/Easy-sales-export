@@ -9,7 +9,7 @@ import { Timestamp } from "@/lib/firestore-compat";
 import { createAdminAuditLog, logAdminAction } from "@/lib/audit-log";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { createNotificationAction } from "@/app/actions/notifications";
-import { isAdmin } from "@/lib/admin-permissions";
+import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { revalidateTag } from "next/cache";
 import { invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
@@ -227,7 +227,7 @@ async function _verifyLandListingAction(
         if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         
-        if (!isAdmin(session?.user?.roles)) { 
+        if (!hasAdminPermission(session?.user?.roles, "land:verify_listings")) { 
             return { success: false, error: "Unauthorized: Admin access required", data: null };
         }
 
@@ -325,7 +325,7 @@ async function _rejectLandListingAction(
         if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         
-        if (!isAdmin(session?.user?.roles)) { 
+        if (!hasAdminPermission(session?.user?.roles, "land:verify_listings")) { 
             return { success: false, error: "Unauthorized: Admin access required", data: null };
         }
 
@@ -905,7 +905,7 @@ async function _deleteLandListingAction(
         if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         
-        if (!isAdmin(session?.user?.roles)) { 
+        if (!hasAdminPermission(session?.user?.roles, "land:verify_listings")) { 
             return { success: false, error: "Unauthorized: Admin access required", data: null };
         }
 

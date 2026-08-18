@@ -5,7 +5,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { isAdmin } from "@/lib/admin-permissions";
+import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { FieldValue, Timestamp, FieldPath } from "@/lib/firestore-compat";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
@@ -180,7 +180,7 @@ async function _approveWaveApplicationAction(
             return { success: false as const, error: "Not authenticated" , data: null };
         }
 
-        if (!isAdmin(session.user.roles)) {
+        if (!hasAdminPermission(session.user.roles, "wave:approve_applications")) {
             return { success: false as const, error: "Unauthorized" , data: null };
         }
 
@@ -379,7 +379,7 @@ async function _rejectWaveApplicationAction(
             return { success: false as const, error: "Not authenticated" };
         }
 
-        if (!isAdmin(session.user.roles)) {
+        if (!hasAdminPermission(session.user.roles, "wave:approve_applications")) {
             return { success: false as const, error: "Unauthorized" };
         }
 

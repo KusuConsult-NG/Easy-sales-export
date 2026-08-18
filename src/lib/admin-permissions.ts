@@ -225,6 +225,63 @@ export function isAdmin(userRoles: string[] | undefined): boolean {
 }
 
 /**
+ * Which permission each kind of moderated content actually requires.
+ *
+ * WHY THIS EXISTS
+ * ---------------
+ * approveContentAction and rejectContentAction take a ContentType and switch
+ * over SIX collections — products, land listings, the export catalogue,
+ * courses, certificates and resources — under a single `isAdmin()` gate.
+ *
+ * isAdmin() is true for EVERY admin role, so one gate made no distinction
+ * between them. Each module's admin could act on every other module's content:
+ * an academy_admin could mark a land listing VERIFIED, a wave_admin could
+ * publish an export listing, a farm_nation_admin could issue an academy
+ * certificate. All six module-admin roles are in ALL_USER_ROLES, so all six are
+ * grantable and this was reachable. The matrix already denies each of them;
+ * nothing asked it.
+ *
+ * SCOPE, STATED HONESTLY: `support` and `moderator` appear in PERMISSION_MATRIX
+ * and in isAdmin(), but in no role type and no UI list — bulk-user-operations.ts
+ * records that, and validating against ALL_USER_ROLES closed the one path that
+ * could grant them. So the "a read-only support user could approve things"
+ * reading of this defect is NOT reachable today. The cross-module escalation
+ * between the six module admins is the live half.
+ *
+ * That was the only thing missing. hasAdminPermission is used at seventy-odd
+ * other call sites, so this is one gate that skipped the machinery rather than
+ * machinery that was never built.
+ */
+export const CONTENT_TYPE_PERMISSION = {
+    products: "content:approve",
+    land: "land:verify_listings",
+    export: "export:approve_applications",
+    courses: "academy:manage_courses",
+    certificates: "academy:issue_certificates",
+    resources: "academy:manage_courses",
+} as const satisfies Record<string, AdminPermission>;
+
+export type ModeratedContentType = keyof typeof CONTENT_TYPE_PERMISSION;
+
+/**
+ * The permission needed to approve or reject this kind of content.
+ *
+ * An unrecognised type returns null, and callers must refuse on null rather
+ * than falling back to a generic check — an unknown content type is exactly
+ * where a new collection would slip past the matrix.
+ */
+export function permissionForContentType(type: string): AdminPermission | null {
+    // Object.hasOwn, not a bare index: `type` arrives from the caller, and a
+    // plain lookup walks the prototype chain — permissionForContentType(
+    // "constructor") returned Object.prototype.constructor, a truthy value that
+    // is not a permission. It failed closed (hasAdminPermission never matches a
+    // function) but it reached the matrix at all, which is one step further
+    // than a caller-supplied string should get.
+    if (!Object.hasOwn(CONTENT_TYPE_PERMISSION, type)) return null;
+    return (CONTENT_TYPE_PERMISSION as Record<string, AdminPermission>)[type];
+}
+
+/**
  * Check if user is super admin
  */
 export function isSuperAdmin(userRoles: string[] | undefined): boolean {

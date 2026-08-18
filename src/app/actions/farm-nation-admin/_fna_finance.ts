@@ -5,7 +5,7 @@ import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { claimStatusTransition } from "@/lib/status-transition";
-import { isAdmin } from "@/lib/admin-permissions";
+import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { FieldValue } from "@/lib/firestore-compat";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
@@ -217,7 +217,7 @@ async function _releaseFarmNationEscrowAction(transactionId: string): Promise<Ac
         if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
-        if (!isAdmin(session.user.roles)) {
+        if (!hasAdminPermission(session.user.roles, "finance:resolve_disputes")) {
             return { success: false, error: "Unauthorized: Permission required", data: null };
         }
 

@@ -40,8 +40,8 @@ async function _approveFarmNationSellerAction(userId: string): Promise<ActionRes
         // _verifyPropertyAction — which is the third admin action here and was
         // already guarded. One of three checked and two not is the shape this
         // audit keeps finding.
-        const { isAdmin } = await import("@/lib/admin-permissions");
-        if (!isAdmin(session?.user?.roles)) {
+        const { hasAdminPermission } = await import("@/lib/admin-permissions");
+        if (!hasAdminPermission(session?.user?.roles, "farm_nation:verify_applications")) {
             return { success: false as const, error: "Unauthorized", data: null, meta: null };
         }
 
@@ -132,8 +132,8 @@ async function _rejectFarmNationSellerAction(userId: string, reason: string): Pr
         // anybody with an account, and the record would name the caller as
         // `rejectedBy` — an audit trail agreeing with an action nobody was
         // entitled to take.
-        const { isAdmin } = await import("@/lib/admin-permissions");
-        if (!isAdmin(session?.user?.roles)) {
+        const { hasAdminPermission } = await import("@/lib/admin-permissions");
+        if (!hasAdminPermission(session?.user?.roles, "farm_nation:verify_applications")) {
             return { success: false as const, error: "Unauthorized", data: null, meta: null };
         }
 
@@ -211,8 +211,8 @@ async function _verifyPropertyAction(propertyId: string, verified: boolean): Pro
         const { session } = sessionResult;
         
         // Check admin role
-        const { isAdmin } = await import("@/lib/admin-permissions");
-        if (!isAdmin(session?.user?.roles)) { 
+        const { hasAdminPermission } = await import("@/lib/admin-permissions");
+        if (!hasAdminPermission(session?.user?.roles, "land:verify_listings")) { 
             return { success: false as const, error: "Unauthorized", data: null, meta: null };
         }
 

@@ -6,7 +6,7 @@ import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
 import { logAuditAction } from "@/lib/audit-log";
-import { isAdmin } from "@/lib/admin-permissions";
+import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { ActionResponse, withFlexibleSafeAction } from "@/lib/safe-action";
 
@@ -107,7 +107,7 @@ async function _upsertAcademyCourseAction(
             return { success: false, error: "Not authenticated", data: null };
         }
 
-        if (!isAdmin(session.user.roles)) {
+        if (!hasAdminPermission(session.user.roles, "academy:manage_courses")) {
             return { success: false, error: "Unauthorized", data: null };
         }
         const { courseSchema } = await import("@/lib/schemas");

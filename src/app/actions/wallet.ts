@@ -23,7 +23,7 @@ import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import type { Wallet, WalletTransaction } from "@/lib/types/marketplace";
 import { smsWithdrawalApproved, smsWithdrawalRejected } from "@/lib/africastalking";
 import { pushWithdrawalDecision } from "@/lib/fcm";
-import { isAdmin } from "@/lib/admin-permissions";
+import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { ActionResponse, withSafeAction } from "@/lib/safe-action";
 import { getFeatureToggle } from "./feature-toggles";
 import { z } from "zod";
@@ -631,7 +631,7 @@ async function _processWalletWithdrawalAction(
     if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
     const adminId = sessionResult.session.user.id;
 
-    if (!isAdmin(sessionResult.session.user.roles)) {
+    if (!hasAdminPermission(sessionResult.session.user.roles, "finance:process_withdrawals")) {
         return { success: false as const, error: "Unauthorized", data: null };
     }
 

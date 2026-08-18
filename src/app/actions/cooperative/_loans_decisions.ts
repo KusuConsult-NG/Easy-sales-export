@@ -12,7 +12,7 @@ import {
 } from "@/lib/loan-approval-policy";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import type { LoanApplication } from "@/lib/types/cooperative-loans";
 import { resolveLoanApplication } from "@/lib/loan-application-location";
 
@@ -30,7 +30,7 @@ export async function approveLoanAction(
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
-        if (!session?.user?.id || !isAdmin(session.user.roles)) {
+        if (!session?.user?.id || !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
 
@@ -227,7 +227,7 @@ export async function rejectLoanAction(
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
-        if (!session?.user?.id || !isAdmin(session.user.roles)) {
+        if (!session?.user?.id || !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
 
@@ -308,7 +308,7 @@ export async function disburseLoanAction(
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
-        if (!session?.user?.id || !isAdmin(session.user.roles)) {
+        if (!session?.user?.id || !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
 

@@ -5,7 +5,7 @@ import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { isAdmin } from "@/lib/admin-permissions";
+import { isAdmin, hasAdminPermission, permissionForContentType } from "@/lib/admin-permissions";
 import { FieldValue } from "@/lib/firestore-compat";
 import { serializeValue } from "@/lib/firestore-serialize";
 import {
@@ -238,7 +238,19 @@ export async function approveContentAction(
         // an admin performs by hand. Recorded that way rather than overstated.
         const callerDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const callerRoles: string[] = callerDoc.data()?.roles ?? [];
-        if (!callerDoc.exists || !isAdmin(callerRoles)) {
+        // The permission for THIS content type, not merely "is some kind of
+        // admin".
+        //
+        // isAdmin() is true for every admin role, so one gate covered six
+        // collections belonging to four different modules: an academy_admin
+        // could mark a land listing VERIFIED and a wave_admin could publish an
+        // export listing. All six module-admin roles are grantable, so this was
+        // reachable. See lib/admin-permissions.ts for the full scope.
+        const requiredPermission = permissionForContentType(type);
+        if (!requiredPermission) {
+            return { success: false as const, error: "Invalid content type", data: null };
+        }
+        if (!callerDoc.exists || !hasAdminPermission(callerRoles, requiredPermission)) {
             return { success: false as const, error: "Unauthorized" , data: null };
         }
 
@@ -367,7 +379,19 @@ export async function rejectContentAction(
         // an admin performs by hand. Recorded that way rather than overstated.
         const callerDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const callerRoles: string[] = callerDoc.data()?.roles ?? [];
-        if (!callerDoc.exists || !isAdmin(callerRoles)) {
+        // The permission for THIS content type, not merely "is some kind of
+        // admin".
+        //
+        // isAdmin() is true for every admin role, so one gate covered six
+        // collections belonging to four different modules: an academy_admin
+        // could mark a land listing VERIFIED and a wave_admin could publish an
+        // export listing. All six module-admin roles are grantable, so this was
+        // reachable. See lib/admin-permissions.ts for the full scope.
+        const requiredPermission = permissionForContentType(type);
+        if (!requiredPermission) {
+            return { success: false as const, error: "Invalid content type", data: null };
+        }
+        if (!callerDoc.exists || !hasAdminPermission(callerRoles, requiredPermission)) {
             return { success: false as const, error: "Unauthorized" , data: null };
         }
 

@@ -59,8 +59,8 @@ async function _updateShipmentStatusAction(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
-        const { isAdmin } = await import("@/lib/admin-permissions");
-        if (!isAdmin(session.user.roles)) {
+        const { hasAdminPermission } = await import("@/lib/admin-permissions");
+        if (!hasAdminPermission(session.user.roles, "wave:manage_training")) {
             return { success: false as const, error: "Admin access required", data: null };
         }
 
