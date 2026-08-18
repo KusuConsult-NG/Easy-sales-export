@@ -14,6 +14,7 @@ import { rateLimit } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { getBaseUrl } from "@/lib/server-utils";
+import { checkOrderPaymentAmount } from "@/lib/order-payment-amount";
 import {
     checkAcademyPayment,
     normaliseAcademyPlan,
@@ -102,8 +103,15 @@ export async function initializeEnrollmentPaymentAction(
         if (existingEnrollment.exists) { return { error: "You are already enrolled in this course", success: false as const, data: null };
         }
 
+        // /academy/verify-payment is not a page. Paying for a course enrolment
+        // charged the learner and dropped them on a 404, and the Paystack
+        // webhook has no `academy_enrollment` case, so the verify action that
+        // missing page would have called was the only thing that could enrol
+        // them. `flow=enrollment` picks that verifier on the callback page,
+        // which otherwise defaults to the registration one and would have
+        // refused this payment as the wrong type.
         const baseUrl = await getBaseUrl();
-        const callbackUrl = `${baseUrl}/academy/verify-payment`;
+        const callbackUrl = `${baseUrl}/academy/payment/callback?flow=enrollment`;
 
         // Initialize payment with Paystack
         const { authorizationUrl, reference } = await initializePaystackPayment(
@@ -194,14 +202,29 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
         const courseData = courseDoc.data();
         const expectedPrice = courseData?.price || 0;
 
-        // Verify paid amount matches course price (allow slight epsilon for potential floating point issues, though unlikely with Paystack)
-        if (Math.abs(amountInNaira - expectedPrice) > 50) { // 50 Naira margin for safety/fees? No, should be exact. Let's make it tight. 
-            // Actually, Paystack returns exact amount paid. 
-            // If the user paid less, we reject.
-            if (amountInNaira < expectedPrice) {
-                logger.warn(`Price mismatch for course ${metadata.courseId}. Expected ${expectedPrice}, got ${amountInNaira}`);
-                return { success: false as const, error: `Payment amount (${amountInNaira}) does not match current course price (${expectedPrice}).` , data: null };
-            }
+        // Underpayment is refused — at any size.
+        //
+        // The check here was nested:
+        //
+        //     if (Math.abs(paid - expected) > 50) {
+        //         if (paid < expected) { reject }
+        //     }
+        //
+        // so the reject was unreachable for any shortfall of ₦50 or less. The
+        // outer condition was written as a float-tolerance guard and the comment
+        // beside it argues with itself — "50 Naira margin for safety/fees? No,
+        // should be exact" — and then leaves the 50 in. Paying ₦50 under the
+        // course price was accepted, silently, on every course.
+        //
+        // checkOrderPaymentAmount is the rule the marketplace order path already
+        // uses: it refuses any shortfall beyond one naira of rounding slack, and
+        // ACCEPTS overpayment rather than stranding a learner who has been
+        // charged. That is what the nested version did by accident on the
+        // overpayment side, and what it failed to do on the underpayment side.
+        const amountVerdict = checkOrderPaymentAmount(amountInNaira, expectedPrice);
+        if (!amountVerdict.ok) {
+            logger.warn(`Price mismatch for course ${metadata.courseId}. Expected ${expectedPrice}, got ${amountInNaira}`);
+            return { success: false as const, error: `Payment amount (${amountInNaira}) does not match current course price (${expectedPrice}).`, data: null };
         }
 
         // "SECURITY FIX #4: Use Firestore transaction for atomicity" provided
@@ -221,23 +244,64 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
             metadata: { courseId: metadata.courseId, enrollmentId },
         });
 
+        // The enrolment record, written the same way whichever branch runs.
+        //
+        // TWO COLLECTIONS, ONE ENROLMENT
+        // ------------------------------
+        // The duplicate branch below used to write COLLECTIONS.ACADEMY_ENROLLMENTS
+        // while the primary branch updated COLLECTIONS.ENROLLMENTS. They are
+        // different tables, and the choice depended on whether the payment had
+        // already been claimed.
+        //
+        // That mattered because the admin Academy enrolments report
+        // (_ac_admin_reports.ts) and the platform enrolment metrics
+        // (userMetrics.service.ts) both read ACADEMY_ENROLLMENTS. So the only
+        // enrolments they could see were the ones produced by a DUPLICATE
+        // delivery — the recovery branch was healing the table the admin reads,
+        // and the path that actually enrols somebody was writing elsewhere.
+        //
+        // Both branches now write both: ENROLLMENTS is what
+        // initializeEnrollmentPaymentAction created and what dashboard.ts reads,
+        // and the ACADEMY_ENROLLMENTS mirror is what the admin sees. Neither
+        // reader is repointed, so nothing that works today stops working.
+        const mirrorEnrolmentForAdmin = async () => {
+            try {
+                await db.collection(COLLECTIONS.ACADEMY_ENROLLMENTS).doc(enrollmentId).set({
+                    userId: session.user.id,
+                    courseId: metadata.courseId,
+                    courseTitle: courseData?.title ?? metadata.courseTitle ?? null,
+                    status: "active",
+                    paymentStatus: "completed",
+                    paymentReference: reference,
+                    amount: amountInNaira,
+                    enrolledAt: FieldValue.serverTimestamp(),
+                }, { merge: true });
+            } catch (syncErr: unknown) {
+                // Non-fatal: the learner is enrolled either way, and the mirror
+                // is a reporting copy.
+                logger.warn(`[verifyEnrollmentPaymentAction] Enrollment mirror failed (non-fatal): ${String(syncErr)}`);
+            }
+        };
+
         if (!claim.claimed) {
             // Already applied, by the webhook or by an earlier delivery. Sync
             // the enrolment doc so the user is not told verification failed
             // after paying, then report success — a duplicate is a success.
             logger.info(`[verifyEnrollmentPaymentAction] Payment ${reference} already claimed — syncing enrollment status.`);
             try {
-                await db.collection(COLLECTIONS.ACADEMY_ENROLLMENTS ?? "academy_enrollments").doc(enrollmentId).set({
+                await db.collection(COLLECTIONS.ENROLLMENTS).doc(enrollmentId).set({
                     userId: session.user.id,
                     courseId: metadata.courseId,
                     status: "active",
                     paymentStatus: "completed",
                     paymentReference: reference,
-                    enrolledAt: FieldValue.serverTimestamp(),
+                    paymentVerifiedAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp(),
                 }, { merge: true });
             } catch (syncErr: unknown) {
                 logger.warn(`[verifyEnrollmentPaymentAction] Enrollment sync failed (non-fatal): ${String(syncErr)}`);
             }
+            await mirrorEnrolmentForAdmin();
             return { error: null, success: true as const, data: null };
         }
 
@@ -250,6 +314,8 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
                 paymentStatus: "completed",
                 paymentVerifiedAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp() });
+
+            await mirrorEnrolmentForAdmin();
 
             // Increment course student count.
             //

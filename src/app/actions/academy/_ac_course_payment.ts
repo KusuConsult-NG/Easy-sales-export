@@ -9,7 +9,9 @@ import { initializePaystackPayment, verifyPaystackPayment } from "@/lib/paystack
 import { revalidatePath } from "next/cache";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { claimPaymentOnce } from "@/lib/wallet-ledger";
+import { checkOrderPaymentAmount } from "@/lib/order-payment-amount";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
+import { getBaseUrl } from "@/lib/server-utils";
 import type { Course, UserProgress } from "@/lib/types/academy-actions";
 
 /**
@@ -30,6 +32,28 @@ async function _initializeCoursePaymentAction(courseId: string): Promise<ActionR
             return { success: false as const, error: "This course is free. Please enroll directly.", data: null };
         }
 
+        // A callback that is a page, on the base URL everything else uses.
+        //
+        // This was `${process.env.NEXT_PUBLIC_APP_URL}/academy/verify`, and two
+        // things were wrong with it.
+        //
+        // /academy/verify is not a page. The only route beneath it is
+        // /academy/verify/[certificateId], so a learner who paid for a course
+        // was charged and then landed on a 404 — and since the Paystack webhook
+        // has no case for `academy_enrollment`, the verify action that missing
+        // page would have called was their only route to being enrolled at all.
+        //
+        // And NEXT_PUBLIC_APP_URL was read bare, with no fallback: unset, the
+        // callback becomes the string "undefined/academy/verify". Every other
+        // academy payment resolves its base through getBaseUrl().
+        //
+        // `flow=course` tells the callback page which verifier to call —
+        // verifyAcademyPaymentAction refuses anything that is not an academy
+        // registration, so without it a course payer would have been shown
+        // "Payment Verification Failed" instead.
+        const baseUrl = await getBaseUrl();
+        const callbackUrl = `${baseUrl}/academy/payment/callback?flow=course`;
+
         // Initialize Paystack
         const result = await initializePaystackPayment(
             session.user.email || "",
@@ -39,8 +63,9 @@ async function _initializeCoursePaymentAction(courseId: string): Promise<ActionR
                 courseId,
                 userId: session.user.id,
                 email: session.user.email,
+                callback_url: callbackUrl,
             },
-            `${process.env.NEXT_PUBLIC_APP_URL}/academy/verify` // Redirect to Academy verification page
+            callbackUrl
         );
 
         return { success: true, error: null, data: result };
@@ -78,15 +103,32 @@ async function _verifyCoursePaymentAction(reference: string): Promise<ActionResp
             return { success: false as const, error: "Invalid payment type", data: null };
         }
 
-        // Check if already processed
-        const existingRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
-        const existingDoc = await existingRef.get();
-        if (existingDoc.exists) return { success: false as const, error: "Payment already processed", data: null };
+        // The buyer is the session, not the metadata.
+        //
+        // This read `const userId = metadata.userId` and enrolled that user, with
+        // the session checked only for existence. Its sibling
+        // verifyEnrollmentPaymentAction refuses on `metadata.userId !==
+        // session.user.id`; this one did not compare them at all, so a signed-in
+        // caller holding somebody else's reference could drive that person's
+        // enrolment. The same rule is applied here.
+        const userId = session.user.id;
+        if (metadata.userId && metadata.userId !== userId) {
+            return { success: false as const, error: "Payment verification failed: User mismatch", data: null };
+        }
 
-        // Process enrollment
-        const userId = metadata.userId;
         const courseId = metadata.courseId;
         const amountPaid = verify.data.amount / 100;
+
+        // The pre-claim read is gone; claimPaymentOnce below is the whole answer.
+        //
+        // It was `if (existingDoc.exists) return { success: false, error: "Payment
+        // already processed" }` — a check-then-write whose write happens further
+        // down, so it took no lock and settled nothing, AND it reported a
+        // duplicate as a FAILURE. A learner whose payment had already been
+        // applied was told verification failed after being charged, which is the
+        // exact outcome the registration path carries a comment about having
+        // fixed. claimPaymentOnce distinguishes the two cases for certain, and
+        // the `!claim.claimed` branch below now reports success.
 
         // 🔒 SECURITY FIX: Amount re-validation against REAL course price
         const courseDoc = await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId).get();
@@ -94,9 +136,15 @@ async function _verifyCoursePaymentAction(reference: string): Promise<ActionResp
 
         const course = courseDoc.data() as Course;
         if (course.price && course.price > 0) {
-            // Check if amount paid is less than course price
-            // Allow small margin? No, be strict but handle float.
-            if (amountPaid < course.price) {
+            // The shared rule, rather than a fourth hand-rolled comparison.
+            //
+            // `amountPaid < course.price` has no tolerance at all, so a price and
+            // a payment that differ only in floating-point representation refuse
+            // a legitimate payment. checkOrderPaymentAmount allows one naira of
+            // rounding slack, refuses any real shortfall, and accepts
+            // overpayment — which this comparison also did, by omission.
+            const verdict = checkOrderPaymentAmount(amountPaid, course.price);
+            if (!verdict.ok) {
                 logger.warn(`Price drift detected for course ${courseId}. Expected ${course.price}, Paid ${amountPaid}`);
                 return { success: false as const, error: "Payment verification failed: Amount paid is less than current course price.", data: null };
             }
@@ -119,7 +167,11 @@ async function _verifyCoursePaymentAction(reference: string): Promise<ActionResp
         });
 
         if (!claim.claimed) {
-            return { success: false as const, error: "Payment already processed", data: null };
+            // A duplicate is a SUCCESS. The learner paid and is enrolled; saying
+            // "Payment already processed" as an error tells someone who has been
+            // charged that verification failed.
+            logger.info(`[verifyCoursePaymentAction] Payment ${reference} already claimed — reporting success.`);
+            return { success: true, error: null, data: null };
         }
 
         await db.runTransaction(async (t) => {

@@ -1,5 +1,6 @@
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { normaliseAcademyPlan } from "@/lib/academy-plan";
 import type { UserMetricsServiceContract, CooperativeMemberMetrics, AcademyMetrics } from "@easy-sales/services";
 
 /**
@@ -152,18 +153,38 @@ export class UserMetricsService implements UserMetricsServiceContract {
             advanced: { count: 0, revenue: 0 }
         };
 
+        // Bucketed by a plan that is actually a plan.
+        //
+        // This read `(app.plan || "foundation").toLowerCase()` and, when the
+        // value was not one of the four keys above, created a NEW bucket named
+        // after it. _submitAcademyApplicationAction wrote `plan: "registration"`
+        // on every application it ever created, so every paying learner landed
+        // in a bucket called "registration" while foundation, standard, elite and
+        // advanced all sat at zero — a per-plan breakdown in which no plan had
+        // anybody in it.
+        //
+        // The write is fixed (see lib/academy-plan.ts), but every row already in
+        // the database still carries the literal. normaliseAcademyPlan maps the
+        // real spellings, including the legacy "advanced", and returns null for
+        // anything else.
+        //
+        // Unresolvable rows go to `unknown` rather than being assumed to be
+        // foundation. Guessing the cheapest plan for a learner who paid for elite
+        // would move real revenue between products, which is worse than an
+        // honest bucket the admin can see and act on. The totals are unaffected
+        // either way: totalRegistrationRevenue sums every completed payment
+        // regardless of which bucket it lands in.
         applications.forEach(app => {
             if (app.paymentStatus === 'completed') {
                 totalStudents++;
-                const plan = (app.plan || "foundation").toLowerCase();
+                const plan = normaliseAcademyPlan(app.plan) ?? "unknown";
                 const amount = Number(app.paymentAmount) || 0;
                 totalRegistrationRevenue += amount;
-                if (registrationStats[plan]) {
-                    registrationStats[plan].count++;
-                    registrationStats[plan].revenue += amount;
-                } else {
-                    registrationStats[plan] = { count: 1, revenue: amount };
+                if (!registrationStats[plan]) {
+                    registrationStats[plan] = { count: 0, revenue: 0 };
                 }
+                registrationStats[plan].count++;
+                registrationStats[plan].revenue += amount;
             }
         });
 

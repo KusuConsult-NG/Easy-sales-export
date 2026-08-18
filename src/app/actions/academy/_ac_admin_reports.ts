@@ -132,8 +132,26 @@ async function _getAcademyStatsAction(): Promise<ActionResponse<any>> {
             registrationStats
         } = metrics;
 
+        // The `type` a course purchase is actually claimed under.
+        //
+        // This filtered on "academy_course_purchase", and that string appears in
+        // exactly two places in the whole codebase: written here as the query
+        // value, and written by _ac_course_payment.ts as the claim's `source`.
+        // Nothing has ever written it as a `type`.
+        //
+        // So the query matched nothing, every time. totalCourseRevenue was
+        // always 0, which made monthlyRevenue 0, previousMonthRevenue 0 and —
+        // through the division guard — revenueGrowth 0. The Academy stats screen
+        // reported no course revenue and no growth no matter how much was sold.
+        //
+        // Both paths that take money for a course claim it as
+        // type: "academy_enrollment" (with source "academy_course_purchase" or
+        // "client_verify"), and academy REGISTRATION is a different type
+        // entirely — "academy_registration", counted separately below as
+        // totalRegistrationRevenue. So this is the whole of course revenue and
+        // none of the registration revenue it is added to.
         const courseRevenueSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
-            .where("type", "==", "academy_course_purchase")
+            .where("type", "==", "academy_enrollment")
             .where("status", "==", "completed")
             .get();
 

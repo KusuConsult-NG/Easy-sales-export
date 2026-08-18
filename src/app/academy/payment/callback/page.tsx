@@ -5,12 +5,50 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useOnce } from "@/hooks/useOnce";
 import { Loader2, CheckCircle, XCircle, PartyPopper, ArrowRight } from "lucide-react";
-import { verifyAcademyPaymentAction } from "@/app/actions/academy";
+import {
+    verifyAcademyPaymentAction,
+    verifyCoursePaymentAction,
+    verifyEnrollmentPaymentAction,
+} from "@/app/actions/academy";
 import { Suspense } from "react";
+
+/**
+ * Which payment came back here.
+ *
+ * THE OTHER TWO CALLBACKS WERE 404s
+ * ---------------------------------
+ * Academy takes money through three initiators, and each named its own return
+ * page:
+ *
+ *   initiateAcademyPaymentAction         /academy/payment/callback   ← this page
+ *   initializeEnrollmentPaymentAction    /academy/verify-payment     — no such page
+ *   initializeCoursePaymentAction        /academy/verify             — no such page
+ *
+ * `/academy/verify` looks like a page and is not: the only route under it is
+ * /academy/verify/[certificateId]. So a learner paying through either of the
+ * other two initiators was charged and then landed on a 404, with no webhook
+ * case for `academy_enrollment` to fulfil them either — their only fulfilment
+ * was the verify action that the missing page would have called.
+ *
+ * Pointing both at this page is not enough on its own, because
+ * verifyAcademyPaymentAction refuses anything whose metadata type is not
+ * "academy_registration" — a course payer would have seen "Payment
+ * Verification Failed", which reads worse than a 404. So the initiator says
+ * which flow it is and this page calls that flow's verifier.
+ *
+ * An absent `flow` means registration, which is exactly what this page did
+ * before, so the live path is unchanged.
+ */
+type PaymentFlow = "registration" | "enrollment" | "course";
+
+function resolveFlow(raw: string | null): PaymentFlow {
+    return raw === "enrollment" || raw === "course" ? raw : "registration";
+}
 
 function PaymentCallbackContent() {
     const searchParams = useSearchParams();
     const reference = searchParams.get("reference") || searchParams.get("trxref");
+    const flow = resolveFlow(searchParams.get("flow"));
     const [status, setStatus] = useState<"loading" | "success" | "failed">("loading");
 
     useOnce(() => {
@@ -21,7 +59,12 @@ function PaymentCallbackContent() {
             }
 
             try {
-                const result = await verifyAcademyPaymentAction(reference);
+                const result =
+                    flow === "course"
+                        ? await verifyCoursePaymentAction(reference)
+                        : flow === "enrollment"
+                            ? await verifyEnrollmentPaymentAction(reference)
+                            : await verifyAcademyPaymentAction(reference);
                 setStatus(result.success ? "success" : "failed");
             } catch {
                 setStatus("failed");
@@ -30,6 +73,12 @@ function PaymentCallbackContent() {
 
         verify();
     });
+
+    // Where "Try again" and "Continue" should send them, per flow. A course
+    // buyer sent back to the membership application form would be told to do
+    // something unrelated to what they just paid for.
+    const isCoursePurchase = flow === "course" || flow === "enrollment";
+    const retryHref = isCoursePurchase ? "/academy/dashboard" : "/academy/application";
 
     if (status === "loading") {
         return (
@@ -54,7 +103,7 @@ function PaymentCallbackContent() {
                         We couldn&apos;t verify your payment. Please try again or contact support.
                     </p>
                     <Link
-                        href="/academy/application"
+                        href={retryHref}
                         className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition"
                     >
                         Try Again
@@ -83,25 +132,30 @@ function PaymentCallbackContent() {
 
                     <h3 className="font-bold text-slate-900 mb-3">What happens next?</h3>
                     <ol className="space-y-3 mb-8">
-                        <li className="flex items-start gap-3">
-                            <span className="w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">1</span>
-                            <p className="text-sm text-slate-600">Complete the membership application form</p>
-                        </li>
-                        <li className="flex items-start gap-3">
-                            <span className="w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">2</span>
-                            <p className="text-sm text-slate-600">Our team reviews your application (24–48 hours)</p>
-                        </li>
-                        <li className="flex items-start gap-3">
-                            <span className="w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">3</span>
-                            <p className="text-sm text-slate-600">Get access to all Academy courses and resources</p>
-                        </li>
+                        {(isCoursePurchase
+                            ? [
+                                "Your enrolment is active",
+                                "Open the course from your Academy dashboard",
+                                "Work through the lessons at your own pace",
+                            ]
+                            : [
+                                "Complete the membership application form",
+                                "Our team reviews your application (24–48 hours)",
+                                "Get access to all Academy courses and resources",
+                            ]
+                        ).map((step, i) => (
+                            <li key={step} className="flex items-start gap-3">
+                                <span className="w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">{i + 1}</span>
+                                <p className="text-sm text-slate-600">{step}</p>
+                            </li>
+                        ))}
                     </ol>
 
                     <Link
-                        href="/academy/application"
+                        href={isCoursePurchase ? "/academy/dashboard" : "/academy/application"}
                         className="w-full inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-xl font-bold text-base transition-all shadow-lg shadow-blue-200"
                     >
-                        Continue to Application Form
+                        {isCoursePurchase ? "Go to Academy Dashboard" : "Continue to Application Form"}
                         <ArrowRight className="w-5 h-5" />
                     </Link>
                 </div>
