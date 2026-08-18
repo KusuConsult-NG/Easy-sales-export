@@ -357,10 +357,29 @@ export async function generateCourseCertificate(courseId: string, _courseTitle?:
             .where('courseId', '==', courseId)
             .get();
 
-        if (!certSnapshot.empty) { // Return existing certificate
+        if (!certSnapshot.empty) {
+            // Return the certificate that already exists.
+            //
+            // `existingCert` was assigned and then thrown away — the branch
+            // returned `data: null`, so a caller asking for a certificate the
+            // learner already holds got success and nothing to link to. The
+            // success shape below carries certificateId; this one now matches it.
             const existingCert = certSnapshot.docs[0];
-            return { error: null, success: true as const, data: null };
+            return {
+                error: null,
+                success: true as const,
+                data: { certificateId: existingCert.id, message: "Certificate already issued" },
+            };
         }
+
+        // One certificate number, computed once.
+        //
+        // It was built twice from two separate Date.now() calls — once onto the
+        // certificate and once into the audit log — so the two disagreed by
+        // however many milliseconds separated them. The audit entry could not be
+        // matched to the document it records, which is the only reason to record
+        // the number there.
+        const certificateNumber = `CERT-${Date.now()}-${session.user.id?.substring(0, 8)}`;
 
         // Generate certificate
         const certificateRef = await db.collection(COLLECTIONS.COURSE_CERTIFICATES).add({
@@ -371,7 +390,7 @@ export async function generateCourseCertificate(courseId: string, _courseTitle?:
             courseTitle: verifiedCourseTitle,
             completedAt: progressData.completedAt || FieldValue.serverTimestamp(),
             issuedAt: FieldValue.serverTimestamp(),
-            certificateNumber: `CERT-${Date.now()}-${session.user.id?.substring(0, 8)}`,
+            certificateNumber,
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp() });
 
@@ -382,7 +401,11 @@ export async function generateCourseCertificate(courseId: string, _courseTitle?:
             type: "success",
             title: "🎉 Certificate Issued!",
             message: `Congratulations! You've completed "${verifiedCourseTitle}" and earned your certificate.`,
-            link: `/courses/${courseId}/certificate`,
+            // /courses does not exist — there is no such route segment anywhere
+            // in the app, so every certificate notification linked to a 404. The
+            // certificate page is /academy/certificate/{courseId}: its folder is
+            // named [certificateId] but the param it reads is the course id.
+            link: `/academy/certificate/${courseId}`,
             linkText: "View Certificate" });
 
         // Audit log
@@ -394,7 +417,7 @@ export async function generateCourseCertificate(courseId: string, _courseTitle?:
             metadata: {
                 courseId,
                 courseTitle: verifiedCourseTitle,
-                certificateNumber: `CERT-${Date.now()}-${session.user.id?.substring(0, 8)}` } });
+                certificateNumber } });
 
         return { error: null, success: true as const, data: { certificateId: certificateRef.id, message: "Certificate generated successfully" } };
     } catch (error) { logger.error("Certificate generation error:", error);
