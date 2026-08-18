@@ -35,7 +35,23 @@ async function _getCoursesAction(
 
         const snapshot = await q.get();
 
-        const courses = serializeDocs<Course>(snapshot.docs);
+        // The answer key does not go to the browser — from the LIST either.
+        //
+        // getCourseByIdAction below strips modules[].quiz.questions[].correctAnswer
+        // for non-admins. This function did not, and it returns whole course
+        // documents: calling it fetched up to `limit` courses complete with the
+        // answers to every quiz in them. The fix on the single-course read was
+        // bypassed entirely by its own sibling, so the rule was enforced on one
+        // of the two ways to obtain exactly the same document.
+        //
+        // Same admin carve-out as the sibling, and for the same reason:
+        // /admin/academy lists courses for an editor that cannot edit questions
+        // it cannot see.
+        const sessionResult = await requireSession();
+        const viewerIsAdmin = isAdmin(sessionResult.session?.user?.roles);
+
+        const raw = serializeDocs<Course>(snapshot.docs);
+        const courses = viewerIsAdmin ? raw : raw.map((c) => stripAnswerKey(c));
 
         const newLastDocId = snapshot.docs.length === limit ? snapshot.docs[snapshot.docs.length - 1].id : null;
         const hasMore = snapshot.docs.length === limit;

@@ -287,6 +287,29 @@ async function _getUserProgressAction(
     courseId: string
 ): Promise<ActionResponse<any>> {
     try {
+        // Whose progress this is, decided by the session and not by the caller.
+        //
+        // This function had no session check of any kind. It is a "use server"
+        // export re-exported through academy/index.ts, so it is a reachable HTTP
+        // endpoint whatever the UI does — and it took the user id as its first
+        // argument. getUserProgressAction(anyone, anyCourse) returned that
+        // learner's completed lessons, their quiz SCORES and their completion
+        // date, to an unauthenticated caller.
+        //
+        // Its five siblings in this file all check `session.user.id !== userId`.
+        // It was the one that did not, and it was parked in
+        // action-auth-baseline.json — whose own header says that list is a
+        // ratchet and "must never become a place to park things quietly".
+        //
+        // All eight call sites already pass session.user.id, so nothing
+        // legitimate changes.
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: 'Unauthorized', data: null };
+        const { session } = sessionResult;
+        if (!session?.user?.id || session.user.id !== userId) {
+            return { success: false as const, error: "Unauthorized", data: null };
+        }
+
         const progressDoc = await db.doc(`user_progress/${userId}/courses/${courseId}`).get();
 
         if (!progressDoc.exists) {
@@ -426,6 +449,21 @@ export const logLessonActivityAction = withFlexibleSafeAction("logLessonActivity
  */
 async function _calculateStreakAction(userId: string): Promise<ActionResponse<any>> {
     try {
+        // Same as getUserProgressAction above: the caller named the user.
+        //
+        // No session check at all, and the id came from the argument, so
+        // calculateStreakAction(anyone) returned that learner's day-by-day
+        // activity record. Its writing counterpart, logLessonActivityAction,
+        // takes no id precisely because it derives one from the session.
+        //
+        // Its single call site passes the session user's id.
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: 'Unauthorized', data: null };
+        const { session } = sessionResult;
+        if (!session?.user?.id || session.user.id !== userId) {
+            return { success: false as const, error: "Unauthorized", data: null };
+        }
+
         // Fetch the last 90 days of activity (enough for any realistic streak)
         const snap = await db
             .collection(COLLECTIONS.USER_ACTIVITY_LOGS)

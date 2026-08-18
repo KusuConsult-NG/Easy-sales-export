@@ -13,6 +13,24 @@ import type { Course, LiveSession } from "@/lib/types/academy-actions";
  */
 async function _getLiveSessionsAction(courseId?: string): Promise<ActionResponse<any>> {
     try {
+        // A meeting link is a bearer credential, so this needs a session.
+        //
+        // The rows returned below carry `meetingLink` and `customMeetingLink` —
+        // the Zoom/Meet URL an admin sets when starting a live class. Anyone
+        // holding that URL can join. This function had no session check, and
+        // `courseId` is optional, so calling it with NO arguments returned every
+        // live session in the collection together with its join link: the whole
+        // paid live-class schedule, joinable, to an unauthenticated caller.
+        //
+        // All four call sites — /academy/live, /academy/live/[courseId],
+        // /academy/dashboard and /admin/academy/live/[courseId] — already
+        // redirect an unauthenticated visitor. That is a client-side redirect
+        // and not authorisation: the action is reachable whatever the page does.
+        const sessionResult = await requireSession();
+        if (!sessionResult.session?.user?.id) {
+            return { success: false as const, error: 'Unauthorized', data: null };
+        }
+
         const ref = db.collection(COLLECTIONS.ACADEMY_LIVE_SESSIONS);
         const query = courseId ? ref.where("courseId", "==", courseId) : ref;
         const snapshot = await query.get();
