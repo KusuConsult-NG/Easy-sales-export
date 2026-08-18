@@ -14,7 +14,9 @@ import { createAdminAuditLog } from '@/lib/audit-log';
 import { debitJsonbBalanceWithFloor, compensateJsonbDebit } from "@/lib/wallet-ledger";
 import {
     COOPERATIVE_MINIMUM_BALANCE,
+    COOPERATIVE_MINIMUM_WITHDRAWAL,
     formatMinimumBalance,
+    formatMinimumWithdrawal,
     availableAboveFloor,
 } from "@/lib/cooperative-limits";
 import { revalidatePath } from 'next/cache';
@@ -48,6 +50,19 @@ async function _submitWithdrawalRequestAction(
         }
 
         const validatedData = validation.data;
+
+        // withdrawalSchema asks only for a POSITIVE amount, while
+        // /api/cooperative/withdraw refuses anything under ₦1,000. So a ₦1
+        // request was refused by the route and accepted here — creating a
+        // pending request an admin has to action and locking the amount out of
+        // the member's savings until they do. See lib/cooperative-limits.ts.
+        if (validatedData.amount < COOPERATIVE_MINIMUM_WITHDRAWAL) {
+            return {
+                success: false as const,
+                error: `Minimum withdrawal amount is ${formatMinimumWithdrawal()}`,
+                data: null,
+            };
+        }
 
         const membershipRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
         const membershipDoc = await membershipRef.get();

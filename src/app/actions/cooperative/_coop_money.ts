@@ -16,7 +16,9 @@ import { debitJsonbBalance, debitJsonbBalanceWithFloor, claimSingleOpenLoanAppli
 import { canTransactAsMember, NOT_A_TRANSACTING_MEMBER_MESSAGE } from "@/lib/cooperative-membership-status";
 import {
     COOPERATIVE_MINIMUM_BALANCE,
+    COOPERATIVE_MINIMUM_WITHDRAWAL,
     formatMinimumBalance,
+    formatMinimumWithdrawal,
     availableAboveFloor,
 } from "@/lib/cooperative-limits";
 import { COOPERATIVE_CONFIG } from "@/lib/constants";
@@ -304,6 +306,17 @@ async function _submitWithdrawalAction(
         let bankAccount = null;
 
         if (isNaN(amount) || amount <= 0) { return { error: "Amount must be greater than zero", success: false as const, data: null };
+        }
+
+        // The third door onto one minimum. /api/cooperative/withdraw refuses
+        // anything under ₦1,000; this asked only that the amount be positive.
+        // See lib/cooperative-limits.ts.
+        if (amount < COOPERATIVE_MINIMUM_WITHDRAWAL) {
+            return {
+                error: `Minimum withdrawal amount is ${formatMinimumWithdrawal()}`,
+                success: false as const,
+                data: null,
+            };
         }
 
         try { bankAccount = bankAccountStr ? JSON.parse(bankAccountStr) : null;

@@ -391,3 +391,76 @@ describe('every path that reduces a member\'s savings applies the floor', () => 
         expect(route).not.toContain('debitJsonbBalanceWithFloor');
     });
 });
+
+describe('and one minimum withdrawal, not three answers', () => {
+    // /api/cooperative/withdraw refused anything under ₦1,000. withdrawalSchema
+    // asks only for `positive()`, and submitWithdrawalAction only for `> 0` — so
+    // a ₦1 request was refused by the route and ACCEPTED by both actions, each
+    // one creating a pending request an admin has to action and locking the
+    // amount out of the member's savings until they do.
+    const { readFileSync } = require('fs');
+    const { join } = require('path');
+    const {
+        COOPERATIVE_MINIMUM_WITHDRAWAL,
+        formatMinimumWithdrawal,
+    } = require('@/lib/cooperative-limits');
+
+    const DOORS = [
+        'src/app/api/cooperative/withdraw/route.ts',
+        'src/app/actions/cooperative/_withdrawal.ts',
+        'src/app/actions/cooperative/_coop_money.ts',
+    ];
+
+    it('is 1,000 — the route\'s own figure, not one invented here', () => {
+        expect(COOPERATIVE_MINIMUM_WITHDRAWAL).toBe(1000);
+        expect(formatMinimumWithdrawal()).toBe('₦1,000');
+    });
+
+    // The COMPARISON, not merely the import. Replacing each guard's condition
+    // with `false` left the import and the message in place, so an
+    // import-level assertion passed against a door that enforced nothing.
+    const GUARDS: Array<[string, string]> = [
+        ['src/app/api/cooperative/withdraw/route.ts', 'if (!amount || amount < COOPERATIVE_MINIMUM_WITHDRAWAL) {'],
+        ['src/app/actions/cooperative/_withdrawal.ts', 'if (validatedData.amount < COOPERATIVE_MINIMUM_WITHDRAWAL) {'],
+        ['src/app/actions/cooperative/_coop_money.ts', 'if (amount < COOPERATIVE_MINIMUM_WITHDRAWAL) {'],
+    ];
+
+    it.each(GUARDS)('%s enforces it from the shared constant', (rel: string, guard: string) => {
+        const src = readFileSync(join(process.cwd(), rel), 'utf-8');
+
+        expect(src).toContain(guard);
+        expect(src).toContain('formatMinimumWithdrawal()');
+    });
+
+    it.each(DOORS)('%s no longer writes the figure out by hand', (rel: string) => {
+        const src = readFileSync(join(process.cwd(), rel), 'utf-8')
+            .replace(/\/\*[\s\S]*?\*\//g, '')
+            .split('\n')
+            .filter((l: string) => !l.trim().startsWith('//'))
+            .join('\n');
+
+        expect(src).not.toContain('amount < 1000');
+        expect(src).not.toContain('₦1,000');
+    });
+
+    it('and the withdraw page validates against the same number', () => {
+        // Vacuity guard: the client figure is not a control, but it must agree
+        // with the one that is, or a member is refused after filling the form.
+        const page = readFileSync(
+            join(process.cwd(), 'src/app/cooperatives/(member)/withdraw/page.tsx'),
+            'utf-8',
+        );
+
+        expect(page).toContain(`amountNum < ${COOPERATIVE_MINIMUM_WITHDRAWAL}`);
+    });
+
+    it('and the floor refusal reads the same everywhere too', () => {
+        // The route spelled its own floor message out longhand while the two
+        // actions used formatMinimumBalance/availableAboveFloor.
+        for (const rel of DOORS) {
+            const src = readFileSync(join(process.cwd(), rel), 'utf-8');
+            expect(src).toContain('formatMinimumBalance()');
+            expect(src).toContain('availableAboveFloor(');
+        }
+    });
+});

@@ -8,7 +8,13 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
 import { debitJsonbBalanceWithFloor } from "@/lib/wallet-ledger";
 import { compensateJsonbDebit } from "@/lib/wallet-ledger";
-import { COOPERATIVE_MINIMUM_BALANCE } from "@/lib/cooperative-limits";
+import {
+    COOPERATIVE_MINIMUM_BALANCE,
+    COOPERATIVE_MINIMUM_WITHDRAWAL,
+    formatMinimumBalance,
+    formatMinimumWithdrawal,
+    availableAboveFloor,
+} from "@/lib/cooperative-limits";
 import { canTransactAsMember, NOT_A_TRANSACTING_MEMBER_MESSAGE } from "@/lib/cooperative-membership-status";
 import { rateLimit, createRateLimitResponse } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
@@ -61,9 +67,9 @@ export async function POST(request: NextRequest) {
         const { amount, reason, accountNumber, bankName, accountName } = await request.json();
 
         // Validation
-        if (!amount || amount < 1000) {
+        if (!amount || amount < COOPERATIVE_MINIMUM_WITHDRAWAL) {
             return NextResponse.json(
-                { success: false, message: 'Minimum withdrawal amount is ₦1,000' },
+                { success: false, message: `Minimum withdrawal amount is ${formatMinimumWithdrawal()}` },
                 { status: 400 }
             );
         }
@@ -170,7 +176,7 @@ export async function POST(request: NextRequest) {
             // funds" to someone with a healthy balance would be false.
             const message =
                 debit.reason === "below_floor"
-                    ? `You must maintain a minimum balance of ₦${MINIMUM_BALANCE.toLocaleString()}. Available for withdrawal: ₦${Math.max(0, Number(debit.balance) - MINIMUM_BALANCE).toLocaleString()}`
+                    ? `You must keep a minimum balance of ${formatMinimumBalance()}. Available to withdraw: ₦${availableAboveFloor(Number(debit.balance)).toLocaleString()}`
                     : debit.reason === "insufficient_funds"
                         ? `Insufficient balance. Available: ₦${Number(debit.balance).toLocaleString()}`
                         : 'You must be a cooperative member to request withdrawal';

@@ -22,6 +22,26 @@ export function formatMinimumBalance(): string {
 }
 
 /**
+ * The smallest withdrawal a member may request.
+ *
+ * /api/cooperative/withdraw enforced `amount < 1000` and the two server actions
+ * did not: withdrawalSchema asks only for `positive()`, and
+ * submitWithdrawalAction only for `> 0`. So a ₦1 withdrawal request was refused
+ * by the route and accepted by both actions — each one creating a pending
+ * request an admin has to action, and locking the amount out of the member's
+ * savings until they do.
+ *
+ * 1,000 is not invented here; it is the route's own figure, and the one the
+ * member withdraw page already validates against client-side.
+ */
+export const COOPERATIVE_MINIMUM_WITHDRAWAL = 1000;
+
+/** "₦1,000" — for the message that explains a refused request. */
+export function formatMinimumWithdrawal(): string {
+    return `₦${COOPERATIVE_MINIMUM_WITHDRAWAL.toLocaleString()}`;
+}
+
+/**
  * What a member may actually take out, given a balance.
  *
  * Never negative: a member already at or under the floor has nothing available,
