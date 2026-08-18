@@ -221,3 +221,50 @@ describe('the wallet lifetime totals count every transaction', () => {
         expect(wallet).toContain('stats: { totalFunded, totalSpent, pendingWithdrawals }');
     });
 });
+
+describe('the loan product catalogue is managed by one rule, not two', () => {
+    const PRODUCTS = 'src/app/actions/loan-products.ts';
+    const ROUTES = [
+        'src/app/api/admin/cooperative/create-loan-product/route.ts',
+        'src/app/api/admin/cooperative/update-loan-product/route.ts',
+        'src/app/api/admin/cooperative/delete-loan-product/route.ts',
+    ];
+
+    it('the actions ask the matrix rather than naming roles', () => {
+        // THE test. LOAN_PRODUCTS sets the interest rate and amount band every
+        // borrower is offered, and these four actions manage the same
+        // collection as the three routes below. The routes moved onto the
+        // matrix in the admin pass; these still named ['admin', 'super_admin'],
+        // so `cooperative_admin` could maintain the catalogue through the
+        // routes and was refused through the actions.
+        const products = code(PRODUCTS);
+
+        expect(products).not.toContain('roles?.includes("admin")');
+        expect(products).not.toContain('roles?.includes("super_admin")');
+
+        const gates = products.match(/hasAdminPermission\([^,]+, "cooperatives:approve_loans"\)/g) ?? [];
+        expect(gates.length).toBe(4);
+    });
+
+    it('the same permission the routes onto that collection use', () => {
+        for (const rel of ROUTES) {
+            expect(code(rel)).toContain('"cooperatives:approve_loans"');
+        }
+    });
+
+    it('and both halves really do write LOAN_PRODUCTS', () => {
+        // Vacuity guard: two rules only conflict if they govern one thing.
+        expect(code(PRODUCTS)).toContain('COLLECTIONS.LOAN_PRODUCTS');
+        for (const rel of ROUTES) {
+            expect(code(rel)).toContain('COLLECTIONS.LOAN_PRODUCTS');
+        }
+    });
+
+    it('deliberately not "cooperatives:manage_products", which admin lacks', () => {
+        // The semantically exact permission is withheld from the plain `admin`
+        // role by the matrix, so adopting it would remove something an admin
+        // can do today. Same trade as the routes; recorded, not silently taken.
+        expect(source(PRODUCTS)).toContain('deliberately withholds');
+        expect(source(PRODUCTS)).toContain('cooperatives:manage_products');
+    });
+});

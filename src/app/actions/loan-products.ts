@@ -4,6 +4,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { FieldValue } from "@/lib/firestore-compat";
@@ -105,6 +106,25 @@ function pickProductFields(data: Partial<LoanProduct>): Partial<LoanProduct> {
 /**
  * Admin: Get paginated loan products
  */
+/**
+ * The four admin functions below ask PERMISSION_MATRIX rather than naming
+ * ['admin', 'super_admin'] by hand.
+ *
+ * They manage LOAN_PRODUCTS — the interest rate and amount band every borrower
+ * is offered — and api/admin/cooperative/{create,update,delete}-loan-product
+ * manage the same collection. Those routes were moved onto the matrix in the
+ * admin pass; these were the other half of the same pair and still named roles,
+ * so `cooperative_admin` could maintain the loan catalogue through the routes
+ * and was refused through the actions.
+ *
+ * "cooperatives:approve_loans" and NOT "cooperatives:manage_products", which is
+ * the semantically exact permission. The matrix deliberately withholds
+ * manage_products from the plain `admin` role, so adopting it here would take
+ * away something an admin can do today — the same trade taken for the routes,
+ * recorded there too. Closing the cross-module hole without narrowing an
+ * existing role is the deliberate half-step; whether loan products should be
+ * cooperative_admin-and-super_admin only is the owner's call.
+ */
 export async function getAdminLoanProductsAction(options: { limit?: number;
     lastDocId?: string; } = {}): Promise<
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
@@ -114,7 +134,7 @@ export async function getAdminLoanProductsAction(options: { limit?: number;
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
         const { session } = sessionResult;
         
-        if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) { return { success: false as const, error: "Unauthorized", data: null };
+        if (!session?.user?.id || !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) { return { success: false as const, error: "Unauthorized", data: null };
         }
 
         const fetchLimit = options.limit || 20;
@@ -146,7 +166,7 @@ export async function createAdminLoanProductAction(data: Omit<LoanProduct, "id">
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
         
-        if (!sessionResult.session.user.roles?.includes("admin") && !sessionResult.session.user.roles?.includes("super_admin")) { return { success: false as const, error: "Unauthorized", data: null };
+        if (!hasAdminPermission(sessionResult.session.user.roles, "cooperatives:approve_loans")) { return { success: false as const, error: "Unauthorized", data: null };
         }
 
         const invalid = validateLoanProduct(data, { partial: false });
@@ -181,7 +201,7 @@ export async function updateAdminLoanProductAction(productId: string, data: Part
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
         
-        if (!sessionResult.session.user.roles?.includes("admin") && !sessionResult.session.user.roles?.includes("super_admin")) { return { success: false as const, error: "Unauthorized", data: null };
+        if (!hasAdminPermission(sessionResult.session.user.roles, "cooperatives:approve_loans")) { return { success: false as const, error: "Unauthorized", data: null };
         }
 
         const patch = pickProductFields(data);
@@ -221,7 +241,7 @@ export async function deleteAdminLoanProductAction(productId: string) { try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
         
-        if (!sessionResult.session.user.roles?.includes("admin") && !sessionResult.session.user.roles?.includes("super_admin")) { return { success: false as const, error: "Unauthorized", data: null };
+        if (!hasAdminPermission(sessionResult.session.user.roles, "cooperatives:approve_loans")) { return { success: false as const, error: "Unauthorized", data: null };
         }
 
         const docRef = db.collection(COLLECTIONS.LOAN_PRODUCTS).doc(productId);

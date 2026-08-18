@@ -359,12 +359,25 @@ describe('isAdmin() is ten roles and the matrix means two', () => {
     it('the permission that would express the boundary is checked nowhere', () => {
         // cooperatives:manage_products exists in the union and is granted to
         // super_admin and cooperative_admin. Nothing asks for it.
-        const consumers = execSync(
-            `grep -rl 'cooperatives:manage_products' src --include='*.ts' --include='*.tsx' || true`,
+        //
+        // CHECKED, not merely mentioned. This grepped for the string and
+        // expected admin-permissions.ts alone, which made it fail the moment
+        // loan-products.ts explained in a comment why it deliberately does NOT
+        // use this permission — the matrix withholds it from the plain `admin`
+        // role, so adopting it would remove something an admin can do today.
+        // Recording that reasoning is the opposite of consuming the permission,
+        // and the assertion's own words are "nothing asks for it".
+        const askers = execSync(
+            `grep -rln 'hasAdminPermission([^)]*cooperatives:manage_products' src --include='*.ts' --include='*.tsx' || true`,
             { encoding: 'utf-8', cwd: process.cwd() }
         ).split('\n').filter(Boolean).filter((f) => !f.includes('__tests__'));
 
-        expect(consumers).toEqual(['src/lib/admin-permissions.ts']);
+        expect(askers).toEqual([]);
+
+        // And it is still a real permission in the matrix, so the gap is a gap
+        // rather than a dead string.
+        expect(hasAdminPermission(['cooperative_admin'], 'cooperatives:manage_products' as any)).toBe(true);
+        expect(hasAdminPermission(['admin'], 'cooperatives:manage_products' as any)).toBe(false);
     });
 
     it('the other side of the same tension is already recorded in the codebase', () => {
