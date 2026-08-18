@@ -65,11 +65,15 @@ function setSession(id: string) {
 }
 
 function setDocs(data: Record<string, any>) {
+    // membershipStatus defaults to 'active': both loan doors now refuse a
+    // membership that is not active or approved, and a fixture with no status
+    // at all is not a member any door would have served — the route sibling
+    // has always refused one. See lib/cooperative-membership-status.ts.
     const snap = {
         exists: true,
         empty: false,
-        docs: [{ id: 'member-1', data: () => data }],
-        data: () => data,
+        docs: [{ id: 'member-1', data: () => ({ membershipStatus: 'active', ...data }) }],
+        data: () => ({ membershipStatus: 'active', ...data }),
     };
     (global as any).mockFirestoreGet.mockImplementation(() => Promise.resolve(snap));
     (global as any).mockFirestoreTxGet.mockImplementation(() => Promise.resolve(snap));

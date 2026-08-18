@@ -9,6 +9,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { debitJsonbBalanceWithFloor } from "@/lib/wallet-ledger";
 import { compensateJsonbDebit } from "@/lib/wallet-ledger";
 import { COOPERATIVE_MINIMUM_BALANCE } from "@/lib/cooperative-limits";
+import { canTransactAsMember, NOT_A_TRANSACTING_MEMBER_MESSAGE } from "@/lib/cooperative-membership-status";
 import { rateLimit, createRateLimitResponse } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 
@@ -86,10 +87,15 @@ export async function POST(request: NextRequest) {
 
         const membershipData = membershipDoc.data()!;
 
-        // Check if member is active
-        if (membershipData.membershipStatus !== 'active') {
+        // "approved" is the LEGACY spelling of "active", not a lesser status —
+        // the member directory and the admin list both query for either, under
+        // the comment "both are fully approved members". Refusing it here left a
+        // legacy member holding the role, listed in the directory and carrying
+        // an ID card, unable to do this. One rule now, in
+        // lib/cooperative-membership-status.ts.
+        if (!canTransactAsMember(membershipData)) {
             return NextResponse.json(
-                { success: false, message: 'Only active members can request withdrawals' },
+                { success: false, message: NOT_A_TRANSACTING_MEMBER_MESSAGE },
                 { status: 403 }
             );
         }

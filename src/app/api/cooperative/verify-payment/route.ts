@@ -165,6 +165,58 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // THE PAYMENT WAS NEVER CHECKED TO BE THE CALLER'S.
+        //
+        // This route takes a reference, confirms with Paystack that SOMEBODY
+        // paid, and then claims it for session.user.id. It never looked at who
+        // the payment was for.
+        //
+        // initiateCooperativePaymentAction records the payer in the metadata —
+        // `userId` and `membershipId`, both the paying member's id — and the
+        // contribution verifier beside it already compares that field:
+        //
+        //     if (userId !== session.user.id) return 'Payment verification
+        //         failed: User mismatch'   (cooperative/_payment.ts)
+        //
+        // The registration verifier did not. So anyone holding a valid
+        // reference — forwarded, shared, lifted from a receipt — could POST it
+        // here and be granted a completed membership on another member's
+        // money. Worse, they did not even need to win the race: the lost-claim
+        // branch below calls syncAlreadyProcessed(userId, ...) for the CALLER,
+        // which writes paymentStatus: "completed" onto their membership, so a
+        // reference the webhook had already settled for its real payer still
+        // handed a second person a paid membership.
+        //
+        // A payment that records no payer is still accepted, and logged. Every
+        // payment this platform initiates carries the field; legacy references
+        // from the old portal may not, and the webhook's own registration
+        // branch already makes that allowance ("Legacy payments from old portal
+        // may not have membershipId"). Refusing them would break verification
+        // of real, old payments to close a hole that only exists where the
+        // field is present and wrong.
+        const payerId = verifyData.data.metadata?.userId
+            ?? verifyData.data.metadata?.membershipId
+            ?? null;
+
+        if (payerId && payerId !== userId) {
+            logger.error(
+                "[Cooperative verify-payment] reference belongs to another user — refusing",
+                { reference, payerId, callerId: userId }
+            );
+            return NextResponse.json(
+                { success: false, message: "Payment verification failed: this payment belongs to another account." },
+                { status: 403 }
+            );
+        }
+
+        if (!payerId) {
+            logger.warn(
+                "[Cooperative verify-payment] payment carries no payer in its metadata — "
+                + "accepted as a legacy reference",
+                { reference, callerId: userId }
+            );
+        }
+
         const { COOPERATIVE_CONFIG } = await import('@/lib/constants');
         const expectedAmount = COOPERATIVE_CONFIG.registrationFee;
         const paidAmount = verifyData.data.amount / 100; // kobo → naira

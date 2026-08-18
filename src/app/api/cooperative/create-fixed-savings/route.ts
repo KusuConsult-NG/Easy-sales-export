@@ -13,6 +13,7 @@ import {
 } from "@/lib/cooperative-savings";
 import { FieldValue } from "@/lib/firestore-compat";
 import { debitJsonbBalance } from "@/lib/wallet-ledger";
+import { canTransactAsMember, NOT_A_TRANSACTING_MEMBER_MESSAGE } from "@/lib/cooperative-membership-status";
 import { compensateJsonbDebit } from "@/lib/wallet-ledger";
 
 /**
@@ -58,9 +59,11 @@ export async function POST(request: NextRequest) {
         }
 
         const memberData = memberDoc.data()!;
-        if (memberData.membershipStatus !== "approved" && memberData.membershipStatus !== "active") {
+        // This door already accepted either spelling; it is the shared rule now
+        // so the two that accepted only "active" cannot drift back.
+        if (!canTransactAsMember(memberData)) {
             return NextResponse.json(
-                { success: false, message: "Your membership must be approved first" },
+                { success: false, message: NOT_A_TRANSACTING_MEMBER_MESSAGE },
                 { status: 403 }
             );
         }

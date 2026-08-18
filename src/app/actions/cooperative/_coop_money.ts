@@ -13,6 +13,7 @@ import { logAuditAction } from "@/app/actions/audit";
 import { invalidateCooperativeCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { debitJsonbBalance, debitJsonbBalanceWithFloor, claimSingleOpenLoanApplication, compensateJsonbDebit } from "@/lib/wallet-ledger";
+import { canTransactAsMember, NOT_A_TRANSACTING_MEMBER_MESSAGE } from "@/lib/cooperative-membership-status";
 import {
     COOPERATIVE_MINIMUM_BALANCE,
     formatMinimumBalance,
@@ -310,9 +311,15 @@ async function _submitWithdrawalAction(
         }
 
         // Membership must be active before any money moves.
+        //
+        // This accepted "active" alone. "approved" is the LEGACY spelling of the
+        // same state — the directory and the admin list both query for either,
+        // under the comment "both are fully approved members" — so a legacy
+        // member holding the role and listed in the directory was refused their
+        // own savings here. See lib/cooperative-membership-status.ts.
         const membershipSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
-        if (!membershipSnap.exists || membershipSnap.data()?.membershipStatus !== "active") {
-            return { success: false as const, error: "You are not an active cooperative member", data: null };
+        if (!membershipSnap.exists || !canTransactAsMember(membershipSnap.data())) {
+            return { success: false as const, error: NOT_A_TRANSACTING_MEMBER_MESSAGE, data: null };
         }
 
         // Reserve the funds under a row lock.
@@ -508,6 +515,19 @@ async function _applyForLoanAction(
         const membershipDoc = membershipSnapshot.docs[0];
         const membershipData = membershipDoc.data();
 
+        // NO STATUS CHECK AT ALL, where the route doing the same work has one.
+        //
+        // /api/cooperative/apply-loan refuses a member who is not active. This
+        // asked only that a membership ROW exist, so a member still at
+        // "pending" — registered, unpaid, onboarding incomplete — could file a
+        // loan application through the page while the route refused them.
+        // Bounded by the savings-multiple eligibility check below, since a
+        // pending member has no savings, but a control that holds only because
+        // another number happens to be zero is not a control.
+        if (!canTransactAsMember(membershipData)) {
+            throw new Error(NOT_A_TRANSACTING_MEMBER_MESSAGE);
+        }
+
         const loansRef = db.collection(COLLECTIONS.COOPERATIVE_LOANS);
 
         // 2. Loan limit — decided by lib/cooperative-tiers.ts, not inline here.
@@ -691,6 +711,17 @@ async function _createFixedSavingsAction(
 
         if (membershipSnapshot.empty) {
             return { success: false as const, error: "Membership not found", data: null };
+        }
+
+        // NO STATUS CHECK AT ALL, where the route doing the same work has one.
+        //
+        // /api/cooperative/create-fixed-savings refuses a member who is not
+        // approved or active. This asked only that a membership row exist — and
+        // unlike the loan path there is no second number bounding it: a pending
+        // member whose contribution had already landed could lock it into a
+        // fixed plan they were not entitled to open.
+        if (!canTransactAsMember(membershipSnapshot.docs[0].data())) {
+            return { success: false as const, error: NOT_A_TRANSACTING_MEMBER_MESSAGE, data: null };
         }
 
         const membershipId = membershipSnapshot.docs[0].id;
