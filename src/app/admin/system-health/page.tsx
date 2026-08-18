@@ -235,7 +235,22 @@ export default function SystemHealthPage() {
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
                                                     <a 
-                                                        href={`/admin/users/${issue.id}`} 
+                                                        /*
+                                                         * /admin/users has no
+                                                         * [id] segment, so this
+                                                         * 404'd on every row.
+                                                         * The users list seeds
+                                                         * its search from
+                                                         * ?search=, and
+                                                         * searchUserIdsByQuery
+                                                         * matches email exactly
+                                                         * — it does not match a
+                                                         * document id at all,
+                                                         * which is why this
+                                                         * carries the email
+                                                         * rather than issue.id.
+                                                         */
+                                                        href={`/admin/users?search=${encodeURIComponent(issue.email)}`} 
                                                         className="inline-flex items-center gap-1.5 bg-slate-900 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-800 transition-all shadow-sm"
                                                     >
                                                         <Search className="w-3.5 h-3.5" />

@@ -553,7 +553,14 @@ async function _withdrawFromWalletAction(
                 type: "payment",
                 title: "Wallet Withdrawal Request",
                 message: `A wallet withdrawal of ₦${amountNGN.toLocaleString()} has been requested.`,
-                link: `/admin/wallets/withdrawals`,
+                // /admin/wallets/withdrawals has never existed — there is no
+                // /admin/wallets segment at all — so every "Process Withdrawal"
+                // an admin clicked led to a 404. The page that processes these
+                // is /admin/marketplace/withdrawals: it calls
+                // processWalletWithdrawalAction, which is the very action this
+                // notification is about. (/admin/withdrawals is a redirect to
+                // the WAVE list, which is a different withdrawal entirely.)
+                link: `/admin/marketplace/withdrawals`,
                 linkText: "Process Withdrawal",
                 read: false,
                 createdAt: FieldValue.serverTimestamp(),

@@ -49,7 +49,7 @@
 
 import { describe, it, expect } from '@jest/globals';
 import { join } from 'path';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import {
     collectRoutes,
@@ -234,13 +234,33 @@ describe('the marketplace and escrow surfaces', () => {
  */
 const KNOWN_DEAD: Record<string, number> = {
     '/vendor/products/new': 2,
-    '/admin/wallets/withdrawals': 1,
-    '/admin/users/[dyn]': 1,
     '/farm-nation/properties/[dyn]': 1,
     '/help/api-docs': 1,
     '/vendor/orders/[dyn]': 1,
     '/vendor/products/[dyn]': 1,
 };
+
+/**
+ * The two admin entries are gone, fixed in the admin pass. They were:
+ *
+ *   /admin/wallets/withdrawals  1x  the "Process Withdrawal" link on every
+ *                                   wallet-withdrawal notification sent to
+ *                                   admins. There is no /admin/wallets segment
+ *                                   at all, so every one 404'd. It points at
+ *                                   /admin/marketplace/withdrawals, the page
+ *                                   that calls processWalletWithdrawalAction —
+ *                                   the very action the notification announces.
+ *                                   (/admin/withdrawals exists but redirects to
+ *                                   the WAVE list, a different withdrawal.)
+ *   /admin/users/[dyn]          1x  the "Verify" button on every system-health
+ *                                   issue row. /admin/users has no [id]
+ *                                   segment. It now links to the users list
+ *                                   seeded by ?search=, carrying the row's
+ *                                   EMAIL — searchUserIdsByQuery matches email
+ *                                   exactly and does not match a document id,
+ *                                   so linking by issue.id would have found
+ *                                   nothing even once the route resolved.
+ */
 
 /**
  * The cooperative entries are gone, fixed in the cooperative pass. They were:
@@ -338,12 +358,51 @@ describe('the rest of the tree', () => {
         // A scanner returning [] passes every assertion above and proves nothing.
         //
         // Was 20 when twenty-six links were dead. Eight were academy's, four
-        // export's and six the cooperative's; the floor tracks what is genuinely
-        // left rather than being a number nobody revisits.
+        // export's, six the cooperative's and two admin's; the floor tracks what
+        // is genuinely left rather than being a number nobody revisits.
         //
-        // What remains is vendor (4), plus one each in admin wallets, admin
-        // users, farm-nation and help — none of them cooperative's business.
-        expect(dead.length).toBeGreaterThanOrEqual(8);
+        // What remains is vendor (4), plus one each in farm-nation and help.
+        // Every vendor entry is #60's business — whether /vendor should exist at
+        // all is an owner decision, so building routes for it here would be
+        // finishing a surface nobody has decided to keep.
+        expect(dead.length).toBeGreaterThanOrEqual(6);
+    });
+
+    it('the wallet withdrawal notification links to the page that processes it', () => {
+        // Not merely "not dead": /admin/withdrawals also resolves, and it
+        // redirects to the WAVE list — a different withdrawal entirely. The
+        // link has to reach the page that calls the action the notification
+        // announces.
+        const wallet = readFileSync(join(process.cwd(), 'src/app/actions/wallet.ts'), 'utf-8');
+
+        expect(wallet).toContain('link: `/admin/marketplace/withdrawals`');
+        // The old path survives in the comment explaining the fix, so pin the
+        // link itself rather than the bare string.
+        expect(wallet).not.toContain('link: `/admin/wallets/withdrawals`');
+
+        const page = readFileSync(
+            join(process.cwd(), 'src/app/admin/marketplace/withdrawals/page.tsx'), 'utf-8');
+        expect(page).toContain('processWalletWithdrawalAction');
+    });
+
+    it('and the system-health Verify button carries an email the search can match', () => {
+        // /admin/users has no [id] route, and searchUserIdsByQuery matches
+        // email exactly while not matching a document id at all — so issue.id
+        // would have found nothing even once the route resolved.
+        const health = readFileSync(
+            join(process.cwd(), 'src/app/admin/system-health/page.tsx'), 'utf-8');
+
+        expect(health).toContain('href={`/admin/users?search=${encodeURIComponent(issue.email)}`}');
+        expect(health).not.toContain('/admin/users/${issue.id}');
+
+        // And the list honours it, or the link lands on an unfiltered table.
+        const users = readFileSync(join(process.cwd(), 'src/app/admin/users/page.tsx'), 'utf-8');
+        expect(users).toContain('new URLSearchParams(window.location.search).get("search")');
+        expect(users).toContain('if (initial) setSearch(initial);');
+
+        // Vacuity guard on the email claim.
+        const helper = readFileSync(join(process.cwd(), 'src/lib/admin-search-helper.ts'), 'utf-8');
+        expect(helper).toContain('.where("email", "==", q)');
     });
 
     it('and the quiz-save redirect with literal spaces is gone', () => {
