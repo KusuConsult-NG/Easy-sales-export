@@ -228,8 +228,24 @@ async function _toggleVerifiedBadgeAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
-            return { error: "Unauthorized: Permission required - users:update", success: false as const };
+        /**
+         * The marketplace permission, not the global user one.
+         *
+         * This required "users:update", which only super_admin and admin hold.
+         * marketplace_admin does not — and /admin/marketplace/sellers, the ONLY
+         * screen with this button, is a route marketplace_admin is explicitly
+         * allowed to reach (see canAccessAdminRoute). So the role whose job is
+         * approving sellers could open the seller screen, approve an application
+         * with "marketplace:approve_sellers" two functions up, and then get
+         * "Unauthorized: Permission required - users:update" from the Grant Badge
+         * button beside it, every time.
+         *
+         * "marketplace:approve_sellers" is held by super_admin, admin and
+         * marketplace_admin — the same set as before plus the role that owns the
+         * screen. Nobody else gains anything.
+         */
+        if (!session?.user || !hasAdminPermission(session.user.roles, "marketplace:approve_sellers")) {
+            return { error: "Unauthorized: Permission required - marketplace:approve_sellers", success: false as const };
         }
 
         const ref = db.collection(COLLECTIONS.SELLER_VERIFICATIONS).doc(verificationId);

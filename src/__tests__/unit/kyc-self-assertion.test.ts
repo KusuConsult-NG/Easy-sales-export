@@ -132,10 +132,15 @@ function setDoc(data: Record<string, any>) {
     // Keep the claim mock in step with the fixture, so the two cannot disagree
     // about what state the record is in.
     currentStatus = String(data.status ?? 'rejected');
+    // The doc refs carry update(), because callers write through the ref they
+    // got from a query — `snapshot.docs[0].ref.update(...)`. A ref without it
+    // throws, the action's catch turns that into "success: false", and the
+    // failure reads as a defect in the code rather than a gap in this stub.
+    const ref = { id: 'ver-1', update: (global as any).mockFirestoreUpdate };
     (global as any).mockFirestoreGet.mockImplementation(() => Promise.resolve({
         exists: true, empty: false,
-        docs: [{ id: 'ver-1', ref: { id: 'ver-1' }, data: () => data }],
-        ref: { id: 'ver-1' },
+        docs: [{ id: 'ver-1', ref, data: () => data }],
+        ref,
         data: () => data,
     }));
 }
@@ -350,7 +355,12 @@ describe('marketplace guards that were already correct', () => {
 
     it('lets an admin grant the badge, so the two refusals above are not vacuous', async () => {
         setSession(ADMIN, ['admin']);
-        setDoc({ id: SELLER, roles: ['seller'], sellerVerificationStatus: 'approved' });
+        // The gate re-reads the CALLER'S roles from the database rather than
+        // trusting the session's copy, so the stubbed document — which stands in
+        // for every get() here — has to carry the admin role, not just the
+        // session. That is the point of the change: a demoted admin's token no
+        // longer grants the badge.
+        setDoc({ id: SELLER, roles: ['admin'], sellerVerificationStatus: 'approved' });
         const { grantSellerVerifiedBadgeAction } = await import('@/app/actions/marketplace/_mp_seller_verification');
 
         const r: any = await grantSellerVerifiedBadgeAction(SELLER);
