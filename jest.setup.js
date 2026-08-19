@@ -216,13 +216,26 @@ global.mockCreateAdminAuditLog = jest.fn(() => Promise.resolve());
 // and threw — inside the try/catch those callers wrap everything in, which
 // turned a harness gap into "the action returned an error" and looked like a
 // defect in the code under test. Same shape as the missing collection().add().
+// recordAdminAction was the THIRD export missing from this list, after
+// logAdminFinancialAction and logAuditAction. The failure mode is identical each
+// time: the export is undefined, the call throws, the action's catch turns it
+// into "Failed to update member status", and a test asserting the write can
+// never pass — against perfectly correct code.
+//
+// It cost an hour here. src/__tests__/unit/audit-log-mock-is-complete.test.ts is
+// the gate that stops there being a fourth: it diffs this list against the
+// module's own exports.
+global.mockRecordAdminAction = jest.fn(() => Promise.resolve());
 jest.mock('@/lib/audit-log', () => ({
     createAdminAuditLog: (payload) => global.mockCreateAdminAuditLog(payload),
     createAuditLog: (payload) => global.mockCreateAdminAuditLog(payload),
+    recordAdminAction: (payload) => global.mockRecordAdminAction(payload),
     logAdminAction: jest.fn(),
     logAuditAction: jest.fn(),
     logFinancialAction: jest.fn(),
     logAdminFinancialAction: jest.fn(),
+    getAuditLogs: jest.fn(() => Promise.resolve([])),
+    purgeOldAuditLogs: jest.fn(() => Promise.resolve(0)),
     getSeverityForAction: jest.fn(() => 'info'),
     getSecurityContextFromHeaders: jest.fn(() => ({})),
 }));

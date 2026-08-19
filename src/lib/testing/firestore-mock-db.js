@@ -121,8 +121,15 @@ function createMockDb() {
         },
     };
 
+    // `.doc()` with no id GENERATES one, the way the real adapter does. Several
+    // write paths rely on it — the in-app broadcast creates a notification per
+    // recipient with `db.collection(NOTIFICATIONS).doc()` — and a ref with an
+    // undefined id silently drops every one of those writes.
+    let generated = 0;
+
     /** A document handle. `__collection` is what lets a store resolve it. */
     function makeDocRef(collection, id) {
+        if (id === undefined || id === null || id === '') id = `auto-${++generated}`;
         global.mockFirestoreDoc(id);
         const descriptor = { kind: 'doc', collection, id };
         return {
