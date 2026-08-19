@@ -62,7 +62,12 @@ const customJestConfig = {
      *   admin/_academy               8.8 -> 80.9
      *   academy/_ac_progress         6.2 -> 92.3
      *
-     * Several of them found a defect on the way — see #77 to #82.
+     * AND AGAIN, 41/31 -> 42/32:
+     *
+     *   wave/_wv_applications       11.1 -> 93.1
+     *   farm-nation/_fn_onboarding   5.3 -> 88.9
+     *
+     * Several of them found a defect on the way — see #77 to #83.
      *
      * WHY THE NUMBER IS NOT AS BAD AS IT SOUNDS, NOR AS GOOD AS THE SUITE COUNT
      * -------------------------------------------------------------------------
@@ -81,10 +86,10 @@ const customJestConfig = {
      */
     coverageThreshold: {
         global: {
-            branches: 31,
-            functions: 34,
-            lines: 42,
-            statements: 41,
+            branches: 32,
+            functions: 35,
+            lines: 43,
+            statements: 42,
         },
     },
     testMatch: [

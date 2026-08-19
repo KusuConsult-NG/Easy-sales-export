@@ -367,6 +367,71 @@ describe('checking the export status', () => {
     });
 });
 
+// ─── claiming a legacy application by email (finding #83) ────────────────────
+
+/**
+ * checkWaveStatus used to claim an application by email with two defects: it
+ * fell back to a `profile.email` nobody had authenticated as, and its
+ * `!appData.userId` test guarded only the backfill WRITE, so an application
+ * belonging to somebody else was still read and its `approved` status promoted
+ * onto the caller — and written to their user record, which
+ * module-access-check Layer 2 admits on.
+ *
+ * That was fixed as #36. On WAVE only. The same code, both defects included,
+ * was still here and in farm-nation/_fn_onboarding.ts.
+ *
+ * src/__tests__/unit/email-claim-is-narrowed-everywhere.test.ts is the gate
+ * against a fourth copy.
+ */
+describe('claiming a legacy application by email (finding #83)', () => {
+    it('claims an UNCLAIMED application matching the authenticated address', async () => {
+        store.seed(COLLECTIONS.EXPORT_APPLICATIONS, 'legacy', {
+            userEmail: 'applicant-1@example.com', status: 'approved',
+        });
+
+        const { checkExportStatusAction } = await actions();
+        expect(await checkExportStatusAction()).toBe('approved');
+        expect(store.get(COLLECTIONS.EXPORT_APPLICATIONS, 'legacy')!.userId).toBe(APPLICANT);
+    });
+
+    it('refuses to adopt an application that already belongs to somebody else', async () => {
+        store.seed(COLLECTIONS.EXPORT_APPLICATIONS, 'somebody-elses', {
+            userId: 'other-person', userEmail: 'applicant-1@example.com', status: 'approved',
+        });
+
+        const { checkExportStatusAction } = await actions();
+        expect(await checkExportStatusAction()).toBeNull();
+        expect(store.get(COLLECTIONS.USERS, APPLICANT)!.serviceRegistrations?.export?.status)
+            .toBeUndefined();
+        expect(store.get(COLLECTIONS.EXPORT_APPLICATIONS, 'somebody-elses')!.userId)
+            .toBe('other-person');
+    });
+
+    it('claims the unclaimed one even when an owned row matches the same address', async () => {
+        store.seedAll(COLLECTIONS.EXPORT_APPLICATIONS, {
+            'owned-by-other': {
+                userId: 'other-person', userEmail: 'applicant-1@example.com', status: 'approved',
+            },
+            'unclaimed': { userEmail: 'applicant-1@example.com', status: 'revision_required' },
+        });
+
+        const { checkExportStatusAction } = await actions();
+        expect(await checkExportStatusAction()).toBe('revision_required');
+        expect(store.get(COLLECTIONS.EXPORT_APPLICATIONS, 'unclaimed')!.userId).toBe(APPLICANT);
+        expect(store.get(COLLECTIONS.EXPORT_APPLICATIONS, 'owned-by-other')!.userId)
+            .toBe('other-person');
+    });
+
+    it('does not match on profile.email, which nobody authenticated as', async () => {
+        store.seed(COLLECTIONS.EXPORT_APPLICATIONS, 'imported', {
+            profile: { email: 'applicant-1@example.com' }, status: 'approved',
+        });
+
+        const { checkExportStatusAction } = await actions();
+        expect(await checkExportStatusAction()).toBeNull();
+    });
+});
+
 // ─── retrieval ───────────────────────────────────────────────────────────────
 
 describe('retrieving the applicant’s own application', () => {

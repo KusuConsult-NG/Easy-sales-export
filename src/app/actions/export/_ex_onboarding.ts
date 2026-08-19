@@ -206,25 +206,49 @@ export async function checkExportStatusAction(): Promise<string | null> { try {
                     }
                 }
             } else if (session.user.email || userData?.email) {
+                /**
+                 * Claiming a legacy application by email — narrowed twice, the
+                 * same two ways checkWaveStatus was.
+                 *
+                 * That fix (#36) landed on WAVE alone. This copy and the one in
+                 * farm-nation/_fn_onboarding.ts kept both defects, which is the
+                 * shape this audit keeps meeting: one control applied on two
+                 * doors out of three.
+                 *
+                 * DEFECT 1: IT MATCHED A FIELD NOBODY AUTHENTICATED AS
+                 * When the `userEmail` query came back empty it fell back to
+                 * `profile.email`. `userEmail` is written from
+                 * `session.user.email` at submission and is the address the
+                 * account actually signed in as; `profile.email` is not — it
+                 * arrives from an import or an admin edit and carries no such
+                 * guarantee.
+                 *
+                 * DEFECT 2: IT ADOPTED APPLICATIONS THAT ALREADY HAD AN OWNER
+                 * The `!appData.userId` test guarded only the backfill WRITE. The
+                 * document became `appDoc` either way, so an application
+                 * belonging to a different user id was still read — and the block
+                 * below promotes an `approved` application's status onto the
+                 * caller AND writes it to their user record, which
+                 * module-access-check reads. Only an unclaimed application can be
+                 * claimed.
+                 */
                 const userEmail = (session.user.email || userData?.email || "").toLowerCase().trim();
                 if (userEmail) {
-                    let emailQuery = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
+                    const emailQuery = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
                         .where("userEmail", "==", userEmail)
-                        .limit(1)
+                        .limit(5)
                         .get();
-                    if (emailQuery.empty) {
-                        emailQuery = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
-                            .where("profile.email", "==", userEmail)
-                            .limit(1)
-                            .get();
-                    }
-                    if (!emailQuery.empty) {
-                        appDoc = emailQuery.docs[0];
-                        // Self-healing: backfill userId on direct application doc if missing
-                        const appData = appDoc.data()!;
-                        if (!appData.userId) {
-                            await appDoc.ref.update({ userId: session.user.id });
-                        }
+
+                    const unclaimed = emailQuery.docs.find(d => !d.data()?.userId);
+
+                    if (unclaimed) {
+                        appDoc = unclaimed;
+                        await unclaimed.ref.update({ userId: session.user.id });
+                    } else if (!emailQuery.empty) {
+                        logger.warn(
+                            `[checkExportStatus] ${emailQuery.docs.length} application(s) match ` +
+                            `${userEmail} but every one already belongs to another account; none claimed.`
+                        );
                     }
                 }
             }
