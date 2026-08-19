@@ -21,7 +21,7 @@ import { requireAdmin } from "@/lib/require-admin";
 import { ActionResponse } from "@/lib/safe-action";
 import { logger } from "@/lib/logger";
 import { categorizeUser } from "@/lib/broadcast-logic";
-import { isMarketplaceBuyer } from "@/lib/broadcast-audience";
+import { isMarketplaceBuyer, isApprovedModuleStatus } from "@/lib/broadcast-audience";
 
 function isStateMatch(dbState: any, filterState: string | undefined): boolean { if (!filterState) return true;
     if (!dbState || typeof dbState !== 'string') return false;
@@ -428,8 +428,14 @@ async function collectSmsRecipients(
                 if (currentStatus === "under_review" || currentStatus === "submitted" || currentStatus === "pending_review") currentStatus = "pending";
 
                 if (filters.moduleStatus && filters.moduleStatus !== "all") {
-                    if (filters.moduleStatus === "not_approved" && (currentStatus === "approved" || currentStatus === "active")) continue;
-                    else if (filters.moduleStatus === "approved" && currentStatus !== "approved" && currentStatus !== "active" && currentStatus !== "paid" && currentStatus !== "completed") continue;
+                    // The exact complement of the "approved" arm below, which also
+                    // accepts "paid" and "completed". It used to exclude only
+                    // "approved" and "active", so an applicant whose status is "paid"
+                    // matched BOTH audiences — and the not_approved audience is the
+                    // chase-up list, so they were messaged to complete a payment they
+                    // had already made. See isApprovedModuleStatus.
+                    if (filters.moduleStatus === "not_approved" && isApprovedModuleStatus(currentStatus)) continue;
+                    else if (filters.moduleStatus === "approved" && !isApprovedModuleStatus(currentStatus)) continue;
                     else if (filters.moduleStatus !== "not_approved" && filters.moduleStatus !== "approved" && currentStatus !== filters.moduleStatus) continue;
                 }
 
@@ -453,8 +459,14 @@ async function collectSmsRecipients(
                 }
 
                 if (filters.moduleStatus && filters.moduleStatus !== "all") {
-                    if (filters.moduleStatus === "not_approved" && (currentStatus === "approved" || currentStatus === "active")) continue;
-                    else if (filters.moduleStatus === "approved" && currentStatus !== "approved" && currentStatus !== "active" && currentStatus !== "paid" && currentStatus !== "completed") continue;
+                    // The exact complement of the "approved" arm below, which also
+                    // accepts "paid" and "completed". It used to exclude only
+                    // "approved" and "active", so an applicant whose status is "paid"
+                    // matched BOTH audiences — and the not_approved audience is the
+                    // chase-up list, so they were messaged to complete a payment they
+                    // had already made. See isApprovedModuleStatus.
+                    if (filters.moduleStatus === "not_approved" && isApprovedModuleStatus(currentStatus)) continue;
+                    else if (filters.moduleStatus === "approved" && !isApprovedModuleStatus(currentStatus)) continue;
                     else if (filters.moduleStatus !== "not_approved" && filters.moduleStatus !== "approved" && currentStatus !== filters.moduleStatus) continue;
                 }
 
@@ -495,8 +507,14 @@ async function collectSmsRecipients(
                 if (currentStatus === "under_review" || currentStatus === "submitted" || currentStatus === "pending_review") currentStatus = "pending";
 
                 if (filters.moduleStatus && filters.moduleStatus !== "all") {
-                    if (filters.moduleStatus === "not_approved" && (currentStatus === "approved" || currentStatus === "active")) continue;
-                    else if (filters.moduleStatus === "approved" && currentStatus !== "approved" && currentStatus !== "active" && currentStatus !== "paid" && currentStatus !== "completed") continue;
+                    // The exact complement of the "approved" arm below, which also
+                    // accepts "paid" and "completed". It used to exclude only
+                    // "approved" and "active", so an applicant whose status is "paid"
+                    // matched BOTH audiences — and the not_approved audience is the
+                    // chase-up list, so they were messaged to complete a payment they
+                    // had already made. See isApprovedModuleStatus.
+                    if (filters.moduleStatus === "not_approved" && isApprovedModuleStatus(currentStatus)) continue;
+                    else if (filters.moduleStatus === "approved" && !isApprovedModuleStatus(currentStatus)) continue;
                     else if (filters.moduleStatus !== "not_approved" && filters.moduleStatus !== "approved" && currentStatus !== filters.moduleStatus) continue;
                 }
 
@@ -528,8 +546,14 @@ async function collectSmsRecipients(
                 if (currentStatus === "under_review" || currentStatus === "submitted" || currentStatus === "pending_review") currentStatus = "pending";
 
                 if (filters.moduleStatus && filters.moduleStatus !== "all") {
-                    if (filters.moduleStatus === "not_approved" && (currentStatus === "approved" || currentStatus === "active")) continue;
-                    else if (filters.moduleStatus === "approved" && currentStatus !== "approved" && currentStatus !== "active" && currentStatus !== "paid" && currentStatus !== "completed") continue;
+                    // The exact complement of the "approved" arm below, which also
+                    // accepts "paid" and "completed". It used to exclude only
+                    // "approved" and "active", so an applicant whose status is "paid"
+                    // matched BOTH audiences — and the not_approved audience is the
+                    // chase-up list, so they were messaged to complete a payment they
+                    // had already made. See isApprovedModuleStatus.
+                    if (filters.moduleStatus === "not_approved" && isApprovedModuleStatus(currentStatus)) continue;
+                    else if (filters.moduleStatus === "approved" && !isApprovedModuleStatus(currentStatus)) continue;
                     else if (filters.moduleStatus !== "not_approved" && filters.moduleStatus !== "approved" && currentStatus !== filters.moduleStatus) continue;
                 }
 

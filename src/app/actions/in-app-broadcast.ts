@@ -46,7 +46,7 @@ export type InAppAudience =
     | "abandoned_failed_transactions";
 
 import type { Notification } from "@/lib/types/firestore";
-import { isMarketplaceBuyer } from "@/lib/broadcast-audience";
+import { isMarketplaceBuyer, isApprovedModuleStatus } from "@/lib/broadcast-audience";
 
 export type NotificationType = Notification["type"];
 
@@ -306,8 +306,12 @@ export async function collectRecipientUserIds(
                 if (currentStatus === "under_review" || currentStatus === "submitted" || currentStatus === "pending_review") currentStatus = "pending";
 
                 if (filters.moduleStatus && filters.moduleStatus !== "all") {
-                    if (filters.moduleStatus === "not_approved" && (currentStatus === "approved" || currentStatus === "active")) continue;
-                    else if (filters.moduleStatus === "approved" && currentStatus !== "approved" && currentStatus !== "active" && currentStatus !== "paid" && currentStatus !== "completed") continue;
+                    // The exact complement of the "approved" arm below — see
+                    // isApprovedModuleStatus. Excluding only approved and active put an
+                    // applicant whose status is "paid" into BOTH audiences, and
+                    // not_approved is the chase-up list.
+                    if (filters.moduleStatus === "not_approved" && isApprovedModuleStatus(currentStatus)) continue;
+                    else if (filters.moduleStatus === "approved" && !isApprovedModuleStatus(currentStatus)) continue;
                     else if (filters.moduleStatus !== "not_approved" && filters.moduleStatus !== "approved" && currentStatus !== filters.moduleStatus) continue;
                 }
 
@@ -331,8 +335,12 @@ export async function collectRecipientUserIds(
                 }
 
                 if (filters.moduleStatus && filters.moduleStatus !== "all") {
-                    if (filters.moduleStatus === "not_approved" && (currentStatus === "approved" || currentStatus === "active")) continue;
-                    else if (filters.moduleStatus === "approved" && currentStatus !== "approved" && currentStatus !== "active" && currentStatus !== "paid" && currentStatus !== "completed") continue;
+                    // The exact complement of the "approved" arm below — see
+                    // isApprovedModuleStatus. Excluding only approved and active put an
+                    // applicant whose status is "paid" into BOTH audiences, and
+                    // not_approved is the chase-up list.
+                    if (filters.moduleStatus === "not_approved" && isApprovedModuleStatus(currentStatus)) continue;
+                    else if (filters.moduleStatus === "approved" && !isApprovedModuleStatus(currentStatus)) continue;
                     else if (filters.moduleStatus !== "not_approved" && filters.moduleStatus !== "approved" && currentStatus !== filters.moduleStatus) continue;
                 }
 
@@ -353,8 +361,12 @@ export async function collectRecipientUserIds(
                 if (currentStatus === "under_review" || currentStatus === "submitted" || currentStatus === "pending_review") currentStatus = "pending";
 
                 if (filters.moduleStatus && filters.moduleStatus !== "all") {
-                    if (filters.moduleStatus === "not_approved" && (currentStatus === "approved" || currentStatus === "active")) continue;
-                    else if (filters.moduleStatus === "approved" && currentStatus !== "approved" && currentStatus !== "active" && currentStatus !== "paid" && currentStatus !== "completed") continue;
+                    // The exact complement of the "approved" arm below — see
+                    // isApprovedModuleStatus. Excluding only approved and active put an
+                    // applicant whose status is "paid" into BOTH audiences, and
+                    // not_approved is the chase-up list.
+                    if (filters.moduleStatus === "not_approved" && isApprovedModuleStatus(currentStatus)) continue;
+                    else if (filters.moduleStatus === "approved" && !isApprovedModuleStatus(currentStatus)) continue;
                     else if (filters.moduleStatus !== "not_approved" && filters.moduleStatus !== "approved" && currentStatus !== filters.moduleStatus) continue;
                 }
 
@@ -375,8 +387,12 @@ export async function collectRecipientUserIds(
                 if (currentStatus === "under_review" || currentStatus === "submitted" || currentStatus === "pending_review") currentStatus = "pending";
 
                 if (filters.moduleStatus && filters.moduleStatus !== "all") {
-                    if (filters.moduleStatus === "not_approved" && (currentStatus === "approved" || currentStatus === "active")) continue;
-                    else if (filters.moduleStatus === "approved" && currentStatus !== "approved" && currentStatus !== "active" && currentStatus !== "paid" && currentStatus !== "completed") continue;
+                    // The exact complement of the "approved" arm below — see
+                    // isApprovedModuleStatus. Excluding only approved and active put an
+                    // applicant whose status is "paid" into BOTH audiences, and
+                    // not_approved is the chase-up list.
+                    if (filters.moduleStatus === "not_approved" && isApprovedModuleStatus(currentStatus)) continue;
+                    else if (filters.moduleStatus === "approved" && !isApprovedModuleStatus(currentStatus)) continue;
                     else if (filters.moduleStatus !== "not_approved" && filters.moduleStatus !== "approved" && currentStatus !== filters.moduleStatus) continue;
                 }
 
