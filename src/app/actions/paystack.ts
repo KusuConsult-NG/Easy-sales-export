@@ -3,6 +3,7 @@
 import { logger } from '@/lib/logger';
 import { requireSession } from '@/lib/session-guard';
 import { ActionResponse } from '@/lib/safe-action';
+import { paystackBaseUrl } from "@/lib/paystack-host";
 
 /**
  * Paystack Integration Server Actions
@@ -42,7 +43,7 @@ export async function getBankList(): Promise<ActionResponse<any>> { try {
             return { success: false, error: 'Payment service not configured', data: null };
         }
 
-        const response = await fetch('https://api.paystack.co/bank?country=nigeria', {
+        const response = await fetch(`${paystackBaseUrl()}/bank?country=nigeria`, {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${secretKey}`,
@@ -97,7 +98,7 @@ export async function verifyBankAccount(
         }
 
         // Call Paystack Resolve Account Number API
-        const url = `https://api.paystack.co/bank/resolve?account_number=${accountNumber}&bank_code=${bankCode}`;
+        const url = `${paystackBaseUrl()}/bank/resolve?account_number=${accountNumber}&bank_code=${bankCode}`;
 
         logger.info('verifyBankAccount: Calling Paystack API', { accountNumber, bankCode });
 

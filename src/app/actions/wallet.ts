@@ -28,6 +28,7 @@ import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { ActionResponse, withSafeAction } from "@/lib/safe-action";
 import { getFeatureToggle } from "./feature-toggles";
 import { z } from "zod";
+import { paystackBaseUrl } from "@/lib/paystack-host";
 
 const MIN_WITHDRAWAL = 5000;   // ₦5,000 minimum withdrawal (NGN)
 const WALLET_COLLECTION = COLLECTIONS.WALLETS;
@@ -236,7 +237,7 @@ async function _fundWalletViaPaystackAction(amountNGN: number): Promise<ActionRe
     const baseUrl = await getBaseUrl();
     const callbackUrl = `${baseUrl}/api/wallet/verify?ref=${reference}`;
 
-    const paystackRes = await fetch("https://api.paystack.co/transaction/initialize", {
+    const paystackRes = await fetch(`${paystackBaseUrl()}/transaction/initialize`, {
         method: "POST",
         headers: {
             Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
@@ -295,7 +296,7 @@ async function _confirmWalletFundingAction(reference: string, paidAt?: Date): Pr
     ConfirmWalletFundingSchema.parse({ reference, paidAt });
 
     // Verify with Paystack
-    const paystackRes = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
+    const paystackRes = await fetch(`${paystackBaseUrl()}/transaction/verify/${reference}`, {
         headers: { Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}` },
     });
     const paystackData = await paystackRes.json();

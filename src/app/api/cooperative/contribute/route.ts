@@ -6,6 +6,7 @@ import { requireSession } from "@/lib/session-guard";
 import { rateLimit, createRateLimitResponse } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 import { getBaseUrl } from "@/lib/server-utils";
+import { paystackBaseUrl } from "@/lib/paystack-host";
 
 // Rate limiter for cooperative contributions (prevent double submissions)
 const contributionLimiter = rateLimit(rateLimitConfig.payment);
@@ -78,7 +79,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const paystackResponse = await fetch('https://api.paystack.co/transaction/initialize', {
+        const paystackResponse = await fetch(`${paystackBaseUrl()}/transaction/initialize`, {
             method: 'POST',
             headers: {
                 Authorization: `Bearer ${paystackSecretKey}`,

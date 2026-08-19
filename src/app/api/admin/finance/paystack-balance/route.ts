@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/session-guard";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { logger } from "@/lib/logger";
+import { paystackBaseUrl } from "@/lib/paystack-host";
 
 /**
  * GET /api/admin/finance/paystack-balance
@@ -24,7 +25,7 @@ export async function GET(_req: NextRequest) {
             return NextResponse.json({ success: false, error: "PAYSTACK_SECRET_KEY not configured" }, { status: 500 });
         }
 
-        const res = await fetch("https://api.paystack.co/balance", {
+        const res = await fetch(`${paystackBaseUrl()}/balance`, {
             headers: {
                 Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
                 "Content-Type": "application/json",

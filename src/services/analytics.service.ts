@@ -13,6 +13,7 @@ import type {
     ModuleRegistrationStats,
     UserSegments
 } from "@easy-sales/services";
+import { paystackBaseUrl } from "@/lib/paystack-host";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -71,7 +72,7 @@ async function eachPaystackSuccess(
     let truncated = false;
 
     while (page <= maxPages) {
-        let url = `https://api.paystack.co/transaction?perPage=${PER_PAGE}&page=${page}&status=success`;
+        let url = `${paystackBaseUrl()}/transaction?perPage=${PER_PAGE}&page=${page}&status=success`;
         if (opts.dateFrom) url += `&from=${encodeURIComponent(opts.dateFrom.toISOString())}`;
         if (opts.dateTo) url += `&to=${encodeURIComponent(opts.dateTo.toISOString())}`;
 
@@ -706,17 +707,17 @@ export class AnalyticsService implements AnalyticsServiceContract {
             try {
                 // Fetch counts using single quick requests for counts first
                 const [successMetaRes, failedMetaRes, abandonedMetaRes] = await Promise.all([
-                    fetch(`https://api.paystack.co/transaction?perPage=1&page=1&status=success`, {
+                    fetch(`${paystackBaseUrl()}/transaction?perPage=1&page=1&status=success`, {
                         headers: { Authorization: `Bearer ${secretKey}`, "Content-Type": "application/json" },
                         cache: "no-store",
                         signal: AbortSignal.timeout(3000),
                     }),
-                    fetch(`https://api.paystack.co/transaction?perPage=1&page=1&status=failed`, {
+                    fetch(`${paystackBaseUrl()}/transaction?perPage=1&page=1&status=failed`, {
                         headers: { Authorization: `Bearer ${secretKey}`, "Content-Type": "application/json" },
                         cache: "no-store",
                         signal: AbortSignal.timeout(3000),
                     }),
-                    fetch(`https://api.paystack.co/transaction?perPage=1&page=1&status=abandoned`, {
+                    fetch(`${paystackBaseUrl()}/transaction?perPage=1&page=1&status=abandoned`, {
                         headers: { Authorization: `Bearer ${secretKey}`, "Content-Type": "application/json" },
                         cache: "no-store",
                         signal: AbortSignal.timeout(3000),

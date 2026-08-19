@@ -8,8 +8,9 @@ import { hasAdminPermission } from "@/lib/admin-permissions";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { financeService } from "@/services";
+import { paystackBaseUrl } from "@/lib/paystack-host";
 
-const PAYSTACK_BASE_URL = "https://api.paystack.co";
+const PAYSTACK_BASE_URL = paystackBaseUrl();
 
 interface PaystackTx {
     reference: string;

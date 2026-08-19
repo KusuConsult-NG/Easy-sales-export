@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
+import { paystackBaseUrl } from "@/lib/paystack-host";
 
 /**
  * Bank Account Name Enquiry
@@ -45,7 +46,7 @@ async function verifyBankAccountHandler(req: NextRequest) {
         }
         // --- END STRICT CHECK ---
 
-        const url = `https://api.paystack.co/bank/resolve?account_number=${accountNumber}&bank_code=${bankCode}`;
+        const url = `${paystackBaseUrl()}/bank/resolve?account_number=${accountNumber}&bank_code=${bankCode}`;
 
         const response = await fetch(url, {
             headers: {

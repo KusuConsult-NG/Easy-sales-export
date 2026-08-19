@@ -4,6 +4,7 @@
  */
 
 import crypto from 'crypto';
+import { paystackBaseUrl } from "@/lib/paystack-host";
 
 /**
  * Convert Naira to Kobo (Paystack expects amounts in kobo)
@@ -13,7 +14,7 @@ export const nairaToKobo = (naira: number | string): number => {
     return Math.round(amount * 100);
 };
 
-const PAYSTACK_BASE_URL = 'https://api.paystack.co';
+const PAYSTACK_BASE_URL = paystackBaseUrl();
 
 export interface PaystackVerifyResponse {
     status: boolean;

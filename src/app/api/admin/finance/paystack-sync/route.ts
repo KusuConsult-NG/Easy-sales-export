@@ -18,8 +18,9 @@ import {
     processWaveRegistration
 } from "@/infrastructure/payments/service";
 import { recordAdminAction } from "@/lib/audit-log";
+import { paystackBaseUrl } from "@/lib/paystack-host";
 
-const PAYSTACK_BASE_URL = "https://api.paystack.co";
+const PAYSTACK_BASE_URL = paystackBaseUrl();
 
 interface PaystackTx {
     reference: string;

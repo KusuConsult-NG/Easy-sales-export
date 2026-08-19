@@ -9,7 +9,7 @@
 
 import { logger } from "@/lib/logger";
 
-const PAYSTACK_BASE = "https://api.paystack.co";
+const PAYSTACK_BASE = paystackBaseUrl();
 
 function getPaystackSecret(): string {
     const key = process.env.PAYSTACK_SECRET_KEY;
@@ -20,6 +20,7 @@ function getPaystackSecret(): string {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 import { bankAccountSchema } from "./validations/shared";
+import { paystackBaseUrl } from "@/lib/paystack-host";
 
 export type BankAccount = import("zod").infer<typeof bankAccountSchema>;
 

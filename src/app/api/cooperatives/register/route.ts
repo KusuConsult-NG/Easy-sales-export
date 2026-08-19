@@ -9,6 +9,7 @@ import { generateReference } from "@/lib/paystack";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { COOPERATIVE_CONFIG } from "@/lib/constants";
 import { getBaseUrl } from "@/lib/server-utils";
+import { paystackBaseUrl } from "@/lib/paystack-host";
 
 export async function POST(request: NextRequest) {
     try {
@@ -73,7 +74,7 @@ export async function POST(request: NextRequest) {
         // If Paystack failed, the doc was orphaned in 'pending' state and the user
         // could never re-register ("You already have a membership" on next attempt).
         // Now we only write to Firestore AFTER Paystack confirms initialisation.
-        const paystackResponse = await fetch("https://api.paystack.co/transaction/initialize", {
+        const paystackResponse = await fetch(`${paystackBaseUrl()}/transaction/initialize`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",

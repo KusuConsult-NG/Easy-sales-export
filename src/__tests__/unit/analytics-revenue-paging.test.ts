@@ -248,7 +248,13 @@ describe('the same bug had two siblings in the same file', () => {
         // A paged sweep is a URL with a VARIABLE page number. The three
         // `perPage=1&page=1` count probes are fixed single-row reads and are not
         // sweeps, so they are excluded by construction rather than by exception.
-        const pagedUrls = (src.match(/api\.paystack\.co\/transaction\?perPage=\$\{/g) ?? []).length;
+        //
+        // The host is no longer written out here — every Paystack call resolves
+        // it through paystackBaseUrl(), which refuses an override in production
+        // and outside it accepts only a loopback stub. See
+        // paystack-host-cannot-be-redirected.test.ts. What this counts is
+        // unchanged: URL templates carrying a variable page number.
+        const pagedUrls = (src.match(/paystackBaseUrl\(\)\}\/transaction\?perPage=\$\{/g) ?? []).length;
         const helperCalls = (src.match(/eachPaystackSuccess\(/g) ?? []).length;
 
         // One URL template, inside the helper; three callers plus the definition.

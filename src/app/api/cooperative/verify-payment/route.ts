@@ -10,6 +10,7 @@ import { rateLimit, createRateLimitResponse } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 import { normalizeUserDoc } from "@/lib/schema-normalizer";
 import { claimPaymentOnce } from "@/lib/wallet-ledger";
+import { paystackBaseUrl } from "@/lib/paystack-host";
 
 // Rate limiter for payment verification (prevent fraud/double-verification)
 const paymentVerifyLimiter = rateLimit(rateLimitConfig.payment);
@@ -146,7 +147,7 @@ export async function POST(request: NextRequest) {
         }
 
         const verifyResponse = await fetch(
-            `https://api.paystack.co/transaction/verify/${reference}`,
+            `${paystackBaseUrl()}/transaction/verify/${reference}`,
             { headers: { Authorization: `Bearer ${paystackSecretKey}` } }
         );
 

@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { Timestamp } from "@/lib/firestore-compat";
+import { paystackBaseUrl } from "@/lib/paystack-host";
 
 /**
  * Automated Paystack ↔ Firebase Reconciliation
@@ -87,7 +88,7 @@ export async function GET(request: NextRequest) {
 
         while (hasMore) {
             const response = await fetch(
-                `https://api.paystack.co/transaction?perPage=100&page=${page}&status=success&from=${fromDate}`,
+                `${paystackBaseUrl()}/transaction?perPage=100&page=${page}&status=success&from=${fromDate}`,
                 {
                     headers: { Authorization: `Bearer ${secretKey}` },
                     // 15s timeout per page fetch
@@ -140,7 +141,7 @@ export async function GET(request: NextRequest) {
                 // Fetch complete metadata from Paystack API to correctly route payment
                 try {
                     const txDetailRes = await fetch(
-                        `https://api.paystack.co/transaction/verify/${tx.reference}`,
+                        `${paystackBaseUrl()}/transaction/verify/${tx.reference}`,
                         {
                             headers: { Authorization: `Bearer ${secretKey}` },
                             signal: AbortSignal.timeout(10000),
