@@ -7,9 +7,10 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { revalidatePath } from "next/cache";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { claimPaymentOnce, decrementManyOrFail } from "@/lib/wallet-ledger";
+import { claimPaymentOnce, decrementManyOrFail, markFulfilmentFailed } from "@/lib/wallet-ledger";
 import { getPlatformFees } from "@/lib/system-settings";
 import { checkOrderPaymentAmount } from "@/lib/order-payment-amount";
+import { escrowIdFor } from "@/lib/escrow-status";
 import { rateLimit } from "@/lib/rate-limiter";
 import { rateLimitConfig } from "@/lib/rate-limits.config";
 import { notifyPaymentReceived } from "@/lib/marketplace-notifications";
@@ -19,6 +20,46 @@ import { createNotification } from "@/infrastructure/notifications/service";
 
 const paymentLimiter = rateLimit(rateLimitConfig.payment);
 
+/**
+ * Was this payment's order ACTUALLY fulfilled?
+ *
+ * Both early returns below used to look the order up and then ignore its
+ * status. A payment whose fulfilment died part-way leaves a claimed
+ * processed_payments row and an order still at `paymentStatus: "pending"` — and
+ * the buyer retrying was told "Order payment successful!" while no escrow
+ * existed and no seller had an order to ship.
+ *
+ * `pending` is the value _payment_orders.ts writes at placement. Anything else
+ * — "escrow_held" from this path and from the webhook, or
+ * "paid_awaiting_refund" from the out-of-stock branch — means a fulfilment path
+ * ran and reached a decision. That is the same test the reconcile-fulfilment
+ * cron applies to decide whether a marketplace payment produced an order, so
+ * the two agree on what "fulfilled" means.
+ */
+async function findFulfilledOrder(reference: string): Promise<
+    { fulfilled: true; orderId: string } | { fulfilled: false; orderId: string | null }
+> {
+    const orderQuery = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
+        .where("paymentReference", "==", reference)
+        .limit(1)
+        .get();
+
+    if (orderQuery.empty) return { fulfilled: false, orderId: null };
+
+    const doc = orderQuery.docs[0];
+    const data = doc.data() ?? {};
+    const orderId = data.orderId || doc.id;
+
+    return data.paymentStatus && data.paymentStatus !== "pending"
+        ? { fulfilled: true, orderId }
+        : { fulfilled: false, orderId };
+}
+
+/** What a buyer is told when their money was taken and nothing was delivered. */
+const UNFULFILLED_MESSAGE =
+    "Your payment went through but the order could not be completed. " +
+    "Support has been alerted and will contact you — please do not pay again.";
+
 
 /**
  * Verify Marketplace Order Payment
@@ -26,6 +67,10 @@ const paymentLimiter = rateLimit(rateLimitConfig.payment);
  */
 async function _verifyOrderPaymentAction(reference: string): Promise<ActionResponse<{ orderId: string; message: string }>> { 
     let sessionResult;
+    // Whether THIS call took the payment. Everything after the claim is money
+    // already collected, so a throw past this point is not an ordinary error —
+    // see the catch.
+    let claimedHere = false;
     try {
         sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
@@ -49,14 +94,25 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
         // once. claimPaymentOnce below is the actual gate; this only saves a
         // Paystack round trip in the common case.
         if (existingPayment.exists) {
-            // Find the order to return its ID to the UI
-            const orderQuery = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
-                .where("paymentReference", "==", reference)
-                .limit(1)
-                .get();
-            const orderId = orderQuery.empty ? reference : orderQuery.docs[0].data()?.orderId || orderQuery.docs[0].id;
-            logger.info(`[verifyOrderPaymentAction] Payment ${reference} already processed by webhook — returning success to client.`);
-            return { error: null, success: true as const, data: { orderId, message: "Order payment successful!" } };
+            // Processed does NOT mean fulfilled.
+            //
+            // This returned success on the strength of the marker alone, having
+            // looked the order up purely to report its id. A payment whose
+            // fulfilment died part-way has the same marker and an order still at
+            // "pending", so the buyer was told it worked.
+            const settled = await findFulfilledOrder(reference);
+
+            if (settled.fulfilled) {
+                logger.info(`[verifyOrderPaymentAction] Payment ${reference} already processed by webhook — returning success to client.`);
+                return { error: null, success: true as const, data: { orderId: settled.orderId, message: "Order payment successful!" } };
+            }
+
+            logger.error(
+                `[Marketplace] Payment ${reference} is claimed but its order is not fulfilled ` +
+                `(order ${settled.orderId ?? "not found"}). Money was taken and nothing was delivered.`
+            );
+            await markFulfilmentFailed(reference, "claimed payment with an unfulfilled order");
+            return { error: UNFULFILLED_MESSAGE, success: false as const, data: null };
         }
 
         // Verify payment with Paystack
@@ -176,20 +232,36 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
             metadata: { orderId: orderDoc.id },
         });
 
+        claimedHere = claim.claimed;
+
         if (!claim.claimed) {
             // The fast path above catches the common case, where the webhook
             // finished before the user was redirected back. This catches the
-            // one it cannot: both arriving at once. Same answer to the user —
-            // the order is live and they have been charged once.
-            logger.info(`[Marketplace] Payment ${reference} already processed; order is live.`);
-            return {
-                error: null,
-                success: true as const,
-                data: {
-                    orderId: orderData.orderId || orderDoc.id,
-                    message: "Order payment successful!",
-                },
-            };
+            // one it cannot: both arriving at once.
+            //
+            // Whether that other caller actually FINISHED is a different
+            // question from whether it started, and this returned success on
+            // the strength of the lost claim alone.
+            const settled = await findFulfilledOrder(reference);
+
+            if (settled.fulfilled) {
+                logger.info(`[Marketplace] Payment ${reference} already processed; order is live.`);
+                return {
+                    error: null,
+                    success: true as const,
+                    data: {
+                        orderId: settled.orderId,
+                        message: "Order payment successful!",
+                    },
+                };
+            }
+
+            logger.error(
+                `[Marketplace] Payment ${reference} was claimed by another caller that did not ` +
+                `fulfil order ${orderDoc.id}. Money was taken and nothing was delivered.`
+            );
+            await markFulfilmentFailed(reference, "concurrent claim did not fulfil the order");
+            return { error: UNFULFILLED_MESSAGE, success: false as const, data: null };
         }
 
         // Reserve stock across every product in the order, atomically.
@@ -327,7 +399,7 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
 
             // Create/Update Escrow Record for each seller to "funded"
             for (const [sellerId, grossAmount] of Object.entries(sellerTotals)) {
-                const escrowId = `ESC-${orderData.orderId}-${sellerId.substring(0, 5)}`;
+                const escrowId = escrowIdFor(orderData.orderId, sellerId, Object.keys(sellerTotals));
                 const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId);
 
                 const platformFee = Math.round(grossAmount * fees.platformFeePercentage);
@@ -494,14 +566,39 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
             data: { orderId: orderData.orderId, message: "Order payment successful!" }
         };
     } catch (error) { 
+        const message = error instanceof Error ? error.message : String(error);
+
         logger.error('[Payment Verification Error]', {
             userId: sessionResult?.session?.user?.id,
             action: 'verifyOrder',
             reference,
-            error: error instanceof Error ? error.message : String(error)
+            error: message
         });
 
-        return { success: false as const, error: "Failed to verify payment: " + (error instanceof Error ? error.message : "Unknown error"), data: null };
+        // THE PAYMENT WAS TAKEN. RECORD THAT NOTHING WAS DELIVERED.
+        //
+        // Everything below the claim is one runTransaction the adapter does not
+        // roll back — it queues the writes and flushes them one at a time — so a
+        // throw part-way leaves the reference claimed as "completed", the stock
+        // decremented, and the order possibly still at "pending" with no escrow
+        // and no seller notified.
+        //
+        // This was the ONLY claimed-payment path in the codebase that did not
+        // record that. The webhook service, export-payment, escrow-lifecycle,
+        // cooperative/_payment, cooperative/_loans_repayments and
+        // farm-nation-payment all call markFulfilmentFailed here; this one
+        // logged a generic message and returned, leaving a row that says
+        // "completed" for a payment that delivered nothing.
+        //
+        // Only when the claim was taken HERE. A throw before it — Paystack
+        // unreachable, the order missing — took no money on this path and must
+        // not mark somebody else's completed payment as failed.
+        if (claimedHere) {
+            await markFulfilmentFailed(reference, message);
+            return { success: false as const, error: UNFULFILLED_MESSAGE, data: null };
+        }
+
+        return { success: false as const, error: "Failed to verify payment: " + message, data: null };
     }
 }
 

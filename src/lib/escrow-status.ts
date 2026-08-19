@@ -259,3 +259,59 @@ export function normaliseEscrowStatus(status: unknown): EscrowStatus | null {
     if (raw === "shipped") return "in_transit";
     return (ESCROW_STATUSES as readonly string[]).includes(raw) ? (raw as EscrowStatus) : null;
 }
+
+/**
+ * The document id for one seller's escrow on one order.
+ *
+ * THE DEFECT
+ * ----------
+ * Four writers built this id independently and all four wrote
+ *
+ *     `ESC-${orderId}-${sellerId.substring(0, 5)}`
+ *
+ *   _payment_orders.ts        creates it "pending" when the order is placed
+ *   _payment_verify.ts        funds it when the buyer's payment verifies
+ *   infrastructure/payments   funds it when the Paystack webhook arrives
+ *   order-management.ts       reads it to release or refund
+ *
+ * FIVE characters of the seller id. Two sellers on one order whose ids share
+ * their first five characters produce the SAME document id — and the funding
+ * write is a full `set()`, not a merge, so the second silently OVERWRITES the
+ * first. One seller's escrow simply disappears: they are never paid, the buyer
+ * is charged in full, and the platform keeps the difference with no record that
+ * anything went missing.
+ *
+ * HOW LIKELY, HONESTLY
+ * --------------------
+ * User ids are Supabase auth UUIDs, so five hex characters is twenty bits and a
+ * two-seller order collides about once in a million. This is a LATENT defect,
+ * not one that is firing today. It is fixed because the consequence is total
+ * and silent loss of one seller's funds, and because the fix costs nothing.
+ *
+ * WHY NOT JUST USE THE WHOLE ID
+ * -----------------------------
+ * Because that would change the id of every escrow, and an order placed before
+ * the change and paid after it would have its "pending" row under the old id
+ * and its "funded" row under the new one — two rows for one seller, created by
+ * the deploy itself.
+ *
+ * So the short form is kept whenever it is unambiguous, which is every existing
+ * order and all but one in a million future ones. The full id is used ONLY when
+ * the seller set of that same order actually collides. The output is therefore
+ * byte-identical to the old scheme except in the case that was broken, and
+ * there is no migration window.
+ *
+ * `allSellerIds` is the seller set of THIS order. Every call site has it —
+ * `Object.keys(sellerTotals)`, `uniqueSellers`, or `order.sellerIds`.
+ */
+export function escrowIdFor(
+    orderId: string,
+    sellerId: string,
+    allSellerIds: readonly string[],
+): string {
+    const short = String(sellerId).substring(0, 5);
+    const collides = allSellerIds.some(
+        (other) => other !== sellerId && String(other).substring(0, 5) === short,
+    );
+    return collides ? `ESC-${orderId}-${sellerId}` : `ESC-${orderId}-${short}`;
+}

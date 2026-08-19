@@ -15,7 +15,7 @@ import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { getLogisticsProvider } from "@/lib/logistics";
 import { runQueryWithRetry } from "@/lib/firestore-utils";
-import { ESCROW_RELEASABLE_FROM, pickOrderEscrow } from "@/lib/escrow-status";
+import { ESCROW_RELEASABLE_FROM, pickOrderEscrow, escrowIdFor } from "@/lib/escrow-status";
 
 /**
  * Get all orders for a seller
@@ -330,7 +330,7 @@ async function _confirmDeliveryAction(orderId: string) { let sessionResult;
             const sellerId = currentOrder.sellerId || (Array.isArray(currentOrder.sellerIds) ? currentOrder.sellerIds[0] : undefined);
             if (!sellerId) throw new Error("Seller ID not found on order");
 
-            const escrowId = `ESC-${orderId}-${sellerId.substring(0, 5)}`;
+            const escrowId = escrowIdFor(orderId, sellerId, Array.isArray(currentOrder.sellerIds) ? currentOrder.sellerIds : [sellerId]);
             const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId);
             const escrowDoc = await escrowRef.get();
 

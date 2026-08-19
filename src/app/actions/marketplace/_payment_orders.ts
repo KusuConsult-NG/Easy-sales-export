@@ -16,6 +16,7 @@ import type { CartItem } from "@/lib/types/marketplace";
 import type { ActionResponse } from "@/lib/safe-action";
 import { createNotification } from "@/infrastructure/notifications/service";
 import { validateCartItems, calculateDeliveryFee, estimateCartWeight, nairaToKobo } from "@/lib/marketplace-cart";
+import { escrowIdFor } from "@/lib/escrow-status";
 
 /**
  * Initialize Paystack Payment for Marketplace Order
@@ -156,7 +157,7 @@ async function _initializeOrderPaymentAction(
         });
 
         for (const [sellerId, grossAmount] of Object.entries(sellerTotals)) {
-            const escrowId = `ESC-${orderId}-${sellerId.substring(0, 5)}`;
+            const escrowId = escrowIdFor(orderId, sellerId, Object.keys(sellerTotals));
             const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId);
 
             const platformFee = Math.round(grossAmount * fees.platformFeePercentage);

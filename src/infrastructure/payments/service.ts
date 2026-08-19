@@ -9,6 +9,7 @@ import { normalizeUserDoc } from "@/lib/schema-normalizer";
 import { claimPaymentOnce, incrementWithinCeiling, CLAIM_TYPE, markFulfilmentFailed } from "@/lib/wallet-ledger";
 import { checkOrderPaymentAmount } from "@/lib/order-payment-amount";
 import { checkAcademyPayment } from "@/lib/academy-plan";
+import { escrowIdFor } from "@/lib/escrow-status";
 
 /**
  * Handle Marketplace Order Fulfillment
@@ -218,7 +219,7 @@ export async function processMarketplaceOrder(reference: string, amount: number,
         // would race the rest of fulfilment and their failures would be
         // unobservable.
         for (const [sellerId, totalAmount] of Object.entries(sellerTotals)) {
-            const escrowId = `ESC-${orderData.orderId}-${sellerId.substring(0, 5)}`;
+            const escrowId = escrowIdFor(orderData.orderId, sellerId, Object.keys(sellerTotals));
             const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId);
 
             const platformFee = Math.round(totalAmount * fees.platformFeePercentage);
