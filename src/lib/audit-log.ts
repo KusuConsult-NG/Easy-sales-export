@@ -158,7 +158,33 @@ export type AuditAction =
     | 'FETCH_COOPERATIVE_MEMBERS'
     | 'FETCH_COOPERATIVE_TRANSACTIONS'
     | 'FETCH_WAVE_APPLICATIONS'
-    | 'telemetry_broadcast_sent';
+    | 'telemetry_broadcast_sent'
+    // ── Added when the unaudited-write baseline was cleared ──────────────
+    // Twenty-nine permission-gated admin writes recorded nothing. Most were
+    // already named by this union — 'content:approve', 'export_create',
+    // 'farm_nation_reject', 'quiz_created' — which is what showed the
+    // convention was ninety-percent applied rather than unbuilt. These are the
+    // names it was missing.
+    | 'broadcast_sent'
+    | 'cooperative_member_status_update'
+    | 'cooperative_revision_request'
+    | 'data_recovery_run'
+    | 'escrow_status_update'
+    | 'export_catalog_delete'
+    | 'export_product_delete'
+    | 'export_product_review'
+    | 'farm_nation_approve'
+    | 'guarantor_verified'
+    | 'inspector_dispatched'
+    | 'kyc_qoreid_verify'
+    | 'password_resets_purged'
+    | 'paystack_sync_run'
+    | 'recovery_emails_sent'
+    | 'review_moderate'
+    | 'village_market_event_created'
+    | 'village_market_event_status_update'
+    | 'village_market_merchant_added'
+    | 'wave_shipment_status_update';
 
 export type AuditSeverity = 'info' | 'warning' | 'critical';
 

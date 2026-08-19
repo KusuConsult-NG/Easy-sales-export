@@ -7,6 +7,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { recordsAGuarantor } from "@/lib/loan-approval-policy";
 import { resolveLoanApplication } from "@/lib/loan-application-location";
+import { recordAdminAction } from "@/lib/audit-log";
 
 /**
  * API Route: Verify Guarantor (Admin Only)
@@ -84,6 +85,12 @@ export async function POST(request: NextRequest) {
             updatedAt: FieldValue.serverTimestamp(),
         });
 
+        await recordAdminAction({
+            action: 'guarantor_verified',
+            userId: session.user.id,
+            targetId: applicationId,
+            targetType: 'loan_application',
+        });
         return NextResponse.json({
             success: true,
             message: "Guarantor verified successfully"

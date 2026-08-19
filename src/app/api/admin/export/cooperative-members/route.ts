@@ -5,7 +5,7 @@ import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { csvDocument } from "@/lib/csv-safe";
 import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
 
@@ -16,7 +16,14 @@ export async function GET(request: NextRequest) {
             return new NextResponse("Unauthorized", { status: 401 });
         }
 
-        if (!isAdmin(session.user.roles)) {
+        // A CSV of every cooperative member — name, email, phone, state.
+        //
+        // isAdmin() is true for EVERY admin role, so support, moderator
+        // and every module admin could download this — an academy admin
+        // could take the contact details of every member on the platform.
+        // canAccessAdminRoute already silos these people by module at the
+        // route layer; this aligns the data layer with that.
+        if (!hasAdminPermission(session.user.roles, "users:export")) {
             return new NextResponse("Admin access required", { status: 403 });
         }
 

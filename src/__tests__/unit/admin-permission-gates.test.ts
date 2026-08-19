@@ -145,30 +145,32 @@ interface Gate { file: string; fn: string }
  * sibling mask a broken one — which is exactly how the five hand-written status
  * sets and the cooperative contribution doors each hid for a pass.
  */
-function soleIsAdminGates(): Gate[] {
+function gatesInSource(src: string, file: string): Gate[] {
     const found: Gate[] = [];
     const FN = /^(?:export\s+)?(?:async\s+)?function\s+([A-Za-z0-9_]+)\s*\(/gm;
+    const heads = [...src.matchAll(FN)];
 
-    for (const file of GUARDED_TREES.flatMap((t) => walk(join(process.cwd(), t)))) {
-        const src = readFileSync(file, 'utf-8');
-        const heads = [...src.matchAll(FN)];
+    for (let i = 0; i < heads.length; i++) {
+        const start = heads[i].index!;
+        const end = i + 1 < heads.length ? heads[i + 1].index! : src.length;
+        const body = strip(src.slice(start, end));
 
-        for (let i = 0; i < heads.length; i++) {
-            const start = heads[i].index!;
-            const end = i + 1 < heads.length ? heads[i + 1].index! : src.length;
-            const body = strip(src.slice(start, end));
+        if (!DB_WRITE.test(body) || MATRIX_GATE.test(body)) continue;
 
-            if (!DB_WRITE.test(body) || MATRIX_GATE.test(body)) continue;
-
-            for (const line of body.split('\n')) {
-                if (!/!\s*isAdmin\s*\(/.test(line) || OWNERSHIP.test(line)) continue;
-                found.push({ file: relative(process.cwd(), file), fn: heads[i][1] });
-                break;
-            }
+        for (const line of body.split('\n')) {
+            if (!/!\s*isAdmin\s*\(/.test(line) || OWNERSHIP.test(line)) continue;
+            found.push({ file, fn: heads[i][1] });
+            break;
         }
     }
 
     return found;
+}
+
+function soleIsAdminGates(): Gate[] {
+    return GUARDED_TREES
+        .flatMap((t) => walk(join(process.cwd(), t)))
+        .flatMap((file) => gatesInSource(readFileSync(file, 'utf-8'), relative(process.cwd(), file)));
 }
 
 /** Every permission string named in a hasAdminPermission call under actions/. */
@@ -380,17 +382,17 @@ describe('no admin write is gated on "is some kind of admin" alone', () => {
         // THE test, and it is structural rather than a list of the forty-three,
         // so a forty-fourth added later cannot slip in behind them.
         //
-        // BASELINE: village-market is the honest remainder. Its three writes
+        // BASELINE: EMPTY. Village-market was the honest remainder — its writes
         // create market events and add external merchants, and PERMISSION_MATRIX
-        // has no village-market permission at all — not a narrower one, none.
-        // Mapping them to a marketplace or content permission would be inventing
-        // a policy rather than applying the platform's own, so they stay listed
-        // here for the owner. The list may shrink; it must never grow.
-        const KNOWN = new Set([
-            'src/app/actions/village-market.ts::createVillageMarketEventAction',
-            'src/app/actions/village-market.ts::addExternalMerchantAction',
-            'src/app/actions/village-market.ts::updateVillageMarketEventStatusAction',
-        ]);
+        // had no village-market permission at all, not a narrower one, none, so
+        // mapping them to a marketplace or content permission would have been
+        // inventing a policy rather than applying the platform's own.
+        //
+        // The matrix now names the surface: "marketplace:manage_village_market",
+        // held by super_admin, admin and marketplace_admin, whose module it is.
+        // All four entry points ask for it, so this is a gate over every admin
+        // write in the codebase rather than a ratchet over a remainder.
+        const KNOWN = new Set<string>([]);
 
         const unexpected = soleIsAdminGates()
             .map((g) => `${g.file}::${g.fn}`)
@@ -409,13 +411,25 @@ describe('no admin write is gated on "is some kind of admin" alone', () => {
         expect(unexpected).toEqual([]);
     });
 
-    it('and the scan really can find one, so the assertion is not vacuous', () => {
-        // The baseline entries ARE the proof: the scanner still reports three,
-        // and they are the three the note above accounts for.
-        const all = soleIsAdminGates().map((g) => `${g.file}::${g.fn}`);
+    it('and the scan really can find one, so [] means clean', () => {
+        // The baseline used to BE the proof — the scanner reported three and
+        // they were the three the note accounted for. With the baseline empty a
+        // scanner that silently matched nothing would pass, so the proof moves
+        // to a synthetic source that the detector must still report.
+        // Unindented on purpose: the function-head regex is line-anchored,
+        // exactly as it is against real source files.
+        const planted = [
+            'export async function _plantedAction() {',
+            '    const session = (await requireSession()).session;',
+            '    if (!isAdmin(session.user.roles)) {',
+            '        return { success: false as const, error: "Unauthorized" };',
+            '    }',
+            '    await db.collection(COLLECTIONS.USERS).doc("someone").update({ x: 1 });',
+            '    return { success: true as const };',
+            '}',
+        ].join('\n');
 
-        expect(all).toHaveLength(3);
-        expect(all.every((k) => k.startsWith('src/app/actions/village-market.ts::'))).toBe(true);
+        expect(gatesInSource(planted, 'planted.ts').map((g) => g.fn)).toContain('_plantedAction');
     });
 
     it('and the fixed gates are the ones that used to be reported', () => {
@@ -519,20 +533,18 @@ describe('no gate locks out the role that does the work', () => {
         // `admin` role: "no deletion, no impersonation, no config rollback".
         // audit:export is deliberate too and audit-log-actions.ts documents why.
         //
-        // "users:create" is the odd one, and it is recorded rather than fixed.
-        // _onboardLegacyMemberAction is live and exported, and it refuses with
-        // "Unauthorized: Permission users:create required" for a plain `admin` —
-        // who is precisely the role that onboards a legacy member. The matrix's
-        // own excuse-list for `admin` does not mention creation, so its absence
-        // reads as an omission rather than a policy; the tell is that the gate
-        // grew a re-read-the-roles-from-the-database fallback, which is what
-        // somebody writes when a permission check refuses an admin and they
-        // assume the session is stale.
+        // "users:create" is GONE from this list — `admin` holds it now.
         //
-        // Granting `admin` the permission WIDENS access, which is the direction
-        // an audit must not take on its own. Left for the owner.
+        // It was the odd one out: _onboardLegacyMemberAction is live and
+        // exported and refused a plain `admin`, who is precisely the role that
+        // onboards a legacy member, while the matrix's own excuse-list for
+        // `admin` — "no deletion, no impersonation, no config rollback" — never
+        // mentioned creation. The tell was that the gate had grown a
+        // re-read-the-roles-from-the-database fallback, which is what somebody
+        // writes when a permission check refuses an admin and they assume the
+        // session is stale. Recorded then rather than fixed, because granting a
+        // permission widens access and that was the owner's call to make.
         const ADMIN_WITHHELD_BY_DESIGN = new Set([
-            'users:create',       // owner decision — see above
             'users:delete',
             'users:impersonate',
             'audit:export',
@@ -555,10 +567,10 @@ describe('no gate locks out the role that does the work', () => {
         expect(offending).toEqual([]);
     });
 
-    it('and the users:create lockout is real, not a reading of a comment', () => {
-        // The finding above, pinned. If somebody grants `admin` users:create,
-        // this fails and the baseline entry comes out with it.
-        expect(hasAdminPermission(['admin'], 'users:create')).toBe(false);
+    it('and the users:create lockout is gone, on the live action that had it', () => {
+        // The inverse of what this used to assert. The gate is unchanged — it
+        // still names users:create — and `admin` now passes it.
+        expect(hasAdminPermission(['admin'], 'users:create')).toBe(true);
         expect(hasAdminPermission(['super_admin'], 'users:create')).toBe(true);
 
         const legacy = readFileSync(join(process.cwd(), 'src/app/actions/admin/_legacy.ts'), 'utf-8');

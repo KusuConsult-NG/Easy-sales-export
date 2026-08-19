@@ -7,6 +7,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
 import { hasAdminPermission } from "@/lib/admin-permissions";
+import { recordAdminAction } from "@/lib/audit-log";
 
 /**
  * API Route: Create Quiz (Admin)
@@ -53,6 +54,12 @@ export async function POST(request: NextRequest) {
             updatedAt: FieldValue.serverTimestamp(),
         });
 
+        await recordAdminAction({
+            action: 'quiz_created',
+            userId: session.user.id,
+            targetId: quizRef.id,
+            targetType: 'academy_quiz',
+        });
         return NextResponse.json({
             success: true,
             message: "Quiz created successfully",

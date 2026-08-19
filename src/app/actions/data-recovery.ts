@@ -6,6 +6,7 @@ import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { FieldValue } from "@/lib/firestore-compat";
+import { recordAdminAction } from "@/lib/audit-log";
 
 /**
  * The most recent application in a collection, and the date it was submitted.
@@ -267,6 +268,12 @@ export async function runServiceRegistrationRecoveryAction(): Promise<{ success:
         }
 
         logger.info(`[DataRecovery] Audit complete. Processed: ${stats.totalUsersProcessed}, Fixed: ${stats.fixedCount}`);
+        await recordAdminAction({
+            action: 'data_recovery_run',
+            userId: sessionResult.session.user.id,
+            targetType: 'service_registrations',
+            metadata: { stats },
+        });
         return { success: true, stats };
 
     } catch (error: any) {

@@ -86,24 +86,30 @@ const AUDITS = /createAdminAuditLog|createAuditLog|logAuditAction|recordAdminAct
  * bulkDeleteUsersAction and createImpersonationTokenAction as unrecorded when
  * both write a row through the other helper.
  */
-function unauditedAdminWrites(): string[] {
+function unauditedInSource(src: string, file: string): string[] {
     const found: string[] = [];
     const FN = /^(?:export\s+)?(?:async\s+)?function\s+([A-Za-z0-9_]+)\s*\(/gm;
+    const heads = [...src.matchAll(FN)];
+    const spans: [string, number, number][] = heads.length
+        ? heads.map((m, i) => [m[1], m.index!, i + 1 < heads.length ? heads[i + 1].index! : src.length])
+        : [['<module>', 0, src.length]];
+
+    for (const [name, a, b] of spans) {
+        const body = strip(src.slice(a, b));
+        if (!DB_WRITE.test(body) || !PERMISSION_GATED.test(body)) continue;
+        if (AUDITS.test(body)) continue;
+        found.push(`${file}::${name}`);
+    }
+
+    return found;
+}
+
+function unauditedAdminWrites(): string[] {
+    const found: string[] = [];
 
     for (const root of ['src/app/actions', 'src/app/api/admin']) {
         for (const file of walk(join(process.cwd(), root))) {
-            const src = readFileSync(file, 'utf-8');
-            const heads = [...src.matchAll(FN)];
-            const spans: [string, number, number][] = heads.length
-                ? heads.map((m, i) => [m[1], m.index!, i + 1 < heads.length ? heads[i + 1].index! : src.length])
-                : [['<module>', 0, src.length]];
-
-            for (const [name, a, b] of spans) {
-                const body = strip(src.slice(a, b));
-                if (!DB_WRITE.test(body) || !PERMISSION_GATED.test(body)) continue;
-                if (AUDITS.test(body)) continue;
-                found.push(`${relative(process.cwd(), file)}::${name}`);
-            }
+            found.push(...unauditedInSource(readFileSync(file, 'utf-8'), relative(process.cwd(), file)));
         }
     }
 
@@ -111,53 +117,31 @@ function unauditedAdminWrites(): string[] {
 }
 
 /**
- * BASELINE — permission-gated admin writes that still record nothing.
+ * BASELINE — EMPTY.
  *
- * The money and irreversible paths came out of this list; what remains is
- * content moderation, catalogue edits and maintenance sweeps. The list may
- * shrink. It must never grow.
+ * Every permission-gated admin write in src/app/actions and src/app/api/admin
+ * now records a row. This is a gate over the whole admin surface rather than a
+ * ratchet over a remainder, and adding an entry back requires saying why here.
  *
- * Two entries are not quite what they look like, and are kept rather than
- * excused so the count stays honest:
+ * The last twenty-nine were content moderation, catalogue edits, maintenance
+ * sweeps and the village-market surface — which only became visible to this
+ * scan once its writes were permission-gated, since an isAdmin()-only write is
+ * not "permission-gated" by PERMISSION_GATED's definition. Fixing one finding
+ * enlarged another, which is the honest order to discover them in.
  *
- *   broadcast/send      writes its own log document with recipient counts and a
- *                       done/partial/failed status. It is recorded, just not in
- *                       audit_logs, so an owner filtering the audit trail will
- *                       not see it.
+ * Two were not quite what they looked like and are recorded anyway:
+ *
+ *   broadcast/send      already wrote its own log document with recipient
+ *                       counts and a done/partial/failed status. It was
+ *                       recorded, just not in audit_logs, so an owner filtering
+ *                       the audit trail could not see it. It writes both now.
  *   getCleanBroadcastListAction
- *                       a READ that the scan catches because it writes an
- *                       audit_logs row in its own catch block. It hands back
- *                       ~37,000 email addresses and records nothing on the way
- *                       out.
+ *                       a READ the scan catches because it writes an audit_logs
+ *                       row in its own catch block. It hands back ~37,000 email
+ *                       addresses, so it records a 'data_access' row — the one
+ *                       entry here that is deliberately not a write.
  */
-const KNOWN_UNAUDITED = [
-    'src/app/actions/admin-content.ts::approveContentAction',
-    'src/app/actions/admin-content.ts::rejectContentAction',
-    'src/app/actions/admin/_exports.ts::_requestExportApplicationRevisionAction',
-    'src/app/actions/broadcast.ts::getCleanBroadcastListAction',
-    'src/app/actions/cooperative/_coop_admin_members.ts::_updateMemberStatusAction',
-    'src/app/actions/cooperative/_coop_admin_members.ts::requestCooperativeRevisionAction',
-    'src/app/actions/data-recovery.ts::runServiceRegistrationRecoveryAction',
-    'src/app/actions/export-admin.ts::createExportCatalogAction',
-    'src/app/actions/export-admin.ts::deleteExportCatalogAction',
-    'src/app/actions/export-admin.ts::reviewExportProductAction',
-    'src/app/actions/export-admin.ts::updateAdminExportOrderStatusAction',
-    'src/app/actions/export-products.ts::deleteExportProductAction',
-    'src/app/actions/farm-nation/_fn_admin.ts::_approveFarmNationSellerAction',
-    'src/app/actions/farm-nation/_fn_admin.ts::_rejectFarmNationSellerAction',
-    'src/app/actions/marketplace/_escrow_actions.ts::_updateEscrowStatus',
-    'src/app/actions/marketplace/_reviews.ts::_moderateReviewAction',
-    'src/app/actions/schema-standardization.ts::runSchemaStandardizationAction',
-    'src/app/actions/wave/_wv_shipments.ts::_updateShipmentStatusAction',
-    'src/app/api/admin/academy/quiz/create/route.ts::POST',
-    'src/app/api/admin/broadcast/send/route.ts::POST',
-    'src/app/api/admin/cooperative/verify-guarantor/route.ts::POST',
-    'src/app/api/admin/farm-nation/dispatch-inspector/route.ts::POST',
-    'src/app/api/admin/finance/paystack-sync/route.ts::paystackSyncHandler',
-    'src/app/api/admin/finance/recovery-emails/route.ts::POST',
-    'src/app/api/admin/kyc/verify-qoreid/route.ts::POST',
-    'src/app/api/admin/password-resets/route.ts::deletePasswordResetsHandler',
-];
+const KNOWN_UNAUDITED: string[] = [];
 
 describe('the audit trail', () => {
     it('records every admin write that was added to it, and gains no new gaps', () => {
@@ -184,9 +168,33 @@ describe('the audit trail', () => {
         expect(fixed).toEqual([]);
     });
 
-    it('and the scan really finds things, so neither assertion is vacuous', () => {
-        expect(unauditedAdminWrites().length).toBe(KNOWN_UNAUDITED.length);
-        expect(KNOWN_UNAUDITED.length).toBeGreaterThan(0);
+    it('and the scan really finds things, so [] means clean', () => {
+        // The baseline used to be the proof. With it empty, a scanner that
+        // silently matched nothing would pass every assertion above, so the
+        // proof moves to a synthetic source the detector must still report.
+        //
+        // Unindented: the function-head regex is line-anchored, exactly as it
+        // is against real source files.
+        const planted = [
+            'export async function _plantedAction() {',
+            '    const session = (await requireSession()).session;',
+            '    if (!hasAdminPermission(session.user.roles, "users:update")) {',
+            '        return { success: false as const, error: "Unauthorized" };',
+            '    }',
+            '    await db.collection(COLLECTIONS.USERS).doc("someone").update({ x: 1 });',
+            '    return { success: true as const };',
+            '}',
+        ].join('\n');
+
+        expect(unauditedInSource(planted, 'planted.ts')).toEqual(['planted.ts::_plantedAction']);
+
+        // ...and the same function WITH a record is not reported.
+        const audited = planted.replace(
+            '    return { success: true as const };',
+            '    await recordAdminAction({ action: \'user_update\', userId: session.user.id });\n'
+            + '    return { success: true as const };',
+        );
+        expect(unauditedInSource(audited, 'planted.ts')).toEqual([]);
     });
 
     it('counting all four audit helpers, not just one', () => {

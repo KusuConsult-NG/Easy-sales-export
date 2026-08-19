@@ -10,6 +10,7 @@ import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { APPROVABLE_FROM_STATUSES } from "@/lib/land-listing-status";
 import type { Property } from "@/lib/types/farm-nation-actions";
+import { recordAdminAction } from "@/lib/audit-log";
 
 async function _approveFarmNationSellerAction(userId: string): Promise<ActionResponse<null>> { 
     try {
@@ -103,6 +104,12 @@ async function _approveFarmNationSellerAction(userId: string): Promise<ActionRes
             logger.error("Failed to invalidate cache after Farm Nation approval:", err);
         }
 
+        await recordAdminAction({
+            action: 'farm_nation_approve',
+            userId: session.user.id,
+            targetId: userId,
+            targetType: 'user',
+        });
         return { error: null, success: true as const, data: null, meta: null };
     } catch (error: any) { 
         logger.error("Approve seller error:", error);
@@ -183,6 +190,13 @@ async function _rejectFarmNationSellerAction(userId: string, reason: string): Pr
             logger.error("Failed to invalidate cache after Farm Nation rejection:", err);
         }
 
+        await recordAdminAction({
+            action: 'farm_nation_reject',
+            userId: session.user.id,
+            targetId: userId,
+            targetType: 'user',
+            metadata: { reason },
+        });
         return { error: null, success: true as const, data: null, meta: null };
     } catch (error: any) { 
         logger.error("Reject Farm Nation seller error:", error);

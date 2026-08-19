@@ -14,6 +14,7 @@ import {
     APPROVABLE_FROM_STATUSES,
     REJECTABLE_FROM_STATUSES,
 } from "@/lib/land-listing-status";
+import { recordAdminAction } from "@/lib/audit-log";
 
 export type ContentType = "products" | "land" | "certificates" | "resources" | "courses" | "export";
 export type ApprovalStatus = "pending" | "approved" | "rejected";
@@ -341,6 +342,12 @@ export async function approveContentAction(
             }
         }
 
+        await recordAdminAction({
+            action: 'content:approve',
+            userId: session.user.id,
+            targetId: id,
+            metadata: { contentType: type },
+        });
         return { error: null, success: true as const , data: null };
 
     } catch (error: any) {
@@ -479,6 +486,12 @@ export async function rejectContentAction(
             return { success: false as const, error: result.error || "Rejection failed", data: null };
         }
 
+        await recordAdminAction({
+            action: 'content:reject',
+            userId: session.user.id,
+            targetId: id,
+            metadata: { contentType: type, reason },
+        });
         return { error: null,  success: true as const , data: null };
     } catch (error: any) {
         logger.error("Reject content error:", error);

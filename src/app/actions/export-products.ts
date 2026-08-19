@@ -7,6 +7,7 @@ import { requireSession } from "@/lib/session-guard";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { serializeValue } from "@/lib/firestore-serialize";
+import { recordAdminAction } from "@/lib/audit-log";
 
 export async function submitExportProductAction(productData: any) { try {
         const sessionResult = await requireSession();
@@ -137,6 +138,12 @@ export async function deleteExportProductAction(productId: string) {
 
         await productRef.delete();
 
+        await recordAdminAction({
+            action: 'export_product_delete',
+            userId: userId,
+            targetId: productId,
+            targetType: 'export_product',
+        });
         return { error: null, success: true as const, data: { message: "Product deleted successfully" } };
     } catch (error: any) {
         logger.error("Delete export product error:", error);

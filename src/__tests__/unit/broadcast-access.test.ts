@@ -58,6 +58,13 @@ const mockCleanList = jest.fn(async () => ({
     data: { count: 2, originalDocCount: 3, recipients: [{ email: 'a@e.com' }, { email: 'b@e.com' }], moduleStats: {} },
 })) as jest.Mock<any>;
 
+// The action records an audit row now. Mocked here rather than left to the
+// real module, which reaches for the database this suite does not stand up.
+jest.mock('@/lib/audit-log', () => ({
+    createAuditLog: jest.fn(async () => ({})),
+    createAdminAuditLog: jest.fn(async () => ({})),
+    recordAdminAction: jest.fn(async () => undefined),
+}));
 jest.mock('@/lib/broadcast-logic', () => ({
     getCleanBroadcastList: (...a: any[]) => mockCleanList(...a),
 }));

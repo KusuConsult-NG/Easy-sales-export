@@ -8,6 +8,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
+import { recordAdminAction } from "@/lib/audit-log";
 
 /**
  * API Route: Dispatch Inspector for Land Verification (Admin)
@@ -138,6 +139,13 @@ export async function POST(request: NextRequest) {
             logger.error('[Dispatch Inspector Route Cache] Cache clear error:', cacheError);
         }
 
+        await recordAdminAction({
+            action: 'inspector_dispatched',
+            userId: session.user.id,
+            targetId: verificationId,
+            targetType: 'land_verification',
+            metadata: { inspectorName, scheduledDate },
+        });
         return NextResponse.json({
             success: true,
             message: "Inspector dispatched successfully"

@@ -5,6 +5,7 @@ import { Resend } from "resend";
 import { logger } from "@/lib/logger";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { recordAdminAction } from "@/lib/audit-log";
 
 export const dynamic = "force-dynamic";
 
@@ -137,7 +138,11 @@ export async function POST(req: NextRequest) {
     try {
         // ── Auth guard ──
         const session = (await requireSession()).session;
-        if (!hasAdminPermission(session?.user?.roles, "finance:reconcile")) {
+        // `!session?.user ||` added with the audit record below: the guard
+        // relied on hasAdminPermission(undefined) returning false, which is
+        // true today but leaves `session` un-narrowed for everything after it.
+        // Every other admin route in this tree checks the session explicitly.
+        if (!session?.user || !hasAdminPermission(session.user.roles, "finance:reconcile")) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 
@@ -216,6 +221,12 @@ export async function POST(req: NextRequest) {
         const skipped = results.filter(r => r.status === "skipped").length;
         const errors = results.filter(r => r.status === "error").length;
 
+        await recordAdminAction({
+            action: 'recovery_emails_sent',
+            userId: session.user.id,
+            targetType: 'payment_recovery',
+            metadata: { sent, skipped, dryRun },
+        });
         return NextResponse.json({ sent, skipped, errors, results, dryRun });
 
     } catch (err: any) {

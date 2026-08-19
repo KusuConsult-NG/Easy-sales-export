@@ -19,6 +19,7 @@ import {
     hasExistingReview,
     isReviewableOrderStatus,
 } from "@/lib/product-rating";
+import { recordAdminAction } from "@/lib/audit-log";
 
 // ---------------------------------------------------------------------------
 // SUBMIT: Product Review (buyer, post-delivery)
@@ -372,6 +373,13 @@ async function _moderateReviewAction(
             if (productId) await _recalculateProductRating(productId);
         }
 
+        await recordAdminAction({
+            action: 'review_moderate',
+            userId: adminId,
+            targetId: reviewId,
+            targetType: 'review',
+            metadata: { note },
+        });
         return { error: null, success: true as const, data: null };
     } catch (err: any) { 
         logger.error("moderateReviewAction error:", {

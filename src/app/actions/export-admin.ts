@@ -7,6 +7,7 @@ import { requireSession } from "@/lib/session-guard";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { logger } from "@/lib/logger";
 import { serializeDocs } from "@/lib/firestore-serialize";
+import { recordAdminAction } from "@/lib/audit-log";
 
 const DEFAULT_CATALOG = [
     { id: "cashew-nuts", name: "Cashew Nuts", icon: "🥜", origin: "Ogbomoso, Oyo State", season: "Feb - May", category: "nuts", grades: ["W320", "W240", "W210"], certifications: ["NAFDAC", "SON"], pricePerMT: 2850, minOrderMT: 20 },
@@ -107,7 +108,13 @@ export async function createExportCatalogAction(productData: any): Promise<
                 sortOrder: Date.now(),
                 createdAt: new Date(),
                 createdBy: session.user.id });
-            return { error: null, success: true as const, data: { id: ref.id } };
+            await recordAdminAction({
+            action: 'export_create',
+            userId: session.user.id,
+            targetId: ref.id,
+            targetType: 'export_catalog',
+        });
+        return { error: null, success: true as const, data: { id: ref.id } };
         }
     } catch (error: any) { logger.error("Create/update export catalog error:", error);
         return { success: false as const, error: "Failed to save catalog item", data: null };
@@ -193,6 +200,12 @@ export async function deleteExportCatalogAction(productId: string): Promise<
             deletedBy: session.user.id
         });
 
+        await recordAdminAction({
+            action: 'export_catalog_delete',
+            userId: session.user.id,
+            targetId: productId,
+            targetType: 'export_catalog',
+        });
         return { error: null,  success: true as const , data: null };
     } catch (error: any) { logger.error("Delete export catalog error:", error);
         return { success: false as const, error: "Failed to delete item", data: null };
@@ -265,6 +278,13 @@ export async function reviewExportProductAction(productId: string, action: 'appr
             }
         }
 
+        await recordAdminAction({
+            action: 'export_product_review',
+            userId: session.user.id,
+            targetId: productId,
+            targetType: 'export_product',
+            metadata: { decision: action },
+        });
         return { success: true as const, error: null };
     } catch (error: any) { logger.error("Review export product error:", error);
         return { success: false as const, error: "Failed to review product", data: null };
@@ -361,6 +381,13 @@ export async function updateAdminExportOrderStatusAction(
 
         await orderRef.update(updateData);
 
+        await recordAdminAction({
+            action: 'export_status_update',
+            userId: session.user.id,
+            targetId: orderId,
+            targetType: 'export_order',
+            metadata: { status },
+        });
         return { success: true as const, error: null };
     } catch (error: any) { logger.error("Failed to update export order status:", error);
         return { success: false as const, error: "Failed to update export order status", data: null };

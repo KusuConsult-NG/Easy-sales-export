@@ -7,6 +7,7 @@ import { hasAdminPermission } from "@/lib/admin-permissions";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { withRateLimit } from "@/lib/rate-limit";
+import { recordAdminAction } from "@/lib/audit-log";
 
 /** GET /api/admin/password-resets — list all reset token records */
 async function getPasswordResetsHandler(_req: NextRequest) {
@@ -83,6 +84,12 @@ async function deletePasswordResetsHandler(_req: NextRequest) {
             deleted += Math.min(500, refs.length - i);
         }
 
+        await recordAdminAction({
+            action: 'password_resets_purged',
+            userId: session.user.id,
+            targetType: 'password_reset_tokens',
+            metadata: { deleted },
+        });
         return NextResponse.json({ success: true, deleted });
     } catch (error) {
         logger.error("Admin password resets DELETE error:", error);

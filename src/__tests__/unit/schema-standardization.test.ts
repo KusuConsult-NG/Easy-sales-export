@@ -49,6 +49,13 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 const ADMIN = 'admin-1';
 const MEMBER = 'member-1';
 
+// The action records an audit row now. Mocked here rather than left to the
+// real module, which reaches for the database this suite does not stand up.
+jest.mock('@/lib/audit-log', () => ({
+    createAuditLog: jest.fn(async () => ({})),
+    createAdminAuditLog: jest.fn(async () => ({})),
+    recordAdminAction: jest.fn(async () => undefined),
+}));
 jest.mock('@/lib/firebase-admin', () => ({
     adminAuth: { listUsers: jest.fn(async () => ({ users: [] })) },
 }));

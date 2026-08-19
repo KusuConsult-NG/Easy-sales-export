@@ -17,6 +17,7 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { Resend } from "resend";
 import { deleteCache, invalidateCooperativeCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { extractCanonicalUser } from "@/lib/canonical/normalizer";
+import { recordAdminAction } from "@/lib/audit-log";
 
 // ============================================================================
 // MEMBER MANAGEMENT
@@ -434,6 +435,13 @@ async function _updateMemberStatusAction(
                 logger.error('Cooperative approval email failed (non-blocking):', emailError);
             }
         }
+        await recordAdminAction({
+            action: 'cooperative_member_status_update',
+            userId: session.user.id,
+            targetId: memberId,
+            targetType: 'cooperative_member',
+            metadata: { status },
+        });
         return { error: null, success: true as const, data: null, meta: null };
     } catch (error) {
         logger.error("Update member status error:", {
@@ -544,6 +552,13 @@ export async function requestCooperativeRevisionAction(
             logger.error('Cooperative revision email failed (non-blocking):', emailError);
         }
 
+        await recordAdminAction({
+            action: 'cooperative_revision_request',
+            userId: session.user.id,
+            targetId: memberId,
+            targetType: 'cooperative_member',
+            metadata: { reason },
+        });
         return { success: true, error: null, data: { message: "Revision requested" }, meta: null };
     } catch (error: any) {
         logger.error('requestCooperativeRevisionAction error:', error);

@@ -61,6 +61,7 @@ async function applyUpdates(
  */
 import { requireSession } from "@/lib/session-guard";
 import { hasAdminPermission } from "@/lib/admin-permissions";
+import { recordAdminAction } from "@/lib/audit-log";
 
 export async function runSchemaStandardizationAction(dryRun: boolean = true): Promise<
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
@@ -264,6 +265,12 @@ export async function runSchemaStandardizationAction(dryRun: boolean = true): Pr
         reports.push(waveReport);
 
 
+        await recordAdminAction({
+            action: 'system_cleanup',
+            userId: session.user.id,
+            targetType: 'schema_standardization',
+            metadata: { dryRun },
+        });
         return { error: null, success: true as const, reports , data: null };
 
     } catch (error: any) { logger.error("[SCHEMA FIX] Failed:", error);

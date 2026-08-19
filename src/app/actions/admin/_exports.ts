@@ -16,6 +16,7 @@ import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { ExportOnboardingReviewSchema } from "@/lib/schemas";
 import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
 import { atomicUpdateUser } from "@/lib/services/userService";
+import { recordAdminAction } from "@/lib/audit-log";
 
 // ============================================
 // Export Window Management (Admin)
@@ -382,6 +383,13 @@ async function _requestExportApplicationRevisionAction(
             logger.error('[Export Revision Cache] Cache clear error:', cacheError);
         }
 
+        await recordAdminAction({
+            action: 'export_status_update',
+            userId: session.user.id,
+            targetId: applicationId,
+            targetType: 'export_application',
+            metadata: { revisionNote },
+        });
         return { error: null, success: true as const, message: "Revision note sent to applicant" };
     } catch (error: any) {
         logger.error("Request export revision error:", error);

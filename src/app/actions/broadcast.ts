@@ -7,6 +7,7 @@ import { requireSession } from '@/lib/session-guard';
 import { isAdmin, hasAdminPermission } from '@/lib/admin-permissions';
 
 import { getCleanBroadcastList, type BroadcastAudience, type BroadcastFilters } from '@/lib/broadcast-logic';
+import { recordAdminAction } from "@/lib/audit-log";
 
 export interface BroadcastLog { id: string;
     subject: string;
@@ -60,6 +61,12 @@ export async function getCleanBroadcastListAction(filters?: BroadcastFilters) { 
         }
         logger.info(`[Broadcast] Generating clean list for admin: ${session.user.id}`);
 
+        await recordAdminAction({
+            action: 'data_access',
+            userId: session.user.id,
+            targetType: 'broadcast_recipient_list',
+            metadata: { filters },
+        });
         return await getCleanBroadcastList(filters);
 
     } catch (error: any) { 

@@ -16,6 +16,7 @@ import { logger } from "@/lib/logger";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { rateLimit, createRateLimitResponse } from "@/lib/rate-limiter";
 import { rateLimitConfig } from "@/lib/rate-limits.config";
+import { recordAdminAction } from "@/lib/audit-log";
 
 export const maxDuration = 300; // 5 min timeout for Pro plan
 
@@ -213,6 +214,12 @@ export async function POST(req: NextRequest) {
             }
         });
 
+        await recordAdminAction({
+            action: 'broadcast_sent',
+            userId: session.user.id,
+            targetType: 'broadcast',
+            metadata: { subject, filters },
+        });
         return NextResponse.json({
             success: true,
             sent: allRecipients.length,

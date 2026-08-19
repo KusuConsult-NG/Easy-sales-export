@@ -17,6 +17,7 @@ import {
     processFarmNationRegistration,
     processWaveRegistration
 } from "@/infrastructure/payments/service";
+import { recordAdminAction } from "@/lib/audit-log";
 
 const PAYSTACK_BASE_URL = "https://api.paystack.co";
 
@@ -258,6 +259,12 @@ async function paystackSyncHandler(_req: NextRequest) {
             logger.error("[PaystackSync] Cache invalidation error:", cacheErr);
         }
 
+        await recordAdminAction({
+            action: 'paystack_sync_run',
+            userId: session.user.id,
+            targetType: 'paystack_reconciliation',
+            metadata: { total: allTxs.length },
+        });
         return NextResponse.json({
             success: true,
             total: allTxs.length,

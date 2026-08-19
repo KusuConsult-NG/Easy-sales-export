@@ -21,6 +21,11 @@ export type AdminPermission =
     | "users:suspend"
     | "users:assign_roles"
     | "users:impersonate"
+    // Bulk PII extraction. Separate from "users:read" on purpose: reading one
+    // member's record to answer their support ticket and downloading every
+    // member's name, email, phone and state as a CSV are not the same act, and
+    // every admin role holds users:read.
+    | "users:export"
 
     // Content Management
     | "content:read"
@@ -50,6 +55,11 @@ export type AdminPermission =
     | "marketplace:approve_sellers"
     | "marketplace:suspend_sellers"
     | "marketplace:moderate_reviews"
+    // Village Market events and their external merchants. The four admin
+    // entry points had NO permission in this matrix at all, so they fell back
+    // to isAdmin() — true for every admin role, including support and
+    // moderator, and for every other module's admin.
+    | "marketplace:manage_village_market"
 
     // Cooperatives
     | "cooperatives:approve_loans"
@@ -87,14 +97,14 @@ const PERMISSION_MATRIX: Record<AdminRole, AdminPermission[]> = {
     super_admin: [
         // Full access to everything
         "users:read", "users:create", "users:update", "users:delete",
-        "users:suspend", "users:assign_roles", "users:impersonate",
+        "users:suspend", "users:assign_roles", "users:impersonate", "users:export",
         "content:read", "content:approve", "content:reject", "content:delete",
         "announcements:manage",
         "finance:read", "finance:reconcile", "finance:process_withdrawals", "finance:refund",
         "finance:resolve_disputes",
         "config:read", "config:update", "config:feature_toggles", "config:rollback",
         "marketplace:approve_sellers", "marketplace:suspend_sellers",
-        "marketplace:moderate_reviews",
+        "marketplace:moderate_reviews", "marketplace:manage_village_market",
         "cooperatives:approve_loans", "cooperatives:approve_members",
         "cooperatives:manage_products",
         "wave:approve_applications", "wave:manage_training",
@@ -107,13 +117,27 @@ const PERMISSION_MATRIX: Record<AdminRole, AdminPermission[]> = {
 
     admin: [
         // Standard admin permissions (no deletion, no impersonation, no config rollback)
-        "users:read", "users:update", "users:suspend", "users:assign_roles",
+        //
+        // "users:create" is here now. It was absent, and that absence was an
+        // oversight rather than a policy: the line above enumerates exactly what
+        // this role is denied — deletion, impersonation, config rollback — and
+        // creation is not among them. The gap had a live cost. admin/_legacy.ts
+        // is the only caller, and it onboards a legacy member who already
+        // exists in the business but not in the platform; an `admin` opening
+        // that screen was refused a task the role plainly owns, while keeping
+        // users:update and users:assign_roles, which are the wider powers.
+        "users:read", "users:create", "users:update", "users:suspend", "users:assign_roles",
+        // Bulk PII export. Held by super_admin and admin only — deliberately
+        // NOT by support, moderator, or any module admin. Granting it to one of
+        // them later is a one-line change to a named permission, which is the
+        // whole reason these routes moved off isAdmin().
+        "users:export",
         "content:read", "content:approve", "content:reject",
         "announcements:manage",
         "finance:read", "finance:reconcile", "finance:process_withdrawals", "finance:resolve_disputes",
         "config:read", "config:update", "config:feature_toggles",
         "marketplace:approve_sellers", "marketplace:suspend_sellers",
-        "marketplace:moderate_reviews",
+        "marketplace:moderate_reviews", "marketplace:manage_village_market",
         "cooperatives:approve_loans", "cooperatives:approve_members",
         "wave:approve_applications", "wave:manage_training",
         "academy:approve_applications", "academy:manage_courses", "academy:manage_quizzes", "academy:issue_certificates",
@@ -160,7 +184,11 @@ const PERMISSION_MATRIX: Record<AdminRole, AdminPermission[]> = {
         "finance:read",
         "marketplace:approve_sellers",
         "marketplace:suspend_sellers",
-        "marketplace:moderate_reviews"
+        "marketplace:moderate_reviews",
+        // The Village Market is marketplace's own surface, so its admin runs it.
+        // NOT "users:export": the module admin gains a capability it should
+        // have had and loses one it should never have had, in the same change.
+        "marketplace:manage_village_market"
     ],
     export_admin: [
         "users:read",

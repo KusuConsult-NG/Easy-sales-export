@@ -23,6 +23,7 @@ import {
     ESCROW_REFUNDABLE_FROM,
     participantSourcesFor,
 } from "@/lib/escrow-status";
+import { recordAdminAction } from "@/lib/audit-log";
 
 // Validation schemas
 const escrowAmountSchema = z.number().min(100).max(100000000); // ₦100 to ₦100M
@@ -321,6 +322,13 @@ async function _updateEscrowStatus(
                 linkText: "View Escrow" }).catch((e) => logger.error("[updateEscrowStatus] Notification failed:", e));
         }
 
+        await recordAdminAction({
+            action: 'escrow_status_update',
+            userId: userId,
+            targetId: transactionId,
+            targetType: 'escrow_transaction',
+            metadata: { status },
+        });
         return { error: null,  success: true as const, data: null };
     } catch (error: any) { logger.error("Update escrow status error:", {
             userId: sessionResult?.session?.user?.id,

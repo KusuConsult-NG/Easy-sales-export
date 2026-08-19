@@ -14,6 +14,7 @@ import { isAdmin } from "@/lib/role-utils";
  */
 import { getLogisticsProvider } from "@/lib/logistics";
 import type { ShipmentTracking } from "@/lib/types/wave-actions";
+import { recordAdminAction } from "@/lib/audit-log";
 
 /**
  * Get user's shipment tracking info
@@ -91,6 +92,13 @@ async function _updateShipmentStatusAction(
 
         await shipmentRef.update(updateData);
 
+        await recordAdminAction({
+            action: 'wave_shipment_status_update',
+            userId: session.user.id,
+            targetId: shipmentId,
+            targetType: 'wave_shipment',
+            metadata: { location, note },
+        });
         return { error: null, success: true as const, data: null };
     } catch (error) { 
         const message = error instanceof Error ? error.message : "An unexpected error occurred";

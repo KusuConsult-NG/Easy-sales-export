@@ -23,8 +23,9 @@ import type {
     ExternalMerchant,
 } from "@/lib/types/marketplace";
 import { notifyVillageMarketCreated } from "@/lib/marketplace-notifications";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { hydrateSellerTrust } from "@/lib/seller-trust";
+import { recordAdminAction } from "@/lib/audit-log";
 
 // ---------------------------------------------------------------------------
 // Admin: Create a Village Market Event
@@ -50,7 +51,7 @@ export async function createVillageMarketEventAction(data: {
         const userId = sessionResult.session.user.id;
 
         // Admins only
-        if (!isAdmin(sessionResult.session.user.roles)) {
+        if (!hasAdminPermission(sessionResult.session.user.roles, "marketplace:manage_village_market")) {
             return { success: false as const, error: "Unauthorized: admin role required" , data: null };
         }
 
@@ -93,6 +94,13 @@ export async function createVillageMarketEventAction(data: {
             startTime,
         });
 
+        await recordAdminAction({
+            action: 'village_market_event_created',
+            userId: userId,
+            targetId: eventDoc.id,
+            targetType: 'village_market_event',
+            metadata: { title: data.title, state: data.state },
+        });
         return { error: null, success: true as const, eventId: eventDoc.id , data: null };
     } catch (err: any) {
         logger.error("createVillageMarketEventAction error:", err);
@@ -318,7 +326,7 @@ export async function addExternalMerchantAction(
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" , data: null };
         const userId = sessionResult.session.user.id;
 
-        if (!isAdmin(sessionResult.session.user.roles)) {
+        if (!hasAdminPermission(sessionResult.session.user.roles, "marketplace:manage_village_market")) {
             return { success: false as const, error: "Unauthorized: admin role required" , data: null };
         }
 
@@ -330,6 +338,13 @@ export async function addExternalMerchantAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
+        await recordAdminAction({
+            action: 'village_market_merchant_added',
+            userId: userId,
+            targetId: eventId,
+            targetType: 'village_market_event',
+            metadata: { merchantId, displayName: merchant.displayName },
+        });
         return { error: null, success: true as const, merchantId , data: null };
     } catch (err: any) {
         logger.error("addExternalMerchantAction error:", err);
@@ -353,7 +368,7 @@ export async function updateVillageMarketEventStatusAction(
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" , data: null };
         const userId = sessionResult.session.user.id;
 
-        if (!isAdmin(sessionResult.session.user.roles)) {
+        if (!hasAdminPermission(sessionResult.session.user.roles, "marketplace:manage_village_market")) {
             return { success: false as const, error: "Unauthorized" , data: null };
         }
 
@@ -362,6 +377,13 @@ export async function updateVillageMarketEventStatusAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
+        await recordAdminAction({
+            action: 'village_market_event_status_update',
+            userId: userId,
+            targetId: eventId,
+            targetType: 'village_market_event',
+            metadata: { status },
+        });
         return { error: null, success: true as const , data: null };
     } catch (err: any) {
         logger.error("updateVillageMarketEventStatusAction error:", err);
@@ -411,7 +433,7 @@ export async function getAdminVillageMarketEventsAction(options: {
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" , data: null };
         const userId = sessionResult.session.user.id;
 
-        if (!isAdmin(sessionResult.session.user.roles)) {
+        if (!hasAdminPermission(sessionResult.session.user.roles, "marketplace:manage_village_market")) {
             return { success: false as const, error: "Unauthorized" , data: null };
         }
 

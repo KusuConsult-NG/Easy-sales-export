@@ -6,7 +6,7 @@ import { requireSession } from "@/lib/session-guard";
 import { csvDocument } from "@/lib/csv-safe";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 
 /**
  * API Route: Export WAVE Compliance Reports (PDF/CSV)
@@ -22,7 +22,14 @@ export async function POST(request: NextRequest) {
         }
 
         // Check admin role from session (not from DB query)
-        if (!isAdmin(session.user.roles)) {
+        // A CSV of every WAVE applicant — name, email, phone, state.
+        //
+        // isAdmin() is true for EVERY admin role, so support, moderator
+        // and every module admin could download this — an academy admin
+        // could take the contact details of every member on the platform.
+        // canAccessAdminRoute already silos these people by module at the
+        // route layer; this aligns the data layer with that.
+        if (!hasAdminPermission(session.user.roles, "users:export")) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }
