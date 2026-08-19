@@ -646,6 +646,29 @@ describe('the fake transaction behaves like SupabaseTransaction', () => {
         expect(store.get('x', 'a')!.n).toBe(2);
     });
 
+    it('a snapshot\'s ref exposes SUBCOLLECTIONS, as SupabaseDocumentReference does', async () => {
+        // SupabaseDocumentSnapshot.ref IS a SupabaseDocumentReference, and that
+        // class has `collection(name)` returning `${collection}/${id}/${name}`.
+        // The fake's ref did not, so an action written as
+        //
+        //     const snap = await db.collection(X).doc(id).get();
+        //     await snap.ref.collection('messages').get()
+        //
+        // threw "ref.collection is not a function" against correct code —
+        // getMessages was untestable until this was closed. Same shape as the
+        // missing collection().add() and the missing audit-log exports.
+        store.seed('conversations', 'c1', { participants: ['u1'] });
+        store.seed('conversations/c1/messages', 'm1', { text: 'hello' });
+
+        const snap = await db.collection('conversations').doc('c1').get();
+        const messages = await snap.ref.collection('messages').get();
+
+        expect(messages.docs.map((d: any) => d.data().text)).toEqual(['hello']);
+        // The same path a doc-ref chain produces, so the two agree.
+        const viaChain = await db.collection('conversations').doc('c1').collection('messages').get();
+        expect(viaChain.docs).toHaveLength(1);
+    });
+
     it('and it still takes NO LOCK — which must never be simulated', () => {
         // Structural, because a single-threaded fake cannot demonstrate the
         // absence of locking by racing anything. Every money guarantee in this

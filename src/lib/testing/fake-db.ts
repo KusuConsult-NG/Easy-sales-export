@@ -459,6 +459,8 @@ interface LiveRef {
     set(data: Doc, options?: { merge?: boolean }): Promise<void>;
     delete(): Promise<void>;
     get(): Promise<ReturnType<typeof docSnapshot>>;
+    /** A subcollection, as SupabaseDocumentReference.collection() gives. */
+    collection(sub: string): unknown;
 }
 
 /** Supplied by installFakeDb so a ref can reach the store it came from. */
@@ -482,6 +484,34 @@ function liveRef(collection: string, id: string): LiveRef {
         },
         delete: async () => { ops?.doDelete(collection, id); },
         get: async () => docSnapshot(id, ops?.read(collection, id), collection),
+        /**
+         * A subcollection off this document.
+         *
+         * SupabaseDocumentReference has this — `collection(name)` returns a
+         * reference to `${collection}/${id}/${name}` — and a snapshot's `.ref`
+         * IS a SupabaseDocumentReference. This ref did not, so any action
+         * written as
+         *
+         *     const snap = await db.collection(X).doc(id).get();
+         *     await snap.ref.collection('messages').get()
+         *
+         * threw "conversationDoc.ref.collection is not a function" here against
+         * perfectly correct code — the same shape as the missing
+         * collection().add() and the missing audit-log exports, and it hid
+         * getMessages entirely until a test executed it.
+         *
+         * Delegates to the mock db's own builder so a subcollection behaves
+         * exactly like the flattened path a `db.collection(...).doc(...)
+         * .collection(...)` chain already produces.
+         */
+        collection: (sub: string) => {
+            // Lazily, because firestore-mock-db is CommonJS and importing it at
+            // module scope would create a cycle through the globals it installs.
+            const path = `${collection}/${id}/${sub}`;
+            const g = globalThis as unknown as { __fakeDbMockDb?: { collection(p: string): unknown } };
+            if (!g.__fakeDbMockDb) throw new Error('[fake-db] no mock db installed');
+            return g.__fakeDbMockDb.collection(path);
+        },
     };
 }
 

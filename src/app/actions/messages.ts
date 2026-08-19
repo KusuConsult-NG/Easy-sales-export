@@ -13,6 +13,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Conversation, Message, UserSearchResult } from "@/lib/types/messages";
 import * as messagingService from "@/infrastructure/messaging/service";
+import { ALL_ADMIN_ROLES, MODULE_ADMIN_ROLE, hasAdminPermission } from "@/lib/admin-permissions";
 
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 
@@ -196,7 +197,11 @@ export async function searchUsersAction(query: string) {
         const MIN_QUERY_LENGTH = 3;
         const MAX_RESULTS = 25;
 
-        const ADMIN_ROLES = ["admin", "super_admin", "wave_admin", "cooperative_admin", "marketplace_admin", "export_admin", "farmnation_admin", "academy_admin"];
+        // The canonical list. Both copies of this array were hand-written and
+        // both contained "farmnation_admin", which is not a role — so the Farm
+        // Nation admin was never returned by either lookup and no farmer could
+        // reach them. See ALL_ADMIN_ROLES.
+        const ADMIN_ROLES: string[] = [...ALL_ADMIN_ROLES];
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userRoles: string[] = userDoc.data()?.roles ?? [];
@@ -349,7 +354,11 @@ export async function startSupportConversationAction(module?: string) {
         }
 
         const { supabaseAdmin } = await import("@/lib/supabase");
-        const ADMIN_ROLES = ["admin", "super_admin", "wave_admin", "cooperative_admin", "marketplace_admin", "export_admin", "farmnation_admin", "academy_admin"];
+        // The canonical list. Both copies of this array were hand-written and
+        // both contained "farmnation_admin", which is not a role — so the Farm
+        // Nation admin was never returned by either lookup and no farmer could
+        // reach them. See ALL_ADMIN_ROLES.
+        const ADMIN_ROLES: string[] = [...ALL_ADMIN_ROLES];
 
         const { data: adminDocs, error: adminErr } = await supabaseAdmin
             .from("users")
@@ -367,7 +376,12 @@ export async function startSupportConversationAction(module?: string) {
         let targetAdmin = adminDocs.find(doc => {
             const roles = doc.roles || doc.raw_data?.roles || [];
             const email = (doc.email || doc.raw_data?.email || "").toLowerCase();
-            if (targetModule && (roles.includes(`${targetModule}_admin`) || email.includes(targetModule))) return true;
+            // The module's admin ROLE, looked up rather than concatenated.
+            // `${targetModule}_admin` produced "farmnation_admin" for the one
+            // module whose keyword and role name differ by more than a suffix,
+            // so Farm Nation support always fell through to a global admin.
+            const moduleRole = targetModule ? MODULE_ADMIN_ROLE[targetModule] : undefined;
+            if (targetModule && ((moduleRole && roles.includes(moduleRole)) || email.includes(targetModule))) return true;
             return false;
         });
 
@@ -429,8 +443,14 @@ export async function getApprovedCooperativeMembersAction(): Promise<{
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const roles: string[] = userDoc.data()?.roles ?? [];
-        const isAdmin = roles.some(r => r === "admin" || r === "super_admin" || r.endsWith("_admin"));
-        if (!isAdmin) {
+        // THE COOPERATIVE'S ROSTER IS THE COOPERATIVE'S.
+        //
+        // This admitted anything ending in "_admin", so an academy_admin, an
+        // export_admin, a wave_admin, a farm_nation_admin or a marketplace_admin
+        // could download every approved member's name, email, gender and state
+        // of origin. Module admins are scoped everywhere else in this codebase;
+        // this pair of actions was the hole.
+        if (!hasAdminPermission(roles, "cooperatives:approve_members")) {
             return { success: false, data: [], error: "Access denied" };
         }
 
@@ -500,8 +520,10 @@ export async function broadcastToCooperativeMembersAction(
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(adminId).get();
         const roles: string[] = userDoc.data()?.roles ?? [];
-        const isAdmin = roles.some(r => r === "admin" || r === "super_admin" || r.endsWith("_admin"));
-        if (!isAdmin) {
+        // Same boundary as the roster above, and it matters more here: this
+        // sends a message to every selected member under the caller's own admin
+        // identity. An admin of another module had no business doing either.
+        if (!hasAdminPermission(roles, "cooperatives:approve_members")) {
             return { success: false, sent: 0, failed: 0, errors: [], error: "Access denied" };
         }
 

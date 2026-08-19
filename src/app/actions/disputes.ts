@@ -495,7 +495,15 @@ async function _getDisputeByIdAction(disputeId: string) { let sessionResult;
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const userData = userDoc.data();
-        const isAdminUser = isAdmin(userData?.roles);
+        const callerRoles = userData?.roles || [];
+        // WHO SEES BANK DETAILS, AND WHO MERELY SEES THE DISPUTE.
+        //
+        // The admin arm was isAdmin(), true for all ten admin roles, where the
+        // sibling getAdminDisputesAction requires admin or super_admin for the
+        // very same fields. Matched to the sibling so one dispute cannot be read
+        // two ways depending on which endpoint is asked.
+        const isResolver = hasRole(callerRoles, "admin") || hasRole(callerRoles, "super_admin");
+        const isAdminUser = isAdmin(callerRoles);
         const isBuyer = dispute.buyerId === userId;
         const isSeller = dispute.sellerId === userId;
 
@@ -504,42 +512,51 @@ async function _getDisputeByIdAction(disputeId: string) { let sessionResult;
 
         const disputeData: Dispute & { buyerDetails?: any; sellerDetails?: any } = serializeDisputeDoc(disputeDoc.id, dispute);
 
+        /**
+         * THE COUNTERPARTY'S BANK ACCOUNT IS NOT PART OF A DISPUTE.
+         *
+         * Both profile blocks below attached bankDetails — bank name, account
+         * number, account name, bank code — unconditionally, to every caller the
+         * check above admits. That includes the buyer and the seller. So filing
+         * a dispute handed the buyer the seller's bank account number, and
+         * handed the seller the buyer's.
+         *
+         * The details exist here for one reason: an admin resolving a dispute
+         * may have to move money, and needs the destination. Nobody else does.
+         * The parties keep the contact fields they need in order to be
+         * identified in the dispute; the account numbers are attached only for a
+         * caller who can actually resolve it.
+         */
+        const profileOf = (data: Record<string, any>) => {
+            const profile: Record<string, unknown> = {
+                firstName: data.firstName,
+                lastName: data.lastName,
+                email: data.email,
+                phoneNumber: data.phoneNumber || data.phone || "N/A",
+            };
+            if (isResolver) {
+                profile.bankDetails = data.bankDetails || {
+                    bankName: data.bankName || data.bankAccount?.bankName || "N/A",
+                    accountNumber: data.accountNumber || data.bankAccountNumber || data.bankAccount?.accountNumber || "N/A",
+                    accountName: data.accountName || data.bankAccountName || data.bankAccount?.accountName || "N/A",
+                    bankCode: data.bankCode || data.bankAccount?.bankCode || "N/A",
+                };
+            }
+            return profile;
+        };
+
         // Fetch profiles for detail view
         if (dispute.buyerId) {
             const buyerDoc = await db.collection(COLLECTIONS.USERS).doc(dispute.buyerId).get();
             if (buyerDoc.exists) {
-                const bData = buyerDoc.data()!;
-                disputeData.buyerDetails = {
-                    firstName: bData.firstName,
-                    lastName: bData.lastName,
-                    email: bData.email,
-                    phoneNumber: bData.phoneNumber || bData.phone || "N/A",
-                    bankDetails: bData.bankDetails || {
-                        bankName: bData.bankName || bData.bankAccount?.bankName || "N/A",
-                        accountNumber: bData.accountNumber || bData.bankAccount?.accountNumber || "N/A",
-                        accountName: bData.accountName || bData.bankAccountName || bData.bankAccount?.accountName || "N/A",
-                        bankCode: bData.bankCode || bData.bankAccount?.bankCode || "N/A"
-                    }
-                };
+                disputeData.buyerDetails = profileOf(buyerDoc.data()!);
             }
         }
 
         if (dispute.sellerId) {
             const sellerDoc = await db.collection(COLLECTIONS.USERS).doc(dispute.sellerId).get();
             if (sellerDoc.exists) {
-                const sData = sellerDoc.data()!;
-                disputeData.sellerDetails = {
-                    firstName: sData.firstName,
-                    lastName: sData.lastName,
-                    email: sData.email,
-                    phoneNumber: sData.phoneNumber || sData.phone || "N/A",
-                    bankDetails: sData.bankDetails || {
-                        bankName: sData.bankName || sData.bankAccount?.bankName || "N/A",
-                        accountNumber: sData.accountNumber || sData.bankAccountNumber || sData.bankAccount?.accountNumber || "N/A",
-                        accountName: sData.accountName || sData.bankAccountName || sData.bankAccount?.accountName || "N/A",
-                        bankCode: sData.bankCode || sData.bankAccount?.bankCode || "N/A"
-                    }
-                };
+                disputeData.sellerDetails = profileOf(sellerDoc.data()!);
             }
         }
 
@@ -651,6 +668,58 @@ async function _updateDisputeStatusAction(
         const finalEscrowStatus = resolution === "release_seller" ? "released" : "refunded";
         const nowIso = new Date().toISOString();
 
+        // FOUR RESOLUTIONS, TWO OF THEM EXECUTED.
+        //
+        // DisputeResolution is "refund_buyer" | "release_seller" |
+        // "partial_refund" | "no_action", and everything below treated it as a
+        // binary: anything that was not "release_seller" refunded the buyer
+        // `escrowAmount` — the WHOLE escrow.
+        //
+        // The admin dispute detail page offers "Partial Refund" and collects an
+        // amount. That amount was written onto the dispute as `refundAmount`
+        // and then ignored, so a ₦5,000 partial refund on a ₦50,000 order paid
+        // out ₦50,000 and recorded ₦5,000 beside it. The other admin dispute
+        // list calls this action with no refundAmount at all.
+        //
+        // A partial refund is now executed as what the words mean and as what
+        // the escrow requires: the buyer is credited the stated amount and the
+        // seller the remainder, so the escrow is fully disbursed and nothing is
+        // stranded in a row marked "refunded".
+        //
+        // "no_action" is REFUSED rather than guessed at. It has no caller and
+        // no defined execution — dismissing a dispute without moving money
+        // leaves the escrow frozen at "disputed", and choosing between that and
+        // a release is a decision for the owner, not one to make silently
+        // inside a bug fix. Refusing is what the old code should have done
+        // instead of refunding in full.
+        if (resolution === "no_action") {
+            return {
+                success: false as const,
+                error: "\"No action\" has no defined outcome for the escrow. Use release to seller, refund to buyer, or a partial refund.",
+                data: null,
+            };
+        }
+
+        let buyerShare = 0;
+        if (resolution === "partial_refund") {
+            const requested = Number(refundAmount);
+            if (!Number.isFinite(requested) || requested <= 0) {
+                return {
+                    success: false as const,
+                    error: "A partial refund needs a refund amount greater than zero.",
+                    data: null,
+                };
+            }
+            if (requested > escrowAmount) {
+                return {
+                    success: false as const,
+                    error: `A partial refund cannot exceed the escrow amount of ₦${Number(escrowAmount).toLocaleString()}.`,
+                    data: null,
+                };
+            }
+            buyerShare = requested;
+        }
+
         // The shared sets, and NOT from "pending".
         //
         // This claimed `["funded", "disputed", "pending"]` for both outcomes.
@@ -697,18 +766,49 @@ async function _updateDisputeStatusAction(
             // status is NOT "completed" — this is money leaving escrow to a
             // user, not revenue arriving, and platform_revenue_totals() sums
             // completed rows.
+            // What the beneficiary of the primary credit receives. For a
+            // partial refund that is the stated amount, not the whole escrow.
+            const primaryAmount = resolution === "partial_refund" ? buyerShare : escrowAmount;
+
             const credit = await creditWalletOnce({
                 reference: `DISPUTE-RES-${disputeId}`,
                 userId: targetId,
-                amount: escrowAmount,
+                amount: primaryAmount,
                 paymentType: resolution === "release_seller" ? "dispute_payout" : "dispute_refund",
                 source: "escrow",
                 status: resolution === "release_seller" ? "disbursement" : "refund",
                 metadata: { disputeId, escrowId, orderId: freshDispute.orderId },
             });
 
+            // The remainder of a partial refund goes to the seller. Without it
+            // the escrow is marked "refunded" while part of the money it held
+            // belongs to nobody — the balance simply disappears.
+            //
+            // Its own reference, so the two credits claim independently and a
+            // retry cannot double either.
+            const sellerShare = resolution === "partial_refund"
+                ? Number((escrowAmount - buyerShare).toFixed(2))
+                : 0;
+
+            if (sellerShare > 0 && freshDispute.sellerId) {
+                await creditWalletOnce({
+                    reference: `DISPUTE-RES-SELLER-${disputeId}`,
+                    userId: freshDispute.sellerId,
+                    amount: sellerShare,
+                    paymentType: "dispute_payout",
+                    source: "escrow",
+                    status: "disbursement",
+                    metadata: { disputeId, escrowId, orderId: freshDispute.orderId, partial: true },
+                });
+            } else if (sellerShare > 0) {
+                logger.error(
+                    `[resolveDisputeAction] Partial refund on dispute ${disputeId} leaves ` +
+                    `₦${sellerShare} with no seller recorded on the dispute. Needs manual settlement.`
+                );
+            }
+
             const balanceAfter = credit.balance;
-            const balanceBefore = credit.claimed ? balanceAfter - escrowAmount : balanceAfter;
+            const balanceBefore = credit.claimed ? balanceAfter - primaryAmount : balanceAfter;
 
             const updateData: Record<string, unknown> = { status: "resolved",
                 resolution,
@@ -749,7 +849,9 @@ async function _updateDisputeStatusAction(
                     walletId: targetId,
                     userId: targetId,
                     type: resolution === "release_seller" ? "funding" : "refund",
-                    amount: escrowAmount,
+                    // The amount CREDITED, which for a partial refund is the
+                    // buyer's share rather than the whole escrow.
+                    amount: primaryAmount,
                     balanceBefore,
                     balanceAfter,
                     reference: escrowId,
@@ -768,7 +870,7 @@ async function _updateDisputeStatusAction(
                     userId: targetId,
                     type: resolution === "release_seller" ? "dispute_payout" : "dispute_refund",
                     module: "escrow",
-                    amount: escrowAmount,
+                    amount: primaryAmount,
                     currency: "NGN",
                     status: "completed",
                     date: FieldValue.serverTimestamp(),

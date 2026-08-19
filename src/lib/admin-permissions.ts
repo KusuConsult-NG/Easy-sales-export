@@ -353,6 +353,48 @@ export const PRIVILEGED_ROLES: readonly string[] = (() => {
 })();
 
 /**
+ * Every admin role there is, from the matrix that defines them.
+ *
+ * WHY THIS EXISTS
+ * ---------------
+ * The messaging subsystem hand-wrote this list three times and every copy
+ * contained "farmnation_admin" — a role that does not exist. The role is
+ * `farm_nation_admin`, and nothing anywhere writes the other spelling.
+ *
+ * So a real farm_nation_admin passed the `endsWith("_admin")` gate into the
+ * admin conversation list, matched no module filter inside it, and saw nothing;
+ * canAccessConversation refused every conversation for the same reason; and the
+ * admin lookup that lets a user start a support chat never returned them at
+ * all. A typo in a string literal removed one role from a subsystem, in both
+ * directions, silently.
+ *
+ * Derived from PERMISSION_MATRIX so a new admin role is included the day it is
+ * added, and a misspelling cannot survive: a name not in the matrix is not in
+ * this list.
+ */
+export const ALL_ADMIN_ROLES: readonly AdminRole[] =
+    Object.keys(PERMISSION_MATRIX) as AdminRole[];
+
+/**
+ * The admin role that owns a module, by the keyword the messaging subsystem
+ * uses for that module.
+ *
+ * The lookup was `roles.includes(`${module}_admin`)` — string concatenation
+ * over a keyword. That works only while every module's keyword and its admin
+ * role differ by exactly the suffix, and Farm Nation is the one that does not:
+ * its keyword is "farmnation" and its role is `farm_nation_admin`. Written out
+ * so the one exception is visible rather than assumed away.
+ */
+export const MODULE_ADMIN_ROLE: Readonly<Record<string, AdminRole>> = {
+    wave: "wave_admin",
+    cooperative: "cooperative_admin",
+    academy: "academy_admin",
+    marketplace: "marketplace_admin",
+    export: "export_admin",
+    farmnation: "farm_nation_admin",
+};
+
+/**
  * Which roles hold a permission — the inverse of the matrix lookup.
  *
  * WHY THIS EXISTS

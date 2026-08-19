@@ -315,6 +315,11 @@ function createMockDb() {
         return q;
     }
 
+    // The last mock db created, reachable by fake-db's liveRef so a snapshot's
+    // `.ref.collection(sub)` can build a query over the flattened subcollection
+    // path — which SupabaseDocumentReference supports and this ref did not.
+    global.__fakeDbMockDb = mockDb;
+
     return mockDb;
 }
 
