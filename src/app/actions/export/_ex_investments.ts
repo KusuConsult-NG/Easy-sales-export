@@ -6,6 +6,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { claimPaymentOnce, incrementWithinCeiling } from "@/lib/wallet-ledger";
 import { checkOrderPaymentAmount } from "@/lib/order-payment-amount";
 import { revalidatePath } from "next/cache";
@@ -130,13 +131,40 @@ export async function getUserExportStatsAction() { try {
         const portfolioDoc = await db.collection(COLLECTIONS.INVESTOR_PORTFOLIOS).doc(userId).get();
 
         if (portfolioDoc.exists) { const data = portfolioDoc.data()!;
+             // THE NAMES THE PORTFOLIO IS ACTUALLY WRITTEN UNDER.
+             //
+             // This read `totalReturns` and `pendingReturns`. The only writer of
+             // investorPortfolios — verifyInvestmentPaymentAction, and now the
+             // webhook path too — writes `totalReturned` and
+             // `totalExpectedReturns`. Neither key read here was written by
+             // anything, anywhere in the codebase, so both fell to `|| 0`.
+             //
+             // The export dashboard renders them as "Total Returns" and
+             // "Pending Returns", and the portfolio page adds them together for
+             // its headline expected-returns figure. All three were structurally
+             // ₦0 for every investor, whatever they had invested.
+             //
+             // Read what is written, keeping the old names first so a record
+             // that does carry them is unaffected:
+             //
+             //   totalReturns    what has actually been paid back
+             //   pendingReturns  expected, less what has been paid back — the
+             //                   outstanding part, which is what "pending" means
+             //                   and what makes the portfolio page's SUM of the
+             //                   two equal totalExpectedReturns, exactly as its
+             //                   own comment claims.
+             //
+             // Nothing records a return yet, so totalReturned stays 0 until a
+             // payout path exists. Pending stops being a lie today.
+             const totalReturns = data.totalReturns ?? data.totalReturned ?? 0;
+             const expectedReturns = data.totalExpectedReturns ?? 0;
              return { error: null, success: true as const,
                  meta: null
              , data: {
                  totalInvested: data.totalInvested || 0,
                  activeInvestments: data.activeInvestments || 0,
-                 totalReturns: data.totalReturns || 0,
-                 pendingReturns: data.pendingReturns || 0
+                 totalReturns,
+                 pendingReturns: data.pendingReturns ?? Math.max(0, expectedReturns - totalReturns)
              } };
         }
 
@@ -528,8 +556,33 @@ export async function extendEscrowAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired"};
         const { session } = sessionResult;
-        // Check admin role
-        if (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin")) { return { success: false as const, error: "Unauthorized"};
+
+        // The permission matrix, not a role-array string test.
+        //
+        // This read `roles.includes("admin") || roles.includes("super_admin")`
+        // — the shape corrected 43 times under the admin-authorisation finding.
+        // It bypasses the matrix, and it locked out the one role whose whole
+        // job this is: an export_admin could not extend an export escrow.
+        if (!hasAdminPermission(session?.user?.roles, "export:approve_applications")) {
+            return { success: false as const, error: "Unauthorized"};
+        }
+
+        // EXTEND MEANS EXTEND.
+        //
+        // `days` was written straight into setDate() with no validation, and
+        // escrowReleaseDate is not decorative: api/cron/release-escrow releases
+        // every window whose escrowReleaseDate is <= now. So this "extend"
+        // control accepted a NEGATIVE number and moved the release date
+        // backwards — far enough back and the next cron run released the escrow
+        // on a window that had just been held. A non-finite value was worse
+        // still: setDate(NaN) writes an Invalid Date, which no comparison
+        // matches, silently taking the window out of the release job entirely.
+        //
+        // A whole number of days, at least one, and capped at a year — long
+        // enough for any real shipping delay, short enough that a slipped digit
+        // does not park an escrow past the decade.
+        if (!Number.isInteger(days) || days < 1 || days > 365) {
+            return { success: false as const, error: "Escrow can only be extended by 1 to 365 whole days" };
         }
 
         const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);

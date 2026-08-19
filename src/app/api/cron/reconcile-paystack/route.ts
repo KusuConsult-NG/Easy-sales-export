@@ -133,7 +133,8 @@ export async function GET(request: NextRequest) {
             processExportInvestment, 
             processCooperativeRegistration, 
             processAcademyRegistration, 
-            processCooperativeContribution 
+            processCooperativeContribution,
+            exportWindowIdFromMetadata
         } = await import("@/infrastructure/payments/service");
 
         for (const tx of allPaystackTransactions) {
@@ -177,8 +178,11 @@ export async function GET(request: NextRequest) {
                             if (type === "marketplace_order") {
                                 await processMarketplaceOrder(tx.reference, amountPaidv, userId, paidAtDate);
                             } else if (type === "export_investment") {
-                                const exportId = metadata.exportId;
-                                await processExportInvestment(tx.reference, amountPaidv, userId, exportId, paidAtDate);
+                                // Either name — see exportWindowIdFromMetadata. Reading
+                                // `exportId` alone meant this job could not heal the
+                                // very payments it exists to find.
+                                const exportId = exportWindowIdFromMetadata(metadata);
+                                await processExportInvestment(tx.reference, amountPaidv, userId, exportId as string, paidAtDate);
                             } else if (type === "cooperative_membership_registration") {
                                 const tier = metadata.membershipTier || metadata.plan || "Member";
                                 const membershipId = metadata.membershipId || userId;

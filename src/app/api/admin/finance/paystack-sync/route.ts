@@ -15,7 +15,8 @@ import {
     processCooperativeRegistration,
     processAcademyRegistration,
     processFarmNationRegistration,
-    processWaveRegistration
+    processWaveRegistration,
+    exportWindowIdFromMetadata
 } from "@/infrastructure/payments/service";
 import { recordAdminAction } from "@/lib/audit-log";
 import { paystackBaseUrl } from "@/lib/paystack-host";
@@ -173,7 +174,8 @@ async function paystackSyncHandler(_req: NextRequest) {
                             if (type === "marketplace_order") {
                                 await processMarketplaceOrder(reference, amountNGN, userId, paidAtDate);
                             } else if (type === "export_investment") {
-                                await processExportInvestment(reference, amountNGN, userId, metadata.exportId, paidAtDate);
+                                // Either name — see exportWindowIdFromMetadata.
+                                await processExportInvestment(reference, amountNGN, userId, exportWindowIdFromMetadata(metadata) as string, paidAtDate);
                             } else if (type === "cooperative_membership_registration") {
                                 const tier = metadata.membershipTier || metadata.plan || "Member";
                                 // Legacy payments from old portal may not have membershipId — fall back to userId

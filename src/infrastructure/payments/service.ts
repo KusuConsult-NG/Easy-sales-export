@@ -394,6 +394,47 @@ export async function reconcilePendingFulfillments() {
 /**
  * Handle Export Investment Fulfillment
  */
+/**
+ * Which export window a payment is for — under either of the two names.
+ *
+ * THE DEFECT
+ * ----------
+ * Three server-side entry points fulfil `type: "export_investment"` and all
+ * three read `metadata.exportId`:
+ *
+ *   api/webhooks/paystack               the live webhook
+ *   api/cron/reconcile-paystack         the nightly heal
+ *   api/admin/finance/paystack-sync     the admin heal
+ *
+ * There are two initiators, and they disagree about the key:
+ *
+ *   initializeInvestmentPaymentAction   writes `windowId`. Called from
+ *   (actions/export-payment.ts)         /export/windows/[id] — the ONLY
+ *                                       investment button in the app.
+ *
+ *   investInExportAction                writes `exportId`. No caller.
+ *   (actions/export/_ex_investments.ts)
+ *
+ * So for every investment anybody has actually made, `metadata.exportId` is
+ * undefined and processExportInvestment threw on its first line. The webhook
+ * never fulfilled one, and neither reconciliation job could heal it — they fail
+ * on the same missing key, which is why the gap was invisible: the job that
+ * exists to report unfulfilled payments could not fulfil these either.
+ *
+ * The investor was left depending entirely on getting back to the callback page
+ * so verifyInvestmentPaymentAction could run. Close the tab, lose signal, or
+ * let the redirect fail, and the money was taken with nothing recorded.
+ *
+ * Reading both names is the fix, in one place so a third caller cannot get it
+ * wrong again. `exportId` is preferred so nothing that works today changes.
+ */
+export function exportWindowIdFromMetadata(
+    metadata: Record<string, unknown> | null | undefined,
+): string | undefined {
+    const id = metadata?.exportId ?? metadata?.windowId;
+    return typeof id === "string" && id.trim() !== "" ? id : undefined;
+}
+
 export async function processExportInvestment(reference: string, amount: number, userId: string, exportId: string, paidAt?: Date) {
     if (!exportId) throw new Error("Missing exportId in metadata");
 
@@ -539,6 +580,72 @@ export async function processExportInvestment(reference: string, amount: number,
         exportId,
         processedAt: paymentTimestamp,
     });
+
+    // The investor-facing record, settled — TWO COLLECTIONS, ONE INVESTMENT.
+    //
+    // This path writes EXPORT_SLOTS. The four export pages an investor actually
+    // looks at — dashboard, portfolio, transactions and investments/[id] — read
+    // EXPORT_INVESTMENTS by `investorId`, plus INVESTOR_PORTFOLIOS for the
+    // headline figures. initializeInvestmentPaymentAction creates that
+    // EXPORT_INVESTMENTS row as `pending_payment` before sending the investor
+    // to Paystack, and only verifyInvestmentPaymentAction ever settled it.
+    //
+    // Which means that once the window-id fix above lets the webhook fulfil
+    // these payments — and the webhook usually wins the race — the window would
+    // be funded, the slot written, and the investor would still be looking at a
+    // pending investment and a portfolio of zero. Fixing the id without this
+    // trades "nothing happens" for "everything happens except what the investor
+    // can see", so the two land together.
+    //
+    // Neither reader is repointed: EXPORT_SLOTS stays exactly as it was.
+    try {
+        const pendingInvestment = await db.collection(COLLECTIONS.EXPORT_INVESTMENTS)
+            .where("paymentReference", "==", reference)
+            .limit(1)
+            .get();
+
+        if (!pendingInvestment.empty) {
+            const investmentDoc = pendingInvestment.docs[0];
+            const investmentData = investmentDoc.data() ?? {};
+
+            await investmentDoc.ref.update({
+                status: "active",
+                paymentStatus: "completed",
+                paymentVerifiedAt: paymentTimestamp,
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+
+            const portfolioRef = db.collection(COLLECTIONS.INVESTOR_PORTFOLIOS).doc(userId);
+            const portfolioSnap = await portfolioRef.get();
+
+            if (portfolioSnap.exists) {
+                await portfolioRef.update({
+                    totalInvested: FieldValue.increment(amount),
+                    totalExpectedReturns: FieldValue.increment(investmentData.expectedReturn || expectedReturn),
+                    activeInvestments: FieldValue.increment(1),
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+            } else {
+                await portfolioRef.set({
+                    investorId: userId,
+                    investorEmail: investmentData.investorEmail ?? null,
+                    totalInvested: amount,
+                    totalExpectedReturns: investmentData.expectedReturn || expectedReturn,
+                    totalReturned: 0,
+                    activeInvestments: 1,
+                    completedInvestments: 0,
+                    createdAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+            }
+        }
+    } catch (settleErr: unknown) {
+        // Non-fatal: the money is applied and the slot exists either way, and a
+        // throw here would leave the claimed row at "pending_fulfilment" for a
+        // payment that WAS fulfilled — the one direction reconcile-fulfilment
+        // cannot tell apart.
+        logger.warn(`[Paystack Fulfillment] Investor record not settled for ${reference} (non-fatal): ${String(settleErr)}`);
+    }
 
     // Unified ledger, written last: a crash part-way leaves an investor with a
     // slot and no ledger row rather than a ledger row and no slot.
