@@ -106,10 +106,21 @@ async function _initiatePropertyPurchaseAction(
             };
         }
 
+        /**
+         * A reservation with no purchase request behind it is a stranded
+         * listing.
+         *
+         * The claim above takes the property off the market. If the write below
+         * fails, the buyer has nothing to cancel — cancelPurchaseRequestAction
+         * needs a request — and no other buyer can claim it, so the property is
+         * gone for good. Same hole as the checkout path, which now releases on
+         * failure too.
+         */
+        try {
         await db.runTransaction(async (transaction) => {
             // Create purchase request record
             const purchaseRequestRef = db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).doc();
-            transaction.set(purchaseRequestRef, { 
+            transaction.set(purchaseRequestRef, {
                 propertyId,
                 propertyName: propData.name,
                 propertyPrice: propData.price,
@@ -133,6 +144,23 @@ async function _initiatePropertyPurchaseAction(
             //  Setting it here as well is what put the reservation AFTER the
             //  purchase request, so two buyers could both get that far.)
         });
+        } catch (writeError) {
+            try {
+                await propertyRef.update({
+                    status: statusAfterCancellation(propData.status),
+                    pendingBuyerId: null,
+                    previousStatus: null,
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+            } catch (releaseError) {
+                logger.error(
+                    `[initiatePropertyPurchase] property ${propertyId} is reserved and could not be released ` +
+                    `after the purchase request failed to write; it needs to be freed by hand.`,
+                    releaseError,
+                );
+            }
+            throw writeError;
+        }
 
         return { error: null, success: true as const, meta: null, data: null };
     } catch (error: any) { 
@@ -272,13 +300,42 @@ async function _cancelPurchaseRequestAction(requestId: string): Promise<ActionRe
         if (requestData?.propertyId) {
             const listingRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(requestData.propertyId);
             const listingSnap = await listingRef.get();
+            const listing = listingSnap.data() ?? {};
 
-            await listingRef.update({
-                status: statusAfterCancellation(listingSnap.data()?.previousStatus),
-                pendingBuyerId: null,
-                previousStatus: null,
-                updatedAt: FieldValue.serverTimestamp(),
-            });
+            /**
+             * Release only the reservation THIS request is holding.
+             *
+             * This wrote the release unconditionally, from the propertyId on the
+             * cancelled request. `pendingBuyerId` is written by both reservation
+             * paths and was read by nothing, so nothing checked that the listing
+             * was still held by the person cancelling.
+             *
+             * That matters as soon as a reservation can change hands. An admin
+             * approval used to claim a listing straight out of "pending" (see
+             * IN_REVIEW_STATUSES), after which another buyer could reserve and
+             * pay for it — and then the FIRST buyer cancelling their stale
+             * request would blow away the second buyer's reservation while their
+             * money was in escrow. Approvals no longer do that, and this no
+             * longer depends on them not doing it.
+             *
+             * A listing that has moved on is left exactly as it is; the request
+             * is still cancelled, because that part is the buyer's to decide.
+             */
+            const heldByThisBuyer = String(listing.pendingBuyerId ?? "") === session.user.id;
+
+            if (heldByThisBuyer) {
+                await listingRef.update({
+                    status: statusAfterCancellation(listing.previousStatus),
+                    pendingBuyerId: null,
+                    previousStatus: null,
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+            } else if (listing.pendingBuyerId) {
+                logger.warn(
+                    `[cancelPurchaseRequest] request ${requestId} cancelled, but listing ` +
+                    `${requestData.propertyId} is reserved by ${listing.pendingBuyerId}; left untouched.`
+                );
+            }
         }
 
         return { error: null, success: true as const, meta: null, data: null };

@@ -172,9 +172,32 @@ export const AWAITING_VERIFICATION_STATUS: LandVerificationStatus = "pending";
  * Enumerated rather than expressed as "everything except", so a status added
  * later cannot become admin-writable by omission.
  */
+/**
+ * "pending" is NOT in this list, and that is the point.
+ *
+ * On LAND_LISTINGS, `pending` has exactly one writer: the farm-nation buyer
+ * RESERVATION in _fn_purchases.ts, which claims a listing to "pending" while
+ * that buyer is at checkout. Nothing writes it to mean "waiting for an admin" —
+ * review is `pending_verification`. The collision is documented a few lines
+ * below for PENDING_REVIEW_STATUSES, where two dashboards counted reserved
+ * properties as outstanding approvals; those readers were corrected and this
+ * list was not.
+ *
+ * Leaving it here let an admin approval or rejection CLAIM A LISTING A BUYER
+ * WAS PAYING FOR — the approval succeeded, wrote "verified", and put the parcel
+ * back on the public market with someone mid-purchase. That is the same fault
+ * the approve-land route's own comment describes for `pending_escrow` ("two
+ * buyers, two escrows, one parcel"); `pending` is that fault one step earlier,
+ * before the money is taken.
+ *
+ * An admin is now refused on a reserved listing, and told which state it is in.
+ * A reservation that is abandoned rather than cancelled therefore holds the
+ * listing until its buyer cancels — `pendingSince` is written for exactly this
+ * and is read by nothing, so there is no expiry. Building that sweep is a
+ * product decision, not a bug fix, and is recorded rather than invented here.
+ */
 const IN_REVIEW_STATUSES: readonly string[] = [
     "draft",
-    "pending",
     "pending_verification",
     "inspection_scheduled",
 ];
