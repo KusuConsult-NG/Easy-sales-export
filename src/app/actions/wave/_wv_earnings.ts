@@ -8,6 +8,7 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { debitJsonbBalance } from "@/lib/wallet-ledger";
+import { getFeatureToggle } from "@/app/actions/feature-toggles";
 import { compensateJsonbDebit } from "@/lib/wallet-ledger";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { isAdmin } from "@/lib/role-utils";
@@ -267,12 +268,31 @@ async function _withdrawEarningsAction(
     amount: number
 ): Promise<ActionResponse<null>> {
     try {
-        // WAVE withdrawals are currently disabled
-        return { 
-            success: false as const, 
-            error: "WAVE earnings withdrawals are currently disabled for maintenance. Please try again later.", 
-            data: null 
-        };
+        /**
+         * Disabled by a TOGGLE, not by an unconditional `return`.
+         *
+         * This opened with a bare `return` and ~140 lines of unreachable code
+         * behind it. Two consequences, neither of them the intent:
+         *
+         *   - Re-enabling withdrawals needs a code change and a deploy, and the
+         *     dead code below rots in the meantime — nothing executes it, so
+         *     nothing tells you when it stops working.
+         *   - The earnings page could not know. It enables Withdraw whenever
+         *     the balance is above zero, opens a modal, takes an amount, and
+         *     only then shows the failure. A member with money showing was
+         *     invited to withdraw it and refused every time.
+         *
+         * `wave_withdrawals` defaults to FALSE, so behaviour today is exactly
+         * what it was; the page now reads the same toggle and says so up front.
+         */
+        const withdrawalsEnabled = await getFeatureToggle("wave_withdrawals");
+        if (!withdrawalsEnabled) {
+            return {
+                success: false as const,
+                error: "WAVE earnings withdrawals are currently disabled. Please try again later.",
+                data: null,
+            };
+        }
 
         const sessionResult = await requireSession();
         if (!sessionResult.session?.user?.id) {

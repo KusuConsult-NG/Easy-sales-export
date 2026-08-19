@@ -9,6 +9,7 @@ import {
     Eye, Loader2, ArrowDownCircle, CheckCircle, ChevronDown
 } from "lucide-react";
 import { calculateEarningsAction, withdrawEarningsAction } from "@/app/actions/wave";
+import { useFeatureToggle } from "@/hooks/useFeatureToggle";
 import type { MemberEarnings } from "@/app/actions/wave";
 import { formatCurrency, parseCurrencyStringToFloat } from "@/lib/utils";
 import { useToast } from "@/contexts/ToastContext";
@@ -23,6 +24,17 @@ export default function WaveEarningsPage() {
     const [withdrawalAmount, setWithdrawalAmount] = useState("");
     const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
     const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+
+    /**
+     * Whether withdrawals are open at all.
+     *
+     * The action used to refuse every request from an unconditional `return`,
+     * and this page had no way to know: it enabled Withdraw whenever the
+     * balance was above zero, opened the modal, took an amount, and only then
+     * showed "currently disabled". A member with money showing was invited to
+     * withdraw it and refused every time. Both sides read the same toggle now.
+     */
+    const withdrawalsEnabled = useFeatureToggle("wave_withdrawals");
 
     useEffect(() => {
         if (status === "unauthenticated") {
@@ -159,11 +171,14 @@ export default function WaveEarningsPage() {
                 <div className="flex gap-4 mb-8">
                     <button
                         onClick={() => setShowWithdrawalModal(true)}
-                        disabled={earnings.paidAmount === 0}
+                        disabled={earnings.paidAmount === 0 || !withdrawalsEnabled}
+                        title={!withdrawalsEnabled
+                            ? "Withdrawals are paused at the moment. Your earnings are safe and will still be here."
+                            : undefined}
                         className="flex-1 px-6 py-4 bg-emerald-700 hover:bg-emerald-700 text-white rounded-xl font-bold transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                         <ArrowDownCircle className="w-5 h-5" />
-                        Withdraw Earnings
+                        {withdrawalsEnabled ? "Withdraw Earnings" : "Withdrawals Paused"}
                     </button>
                     <button
                         onClick={() => window.print()}

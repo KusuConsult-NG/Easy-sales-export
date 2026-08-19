@@ -43,6 +43,20 @@ async function _getStandardWaveWithdrawalsAction(options: {
             return { success: false as const, error: "Unauthorized" };
         }
 
+        /**
+         * Bank details go only to the callers who can pay a withdrawal out.
+         *
+         * This list hydrates every WAVE member's account number, account name
+         * and bank code, and its gate was isAdmin() — true for all TEN admin
+         * roles — while processWaveWithdrawalAction, the only thing this screen
+         * does, requires "finance:process_withdrawals". Reader wider than
+         * writer on the same rows, for the sixth time: the admin withdrawal
+         * list, the marketplace escrow list, the farm-nation transaction list,
+         * the farm-nation registrant list and the land verification queue were
+         * each closed the same way.
+         */
+        const maySeeBankDetails = hasAdminPermission(session.user.roles, "finance:process_withdrawals");
+
         const fetchLimit = options.search ? 5000 : (options.limit || 25);
         const orderDirection = options.sortOrder || "desc";
         let q: any = db.collection(COLLECTIONS.WAVE_WITHDRAWALS);
@@ -110,7 +124,7 @@ async function _getStandardWaveWithdrawalsAction(options: {
         let enrichedWithdrawals = withdrawals.map((w: any) => ({
             ...w,
             user: userMap[w.userId] || null,
-            bankDetails: userMap[w.userId]?.bankDetails || {
+            bankDetails: !maySeeBankDetails ? undefined : userMap[w.userId]?.bankDetails || {
                 bankName: "",
                 accountNumber: "",
                 accountName: "",
