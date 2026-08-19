@@ -14,6 +14,7 @@ import { parseFormData } from "@/lib/form-validation";
 import type { JoinCooperativeState } from "@/lib/types/cooperative";
 import { serializeValue, toMillis } from "@/lib/firestore-serialize";
 import { claimStatusTransition } from "@/lib/status-transition";
+import { inviteRefusalReason, INVITE_WRONG_ACCOUNT_MESSAGE } from "@/lib/cooperative-invite";
 import { mayClaimMembershipByEmail } from "@/lib/cooperative-membership-claim";
 import { revalidatePath } from "next/cache";
 
@@ -755,7 +756,32 @@ export async function validateCooperativeInviteAction(
 
         const data = inviteDoc.data()!;
 
-        if (data.status !== "pending") { return { success: false as const, error: "This invitation has already been used or revoked.", data: null };
+        // One policy, asked by both doors.
+        //
+        // This used to check `status !== "pending"` and nothing else — no
+        // expiry, and the invite's recorded `email` compared to nothing at all,
+        // so a forwarded link admitted whoever held it, fee-free and for ever.
+        // See lib/cooperative-invite.ts for why the binding fails CLOSED here
+        // when the session-revocation check fails open.
+        //
+        // The caller's email comes from the session rather than a parameter, so
+        // the redemption path in registerCooperativeMember cannot forget to pass
+        // it — that is the shape this codebase keeps getting wrong when one rule
+        // has two doors. Signed out, the binding is skipped and only status and
+        // age are checked: this action is also the onboarding page's link
+        // preview, and a preview is not the fee waiver.
+        const previewSession = await requireSession();
+        const callerEmail = previewSession.session?.user?.email ?? undefined;
+
+        const refusal = inviteRefusalReason(data, callerEmail);
+        if (refusal) {
+            if (callerEmail && refusal === INVITE_WRONG_ACCOUNT_MESSAGE) {
+                logger.warn(
+                    "[invite] refused: the link was issued to a different address",
+                    { token, caller: callerEmail },
+                );
+            }
+            return { success: false as const, error: refusal, data: null };
         }
 
         return { error: null, success: true as const, data: { message: "Invite valid" },

@@ -612,6 +612,16 @@ declare module "next-auth" {
             currentModuleId?: string;
             gender?: "male" | "female";
             createdAt?: string;
+            /**
+             * When THIS session was authenticated, in epoch ms.
+             *
+             * Surfaced so changePasswordAction can revoke every OTHER session
+             * without revoking the one the user is standing in — it writes this
+             * value as the profile's sessionsValidFrom, and the predicate in the
+             * jwt callback is strictly-before. Falls back to the JWT's own `iat`
+             * for sessions minted before `authAt` existed.
+             */
+            authAt?: number;
         };
         firebaseToken?: string;
     }

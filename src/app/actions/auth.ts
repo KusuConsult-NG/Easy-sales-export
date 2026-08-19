@@ -940,10 +940,51 @@ export async function changePasswordAction(
         // stores by this point; failing the whole operation because a flag write
         // failed would tell the user their password did not change when it did.
         // The worst case here is being asked to change it again.
+        // ── Revoke every OTHER session ────────────────────────────────────
+        //
+        // `passwordChangedAt` was written here and READ NOWHERE, so changing
+        // your password left every other session signed in for the remaining
+        // eight hours of its maxAge — including the stolen one you changed it
+        // because of.
+        //
+        // resetPasswordAction already stamps `sessionsValidFrom` and the jwt
+        // callback compares it against the token's issue time. The reason this
+        // path was left out was that its two callers stay signed in and carry
+        // on — /auth/reset-legacy-password pushes to /dashboard, /profile shows
+        // an inline success — so stamping Date.now() would have signed the user
+        // out of the flow they were standing in.
+        //
+        // The predicate is strictly-before, which resolves that: stamping the
+        // CURRENT session's own issue time revokes everything minted before it
+        // and keeps this one. That is what "sign out my other sessions" means,
+        // and it needs no change to the flow.
+        //
+        // A stolen cookie is necessarily older than the session you are sitting
+        // in when you notice and react, so this covers the case the feature
+        // exists for. A session minted AFTER this one survives, deliberately: it
+        // could only have been created with a password, and after this call that
+        // is the new one.
+        //
+        // Fails OPEN when the issue time is unknown — the same asymmetry
+        // resetPasswordAction reasons about. A wrong value here signs out a user
+        // who did nothing wrong; a missing one leaves a stale session that still
+        // expires within maxAge.
+        const revokeBefore = session.user.authAt;
+        if (typeof revokeBefore !== "number" || !(revokeBefore > 0)) {
+            logger.error(
+                "[changePassword] password changed but other sessions were NOT revoked: "
+                + "this session records no issue time",
+                { userId: session.user.id },
+            );
+        }
+
         try {
             await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
                 requiresPasswordChange: FieldValue.delete(),
                 passwordChangedAt: FieldValue.serverTimestamp(),
+                ...(typeof revokeBefore === "number" && revokeBefore > 0
+                    ? { sessionsValidFrom: revokeBefore }
+                    : {}),
                 updatedAt: FieldValue.serverTimestamp(),
             });
         } catch (flagErr: any) {

@@ -84,19 +84,24 @@ describe('an invitation really is the fee waiver', () => {
         expect(raw).toContain('your registration fee has already been waived');
     });
 
-    it('and nothing else about the token is checked', () => {
-        // The validator tests status and nothing more — no expiry field is ever
-        // written, and the recorded `email` is not compared to the caller. Both
-        // are recorded for the owner rather than changed here: enforcing the
-        // email binding would refuse an invited member who signed up under a
-        // different address, which is a policy call, not a bug fix.
+    it('and the token is now bound to who it was issued to, and to when', () => {
+        // This used to assert the opposite — "nothing else about the token is
+        // checked" — and recorded why: enforcing the email binding refuses an
+        // invited member who signed up under a different address, which is a
+        // policy call. The owner made it. See cooperative-invite-binding.
+        //
+        // The validator no longer tests status and nothing more; it asks one
+        // shared policy that covers status, age and the recorded email.
         const validate = fn(REGISTRATION, 'validateCooperativeInviteAction');
 
-        expect(validate).toContain('data.status !== "pending"');
-        // Raw source: a not.toContain against the stripped text would pass for
-        // the wrong reason, since the stripper eats most of this file.
+        expect(validate).toContain('inviteRefusalReason(data, callerEmail)');
+        expect(validate).not.toContain('data.status !== "pending"');
+
+        // The writer still records no expiresAt — the age window is derived
+        // from createdAt, and an explicit expiresAt is honoured if one is ever
+        // written. Raw source: a not.toContain against the stripped text would
+        // pass for the wrong reason, since the stripper eats most of this file.
         expect(readFileSync(join(process.cwd(), LEGACY), 'utf-8')).not.toContain('expiresAt');
-        expect(validate).not.toContain('email');
     });
 });
 

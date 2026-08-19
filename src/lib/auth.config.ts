@@ -121,6 +121,13 @@ export const authConfig = {
                 session.user.currentModuleId = token.currentModuleId as string || "platform";
                 session.user.gender = token.gender as "male" | "female" | undefined;
                 session.user.createdAt = token.createdAt as string | undefined;
+                // Surfaced for changePasswordAction, which revokes every session
+                // OLDER than this one. `iat` is the fallback for sessions minted
+                // before `authAt` was stamped, exactly as the revocation
+                // predicate in lib/auth.ts resolves it.
+                session.user.authAt = typeof token.authAt === "number"
+                    ? token.authAt
+                    : (typeof token.iat === "number" ? token.iat * 1000 : undefined);
             }
             return session;
         },

@@ -211,20 +211,59 @@ describe('the reset stamps the revocation point', () => {
     });
 });
 
-describe('what this does NOT cover, stated rather than implied', () => {
-    it('changePasswordAction still does not revoke', () => {
-        // Recorded, not fixed. Its two callers stay signed in and continue, so
-        // revoking would sign the user out of the flow they are standing in —
-        // a UX change to working paths rather than a defect fix.
-        const change = code(CHANGE);
-        const fn = change.slice(change.indexOf('export async function changePasswordAction'));
+describe('changePasswordAction revokes the OTHER sessions', () => {
+    // This used to say "still does not revoke", and recorded why: its two
+    // callers stay signed in and carry on, so stamping Date.now() would have
+    // signed the user out of the flow they were standing in.
+    //
+    // The predicate being strictly-before is what resolved it. Stamping the
+    // CURRENT session's own issue time revokes everything minted before it and
+    // keeps this one — which is what "sign out my other sessions" means, and
+    // needs no change to either flow.
+    const change = code(CHANGE);
+    const fn = change.slice(change.indexOf('export async function changePasswordAction'));
 
-        expect(fn).toContain('passwordChangedAt: FieldValue.serverTimestamp(),');
-        expect(fn).not.toContain('sessionsValidFrom');
+    it('stamping this session\'s issue time rather than now — THE test', () => {
+        expect(fn).toContain('const revokeBefore = session.user.authAt;');
+        expect(fn).toContain('? { sessionsValidFrom: revokeBefore }');
+        // Date.now() would have revoked the caller's own session too.
+        expect(fn).not.toContain('sessionsValidFrom: Date.now()');
     });
 
-    it('and its two callers really do stay signed in, which is why', () => {
-        // Vacuity guard on that reasoning.
+    it('which keeps the current session and drops every older one', () => {
+        // Exercised against the same predicate the callback runs.
+        const CURRENT = 1_700_000_500_000;
+        const older = CURRENT - 60_000;
+        const newer = CURRENT + 60_000;
+
+        expect(isRevoked({ authAt: CURRENT }, { sessionsValidFrom: CURRENT })).toBe(false);
+        expect(isRevoked({ authAt: older }, { sessionsValidFrom: CURRENT })).toBe(true);
+        // Deliberate: a session minted after this one could only have been
+        // created with a password, and after this call that is the new one.
+        expect(isRevoked({ authAt: newer }, { sessionsValidFrom: CURRENT })).toBe(false);
+    });
+
+    it('failing open when this session records no issue time', () => {
+        // Same asymmetry the reset path reasons about: a wrong value signs out
+        // a user who did nothing wrong.
+        expect(fn).toContain('if (typeof revokeBefore !== "number" || !(revokeBefore > 0)) {');
+        expect(fn).toContain('other sessions were NOT revoked');
+    });
+
+    it('and still keeps the fields it already wrote', () => {
+        expect(fn).toContain('requiresPasswordChange: FieldValue.delete(),');
+        expect(fn).toContain('passwordChangedAt: FieldValue.serverTimestamp(),');
+    });
+
+    it('the issue time being surfaced on the session for it to read', () => {
+        // Vacuity guard: session.user.authAt has to exist, and has to be the
+        // same value the predicate compares against.
+        const cfg = code(AUTH_CONFIG);
+        expect(cfg).toContain('session.user.authAt = typeof token.authAt === "number"');
+        expect(cfg).toContain('(typeof token.iat === "number" ? token.iat * 1000 : undefined)');
+    });
+
+    it('and its two callers still stay signed in, which is why Date.now() was wrong', () => {
         expect(source('src/app/auth/reset-legacy-password/page.tsx')).toContain('router.push("/dashboard")');
         expect(source('src/app/profile/page.tsx')).toContain('Password updated successfully!');
     });
