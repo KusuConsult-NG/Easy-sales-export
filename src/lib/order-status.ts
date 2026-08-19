@@ -140,3 +140,43 @@ export function sumOrders<T extends { status?: unknown; totalAmount?: unknown }>
 ): number {
     return orders.reduce((sum, o) => (matches(o?.status) ? sum + orderAmount(o) : sum), 0);
 }
+
+/**
+ * Has this order taken stock off the shelf yet?
+ *
+ * THE DEFECT
+ * ----------
+ * Both cancel paths restocked unconditionally:
+ *
+ *   marketplace/_buyer.ts    cancelOrderAction — the buyer's own cancel
+ *   order-management.ts      the seller/admin cancel
+ *
+ * and the buyer's one claims `from: "pending_payment"` — which is precisely the
+ * state in which NO stock has been reserved. The three order creators differ:
+ *
+ *   _initializeOrderPaymentAction   Paystack. Writes "pending_payment" and does
+ *                                   NOT touch availableQuantity. The reservation
+ *                                   happens later, in _payment_verify, which
+ *                                   moves the order to "processing".
+ *   _createBankTransferOrderAction  reserves at creation, writes "processing".
+ *   _createPaymentOnDeliveryOrderAction  likewise.
+ *
+ * So a buyer who placed a Paystack order, never paid, and cancelled had the
+ * seller's availableQuantity INCREASED by the order quantity — inventory
+ * invented from nothing. It is repeatable and cumulative, and the inflated
+ * figure then oversells: decrementManyOrFail happily succeeds against a number
+ * that is too high, so a later buyer pays for goods that do not exist.
+ *
+ * The rule is simply which side of the reservation the order is on.
+ * "pending_payment" is before it; everything else is after.
+ *
+ * Callers must pass the status the order held BEFORE the cancelling claim —
+ * TransitionResult.status is the status AFTER the call, not the previous one.
+ * Reading it from the document fetched before the claim is what both sites do.
+ * If that read raced a payment completing, the answer errs towards NOT
+ * restocking, which understates inventory rather than inventing it.
+ */
+export function hasReservedStock(statusBeforeCancel: unknown): boolean {
+    const status = String(statusBeforeCancel ?? "");
+    return status !== "" && status !== "pending_payment" && status !== "cancelled";
+}

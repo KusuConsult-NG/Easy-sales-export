@@ -8,7 +8,7 @@ import { withSafeAction } from "@/lib/safe-action";
 import { FieldValue } from "@/lib/firestore-compat";
 import { claimStatusTransition, claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { isActiveEscrowStatus } from "@/lib/escrow-status";
-import { ORDER_CONFIRMABLE_FROM } from "@/lib/order-status";
+import { ORDER_CONFIRMABLE_FROM, hasReservedStock } from "@/lib/order-status";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import type { ActionResponse } from "@/lib/safe-action";
 import { ProductSchema } from "@/lib/validations/marketplace";
@@ -423,15 +423,32 @@ async function _cancelOrderAction(orderId: string): Promise<ActionResponse<{ suc
         }
 
         await (async () => {
-            // 1. Revert product quantities
-            for (const item of items) {
-                if (item.productId && item.quantity) {
-                    const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(item.productId);
-                    await productRef.update({
-                        availableQuantity: FieldValue.increment(item.quantity),
-                        _version: FieldValue.increment(1),
-                        updatedAt: FieldValue.serverTimestamp()
-                    });
+            // 1. Revert product quantities — ONLY IF ANY WERE TAKEN.
+            //
+            // This restocked unconditionally, and the only status it can cancel
+            // from is "pending_payment" — the state in which no stock has been
+            // reserved at all. _initializeOrderPaymentAction writes the order
+            // without touching availableQuantity; the reservation happens later
+            // in _payment_verify, which moves the order off "pending_payment".
+            //
+            // So placing a Paystack order, not paying, and cancelling INCREASED
+            // the seller's stock by the order quantity — repeatable, cumulative,
+            // and it oversells afterwards, because decrementManyOrFail succeeds
+            // against the inflated figure and the seller cannot ship.
+            //
+            // Written as the general rule rather than "never restock", so it
+            // stays correct if the claimable set ever widens. See
+            // hasReservedStock in lib/order-status.ts.
+            if (hasReservedStock(orderData?.status)) {
+                for (const item of items) {
+                    if (item.productId && item.quantity) {
+                        const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(item.productId);
+                        await productRef.update({
+                            availableQuantity: FieldValue.increment(item.quantity),
+                            _version: FieldValue.increment(1),
+                            updatedAt: FieldValue.serverTimestamp()
+                        });
+                    }
                 }
             }
 

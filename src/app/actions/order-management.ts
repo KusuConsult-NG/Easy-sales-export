@@ -16,6 +16,7 @@ import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { getLogisticsProvider } from "@/lib/logistics";
 import { runQueryWithRetry } from "@/lib/firestore-utils";
 import { ESCROW_RELEASABLE_FROM, pickOrderEscrow, escrowIdFor } from "@/lib/escrow-status";
+import { hasReservedStock } from "@/lib/order-status";
 
 /**
  * Get all orders for a seller
@@ -173,7 +174,20 @@ async function _updateOrderStatusAction(
                             : `Order cannot be cancelled from status '${cancelClaim.status}'`);
                 }
 
-                const items = currentOrder.items || [];
+                // ONLY IF STOCK WAS EVER TAKEN.
+                //
+                // This claims from "pending_payment" among others, and an order
+                // in that state has reserved nothing — the Paystack creator
+                // writes it without touching availableQuantity and the
+                // reservation happens at verification. Restocking it invented
+                // inventory, and the `orders` counter is incremented at that
+                // same verification, so decrementing it here drove the count
+                // negative for an order that had never been counted.
+                //
+                // `currentOrder.status` is the status BEFORE the claim above;
+                // TransitionResult.status is the status after it. See
+                // hasReservedStock in lib/order-status.ts.
+                const items = hasReservedStock(currentOrder.status) ? (currentOrder.items || []) : [];
                 for (const item of items) {
                     const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(item.productId);
                     await productRef.update({

@@ -157,6 +157,20 @@ describe('cancelOrderAction — the restock that erased other writes', () => {
     it('restocks by increment, never by a computed total', async () => {
         // THE test. `currentQty + item.quantity` erases a concurrent
         // purchase's decrement, so the shop oversells afterwards.
+        //
+        // Seeded at "processing" rather than "pending_payment" — see #107. An
+        // order at pending_payment has reserved NO stock, so there is nothing
+        // to put back and the restock is now skipped entirely. This test is
+        // about the SHAPE of the restock when one is due, and the buyer action
+        // only claims from pending_payment today, so the branch it asserts is
+        // reached through the general rule rather than through that claim.
+        // Which statuses restock at all is covered next.
+        setDocs({
+            buyerId: 'buyer-1',
+            status: 'processing',
+            items: [{ productId: 'prod-a', quantity: 3, sellerId: 'seller-1' }],
+        });
+
         const { cancelOrderAction } = await import('@/app/actions/marketplace/_buyer');
         await cancelOrderAction('order-1');
 
@@ -166,6 +180,18 @@ describe('cancelOrderAction — the restock that erased other writes', () => {
             _methodName: 'FieldValue.increment',
             _operand: 3,
         });
+    });
+
+    it('and puts NOTHING back for an order that never reserved any', async () => {
+        // #107. pending_payment is the state before the reservation: the
+        // Paystack creator writes the order without touching
+        // availableQuantity. Restocking it invented inventory the seller never
+        // had, repeatably.
+        const { cancelOrderAction } = await import('@/app/actions/marketplace/_buyer');
+        await cancelOrderAction('order-1');
+
+        const updates = (global as any).mockFirestoreUpdate.mock.calls.map((c: any) => c[1]);
+        expect(updates.find((u: any) => u.availableQuantity !== undefined)).toBeUndefined();
     });
 
     it('restocks nothing when the cancellation claim is lost', async () => {
