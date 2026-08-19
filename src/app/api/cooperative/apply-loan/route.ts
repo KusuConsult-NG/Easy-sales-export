@@ -232,6 +232,10 @@ async function applyLoanHandler(request: NextRequest) {
         const applicationRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc();
         const applicationData = {
             userId,
+            // Which product this is — see lib/loan-product.ts. Existing rows
+            // are inferred from productId and the guarantor, so this stamp is
+            // for clarity on new ones rather than a migration requirement.
+            loanProduct: "cooperative" as const,
             productId,
             productName: product.name,
             amount,

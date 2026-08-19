@@ -31,6 +31,16 @@ import type { FieldValue, Timestamp } from "@/lib/firestore-compat";
 
 export interface LoanApplication {
     id?: string;
+    /**
+     * Which of the two products this application is for.
+     *
+     * LOAN_APPLICATIONS holds cooperative and business loans, and no row said
+     * which, so every admin queue filtered on `status` alone and showed both.
+     * Optional because rows written before this existed carry no value —
+     * lib/loan-product.ts infers those from the fields that always
+     * distinguished them rather than requiring a backfill.
+     */
+    loanProduct?: "cooperative" | "business";
     userId: string;
     userEmail: string;
     fullName: string;

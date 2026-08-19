@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { filterByLoanProduct } from "@/lib/loan-product";
 import { isAdmin } from "@/lib/admin-permissions";
 
 /**
@@ -45,8 +46,15 @@ export async function GET(request: NextRequest) {
             logger.warn("[admin/cooperative/loan-applications] result truncated by the adapter's query limit");
         }
 
+        // The cooperative admin list. It read every row in the collection, so it
+        // also listed business-loan applications — a different product with no
+        // membership, no guarantor and no savings cap. Filtered in memory
+        // because rows written before the discriminator existed carry no value
+        // and a `where` would drop them. See lib/loan-product.ts.
+        const cooperativeDocs = filterByLoanProduct(snapshot.docs, 'cooperative');
+
         const applications = await Promise.all(
-            snapshot.docs.map(async (appDoc) => {
+            cooperativeDocs.map(async (appDoc) => {
                 const data = appDoc.data();
 
                 // Get user details

@@ -103,6 +103,9 @@ export async function submitLoanApplicationAction(formData: {
 
         // Create application payload
         const application: Omit<LoanApplication, "id"> = {
+            // Which product this is — see lib/loan-product.ts. LOAN_APPLICATIONS
+            // holds two and no row said which, so every admin queue showed both.
+            loanProduct: "cooperative" as const,
             userId: formData.userId,
             userEmail: formData.userEmail,
             fullName: formData.fullName,

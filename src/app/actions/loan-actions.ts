@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { filterByLoanProduct } from "@/lib/loan-product";
 import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { loanApplicationSchema,
@@ -77,6 +78,10 @@ export async function submitLoanApplication(
                 row: {
                     ...validated,
                     userId: session.user.id,
+                    // Which product this is. LOAN_APPLICATIONS holds two, and
+                    // no row said which, so every admin queue showed both.
+                    // See lib/loan-product.ts.
+                    loanProduct: "business" as const,
                     status: LoanStatus.PENDING,
                     guarantorVerified: true, // General loans have no guarantor and are pre-verified
                     // interestRate is a MONTHLY percentage. See src/lib/loan-terms.ts —
@@ -204,7 +209,18 @@ export async function getPendingLoanApplications() { const sessionResult = await
             .orderBy('createdAt', 'desc');
 
         const snapshot = await loansQuery.get();
-        const loans = serializeDocs<LoanApplication>(snapshot.docs);
+
+        // ONE COLLECTION, TWO PRODUCTS. This queue is /loans/approve, the
+        // BUSINESS door — collateral and business details, no membership, no
+        // guarantor, no savings cap. It filtered on status alone, so it also
+        // listed every pending cooperative application, whose underwriting is
+        // entirely different and invisible here.
+        //
+        // Filtered in memory rather than with a `where`: rows written before
+        // the discriminator existed carry no value, and a where clause would
+        // silently drop every one of them. See lib/loan-product.ts.
+        const businessDocs = filterByLoanProduct(snapshot.docs, 'business');
+        const loans = serializeDocs<LoanApplication>(businessDocs);
 
         return { error: null, success: true as const, data: loans };
     } catch (error) { return { success: false as const, error: "Failed to fetch pending loans", data: null };
