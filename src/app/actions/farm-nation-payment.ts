@@ -11,6 +11,8 @@ import { rateLimitConfig } from '@/lib/rate-limits.config';
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { claimPaymentOnce, markFulfilmentFailed } from "@/lib/wallet-ledger";
 import { getBaseUrl } from "@/lib/server-utils";
+import { claimStatusTransitionFromAny } from "@/lib/status-transition";
+import { PURCHASABLE_STATUSES, isPurchasable, statusAfterCancellation } from "@/lib/land-listing-status";
 
 const paymentLimiter = rateLimit(rateLimitConfig.payment);
 
@@ -101,36 +103,124 @@ async function _initializePropertyPaymentAction(
             return { success: false, error: "This property has no price set and cannot be purchased.", data: null };
         }
 
-        if (propertyData.status !== "verified") { 
+        /**
+         * THE SHARED PURCHASABLE RULE, NOT THE LITERAL "verified".
+         *
+         * LAND_LISTINGS is written by two modules with different vocabularies.
+         * _fn_listings.ts creates a farm-nation property as "available"; the
+         * land module's admin approval writes "verified". PURCHASABLE_STATUSES
+         * covers both — it exists because requiring one spelling made the other
+         * module's listings unbuyable, and BROWSABLE_STATUSES is the same set,
+         * so the browse page shows both as for sale.
+         *
+         * This required "verified" exactly. So EVERY property listed through
+         * Farm Nation itself was visible, clickable, and refused at checkout
+         * with "Property is no longer available" — the module's own listings
+         * could not be bought through the only checkout page the app has.
+         * _fn_purchases.ts was widened to the shared rule; this, the path the
+         * page actually calls, was not.
+         */
+        if (!isPurchasable(propertyData.status)) {
             return { success: false, error: "Property is no longer available", data: null };
         }
 
         // Buyer cannot purchase their own property
-        if (propertyData.ownerId === session.user.id) { 
+        if (propertyData.ownerId === session.user.id) {
             return { success: false, error: "You cannot purchase your own property", data: null };
+        }
+
+        /**
+         * RESERVE THE PROPERTY BEFORE CHARGING ANYBODY.
+         *
+         * The status write used to be a bare `update({ status: "pending_escrow" })`
+         * AFTER the Paystack session was created. Two buyers reaching checkout
+         * on one listing therefore both read "verified", both got an
+         * authorization URL, and BOTH WERE CHARGED — the second update simply
+         * overwrote the first. One property, two payments, and only one of them
+         * can ever be fulfilled.
+         *
+         * _fn_purchases.ts documents fixing exactly this with a claim, and says
+         * why: "exactly one buyer wins, and the loser is told it has gone rather
+         * than being taken to payment for something they cannot have". That fix
+         * landed on the path with no UI and not on this one.
+         *
+         * Claiming FIRST means the loser never reaches Paystack.
+         * `recordPreviousAs` stores what it was reserved from, so cancelling
+         * restores "verified" rather than dropping the listing to "available"
+         * — which would take it out of the land module's public view, since
+         * getVerifiedLandListings queries that exact status.
+         */
+        const reservation = await claimStatusTransitionFromAny({
+            collection: COLLECTIONS.LAND_LISTINGS,
+            id: propertyId,
+            fromAny: [...PURCHASABLE_STATUSES],
+            to: "pending_escrow",
+            patch: { pendingBuyerId: session.user.id, pendingSince: new Date().toISOString() },
+            recordPreviousAs: "previousStatus",
+        });
+
+        if (!reservation.claimed) {
+            return { success: false, error: "Property is no longer available", data: null };
         }
 
         const baseUrl = await getBaseUrl();
         const callbackUrl = `${baseUrl}/farm-nation/payment/callback`;
 
+        /**
+         * A reservation that cannot be paid for must be given back.
+         *
+         * Everything from here on can fail — Paystack can be unreachable, the
+         * record write can throw — and the listing is already reserved. Without
+         * this the property is off the market permanently: no buyer can claim
+         * it, and its would-be buyer has no purchase record to cancel, because
+         * the record is written below.
+         */
+        const releaseReservation = async (why: string) => {
+            try {
+                // Back to whatever it was reserved FROM — the same rule the
+                // cancel path uses, so a listing reserved from "verified" does
+                // not come back as "available" and drop out of the land view.
+                await propertyRef.update({
+                    status: statusAfterCancellation(propertyData.status),
+                    pendingBuyerId: null,
+                    previousStatus: null,
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+            } catch (releaseError) {
+                logger.error(
+                    `[initializePropertyPayment] property ${propertyId} is reserved and could not be released ` +
+                    `after ${why}; it needs to be freed by hand.`,
+                    releaseError,
+                );
+            }
+        };
+
         // Initialize payment with Paystack
-        const { authorizationUrl, reference } = await initializePaystackPayment(
-            session.user.email || "",
-            nairaToKobo(listedPrice),
-            {
-                userId: session.user.id,
-                propertyId,
-                propertyTitle: listingTitle,
-                sellerId: listingSellerId,
-                type: "property_purchase",
-                callback_url: callbackUrl 
-            },
-            callbackUrl
-        );
+        let authorizationUrl: string;
+        let reference: string;
+        try {
+            ({ authorizationUrl, reference } = await initializePaystackPayment(
+                session.user.email || "",
+                nairaToKobo(listedPrice),
+                {
+                    userId: session.user.id,
+                    propertyId,
+                    propertyTitle: listingTitle,
+                    sellerId: listingSellerId,
+                    type: "property_purchase",
+                    callback_url: callbackUrl
+                },
+                callbackUrl
+            ));
+        } catch (initError: any) {
+            await releaseReservation("the Paystack session could not be created");
+            throw initError;
+        }
 
         // Create pending purchase record in FARM_NATION_TRANSACTIONS
         const purchaseId = `${session.user.id}_${propertyId}_${Date.now()}`;
-        await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).doc(purchaseId).set({ 
+        try {
+            await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).doc(purchaseId).set({ 
             id: purchaseId,
             propertyId,
             propertyName: listingTitle,
@@ -150,12 +240,16 @@ async function _initializePropertyPaymentAction(
             zoningComplianceDeclarationAccepted: true,
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp() 
-        });
-        
-        await propertyRef.update({ 
-            status: "pending_escrow", // Update status to reflect it's being purchased
-            updatedAt: FieldValue.serverTimestamp() 
-        });
+            });
+        } catch (recordError: any) {
+            await releaseReservation("the purchase record could not be written");
+            throw recordError;
+        }
+
+        // The status write that used to sit here — a bare update to
+        // "pending_escrow", after Paystack had already been called — is the
+        // claim above now. See the comment there for what two simultaneous
+        // buyers did to it.
 
         return { 
             success: true, 
