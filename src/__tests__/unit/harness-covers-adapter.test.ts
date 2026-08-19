@@ -59,6 +59,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { supabaseDb as db } from '@/lib/supabase-db';
 import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
+import { stripComments } from '@/lib/testing/strip-comments';
 
 /** Method names the adapter exposes on a collection/query or on db itself. */
 function adapterMethods(): Set<string> {
@@ -502,5 +503,102 @@ describe('the fake hydrates dates the way the adapter does', () => {
 
         expect(data.name).toBe('2026-not-a-date');
         expect(data.code).toBe('12345678901');
+    });
+});
+
+/**
+ * The transaction must behave like SupabaseTransaction, which is not the
+ * intuitive thing.
+ *
+ * `t.get` is literally `refOrQuery.get()`, so it accepts a QUERY as well as a
+ * document reference — academy's dedup guard reads a filtered query that way.
+ * And `t.set` / `t.update` / `t.delete` push closures into `_pendingWrites`
+ * that only run in `_commit()`, AFTER the callback returns.
+ *
+ * The fake used to accept only a ref (a query came back as a non-existent
+ * document, and the action's catch turned the resulting throw into a generic
+ * failure) and to apply writes immediately (so a callback that threw still left
+ * writes in the store, and a read-after-write inside one callback saw the new
+ * value where production sees the old).
+ *
+ * Still NO LOCK, which is the one thing that must not be simulated.
+ */
+describe('the fake transaction behaves like SupabaseTransaction', () => {
+    let store: FakeDbHandle;
+    beforeEach(() => { store = installFakeDb(); });
+
+    it('t.get accepts a query, and the filters actually run', async () => {
+        store.seedAll('x', {
+            a: { status: 'open' },
+            b: { status: 'closed' },
+            c: { status: 'open' },
+        });
+
+        const rows = await db.runTransaction(async (t: any) => {
+            const snap = await t.get(db.collection('x').where('status', '==', 'open'));
+            return snap.docs.map((d: any) => d.id);
+        });
+
+        expect(rows.sort()).toEqual(['a', 'c']);
+    });
+
+    it('t.get still accepts a document reference', async () => {
+        store.seed('x', 'a', { status: 'open' });
+
+        const status = await db.runTransaction(async (t: any) => {
+            const snap = await t.get(db.collection('x').doc('a'));
+            return snap.data().status;
+        });
+
+        expect(status).toBe('open');
+    });
+
+    it('a callback that THROWS writes nothing', async () => {
+        store.seed('x', 'a', { status: 'open' });
+
+        await expect(db.runTransaction(async (t: any) => {
+            t.update(db.collection('x').doc('a'), { status: 'closed' });
+            throw new Error('refused');
+        })).rejects.toThrow('refused');
+
+        expect(store.get('x', 'a')!.status).toBe('open');
+    });
+
+    it('a read after a write, inside one callback, sees the OLD value', async () => {
+        store.seed('x', 'a', { status: 'open' });
+
+        const seen = await db.runTransaction(async (t: any) => {
+            t.update(db.collection('x').doc('a'), { status: 'closed' });
+            const snap = await t.get(db.collection('x').doc('a'));
+            return snap.data().status;
+        });
+
+        expect(seen).toBe('open');
+        // ...and the write does land, once the callback has returned.
+        expect(store.get('x', 'a')!.status).toBe('closed');
+    });
+
+    it('the writes land in the order they were queued', async () => {
+        await db.runTransaction(async (t: any) => {
+            t.set(db.collection('x').doc('a'), { n: 1 });
+            t.update(db.collection('x').doc('a'), { n: 2 });
+        });
+
+        expect(store.get('x', 'a')!.n).toBe(2);
+    });
+
+    it('and it still takes NO LOCK — which must never be simulated', () => {
+        // Structural, because a single-threaded fake cannot demonstrate the
+        // absence of locking by racing anything. Every money guarantee in this
+        // platform is a Postgres CAS function BECAUSE this is true; a fake that
+        // acquired a lock would make an unguarded check-then-write look safe.
+        const raw = readFileSync(
+            join(process.cwd(), 'src/lib/testing/firestore-mock-db.js'), 'utf8');
+        // Comments stripped first — the block above this one SAYS "NO LOCK",
+        // and a scan that reads its own documentation as an implementation is
+        // the mistake finding #75 was about.
+        const code = stripComments(raw);
+        expect(code).not.toMatch(/\block\b|mutex|semaphore|acquire/i);
+        expect(raw).toContain('NO LOCK');
     });
 });

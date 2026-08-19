@@ -121,32 +121,64 @@ function createMockDb() {
             };
         },
 
-        // NO LOCK, exactly like the real adapter: runTransaction calls the
-        // callback and nothing else. Every money guarantee in this platform is a
-        // Postgres CAS function precisely because of that, and a mock that
-        // simulated isolation here would make an unguarded check-then-write look
-        // safe. See lib/supabase-db.ts and supabase/migrations/007.
-        runTransaction: (cb) => {
+        /**
+         * NO LOCK, exactly like the real adapter — but the writes are DEFERRED,
+         * also exactly like it.
+         *
+         * SupabaseTransaction pushes each set/update/delete into
+         * `_pendingWrites` and runTransaction runs them in `_commit()` AFTER the
+         * callback returns. Two consequences this fake used to get wrong by
+         * applying them immediately:
+         *
+         *   - A callback that THROWS writes nothing. Applying eagerly left the
+         *     store holding writes production would never have made, so a test
+         *     asserting "the refusal wrote nothing" failed against correct code.
+         *   - A read after a write, inside one callback, sees the OLD value.
+         *     Eager application showed the new one, which is a fake that is
+         *     better than production — the kind that makes broken code pass.
+         *
+         * What it still does NOT do is lock. Every money guarantee here is a
+         * Postgres CAS function precisely because of that; simulating isolation
+         * would make an unguarded check-then-write look safe. See
+         * lib/supabase-db.ts and supabase/migrations/007.
+         */
+        runTransaction: async (cb) => {
+            const pending = [];
             const tx = {
-                get: (ref) => global.mockFirestoreTxGet(ref),
-                set: (ref, data, options) => withAccess(
-                    { kind: 'doc', collection: ref && ref.__collection, id: ref && ref.id,
-                      merge: options && options.merge },
-                    // TWO arguments to the recorder, as always. Passing `options`
-                    // as a third broke suites reading the payload as
-                    // call[call.length - 1]; merge travels in the descriptor.
-                    () => { global.mockFirestoreTxSet(ref, data); return Promise.resolve(); },
-                ),
-                update: (ref, fields) => {
-                    global.mockFirestoreTxUpdate(ref, fields);
-                    return Promise.resolve();
+                // `t.get` takes a REF OR A QUERY — SupabaseTransaction.get is
+                // literally `refOrQuery.get()`. Academy's dedup guard reads a
+                // filtered query this way, and with a ref-only stub it came back
+                // as a non-existent document: `snap.empty` undefined, then
+                // `snap.docs.sort` threw into the action's catch. A doc ref is
+                // recognised by `__collection`; anything else is a builder and
+                // executes through the ordinary query path, so its filters run.
+                get: (refOrQuery) => (refOrQuery && refOrQuery.__collection !== undefined
+                    ? global.mockFirestoreTxGet(refOrQuery)
+                    : refOrQuery.get()),
+                set: (ref, data, options) => {
+                    pending.push(() => withAccess(
+                        { kind: 'doc', collection: ref && ref.__collection, id: ref && ref.id,
+                          merge: options && options.merge },
+                        // TWO arguments to the recorder, as always. Passing
+                        // `options` as a third broke suites reading the payload
+                        // as call[call.length - 1]; merge travels in the
+                        // descriptor.
+                        () => global.mockFirestoreTxSet(ref, data),
+                    ));
                 },
-                delete: (ref) => withAccess(
-                    { kind: 'doc', collection: ref && ref.__collection, id: ref && ref.id },
-                    () => { global.mockFirestoreDelete(ref && ref.id); return Promise.resolve(); },
-                ),
+                update: (ref, fields) => {
+                    pending.push(() => global.mockFirestoreTxUpdate(ref, fields));
+                },
+                delete: (ref) => {
+                    pending.push(() => withAccess(
+                        { kind: 'doc', collection: ref && ref.__collection, id: ref && ref.id },
+                        () => global.mockFirestoreDelete(ref && ref.id),
+                    ));
+                },
             };
-            return cb(tx);
+            const result = await cb(tx);
+            for (const write of pending) await write();
+            return result;
         },
     };
 
