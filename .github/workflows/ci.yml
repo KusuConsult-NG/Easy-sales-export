@@ -95,8 +95,22 @@ jobs:
           NEXTAUTH_SECRET: placeholder-ci-secret-placeholder-ci-secret
           AUTH_SECRET: placeholder-ci-secret-placeholder-ci-secret
 
-      - name: Run Jest Unit Tests
-        run: npm run test
+      # `npm run test:coverage`, not `npm run test`.
+      #
+      # Both run every test; only this one enforces the coverage floor in
+      # jest.config.js. That floor said 70% lines while the real figure was 32%,
+      # and nobody saw it, because thresholds apply only with --coverage and
+      # neither CI nor the pre-push hook passed it. A declared gate that no
+      # command runs is the same defect as a security check that never prints.
+      #
+      # One run rather than two: coverage instruments the same suite, so adding
+      # a second step would double the runtime and the memory exposure for no
+      # extra signal. NODE_OPTIONS matches the build step — instrumentation
+      # raises heap use, and this job has already died once at the default.
+      - name: Run Jest Unit Tests (enforcing the coverage floor)
+        run: npm run test:coverage
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
 
   # Application integration tests against a real database.
   #

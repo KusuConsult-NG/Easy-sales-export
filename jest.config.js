@@ -24,12 +24,43 @@ const customJestConfig = {
         '!src/**/*.stories.{ts,tsx}',
         '!src/**/__tests__/**',
     ],
+    /**
+     * A RATCHET, set to the true floor — not an aspiration.
+     *
+     * This said branches 60 / functions 60 / lines 70 / statements 70. The
+     * actual figures are 20.46 / 27.32 / 32.26 / 31.45, so
+     * `npm run test:coverage` failed all four. Nothing noticed, because
+     * thresholds only apply with --coverage and both the pre-push hook and CI
+     * run `npm run test`. The numbers read as evidence that coverage is
+     * enforced at 70% while it was 31% and ungated — the same shape as the
+     * weak-secret check that could never print and the GATED_SEGMENTS list that
+     * nothing imported.
+     *
+     * Set at the measured floor with about half a point of headroom, so it can
+     * only be raised. Lowering one requires saying why here, which is the
+     * review conversation the old numbers skipped.
+     *
+     * WHY 31% IS NOT AS BAD AS IT SOUNDS, AND NOT AS GOOD AS 3,884 TESTS SOUNDS
+     * -----------------------------------------------------------------------
+     * 147 of 263 unit suites read SOURCE TEXT and assert on it. That is
+     * deliberate: this codebase's defects were overwhelmingly structural — one
+     * control applied on two doors out of three, a queue filtering on the wrong
+     * field, a permission named nowhere, a status vocabulary that only went one
+     * way — and those are facts about the shape of the code. But a structural
+     * assertion executes almost nothing, so it contributes ~0 coverage while
+     * still being a real gate.
+     *
+     * So this number measures how much of the app is EXERCISED, and the suite
+     * count measures something else. Both are true and neither substitutes for
+     * the integration, db and e2e jobs in .github/workflows/ci.yml, which are
+     * the only things that run this code against a real database and a browser.
+     */
     coverageThreshold: {
         global: {
-            branches: 60,
-            functions: 60,
-            lines: 70,
-            statements: 70,
+            branches: 20,
+            functions: 27,
+            lines: 32,
+            statements: 31,
         },
     },
     testMatch: [
