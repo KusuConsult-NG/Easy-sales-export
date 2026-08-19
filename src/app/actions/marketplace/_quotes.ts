@@ -115,6 +115,44 @@ async function _submitQuoteRequestAction(data: QuoteRequestData): Promise<Action
             return { success: false as const, error: "Quantity must be a positive number", data: null };
         }
 
+        /**
+         * ONE OPEN REQUEST PER BUYER PER SUBJECT.
+         *
+         * Every call wrote a quote row AND a notification, and nothing bounded
+         * the repetition. Any authenticated account could therefore fill a
+         * seller's quote queue and their notification centre at one write per
+         * call, with caller-supplied `notes` carried into every row — and the
+         * seller's screen renders the buyer's name and email beside each one, so
+         * the noise lands on a page they are meant to work through.
+         *
+         * A second request for the same product while the first is still open is
+         * not a thing a buyer means to do; the seller has not replied yet. Once
+         * the first is closed or answered, asking again is legitimate, so the
+         * check is on OPEN requests rather than on any request ever made.
+         *
+         * This is a duplicate check, not a lock — two requests racing can both
+         * pass. That bounds a flood to a handful rather than to nothing, which
+         * is the point; the row it writes is inert, and no money moves here.
+         */
+        if (sellerId === userId) {
+            return { success: false as const, error: "You cannot request a quote on your own listing", data: null };
+        }
+
+        const openRequests = await db.collection(COLLECTIONS.MARKETPLACE_QUOTES)
+            .where("buyerId", "==", userId)
+            .where("productId", "==", data.productId)
+            .where("status", "==", "pending")
+            .limit(1)
+            .get();
+
+        if (!openRequests.empty) {
+            return {
+                success: false as const,
+                error: "You already have an open quote request for this listing. The seller has not replied yet.",
+                data: null,
+            };
+        }
+
         // Fields listed, not spread.
         //
         // `...data` came first and the derived values after it, so the caller's

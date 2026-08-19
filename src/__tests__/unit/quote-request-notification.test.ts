@@ -68,10 +68,15 @@ function setSession(id: string | null, name = 'A Buyer') {
 }
 
 function setProduct(product: Record<string, any> | null) {
+    // One stub answers every read here, document and query alike, so the two
+    // flags have to be set independently: `exists` is the PRODUCT lookup, and
+    // `empty` is the "does this buyer already have an open request" query added
+    // with #125. Tying `empty` to `product === null` made a found product also
+    // mean a found duplicate, and every submission was refused.
     (global as any).mockFirestoreGet.mockImplementation(() => Promise.resolve({
         exists: product !== null,
-        empty: product === null,
-        size: product ? 1 : 0,
+        empty: true,
+        size: 0,
         docs: [],
         data: () => product ?? {},
     }));
