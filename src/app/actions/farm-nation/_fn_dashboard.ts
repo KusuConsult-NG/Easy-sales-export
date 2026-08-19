@@ -56,8 +56,16 @@ async function _getFarmNationDashboardStatsAction(): Promise<ActionResponse<Farm
             status: d.status || 'draft',
             verified: d.status === 'verified',
             name: d.title || 'Unnamed Property',
-            location: d.location?.address || d.location?.lga || '',
-            state: d.location?.state || '',
+            // BOTH location shapes. LAND_LISTINGS holds an object with
+            // address/city/state/lga from the land module, and a plain STRING
+            // with state and lga as siblings from farm-nation's own creation
+            // path. Reading only the object shape left every farm-nation
+            // listing showing a blank location and a blank state on its own
+            // owner's dashboard.
+            location: typeof d.location === 'string'
+                ? d.location
+                : (d.location?.address || d.location?.lga || ''),
+            state: (typeof d.location === 'object' ? d.location?.state : undefined) || d.state || '',
             type: d.category || 'sale',
             createdAt: d.createdAt 
         }));
@@ -98,7 +106,19 @@ async function _getFarmNationDashboardStatsAction(): Promise<ActionResponse<Farm
         const portfolioValue = properties.reduce((sum, p) => sum + p.price, 0);
 
         // Derive stats from transactions (Buyer/Investor)
-        const completedPurchases = transactions.filter(t => t.status === 'completed' || t.status === 'payment_confirmed');
+        /**
+         * A purchase is acquired OR pending, never both.
+         *
+         * `payment_confirmed` was counted in both sets. It means the buyer has
+         * paid and the admin has NOT yet released escrow or transferred the
+         * title — so the same transaction was reported as a property the buyer
+         * owns AND as one still in progress, and its value was added to
+         * "total investment" for land they do not hold yet.
+         *
+         * Ownership transfers when the escrow is released, which is what moves
+         * the transaction to "completed". That is the line.
+         */
+        const completedPurchases = transactions.filter(t => t.status === 'completed');
         const propertiesAcquired = completedPurchases.length;
         const totalInvestmentValue = completedPurchases.reduce((sum, t) => sum + t.amount, 0);
         const pendingTransactions = transactions.filter(
