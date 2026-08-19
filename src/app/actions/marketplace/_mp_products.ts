@@ -210,7 +210,15 @@ async function _createProductAction(prevState: unknown, formData: FormData): Pro
             unit: validatedData.unit,
             location: {
                 state: validatedData.location.state,
-                lga: validatedData.location.lga 
+                lga: validatedData.location.lga,
+                // Collected by both forms, validated into `validatedData`, and
+                // then dropped — the same shape as the certifications defect,
+                // one field over in the same object. /api/marketplace/create-product
+                // writes it, and the seller edit page reads it back into its own
+                // field and re-sends it, so an edit made through that page
+                // silently erased the nearest market the seller had entered and
+                // showed the box empty the next time they opened it.
+                nearestMarket: validatedData.location.nearestMarket,
             },
             deliveryMethod: validatedData.deliveryMethod,
             estimatedDeliveryDays: validatedData.estimatedDeliveryDays,
@@ -419,7 +427,15 @@ async function _updateProductAction(prevState: unknown, formData: FormData): Pro
             unit: validatedData.unit,
             location: {
                 state: validatedData.location.state,
-                lga: validatedData.location.lga 
+                lga: validatedData.location.lga,
+                // Collected by both forms, validated into `validatedData`, and
+                // then dropped — the same shape as the certifications defect,
+                // one field over in the same object. /api/marketplace/create-product
+                // writes it, and the seller edit page reads it back into its own
+                // field and re-sends it, so an edit made through that page
+                // silently erased the nearest market the seller had entered and
+                // showed the box empty the next time they opened it.
+                nearestMarket: validatedData.location.nearestMarket,
             },
             deliveryMethod: validatedData.deliveryMethod,
             estimatedDeliveryDays: validatedData.estimatedDeliveryDays,

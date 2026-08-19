@@ -15,6 +15,7 @@ import {
     PRODUCT_SEARCH_SCAN_LIMIT,
     filterProductsByQuery,
     pageFilteredProducts,
+    categorySpellings,
 } from "@/lib/product-search";
 
 /** Reads a seller's user document, for hydrateSellerTrust. */
@@ -41,8 +42,20 @@ async function _getMarketplaceProductsAction(params: {
 
         let query = db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active") as import("@/lib/supabase-db").SupabaseQuery;
 
-        if (category && category !== "all") { 
-            query = query.where("category", "==", category);
+        /**
+         * Every stored spelling of the category, not just the one asked for.
+         *
+         * This matched the raw string while _buyer.ts and _searchProductsAction
+         * both expanded it through the alias table — so selecting "roots" here
+         * missed every product stored as "tubers", "yam" or "cassava", and the
+         * same choice returned different catalogues depending on which action
+         * the page happened to call. Four category filters, three behaviours.
+         */
+        if (category && category !== "all") {
+            const mapped = categorySpellings(category);
+            query = mapped.length > 1
+                ? query.where("category", "in", mapped)
+                : query.where("category", "==", mapped[0]);
         }
 
         if (location) { 
@@ -91,7 +104,12 @@ async function _getMarketplaceProductsAction(params: {
                 indexError = true;
                 
                 let fallbackQuery = db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active");
-                if (category && category !== "all") fallbackQuery = fallbackQuery.where("category", "==", category);
+                if (category && category !== "all") {
+                    const mapped = categorySpellings(category);
+                    fallbackQuery = mapped.length > 1
+                        ? fallbackQuery.where("category", "in", mapped)
+                        : fallbackQuery.where("category", "==", mapped[0]);
+                }
                 if (location) fallbackQuery = fallbackQuery.where("location.state", "==", location);
                 
                 if (lastId && !searching) {
@@ -444,21 +462,6 @@ async function _getRelatedProductsAction(productId: string, limit: number = 4): 
 export const getRelatedProductsAction = withSafeAction("getRelatedProductsAction", _getRelatedProductsAction);
 
 
-const categoryMapping: Record<string, string[]> = {
-    grains: ["grains", "cereal", "cereals"],
-    roots: ["roots", "roots_tubers", "roots & tubers", "tuber", "tubers", "yam", "yams", "cassava"],
-    vegetables: ["vegetables", "vegetable", "horticultural"],
-    fruits: ["fruits", "fruit"],
-    nuts: ["nuts", "nut", "seed", "seeds", "sesame", "sesame seeds", "sesame_seeds"],
-    spices: ["spices", "spices_herbs_seasonings", "spices & herbs", "spices_herbs", "hibiscus", "zobo"],
-    livestock: ["livestock"],
-    poultry: ["poultry"],
-    dairy: ["dairy", "dairy & eggs", "dairy_eggs"],
-    processed: ["processed", "processed foods", "processed_foods", "natural_oils", "beverages"],
-    organic: ["organic", "organics"],
-    sea_foods: ["sea_foods", "fishery"],
-    fishery: ["fishery", "sea_foods"],
-};
 
 
 /**
@@ -477,7 +480,7 @@ async function _searchProductsAction(params: { query?: string;
             .where("availableQuantity", ">", 0);
 
         if (params.category && params.category !== "All Categories") {
-            const mapped = categoryMapping[params.category.toLowerCase()] || [params.category];
+            const mapped = categorySpellings(params.category);
             if (mapped.length > 1) {
                 query = query.where("category", "in", mapped);
             } else {
@@ -529,7 +532,7 @@ async function _searchProductsAction(params: { query?: string;
                 // Fallback: simple query with status and category
                 let fallbackQuery = db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active");
                 if (params.category && params.category !== "All Categories") {
-                    const mapped = categoryMapping[params.category.toLowerCase()] || [params.category];
+                    const mapped = categorySpellings(params.category);
                     if (mapped.length > 1) {
                         fallbackQuery = fallbackQuery.where("category", "in", mapped);
                     } else {

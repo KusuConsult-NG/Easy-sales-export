@@ -30,6 +30,45 @@
  */
 export const PRODUCT_SEARCH_SCAN_LIMIT = 300;
 
+/**
+ * The category aliases the catalogue was built with, in one place.
+ *
+ * Products have been written with several spellings of the same category —
+ * "roots", "roots_tubers", "tuber", "yam", "cassava" — so a filter for one has
+ * to match all of them. This table existed twice, character for character, in
+ * _buyer.ts and _mp_catalog.ts, and a THIRD reader,
+ * getProductsByCategoryAction, matched the raw string with no mapping at all.
+ * So "roots" returned different products depending on which action the page
+ * happened to call.
+ */
+export const PRODUCT_CATEGORY_ALIASES: Readonly<Record<string, readonly string[]>> = {
+    grains: ["grains", "cereal", "cereals"],
+    roots: ["roots", "roots_tubers", "roots & tubers", "tuber", "tubers", "yam", "yams", "cassava"],
+    vegetables: ["vegetables", "vegetable", "horticultural"],
+    fruits: ["fruits", "fruit"],
+    nuts: ["nuts", "nut", "seed", "seeds", "sesame", "sesame seeds", "sesame_seeds"],
+    spices: ["spices", "spices_herbs_seasonings", "spices & herbs", "spices_herbs", "hibiscus", "zobo"],
+    livestock: ["livestock"],
+    poultry: ["poultry"],
+    dairy: ["dairy", "dairy & eggs", "dairy_eggs"],
+    processed: ["processed", "processed foods", "processed_foods", "natural_oils", "beverages"],
+    organic: ["organic", "organics"],
+    sea_foods: ["sea_foods", "fishery"],
+    fishery: ["fishery", "sea_foods"],
+};
+
+/**
+ * Every stored spelling of a requested category.
+ *
+ * An unknown category maps to itself, so a filter for something not in the table
+ * still matches rows stored under exactly that name.
+ */
+export function categorySpellings(category: string): string[] {
+    const key = String(category ?? "").toLowerCase();
+    const mapped = PRODUCT_CATEGORY_ALIASES[key];
+    return mapped ? [...mapped] : [String(category ?? "")];
+}
+
 /** A row this module can page: anything with an id. */
 export interface Identified { id?: string | null }
 

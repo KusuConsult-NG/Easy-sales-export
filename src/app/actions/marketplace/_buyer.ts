@@ -16,6 +16,7 @@ import { notifyOrderCancelled } from "@/lib/marketplace-notifications";
 
 import { runQueryWithRetry } from "@/lib/firestore-utils";
 import { hydrateSellerTrust } from "@/lib/seller-trust";
+import { categorySpellings } from "@/lib/product-search";
 
 /**
  * Reads a seller's user document, for hydrateSellerTrust.
@@ -63,21 +64,6 @@ export interface ProductFilters {
     searchTerm?: string; 
 }
 
-const categoryMapping: Record<string, string[]> = {
-    grains: ["grains", "cereal", "cereals"],
-    roots: ["roots", "roots_tubers", "roots & tubers", "tuber", "tubers", "yam", "yams", "cassava"],
-    vegetables: ["vegetables", "vegetable", "horticultural"],
-    fruits: ["fruits", "fruit"],
-    nuts: ["nuts", "nut", "seed", "seeds", "sesame", "sesame seeds", "sesame_seeds"],
-    spices: ["spices", "spices_herbs_seasonings", "spices & herbs", "spices_herbs", "hibiscus", "zobo"],
-    livestock: ["livestock"],
-    poultry: ["poultry"],
-    dairy: ["dairy", "dairy & eggs", "dairy_eggs"],
-    processed: ["processed", "processed foods", "processed_foods", "natural_oils", "beverages"],
-    organic: ["organic", "organics"],
-    sea_foods: ["sea_foods", "fishery"],
-    fishery: ["fishery", "sea_foods"],
-};
 
 /**
  * Get products with filtering
@@ -88,7 +74,7 @@ async function _getProductsAction(filters?: ProductFilters): Promise<ActionRespo
 
         // Apply Firestore-supported filters
         if (filters?.category && filters.category !== "all") { 
-            const mapped = categoryMapping[filters.category.toLowerCase()] || [filters.category];
+            const mapped = categorySpellings(filters.category);
             if (mapped.length > 1) {
                 query = query.where("category", "in", mapped);
             } else {
@@ -121,7 +107,7 @@ async function _getProductsAction(filters?: ProductFilters): Promise<ActionRespo
                 // Fallback: only filter by status and category at DB level
                 let fallbackQuery = db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active");
                 if (filters?.category && filters.category !== "all") {
-                    const mapped = categoryMapping[filters.category.toLowerCase()] || [filters.category];
+                    const mapped = categorySpellings(filters.category);
                     if (mapped.length > 1) {
                         fallbackQuery = fallbackQuery.where("category", "in", mapped);
                     } else {
@@ -156,9 +142,25 @@ async function _getProductsAction(filters?: ProductFilters): Promise<ActionRespo
         }
 
         // Client-side filters (for complex/non-indexed queries)
-        if (filters?.minPrice !== undefined || filters?.maxPrice !== undefined) { 
+        /**
+         * One malformed row must not take down the whole catalogue.
+         *
+         * `product.pricingTiers[0]?.price` guards the ELEMENT and not the ARRAY,
+         * so a product stored without `pricingTiers` throws a TypeError here —
+         * inside the try, so the catch turns it into "Failed to fetch products"
+         * and the buyer sees an empty page rather than the other 299 products.
+         * `product.location.lga` below had no guard at all. It is the same
+         * mistake as `createdAt?.toMillis()` in the sort-key finding: optional
+         * chaining on the property, then an unconditional use of the result.
+         *
+         * Nothing this file writes omits either field. Neither does anything
+         * guarantee it — these rows are written by two product creators, an
+         * update route with an allow-list, and whatever imported the catalogue
+         * before them — and the cost of being wrong is the entire page.
+         */
+        if (filters?.minPrice !== undefined || filters?.maxPrice !== undefined) {
             products = products.filter(product => {
-                const price = product.pricingTiers[0]?.price || 0;
+                const price = product.pricingTiers?.[0]?.price || 0;
                 const meetsMin = filters.minPrice === undefined || price >= filters.minPrice;
                 const meetsMax = filters.maxPrice === undefined || price <= filters.maxPrice;
                 return meetsMin && meetsMax;
@@ -174,7 +176,7 @@ async function _getProductsAction(filters?: ProductFilters): Promise<ActionRespo
         }
 
         if (filters?.lga) {
-            products = products.filter(product => product.location.lga === filters.lga);
+            products = products.filter(product => product.location?.lga === filters.lga);
         }
 
         // Seller name and badge, live — see readSeller above for why this file
@@ -245,9 +247,13 @@ export const getFeaturedProductsAction = withSafeAction("getFeaturedProductsActi
  */
 async function _getProductsByCategoryAction(category: string): Promise<ActionResponse<{ products: Product[] }>> { 
     try {
+        // The shared alias table, like every other category filter. This one
+        // matched the raw string, so it returned a different set of products
+        // from getProductsAction for the same category name.
+        const mapped = categorySpellings(category);
         const snapshot = await db.collection(COLLECTIONS.PRODUCTS)
             .where("status", "==", "active")
-            .where("category", "==", category)
+            .where("category", mapped.length > 1 ? "in" : "==", mapped.length > 1 ? mapped : mapped[0])
             .limit(PRODUCT_QUERY_CAP)
             .get();
 

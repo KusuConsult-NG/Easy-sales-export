@@ -169,6 +169,18 @@ describe('getMarketplaceProductsAction', () => {
         expect(titlesOf(await list({ location: 'Lagos', limit: 10 }))).toHaveLength(0);
     });
 
+    it('FINDS A PRODUCT STORED UNDER AN ALIAS OF THE CATEGORY', async () => {
+        // #131. This matched the raw string while _buyer.ts and
+        // searchProductsAction both expanded it through the alias table, so
+        // selecting "roots" on /marketplace/products missed every product
+        // stored as "tubers", "yam" or "cassava" — and the same choice returned
+        // a different catalogue depending on which action the page called.
+        seedProducts(['Yam', 'Rice']);
+        store.seed(PRODUCTS, 'p0', { ...store.get(PRODUCTS, 'p0'), category: 'tubers' });
+
+        expect(titlesOf(await list({ category: 'roots', limit: 10 }))).toEqual(['Yam']);
+    });
+
     it('pages an unfiltered list through the database', async () => {
         seedProducts(['A', 'B', 'C', 'D']);
 
