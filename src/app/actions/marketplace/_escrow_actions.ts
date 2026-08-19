@@ -95,6 +95,29 @@ async function _getAllEscrowTransactionsAdmin(options: { status?: EscrowStatus;
         if (!isAdmin(callerRoles)) { return { success: false as const, error: "Admin access required", data: null };
         }
 
+        /**
+         * Bank details go only to the callers who can actually pay them out.
+         *
+         * This list hydrates BOTH parties of every escrow with their account
+         * number, account name, bank code, email and phone — and its gate was
+         * isAdmin(), true for all TEN admin roles. So an academy_admin or a
+         * wave_admin could open /admin/marketplace/escrow and read the banking
+         * instrument of every buyer and seller on the platform, in bulk.
+         *
+         * The withdrawal list had exactly this defect and was closed by
+         * requiring the permission that lets you process the payout. The same
+         * line applies here: releaseEscrowFunds and refundEscrowToBuyer, the two
+         * actions this screen exists to drive, both require
+         * "finance:resolve_disputes", and the page renders bank details ONLY
+         * inside their confirmation modal.
+         *
+         * Names, emails and phone numbers stay for every admin — they are what
+         * the list and its search are built on, and losing them would break the
+         * screen for the module admin who runs it. The account is the part that
+         * needs the higher bar.
+         */
+        const maySeeBankDetails = hasAdminPermission(callerRoles, "finance:resolve_disputes");
+
         const fetchLimit = options.search ? 5000 : (options.limit || 50);
         const sortDirection = options.sortOrder || "desc";
         let q = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS);
@@ -154,12 +177,16 @@ async function _getAllEscrowTransactionsAdmin(options: { status?: EscrowStatus;
                     lastName: data.lastName,
                     email: data.email,
                     phoneNumber: data.phoneNumber || data.phone || "N/A",
-                    bankDetails: data.bankDetails || {
-                        bankName: data.bankName || data.bankAccount?.bankName || "N/A",
-                        accountNumber: data.accountNumber || data.bankAccountNumber || data.bankAccount?.accountNumber || "N/A",
-                        accountName: data.accountName || data.bankAccountName || data.bankAccount?.accountName || "N/A",
-                        bankCode: data.bankCode || data.bankAccount?.bankCode || "N/A"
-                    }
+                    ...(maySeeBankDetails
+                        ? {
+                            bankDetails: data.bankDetails || {
+                                bankName: data.bankName || data.bankAccount?.bankName || "N/A",
+                                accountNumber: data.accountNumber || data.bankAccountNumber || data.bankAccount?.accountNumber || "N/A",
+                                accountName: data.accountName || data.bankAccountName || data.bankAccount?.accountName || "N/A",
+                                bankCode: data.bankCode || data.bankAccount?.bankCode || "N/A"
+                            }
+                        }
+                        : {}),
                 };
             }));
         }
