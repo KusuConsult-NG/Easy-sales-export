@@ -30,6 +30,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { serializeDoc, serializeDocs, toMillis } from "@/lib/firestore-serialize";
 import { toDate } from "@/lib/date-utils";
+import { isActiveOrderStatus } from "@/lib/order-status";
 import { logger } from "@/lib/logger";
 
 /** The signed-in user's id, or null when unauthenticated. */
@@ -184,15 +185,29 @@ export async function getMyActiveOrderCount(): Promise<number> {
     const userId = await currentUserId();
     if (!userId) return 0;
 
-    const ACTIVE = new Set(["pending", "confirmed", "processing", "shipped"]);
-
+    // `status`, and the SHARED set.
+    //
+    // TWO FAULTS, EITHER OF WHICH ALONE MADE THIS ZERO.
+    //
+    // It read `orderStatus`. Every writer of MARKETPLACE_ORDERS sets `status`
+    // — _payment_orders.ts writes `status: "pending_payment"`, the dispute path
+    // transitions `status`, the fulfilment paths update `status`. `orderStatus`
+    // exists only on the MarketplaceOrder interface and in this one filter, so
+    // it was undefined on every real order and the dashboard's Active Orders
+    // tile showed 0 for every buyer, however many orders they had in flight.
+    //
+    // And the hand-written set was the wrong vocabulary: "pending" and
+    // "confirmed" are not statuses any writer produces, while pending_payment,
+    // payment_received and disputed — three of the five states an order is
+    // actually live in — were missing. lib/order-status.ts already owns this
+    // rule; this was a fifth copy of it, on the wrong field.
     try {
         const snap = await db
             .collection(COLLECTIONS.MARKETPLACE_ORDERS)
             .where("buyerId", "==", userId)
             .get();
 
-        return snap.docs.filter(d => ACTIVE.has(d.data().orderStatus)).length;
+        return snap.docs.filter(d => isActiveOrderStatus(d.data().status)).length;
     } catch (error) {
         logger.error("[my-data] getMyActiveOrderCount failed", { userId, error });
         return 0;

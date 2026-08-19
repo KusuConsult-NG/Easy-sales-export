@@ -74,9 +74,21 @@ export async function GET(
         let avgRating = 0;
         let reviewCount = 0;
         try {
+            // APPROVED ONLY, like every other reader of this figure.
+            //
+            // This counted every seller review regardless of status, so the
+            // public rating included reviews still waiting on a moderator AND
+            // reviews a moderator had explicitly REJECTED. getSellerReviewSummaryAction
+            // computes the same average from the same collection with
+            // `status == "approved"`, so the platform showed two different
+            // ratings for one seller and the permissive one was the public route.
+            //
+            // Rejecting a fake one-star changed nothing a buyer could see here,
+            // which is the one thing the moderation queue exists for.
             const reviewSnap = await db
                 .collection(COLLECTIONS.SELLER_REVIEWS)
                 .where("sellerId", "==", sellerId)
+                .where("status", "==", "approved")
                 .get();
 
             reviewCount = reviewSnap.size;
