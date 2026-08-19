@@ -14,6 +14,20 @@ import { pushDisputeResolved } from "@/lib/fcm";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import type { Dispute, EscrowTransaction } from "@/lib/types/marketplace-escrow";
 import { ESCROW_DISPUTEABLE_STATUSES } from "@/lib/escrow-status";
+import { creditWalletOnce } from "@/lib/wallet-ledger";
+
+/**
+ * The two outcomes this resolver understands.
+ *
+ * The parameter is typed `"release_seller" | "refund_buyer"`, which is a
+ * compile-time claim on a server action — the argument arrives as whatever was
+ * sent. Every use below is `outcome === "release_seller" ? A : B`, so ANY other
+ * string fell through to B and silently refunded the buyer: the escrow was
+ * marked "refunded", the buyer credited, and both parties told the case was
+ * decided against the seller. actions/disputes.ts validates its resolution for
+ * exactly this reason — a "no_action" outcome used to refund there too.
+ */
+const DISPUTE_OUTCOMES = ["release_seller", "refund_buyer"] as const;
 
 /**
  * Create dispute.
@@ -227,7 +241,15 @@ export async function createDisputeAction(data: Parameters<typeof _createDispute
  * Admin resolves dispute.
  *
  * Uses requireAdmin() for live role re-validation.
- * Uses a transaction to atomically update both dispute and escrow documents.
+ *
+ * NOTHING CALLS THIS. The admin dispute screen resolves through
+ * actions/disputes.ts — which supports partial refunds, credits through the
+ * ledger primitive and validates its resolution — and calls into this file only
+ * for escalateDisputeAction below. `index.ts` re-exports the module, so this is
+ * a registered server action rather than dead code, and it is the second copy
+ * of a money path: every defect fixed in the live resolver had to be fixed here
+ * too, because a copy nobody runs is a copy nobody notices drifting. Removing a
+ * "use server" export is the owner's call, not a side effect of a bug fix.
  */
 async function _resolveDisputeAction(
     disputeId: string,
@@ -240,6 +262,27 @@ async function _resolveDisputeAction(
     const adminCheck = await requireAdmin();
     if ("error" in adminCheck) {
         return { success: false as const, error: adminCheck.error};
+    }
+
+    /**
+     * The admin who is actually signed in, not the one the caller names.
+     *
+     * `adminId` is a PARAMETER. requireAdmin() above proves the caller is an
+     * admin, and then every attribution below — `resolvedBy` on the dispute,
+     * `releasedBy` on the escrow, and the `userId` on the audit row — was taken
+     * from the argument instead. So one admin could resolve a dispute and record
+     * a colleague as having decided it, in the audit log meant to establish who
+     * released the money. The argument is kept in the signature (callers pass
+     * it) and no longer decides anything.
+     */
+    const actingAdminId = (adminCheck as { userId: string }).userId || adminId;
+
+    if (!(DISPUTE_OUTCOMES as readonly string[]).includes(String(outcome))) {
+        return {
+            success: false as const,
+            error: `Unknown outcome '${String(outcome)}'. Expected one of: ${DISPUTE_OUTCOMES.join(", ")}`,
+            data: null,
+        };
     }
 
     try {
@@ -265,12 +308,38 @@ async function _resolveDisputeAction(
         }
         const preDispute = disputeSnap.data() as Dispute;
 
+        /**
+         * The escrow is read BEFORE the dispute is claimed.
+         *
+         * It used to be read inside the transaction that follows the claim, and
+         * a missing or unreadable escrow threw there — leaving the dispute
+         * already marked "resolved", with a resolution and a resolver recorded,
+         * and no money moved. A second attempt then fails the claim ("already
+         * resolved"), so there is no way back through this action: the case is
+         * closed, nobody has been paid, and the admin is told it failed.
+         *
+         * Checking first turns that into a refusal that changes nothing.
+         */
+        const preEscrowSnap = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
+            .doc(String(preDispute.escrowId ?? ""))
+            .get();
+
+        if (!preEscrowSnap.exists) {
+            return { success: false as const, error: "Escrow transaction not found", data: null };
+        }
+
+        const preEscrow = preEscrowSnap.data() as EscrowTransaction;
+        const escrowAmount = Number(preEscrow.amount);
+        if (!Number.isFinite(escrowAmount) || escrowAmount <= 0) {
+            return { success: false as const, error: "This escrow has no valid amount to settle", data: null };
+        }
+
         let claim = await claimStatusTransition({
             collection: COLLECTIONS.DISPUTES,
             id: disputeId,
             from: "open",
             to: "resolved",
-            patch: { resolution, resolvedBy: adminId, resolvedAt: new Date().toISOString() },
+            patch: { resolution, resolvedBy: actingAdminId, resolvedAt: new Date().toISOString() },
         });
 
         if (!claim.claimed) {
@@ -279,7 +348,7 @@ async function _resolveDisputeAction(
                 id: disputeId,
                 from: "under_review",
                 to: "resolved",
-                patch: { resolution, resolvedBy: adminId, resolvedAt: new Date().toISOString() },
+                patch: { resolution, resolvedBy: actingAdminId, resolvedAt: new Date().toISOString() },
             });
         }
 
@@ -294,78 +363,105 @@ async function _resolveDisputeAction(
         escrowId = preDispute.escrowId;
         disputeData = preDispute;
 
-        await db.runTransaction(async (tx) => {
-            const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId!);
-            const escrowDoc = await tx.get(escrowRef);
-            if (!escrowDoc.exists) throw new Error("Escrow transaction not found");
-            const escrowData = escrowDoc.data() as EscrowTransaction;
+        const releasingToSeller = outcome === "release_seller";
+        const targetId = releasingToSeller ? preEscrow.sellerId : preEscrow.buyerId;
 
-            // 2. Update escrow status
-            const finalStatus = outcome === "release_seller" ? "released" : "refunded";
-            tx.update(escrowRef, { 
-                status: finalStatus,
-                releasedBy: adminId,
-                [outcome === "release_seller" ? "releasedAt" : "refundedAt"]: FieldValue.serverTimestamp() 
+        /**
+         * A seller wins the NET, the same figure an ordinary release pays.
+         *
+         * This credited `escrowData.amount` — the gross — so resolving a dispute
+         * in the seller's favour handed over the platform fee that every
+         * undisputed sale now withholds. Two release paths disagreeing about
+         * what a seller is owed, which is the shape this audit has already found
+         * twice on the escrow side.
+         *
+         * A refund is unchanged: the buyer gets back what they paid in, fee
+         * included. That is the rule the live resolver in actions/disputes.ts
+         * follows too.
+         */
+        const netAmount = Number((preEscrow as { netAmount?: unknown }).netAmount);
+        const sellerPayout = Number.isFinite(netAmount) && netAmount > 0 ? netAmount : escrowAmount;
+        const payoutAmount = releasingToSeller ? sellerPayout : escrowAmount;
+
+        /**
+         * The money moves through the ledger primitive, not by hand.
+         *
+         * The block that was here read the wallet and wrote a computed balance
+         * inside runTransaction — which takes NO LOCK in this adapter — with no
+         * idempotency reference at all. It is the exact shape its sibling in
+         * _escrow_lifecycle.ts documents as replaced. creditWalletOnce moves the
+         * balance in SQL and keys on the dispute, so a retry is a no-op rather
+         * than a second payout.
+         *
+         * `DISPUTE-RES-${disputeId}` is deliberately the SAME reference the live
+         * resolver in actions/disputes.ts uses. The two copies wrote the same
+         * global-ledger id already; sharing the claim key means that if both ever
+         * ran for one dispute, the second credits nothing instead of paying
+         * twice and overwriting the first one's ledger row.
+         */
+        const credit = await creditWalletOnce({
+            reference: `DISPUTE-RES-${disputeId}`,
+            userId: targetId,
+            amount: payoutAmount,
+            paymentType: releasingToSeller ? "dispute_payout" : "dispute_refund",
+            source: "escrow",
+            status: releasingToSeller ? "disbursement" : "refund",
+            metadata: { disputeId, escrowId, outcome },
+        });
+
+        if (!credit.claimed) {
+            logger.warn("[resolveDisputeAction] wallet credit was already claimed; ledger rows left untouched", {
+                disputeId, escrowId, targetId,
             });
+        }
 
-            // 3. Financial Action (Wallet Credit/Refund)
-            const targetId = outcome === "release_seller" ? escrowData.sellerId : escrowData.buyerId;
-            const walletRef = db.collection(COLLECTIONS.WALLETS).doc(targetId);
-            const walletSnap = await tx.get(walletRef);
-            let balanceBefore = 0;
+        const balanceAfter = credit.balance;
+        const balanceBefore = credit.claimed ? balanceAfter - payoutAmount : balanceAfter;
 
-            if (!walletSnap.exists) {
-                tx.set(walletRef, {
-                    userId: targetId,
-                    balance: escrowData.amount,
-                    currency: "NGN",
-                    createdAt: FieldValue.serverTimestamp(),
-                    updatedAt: FieldValue.serverTimestamp()
-                });
-            } else {
-                balanceBefore = walletSnap.data()?.balance || 0;
-                tx.update(walletRef, {
-                    balance: FieldValue.increment(escrowData.amount),
-                    updatedAt: FieldValue.serverTimestamp()
-                });
-            }
+        const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId!);
+        await escrowRef.update({
+            status: releasingToSeller ? "released" : "refunded",
+            releasedBy: actingAdminId,
+            [releasingToSeller ? "releasedAt" : "refundedAt"]: FieldValue.serverTimestamp()
+        });
 
-            // Record transaction in target's wallet_transactions history
-            const targetTxnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc();
-            tx.set(targetTxnRef, {
-                id: targetTxnRef.id,
+        if (credit.claimed) {
+            // Both ledger rows keyed on the dispute rather than auto-generated,
+            // so a retry overwrites its own row instead of showing the payee two
+            // settlements for one decision.
+            const txId = `DISPUTE-RES-${disputeId}`;
+
+            await db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc(txId).set({
+                id: txId,
                 walletId: targetId,
                 userId: targetId,
-                type: outcome === "release_seller" ? "funding" : "refund",
-                amount: escrowData.amount,
+                type: releasingToSeller ? "funding" : "refund",
+                amount: payoutAmount,
                 balanceBefore,
-                balanceAfter: balanceBefore + escrowData.amount,
+                balanceAfter,
                 reference: escrowId,
-                description: `Dispute Resolution (${outcome}) for escrow #${escrowId.substring(0, 8)}`,
+                description: `Dispute Resolution (${outcome}) for escrow #${String(escrowId).substring(0, 8)}`,
                 status: "completed",
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp()
             });
 
-            // 4. Record in Global Ledger
-            const txId = `DISPUTE-RES-${disputeId}`;
-            const txRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(txId);
-            tx.set(txRef, {
+            await db.collection(COLLECTIONS.TRANSACTIONS).doc(txId).set({
                 id: txId,
                 userId: targetId,
-                type: outcome === "release_seller" ? "dispute_payout" : "dispute_refund",
+                type: releasingToSeller ? "dispute_payout" : "dispute_refund",
                 module: "escrow",
-                amount: escrowData.amount,
+                amount: payoutAmount,
                 currency: "NGN",
                 status: "completed",
                 date: FieldValue.serverTimestamp(),
                 reference: escrowId,
-                description: `Dispute Resolution (${outcome}) for "${escrowData.productName}"`
+                description: `Dispute Resolution (${outcome}) for "${preEscrow.productName}"`
             });
-        });
+        }
 
         await createAdminAuditLog({ action: "dispute_resolved",
-            userId: adminId,
+            userId: actingAdminId,
             targetId: disputeId,
             targetType: "dispute",
             metadata: {
