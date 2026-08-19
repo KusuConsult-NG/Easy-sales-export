@@ -305,8 +305,16 @@ function filterField(field: unknown): string {
     return String(field);
 }
 
-function matches(doc: Doc, f: Filter): boolean {
-    const actual = getPath(doc, filterField(f.field));
+function matches(doc: Doc, filter: Filter): boolean {
+    const actual = getPath(doc, filterField(filter.field));
+
+    // The comparison value is FLATTENED first — a Date or a Timestamp becomes
+    // its ISO string, and an array of them is mapped element by element. That is
+    // applyJsonbFilter's own normalisation (`value instanceof Date ->
+    // toISOString()`), and without it a date-range filter compares
+    // "Wed May 18 2026 00:00:00 GMT+0000" against "2026-05-18T00:00:00.000Z"
+    // and answers nonsense — silently, in the direction of matching nothing.
+    const f: Filter = { ...filter, value: flattenTimestamps(filter.value) };
 
     switch (f.op) {
         case '==':

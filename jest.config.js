@@ -62,7 +62,7 @@ const customJestConfig = {
      *   admin/_academy               8.8 -> 80.9
      *   academy/_ac_progress         6.2 -> 92.3
      *
-     * AND AGAIN, 41/31 -> 45/35:
+     * AND AGAIN, 41/31 -> 46/36:
      *
      *   wave/_wv_applications        11.1 -> 93.1
      *   farm-nation/_fn_onboarding    5.3 -> 88.9
@@ -71,6 +71,8 @@ const customJestConfig = {
      *   marketplace/_mp_onboarding    7.6 -> 90.4
      *   farm-nation/_fn_listings     11.2 -> 87.5
      *   marketplace/_mp_seller_dashboard 7.3 -> 73.7
+     *   cooperative/_coop_admin_reports  4.5 -> 92.6
+     *   cooperative/_coop_admin_members 22.7 -> 88.4
      *
      * Several of them found a defect on the way — see #77 to #83.
      *
@@ -91,10 +93,10 @@ const customJestConfig = {
      */
     coverageThreshold: {
         global: {
-            branches: 35,
-            functions: 37,
-            lines: 46,
-            statements: 45,
+            branches: 36,
+            functions: 38,
+            lines: 47,
+            statements: 46,
         },
     },
     testMatch: [
