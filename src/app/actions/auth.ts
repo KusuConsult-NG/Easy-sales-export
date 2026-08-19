@@ -18,7 +18,7 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { rateLimit, getActionClientIp } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
-import { normalisePhone } from '@/lib/phone';
+import { normalisePhone, phoneLookupVariants } from '@/lib/phone';
 
 const loginLimiter = rateLimit(rateLimitConfig.login);
 
@@ -558,8 +558,17 @@ export async function registerAction(prevState: any, formData: FormData) { const
         // 🔒 DEDUP GUARD: Check phone uniqueness before touching Firebase Auth
         // Prevents multi-account fraud (same phone, different email addresses)
         const normalisedPhone = normalisePhone(validatedData.phone) || validatedData.phone;
-        if (normalisedPhone) { const phoneCheck = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS)
-                .where("phone", "==", normalisedPhone)
+        // EVERY spelling that might be stored, not just the normalised one.
+        //
+        // This action normalises before it writes, so an account created HERE
+        // carries +234…. The bulk member import, seller approval, export
+        // onboarding and the KYC action all write the raw value to the same
+        // field — so asking only for +234… could not see a member who arrived by
+        // any of those routes, and the bulk import is where most members came
+        // from. See phoneLookupVariants.
+        const phoneVariants = phoneLookupVariants(validatedData.phone);
+        if (phoneVariants.length > 0) { const phoneCheck = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS)
+                .where("phone", "in", phoneVariants)
                 .limit(1)
                 .get());
             if (!phoneCheck.empty) {
