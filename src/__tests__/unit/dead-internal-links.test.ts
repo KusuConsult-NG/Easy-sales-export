@@ -232,13 +232,32 @@ describe('the marketplace and escrow surfaces', () => {
  * Removing an entry when it is fixed is the point. Adding one requires saying so
  * here, which is the review conversation this property needs.
  */
-const KNOWN_DEAD: Record<string, number> = {
-    '/vendor/products/new': 2,
-    '/farm-nation/properties/[dyn]': 1,
-    '/help/api-docs': 1,
-    '/vendor/orders/[dyn]': 1,
-    '/vendor/products/[dyn]': 1,
-};
+const KNOWN_DEAD: Record<string, number> = {};
+
+/**
+ * EMPTY. Every dead internal link in the tree is fixed, so this is now a gate
+ * over the WHOLE application rather than a ratchet over a known remainder.
+ *
+ * The last six went as follows:
+ *
+ *   /vendor/products/new        2x  ) all four went with the /vendor surface
+ *   /vendor/orders/[dyn]        1x  ) itself, which was removed rather than
+ *   /vendor/products/[dyn]      1x  ) finished — see vendor-surface-removed.
+ *   /farm-nation/properties/[dyn] 1x  the "view my property" link on the member
+ *                                     dashboard. /properties is the LIST and
+ *                                     has no [id] segment; the detail page is
+ *                                     /property/[id], singular. Relinked.
+ *   /help/api-docs              1x  a "resource" card advertising API
+ *                                     documentation that does not exist, on a
+ *                                     platform with no public API. The card was
+ *                                     removed rather than pointed at "#" like
+ *                                     its three siblings, because an inert card
+ *                                     that looks clickable is the defect this
+ *                                     audit removed elsewhere.
+ *
+ * Adding an entry back requires saying why here, which is the review
+ * conversation this property needs.
+ */
 
 /**
  * The two admin entries are gone, fixed in the admin pass. They were:
@@ -354,18 +373,44 @@ describe('the rest of the tree', () => {
         expect({ added, grown }).toEqual({ added: [], grown: [] });
     });
 
-    it('still finds the ones already known, so the gate is not vacuous', () => {
-        // A scanner returning [] passes every assertion above and proves nothing.
+    it('and the scanner can still find one, so [] means clean', () => {
+        // THE vacuity guard, and it had to change shape.
         //
-        // Was 20 when twenty-six links were dead. Eight were academy's, four
-        // export's, six the cooperative's and two admin's; the floor tracks what
-        // is genuinely left rather than being a number nobody revisits.
+        // It used to be a floor — "at least N dead links are still known" —
+        // which worked only while a remainder existed. The remainder is now
+        // zero, and a scanner that silently returned [] for every input would
+        // pass every assertion above while proving nothing.
         //
-        // What remains is vendor (4), plus one each in farm-nation and help.
-        // Every vendor entry is #60's business — whether /vendor should exist at
-        // all is an owner decision, so building routes for it here would be
-        // finishing a surface nobody has decided to keep.
-        expect(dead.length).toBeGreaterThanOrEqual(6);
+        // So instead: run the SAME function over a throwaway tree containing one
+        // link that is deliberately dead. If it finds that, an empty result on
+        // the real tree means the tree is clean rather than the scanner broken.
+        const dir = mkdtempSync(join(tmpdir(), 'deadlink-control-'));
+        try {
+            mkdirSync(join(dir, 'app', 'real'), { recursive: true });
+            writeFileSync(join(dir, 'app', 'real', 'page.tsx'), 'export default function P() { return null; }');
+            mkdirSync(join(dir, 'components'), { recursive: true });
+            writeFileSync(
+                join(dir, 'components', 'Thing.tsx'),
+                'export const A = () => <a href="/definitely-not-a-route">x</a>;\n',
+            );
+
+            const found = scanForDeadLinks([join(dir, 'components')], dir, join(dir, 'app'));
+
+            expect(found.map((d) => d.href)).toContain('/definitely-not-a-route');
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
+    });
+
+    it('the real tree being clean, which is now a gate over all of it', () => {
+        // Was a ratchet with six known entries. It is a gate now.
+        if (dead.length > 0) {
+            throw new Error(
+                `\n\n⚠️  ${dead.length} dead internal link(s):\n\n` +
+                dead.map((d) => `  ${d.file}:${d.line}\n      ${d.href}`).join('\n') + '\n',
+            );
+        }
+        expect(dead).toEqual([]);
     });
 
     it('the wallet withdrawal notification links to the page that processes it', () => {

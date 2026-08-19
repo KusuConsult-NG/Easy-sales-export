@@ -297,7 +297,10 @@ export default function FarmNationDashboard() {
                                             {formatCurrency(prop.price)}
                                         </p>
                                         <Link
-                                            href={`/farm-nation/properties/${prop.id}`}
+                                            // /properties is the LIST and has no [id] segment; the
+                                            // detail page is /property/[id], singular. Every "view
+                                            // my property" link from the member dashboard 404'd.
+                                            href={`/farm-nation/property/${prop.id}`}
                                             className="inline-flex items-center gap-1 text-xs text-emerald-600 hover:underline mt-1"
                                         >
                                             <Eye className="w-3 h-3" />

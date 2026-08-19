@@ -332,11 +332,14 @@ describe('the dead segment list is gone', () => {
         // checkout page and on easysalesexportng.com the buyer area had no
         // middleware gate at all. They are in PROTECTED_PATHS now. The other
         // nineteen were already covered.
+        // '/vendor' is absent from this list on purpose: the surface it named
+        // was removed outright (see vendor-surface-removed.test.ts), so there
+        // is no page left to protect and PROTECTED_PATHS no longer names it.
         const CARRIED = [
             '/onboarding', '/checkout', '/payment', '/verify-payment', '/briefing',
             '/application', '/setup', '/buyer', '/seller', '/sell', '/list-land',
             '/dashboard', '/profile', '/settings', '/messages', '/escrow', '/loans',
-            '/admin', '/verify-id', '/verify-status', '/vendor',
+            '/admin', '/verify-id', '/verify-status',
         ];
         expect(CARRIED.filter((s) => !isProtectedPath(s))).toEqual([]);
     });

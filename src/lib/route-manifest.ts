@@ -200,7 +200,6 @@ export const PROTECTED_PATHS = [
     "/verify-id",
     "/verify-status",
     "/messages",
-    "/vendor",
     "/loans",
     "/admin",
 ] as const;

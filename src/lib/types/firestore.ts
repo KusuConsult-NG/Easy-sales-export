@@ -480,11 +480,19 @@ export const COLLECTIONS = {
     SYSTEM_SETTINGS: "system_settings",
 
     // Vendor
+    // VENDOR_PRODUCTS, VENDOR_ORDERS and VENDOR_REVIEWS were removed with the
+    // /vendor surface. Nothing wrote any of the three: vendor_products was read
+    // in four places and written in none, so its catalogue was permanently
+    // empty, and vendor_orders and vendor_reviews were declared here and
+    // referenced nowhere at all.
+    //
+    // VENDOR_SETTINGS and VENDOR_PROFILES stay. admin/_legacy.ts writes the
+    // first during legacy migration, and marketplace/_mp_products.ts reads the
+    // second for a seller-name fallback — this app creates no vendor_profiles
+    // row, but legacy data may exist and removing the read would silently
+    // change seller names on new products.
     VENDOR_SETTINGS: "vendor_settings",
-    VENDOR_REVIEWS: "vendor_reviews",
     // @deprecated Use MARKETPLACE_ORDERS moving forward to prevent fragmentation
-    VENDOR_ORDERS: "vendor_orders",
-    VENDOR_PRODUCTS: "vendor_products",
     VENDOR_PROFILES: "vendor_profiles",
 
     // WAVE Resource Access

@@ -76,7 +76,6 @@ const PERSONA_BY_PREFIX: Array<{ prefix: string; user: keyof typeof USERS | null
     { prefix: '/marketplace/seller', user: 'seller' },
     { prefix: '/marketplace/buyer', user: 'buyer' },
     { prefix: '/marketplace', user: 'buyer' },
-    { prefix: '/vendor', user: 'seller' },
     { prefix: '/cooperatives', user: 'cooperative' },
     { prefix: '/academy', user: 'academy' },
     { prefix: '/wave', user: 'wave' },
