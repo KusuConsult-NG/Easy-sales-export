@@ -24,7 +24,7 @@ import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import type { Wallet, WalletTransaction } from "@/lib/types/marketplace";
 import { smsWithdrawalApproved, smsWithdrawalRejected } from "@/lib/africastalking";
 import { pushWithdrawalDecision } from "@/lib/fcm";
-import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
+import { hasAdminPermission, rolesWithPermission } from "@/lib/admin-permissions";
 import { ActionResponse, withSafeAction } from "@/lib/safe-action";
 import { getFeatureToggle } from "./feature-toggles";
 import { z } from "zod";
@@ -453,13 +453,24 @@ async function _walletCheckoutAction(
     }
 
     // Ledger records, written after the money moved.
+    //
+    // THE AMOUNT DEBITED, NOT THE AMOUNT REQUESTED.
+    //
+    // The caller-controlled `amountNGN` was replaced by `orderTotal` in the
+    // debit above, and the comment there says the parameter "is deliberately
+    // ignored" — but both ledger writes below still used it. So the wallet was
+    // charged the right figure while two rows marked `status: "completed"`
+    // recorded whatever the request asked for: a ₦1 purchase row against a
+    // ₦50,000 order, from the same call. Reconciliation reads exactly these
+    // rows to decide whether a payment produced what it should have, so the
+    // half-applied fix left the discrepancy where it does the most harm.
     const shortId = orderId.substring(0, 8).toUpperCase();
     const txnRef = db.collection(TXN_COLLECTION).doc();
     await txnRef.set({
         walletId: userId,
         userId,
         type: "purchase",
-        amount: -amountNGN, // Negative = debit
+        amount: -orderTotal, // Negative = debit
         balanceAfter: newBalance,
         orderId,
         description: `Marketplace purchase — Order #${shortId}`,
@@ -473,7 +484,7 @@ async function _walletCheckoutAction(
         userId,
         type: "purchase",
         module: "wallet",
-        amount: -amountNGN, // Explicitly negative to show debit in ledger.
+        amount: -orderTotal, // Explicitly negative to show debit in ledger.
         currency: "NGN",
         status: "completed",
         date: FieldValue.serverTimestamp(),
@@ -541,22 +552,26 @@ async function _withdrawFromWalletAction(
     const result = { withdrawalId: txnRef.id };
 
     // Notify admins of the pending withdrawal (Non-blocking post-commit)
+    //
+    // THE PEOPLE WHO CAN ACTUALLY PROCESS IT.
+    //
+    // This queried `cooperative_admin` and `super_admin`. Processing a wallet
+    // withdrawal requires "finance:process_withdrawals", which the matrix gives
+    // to `super_admin` and `admin` — so every cooperative_admin was sent to a
+    // screen that refuses them, and no plain admin was told at all. Half the
+    // people who can act never heard about the request; the rest could not act
+    // on what they heard.
+    //
+    // Derived from the matrix now, so the audience cannot drift from the gate:
+    // grant the permission to another role and it starts being notified.
     try {
-        const [coopSnap, superSnap] = await Promise.all([
-            db.collection(COLLECTIONS.USERS)
-                .where("roles", "array-contains", "cooperative_admin")
-                .select()
-                .get(),
-            db.collection(COLLECTIONS.USERS)
-                .where("roles", "array-contains", "super_admin")
-                .select()
-                .get(),
-        ]);
+        const notifiableRoles = rolesWithPermission("finance:process_withdrawals");
+        const adminSnap = await db.collection(COLLECTIONS.USERS)
+            .where("roles", "array-contains-any", notifiableRoles)
+            .select()
+            .get();
 
-        const ids = new Set<string>();
-        coopSnap.docs.forEach((d) => ids.add(d.id));
-        superSnap.docs.forEach((d) => ids.add(d.id));
-        const adminIds = Array.from(ids);
+        const adminIds = Array.from(new Set(adminSnap.docs.map((d) => d.id)));
 
         const notifBatch = db.batch();
         adminIds.forEach((adminId) => {
@@ -905,8 +920,19 @@ async function _getAdminWalletWithdrawalsAction(options: {
     const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: "Unauthorized" , data: null };
 
-    // Verify admin
-    if (!isAdmin(sessionResult.session.user.roles)) {
+    // THIS LIST CARRIES BANK ACCOUNT NUMBERS.
+    //
+    // The gate was isAdmin() — true for all ten admin roles — while the rows it
+    // returns hydrate every withdrawing user's bank name, account number,
+    // account name, bank code, email and phone. The action this list exists to
+    // feed, processWalletWithdrawalAction, requires
+    // "finance:process_withdrawals", held by super_admin and admin only.
+    //
+    // So a support agent, a moderator, or any of the six module admins could
+    // read every user's bank details from a queue they are not permitted to act
+    // on. Gated on the permission the queue is FOR, which is the same
+    // resolution the other bulk-PII readers took.
+    if (!hasAdminPermission(sessionResult.session.user.roles, "finance:process_withdrawals")) {
         return { success: false as const, error: "Unauthorized" , data: null };
     }
 

@@ -353,6 +353,28 @@ export const PRIVILEGED_ROLES: readonly string[] = (() => {
 })();
 
 /**
+ * Which roles hold a permission — the inverse of the matrix lookup.
+ *
+ * WHY THIS EXISTS
+ * ---------------
+ * Deciding WHO to tell about work is the same question as deciding who may do
+ * it, and the two were answered from different places. wallet.ts notified
+ * `cooperative_admin` and `super_admin` about a pending withdrawal, while the
+ * action that processes one requires "finance:process_withdrawals" — held by
+ * `super_admin` and `admin`. Every cooperative_admin was sent to a screen that
+ * would refuse them, and no plain admin was told at all.
+ *
+ * A hand-written audience beside a matrix-derived gate is the same drift as a
+ * hand-written role list beside a matrix-derived permission, and it fails in
+ * the direction nobody notices: the work simply does not get done.
+ */
+export function rolesWithPermission(permission: AdminPermission): AdminRole[] {
+    return (Object.keys(PERMISSION_MATRIX) as AdminRole[]).filter((role) =>
+        (PERMISSION_MATRIX[role] ?? []).includes(permission)
+    );
+}
+
+/**
  * Does this set of roles include one that only a super_admin may hand out?
  *
  * WHY THIS EXISTS
