@@ -430,6 +430,10 @@ async function _updatePropertyAction(propertyId: string, updates: Partial<Proper
          * terms the buyer was quoted on that must not move under them.
          */
         const TERMS_LOCKED_IN = [
+            // A buyer reservation, same as the states below it. The admin
+            // editor in farm-nation-admin/_fna_verifications.ts uses the same
+            // list; two editors of one set of terms have to agree.
+            "pending",
             "pending_escrow",
             "pending_payment",
             "payment_confirmed",

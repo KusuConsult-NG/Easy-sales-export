@@ -400,14 +400,85 @@ async function _updateAdminLandListingAction(data: {
             return { success: false, error: "Land listing not found", data: null };
         }
 
+        const listing = doc.data() ?? {};
+
+        /**
+         * The admin editor obeys the same lock the owner's editor does.
+         *
+         * updatePropertyAction refuses to move price, size, type, category or
+         * lease terms while a purchase is in flight, and its comment sets out
+         * the sequence: buyer is quoted and charged, the listing moves to
+         * pending_escrow, the price changes, and the buyer returns from Paystack
+         * to a verification that reads the NEW price and throws — after the
+         * payment is claimed, so they have paid and received nothing.
+         *
+         * This admin path wrote `price`, `size` and `category` unconditionally,
+         * so the whole sequence was still reachable through
+         * /admin/farm-nation/land-verification. A guard on one of two editors of
+         * the same terms is not a guard.
+         *
+         * `pending` is included here and in the owner's list: it is a buyer
+         * reservation, and terms should not move under a reservation either.
+         */
+        const TERMS_LOCKED_IN = [
+            "pending",
+            "pending_escrow",
+            "pending_payment",
+            "payment_confirmed",
+            "pending_transfer",
+            "sold",
+            "completed",
+        ];
+
+        const changesTerms =
+            Number(data.size) !== Number(listing.size) ||
+            Number(data.price) !== Number(listing.price) ||
+            String(data.category) !== String(listing.category);
+
+        if (changesTerms && TERMS_LOCKED_IN.includes(String(listing.status))) {
+            return {
+                success: false,
+                error:
+                    `This property has a purchase in progress (${listing.status}), so its price, size ` +
+                    `and category cannot be changed. Its title and location can still be corrected, ` +
+                    `or resolve the purchase first.`,
+                data: null,
+            };
+        }
+
+        /**
+         * The location is MERGED, not replaced.
+         *
+         * This wrote `location: { state, lga, address }` over whatever was
+         * there. LAND_LISTINGS holds two shapes: the land module stores an
+         * object with `lat`, `lng`, `city`, `address`, `state` and `lga`, while
+         * farm-nation's own creation path stores a plain STRING with `state`
+         * and `lga` as siblings.
+         *
+         * So an admin correcting a title on a land-module listing silently
+         * deleted its `lat`, `lng` and `city` — and components/land/LandMap.tsx
+         * plots every pin from `listing.location.lat/lng` and labels it with
+         * `location.city`. The listing dropped off the map, from an edit that
+         * never mentioned the map. Same shape as the product edit that erased a
+         * seller's certifications.
+         */
+        const previousLocation = typeof listing.location === "object" && listing.location !== null
+            ? listing.location as Record<string, unknown>
+            : {};
+
         const updateData: any = {
             title: data.title,
             category: data.category,
             location: {
+                ...previousLocation,
                 state: data.state,
                 lga: data.lga,
-                address: data.address || doc.data()?.location?.address || ""
+                address: data.address || (previousLocation.address as string | undefined) || ""
             },
+            // The top-level copies farm-nation reads, kept in step with the
+            // object so the two cannot disagree after an edit.
+            state: data.state,
+            lga: data.lga,
             size: Number(data.size),
             price: Number(data.price),
             updatedAt: FieldValue.serverTimestamp()
