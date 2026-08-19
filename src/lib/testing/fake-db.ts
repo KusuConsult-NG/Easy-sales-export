@@ -269,6 +269,8 @@ interface QueryState {
     limit?: number;
     offset?: number;
     startAfterValues?: any[];
+    /** The snapshot passed to startAfter(), resolved here rather than there. */
+    startAfterDoc?: { data(): any } | undefined;
     unbounded?: boolean;
 }
 
@@ -397,8 +399,25 @@ function runQuery(store: Map<string, Map<string, Doc>>, q: QueryState): Array<[s
     // startAfter is positional on the order key, matching the adapter's cursor:
     // it keeps everything strictly after the first document whose order values
     // equal the cursor.
-    if (q.startAfterValues && q.startAfterValues.length > 0 && q.orders.length > 0) {
-        const cursor = q.startAfterValues;
+    // The cursor. Resolved HERE, against the final order keys, because
+    // SupabaseQuery stores the snapshot and reads it in buildCursorFilter — so
+    // `.startAfter(doc)` before `.orderBy(...)` works in production, and several
+    // actions are written that way.
+    if (q.startAfterDoc && q.orders.length > 0) {
+        const d = q.startAfterDoc.data() || {};
+        const cursor = q.orders.map((o) => flattenTimestamps(getPath(d, filterField(o.field))));
+        const idx = rows.findIndex(([, row]) =>
+            q.orders.every((o, i) =>
+                String(getPath(row, filterField(o.field)) ?? '') === String(cursor[i] ?? '')));
+        rows = idx >= 0 ? rows.slice(idx + 1) : rows;
+    } else if (q.startAfterValues && q.startAfterValues.length > 0 && q.orders.length > 0) {
+        // Flattened, because a cursor taken from a SNAPSHOT carries hydrated
+        // Timestamps while the store holds ISO strings — so an unflattened
+        // comparison stringifies to "[object Object]" and matches nothing,
+        // silently returning the FIRST page again forever. The adapter does the
+        // same conversion (`cursorValue.toDate().toISOString()` in
+        // buildCursorFilter); this is that, not a fake-only convenience.
+        const cursor = q.startAfterValues.map(flattenTimestamps);
         const idx = rows.findIndex(([, d]) =>
             q.orders.every((o, i) =>
                 String(getPath(d, filterField(o.field)) ?? '') === String(cursor[i] ?? '')));
@@ -521,6 +540,7 @@ export interface AccessDescriptor {
         limit?: number;
         offset?: number;
         startAfterValues?: any[];
+        startAfterDoc?: { data(): any };
         unbounded?: boolean;
     };
     aggregate?: Record<string, { field?: string; kind: 'sum' | 'average' | 'count' }>;
@@ -581,6 +601,7 @@ export function installFakeDb(seed: Record<string, Record<string, Doc>> = {}): F
             limit: d.query?.limit,
             offset: d.query?.offset,
             startAfterValues: d.query?.startAfterValues,
+            startAfterDoc: d.query?.startAfterDoc,
             unbounded: d.query?.unbounded,
         });
 

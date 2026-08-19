@@ -496,6 +496,65 @@ describe('the fake hydrates dates the way the adapter does', () => {
         expect(snap.docs.map((d: any) => d.id)).toEqual(['b']);
     });
 
+    it('a cursor taken from a SNAPSHOT still matches the stored value', async () => {
+        // The trap hydration introduced: startAfter(snapshot) reads the order
+        // key off `snapshot.data()`, which is hydrated, while the rows are
+        // compared against the stored ISO string. Unflattened it stringifies to
+        // "[object Object]", matches nothing, and every page is page one — a
+        // paginated list that silently never advances. The adapter converts the
+        // cursor the same way in buildCursorFilter.
+        store.seedAll('x', {
+            a: { createdAt: '2026-01-03T00:00:00.000Z' },
+            b: { createdAt: '2026-01-02T00:00:00.000Z' },
+            c: { createdAt: '2026-01-01T00:00:00.000Z' },
+        });
+
+        const cursorDoc = await db.collection('x').doc('b').get();
+        const page = await db.collection('x')
+            .orderBy('createdAt', 'desc').startAfter(cursorDoc).limit(2).get() as any;
+
+        expect(page.docs.map((d: any) => d.id)).toEqual(['c']);
+    });
+
+    it('the cursor is resolved when the query RUNS, not when startAfter is called', async () => {
+        // SupabaseQuery stores the snapshot in `_startAfterDoc` and reads it in
+        // buildCursorFilter, so `.startAfter(doc)` BEFORE `.orderBy(...)` works.
+        // Several actions are written that way — _mp_seller_dashboard.ts is —
+        // and a fake resolving the cursor eagerly got an empty one and returned
+        // page one forever, which is a "load more" button that never advances.
+        store.seedAll('x', {
+            a: { createdAt: '2026-01-03T00:00:00.000Z' },
+            b: { createdAt: '2026-01-02T00:00:00.000Z' },
+            c: { createdAt: '2026-01-01T00:00:00.000Z' },
+        });
+
+        const cursorDoc = await db.collection('x').doc('b').get();
+        const page = await db.collection('x')
+            .startAfter(cursorDoc)          // <- before the orderBy
+            .orderBy('createdAt', 'desc')
+            .limit(2)
+            .get() as any;
+
+        expect(page.docs.map((d: any) => d.id)).toEqual(['c']);
+    });
+
+    it('and a NON-snapshot cursor is ignored, as the adapter ignores it', async () => {
+        // `startAfter(docOrValue)` records the cursor only when it is a
+        // SupabaseDocumentSnapshot. Honouring a bare value would make a call
+        // site look like it paginates when in production it pages nowhere.
+        store.seedAll('x', {
+            a: { createdAt: '2026-01-03T00:00:00.000Z' },
+            b: { createdAt: '2026-01-02T00:00:00.000Z' },
+        });
+
+        const page = await db.collection('x')
+            .orderBy('createdAt', 'desc')
+            .startAfter('2026-01-03T00:00:00.000Z')
+            .get() as any;
+
+        expect(page.docs.map((d: any) => d.id)).toEqual(['a', 'b']);
+    });
+
     it('leaves a string that merely starts with digits alone', async () => {
         store.seed('x', 'a', { name: '2026-not-a-date', code: '12345678901' });
 

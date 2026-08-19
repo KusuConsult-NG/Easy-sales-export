@@ -249,16 +249,29 @@ function createMockDb() {
             orderBy: (field, dir) => next({ orders: s.orders.concat([{ field, dir: dir || 'asc' }]) }),
             limit: (n) => next({ limit: n }),
             offset: (n) => next({ offset: n }),
+            /**
+             * The SNAPSHOT is stored, and resolved against the order keys when
+             * the query runs — which is what SupabaseQuery does
+             * (`_startAfterDoc`, read in buildCursorFilter).
+             *
+             * This used to resolve the cursor values eagerly, against whatever
+             * `orderBy` calls had happened SO FAR. Several actions call
+             * `.startAfter(lastDoc)` before `.orderBy(...)` —
+             * _mp_seller_dashboard.ts does — so the cursor came out empty and
+             * paging silently returned page one forever. In production the
+             * order of the two calls does not matter, and now it does not here.
+             *
+             * A non-snapshot argument is IGNORED, also like the adapter:
+             * `startAfter(docOrValue)` only records it when it is a
+             * SupabaseDocumentSnapshot. A fake that honoured a bare value would
+             * make a paginating call site look correct that pages nowhere.
+             */
             startAfter: (...values) => next({
-                // startAfter(snapshot) and startAfter(...values) are both used.
-                startAfterValues: values.length === 1 && values[0] && typeof values[0].data === 'function'
-                    ? s.orders.map((o) => {
-                        const d = values[0].data() || {};
-                        return o.field.split('.').reduce((acc, k) => (acc == null ? acc : acc[k]), d);
-                    })
-                    : values,
+                startAfterDoc: (values.length === 1 && values[0]
+                    && typeof values[0].data === 'function') ? values[0] : undefined,
             }),
-            startAt: (...values) => next({ startAfterValues: values }),
+            // The adapter's startAt is a straight delegate to startAfter.
+            startAt: (...values) => q.startAfter(...values),
             endAt: () => q,
             endBefore: () => q,
 
