@@ -115,6 +115,75 @@ function deletePath(doc: Doc, path: string): void {
     if (cur && typeof cur === 'object') delete cur[parts[parts.length - 1]];
 }
 
+// ─── Timestamps, on the way out and on the way back in ───────────────────────
+//
+// The adapter does NOT hand back what it stored. It writes ISO strings into
+// JSONB (convertTimestampsToStrings) and revives them into Timestamp objects on
+// every read (convertStringsToTimestamps). So a caller who stores
+// `new Date().toISOString()` reads back something with `.toDate()`.
+//
+// This fake used to hand back the raw string, which is a divergence in the
+// dangerous direction: production code is FULL of
+// `value?.toDate ? value.toDate() : new Date(value)`, and with plain strings
+// every one of those took its fallback arm. A test could assert the fallback's
+// answer and prove nothing about the arm that actually runs — and the
+// cooperative ID card, which computes the card's issue and expiry dates through
+// exactly that shape, is the reason this was noticed.
+//
+// Both directions are reproduced, because only reproducing one would round-trip
+// a Timestamp object into the store and corrupt it.
+
+/** The same ISO detection the adapter uses. */
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
+
+const isTimestampLike = (v: any): boolean =>
+    !!v && typeof v === 'object' && typeof v.toDate === 'function';
+
+/** ISO strings → Timestamp, recursively. Mirrors convertStringsToTimestamps. */
+function hydrateTimestamps(value: any): any {
+    if (value === null || value === undefined) return value;
+
+    if (typeof value === 'string') {
+        if (!ISO_DATE.test(value)) return value;
+        const d = new Date(value);
+        if (Number.isNaN(d.getTime())) return value;
+        // Required lazily: firestore-compat is mocked in some suites, and a
+        // top-level import would bind whichever version loaded first.
+        const { Timestamp } = require('@/lib/firestore-compat');
+        try { return Timestamp.fromDate(d); } catch { return value; }
+    }
+
+    if (Array.isArray(value)) return value.map(hydrateTimestamps);
+
+    if (typeof value === 'object') {
+        if (isTimestampLike(value)) return value;
+        const out: Doc = {};
+        for (const [k, v] of Object.entries(value)) out[k] = hydrateTimestamps(v);
+        return out;
+    }
+
+    return value;
+}
+
+/** Timestamp/Date → ISO string, recursively. Mirrors convertTimestampsToStrings. */
+function flattenTimestamps(value: any): any {
+    if (value === null || value === undefined) return value;
+    if (value instanceof Date) return value.toISOString();
+    if (isTimestampLike(value)) return value.toDate().toISOString();
+    if (value && typeof value === 'object' && typeof value._seconds === 'number') {
+        return new Date(value._seconds * 1000).toISOString();
+    }
+    if (Array.isArray(value)) return value.map(flattenTimestamps);
+    if (typeof value === 'object') {
+        // Sentinels pass through untouched — applyPatch resolves them.
+        if (typeof (value as any)._methodName === 'string') return value;
+        const out: Doc = {};
+        for (const [k, v] of Object.entries(value)) out[k] = flattenTimestamps(v);
+        return out;
+    }
+    return value;
+}
+
 // ─── FieldValue sentinels ────────────────────────────────────────────────────
 //
 // The same detection the adapter uses: a `_methodName` property. Both the
@@ -178,7 +247,10 @@ function applyPatch(target: Doc, patch: Doc, now: string, deep: boolean): void {
             continue;
         }
 
-        setPath(target, key, raw instanceof Date ? raw.toISOString() : clone(raw));
+        // Timestamps and Dates go into the store as ISO strings, the way the
+        // adapter writes them, so the next read hydrates them back rather than
+        // JSON-cloning a Timestamp's internals into the document.
+        setPath(target, key, clone(flattenTimestamps(raw)));
     }
 }
 
@@ -388,7 +460,7 @@ function liveRef(collection: string, id: string): LiveRef {
 
 function docSnapshot(id: string, data: Doc | undefined, collection = '') {
     const exists = data !== undefined;
-    const stored = exists ? clone(data) : undefined;
+    const stored = exists ? hydrateTimestamps(clone(data)) : undefined;
     return {
         id,
         exists,
@@ -484,7 +556,7 @@ export function installFakeDb(seed: Record<string, Record<string, Doc>> = {}): F
 
     for (const [collection, docs] of Object.entries(seed)) {
         for (const [id, data] of Object.entries(docs)) {
-            collectionOf(collection).set(id, clone({ id, ...data }));
+            collectionOf(collection).set(id, clone(flattenTimestamps({ id, ...data })));
         }
     }
 
@@ -642,10 +714,14 @@ export function installFakeDb(seed: Record<string, Record<string, Doc>> = {}): F
     });
 
     return {
-        seed: (collection, id, data) => { collectionOf(collection).set(id, clone({ id, ...data })); },
+        // Seeds go through the same flattening a write does, so a test seeding
+        // `new Date()` stores what the adapter would have stored.
+        seed: (collection, id, data) => {
+            collectionOf(collection).set(id, clone(flattenTimestamps({ id, ...data })));
+        },
         seedAll: (collection, docs) => {
             for (const [id, data] of Object.entries(docs)) {
-                collectionOf(collection).set(id, clone({ id, ...data }));
+                collectionOf(collection).set(id, clone(flattenTimestamps({ id, ...data })));
             }
         },
         get: (collection, id) => clone(store.get(collection)?.get(id)),

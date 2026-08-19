@@ -54,9 +54,11 @@
  * actually write.
  */
 
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect, beforeEach } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { supabaseDb as db } from '@/lib/supabase-db';
+import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
 
 /** Method names the adapter exposes on a collection/query or on db itself. */
 function adapterMethods(): Set<string> {
@@ -414,5 +416,91 @@ describe('the jest harness against the real adapter', () => {
             );
         }
         expect(silent).toEqual([]);
+    });
+});
+
+/**
+ * The fake must hand back what the ADAPTER hands back, not what was stored.
+ *
+ * supabase-db writes ISO strings into JSONB (convertTimestampsToStrings) and
+ * revives them into Timestamp objects on every read
+ * (convertStringsToTimestamps). So `doc.data().createdAt.toDate()` works in
+ * production even though the column holds a string.
+ *
+ * The fake used to hand back the raw string, and that is a divergence in the
+ * dangerous direction. This codebase is full of
+ * `v?.toDate ? v.toDate() : new Date(v)`; with plain strings every one of those
+ * took its FALLBACK arm, so a behavioural test could assert the fallback's
+ * answer while the arm that actually runs in production went unexercised. The
+ * cooperative ID card computes the card's issue and expiry dates through
+ * exactly that shape.
+ *
+ * Both directions are gated here, because reproducing only the read would
+ * round-trip a Timestamp object into the store and corrupt the document.
+ */
+describe('the fake hydrates dates the way the adapter does', () => {
+    let store: FakeDbHandle;
+    beforeEach(() => { store = installFakeDb(); });
+
+    it('doc.data() gives a Timestamp for a stored ISO string', async () => {
+        store.seed('x', 'a', { createdAt: '2026-01-02T03:04:05.000Z', name: 'ada' });
+
+        const snap = await db.collection('x').doc('a').get();
+        const data = snap.data() as Record<string, any>;
+
+        expect(typeof data.createdAt.toDate).toBe('function');
+        expect(data.createdAt.toDate().toISOString()).toBe('2026-01-02T03:04:05.000Z');
+        expect(typeof data.createdAt.toMillis).toBe('function');
+        expect(data.name).toBe('ada');
+    });
+
+    it('a query snapshot hydrates too, not only a document read', async () => {
+        store.seed('x', 'a', { createdAt: '2026-01-02T03:04:05.000Z' });
+
+        const snap = await db.collection('x')
+            .where('createdAt', '==', '2026-01-02T03:04:05.000Z').get() as any;
+
+        expect(snap.docs).toHaveLength(1);
+        expect(typeof snap.docs[0].data().createdAt.toDate).toBe('function');
+    });
+
+    it('a Timestamp written back becomes an ISO string in the store', async () => {
+        // Without this the JSON clone would put a Timestamp's internals into the
+        // document, and the next read would hand back an object that is neither
+        // a date nor a string.
+        store.seed('x', 'a', { createdAt: '2026-01-02T03:04:05.000Z' });
+        const read = (await db.collection('x').doc('a').get()).data() as Record<string, any>;
+
+        await db.collection('x').doc('a').update({ copiedAt: read.createdAt });
+
+        expect(store.get('x', 'a')!.copiedAt).toBe('2026-01-02T03:04:05.000Z');
+    });
+
+    it('a Date written straight in becomes an ISO string too', async () => {
+        await db.collection('x').doc('a').set({ when: new Date('2026-05-06T07:08:09.000Z') });
+        expect(store.get('x', 'a')!.when).toBe('2026-05-06T07:08:09.000Z');
+    });
+
+    it('and the FILTERS still compare the stored string, as Postgres does', async () => {
+        // raw_data->>'k' is text. Hydration is a read-side concern only; if it
+        // leaked into the query evaluation the comparisons would change meaning.
+        store.seedAll('x', {
+            a: { createdAt: '2026-01-01T00:00:00.000Z' },
+            b: { createdAt: '2026-06-01T00:00:00.000Z' },
+        });
+
+        const snap = await db.collection('x')
+            .where('createdAt', '>', '2026-03-01T00:00:00.000Z').get() as any;
+
+        expect(snap.docs.map((d: any) => d.id)).toEqual(['b']);
+    });
+
+    it('leaves a string that merely starts with digits alone', async () => {
+        store.seed('x', 'a', { name: '2026-not-a-date', code: '12345678901' });
+
+        const data = (await db.collection('x').doc('a').get()).data() as Record<string, any>;
+
+        expect(data.name).toBe('2026-not-a-date');
+        expect(data.code).toBe('12345678901');
     });
 });
