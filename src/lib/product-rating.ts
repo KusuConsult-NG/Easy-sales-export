@@ -193,3 +193,61 @@ export const REVIEWABLE_ORDER_STATUSES: readonly string[] = ["delivered", "compl
 export function isReviewableOrderStatus(status: unknown): boolean {
     return REVIEWABLE_ORDER_STATUSES.includes(String(status ?? ""));
 }
+
+/**
+ * Is this a rating a review may carry?
+ *
+ * Both submit actions checked `rating < 1 || rating > 5`, which is a comparison
+ * and not a validation. A server action's parameter types are erased at the
+ * wire, so `rating` arrives as whatever was sent:
+ *
+ *   - `NaN`  — both comparisons are FALSE, so it passed. It then reaches
+ *     recalculateProductRating, where `total += NaN` makes the product's whole
+ *     average NaN, and every reader that formats it shows nothing at all.
+ *   - `"5"`  — a string. `"5" < 1` and `"5" > 5` are both false, so it passed
+ *     too, and getSellerReviewSummaryAction's `total += r` CONCATENATES it:
+ *     two five-star reviews become "055", and the average 27.5 out of 5.
+ *   - `4.7`  — accepted silently, so the star distribution rounds it into a
+ *     bucket the reviewer did not choose.
+ *
+ * One rule now, and it is a whole number from one to five.
+ */
+export function isValidReviewRating(rating: unknown): boolean {
+    return typeof rating === "number" && Number.isInteger(rating) && rating >= 1 && rating <= 5;
+}
+
+/** The product ids an order actually contains, both item spellings. */
+export function orderedProductIds(order: unknown): string[] {
+    const items = (order as { items?: unknown })?.items;
+    if (!Array.isArray(items)) return [];
+
+    return items
+        .map((item) => String((item as Record<string, unknown>)?.productId ?? (item as Record<string, unknown>)?.id ?? ""))
+        .filter(Boolean);
+}
+
+/**
+ * Which products on this order has anybody already reviewed?
+ *
+ * The order carried a single boolean, `reviewSubmitted`, set to true by the
+ * first review of any item — see the comment at its write site. This reads the
+ * reviews themselves, so the flag it feeds is recomputed from the source rather
+ * than accumulated, and a lost race self-heals on the next review.
+ */
+export async function reviewedProductIdsForOrder(
+    db: RatingDb,
+    orderId: string,
+): Promise<string[]> {
+    const snap = await db
+        .collection(COLLECTIONS.PRODUCT_REVIEWS)
+        .where("orderId", "==", orderId)
+        .get();
+
+    const ids = new Set<string>();
+    for (const doc of snap.docs ?? []) {
+        const productId = String(doc.data()?.productId ?? "");
+        if (productId) ids.add(productId);
+    }
+
+    return [...ids];
+}

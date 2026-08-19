@@ -368,8 +368,13 @@ describe('unapproved reviews are not public', () => {
         const src = code(MARKET);
         const fn = src.slice(src.indexOf('async function _getProductReviewsAction'));
 
+        // The gate was `callerIsAdmin`, from isAdmin() — true for all ten admin
+        // roles, so a wave_admin or an academy_admin could read unmoderated and
+        // rejected reviews. It is now the permission that moderating those same
+        // rows requires; marketplace-reviews-behaviour.test.ts executes it.
         expect(fn).toContain('const requested = options?.status || "approved";');
-        expect(fn).toContain('requested === "approved" || callerIsAdmin ? requested : "approved"');
+        expect(fn).toContain('requested === "approved" || callerMayModerate ? requested : "approved"');
+        expect(fn).toContain('"marketplace:moderate_reviews"');
     });
 
     it('and the caller\'s status no longer reaches the query directly', () => {

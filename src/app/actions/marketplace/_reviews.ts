@@ -10,7 +10,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { withSafeAction } from "@/lib/safe-action";
 import type { ActionResponse } from "@/lib/safe-action";
 import {
@@ -18,6 +18,9 @@ import {
     reviewerIdentityFields,
     hasExistingReview,
     isReviewableOrderStatus,
+    isValidReviewRating,
+    orderedProductIds,
+    reviewedProductIdsForOrder,
 } from "@/lib/product-rating";
 import { recordAdminAction } from "@/lib/audit-log";
 
@@ -34,8 +37,11 @@ async function _submitProductReviewAction(data: {
 }): Promise<ActionResponse<null>> { 
     let sessionResult;
     try {
-        if (data.rating < 1 || data.rating > 5) {
-            return { success: false as const, error: "Rating must be between 1 and 5", data: null };
+        // A comparison is not a validation — see isValidReviewRating. NaN and
+        // the string "5" both passed this pair of `<`/`>` tests, and both
+        // corrupt an average downstream.
+        if (!isValidReviewRating(data.rating)) {
+            return { success: false as const, error: "Rating must be a whole number between 1 and 5", data: null };
         }
 
         sessionResult = await requireSession();
@@ -74,12 +80,9 @@ async function _submitProductReviewAction(data: {
         // submitSellerReviewAction, two screens below, already does exactly this
         // check — `if (!sellerIds.includes(data.sellerId))`. Only the product
         // path was missing it.
-        const orderItems: any[] = Array.isArray(orderData.items) ? orderData.items : [];
-        const orderedProductIds = orderItems
-            .map((item) => String(item?.productId ?? item?.id ?? ""))
-            .filter(Boolean);
+        const orderProductIds = orderedProductIds(orderData);
 
-        if (!orderedProductIds.includes(String(data.productId))) {
+        if (!orderProductIds.includes(String(data.productId))) {
             return { success: false as const, error: "That product was not part of this order", data: null };
         }
 
@@ -116,11 +119,33 @@ async function _submitProductReviewAction(data: {
             _version: 0 
         });
 
-        await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(data.orderId).update({ 
-            reviewSubmitted: true,
+        /**
+         * `reviewSubmitted` means EVERY item has been reviewed, not "one has".
+         *
+         * It was set to true by the first review of any item, and the order
+         * detail page reads it as `canReview = delivered && !reviewSubmitted`.
+         * So on a three-item order the buyer reviewed one product and the
+         * control disappeared — the other two could never be reviewed, while
+         * this action's own duplicate guard is per (buyer, order, PRODUCT) and
+         * plainly expects one review each.
+         *
+         * The seller of an unreviewed item loses the rating they earned, and the
+         * product keeps `rating: 0`, which the card renders as no rating at all.
+         *
+         * `reviewedProductIds` is recomputed from the reviews themselves rather
+         * than accumulated, so two reviews racing cannot leave the flag wrong for
+         * good — the next one repairs it.
+         */
+        const reviewedIds = await reviewedProductIdsForOrder(db as any, String(data.orderId));
+        const everyItemReviewed = orderProductIds.length > 0
+            && orderProductIds.every((id) => reviewedIds.includes(id));
+
+        await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(data.orderId).update({
+            reviewSubmitted: everyItemReviewed,
+            reviewedProductIds: reviewedIds,
             reviewId: reviewRef.id,
             updatedAt: FieldValue.serverTimestamp(),
-            _version: FieldValue.increment(1) 
+            _version: FieldValue.increment(1)
         });
 
         await _recalculateProductRating(data.productId);
@@ -148,8 +173,11 @@ async function _submitSellerReviewAction(data: {
 }): Promise<ActionResponse<null>> { 
     let sessionResult;
     try {
-        if (data.rating < 1 || data.rating > 5) {
-            return { success: false as const, error: "Rating must be between 1 and 5", data: null };
+        // A comparison is not a validation — see isValidReviewRating. NaN and
+        // the string "5" both passed this pair of `<`/`>` tests, and both
+        // corrupt an average downstream.
+        if (!isValidReviewRating(data.rating)) {
+            return { success: false as const, error: "Rating must be a whole number between 1 and 5", data: null };
         }
 
         sessionResult = await requireSession();
@@ -235,9 +263,16 @@ async function _getProductReviewsAction(
         // _getSellerReviewSummaryAction hardcodes "approved" and was never
         // exposed this way — the same two-siblings-disagree shape as everything
         // else in this cluster.
+        // The moderation permission, not isAdmin(). isAdmin() is true for all ten
+        // admin roles, so it let a wave_admin or an academy_admin read
+        // unmoderated and rejected reviews here — the same rows the pending
+        // queue below now gates on "marketplace:moderate_reviews".
         const requested = options?.status || "approved";
-        const callerIsAdmin = isAdmin((sessionResult as any)?.session?.user?.roles);
-        const status = requested === "approved" || callerIsAdmin ? requested : "approved";
+        const callerMayModerate = hasAdminPermission(
+            (sessionResult as any)?.session?.user?.roles,
+            "marketplace:moderate_reviews",
+        );
+        const status = requested === "approved" || callerMayModerate ? requested : "approved";
 
         const pageSize = options?.limit || 20;
 
@@ -293,15 +328,31 @@ async function _getSellerReviewSummaryAction(sellerId: string): Promise<ActionRe
         const distribution: Record<string, number> = { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 };
         let total = 0;
 
-        snap.docs.forEach((d) => { 
-            const r = d.data().rating as number;
+        /**
+         * The stored rating is coerced, and an unreadable one is skipped.
+         *
+         * `total += d.data().rating` took the value raw. A row holding the
+         * STRING "5" — which the submit guard used to accept, and which the
+         * adapter can also produce for a JSON-stored number — turned `+=` into
+         * string concatenation: two five-star reviews made total "055" and the
+         * average 27.5 out of 5. A NaN made every figure NaN. Both then went out
+         * as this seller's public rating.
+         *
+         * recalculateProductRating already reads `Number(...)` and skips what
+         * does not resolve; this is the same rule on the seller side.
+         */
+        let counted = 0;
+        snap.docs.forEach((d) => {
+            const r = Number(d.data()?.rating);
+            if (!Number.isFinite(r)) return;
             total += r;
+            counted++;
             const key = String(Math.round(r));
             if (distribution[key] !== undefined) distribution[key]++;
         });
 
-        const averageRating = Math.round((total / snap.size) * 10) / 10;
-        return { error: null, success: true as const, data: { summary: { averageRating, totalReviews: snap.size, distribution } } };
+        const averageRating = counted === 0 ? 0 : Math.round((total / counted) * 10) / 10;
+        return { error: null, success: true as const, data: { summary: { averageRating, totalReviews: counted, distribution } } };
     } catch (err: any) { 
         logger.error("getSellerReviewSummaryAction error:", { 
             sellerId, 
@@ -403,7 +454,19 @@ async function _getPendingReviewsAction(options?: { limit?: number; }): Promise<
     try {
         sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
-        if (!isAdmin(sessionResult.session.user.roles)) return { success: false as const, error: "Unauthorized", data: null };
+        /**
+         * The same permission the moderation itself requires.
+         *
+         * This queue holds unmoderated buyer comments and images, and it was
+         * gated on isAdmin(), which is true for ALL TEN admin roles — so an
+         * academy_admin or an export_admin could read every pending review while
+         * moderateReviewAction, the only thing you can do with them, requires
+         * "marketplace:moderate_reviews". The reader was wider than the writer on
+         * the same rows.
+         */
+        if (!hasAdminPermission(sessionResult.session.user.roles, "marketplace:moderate_reviews")) {
+            return { success: false as const, error: "Unauthorized", data: null };
+        }
 
         const pageSize = options?.limit || 30;
 
