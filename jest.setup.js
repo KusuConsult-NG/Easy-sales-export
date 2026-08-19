@@ -226,6 +226,11 @@ global.mockCreateAdminAuditLog = jest.fn(() => Promise.resolve());
 // the gate that stops there being a fourth: it diffs this list against the
 // module's own exports.
 global.mockRecordAdminAction = jest.fn(() => Promise.resolve());
+// Financial audit rows are assertable too. logAdminFinancialAction was a bare
+// jest.fn() with no handle, so a suite that wanted to check WHICH amount was
+// recorded — the payout or the gross, which #109/#113 are exactly about — had
+// no way to reach it without re-mocking the whole module locally.
+global.mockLogAdminFinancialAction = jest.fn(() => Promise.resolve());
 jest.mock('@/lib/audit-log', () => ({
     createAdminAuditLog: (payload) => global.mockCreateAdminAuditLog(payload),
     createAuditLog: (payload) => global.mockCreateAdminAuditLog(payload),
@@ -233,7 +238,7 @@ jest.mock('@/lib/audit-log', () => ({
     logAdminAction: jest.fn(),
     logAuditAction: jest.fn(),
     logFinancialAction: jest.fn(),
-    logAdminFinancialAction: jest.fn(),
+    logAdminFinancialAction: (...args) => global.mockLogAdminFinancialAction(...args),
     getAuditLogs: jest.fn(() => Promise.resolve([])),
     purgeOldAuditLogs: jest.fn(() => Promise.resolve(0)),
     getSeverityForAction: jest.fn(() => 'info'),
