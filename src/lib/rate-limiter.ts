@@ -12,6 +12,18 @@ import { checkFallbackLimit } from './rate-limiter-fallback';
 interface RateLimitConfig {
     interval: number; // Time window in milliseconds
     maxRequests: number; // Maximum requests in window
+    /**
+     * What this limit is FOR, and therefore its own key space in Redis.
+     *
+     * Required, not optional. Without it every limiter built here shared one
+     * key per identifier — see the note in rate-limits.config.ts — and the
+     * failure was silent: a member was refused a withdrawal because they had
+     * used the app.
+     *
+     * rateLimitConfig stamps this from the object key, so a new limit cannot be
+     * added without one and the name cannot drift from what it is called.
+     */
+    name: string;
 }
 
 /**
@@ -22,7 +34,10 @@ export function rateLimit(config: RateLimitConfig) {
     const limiter = new Ratelimit({
         redis: redis,
         limiter: Ratelimit.slidingWindow(config.maxRequests, `${config.interval} ms`),
-        prefix: "@upstash/ratelimit_custom",
+        // The name is in the PREFIX, so Upstash's own key already separates one
+        // limit from another. It was a single constant, and every limit built
+        // here therefore shared one counter per identifier.
+        prefix: `@upstash/ratelimit_custom:${config.name}`,
         analytics: false,
     });
 
@@ -30,11 +45,18 @@ export function rateLimit(config: RateLimitConfig) {
         check: async (identifier: string): Promise<{ success: boolean; limit: number; remaining: number; reset: number }> => {
             const now = Date.now();
 
+            // The in-memory fallback needs the same separation, and gets it here
+            // rather than from a prefix it does not have. Namespacing only the
+            // Redis path would leave every limit colliding again the moment
+            // Upstash was unreachable — which is precisely when a member is
+            // least able to tell a rate limit from an outage.
+            const key = `${config.name}:${identifier}`;
+
             // No Upstash configured: the sliding window below runs against the
             // four-method stub in lib/redis.ts, which has no `evalsha`, and so
             // threw once per request before reaching this same fallback.
             if (!isRedisConfigured) {
-                const fallback = checkFallbackLimit(identifier, config.maxRequests, config.interval);
+                const fallback = checkFallbackLimit(key, config.maxRequests, config.interval);
                 return {
                     success: fallback.success,
                     limit: config.maxRequests,
@@ -54,7 +76,7 @@ export function rateLimit(config: RateLimitConfig) {
             } catch (error) {
                 // Redis error - fall back to in-memory fallback rate limiter instead of failing fully open
                 console.error('[Rate Limiter] Redis error (falling back to in-memory):', error);
-                const fallback = checkFallbackLimit(identifier, config.maxRequests, config.interval);
+                const fallback = checkFallbackLimit(key, config.maxRequests, config.interval);
                 return {
                     success: fallback.success,
                     limit: config.maxRequests,
