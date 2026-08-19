@@ -10,6 +10,7 @@ import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { FieldValue } from "@/lib/firestore-compat";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
+import { creditWalletOnce } from "@/lib/wallet-ledger";
 
 /**
  * Get global stats for Farm Nation admin dashboard
@@ -79,6 +80,21 @@ async function _getFarmNationTransactionsAction(options: {
         if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized: Permission required", data: null };
         }
+
+        /**
+         * Bank details go only to the callers who can pay them out.
+         *
+         * This list hydrates every farm-nation seller's account number, account
+         * name, bank code, email and phone, and its gate was isAdmin() — true
+         * for all TEN admin roles. The admin withdrawal list and the marketplace
+         * escrow list both had this defect and both were closed by requiring the
+         * permission that lets you process the payout; this is the third copy.
+         *
+         * releaseFarmNationEscrowAction — the one thing this screen exists to
+         * do — requires "finance:resolve_disputes". Names, emails and phones
+         * stay for every admin, because the list is built on them.
+         */
+        const maySeeBankDetails = hasAdminPermission(session.user.roles, "finance:resolve_disputes");
 
         const fetchLimit = options.limit || 50;
         let queryRef: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).orderBy("createdAt", "desc");
@@ -163,12 +179,16 @@ async function _getFarmNationTransactionsAction(options: {
                         name: data.name || data.fullName || "Unknown",
                         email: data.email || "",
                         phone: data.phone || "",
-                        bankDetails: data.bankDetails || {
-                            bankName: data.bankName || data.bankAccount?.bankName || "N/A",
-                            accountNumber: data.bankAccountNumber || data.bankAccount?.accountNumber || "N/A",
-                            accountName: data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : "N/A"),
-                            bankCode: data.bankCode || data.bankAccount?.bankCode || "N/A"
-                        }
+                        ...(maySeeBankDetails
+                            ? {
+                                bankDetails: data.bankDetails || {
+                                    bankName: data.bankName || data.bankAccount?.bankName || "N/A",
+                                    accountNumber: data.bankAccountNumber || data.bankAccount?.accountNumber || "N/A",
+                                    accountName: data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : "N/A"),
+                                    bankCode: data.bankCode || data.bankAccount?.bankCode || "N/A"
+                                }
+                            }
+                            : {}),
                     };
                 });
             });
@@ -293,6 +313,49 @@ async function _releaseFarmNationEscrowAction(transactionId: string): Promise<Ac
             if (!txDoc.exists) throw new Error("Transaction not found");
             const txData = txDoc.data()!;
 
+            /**
+             * THE SELLER IS ACTUALLY PAID.
+             *
+             * This wrote a `farm_nation_payouts` row with
+             * `status: "pending_transfer"` and stopped. That collection is
+             * written HERE AND NOWHERE ELSE, and read by nothing — no admin
+             * screen (/admin/farm-nation has applications, escrow,
+             * land-verification and listings, and no payouts), no cron, no
+             * script, no query anywhere in the repository.
+             *
+             * So releasing escrow transferred the property to the buyer, marked
+             * the transaction "completed" and "released", and recorded
+             * "escrow_released" in the audit log — while the seller's money went
+             * into a queue nobody drains. The buyer's payment had already
+             * reached the platform's Paystack account. The seller had no wallet
+             * credit, no transfer, and no screen telling them anything was owed.
+             *
+             * The marketplace's escrow release credits the seller's wallet
+             * through this same primitive, and the wallet already has a
+             * withdrawal flow behind it. Doing the same here makes the money
+             * move; keyed on the transaction, so a retry cannot pay twice.
+             *
+             * The payout row is kept — it is the settlement record — and now
+             * says where the money went instead of implying a transfer that
+             * nothing performs.
+             */
+            const payoutAmount = Number(txData.escrowAmount ?? 0);
+            const sellerId = String(txData.sellerId ?? "");
+
+            if (!sellerId) {
+                throw new Error("Transaction has no seller recorded; escrow cannot be paid out.");
+            }
+
+            const credit = await creditWalletOnce({
+                reference: `FN-ESCROW-RELEASE-${transactionId}`,
+                userId: sellerId,
+                amount: payoutAmount,
+                paymentType: "property_sale",
+                source: "farm_nation_escrow",
+                status: "disbursement",
+                metadata: { transactionId, propertyId: txData.propertyId, buyerId: txData.buyerId ?? null },
+            });
+
             const propertyRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(txData.propertyId);
             const propertyDoc = await propertyRef.get();
             if (!propertyDoc.exists) throw new Error("Property not found");
@@ -320,9 +383,15 @@ async function _releaseFarmNationEscrowAction(transactionId: string): Promise<Ac
             await payoutRef.set({
                 transactionId,
                 propertyId: txData.propertyId,
-                sellerId: txData.sellerId,
-                amount: txData.escrowAmount,
-                status: "pending_transfer",
+                sellerId,
+                amount: payoutAmount,
+                // Where the money went, not a transfer nothing performs.
+                status: "paid_to_wallet",
+                walletCreditedAt: FieldValue.serverTimestamp(),
+                // False on a replay: creditWalletOnce had already paid this
+                // transaction, so this row is a re-record and not a second
+                // payment.
+                walletCredited: credit.claimed,
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
                 _version: 0
