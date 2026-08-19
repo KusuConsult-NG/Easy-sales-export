@@ -112,7 +112,23 @@ async function _getAdminLandVerificationsAction(options: {
         if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         
-        if (!isAdmin(session.user.roles)) {
+        /**
+         * The queue's READ gate matches its WRITE gate.
+         *
+         * This was isAdmin() — true for all TEN admin roles — over a list that
+         * spreads the whole land listing into every row: the owner's email and
+         * phone, and the URLs of their C of O, survey plan and tax clearance.
+         * Those are the legal documents proving title to a parcel of land.
+         *
+         * Everything you can DO from this screen requires "land:verify_listings"
+         * — verifyPropertyAction, updateAdminLandListingAction and the
+         * approve-land route all check it, and only super_admin, admin and
+         * farm_nation_admin hold it. An academy_admin or a support user could
+         * not act on a single row here, and could read every deed on the
+         * platform. Same reader-wider-than-writer shape as the four bank-detail
+         * lists.
+         */
+        if (!hasAdminPermission(session.user.roles, "land:verify_listings")) {
             return { success: false, error: "Unauthorized: Permission required", data: null };
         }
 
