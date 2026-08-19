@@ -34,12 +34,25 @@ export function normalizeAggressive(
     const gender = cleanVal(uData.gender) || cleanVal(wData?.gender) || "";
     const dob = cleanVal(uData.dateOfBirth) || cleanVal(wData?.dateOfBirth) || cleanVal(cData?.personalInfo?.dateOfBirth) || "";
 
-    // 2. Resolve Bank Details (Aggressive fallback)
+    /**
+     * 2. Resolve Bank Details (Aggressive fallback)
+     *
+     * The user document's own legacy spellings — bankAccountNumber,
+     * bankAccountName and the bankAccount sub-object — are in the chain now.
+     * They were not, and they are what admin/_legacy.ts and
+     * wave/_wv_applications.ts write: `bankAccountNumber` flat on the user, no
+     * `bankDetails` block at all for a member onboarded before that block
+     * existed. Every screen built on this resolver therefore showed a blank
+     * destination account for exactly the bulk-imported members whose payouts
+     * are made by hand.
+     *
+     * Appended, not prepended, so nobody who already resolves changes.
+     */
     const bankDetails = {
-        bankName:      cleanVal(uData.bankDetails?.bankName)      || cleanVal(wData?.bankName)      || cleanVal(cData?.bankDetails?.bankName)      || cleanVal(sData?.bankAccount?.bankName)      || cleanVal(uData.bankName)      || "",
-        accountNumber: cleanVal(uData.bankDetails?.accountNumber) || cleanVal(wData?.accountNumber) || cleanVal(cData?.bankDetails?.accountNumber) || cleanVal(sData?.bankAccount?.accountNumber) || cleanVal(uData.accountNumber) || "",
-        accountName:   cleanVal(uData.bankDetails?.accountName)   || cleanVal(cData?.bankDetails?.accountName)   || cleanVal(sData?.bankAccount?.accountName)   || cleanVal(uData.fullName) || fullName || "",
-        bankCode:      cleanVal(uData.bankDetails?.bankCode)      || cleanVal(cData?.bankDetails?.bankCode)      || cleanVal(sData?.bankAccount?.bankCode)      || cleanVal(uData.bankCode) || ""
+        bankName:      cleanVal(uData.bankDetails?.bankName)      || cleanVal(wData?.bankName)      || cleanVal(cData?.bankDetails?.bankName)      || cleanVal(sData?.bankAccount?.bankName)      || cleanVal(uData.bankName)      || cleanVal(uData.bankAccount?.bankName)      || "",
+        accountNumber: cleanVal(uData.bankDetails?.accountNumber) || cleanVal(wData?.accountNumber) || cleanVal(cData?.bankDetails?.accountNumber) || cleanVal(sData?.bankAccount?.accountNumber) || cleanVal(uData.accountNumber) || cleanVal(uData.bankAccountNumber) || cleanVal(uData.bankAccount?.accountNumber) || "",
+        accountName:   cleanVal(uData.bankDetails?.accountName)   || cleanVal(cData?.bankDetails?.accountName)   || cleanVal(sData?.bankAccount?.accountName)   || cleanVal(uData.bankAccountName) || cleanVal(uData.bankAccount?.accountName) || cleanVal(uData.fullName) || fullName || "",
+        bankCode:      cleanVal(uData.bankDetails?.bankCode)      || cleanVal(cData?.bankDetails?.bankCode)      || cleanVal(sData?.bankAccount?.bankCode)      || cleanVal(uData.bankCode) || cleanVal(uData.bankAccount?.bankCode) || ""
     };
 
     // 3. Resolve KYC / Identity (NIN/BVN)
@@ -121,12 +134,24 @@ export function normalizeAggressive(
 export function extractCanonicalUser(uData: any, appData: any = null) {
     const profile = uData?.verificationProfile;
     
-    // 1. BANK DETAILS (SSOT Priority)
+    /**
+     * 1. BANK DETAILS (SSOT Priority)
+     *
+     * `bankAccountNumber` / `bankAccountName` / `bankAccount.*` on the USER
+     * document are in the chain now — see the same note in normalizeAggressive
+     * above. They are what admin/_legacy.ts writes for a bulk-imported member
+     * and what wave/_wv_applications.ts writes alongside the canonical block,
+     * and this resolver read neither, so the WAVE withdrawal queue, the
+     * cooperative money screen and the admin withdrawal queue all showed a
+     * blank destination account for those members.
+     *
+     * Appended, so a member who already resolves is unaffected.
+     */
     const bankDetails = {
-        bankName:      profile?.bankDetails?.bankName      || uData?.bankDetails?.bankName      || uData?.bankName      || appData?.bankName      || appData?.bankAccount?.bankName      || "",
-        accountNumber: profile?.bankDetails?.accountNumber || uData?.bankDetails?.accountNumber || uData?.accountNumber || appData?.accountNumber || appData?.bankAccount?.accountNumber || "",
-        accountName:   profile?.bankDetails?.accountName   || uData?.bankDetails?.accountName   || uData?.accountName   || appData?.accountName   || appData?.bankAccount?.accountName   || uData?.fullName || "",
-        bankCode:      profile?.bankDetails?.bankCode      || uData?.bankDetails?.bankCode      || uData?.bankCode      || appData?.bankCode      || appData?.bankAccount?.bankCode      || "",
+        bankName:      profile?.bankDetails?.bankName      || uData?.bankDetails?.bankName      || uData?.bankName      || appData?.bankName      || appData?.bankAccount?.bankName      || uData?.bankAccount?.bankName      || "",
+        accountNumber: profile?.bankDetails?.accountNumber || uData?.bankDetails?.accountNumber || uData?.accountNumber || appData?.accountNumber || appData?.bankAccount?.accountNumber || uData?.bankAccountNumber || uData?.bankAccount?.accountNumber || "",
+        accountName:   profile?.bankDetails?.accountName   || uData?.bankDetails?.accountName   || uData?.accountName   || appData?.accountName   || appData?.bankAccount?.accountName   || uData?.bankAccountName || uData?.bankAccount?.accountName || uData?.fullName || "",
+        bankCode:      profile?.bankDetails?.bankCode      || uData?.bankDetails?.bankCode      || uData?.bankCode      || appData?.bankCode      || appData?.bankAccount?.bankCode      || uData?.bankAccount?.bankCode      || "",
     };
 
     // 2. ADDRESS (SSOT Priority)

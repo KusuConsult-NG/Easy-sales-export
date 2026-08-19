@@ -15,7 +15,25 @@ import { serializeDoc } from "@/lib/firestore-serialize";
 import { createNotificationAction } from "@/app/actions/notifications";
 import { WithdrawalProcessingSchema } from "@/lib/schemas";
 import { hasAdminPermission } from "@/lib/admin-permissions";
+import { stripPii } from "@/lib/admin-pii";
+import { extractCanonicalUser } from "@/lib/canonical/normalizer";
 import { requireAdmin } from "@/lib/require-admin";
+
+/**
+ * The first bank block that actually carries an account number.
+ *
+ * Every hydrator on this screen produces an object whether or not it found
+ * anything, so a plain `a || b || c` chain always stops at the first one and
+ * never reaches a populated fallback.
+ */
+function firstWithAccount(
+    ...candidates: Array<Record<string, any> | null | undefined>
+): Record<string, unknown> {
+    for (const c of candidates) {
+        if (c && String(c.accountNumber ?? "").trim() !== "") return c;
+    }
+    return candidates[candidates.length - 1] ?? {};
+}
 
 // ============================================
 // Process Withdrawal Request
@@ -284,6 +302,22 @@ async function _getPendingWithdrawalsAction(
             return { error: "Unauthorized: Permission required - finance:read", success: false as const, data: null };
         }
 
+        /**
+         * "finance:read" is held by super_admin, admin, support,
+         * cooperative_admin and marketplace_admin — five of the ten roles, and
+         * this action returns the bank account of every withdrawer across the
+         * standard, cooperative AND wave queues at once. Paying any of them
+         * requires "finance:process_withdrawals": super_admin and admin.
+         *
+         * The counterpart list in wave/_wv_admin_withdrawals.ts was closed on
+         * the same permission (#149) and the wallet queue before it (#92); this
+         * one reads all three collections, so it was the widest of the three.
+         * The rows stay visible to everyone with finance:read — amounts, status
+         * and who requested — because reconciling a total does not need an
+         * account number.
+         */
+        const maySeeBankDetails = hasAdminPermission(session.user.roles, "finance:process_withdrawals");
+
         // Helper to build a query per collection
         const buildQuery = (collectionName: string) => {
             return statusFilter === "all"
@@ -332,31 +366,61 @@ async function _getPendingWithdrawalsAction(
             userSnapshots.forEach(snap => {
                 snap.forEach(doc => {
                     const data = doc.data();
+                    /**
+                     * THE DESTINATION ACCOUNT WAS BLANK FOR HALF THE PLATFORM.
+                     *
+                     * This hydration was hand-written and read
+                     * `bankAccountNumber` and `bankAccount.accountNumber` — and
+                     * never `bankDetails`, the canonical block that
+                     * marketplace/_mp_onboarding.ts and export/_ex_onboarding.ts
+                     * are the sole writers of. So a marketplace seller or an
+                     * export member requesting a withdrawal appeared in this
+                     * queue with an empty account number, and the admin
+                     * approving it had nothing to pay into.
+                     *
+                     * Worse, the empty object it produced is TRUTHY, so the
+                     * `userMap[...] || w.bankDetails` fallback below never ran:
+                     * the account the member typed onto their own withdrawal
+                     * request was shadowed by the blank hydrated one.
+                     *
+                     * extractCanonicalUser is what wave/_wv_admin_withdrawals.ts
+                     * and cooperative/_coop_admin_money.ts already use for the
+                     * same field. This action was the last hand-written copy.
+                     */
+                    const canonical = extractCanonicalUser(data);
                     userMap[doc.id] = {
-                        name: data.name || data.fullName || "Unknown",
-                        email: data.email || "",
-                        phone: data.phone || "",
-                        bankDetails: {
-                            bankName: data.bankName || data.bankAccount?.bankName || "",
-                            accountNumber: data.bankAccountNumber || data.bankAccount?.accountNumber || "",
-                            accountName: data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : ""),
-                            bankCode: data.bankCode || data.bankAccount?.bankCode || ""
-                        }
+                        name: canonical.name,
+                        email: canonical.email,
+                        phone: canonical.phone,
+                        ...(maySeeBankDetails ? { bankDetails: canonical.bankDetails } : {}),
                     };
                 });
             });
         }
 
         const enrichedData = withdrawals.map((w: any) => ({
-            ...w,
+            // The withdrawal row itself carries bankAccountNumber, accountName
+            // and bankCode at its root for the cooperative and WAVE queues, so
+            // gating only the hydrated `bankDetails` block below would have left
+            // the same values in the spread beside it.
+            ...(maySeeBankDetails ? w : stripPii(w)),
             user: userMap[w.userId] || null,
-            // Standardize bankDetails at root for UI components
-            bankDetails: userMap[w.userId]?.bankDetails || w.bankDetails || {
-                bankName: w.bankName || "",
-                accountNumber: w.bankAccountNumber || w.accountNumber || "",
-                accountName: w.bankAccountName || w.accountName || (userMap[w.userId]?.name || ""),
-                bankCode: w.bankCode || ""
-            }
+            // Chosen on whether an account number is actually PRESENT, not on
+            // whether an object is non-null: the hydrated block is always an
+            // object, so `a || b` silently preferred a blank one over the
+            // account the member typed onto the request itself.
+            ...(maySeeBankDetails ? {
+                bankDetails: firstWithAccount(
+                    userMap[w.userId]?.bankDetails,
+                    w.bankDetails,
+                    {
+                        bankName: w.bankName || "",
+                        accountNumber: w.bankAccountNumber || w.accountNumber || "",
+                        accountName: w.bankAccountName || w.accountName || (userMap[w.userId]?.name || ""),
+                        bankCode: w.bankCode || ""
+                    },
+                ),
+            } : {}),
         }));
 
         return {

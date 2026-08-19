@@ -6,7 +6,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { FieldPath } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
-import { isAdmin } from "@/lib/admin-permissions";
+import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { ActionResponse, withFlexibleSafeAction } from "@/lib/safe-action";
 
@@ -26,6 +26,18 @@ async function _getAcademyEnrollmentsAction(options?: {
         if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized", data: null };
         }
+
+        /**
+         * Bank details go only to the callers who can act on these records.
+         *
+         * The gate above admits every admin role; this list carries account
+         * numbers, account names and bank codes. Six lists were already closed
+         * this way — the admin withdrawal queue, the marketplace escrow list,
+         * the farm-nation transaction and registrant lists, the land
+         * verification queue and the WAVE withdrawal queue — each on the
+         * permission required by the action the screen exists to perform.
+         */
+        const maySeeBankDetails = hasAdminPermission(session.user.roles, "academy:approve_applications");
 
         let q: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.ACADEMY_ENROLLMENTS);
         const fetchLimit = options?.search ? 5000 : (options?.limit || 50);
@@ -60,7 +72,7 @@ async function _getAcademyEnrollmentsAction(options?: {
 
             return {
                 ...e,
-                bankDetails,
+                ...(maySeeBankDetails ? { bankDetails } : {}),
                 userProfile: {
                     name: uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (uData.name || e.studentName || "Unknown"),
                     email: uData.email || e.studentEmail || "N/A",

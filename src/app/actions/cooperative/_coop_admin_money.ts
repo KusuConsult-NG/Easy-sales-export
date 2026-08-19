@@ -50,6 +50,15 @@ async function _getAllTransactionsAction(options?: {
             }
         }
 
+        /**
+         * Bank details go only to the callers who can act on these records.
+         * `roles` above is the LIVE set this action already resolves, so the
+         * check below inherits that. Seventh and eighth instances of a list
+         * gated more loosely than the action it feeds; see the WAVE withdrawal
+         * queue for the six before them.
+         */
+        const maySeeBankDetails = hasAdminPermission(roles, "finance:process_withdrawals");
+
         // Audit logging
         await createAdminAuditLog({
             userId: session.user.id,
@@ -160,12 +169,14 @@ async function _getAllTransactionsAction(options?: {
                 userId: raw.userId || "",
                 userName: canonical?.name || raw.userId || "Unknown",
                 user: canonical,
-                bankDetails: canonical?.bankDetails || {
-                    bankName: raw.bankName || "",
-                    accountNumber: raw.accountNumber || "",
-                    accountName: raw.accountName || "",
-                    bankCode: raw.bankCode || ""
-                },
+                ...(maySeeBankDetails ? {
+                    bankDetails: canonical?.bankDetails || {
+                        bankName: raw.bankName || "",
+                        accountNumber: raw.accountNumber || "",
+                        accountName: raw.accountName || "",
+                        bankCode: raw.bankCode || ""
+                    }
+                } : {}),
                 type: raw.type || "unknown",
                 amount: Number(raw.amount) || 0,
                 status: raw.status || "unknown",

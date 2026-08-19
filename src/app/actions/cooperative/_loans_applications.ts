@@ -9,7 +9,7 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { isEligibleForLoan, getTierInterestRate } from "@/lib/cooperative-tiers";
 import { requireSession } from "@/lib/session-guard";
 import { serializeDocs } from "@/lib/firestore-serialize";
-import { isAdmin } from "@/lib/admin-permissions";
+import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import type { LoanApplication } from "@/lib/types/cooperative-loans";
 import { normaliseLoanApplication, LOAN_APPLICATION_COLLECTIONS, resolveLoanApplication } from "@/lib/loan-application-location";
 
@@ -296,6 +296,16 @@ export async function getAdminLoanApplicationsAction(options: {
             return { success: false as const, error: "Unauthorized", data: null };
         }
 
+        /**
+         * Bank details go only to the callers who can act on these records.
+         *
+         * The three-role list above is hand-written rather than taken from the
+         * matrix, which is its own small drift; the permission below is the one
+         * approving a loan requires, and every row here carries an applicant's
+         * account number, account name and bank code.
+         */
+        const maySeeBankDetails = hasAdminPermission(session.user.roles, "cooperatives:approve_loans");
+
         const fetchLimit = options.search ? 5000 : (options.limit || 20);
 
         // Build query: ALL where() clauses must come BEFORE orderBy() in Firestore.
@@ -529,12 +539,9 @@ export async function getAdminLoanApplicationsAction(options: {
             const accountName = user.bankDetails?.accountName || app.accountName || user.accountName || user.bankAccountName || user.bankAccount?.accountNumber || user.fullName || (user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : "N/A");
             const bankCode = user.bankDetails?.bankCode || app.bankCode || user.bankCode || user.bankAccount?.bankCode || "N/A";
 
-            const bankDetails = {
-                bankName,
-                accountNumber,
-                accountName,
-                bankCode
-            };
+            const bankDetails = maySeeBankDetails
+                ? { bankName, accountNumber, accountName, bankCode }
+                : undefined;
 
             const appAppliedAt = app.appliedAt || app.createdAt;
 
@@ -545,10 +552,14 @@ export async function getAdminLoanApplicationsAction(options: {
                 appliedAt: appAppliedAt,
                 userName: app.fullName || (user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.fullName || "Unknown"),
                 userEmail: app.userEmail || user.email || "",
-                bankName: bankDetails.bankName,
-                accountNumber: bankDetails.accountNumber,
-                accountName: bankDetails.accountName,
-                bankDetails
+                // The flattened copies are the same data under other names, so
+                // they follow the same gate.
+                ...(bankDetails ? {
+                    bankName: bankDetails.bankName,
+                    accountNumber: bankDetails.accountNumber,
+                    accountName: bankDetails.accountName,
+                    bankDetails,
+                } : {}),
             };
         });
 

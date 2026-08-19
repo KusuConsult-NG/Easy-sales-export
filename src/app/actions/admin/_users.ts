@@ -16,6 +16,7 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { serializeValue } from "@/lib/firestore-serialize";
 import { UserVerificationToggleSchema, UserKycVerificationSchema } from "@/lib/schemas";
 import { hasAdminPermission, isAdmin, isSuperAdmin, includesPrivilegedRole } from "@/lib/admin-permissions";
+import { stripRegistrationPii } from "@/lib/admin-pii";
 import { atomicUpdateUser } from "@/lib/services/userService";
 import { writeGuard, UserRolesWriteSchema } from "@/lib/write-guard";
 import { safeToISOString, safeToISOStringOptional } from "@/lib/date-utils";
@@ -313,6 +314,26 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
             };
         }
 
+        /**
+         * The users:read gate above admits ALL TEN admin roles — that is what it
+         * is for, so support can look somebody up by name to answer a ticket.
+         * But every row this action returns also carried the member's BVN, NIN,
+         * bank account number, account name, bank code and next of kin.
+         *
+         * The CSV of the SAME fields is gated on "users:export", which
+         * super_admin and admin alone hold (#64). Its own comment in
+         * admin-permissions.ts says why: "reading one member's record to answer
+         * their support ticket and downloading every member's name, email,
+         * phone and state as a CSV are not the same act, and every admin role
+         * holds users:read." The download was locked and the table beside it,
+         * showing more sensitive fields than the CSV carries, was not — so the
+         * export gate was avoidable by paging the table with search set, which
+         * raises the fetch limit to 5,000 rows.
+         *
+         * Same permission as the export, so the two surfaces now agree.
+         */
+        const maySeePii = hasAdminPermission(session.user.roles, "users:export");
+
         const pageSize = options.search ? 5000 : (options.limit || 50);
         const page = options.page ?? 0; // page offset (0-indexed)
 
@@ -549,11 +570,14 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
                 state: bestState || "",
                 lga: bestLga || "",
                 // KYC fields — prefer nested kyc.* (written by live QoreID actions),
-                // fall back to legacy top-level fields for existing records
-                bvn: bestBvn,
+                // fall back to legacy top-level fields for existing records.
+                //
+                // The *_verified / *Status flags stay for everyone: whether a
+                // member has passed KYC is what an admin needs to triage a
+                // ticket. The numbers themselves are behind users:export.
+                ...(maySeePii ? { bvn: bestBvn, nin: bestNin } : {}),
                 bvnVerified: bestBvnVerified,
                 bvnStatus: data.kyc?.bvnStatus || (bestBvnVerified ? 'verified' : undefined),
-                nin: bestNin,
                 ninVerified: bestNinVerified,
                 ninStatus: data.kyc?.ninStatus || (bestNinVerified ? 'verified' : undefined),
                 kycStatus: data.kyc?.status || data.kycStatus || 'pending',
@@ -562,21 +586,30 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
                 cacNumber: data.cacNumber,
                 cacVerified: data.cacVerified,
                 idType: data.kyc?.idType || data.idType,
-                // Next of Kin
-                nextOfKin: bestNextOfKin,
+                // Next of Kin — a third party who never dealt with this admin.
+                ...(maySeePii ? { nextOfKin: bestNextOfKin } : {}),
                 // Other
-                bankDetails: {
-                    bankName: bestBankDetails?.bankName || "",
-                    accountNumber: bestBankDetails?.accountNumber || "",
-                    accountName: bestBankDetails?.accountName || bestFullName || (bestFirstName && bestLastName ? `${bestFirstName} ${bestLastName}` : ""),
-                    bankCode: bestBankDetails?.bankCode || ""
-                },
+                ...(maySeePii ? {
+                    bankDetails: {
+                        bankName: bestBankDetails?.bankName || "",
+                        accountNumber: bestBankDetails?.accountNumber || "",
+                        accountName: bestBankDetails?.accountName || bestFullName || (bestFirstName && bestLastName ? `${bestFirstName} ${bestLastName}` : ""),
+                        bankCode: bestBankDetails?.bankCode || ""
+                    },
+                } : {}),
                 metadata: data.metadata,
                 accountType: data.marketplaceAccountType || data.serviceRegistrations?.marketplace?.accountType || data.accountType,
                 // ── Module membership ────────────────────────────────────────────
                 // Pass the full serviceRegistrations map so the admin UI can render
                 // per-module status badges and detect multi-module enrolments.
-                serviceRegistrations: data.serviceRegistrations || {},
+                // Stripped of verificationProfile when the caller may not see
+                // PII: that block is where a module keeps the member's own copy
+                // of their BVN, NIN and bank account, so passing the map through
+                // whole would have handed back exactly what the fields above
+                // were just gated on.
+                serviceRegistrations: maySeePii
+                    ? (data.serviceRegistrations || {})
+                    : stripRegistrationPii(data.serviceRegistrations),
                 gender: data.gender || data.kyc?.gender || data.kyc?.kycData?.gender || Object.values(data.serviceRegistrations || {}).map((reg: any) => reg?.profile?.gender || reg?.gender).find(Boolean) || "",
                 identityDocument: data.identityDocument || "",
             };

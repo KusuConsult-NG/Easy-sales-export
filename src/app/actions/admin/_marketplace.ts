@@ -14,6 +14,7 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { serializeDocs, serializeValue, toMillis } from "@/lib/firestore-serialize";
 import { normalizeAggressive } from "@/lib/canonical/normalizer";
 import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
+import { stripPii } from "@/lib/admin-pii";
 import { safeToISOString } from "@/lib/date-utils";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { normaliseSellerVerification } from "@/lib/seller-verification-shape";
@@ -346,6 +347,20 @@ async function _getStandardSellerVerificationsAction(
             return { success: false as const, error: "Unauthorized", data: null };
         }
 
+        /**
+         * isAdmin() is true for all TEN admin roles, and every row below carries
+         * the applicant's bank details AND the URLs of their ID card and
+         * business certificate. Approving, rejecting or suspending a seller —
+         * the only things this screen does — requires
+         * "marketplace:approve_sellers", which the action fifty lines above
+         * already enforces: super_admin, admin and marketplace_admin.
+         *
+         * So an academy_admin or a support user could not decide a single
+         * application and could read every seller's account number and download
+         * their identity documents.
+         */
+        const maySeeVerificationPii = hasAdminPermission(session.user.roles, "marketplace:approve_sellers");
+
         let cursorSnap = null;
         if (cursorId) {
             cursorSnap = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS).doc(cursorId).get();
@@ -497,8 +512,10 @@ async function _getStandardSellerVerificationsAction(
                     address: normalized.address?.street || "Unknown",
                     state: normalized.address?.state || "Unknown",
                     lga: normalized.address?.lga || "Unknown",
-                    bankDetails: normalized.verificationProfile?.bankDetails,
-                    documents: normalized.verificationProfile?.documents
+                    ...(maySeeVerificationPii ? {
+                        bankDetails: normalized.verificationProfile?.bankDetails,
+                        documents: normalized.verificationProfile?.documents,
+                    } : {}),
                 },
                 status: normalized.verificationProfile?.status || "pending",
                 // Normalised onto the shape the admin screen reads.
@@ -518,7 +535,12 @@ async function _getStandardSellerVerificationsAction(
                 // Applied BEFORE the normalizeAggressive fields, so those still
                 // win — they draw on the user document as well as the
                 // application, which is a wider source than this adapter has.
-                data: {
+                // `canonical` is the raw application normalised, so it carries
+                // whatever the two writers put there — account number, BVN and
+                // NIN among it. Stripped rather than overridden field by field:
+                // a spread of a document nobody controls cannot be gated by
+                // naming the keys you happen to know about.
+                data: maySeeVerificationPii ? {
                     ...canonical,
                     // normalizeAggressive draws on the USER document as well as
                     // the application, which is a wider source than the adapter
@@ -531,7 +553,7 @@ async function _getStandardSellerVerificationsAction(
                         ...(normalized.verificationProfile?.documents ?? {}),
                         ...canonical.documents,
                     }
-                }
+                } : stripPii(canonical)
             };
         });
 
@@ -616,6 +638,12 @@ async function _getMarketplaceUsersAction(options: {
         if (!isAdmin(session.user.roles)) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
+
+        // Same shape as the seller verification list above: isAdmin() admits
+        // every admin role, and each row carried a marketplace buyer's or
+        // seller's bank account. Acting on one requires
+        // "marketplace:approve_sellers" or "marketplace:suspend_sellers".
+        const maySeeBankDetails = hasAdminPermission(session.user.roles, "marketplace:approve_sellers");
 
         const fetchLimit = options.search ? 5000 : (options.limit || 50);
         let q: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.USERS);
@@ -706,12 +734,14 @@ async function _getMarketplaceUsersAction(options: {
                 buyerRole,
                 status: data.status || "active",
                 createdAt: safeToISOString(data.createdAt, new Date(0).toISOString()),
-                bankDetails: serializeValue(data.bankDetails || {
-                    bankName: data.bankName || data.bankAccount?.bankName || "",
-                    accountNumber: data.accountNumber || data.bankAccountNumber || data.bankAccount?.accountNumber || "",
-                    accountName: data.accountName || data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : ""),
-                    bankCode: data.bankCode || data.bankAccount?.bankCode || ""
-                }) ?? null
+                ...(maySeeBankDetails ? {
+                    bankDetails: serializeValue(data.bankDetails || {
+                        bankName: data.bankName || data.bankAccount?.bankName || "",
+                        accountNumber: data.accountNumber || data.bankAccountNumber || data.bankAccount?.accountNumber || "",
+                        accountName: data.accountName || data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : ""),
+                        bankCode: data.bankCode || data.bankAccount?.bankCode || ""
+                    }) ?? null,
+                } : {}),
             };
         }).filter(Boolean) as any[];
 

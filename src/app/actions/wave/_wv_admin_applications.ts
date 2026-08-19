@@ -34,6 +34,18 @@ async function _getWaveApplicationsAction(): Promise<
             return { success: false as const, error: "Unauthorized" , data: null };
         }
 
+        /**
+         * Bank details go only to the callers who can act on these records.
+         *
+         * The gate above admits every admin role; this list carries account
+         * numbers, account names and bank codes. Six lists were already closed
+         * this way — the admin withdrawal queue, the marketplace escrow list,
+         * the farm-nation transaction and registrant lists, the land
+         * verification queue and the WAVE withdrawal queue — each on the
+         * permission required by the action the screen exists to perform.
+         */
+        const maySeeBankDetails = hasAdminPermission(session.user.roles, "wave:approve_applications");
+
         // Audit logging
         await createAdminAuditLog({
             userId: session.user.id,
@@ -136,7 +148,7 @@ async function _getWaveApplicationsAction(): Promise<
                     name: canonical.name,
                     email: canonical.email,
                     phone: canonical.phone,
-                    bankDetails: canonical.bankDetails
+                    ...(maySeeBankDetails ? { bankDetails: canonical.bankDetails } : {}),
                 }
             };
         });

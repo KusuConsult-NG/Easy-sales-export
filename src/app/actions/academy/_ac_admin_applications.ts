@@ -149,6 +149,19 @@ async function _getStandardAcademyApplicationsAction(options: {
             return { success: false, error: "Unauthorized", data: null };
         }
 
+        /**
+         * isAdmin() is true for all TEN admin roles, and both mappers below
+         * attach the applicant's bank name, account number, account name and
+         * bank code. Approving or rejecting an academy application requires
+         * "academy:approve_applications" — super_admin, admin and academy_admin.
+         * A wave_admin or a support user could not act on one row and could read
+         * every learner's account.
+         *
+         * The list itself stays open: a support user answering "did my academy
+         * application go through" needs the status. The bank block does not.
+         */
+        const maySeeBankDetails = hasAdminPermission(session.user.roles, "academy:approve_applications");
+
         const useMemoryPagination = !!options.search || !!options.dateFrom || !!options.dateTo || (options.paymentStatus && options.paymentStatus !== "all") || (options.registry && options.registry !== "all") || options.sortBy === "gender";
         const fetchLimit = useMemoryPagination ? 5000 : (options.limit || 50);
         const orderDirection = options.sortOrder || "desc";
@@ -360,12 +373,12 @@ async function _getStandardAcademyApplicationsAction(options: {
                     ),
                 };
 
-                const bankDetails = uData.bankDetails || {
+                const bankDetails = maySeeBankDetails ? (uData.bankDetails || {
                     bankName: uData.bankName || "N/A",
                     accountNumber: uData.bankAccountNumber || "N/A",
                     accountName: uData.bankAccountName || "N/A",
                     bankCode: uData.bankCode || "N/A"
-                };
+                }) : undefined;
 
                 return {
                     id: app.id,
@@ -380,7 +393,7 @@ async function _getStandardAcademyApplicationsAction(options: {
                         state: mergedData.stateOfOrigin || "Unknown",
                         lga: mergedData.lga || "Unknown",
                         gender: mergedData.gender || "Unknown",
-                        bankDetails
+                        ...(bankDetails ? { bankDetails } : {}),
                     },
                     status: app.status || "pending",
                     data: mergedData,
@@ -449,12 +462,12 @@ async function _getStandardAcademyApplicationsAction(options: {
                     ),
                 };
 
-                const bankDetails = uData.bankDetails || {
+                const bankDetails = maySeeBankDetails ? (uData.bankDetails || {
                     bankName: uData.bankName || "N/A",
                     accountNumber: uData.bankAccountNumber || "N/A",
                     accountName: uData.bankAccountName || "N/A",
                     bankCode: uData.bankCode || "N/A"
-                };
+                }) : undefined;
 
                 return {
                     id: app.id,
@@ -469,7 +482,7 @@ async function _getStandardAcademyApplicationsAction(options: {
                         state: mergedData.stateOfOrigin || "Unknown",
                         lga: mergedData.lga || "Unknown",
                         gender: mergedData.gender || "Unknown",
-                        bankDetails
+                        ...(bankDetails ? { bankDetails } : {}),
                     },
                     status: app.status || "pending",
                     data: mergedData,

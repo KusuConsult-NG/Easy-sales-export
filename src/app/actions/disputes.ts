@@ -12,6 +12,8 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Dispute, Order, DisputeReason, DisputeResolution } from "@/lib/types/marketplace";
 import { hasRole } from "@/lib/role-utils";
+import { hasAdminPermission } from "@/lib/admin-permissions";
+import { recordAdminAction } from "@/lib/audit-log";
 import { FieldValue, Timestamp, FieldPath } from "@/lib/firestore-compat";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
@@ -378,8 +380,14 @@ async function _getAdminDisputesAction(options: { status?: "open" | "under_revie
         // Deliberately NOT switched to isAdmin(), which also admits moderator,
         // support and every module admin. Widening review moderation while
         // fixing a lockout would be a bad trade made quietly.
+        //
+        // Now asked of PERMISSION_MATRIX rather than by naming the two roles
+        // here. "finance:resolve_disputes" is held by super_admin and admin and
+        // nobody else, so the set is unchanged — but the eleven other lists
+        // closed in #151 all ask the matrix, and a hand-written pair of role
+        // names is how the same screen ends up gated two ways.
         const callerRoles = userData?.roles || [];
-        if (!hasRole(callerRoles, "admin") && !hasRole(callerRoles, "super_admin")) {
+        if (!hasAdminPermission(callerRoles, "finance:resolve_disputes")) {
             return { success: false as const, error: "Not authorized as admin", data: null };
         }
 
@@ -502,7 +510,7 @@ async function _getDisputeByIdAction(disputeId: string) { let sessionResult;
         // sibling getAdminDisputesAction requires admin or super_admin for the
         // very same fields. Matched to the sibling so one dispute cannot be read
         // two ways depending on which endpoint is asked.
-        const isResolver = hasRole(callerRoles, "admin") || hasRole(callerRoles, "super_admin");
+        const isResolver = hasAdminPermission(callerRoles, "finance:resolve_disputes");
         const isAdminUser = isAdmin(callerRoles);
         const isBuyer = dispute.buyerId === userId;
         const isSeller = dispute.sellerId === userId;
@@ -598,8 +606,14 @@ async function _updateDisputeStatusAction(
         // Deliberately NOT switched to isAdmin(), which also admits moderator,
         // support and every module admin. Widening review moderation while
         // fixing a lockout would be a bad trade made quietly.
+        //
+        // Now asked of PERMISSION_MATRIX rather than by naming the two roles
+        // here. "finance:resolve_disputes" is held by super_admin and admin and
+        // nobody else, so the set is unchanged — but the eleven other lists
+        // closed in #151 all ask the matrix, and a hand-written pair of role
+        // names is how the same screen ends up gated two ways.
         const callerRoles = userData?.roles || [];
-        if (!hasRole(callerRoles, "admin") && !hasRole(callerRoles, "super_admin")) {
+        if (!hasAdminPermission(callerRoles, "finance:resolve_disputes")) {
             return { success: false as const, error: "Not authorized as admin", data: null };
         }
 
@@ -883,6 +897,37 @@ async function _updateDisputeStatusAction(
                 });
             }
         }
+
+        /**
+         * THE RESOLUTION LEFT NO ADMIN RECORD.
+         *
+         * This action moves escrow money to a buyer or a seller, closes the
+         * dispute and completes or cancels the order — and wrote nothing to the
+         * admin audit log. Its sibling in marketplace/_escrow_actions.ts records
+         * a mere status edit; the one that decides who keeps the money did not.
+         *
+         * The #66 ratchet did not see it: it matches permission-gated writes,
+         * and until #151 this action named its two roles by hand, so the ratchet
+         * read it as ungated and skipped it. Putting the gate on the matrix is
+         * what surfaced this.
+         *
+         * After the money, so the record describes a resolution that happened;
+         * before the notifications, so a failed SMS cannot skip it.
+         */
+        await recordAdminAction({
+            action: 'dispute_resolved',
+            userId,
+            targetId: disputeId,
+            targetType: 'dispute',
+            metadata: {
+                resolution,
+                escrowId,
+                orderId: freshDispute.orderId,
+                amount: escrowAmount,
+                refundAmount: refundAmount ?? null,
+                beneficiaryId: targetId,
+            },
+        });
 
         // Post-transaction notifications (non-fatal)
         try {

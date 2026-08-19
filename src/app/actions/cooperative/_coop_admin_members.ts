@@ -45,6 +45,15 @@ async function _getAllMembersAction(options?: {
             }
         }
 
+        /**
+         * Bank details go only to the callers who can act on these records.
+         * `roles` above is the LIVE set this action already resolves, so the
+         * check below inherits that. Seventh and eighth instances of a list
+         * gated more loosely than the action it feeds; see the WAVE withdrawal
+         * queue for the six before them.
+         */
+        const maySeeBankDetails = hasAdminPermission(roles, "cooperatives:approve_members");
+
         // Audit logging
         await createAdminAuditLog({
             userId: session.user.id,
@@ -123,7 +132,7 @@ async function _getAllMembersAction(options?: {
                     name: canonical.name,
                     email: canonical.email,
                     phone: canonical.phone,
-                    bankDetails: canonical.bankDetails
+                    ...(maySeeBankDetails ? { bankDetails: canonical.bankDetails } : {}),
                 }
             };
         });
