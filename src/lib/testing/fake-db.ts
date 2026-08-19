@@ -319,7 +319,50 @@ function runQuery(store: Map<string, Map<string, Doc>>, q: QueryState): Array<[s
 
 // ─── snapshots ───────────────────────────────────────────────────────────────
 
-function docSnapshot(id: string, data: Doc | undefined) {
+/**
+ * A live document handle attached to a snapshot.
+ *
+ * `snapshot.ref.update(...)` is not decoration: this codebase's self-healing
+ * paths write through it — module-access-check heals a membership found by query,
+ * several admin sweeps repair the row they just read. A snapshot whose ref could
+ * not write would make every one of those paths look like it did nothing, and a
+ * test asserting the heal would fail against correct code.
+ */
+interface LiveRef {
+    id: string;
+    __collection: string;
+    path: string;
+    update(patch: Doc): Promise<void>;
+    set(data: Doc, options?: { merge?: boolean }): Promise<void>;
+    delete(): Promise<void>;
+    get(): Promise<ReturnType<typeof docSnapshot>>;
+}
+
+/** Supplied by installFakeDb so a ref can reach the store it came from. */
+interface StoreOps {
+    doUpdate(collection: string, id: string, patch: Doc): void;
+    doSet(collection: string, id: string, data: Doc, merge?: boolean): void;
+    doDelete(collection: string, id: string): void;
+    read(collection: string, id: string): Doc | undefined;
+}
+
+let ops: StoreOps | null = null;
+
+function liveRef(collection: string, id: string): LiveRef {
+    return {
+        id,
+        __collection: collection,
+        path: `${collection}/${id}`,
+        update: async (patch: Doc) => { ops?.doUpdate(collection, id, patch); },
+        set: async (data: Doc, options?: { merge?: boolean }) => {
+            ops?.doSet(collection, id, data, options?.merge);
+        },
+        delete: async () => { ops?.doDelete(collection, id); },
+        get: async () => docSnapshot(id, ops?.read(collection, id), collection),
+    };
+}
+
+function docSnapshot(id: string, data: Doc | undefined, collection = '') {
     const exists = data !== undefined;
     const stored = exists ? clone(data) : undefined;
     return {
@@ -329,12 +372,12 @@ function docSnapshot(id: string, data: Doc | undefined) {
         // buildDedicatedRow both put it there — and callers read doc.data().id.
         data: () => (exists ? { id, ...stored } : undefined),
         get: (field: string) => (exists ? getPath(stored!, field) : undefined),
-        ref: { id },
+        ref: liveRef(collection, id),
     };
 }
 
-function querySnapshot(rows: Array<[string, Doc]>) {
-    const docs = rows.map(([id, d]) => docSnapshot(id, d));
+function querySnapshot(rows: Array<[string, Doc]>, collection = '') {
+    const docs = rows.map(([id, d]) => docSnapshot(id, d, collection));
     return {
         docs,
         empty: docs.length === 0,
@@ -431,7 +474,8 @@ export function installFakeDb(seed: Record<string, Record<string, Doc>> = {}): F
         if (!d) return Promise.resolve(querySnapshot([]));
 
         if (d.kind === 'doc') {
-            return Promise.resolve(docSnapshot(d.id!, collectionOf(d.collection!).get(d.id!)));
+            return Promise.resolve(
+                docSnapshot(d.id!, collectionOf(d.collection!).get(d.id!), d.collection!));
         }
 
         const rows = runQuery(store, {
@@ -459,7 +503,7 @@ export function installFakeDb(seed: Record<string, Record<string, Doc>> = {}): F
             return Promise.resolve({ data: () => out });
         }
 
-        return Promise.resolve(querySnapshot(rows));
+        return Promise.resolve(querySnapshot(rows, d.collection!));
     });
 
     // ── writes ───────────────────────────────────────────────────────────────
@@ -486,6 +530,16 @@ export function installFakeDb(seed: Record<string, Record<string, Doc>> = {}): F
         if (!existing) return;
         applyPatch(existing, patch ?? {}, now(), false);
         col.set(id, existing);
+    };
+
+    // Published so a snapshot's `ref` can write back into THIS store. Reassigned
+    // on every install, so the most recent store is the one a ref reaches — which
+    // is correct, because a ref never outlives the test that made it.
+    ops = {
+        doUpdate,
+        doSet,
+        doDelete: (collection, id) => { collectionOf(collection).delete(id); },
+        read: (collection, id) => collectionOf(collection).get(id),
     };
 
     // ── batches: queued, applied on commit ───────────────────────────────────
@@ -533,7 +587,7 @@ export function installFakeDb(seed: Record<string, Record<string, Doc>> = {}): F
         const collection = ref?.__collection;
         const id = ref?.id;
         if (!collection || !id) return Promise.resolve(docSnapshot(id ?? 'unknown', undefined));
-        return Promise.resolve(docSnapshot(id, collectionOf(collection).get(id)));
+        return Promise.resolve(docSnapshot(id, collectionOf(collection).get(id), collection));
     });
     g.mockFirestoreTxSet.mockImplementation((ref: any, data: Doc) => {
         // merge comes from the descriptor, not a third argument — see
