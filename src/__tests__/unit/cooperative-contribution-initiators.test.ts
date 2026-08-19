@@ -104,7 +104,12 @@ describe('the contribute route', () => {
     });
 
     it('and lands the member on a page that exists', () => {
-        expect(route).toContain('callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/cooperatives/verify-payment`');
+        // The base moved from a bare `${process.env.NEXT_PUBLIC_APP_URL}` to
+        // getBaseUrl() — unset, that variable interpolated as the string
+        // "undefined" and the member who had just paid was sent nowhere. See
+        // payment-callback-base-url.test.ts. What this test owns is the PATH,
+        // which is what was wrong here originally.
+        expect(route).toContain('callback_url: `${await getBaseUrl()}/cooperatives/verify-payment`');
         expect(route).not.toContain('/cooperatives/contribute/callback');
     });
 

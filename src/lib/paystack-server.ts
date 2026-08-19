@@ -215,6 +215,32 @@ export function verifyPaystackWebhook(
 }
 
 /**
+ * The base for the LAST-RESORT callback below, when no caller supplied one.
+ *
+ * It was `${process.env.NEXT_PUBLIC_APP_URL}`, read bare. Nothing requires that
+ * variable — env-validator lists it as recommended — so on a deploy that never
+ * set it the default callback became the literal string
+ * "undefined/cooperatives/verify-payment", and a payer who reached this
+ * fallback was redirected somewhere that does not resolve. This is the shared
+ * initializer behind all eight payment modules, so it is the widest of the
+ * three places that read it this way.
+ *
+ * getBaseUrl() prefers the request host and falls back to www rather than the
+ * apex, which matters because the apex answers POST with 405. It reads
+ * headers(), so it needs a request scope; every caller of
+ * initializePaystackPayment is a server action, but a throw here would fail a
+ * payment that was otherwise fine, so it degrades to the same www host instead.
+ */
+async function resolveDefaultBase(): Promise<string> {
+    try {
+        const { getBaseUrl } = await import("@/lib/server-utils");
+        return await getBaseUrl();
+    } catch {
+        return process.env.NEXT_PUBLIC_APP_URL || "https://www.easysalesexport.com";
+    }
+}
+
+/**
  * Initialize a Paystack payment (server-side)
  * @param email - Customer email
  * @param amount - Amount in kobo
@@ -256,7 +282,7 @@ export async function initializePaystackPayment(
                     amount,
                     channels,
                     metadata,
-                    callback_url: callbackUrl || (metadata.callback_url as string) || `${process.env.NEXT_PUBLIC_APP_URL}/cooperatives/verify-payment`,
+                    callback_url: callbackUrl || (metadata.callback_url as string) || `${await resolveDefaultBase()}/cooperatives/verify-payment`,
                 }),
                 signal: AbortSignal.timeout(5000),
             });

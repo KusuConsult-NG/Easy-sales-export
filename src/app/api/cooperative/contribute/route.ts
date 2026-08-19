@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { rateLimit, createRateLimitResponse } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
+import { getBaseUrl } from "@/lib/server-utils";
 
 // Rate limiter for cooperative contributions (prevent double submissions)
 const contributionLimiter = rateLimit(rateLimitConfig.payment);
@@ -134,7 +135,19 @@ export async function POST(request: NextRequest) {
                     purpose: 'cooperative_contribution',
                     contributionType,
                 },
-                callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/cooperatives/verify-payment`,
+                // The base comes from the request, not from a bare env read.
+                //
+                // This was `${process.env.NEXT_PUBLIC_APP_URL}/...`. That
+                // variable is not in env-validator's required list, so an
+                // environment that never set it starts and serves normally —
+                // and the string becomes "undefined/cooperatives/verify-payment".
+                // Paystack accepts the transaction and sends the member who has
+                // just paid to a URL that resolves nowhere, with no page to run
+                // verifyContributionPaymentAction. The same read was removed
+                // from the academy and export initiators in earlier passes;
+                // these two were missed because the fix there was about the
+                // callback PATH and this is about the base in front of it.
+                callback_url: `${await getBaseUrl()}/cooperatives/verify-payment`,
             }),
         });
 

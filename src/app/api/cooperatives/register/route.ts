@@ -8,6 +8,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { generateReference } from "@/lib/paystack";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { COOPERATIVE_CONFIG } from "@/lib/constants";
+import { getBaseUrl } from "@/lib/server-utils";
 
 export async function POST(request: NextRequest) {
     try {
@@ -83,7 +84,12 @@ export async function POST(request: NextRequest) {
                 amount: registrationFee * 100,
                 reference: paymentReference,
                 channels: ["bank_transfer"],
-                callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/cooperatives/verify-payment?reference=${paymentReference}&type=registration`,
+                // See the note in api/cooperative/contribute: a bare
+                // NEXT_PUBLIC_APP_URL read builds "undefined/cooperatives/..."
+                // when the variable is unset, and nothing validates it. This
+                // one is the registration fee, so the member who lands nowhere
+                // has paid to join and has no page to complete the join on.
+                callback_url: `${await getBaseUrl()}/cooperatives/verify-payment?reference=${paymentReference}&type=registration`,
                 metadata: {
                     membershipId,
                     userId: session.user.id,
