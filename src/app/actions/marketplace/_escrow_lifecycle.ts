@@ -5,7 +5,7 @@ import { logger } from '@/lib/logger';
 import { requireAdmin } from "@/lib/require-admin";
 import { claimStatusTransition, claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { ESCROW_RELEASABLE_FROM } from "@/lib/escrow-status";
-import { claimPaymentOnce, markFulfilmentFailed } from "@/lib/wallet-ledger";
+import { claimPaymentOnce, markFulfilmentFailed, creditWalletOnce } from "@/lib/wallet-ledger";
 import { FieldValue } from "@/lib/firestore-compat";
 import { createAdminAuditLog, logAdminFinancialAction } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
@@ -455,40 +455,67 @@ async function _releaseEscrowAction(
             };
         }
 
+        const releasing = escrowData as EscrowTransaction;
+        const gross = Number((releasing as any).amount) || 0;
+
+        // The seller's share, net of the platform fee — see the note in
+        // _escrow_actions.ts. The fee was computed on every escrow and taken
+        // from none of them.
+        const netStored = Number((releasing as any).netAmount);
+        const sellerPayout = Number.isFinite(netStored) && netStored > 0 ? netStored : gross;
+
+        // CREDITED THROUGH THE LEDGER PRIMITIVE, not by hand.
+        //
+        // This read the wallet and wrote a computed balance:
+        //
+        //     if (!walletSnap.exists) tx.set(walletRef, { balance: data.amount })
+        //     else                    tx.update(walletRef, { balance: increment(...) })
+        //
+        // The increment branch is safe. The other is not, and the claim above
+        // does not cover it: the claim stops the same escrow being released
+        // twice, while this loses money when TWO DIFFERENT escrows for the same
+        // seller are released at once before that seller has a wallet row —
+        // both take the set branch and the last write wins, so one release is
+        // simply gone. db.runTransaction takes no lock on this adapter and
+        // cannot roll back.
+        //
+        // It was also the only release path with no idempotency reference, so a
+        // retry credited again. Its sibling in _escrow_actions.ts was moved onto
+        // credit_wallet_once for exactly these reasons; this one was missed,
+        // which is easy to do because nothing imports it — see the note on the
+        // export below.
+        //
+        // status "disbursement", NOT "completed": platform_revenue_totals() sums
+        // completed rows, and an escrow release is money going OUT.
+        const credit = await creditWalletOnce({
+            reference: `escrow-release:${escrowId}`,
+            userId: releasing.sellerId,
+            amount: sellerPayout,
+            paymentType: "escrow_release",
+            source: "marketplace_escrow",
+            status: "disbursement",
+            metadata: { escrowId, productName: (releasing as any).productName ?? "" },
+        });
+
+        const balanceAfter = credit.balance;
+        const balanceBefore = credit.claimed ? balanceAfter - sellerPayout : balanceAfter;
+
         await db.runTransaction(async (tx) => {
             const data = escrowData as EscrowTransaction;
 
-            // Credit the Seller's Wallet
-            const walletRef = db.collection(COLLECTIONS.WALLETS).doc(data.sellerId);
-            const walletSnap = await tx.get(walletRef);
-            let balanceBefore = 0;
-            
-            if (!walletSnap.exists) {
-                tx.set(walletRef, {
-                    userId: data.sellerId,
-                    balance: data.amount,
-                    currency: "NGN",
-                    createdAt: FieldValue.serverTimestamp(),
-                    updatedAt: FieldValue.serverTimestamp()
-                });
-            } else {
-                balanceBefore = walletSnap.data()?.balance || 0;
-                tx.update(walletRef, {
-                    balance: FieldValue.increment(data.amount),
-                    updatedAt: FieldValue.serverTimestamp()
-                });
-            }
-
             // Record transaction in seller's wallet_transactions history
-            const sellerTxnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc();
+            // Derived from the escrow rather than auto-generated, so a retry
+            // overwrites the row instead of showing the seller two payouts.
+            const sellerTxnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS)
+                .doc(`escrow-release-${escrowId}`);
             tx.set(sellerTxnRef, {
                 id: sellerTxnRef.id,
                 walletId: data.sellerId,
                 userId: data.sellerId,
                 type: "funding",
-                amount: data.amount,
+                amount: sellerPayout,
                 balanceBefore,
-                balanceAfter: balanceBefore + data.amount,
+                balanceAfter,
                 reference: escrowId,
                 description: `Payout for escrow #${escrowId.substring(0, 8)} (Escrow released)`,
                 status: "completed",
@@ -504,7 +531,7 @@ async function _releaseEscrowAction(
                 userId: data.sellerId,
                 type: "escrow_payout",
                 module: "escrow",
-                amount: data.amount,
+                amount: sellerPayout,
                 currency: "NGN",
                 status: "completed",
                 date: FieldValue.serverTimestamp(),
@@ -565,4 +592,16 @@ async function _releaseEscrowAction(
 }
 
 
+/**
+ * NOTHING IMPORTS THIS.
+ *
+ * No page, no route, not even the marketplace index. The release the admin
+ * escrow screens actually call is releaseEscrowFunds in _escrow_actions.ts.
+ *
+ * It is left in place rather than deleted because removing a "use server"
+ * export is a decision for the owner, not a side effect of a bug fix — the same
+ * call as the /vendor parallel. But a dead path that credits wallets is a
+ * defect waiting to be re-wired, so it has been brought onto the same
+ * primitives as the live one instead of being left as it was.
+ */
 export const releaseEscrowAction = withFlexibleSafeAction("releaseEscrowAction", _releaseEscrowAction);

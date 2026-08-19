@@ -463,6 +463,37 @@ async function _releaseEscrowFunds(
         const escrowAmount = data.amount || data.grossAmount || 0;
         if (escrowAmount <= 0) return { success: false as const, error: "Invalid transaction amount" };
 
+        /**
+         * WHAT THE SELLER IS OWED — net of the platform fee.
+         *
+         * THE DEFECT
+         * ----------
+         * Three escrow creators compute `platformFee` from
+         * MARKETPLACE_CONFIG.platformFee (5%) and store it, with `netAmount`,
+         * on every escrow row:
+         *
+         *   _payment_orders.ts            at order placement
+         *   _payment_verify.ts            at payment verification
+         *   infrastructure/payments       at the webhook
+         *
+         * NOTHING READ EITHER FIELD. Both release paths credited the seller
+         * `data.amount` — the gross — so the platform's commission was computed
+         * on every sale, written to the database, and never taken. The seller
+         * onboarding pages state "Platform fee: 5% per transaction" as an agreed
+         * term (BankAccountStep, TermsStep), and the marketplace collected none
+         * of it.
+         *
+         * The refund path is different and correct: a refunded buyer gets the
+         * GROSS back, because gross is what they paid.
+         *
+         * `netAmount` is preferred and the gross is the fallback, so an escrow
+         * written before the fee was recorded still pays out in full rather
+         * than paying nothing.
+         */
+        const sellerPayout = Number.isFinite(Number(data.netAmount)) && Number(data.netAmount) > 0
+            ? Number(data.netAmount)
+            : escrowAmount;
+
         const orderId = data.orderId;
 
         // The order's sibling escrows are deliberately NOT read here. A snapshot
@@ -523,7 +554,7 @@ async function _releaseEscrowFunds(
         const credit = await creditWalletOnce({
             reference: `escrow-release:${transactionId}`,
             userId: data.sellerId,
-            amount: escrowAmount,
+            amount: sellerPayout,
             paymentType: "escrow_release",
             source: "marketplace_escrow",
             status: "disbursement",
@@ -533,7 +564,7 @@ async function _releaseEscrowFunds(
         // claimed:false means an earlier attempt already credited this escrow.
         // That is success, not an error — the money is where it should be.
         const balanceAfter = credit.balance;
-        const balanceBefore = credit.claimed ? balanceAfter - escrowAmount : balanceAfter;
+        const balanceBefore = credit.claimed ? balanceAfter - sellerPayout : balanceAfter;
 
         await db.runTransaction(async (tx) => {
             // Create payout instruction
@@ -543,7 +574,7 @@ async function _releaseEscrowFunds(
                 escrowId: transactionId,
                 recipientId: data.sellerId,
                 recipientEmail: data.sellerEmail || "",
-                amount: escrowAmount,
+                amount: sellerPayout,
                 status: "pending_admin_action",
                 description: `Release escrow funds for ${data.productName}`,
                 createdAt: FieldValue.serverTimestamp(),
@@ -563,7 +594,7 @@ async function _releaseEscrowFunds(
                 walletId: data.sellerId,
                 userId: data.sellerId,
                 type: "funding",
-                amount: escrowAmount,
+                amount: sellerPayout,
                 balanceBefore,
                 balanceAfter,
                 reference: transactionId,
@@ -581,7 +612,7 @@ async function _releaseEscrowFunds(
                 userId: data.sellerId,
                 type: "escrow_payout",
                 module: "escrow",
-                amount: escrowAmount,
+                amount: sellerPayout,
                 currency: "NGN",
                 status: "completed",
                 date: FieldValue.serverTimestamp(),
@@ -635,7 +666,7 @@ async function _releaseEscrowFunds(
             action: 'escrow_released',
             targetId: transactionId,
             targetType: "escrow",
-            metadata: { sellerId: data.sellerId, amount: escrowAmount }
+            metadata: { sellerId: data.sellerId, amount: sellerPayout, gross: escrowAmount, platformFee: data.platformFee ?? 0 }
         });
 
         await Promise.allSettled([
@@ -643,7 +674,7 @@ async function _releaseEscrowFunds(
                 userId: data.sellerId,
                 type: "escrow",
                 title: "Escrow Funds Released",
-                message: `₦${escrowAmount.toLocaleString()} for "${data.productName}" has been released.`,
+                message: `₦${sellerPayout.toLocaleString()} for "${data.productName}" has been released.`,
                 link: `/escrow/${transactionId}`,
                 linkText: "View Details" }),
             createNotificationAction({
@@ -661,8 +692,8 @@ async function _releaseEscrowFunds(
         const orderRef = data.orderId;
 
         await Promise.allSettled([
-            sellerPhone ? smsEscrowReleased(sellerPhone, orderRef, escrowAmount) : Promise.resolve(),
-            pushEscrowReleased(data.sellerId, orderRef, escrowAmount, transactionId),
+            sellerPhone ? smsEscrowReleased(sellerPhone, orderRef, sellerPayout) : Promise.resolve(),
+            pushEscrowReleased(data.sellerId, orderRef, sellerPayout, transactionId),
         ]).catch((e) => logger.error("[releaseEscrowFunds] SMS/Push notifications failed:", e));
 
         return { error: null,  success: true as const, data: null };

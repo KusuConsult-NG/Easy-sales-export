@@ -50,7 +50,11 @@ describe('a claimed payment that funded nothing is flagged', () => {
         const src = code(LIFECYCLE);
 
         expect(src).toContain('await markFulfilmentFailed(paymentReference, reason);');
-        expect(src).toContain('import { claimPaymentOnce, markFulfilmentFailed }');
+        // The IMPORT, not the exact import line. It was pinned as
+        // `import { claimPaymentOnce, markFulfilmentFailed }`, which broke the
+        // moment creditWalletOnce joined it (#110) — an assertion about
+        // punctuation rather than about the thing it cares about.
+        expect(src).toMatch(/import \{[^}]*\bmarkFulfilmentFailed\b[^}]*\} from "@\/lib\/wallet-ledger"/);
     });
 
     it('does so on the branch where the status claim failed', () => {
