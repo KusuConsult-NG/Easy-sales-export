@@ -78,9 +78,26 @@ function adapterMethods(): Set<string> {
     return names;
 }
 
+/**
+ * The harness is TWO files now.
+ *
+ * jest.setup.js used to carry the whole fluent surface twice over, once per
+ * mocked module. It was deduplicated into src/lib/testing/firestore-mock-db.js,
+ * so a check that reads only jest.setup.js now reads the wiring and not the
+ * surface — and would report every method missing while the harness was
+ * complete. Both files, always.
+ */
+const HARNESS_FILES = ['jest.setup.js', 'src/lib/testing/firestore-mock-db.js'];
+
+function harnessSource(): string {
+    return HARNESS_FILES
+        .map((f) => readFileSync(join(process.cwd(), f), 'utf-8'))
+        .join('\n');
+}
+
 /** Method names the mock implements, however they are written. */
 function harnessMethods(): Set<string> {
-    const src = readFileSync(join(process.cwd(), 'jest.setup.js'), 'utf-8');
+    const src = harnessSource();
     const names = new Set<string>();
 
     // `foo: (` — arrow-style stubs, and `foo: docObj` — reference-style.
@@ -144,13 +161,17 @@ describe('the jest harness against the real adapter', () => {
         // failure that no assertion can distinguish from a refusal.
         const DOC_REF_SURFACE = ['get', 'set', 'update', 'delete'];
 
-        const src = readFileSync(join(process.cwd(), 'jest.setup.js'), 'utf-8');
+        const src = harnessSource();
 
-        // Each `const docObj = (id) => { ... };` block, plus the modular
-        // docRefFor. Located by name so a new shape has to be added here
-        // deliberately.
+        // Each document-ref shape, located by name so a new one has to be added
+        // here deliberately. There used to be three — two copies of `docObj` and
+        // the modular `docRefFor` — which is exactly why `delete` could be
+        // missing from two of them while the flat check above saw it as covered.
+        // Deduplicating them into `makeDocRef` is what removed that class of gap;
+        // the older names stay in the pattern so re-introducing a second shape is
+        // still caught.
         const shapes: Array<{ name: string; body: string }> = [];
-        for (const m of src.matchAll(/const (docObj|docRefFor) = \([^)]*\) =>/g)) {
+        for (const m of src.matchAll(/(?:const (?:docObj|docRefFor) = \([^)]*\) =>|function (makeDocRef)\()/g)) {
             const start = m.index ?? 0;
             // Take the balanced body that follows.
             let depth = 0, end = start;
@@ -173,12 +194,23 @@ describe('the jest harness against the real adapter', () => {
                     return !t.startsWith('//') && !t.startsWith('*') && !t.startsWith('/*');
                 })
                 .join('\n');
-            shapes.push({ name: `${m[1]} @ line ${src.slice(0, start).split('\n').length}`, body });
+            shapes.push({ name: `${m[1] ?? m[2] ?? 'shape'} @ line ${src.slice(0, start).split('\n').length}`, body });
         }
 
-        // Sanity: without this the loop below can pass against zero shapes,
-        // which is the vacuity failure this file exists to prevent.
-        expect(shapes.length).toBeGreaterThanOrEqual(3);
+        // At least one shape must be found, or the loop below passes against
+        // nothing — the vacuity failure this file exists to prevent.
+        expect(shapes.length).toBeGreaterThanOrEqual(1);
+
+        // And a SYNTHETIC POSITIVE CONTROL, because a count floor stops meaning
+        // anything once the count is one. The detector is run over a planted
+        // shape that is missing `delete`, and must flag it. If the regex ever
+        // stops matching the real shape, this still fails.
+        const planted = `function makeDocRef(collection, id) {
+            return { get: () => 1, set: () => 2, update: () => 3 };
+        }`;
+        const plantedGaps = DOC_REF_SURFACE.filter(
+            (m) => !new RegExp(`\\b${m}\\s*:`).test(planted));
+        expect(plantedGaps).toEqual(['delete']);
 
         const gaps: string[] = [];
         for (const shape of shapes) {
@@ -219,7 +251,7 @@ describe('the jest harness against the real adapter', () => {
         // The supabase-db surface has been checked since #144. This module was
         // not, purely because the earlier failures happened to be there.
         const realSrc = readFileSync(join(process.cwd(), 'src/lib/firebase-admin.ts'), 'utf-8');
-        const harnessSrc = readFileSync(join(process.cwd(), 'jest.setup.js'), 'utf-8');
+        const harnessSrc = harnessSource();
 
         const exported = [...realSrc.matchAll(/^export (?:async )?(?:function|const) ([a-zA-Z][a-zA-Z0-9_]*)/gm)]
             .map((m) => m[1]);
@@ -255,7 +287,7 @@ describe('the jest harness against the real adapter', () => {
     it('gives the mocked auth handle the methods src calls on it', () => {
         // `adminAuth: {}` satisfies a presence check and throws on every call.
         // These are the methods actually reached from src.
-        const harnessSrc = readFileSync(join(process.cwd(), 'jest.setup.js'), 'utf-8');
+        const harnessSrc = harnessSource();
         // Comment lines removed before matching.
         //
         // The comment explaining this fix quotes `adminAuth: {}` to say what was
@@ -305,7 +337,7 @@ describe('the jest harness against the real adapter', () => {
         // and nothing said so. The check above passes happily, because it only
         // ever looked at class members.
         const adapterSrc = readFileSync(join(process.cwd(), 'src/lib/supabase-db.ts'), 'utf-8');
-        const harnessSrc = readFileSync(join(process.cwd(), 'jest.setup.js'), 'utf-8');
+        const harnessSrc = harnessSource();
 
         const exported = [...adapterSrc.matchAll(/^export (?:async )?(?:function|const) ([a-zA-Z][a-zA-Z0-9_]*)/gm)]
             .map((m) => m[1]);
@@ -332,7 +364,7 @@ describe('the jest harness against the real adapter', () => {
         // The narrower lesson from docRef.set(). A write stub that returns a
         // resolved promise and calls no jest.fn() is indistinguishable from a
         // working one, right up until a test asserts on it.
-        const src = readFileSync(join(process.cwd(), 'jest.setup.js'), 'utf-8');
+        const src = harnessSource();
         const writeStubs = ['set', 'update', 'add', 'delete', 'create'];
 
         const lines = src.split('\n');
@@ -342,10 +374,24 @@ describe('the jest harness against the real adapter', () => {
             const m = lines[i].match(/^\s+(set|update|add|delete|create):\s*\([^)]*\)\s*=>\s*(.*)$/);
             if (!m) continue;
 
-            // A stub may be one line, or open a block and record on the next.
-            // Reading only the first line reported every multi-line stub as
-            // silent — which is what the first version of this check did.
-            const body = [m[2], ...lines.slice(i + 1, i + 4)].join(' ');
+            // A stub may be one line, or open a block and record several lines
+            // down. Reading only the first line reported every multi-line stub as
+            // silent, which is what the first version of this check did — and a
+            // fixed four-line window then reported a correct stub as silent the
+            // moment an explanatory comment sat between the arrow and the
+            // recorder. Neither is a property of the stub.
+            //
+            // So the body is the whole property: everything up to the next line
+            // indented no deeper than the stub itself. That is what "does this
+            // stub record" is actually a question about.
+            const indent = lines[i].match(/^\s*/)![0].length;
+            const bodyLines = [m[2]];
+            for (let j = i + 1; j < lines.length; j++) {
+                const line = lines[j];
+                if (line.trim().length > 0 && line.match(/^\s*/)![0].length <= indent) break;
+                bodyLines.push(line);
+            }
+            const body = bodyLines.join(' ');
             // Any global recorder, not just the mockFirestore family.
             //
             // This tested /mockFirestore/, which was every recorder in the file

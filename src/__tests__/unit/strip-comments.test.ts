@@ -252,15 +252,30 @@ describe('it agrees with the naive version everywhere the naive version is right
         if (naiveLines < goodLines * 0.9) AFFECTED.push(rel);
     }
 
-    it('and the files where it does not is a KNOWN list — nine, not one', () => {
-        // I wrote this expecting csp.ts alone. It is nine files. Recording the
+    it('and the files where it does not is a KNOWN list — ten, not one', () => {
+        // I wrote this expecting csp.ts alone. It is ten files. Recording the
         // measured number rather than the assumed one is the whole point of
         // measuring.
         //
         // Pinned so a new one is noticed. If this list GROWS, some suite is
         // asserting against text it did not expect.
-        expect(AFFECTED.length).toBeLessThanOrEqual(9);
+        //
+        // NINE became TEN when harness-covers-adapter.test.ts was edited, and the
+        // ratchet caught it on the same run — which is the ratchet working, so it
+        // is raised rather than relaxed. The mechanism is the one this module
+        // exists for, in its second form: that file contains the LITERAL '/*'
+        // inside a string, at `!t.startsWith('/*')`, twice. The naive regex opens
+        // a block comment there and runs to the next real `*/`, and how much it
+        // eats depends on what sits between them — so editing prose in the file
+        // changed the damage from under the 10% threshold to well over it.
+        //
+        // Nothing reads that file with a naive stripper (it strips the harness
+        // files, using its own filter, and asserts on its own source nowhere), so
+        // no assertion is affected. It is on the list because the list is about
+        // which files the naive stripper mangles, not about which are read.
+        expect(AFFECTED.length).toBeLessThanOrEqual(10);
         expect(AFFECTED).toContain('src/lib/csp.ts');
+        expect(AFFECTED).toContain('src/__tests__/unit/harness-covers-adapter.test.ts');
     });
 
     it('only two of them are application source, which is what narrows the risk', () => {
