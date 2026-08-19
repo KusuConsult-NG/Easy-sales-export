@@ -183,6 +183,45 @@ describe('onboardLegacyMemberAction — who may do it', () => {
         expect((await onboard()).success).toBe(true);
     });
 
+    it('REFUSES a plain admin onboarding somebody with admin roles (finding #87)', async () => {
+        // The third role-writer, and the one with no escalation guard.
+        // admin-permissions.ts's includesPrivilegedRole exists because both
+        // role-writing endpoints accepted whatever list they were handed, and
+        // its header names them: bulkAssignRolesAction and
+        // updateUserRolesAction. This is a third — `data.roles` is written
+        // wholesale onto the user document, LegacyOnboardingSchema accepts
+        // "admin" and "super_admin" as values, and the only gate is
+        // `users:create`, which PERMISSION_MATRIX gives to plain `admin`.
+        //
+        // So an admin could open this screen, type any email address, tick
+        // super_admin, and mint an account holding exactly the permissions the
+        // matrix withholds from them — on a new identity rather than their own,
+        // which is if anything harder to notice.
+        actAs('admin-2', ['admin']);
+
+        expect(await onboard(form({ roles: ['cooperative_member', 'super_admin'] })))
+            .toMatchObject({
+                success: false,
+                error: 'Only a super admin can onboard a member with admin roles',
+            });
+        expect(store.get(COLLECTIONS.USERS, NEW_UID)).toBeUndefined();
+    });
+
+    it('and refuses plain "admin" too', async () => {
+        actAs('admin-2', ['admin']);
+        expect(((await onboard(form({ roles: ['admin'] }))) as any).success).toBe(false);
+    });
+
+    it('a SUPER ADMIN may — the refusal is a permission, not a wall', async () => {
+        expect((await onboard(form({ roles: ['cooperative_member', 'admin'] }))).success).toBe(true);
+        expect(user().roles).toEqual(['cooperative_member', 'admin']);
+    });
+
+    it('and a plain admin may still onboard an ordinary member', async () => {
+        actAs('admin-2', ['admin']);
+        expect((await onboard(form({ roles: ['cooperative_member'] }))).success).toBe(true);
+    });
+
     it('re-reads the roles from the database when the session is stale', async () => {
         actAs('promoted-1', ['user']);
         store.seed(COLLECTIONS.USERS, 'promoted-1', { roles: ['super_admin'] });

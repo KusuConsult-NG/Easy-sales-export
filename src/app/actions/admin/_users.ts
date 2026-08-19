@@ -503,9 +503,33 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
 
             const derivedFirstName = !isPlaceholder(bestFirstName) ? bestFirstName : null;
             const derivedFullName  = !isPlaceholder(bestFullName)  ? bestFullName  : null;
+            /**
+             * `data.name` is in this chain now.
+             *
+             * The comment at the top of this mapper enumerates the schema
+             * generations it supports and names the third one "Auth-only schema:
+             * name stored from Firebase Auth display name" — and the chain read
+             * `displayName` and never `name`. The sweep through
+             * serviceRegistrations twenty lines above DOES honour `profile.name`,
+             * so a name held on a module registration was used while the same
+             * field on the user document was skipped.
+             *
+             * Three other readers of the same field disagree with this one:
+             * cooperative/_coop_identity.ts resolves `userData?.name` FIRST,
+             * admin/_marketplace.ts reads `data.fullName || data.name`, and
+             * lib/seller-trust.ts lists it among its sources. Only the admin
+             * user table did not, and the consequence was visible: with no
+             * firstName and no fullName the chain fell through to the PHONE
+             * NUMBER, so those rows showed a phone where every other screen
+             * showed the person's name.
+             *
+             * Placed after fullName so nobody who already has one sees a change.
+             */
+            const derivedAuthName  = !isPlaceholder(data.name)     ? data.name     : null;
             const derivedName = derivedFirstName
                 ? [derivedFirstName, data.otherName, bestLastName].filter(Boolean).join(" ").trim()
-                : (derivedFullName || data.displayName || (bestPhone && bestPhone !== "" ? bestPhone : data.email) || "Unknown");
+                : (derivedFullName || derivedAuthName || data.displayName
+                    || (bestPhone && bestPhone !== "" ? bestPhone : data.email) || "Unknown");
 
             return {
                 id: doc.id,

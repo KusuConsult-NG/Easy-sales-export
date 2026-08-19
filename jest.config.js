@@ -62,7 +62,7 @@ const customJestConfig = {
      *   admin/_academy               8.8 -> 80.9
      *   academy/_ac_progress         6.2 -> 92.3
      *
-     * AND AGAIN, 41/31 -> 48/39:
+     * AND AGAIN, 41/31 -> 48/39, and on to admin/_users:
      *
      *   wave/_wv_applications        11.1 -> 93.1
      *   farm-nation/_fn_onboarding    5.3 -> 88.9
@@ -77,8 +77,9 @@ const customJestConfig = {
      *   village-market                 17.9 -> 83.2
      *   academy/_ac_admin_applications 20.2 -> 93.0
      *   admin/_legacy                   9.1 -> 94.7
+     *   admin/_users                   40.1 -> 88.4
      *
-     * Several of them found a defect on the way — see #77 to #84.
+     * Several of them found a defect on the way — see #77 to #87.
      *
      * WHY THE NUMBER IS NOT AS BAD AS IT SOUNDS, NOR AS GOOD AS THE SUITE COUNT
      * -------------------------------------------------------------------------

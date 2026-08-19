@@ -14,7 +14,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { LegacyOnboardingSchema } from "@/lib/schemas";
 import { sendLegacyMemberWelcomeEmail } from "@/lib/email-notifications";
-import { hasAdminPermission } from "@/lib/admin-permissions";
+import { hasAdminPermission, includesPrivilegedRole, isSuperAdmin } from "@/lib/admin-permissions";
 import { requireAdmin } from "@/lib/require-admin";
 // ============================================
 // Import Legacy Cooperative Member
@@ -194,6 +194,34 @@ async function _onboardLegacyMemberAction(
         }
 
         const data = validated.data;
+
+        /**
+         * THE THIRD ROLE-WRITER, and the one that had no escalation guard.
+         *
+         * admin-permissions.ts's includesPrivilegedRole exists because both
+         * role-writing endpoints accepted whatever list they were handed, and
+         * its header names them: bulkAssignRolesAction and
+         * updateUserRolesAction. Both route through it now.
+         *
+         * This is a third. `data.roles` is written wholesale onto the user
+         * document below, LegacyOnboardingSchema's UserRoleSchema accepts
+         * "admin" and "super_admin" as values, and the only gate in front of it
+         * is `users:create` — which PERMISSION_MATRIX gives to plain `admin`.
+         *
+         * So an admin could open the legacy-onboarding screen, type any email
+         * address, tick super_admin, and mint an account holding exactly the
+         * permissions the matrix withholds from them — collecting them on a new
+         * identity rather than their own, which is if anything harder to notice.
+         *
+         * Same rule, same helper, so the three cannot drift: any resulting role
+         * set containing a privileged role needs a super_admin to write it.
+         */
+        if (includesPrivilegedRole(data.roles) && !isSuperAdmin(roles)) {
+            return {
+                error: "Only a super admin can onboard a member with admin roles",
+                success: false as const,
+            };
+        }
         data.email = data.email.toLowerCase(); // Permanent Fix: Force lowercase normalization
 
         // 1. Resolve Identity and Enforce Uniqueness (with Auto-Resolution)
