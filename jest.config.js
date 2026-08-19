@@ -75,6 +75,13 @@ const customJestConfig = {
         // staging database. They have their own config and setup.
         // Run them with: npm run test:db
         '/__tests__/db-integration/',
+        // ── Real-Postgres SQL tests ───────────────────────────────────────────
+        // These talk to an actual database through `pg`. The default run mocks
+        // @/lib/supabase-db globally in jest.setup.js, and loading that mock
+        // around a test that opens its own connection is not merely pointless —
+        // it is how a suite ends up green while exercising a fake.
+        // Run them with: npm run test:pg
+        '/src/__tests__/pg/',
         // ── Playwright e2e specs ───────────────────────────────────────────────
         // These files import @playwright/test which Jest cannot resolve.
         // Run them with: npx playwright test

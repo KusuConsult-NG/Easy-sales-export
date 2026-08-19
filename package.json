@@ -50,6 +50,9 @@
     "repair:savings": "tsx scripts/repair-savings-balance.ts",
     "backfill:fixsav": "tsx scripts/backfill-fixed-savings-ledger.ts",
     "backfill:exportgoals": "tsx scripts/backfill-export-funding-goals.ts",
+    "pg:start": "bash scripts/local-postgres.sh start",
+    "pg:stop": "bash scripts/local-postgres.sh stop",
+    "test:pg": "jest --config jest.config.pg.js --runInBand",
     "stack:up": "bash scripts/local-stack/up.sh",
     "stack:down": "bash scripts/local-stack/down.sh"
   },
