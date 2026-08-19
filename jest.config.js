@@ -40,12 +40,22 @@ const customJestConfig = {
      * only be raised. Lowering one requires saying why here, which is the
      * review conversation the old numbers skipped.
      *
-     * RAISED, as behavioural suites replaced structural ones. The move from
-     * 31/20 to 35/25 is lib/broadcast-logic (1.4 -> 76), lib/module-access-check
-     * (3.8 -> 94.5), actions/sms-broadcast (6.1 -> 79) and
-     * actions/in-app-broadcast (3.9 -> 63.6), which became testable when
-     * lib/testing/fake-db.ts gave the global harness a real store instead of a
-     * call recorder. Each of those found a defect on the way — see #77 to #79.
+     * RAISED TWICE, as behavioural suites replaced structural ones. 31/20 was the
+     * honest floor when the harness was a call recorder; lib/testing/fake-db.ts
+     * gave it a real store, and these modules became testable:
+     *
+     *   lib/module-access-check      3.8 -> 94.5
+     *   actions/sms-broadcast        6.1 -> 79
+     *   lib/broadcast-logic          1.4 -> 76
+     *   actions/admin/_marketplace   8.2 -> 66.7
+     *   actions/in-app-broadcast     3.9 -> 63.6
+     *   cooperative/_loans_applications 3.5 -> 55.8
+     *   admin/_exports               6.6 -> 54.5
+     *   marketplace/_mp_catalog      7.4 -> 53.5
+     *   export/_ex_onboarding        3.6 -> 50.5
+     *   lib/auth                     0   -> 38.8
+     *
+     * Several of them found a defect on the way — see #77 to #79.
      *
      * WHY THE NUMBER IS NOT AS BAD AS IT SOUNDS, NOR AS GOOD AS THE SUITE COUNT
      * -------------------------------------------------------------------------
@@ -64,10 +74,10 @@ const customJestConfig = {
      */
     coverageThreshold: {
         global: {
-            branches: 25,
-            functions: 29,
-            lines: 36,
-            statements: 35,
+            branches: 29,
+            functions: 32,
+            lines: 39,
+            statements: 38,
         },
     },
     testMatch: [
