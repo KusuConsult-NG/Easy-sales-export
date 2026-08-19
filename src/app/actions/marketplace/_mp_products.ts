@@ -379,8 +379,12 @@ async function _updateProductAction(prevState: unknown, formData: FormData): Pro
         };
 
         const imageUrls: string[] = [];
+        // Whether the form carried image fields AT ALL, as distinct from
+        // carrying none. See the note on the write below.
+        let formCarriedImages = false;
         for (const key of Array.from(formData.keys())) { 
             if (key.startsWith("productImages_") || key.startsWith("image")) {
+                formCarriedImages = true;
                 const val = formData.get(key);
                 if (val) {
                     if (typeof val === "string" && val.startsWith("http")) {
@@ -398,7 +402,16 @@ async function _updateProductAction(prevState: unknown, formData: FormData): Pro
             title: validatedData.title,
             description: validatedData.description,
             category: validatedData.category,
-            images: imageUrls,
+            // KEPT when the form did not carry any.
+            //
+            // This wrote `imageUrls` unconditionally, and that list is built by
+            // scanning the form for productImages_*/image* keys. A caller that
+            // sends none — this is a "use server" export, so that is any caller
+            // — therefore had every photo removed from the listing by an edit
+            // that never mentioned images. The seller edit page does re-send
+            // the existing URLs, so this half was latent; the certifications
+            // below were not.
+            images: formCarriedImages ? imageUrls : (productData?.images ?? []),
             videoUrl: (validatedData.videoUrl as string) || undefined,
             pricingTiers: validatedData.pricingTiers,
             availableQuantity: validatedData.availableQuantity,
@@ -412,10 +425,24 @@ async function _updateProductAction(prevState: unknown, formData: FormData): Pro
             estimatedDeliveryDays: validatedData.estimatedDeliveryDays,
             bulkAvailable: validatedData.bulkAvailable || false,
             exportReady: validatedData.exportReady || false,
-            // Dropped on the update path too, so editing a product silently
-            // erased nothing and saved nothing: certifications were validated
-            // and never written on either create or update.
-            certifications: validatedData.certifications ?? certifications ?? [],
+            // KEPT when the form did not carry them, which is EVERY EDIT.
+            //
+            // certifications was originally dropped from both writes; restoring
+            // it to the update introduced a second fault, because the value
+            // being restored is `JSON.parse(formData.get("certifications") ??
+            // "[]")` and the seller edit page
+            // (/marketplace/seller/products/[id]/edit) never appends that
+            // field. So every edit wrote an empty array over whatever the
+            // create path had saved, and the certifications section on
+            // /marketplace/products/[id] went blank. On an agricultural export
+            // marketplace those badges are the product's selling point.
+            //
+            // ProductSchema defaults the field to [], so validatedData cannot
+            // distinguish "sent empty" from "not sent" — the FORM is asked
+            // instead.
+            certifications: formData.has("certifications")
+                ? (validatedData.certifications ?? certifications ?? [])
+                : (productData?.certifications ?? []),
             updatedAt: FieldValue.serverTimestamp()
         };
 

@@ -99,9 +99,9 @@ const customJestConfig = {
     coverageThreshold: {
         global: {
             branches: 43,
-            functions: 44,
-            lines: 53,
-            statements: 52,
+            functions: 45,
+            lines: 54,
+            statements: 53,
         },
     },
     testMatch: [

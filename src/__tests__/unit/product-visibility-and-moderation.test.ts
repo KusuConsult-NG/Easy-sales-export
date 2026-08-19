@@ -279,8 +279,21 @@ describe('certifications survive the round trip', () => {
         // Two sites in _mp_products.ts. The first version of this test checked
         // for the substring once, which the create path alone satisfied while
         // editing a product still silently dropped them.
+        //
+        // The update site is now CONDITIONAL — see #106. Restoring the write
+        // fixed one fault and introduced another: the value being written is
+        // parsed from a form field the seller edit page never sends, so every
+        // edit put an empty array over what the create path had saved. It now
+        // writes the form's value when the form carried the field and keeps the
+        // stored one otherwise.
+        //
+        // Both sites still WRITE the field, which is what this test is for.
+        // Whether the update preserves or replaces is behaviour, and
+        // marketplace-products-behaviour.test.ts executes it.
         const src = code(ACTION);
-        expect((src.match(/certifications:\s*validatedData\.certifications/g) || []).length).toBe(2);
+        expect((src.match(/certifications:/g) || []).length).toBe(2);
+        expect(src).toMatch(/certifications:\s*validatedData\.certifications/);
+        expect(src).toMatch(/formData\.has\("certifications"\)/);
     });
 });
 
