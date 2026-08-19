@@ -89,6 +89,11 @@ export async function createExportWindowAction(
             // Save to Firestore
             const exportWindowRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc();
             await exportWindowRef.set({ orderId,
+                // export_windows holds two entities. This is the SHIPMENT one —
+                // a private export request moving pending → in_transit →
+                // delivered → completed. Stamped so the status rule does not
+                // have to infer it. See lib/export-window-status.ts.
+                windowKind: "shipment" as const,
                 commodity: validatedData.commodity,
                 quantity: validatedData.quantity,
                 amount: validatedData.amount,
@@ -173,6 +178,10 @@ export async function updateExportStatusAction(
             ownerId: data?.userId,
             currentStatus: data?.status,
             newStatus,
+            // The document itself, so the legal vocabulary is chosen by which
+            // entity this is — an aggregation window's statuses are open /
+            // closed / completed, not the shipment four.
+            window: data,
         });
         if (refusal) {
             return { error: refusal, success: false as const, data: null };

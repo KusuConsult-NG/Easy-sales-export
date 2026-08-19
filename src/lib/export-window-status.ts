@@ -129,6 +129,12 @@ export interface ExportStatusChange {
     ownerId: string | undefined | null;
     currentStatus: unknown;
     newStatus: unknown;
+    /**
+     * The window document, so the legal vocabulary can be chosen by which
+     * entity this actually is. Optional: a caller that does not pass it gets
+     * the shipment vocabulary, which is the behaviour every caller had before.
+     */
+    window?: Record<string, unknown> | null;
 }
 
 /**
@@ -145,7 +151,16 @@ export interface ExportStatusChange {
  * settle, and who may reopen a settlement.
  */
 export function refuseExportStatusChange(change: ExportStatusChange): string | null {
-    const next = normaliseExportWindowStatus(change.newStatus);
+    // Which words are legal depends on which entity this is.
+    //
+    // This used to ask normaliseExportWindowStatus, which knows only the four
+    // SHIPMENT statuses. An aggregation window moved onto one of them could
+    // therefore never be set back to "open" — "Invalid status value" — and it
+    // left the investor browse query (`where status == "open"`) for good, with
+    // money already in it. A one-way trapdoor reached through an ordinary
+    // admin dropdown.
+    const kind = exportWindowKind(change.window);
+    const next = normaliseStatusForKind(kind, change.newStatus);
     if (!next) return "Invalid status value";
 
     const isAdmin = hasExportAdminAccess(change.callerRoles);
@@ -161,7 +176,7 @@ export function refuseExportStatusChange(change: ExportStatusChange): string | n
         return "Only an administrator can mark an export completed";
     }
 
-    if (normaliseExportWindowStatus(change.currentStatus) === EXPORT_SETTLED_STATUS) {
+    if (normaliseStatusForKind(kind, change.currentStatus) === EXPORT_SETTLED_STATUS) {
         return "This export is completed and can only be changed by an administrator";
     }
 
@@ -210,4 +225,125 @@ export function exportWindowRoiPercent(value: unknown): number {
 
     const parsed = Number(cleaned);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_EXPORT_ROI_PERCENT;
+}
+
+// ── Which entity a window IS ─────────────────────────────────────────────────
+
+/**
+ * export_windows holds two things, and the status vocabulary was one-way.
+ *
+ * A SHIPMENT window is a private export request: orderId, commodity, quantity,
+ * userId, created "pending", moving pending → in_transit → delivered →
+ * completed.
+ *
+ * An AGGREGATION window is a crowdfunded opportunity: title, targetVolume,
+ * slotPrice, currentVolume, createdBy, created "open", browsed by investors
+ * through `where status == "open"`.
+ *
+ * THE TRAPDOOR
+ * ------------
+ * EXPORT_WINDOW_STATUSES lists only the four shipment statuses, and
+ * normaliseExportWindowStatus refuses everything else. So the moment an admin
+ * moved an aggregation window onto one of the four — which the admin status
+ * endpoint happily allowed, because it never asked which entity it was holding
+ * — "open" became "Invalid status value" and there was no way back. The window
+ * dropped out of the investor browse query permanently, with money already in
+ * it.
+ *
+ * The fix is not to merge the two vocabularies: "in_transit" is meaningless for
+ * an aggregation window and "open" is meaningless for a shipment. It is to ask
+ * WHICH ENTITY the row is before deciding which words are legal for it.
+ *
+ * Inferred rather than migrated, the same way loanProductOf is: rows in
+ * production carry no discriminator, and the fields have always told them
+ * apart. New rows carry `windowKind` outright.
+ */
+export type ExportWindowKind = "shipment" | "aggregation";
+
+export const EXPORT_AGGREGATION_STATUSES = ["open", "closed", "completed"] as const;
+
+function present(data: Record<string, unknown>, key: string): boolean {
+    const v = data[key];
+    if (v === undefined || v === null) return false;
+    if (typeof v === "string") return v.trim().length > 0;
+    if (typeof v === "number") return Number.isFinite(v);
+    return true;
+}
+
+export function exportWindowKind(
+    data: Record<string, unknown> | null | undefined,
+): ExportWindowKind {
+    if (!data) return "shipment";
+
+    const stamped = data.windowKind;
+    if (stamped === "shipment" || stamped === "aggregation") return stamped;
+
+    // slotPrice and targetVolume exist only on the aggregation shape, and
+    // admin/_exports.ts already treats targetVolume as the tell:
+    // `const isCrowdfunded = !!data.targetVolume;`
+    if (present(data, "slotPrice") || present(data, "targetVolume")) return "aggregation";
+    // "open" is only ever written by the aggregation creator.
+    if (String(data.status ?? "").trim().toLowerCase() === "open") return "aggregation";
+
+    return "shipment";
+}
+
+/** The statuses that are legal for a window of this kind. */
+export function statusesForExportWindowKind(kind: ExportWindowKind): readonly string[] {
+    return kind === "aggregation" ? EXPORT_AGGREGATION_STATUSES : EXPORT_WINDOW_STATUSES;
+}
+
+/**
+ * Normalise a status against the vocabulary of the kind that owns it.
+ *
+ * normaliseExportWindowStatus stays as it is — it answers "is this one of the
+ * four shipment statuses", which is what its existing callers mean.
+ */
+export function normaliseStatusForKind(kind: ExportWindowKind, status: unknown): string | null {
+    const raw = String(status ?? "").trim().toLowerCase();
+    if (!raw) return null;
+    return statusesForExportWindowKind(kind).includes(raw) ? raw : null;
+}
+
+// ── What an aggregation window is trying to raise ────────────────────────────
+
+/**
+ * The amount a window is raising, or null when it is not raising anything.
+ *
+ * Nothing wrote `fundingGoal` onto an export window, so the overfunding
+ * machinery in all three fulfilment paths was inert: incrementWithinCeiling
+ * treats a MISSING ceiling field as unbounded, so no window was ever capped.
+ *
+ * It was always derivable — admin/_exports.ts computes exactly this for display
+ * (`Number(data.targetVolume) * Number(data.slotPrice || 1)`) and then throws
+ * the number away. Both creators record it now, and this derives it for rows
+ * written before they did.
+ *
+ * A SHIPMENT window returns null: it has no investors and nothing to overfund.
+ * Returning 0 would read as "already full" to anything comparing against it.
+ *
+ * NOTE ON THE CEILING. incrementWithinCeiling reads a stored FIELD through a
+ * Postgres function, so deriving the goal in JavaScript does not cap an
+ * existing row — only a stored `fundingGoal` does. New windows are capped from
+ * creation; existing ones need scripts/backfill-export-funding-goals.ts, which
+ * is written but deliberately not run here.
+ */
+export function exportWindowFundingGoal(
+    data: Record<string, unknown> | null | undefined,
+): number | null {
+    if (!data) return null;
+
+    for (const key of ["fundingGoal", "goal"]) {
+        const n = Number(data[key]);
+        if (Number.isFinite(n) && n > 0) return n;
+    }
+
+    if (exportWindowKind(data) !== "aggregation") return null;
+
+    const targetVolume = Number(data.targetVolume);
+    const slotPrice = Number(data.slotPrice);
+    if (!Number.isFinite(targetVolume) || targetVolume <= 0) return null;
+    if (!Number.isFinite(slotPrice) || slotPrice <= 0) return null;
+
+    return targetVolume * slotPrice;
 }

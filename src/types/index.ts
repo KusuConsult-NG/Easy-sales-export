@@ -173,6 +173,19 @@ export type CommodityType = "Yam Tubers" | "Sesame Seeds" | "Dried Hibiscus" | "
 
 export interface ExportWindow {
     id: string;
+    /**
+     * Which of the two entities export_windows holds.
+     *
+     * "shipment" is a private export request (orderId, quantity, userId,
+     * pending → in_transit → delivered → completed). "aggregation" is a
+     * crowdfunded opportunity (targetVolume, slotPrice, currentVolume, open).
+     * Optional because rows written before this existed carry no value —
+     * exportWindowKind() infers those from the fields that always told them
+     * apart. See lib/export-window-status.ts.
+     */
+    windowKind?: "shipment" | "aggregation";
+    /** What an aggregation window is raising: targetVolume x slotPrice. */
+    fundingGoal?: number;
     title?: string;
     commodity: CommodityType;
     phase?: string;

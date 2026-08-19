@@ -92,16 +92,35 @@ function fn(rel: string, name: string): string {
 }
 
 describe('nothing writes a funding goal', () => {
-    it('neither window creator records one', () => {
-        // THE premise. Both write the EXPORT_WINDOWS collection, and their
-        // document shapes are disjoint — neither includes a funding goal.
+    it('the aggregation creator records one now; the shipment creator still does not', () => {
+        // This used to assert NEITHER did, which was the premise for the whole
+        // outage. The aggregation window records targetVolume x slotPrice —
+        // admin/_exports.ts already computed exactly that number for display
+        // and threw it away — so incrementWithinCeiling has a ceiling field to
+        // read and new windows are capped.
+        //
+        // The shipment creator deliberately still records none: a private
+        // export request has no investors and nothing to overfund. A goal of 0
+        // there would read as "already full".
         const exporter = fn(WINDOWS, 'createExportWindowAction');
         const aggregation = fn(AGGREGATION, 'createExportWindowAction');
 
+        expect(aggregation).toContain('fundingGoal: targetVolume * slotPrice,');
         expect(exporter).not.toContain('fundingGoal');
-        expect(aggregation).not.toContain('fundingGoal');
         expect(exporter).not.toMatch(/\bgoal:/);
-        expect(aggregation).not.toMatch(/\bgoal:/);
+    });
+
+    it('and rows written before that carry none, so it is derived for them', () => {
+        // incrementWithinCeiling reads a STORED field through a Postgres
+        // function, so deriving in JavaScript caps nothing — existing rows need
+        // the backfill script. What the derivation fixes is every READER that
+        // wanted to show or check a goal.
+        const { exportWindowFundingGoal } = require('@/lib/export-window-status');
+
+        expect(exportWindowFundingGoal({ targetVolume: 1000, slotPrice: 250 })).toBe(250000);
+        expect(exportWindowFundingGoal({ fundingGoal: 999 })).toBe(999);
+        // A shipment window is raising nothing, and null is not 0.
+        expect(exportWindowFundingGoal({ orderId: 'ord_1', commodity: 'cocoa' })).toBeNull();
     });
 
     it('and both really do write that collection, so both shapes land there', () => {

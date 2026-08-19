@@ -65,6 +65,7 @@ async function _updateExportStatusAction(
             ownerId: exportData.userId,
             currentStatus: exportData.status,
             newStatus,
+            window: exportData,
         });
         if (refusal) {
             return { error: refusal, success: false as const, data: null, meta: null };
