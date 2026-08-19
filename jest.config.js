@@ -55,7 +55,14 @@ const customJestConfig = {
      *   export/_ex_onboarding        3.6 -> 50.5
      *   lib/auth                     0   -> 38.8
      *
-     * Several of them found a defect on the way — see #77 to #79.
+     * RAISED AGAIN, 38/29 -> 41/31, for the next batch:
+     *
+     *   actions/auth                16.8 -> 34.6
+     *   wave/_wv_admin_applications 30.3 -> 68.9
+     *   admin/_academy               8.8 -> 80.9
+     *   academy/_ac_progress         6.2 -> 92.3
+     *
+     * Several of them found a defect on the way — see #77 to #82.
      *
      * WHY THE NUMBER IS NOT AS BAD AS IT SOUNDS, NOR AS GOOD AS THE SUITE COUNT
      * -------------------------------------------------------------------------
@@ -74,10 +81,10 @@ const customJestConfig = {
      */
     coverageThreshold: {
         global: {
-            branches: 29,
-            functions: 32,
-            lines: 39,
-            statements: 38,
+            branches: 31,
+            functions: 34,
+            lines: 42,
+            statements: 41,
         },
     },
     testMatch: [
@@ -99,6 +106,16 @@ const customJestConfig = {
         // it is how a suite ends up green while exercising a fake.
         // Run them with: npm run test:pg
         '/src/__tests__/pg/',
+        // ── Tests that need a specific server TIMEZONE ────────────────────────
+        // A process has one timezone, fixed before any Date exists;
+        // `process.env.TZ = ...` inside a test does nothing, and a first
+        // attempt at finding #81 passed under UTC while claiming to prove a
+        // UTC-vs-local divergence. So these run in their own process with TZ
+        // set on it.
+        // Run them with: npm run test:tz
+        // src/__tests__/unit/timezone-sensitive-suites-run.test.ts spawns that
+        // script, so the default run still covers them.
+        '/src/__tests__/tz/',
         // ── Playwright e2e specs ───────────────────────────────────────────────
         // These files import @playwright/test which Jest cannot resolve.
         // Run them with: npx playwright test

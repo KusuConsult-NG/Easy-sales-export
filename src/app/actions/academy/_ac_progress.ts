@@ -478,22 +478,39 @@ async function _calculateStreakAction(userId: string): Promise<ActionResponse<an
         const activeDays = new Set(snap.docs.map(d => d.id)); // Set of "YYYY-MM-DD" strings
 
         let streak = 0;
-        // Start from today and walk back
+        // Start from today and walk back.
+        //
+        // UTC throughout, because the day ids being matched are UTC days.
+        // logLessonActivityAction names each document
+        // `new Date().toISOString().split("T")[0]` — the UTC calendar date — and
+        // this loop used to walk the LOCAL one: `setHours(0,0,0,0)` then
+        // `toISOString()`, which is local midnight expressed in UTC.
+        //
+        // On a UTC server the two agree and nothing shows. On a server east of
+        // UTC they do not: local midnight in Lagos (UTC+1) is 23:00 the previous
+        // day in UTC, so the walk started one day BEHIND the id the writer had
+        // just created. Today's lesson never counted, and a learner who studied
+        // today but not yesterday was told their streak was 0 — on the very day
+        // they earned it.
+        //
+        // Fixed on the reading side rather than the writing side: the ids
+        // already in the database are UTC days, and changing the writer would
+        // split the collection into two calendars.
         const cursor = new Date();
-        cursor.setHours(0, 0, 0, 0);
+        cursor.setUTCHours(0, 0, 0, 0);
 
         while (true) {
             const dateStr = cursor.toISOString().split("T")[0];
             if (activeDays.has(dateStr)) {
                 streak++;
-                cursor.setDate(cursor.getDate() - 1);
+                cursor.setUTCDate(cursor.getUTCDate() - 1);
             } else if (streak === 0) {
                 // Allow one day gap at the start (e.g. user completed lessons yesterday but not today yet)
-                cursor.setDate(cursor.getDate() - 1);
+                cursor.setUTCDate(cursor.getUTCDate() - 1);
                 const yesterdayStr = cursor.toISOString().split("T")[0];
                 if (activeDays.has(yesterdayStr)) {
                     streak++;
-                    cursor.setDate(cursor.getDate() - 1);
+                    cursor.setUTCDate(cursor.getUTCDate() - 1);
                 } else {
                     break;
                 }

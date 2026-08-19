@@ -62,9 +62,18 @@ export function academyCertificateNumber(
 ): string {
     // The year of COMPLETION. Falling back to the current year only when the
     // record carries no date at all — not on every render.
+    //
+    // UTC, because "the same everywhere" is this function's whole point and
+    // getFullYear() is the SERVER's year. A completion stamped
+    // 2025-12-31T23:00:00Z is 2025 on a UTC host and 2026 in Lagos (UTC+1),
+    // where this platform's users are — so the number printed on the PDF, shown
+    // on the page and pasted into LinkedIn could differ by host or by a
+    // deployment region change, for a string that is meant to be an identifier.
+    // Derived from the stored instant instead, in a fixed zone.
+    // Measured in src/__tests__/tz/, which runs under TZ=Africa/Lagos.
     const year = completedAt instanceof Date && !Number.isNaN(completedAt.getTime())
-        ? completedAt.getFullYear()
-        : new Date().getFullYear();
+        ? completedAt.getUTCFullYear()
+        : new Date().getUTCFullYear();
 
     return `ACAD-${year}-${segment(courseId, 6)}-${segment(userId, 6)}`;
 }

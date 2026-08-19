@@ -59,6 +59,35 @@ function createMockDb() {
     const mockDb = {
         collection: (name) => makeQuery(name),
 
+        /**
+         * db.doc("a/b/c/d") — a document addressed by PATH, not by
+         * collection().doc().
+         *
+         * The real adapter splits on "/", takes the last segment as the id and
+         * the rest as the collection, and REFUSES an odd number of segments.
+         * Academy progress addresses `user_progress/<uid>/courses/<courseId>`
+         * this way and nothing else in the harness answered it.
+         *
+         * The refusal is reproduced too: it exists because a single-segment path
+         * used to throw "Invalid document path" and took out the cooperative
+         * contribution verification entirely, and a fake that quietly accepted
+         * one would make that class of mistake untestable.
+         */
+        doc: (path, ...segments) => {
+            const parts = [path, ...segments]
+                .filter((p) => p !== undefined && p !== null && p !== '')
+                .flatMap((p) => String(p).split('/'))
+                .filter(Boolean);
+
+            if (parts.length < 2 || parts.length % 2 !== 0) {
+                throw new Error(`Invalid document path: "${parts.join('/')}"`);
+            }
+
+            const id = parts[parts.length - 1];
+            const collection = parts.slice(0, -1).join('/');
+            return makeDocRef(collection, id);
+        },
+
         // db.getAll(...refs) reads several documents at once. Unmocked, any
         // action using it threw before its first assertion.
         getAll: (...refs) => Promise.all(
