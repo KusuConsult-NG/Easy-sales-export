@@ -66,6 +66,58 @@ async function _processWithdrawalAction(
             return { error: "Withdrawal request not found", success: false as const };
         }
 
+        // ONE WITHDRAWAL, TWO ADMIN SCREENS, TWO DIFFERENT OUTCOMES.
+        //
+        // This action pays through Paystack and writes a row to the global
+        // TRANSACTIONS ledger. That is correct for a wallet withdrawal and
+        // wrong for the other two collections it was reaching into, because
+        // each of those has a dedicated action that does strictly more:
+        //
+        //   COOPERATIVE_WITHDRAWALS
+        //     cooperative/_coop_admin_money.ts approveWithdrawalAction applies a
+        //     24-hour pending hold, checks the admin's cooperative scope against
+        //     the request (an IDOR guard this action has no equivalent of),
+        //     decrements the member's lockedBalance, and writes the
+        //     `withdrawal` row to COOPERATIVE_TRANSACTIONS that forensics.ts,
+        //     getCooperativeStats and the member's own history all read.
+        //
+        //     Processed HERE instead, a cooperative withdrawal paid out and
+        //     lockedBalance was never released — the amount stayed locked out
+        //     of the member's savings permanently, with forensics still
+        //     counting it as held and the ledger never recording that the money
+        //     had left. The 24-hour hold and the scope check were skipped too.
+        //
+        //     It also pays the WRONG WAY. mark-withdrawal-completed's own
+        //     comment records the cooperative flow as "pending → approved, with
+        //     the payout made by hand", then marked completed once the bank
+        //     transfer is done. Firing a Paystack transfer at a withdrawal whose
+        //     settlement process is manual is how the same money goes out twice.
+        //
+        //   WAVE_WITHDRAWALS
+        //     wave/_wv_admin_withdrawals.ts processWaveWithdrawalAction pays
+        //     through Paystack too, but returns the request to `pending` when
+        //     the transfer fails — the rollback an earlier pass added after a
+        //     failed payout could be retried into a double payout. This action
+        //     has no such rollback: a failed transfer here parks the row at
+        //     approved_pending_payout instead.
+        //
+        // Both claim `from: "pending"`, so the two paths race on the same field
+        // and which behaviour a member got depended on which screen an admin
+        // happened to open. This action now owns WITHDRAWALS alone and refuses
+        // the other two rather than half-completing them. It is the narrower
+        // path being withdrawn, not a new one being invented: nothing in the UI
+        // calls this action, and each module's own screen already does the whole
+        // job.
+        if (withdrawalCollection !== COLLECTIONS.WITHDRAWALS) {
+            const owner = withdrawalCollection === COLLECTIONS.COOPERATIVE_WITHDRAWALS
+                ? "the Cooperative admin screen, which releases the member's locked balance and records the ledger entry"
+                : "the WAVE admin screen, which rolls the request back if the transfer fails";
+            return {
+                error: `This is not a wallet withdrawal. Process it from ${owner}.`,
+                success: false as const,
+            };
+        }
+
         const withdrawalData = withdrawalDoc.data()!;
 
         if (action === "approve") {
