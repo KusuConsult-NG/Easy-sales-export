@@ -208,8 +208,31 @@ interface QueryState {
  * make `where("amount", ">", 900)` match "90000" in a test and not in
  * production, or the reverse.
  */
+/**
+ * The field a filter reads, as a dotted path.
+ *
+ * `FieldPath.documentId()` arrives as a SENTINEL OBJECT, not a string — every
+ * batched hydration in this codebase uses it, in the shape
+ * `.where(FieldPath.documentId(), "in", chunk)`. The adapter maps it to the
+ * primary key; here the id is on the document as `id`, because both
+ * buildGenericRow and buildDedicatedRow put it there.
+ *
+ * Left unmapped it reached getPath as an object, `path.includes` threw, and the
+ * ACTION's own try/catch turned that into its generic failure message — which
+ * reads exactly like a defect in the code under test. Same shape as the three
+ * incomplete mocks this audit has already tripped over.
+ */
+function filterField(field: unknown): string {
+    if (typeof field === 'string') {
+        return field === '__name__' || field === '__id__' ? 'id' : field;
+    }
+    const sentinel = (field as { _methodName?: string })?._methodName;
+    if (sentinel === 'FieldPath.documentId') return 'id';
+    return String(field);
+}
+
 function matches(doc: Doc, f: Filter): boolean {
-    const actual = getPath(doc, f.field);
+    const actual = getPath(doc, filterField(f.field));
 
     switch (f.op) {
         case '==':
@@ -267,8 +290,8 @@ function matches(doc: Doc, f: Filter): boolean {
  * production's trap, so it is reproduced rather than fixed.
  */
 function compareOn(a: Doc, b: Doc, o: Order): number {
-    const av = getPath(a, o.field);
-    const bv = getPath(b, o.field);
+    const av = getPath(a, filterField(o.field));
+    const bv = getPath(b, filterField(o.field));
     const aNull = av === undefined || av === null;
     const bNull = bv === undefined || bv === null;
 
@@ -305,7 +328,8 @@ function runQuery(store: Map<string, Map<string, Doc>>, q: QueryState): Array<[s
     if (q.startAfterValues && q.startAfterValues.length > 0 && q.orders.length > 0) {
         const cursor = q.startAfterValues;
         const idx = rows.findIndex(([, d]) =>
-            q.orders.every((o, i) => String(getPath(d, o.field) ?? '') === String(cursor[i] ?? '')));
+            q.orders.every((o, i) =>
+                String(getPath(d, filterField(o.field)) ?? '') === String(cursor[i] ?? '')));
         rows = idx >= 0 ? rows.slice(idx + 1) : rows;
     }
 
