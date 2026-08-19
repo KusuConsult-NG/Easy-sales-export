@@ -362,34 +362,73 @@ async function _createEscrowDispute(
         const txRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(transactionId);
         const disputeRef = db.collection(COLLECTIONS.DISPUTES).doc();
 
-        await db.runTransaction(async (tx) => { const txDoc = await tx.get(txRef);
-            if (!txDoc.exists) throw new Error("Transaction not found");
+        // Participation is checked before the claim, because the claim cannot
+        // express "and the caller is one of these two parties" — the same
+        // ordering _updateEscrowStatus above uses.
+        const preRead = await txRef.get();
+        if (!preRead.exists) {
+            return { success: false as const, error: "Transaction not found" };
+        }
+        const txData = preRead.data()!;
+        if (txData.buyerId !== userId && txData.sellerId !== userId) {
+            return { success: false as const, error: "Not authorized to dispute this transaction" };
+        }
 
-            const txData = txDoc.data()!;
-            if (txData.buyerId !== userId && txData.sellerId !== userId) {
-                throw new Error("Not authorized to dispute this transaction");
-            }
+        // One active dispute per escrow.
+        //
+        // The sibling creator in _escrow_disputes.ts checks this; this one did
+        // not check at all, so a second dispute on the same escrow was simply
+        // created.
+        const existing = await db.collection(COLLECTIONS.DISPUTES)
+            .where("escrowId", "==", transactionId)
+            .where("status", "in", ["open", "under_review"])
+            .limit(1)
+            .get();
 
-            if (!ESCROW_DISPUTEABLE_STATUSES.includes(txData.status)) {
-                throw new Error(`Cannot dispute transaction in ${txData.status} status`);
-            }
+        if (!existing.empty) {
+            return { success: false as const, error: "An active dispute already exists for this transaction" };
+        }
 
-            tx.set(disputeRef, { escrowId: transactionId,
-                buyerId: txData.buyerId,
-                sellerId: txData.sellerId,
-                reason,
-                description: reason,
-                raisedBy: userId,
-                status: "open",
-                createdAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
-                _version: 0 });
-
-            tx.update(txRef, { status: "disputed",
+        // CLAIMED, not checked-then-written.
+        //
+        // The status check and the write sat inside runTransaction, which takes
+        // NO lock in this adapter, so two callers both read a disputeable status
+        // and both created a DISPUTES row — the escrow keeping whichever
+        // disputeId was written last and the other dispute orphaned where no
+        // resolution path can reach it. actions/disputes.ts fixed exactly this
+        // and records the reasoning; this creator and the one in
+        // _escrow_disputes.ts kept the old shape.
+        const disputeClaim = await claimStatusTransitionFromAny({
+            collection: COLLECTIONS.ESCROW_TRANSACTIONS,
+            id: transactionId,
+            fromAny: [...ESCROW_DISPUTEABLE_STATUSES],
+            to: "disputed",
+            patch: {
                 disputeId: disputeRef.id,
-                updatedAt: FieldValue.serverTimestamp(),
-                _version: FieldValue.increment(1) });
+                updatedAt: new Date().toISOString(),
+            },
         });
+
+        if (!disputeClaim.claimed) {
+            return {
+                success: false as const,
+                error: disputeClaim.status === null
+                    ? "Transaction not found"
+                    : `Cannot dispute transaction in ${disputeClaim.status} status`,
+            };
+        }
+
+        await disputeRef.set({
+            escrowId: transactionId,
+            buyerId: txData.buyerId,
+            sellerId: txData.sellerId,
+            reason,
+            description: reason,
+            raisedBy: userId,
+            status: "open",
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+            _version: 0 });
 
         return { error: null,  success: true as const, data: null };
     } catch (error: any) { logger.error("Create escrow dispute error:", {

@@ -3,7 +3,7 @@
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from '@/lib/logger';
 import { requireAdmin } from "@/lib/require-admin";
-import { claimStatusTransition } from "@/lib/status-transition";
+import { claimStatusTransition, claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { FieldValue } from "@/lib/firestore-compat";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
@@ -13,6 +13,7 @@ import { smsDisputeResolved } from "@/lib/africastalking";
 import { pushDisputeResolved } from "@/lib/fcm";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import type { Dispute, EscrowTransaction } from "@/lib/types/marketplace-escrow";
+import { ESCROW_DISPUTEABLE_STATUSES } from "@/lib/escrow-status";
 
 /**
  * Create dispute.
@@ -84,17 +85,54 @@ async function _createDisputeAction(data: { escrowId: string;
 
         let escrowSnapData: EscrowTransaction | null = null;
 
+        // CLAIMED, and from every disputeable status.
+        //
+        // TWO FAULTS IN ONE BLOCK.
+        //
+        // 1. This was a check-then-write inside runTransaction, which takes NO
+        //    lock in this adapter. Two disputes raised on one escrow — the
+        //    buyer and the seller at once, or one impatient double-click — both
+        //    read a disputeable status and both created a DISPUTES row, leaving
+        //    the escrow pointing at whichever wrote its disputeId last and an
+        //    orphan dispute no resolution path can reach. actions/disputes.ts
+        //    fixed exactly this by claiming the transition, and records the
+        //    reasoning; this creator and the one in _escrow_actions.ts kept the
+        //    old shape.
+        //
+        // 2. It required `status === "funded"` EXACTLY.
+        //    ESCROW_DISPUTEABLE_STATUSES is funded/in_transit/delivered, and its
+        //    own comment says a dispute must be raisable from anything a release
+        //    can be claimed from, "or the freeze is decorative". Both release
+        //    paths release from "delivered". So a buyer whose goods had shipped,
+        //    or arrived damaged — the states where a dispute is the entire
+        //    point — was told the escrow "must be in 'funded' state".
+        //
+        // The claim is the check now, so there is no window between them.
+        const disputeClaim = await claimStatusTransitionFromAny({
+            collection: COLLECTIONS.ESCROW_TRANSACTIONS,
+            id: data.escrowId,
+            fromAny: [...ESCROW_DISPUTEABLE_STATUSES],
+            to: "disputed",
+            patch: {
+                disputeId: disputeRef.id,
+                updatedAt: new Date().toISOString(),
+            },
+        });
+
+        if (!disputeClaim.claimed) {
+            return {
+                success: false as const,
+                error: disputeClaim.status === null
+                    ? "Escrow transaction not found"
+                    : `Cannot dispute an escrow that is '${disputeClaim.status}'`,
+            };
+        }
+
         await db.runTransaction(async (tx) => {
             const escrowDoc = await tx.get(escrowRef);
             if (!escrowDoc.exists) throw new Error("Escrow transaction not found");
 
             const escrowData = escrowDoc.data() as EscrowTransaction;
-            if (escrowData.status !== "funded") {
-                throw new Error(
-                    `Cannot dispute: escrow must be in 'funded' state, currently '${escrowData.status}'`
-                );
-            }
-
             escrowSnapData = escrowData;
 
             // Fields listed, not spread.
@@ -135,10 +173,10 @@ async function _createDisputeAction(data: { escrowId: string;
                 createdAt: FieldValue.serverTimestamp() };
 
             tx.set(disputeRef, dispute);
-            tx.update(escrowRef, { status: "disputed", 
-                disputeId: disputeRef.id,
-                updatedAt: FieldValue.serverTimestamp(),
-                _version: FieldValue.increment(1) });
+            // The escrow's status and disputeId are written by the claim above.
+            // Writing them here as well would put the transition AFTER the
+            // dispute row, which is the ordering that let two callers through.
+            tx.update(escrowRef, { _version: FieldValue.increment(1) });
         });
 
         await createAdminAuditLog({ action: "dispute_created",

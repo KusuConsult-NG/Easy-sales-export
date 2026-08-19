@@ -215,8 +215,15 @@ describe('the guard the cron depends on', () => {
     it('the escrow-keyed path still freezes too, so both agree', () => {
         // The path that was already right. If it regressed, the dashboard fix would
         // mask it.
+        //
+        // It freezes through the CLAIM now rather than a tx.update — see #108.
+        // The old shape was a check-then-write inside runTransaction, so two
+        // disputes on one escrow both created a row. The freeze is the same
+        // freeze; what changed is that it cannot happen twice.
         const src = code(ESCROW_DISPUTES);
-        expect(src).toMatch(/status: "disputed"/);
+        expect(src).toMatch(/to: "disputed"/);
+        expect(src).toContain('claimStatusTransitionFromAny');
+        expect(src).toContain('ESCROW_DISPUTEABLE_STATUSES');
     });
 });
 
