@@ -6,7 +6,7 @@ import { requireSession } from "@/lib/session-guard";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { logger } from "@/lib/logger";
 import { BriefingRegistrationData, BriefingStatus } from "./briefing";
-import { serializeValue, toMillis } from "@/lib/firestore-serialize";
+import { serializeValue, toMillis, toIsoOrEmpty } from "@/lib/firestore-serialize";
 
 export interface BriefingRegistration extends BriefingRegistrationData { id: string;
     createdAt: string; // ISO string — safe for server→client boundary
@@ -32,16 +32,6 @@ export interface BriefingRegistrationsResult {
  * constant exists so reaching the cap can be reported rather than guessed at.
  */
 const FALLBACK_SAMPLE_LIMIT = Math.max(1, Number(process.env.SUPABASE_DEFAULT_QUERY_LIMIT) || 5000);
-
-/**
- * A timestamp as an ISO string, or "" when there is no timestamp to report.
- *
- * Never invents one. See the createdAt note in the mapper below.
- */
-function isoOrEmpty(value: unknown): string {
-    const ms = toMillis(value);
-    return ms > 0 ? new Date(ms).toISOString() : "";
-}
 
 /**
  * Options for fetching briefing registrations with server-side filters.
@@ -254,8 +244,8 @@ export async function getBriefingRegistrationsAction(
                  * returns "" when there genuinely is nothing. The table renders
                  * an em dash for an empty value and the CSV a blank cell.
                  */
-                createdAt: isoOrEmpty(d.createdAt),
-                updatedAt: isoOrEmpty(d.updatedAt),
+                createdAt: toIsoOrEmpty(d.createdAt),
+                updatedAt: toIsoOrEmpty(d.updatedAt),
                 status: d.status || "registered",
                 attended: d.attended ?? false,
                 confirmationSent: d.confirmationSent ?? false } as BriefingRegistration;
@@ -275,7 +265,7 @@ export async function getBriefingRegistrationsAction(
         // null on a page that HAS more stops pagination dead, so this reads
         // through the shared helper too.
         const nextCursor = hasMore && docs.length > 0
-            ? (isoOrEmpty(docs[docs.length - 1].data().createdAt) || null)
+            ? (toIsoOrEmpty(docs[docs.length - 1].data().createdAt) || null)
             : null;
 
         return { error: null, success: true as const, data, meta: { cursor: nextCursor, hasMore, totalCount } };

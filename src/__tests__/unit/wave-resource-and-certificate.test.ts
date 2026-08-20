@@ -139,26 +139,40 @@ describe('every reader uses the shared predicate', () => {
     });
 
     it('the listing that filtered nothing at all', () => {
+        // Was pinned to one exact line:
+        //
+        //   expect(src).toContain('const visibleDocs = snapshot.docs.filter(...)')
+        //
+        // which asserted a SPELLING, not a behaviour, and broke the moment #196
+        // replaced the single fetch with a scan — while the property it meant to
+        // protect, "withdrawn resources never reach the member", was untouched.
+        // The behaviour is proven by execution in the #196 suite; this keeps
+        // only the structural half that a test cannot easily execute: the filter
+        // must run before the page is cut, or a page comes back short.
         const src = code(MEMBER_RESOURCES);
 
-        expect(src).toContain('const visibleDocs = snapshot.docs.filter((doc: any) => !isResourceWithdrawn(doc.data()))');
-        // Applied before the page slice, or a page would come back short.
-        const filterAt = src.indexOf('const visibleDocs');
+        expect(src).toContain('!isResourceWithdrawn(doc.data())');
+        const filterAt = src.indexOf('!isResourceWithdrawn(doc.data())');
         const sliceAt = src.indexOf('visibleDocs.slice(0, pageSize)');
         expect(filterAt).toBeGreaterThan(-1);
         expect(sliceAt).toBeGreaterThan(filterAt);
     });
 
     it('does not filter the training events listing by mistake', () => {
-        // The same three-line snapshot/hasMore/slice shape appears twice in that
-        // file; the second is WAVE_TRAINING_EVENTS, which has its own status filter
-        // and no notion of withdrawal.
+        // The same snapshot/hasMore/slice shape appears twice in that file; the
+        // second is WAVE_TRAINING_EVENTS, which has its own status filter and no
+        // notion of withdrawal.
+        //
+        // This counted occurrences and required exactly ONE, which made it fail
+        // when #200 gave the download action the withdrawn check it had always
+        // lacked — a correct new guard reported as a regression. A count is the
+        // wrong instrument: what matters is WHERE the predicate is used, so that
+        // is what is asserted.
         const src = code(MEMBER_RESOURCES);
-        const occurrences = src.match(/isResourceWithdrawn\(/g) || [];
 
-        expect(occurrences).toHaveLength(1);
-        const eventsBlock = src.slice(src.indexOf('COLLECTIONS.WAVE_TRAINING_EVENTS'));
-        expect(eventsBlock).not.toContain('isResourceWithdrawn');
+        const eventsBlock = src.slice(src.indexOf('_getWaveTrainingEventsAction'));
+        const eventsBody = eventsBlock.slice(0, eventsBlock.indexOf('uploadWaveResourceAction'));
+        expect(eventsBody).not.toContain('isResourceWithdrawn');
     });
 });
 

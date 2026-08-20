@@ -103,6 +103,10 @@ export type AuditAction =
     | 'wave_training_created'
     | 'wave_training_updated'
     | 'wave_training_deleted'
+    // A member taking a place on a session. Was filed as 'user_update', which
+    // is the catch-all for an unclassified write — so the one question this row
+    // exists to answer, who took which seat, could not be asked of it.
+    | 'training_registered'
     | 'wave_application_approved'
     | 'wave_application_rejected'
     | 'wave_approve'

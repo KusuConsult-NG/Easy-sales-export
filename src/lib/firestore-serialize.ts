@@ -80,6 +80,28 @@ export function toMillis(value: unknown): number {
 }
 
 /**
+ * A timestamp as an ISO 8601 string, or "" when there is none.
+ *
+ * The companion to toMillis, for the same reason and against the same mistake.
+ * Call sites paginating a list wrote
+ *
+ *     lastDoc.data().createdAt?.toDate?.()?.toISOString() ?? null
+ *
+ * which answers for a hydrated Timestamp and gives up on every other shape —
+ * a Date, a number, a legacy {_seconds} object, or a missing field. As a
+ * NEXT CURSOR that is worse than wrong: null cursor with hasMore true stops
+ * pagination dead. As a displayed date, the sibling spelling
+ * `?? new Date().toISOString()` invents today for a row that has none (#194).
+ *
+ * Empty string rather than null so it drops into a `string` field without a
+ * cast; callers wanting null write `toIsoOrEmpty(x) || null`.
+ */
+export function toIsoOrEmpty(value: unknown): string {
+    const ms = toMillis(value);
+    return ms > 0 ? new Date(ms).toISOString() : "";
+}
+
+/**
  * Convert a single Firestore Timestamp (or anything with a toDate() method)
  * to an ISO 8601 string.
  */
