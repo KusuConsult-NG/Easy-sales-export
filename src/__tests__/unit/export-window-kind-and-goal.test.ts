@@ -70,7 +70,7 @@ import {
     EXPORT_WINDOW_STATUSES,
     EXPORT_AGGREGATION_STATUSES,
 } from '@/lib/export-window-status';
-import { kindOf, goalOf } from '../../../scripts/backfill-export-funding-goals';
+import { kindOf, goalOf } from '../../../scripts/export-funding-goal-kind';
 
 const ROOT = process.cwd();
 

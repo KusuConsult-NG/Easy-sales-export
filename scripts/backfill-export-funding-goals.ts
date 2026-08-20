@@ -60,6 +60,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { existsSync } from 'fs';
 import { config as loadEnv } from 'dotenv';
+import { kindOf, goalOf } from './export-funding-goal-kind';
 
 if (existsSync('.env.development.local')) loadEnv({ path: '.env.development.local' });
 loadEnv({ path: '.env.local' });
@@ -81,30 +82,6 @@ if (!url || !serviceKey) {
 const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
 
 const naira = (n: number) => `₦${n.toLocaleString('en-NG', { maximumFractionDigits: 2 })}`;
-
-/**
- * The same rule lib/export-window-status.ts applies, duplicated deliberately:
- * a script that imports application code drags the whole module graph and its
- * environment expectations into a one-off maintenance run. Kept in step by
- * export-window-kind-and-goal.test.ts, which asserts both agree.
- */
-export function kindOf(raw: Record<string, any>): 'shipment' | 'aggregation' {
-    if (raw.windowKind === 'shipment' || raw.windowKind === 'aggregation') return raw.windowKind;
-
-    const num = (v: unknown) => Number.isFinite(Number(v)) && Number(v) !== 0;
-    if (num(raw.slotPrice) || num(raw.targetVolume)) return 'aggregation';
-    if (String(raw.status ?? '').trim().toLowerCase() === 'open') return 'aggregation';
-
-    return 'shipment';
-}
-
-export function goalOf(raw: Record<string, any>): number | null {
-    const targetVolume = Number(raw.targetVolume);
-    const slotPrice = Number(raw.slotPrice);
-    if (!Number.isFinite(targetVolume) || targetVolume <= 0) return null;
-    if (!Number.isFinite(slotPrice) || slotPrice <= 0) return null;
-    return targetVolume * slotPrice;
-}
 
 interface Planned {
     id: string;
