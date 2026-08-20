@@ -25,76 +25,21 @@ import { invalidateCacheForCollection } from './cache-map';
 import { logger } from './logger';
 
 // ─── Table Mapping ─────────────────────────────────────────────────────────────
-// Maps Firestore collection names → dedicated Supabase table names.
-// Collections NOT listed here fall back to the `document_collections` generic table.
+// Declared in ./supabase-table-map so the browser-side reader shares them
+// rather than keeping a hand-copied set that drifts. Re-exported because
+// several modules and jest.setup.js import them from here by name.
 
-export const DEDICATED_TABLE_MAP: Record<string, string> = {
-    'users': 'users',
-    'cooperative_members': 'cooperative_members',
-    'cooperative_loans': 'cooperative_loans',
-    'transactions': 'transactions',
-    'processedPayments': 'processed_payments',  // Firestore camelCase → snake_case table
-    'processed_payments': 'processed_payments', // Also accept snake_case
-    'marketplaceOrders': 'marketplace_orders',  // Firestore camelCase → snake_case table
-    'marketplace_orders': 'marketplace_orders', // Also accept snake_case
-    'wallets': 'wallets',
-    'academy_applications': 'academy_applications',
-};
+export {
+    DEDICATED_TABLE_MAP,
+    NATIVE_COLUMNS,
+    FIELD_TO_COLUMN,
+} from './supabase-table-map';
 
-// Native typed columns per dedicated table (used to route .where() filters efficiently)
-// Fields NOT listed here are stored in raw_data JSONB and queried via raw_data->>'field'
-export const NATIVE_COLUMNS: Record<string, string[]> = {
-    'users': ['id', 'email', 'roles', 'created_at', 'updated_at'],
-    'cooperative_members': ['id', 'user_id', 'status', 'created_at', 'updated_at'],
-    'cooperative_loans': ['id', 'user_id', 'amount', 'status', 'created_at', 'updated_at'],
-    'transactions': ['id', 'user_id', 'amount', 'type', 'status', 'created_at', 'updated_at'],
-    'processed_payments': ['id', 'user_id', 'amount', 'reference', 'created_at', 'updated_at'],
-    'marketplace_orders': ['id', 'user_id', 'status', 'total_amount', 'created_at', 'updated_at'],
-    'wallets': ['id', 'balance', 'created_at', 'updated_at'],
-    'academy_applications': ['id', 'user_id', 'status', 'created_at', 'updated_at'],
-};
-
-// Firestore field name → Supabase native column name (for dedicated tables)
-// These map the app's data model field names to the actual SQL column names
-export const FIELD_TO_COLUMN: Record<string, Record<string, string>> = {
-    'users': {
-        'email': 'email',
-        'roles': 'roles',
-    },
-    'cooperative_members': {
-        'userId': 'user_id',
-        'membershipStatus': 'status',
-        'status': 'status',
-    },
-    'cooperative_loans': {
-        'userId': 'user_id',
-        'status': 'status',
-        'amount': 'amount',
-    },
-    'transactions': {
-        'userId': 'user_id',
-        'type': 'type',
-        'status': 'status',
-        'amount': 'amount',
-    },
-    'processed_payments': {
-        'userId': 'user_id',
-        'reference': 'reference',
-        'amount': 'amount',
-    },
-    'marketplace_orders': {
-        'userId': 'user_id',
-        'status': 'status',
-        'totalAmount': 'total_amount',
-    },
-    'wallets': {
-        'balance': 'balance',
-    },
-    'academy_applications': {
-        'userId': 'user_id',
-        'status': 'status',
-    },
-};
+import {
+    DEDICATED_TABLE_MAP,
+    NATIVE_COLUMNS,
+    FIELD_TO_COLUMN,
+} from './supabase-table-map';
 
 /**
  * Rows returned by a query that specifies no .limit().
