@@ -15,6 +15,8 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
 import { isAdmin } from "@/lib/admin-permissions";
 import { PUBLIC_LAND_STATUSES, stripInternalLandFields } from "@/lib/land-visibility";
+import { claimStatusTransitionFromAny } from "@/lib/status-transition";
+import { APPROVABLE_FROM_STATUSES, REJECTABLE_FROM_STATUSES } from "@/lib/land-listing-status";
 
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { logger } from "@/lib/logger";
@@ -108,22 +110,64 @@ async function _getLandListings(filters?: z.infer<typeof landSearchSchema>): Pro
             }
         }
 
+        /**
+         * THE REVIEW QUEUE WAS THE DEFAULT PAGE.
+         *
+         * The gate above fires only when the caller ASKS for a non-public
+         * status. Omitting the filter left `wantsNonPublic` false, so no session
+         * was required — and the query then applied no status predicate at all,
+         * because that too was inside `if (filters?.status)`. So
+         * `getLandListings()`, with no arguments and no session, returned every
+         * listing on the platform: pending_verification, rejected, all of it.
+         *
+         * The gate refused the front door and left the wall open, and the wall
+         * is the one lib/land-visibility.ts was extracted from this file to
+         * build. Its header names the endpoint that spread whole documents;
+         * this is the action the rule came from.
+         *
+         * The status set is decided ONCE now, and defaults to public. Anything
+         * else has to be asked for, and asking is what the gate above checks.
+         *
+         * `verified` expands to the whole public set rather than to the
+         * hardcoded `['verified', 'approved']` it used to. That pair was the
+         * drift land-visibility.ts documents: `available` is purchasable and was
+         * missing here, so every listing Farm Nation created was buyable and
+         * absent from this feed — invisible inventory, reachable only by direct
+         * URL.
+         */
+        const targetStatuses = wantsNonPublic
+            ? [requestedStatus as string]
+            : [...PUBLIC_LAND_STATUSES];
+
         let listingsQuery = db.collection(COLLECTIONS.LAND_LISTINGS)
-            .orderBy('createdAt', 'desc');
+            .where('status', 'in', targetStatuses);
 
-        // Apply status filter if provided
-        if (filters?.status) {
-            const targetStatuses = filters.status === 'verified' ? ['verified', 'approved'] : [filters.status];
-            listingsQuery = db.collection(COLLECTIONS.LAND_LISTINGS)
-                .where('status', 'in', targetStatuses)
-                .orderBy('createdAt', 'desc');
-        }
+        /**
+         * AND THE SEARCH FILTERS RAN OVER AN ARBITRARY PAGE.
+         *
+         * `.limit()` was applied by the database and every filter below was
+         * applied in memory AFTERWARDS, so a search matched only within the
+         * newest N listings. With an older, cheaper parcel in the catalogue,
+         * "under ₦2,000,000" returned nothing — indistinguishable from a
+         * catalogue that has none, which is the same shape as the export window
+         * date filter and the admin marketplace search.
+         *
+         * The predicates the database can express are asked of the database, so
+         * the limit applies to MATCHING rows, which is what a caller means by
+         * `limit`. A range predicate beside an equality and an order is ordinary
+         * on Postgres through PostgREST — the same argument the export window
+         * filter was moved on.
+         */
+        if (filters?.minPrice !== undefined) listingsQuery = listingsQuery.where('price', '>=', filters.minPrice);
+        if (filters?.maxPrice !== undefined) listingsQuery = listingsQuery.where('price', '<=', filters.maxPrice);
+        if (filters?.minSize !== undefined) listingsQuery = listingsQuery.where('size', '>=', filters.minSize);
+        if (filters?.maxSize !== undefined) listingsQuery = listingsQuery.where('size', '<=', filters.maxSize);
+        if (filters?.soilQuality) listingsQuery = listingsQuery.where('soilQuality', '==', filters.soilQuality);
+        if (filters?.state) listingsQuery = listingsQuery.where('location.state', '==', filters.state);
+        if (filters?.city) listingsQuery = listingsQuery.where('location.city', '==', filters.city);
 
-        if (filters?.limit) { 
-            listingsQuery = listingsQuery.limit(filters.limit);
-        } else { 
-            listingsQuery = listingsQuery.limit(50);
-        }
+        listingsQuery = listingsQuery.orderBy('createdAt', 'desc');
+        listingsQuery = listingsQuery.limit(filters?.limit ?? 50);
 
         const snapshot = await listingsQuery.get();
 
@@ -143,18 +187,22 @@ async function _getLandListings(filters?: z.infer<typeof landSearchSchema>): Pro
                     verifiedAt: data.verifiedAt ? (data.verifiedAt as Timestamp).toDate().toISOString() : null 
                 } as unknown as LandListing;
             })
+            // Backstop. `deleted` is not in PUBLIC_LAND_STATUSES and is not a
+            // value landSearchSchema accepts, so the query above cannot select
+            // one — this stays for a row whose status the query matched by some
+            // other route.
             .filter(listing => (listing as any).status !== 'deleted');
 
-        // Apply client-side filters
-        if (filters) { 
+        // The three the database cannot answer, because nothing writes them.
+        //
+        // waterAccess, electricityAccess and roadAccess are read by LandMap and
+        // by /land/verify and are written by no creator in this codebase, so
+        // they are absent from every stored listing. Filtering on one therefore
+        // matches nothing — which is the honest outcome for a field that does
+        // not exist, and is left in memory rather than pushed into a query where
+        // it would look like a supported search.
+        if (filters) {
             listings = listings.filter(listing => {
-                if (filters.minPrice && listing.price < filters.minPrice) return false;
-                if (filters.maxPrice && listing.price > filters.maxPrice) return false;
-                if (filters.minSize && listing.size < filters.minSize) return false;
-                if (filters.maxSize && listing.size > filters.maxSize) return false;
-                if (filters.soilQuality && listing.soilQuality !== filters.soilQuality) return false;
-                if (filters.state && listing.location.state !== filters.state) return false;
-                if (filters.city && listing.location.city !== filters.city) return false;
                 if (filters.waterAccess !== undefined && listing.waterAccess !== filters.waterAccess) return false;
                 if (filters.electricityAccess !== undefined && listing.electricityAccess !== filters.electricityAccess) return false;
                 if (filters.roadAccess !== undefined && listing.roadAccess !== filters.roadAccess) return false;
@@ -162,7 +210,22 @@ async function _getLandListings(filters?: z.infer<typeof landSearchSchema>): Pro
             });
         }
 
-        return { success: true, error: null, data: listings };
+        /**
+         * The browse feed is stripped; the review queue is not.
+         *
+         * This feed never called stripInternalLandFields at all, while the
+         * single-listing read below it and /api/farm-nation/listings both do —
+         * so a verified listing that had been rejected once handed a stranger
+         * the admin's notes, the admin's user id and the owner's email.
+         *
+         * Decided by which status set was asked for rather than by re-resolving
+         * the session: a non-public status is admin-only by the gate above, and
+         * a public browse never needs the review fields. That keeps the public
+         * path free of a session lookup it does not otherwise need.
+         */
+        const visible = wantsNonPublic ? listings : listings.map(stripInternalLandFields);
+
+        return { success: true, error: null, data: visible };
     } catch (error: any) { 
         logger.error("getLandListings error:", error);
         return { success: false, error: "Failed to fetch land listings", data: null };
@@ -329,7 +392,20 @@ async function _updateLandListing(
         await db.collection(COLLECTIONS.LAND_LISTINGS).doc(listingId).update({ 
             ...updateData,
             updatedAt: FieldValue.serverTimestamp(),
-            status: 'pending_verification' 
+            status: 'pending_verification',
+            // The previous approval does not survive the edit that voided it.
+            //
+            // The status went back to pending_verification and `verifiedAt` /
+            // `verifiedBy` stayed exactly as they were, so a listing waiting for
+            // review still carried "verified by admin-9 on that date" — and the
+            // admin re-reviewing it was looking at their own earlier approval of
+            // different content.
+            //
+            // verificationNotes and rejectionReason are deliberately left: the
+            // owner is editing in order to address them, and needs to keep
+            // reading what they said.
+            verifiedAt: null,
+            verifiedBy: null,
         });
 
         // Audit log
@@ -378,17 +454,73 @@ async function _verifyLandListing(
     try { 
         const validated = landVerificationSchema.parse(data);
 
-        const updateData: Record<string, unknown> = {
-            status: validated.verified ? 'verified' : 'rejected',
+        const patch: Record<string, unknown> = {
             verifiedBy: session.user.id,
             verifiedAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp() 
         };
 
-        if (validated.notes) { updateData.verificationNotes = validated.notes; }
-        if (!validated.verified && validated.rejectionReason) { updateData.rejectionReason = validated.rejectionReason; }
+        if (validated.notes) { patch.verificationNotes = validated.notes; }
+        if (!validated.verified && validated.rejectionReason) { patch.rejectionReason = validated.rejectionReason; }
 
-        await db.collection(COLLECTIONS.LAND_LISTINGS).doc(validated.listingId).update(updateData);
+        /**
+         * THE SIXTH BLIND LAND STATUS WRITE.
+         *
+         * admin/_land.ts carries a comment headed "The FIFTH blind land status
+         * write, and the most exposed of the five", and lists what the five had
+         * in common: they wrote the status unconditionally, without reading the
+         * listing first. All five were converted to claimStatusTransitionFromAny.
+         *
+         * This one was not among them — and /land/verify, the admin verification
+         * page, calls THIS one. It was
+         *
+         *     await db.collection(LAND_LISTINGS).doc(validated.listingId).update(updateData)
+         *
+         * with no read at all. Two consequences, and the second is the one that
+         * touches money:
+         *
+         *   A listing id that does not exist. update() on a missing document is
+         *   a no-op on this adapter — it warns and affects no rows — so the
+         *   action reported success and wrote an audit row recording a
+         *   verification that never happened.
+         *
+         *   A listing whose state should not be overwritten. Farm Nation holds a
+         *   buyer's money against `pending_escrow`. Approving from there put the
+         *   parcel back on the public market with the escrow still open;
+         *   rejecting from there took it off the market with the buyer's money
+         *   still held and nothing in the flow to release it. That is the fifth
+         *   write's own wording, and it applies here unchanged.
+         *
+         * Everything this wrote is preserved; the check and the write are one
+         * operation now, against the same APPROVABLE_FROM / REJECTABLE_FROM sets
+         * the other five use.
+         */
+        const transition = await claimStatusTransitionFromAny({
+            collection: COLLECTIONS.LAND_LISTINGS,
+            id: validated.listingId,
+            fromAny: validated.verified
+                ? [...APPROVABLE_FROM_STATUSES]
+                : [...REJECTABLE_FROM_STATUSES],
+            to: validated.verified ? 'verified' : 'rejected',
+            patch,
+            recordPreviousAs: validated.verified
+                ? 'statusBeforeVerification'
+                : 'statusBeforeRejection',
+        });
+
+        if (!transition.claimed) {
+            return {
+                success: false,
+                error: transition.status === null
+                    ? (transition.exists
+                        ? "This land listing has no status recorded, so a decision cannot be made on it."
+                        : "Listing not found")
+                    : `This listing is '${transition.status}' and cannot be `
+                      + `${validated.verified ? 'verified' : 'rejected'} from that state. `
+                      + `A listing with a purchase in progress must be resolved first.`,
+                data: null,
+            };
+        }
 
         // Audit log
         await createAdminAuditLog({ 

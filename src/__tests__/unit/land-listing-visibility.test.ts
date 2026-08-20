@@ -53,6 +53,20 @@ jest.mock('@/app/actions/notifications', () => ({
     createNotificationAction: jest.fn(async () => ({})),
 }));
 
+/**
+ * verifyLandListing became a claimed status transition — see the "sixth blind
+ * land status write" note in land-actions.ts. That claim is a Postgres CAS
+ * called through supabaseAdmin.rpc, which the recorder harness this file uses
+ * cannot serve.
+ *
+ * Stubbed to "claimed", because these tests are about WHO MAY VERIFY and the
+ * role check runs before the transition. What the transition itself refuses is
+ * measured against a real store in land-actions-behaviour.test.ts.
+ */
+jest.mock('@/lib/status-transition', () => ({
+    claimStatusTransitionFromAny: jest.fn(async () => ({ claimed: true, exists: true, status: 'verified' })),
+}));
+
 function setSession(id: string | null, roles: string[] = []) {
     (global as any).mockRequireSession.mockImplementation(() => Promise.resolve(
         id === null
