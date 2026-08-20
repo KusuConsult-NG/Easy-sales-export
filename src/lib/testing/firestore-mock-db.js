@@ -261,15 +261,23 @@ function createMockDb() {
              * paging silently returned page one forever. In production the
              * order of the two calls does not matter, and now it does not here.
              *
-             * A non-snapshot argument is IGNORED, also like the adapter:
-             * `startAfter(docOrValue)` only records it when it is a
-             * SupabaseDocumentSnapshot. A fake that honoured a bare value would
-             * make a paginating call site look correct that pages nowhere.
+             * A BARE VALUE IS A CURSOR TOO — `startAfter(someDate)`, which is
+             * what seven call sites pass. This used to ignore it "also like the
+             * adapter", on the reasoning that a fake honouring a bare value
+             * "would make a paginating call site look correct that pages
+             * nowhere". The observation was right and the conclusion was
+             * backwards: the adapter was the thing that was wrong, and matching
+             * it here is what kept those seven lists stuck on page one without
+             * a single test noticing. Both now accept either form.
              */
-            startAfter: (...values) => next({
-                startAfterDoc: (values.length === 1 && values[0]
-                    && typeof values[0].data === 'function') ? values[0] : undefined,
-            }),
+            startAfter: (...values) => {
+                const first = values[0];
+                if (values.length === 1 && first && typeof first.data === 'function') {
+                    return next({ startAfterDoc: first });
+                }
+                const vals = values.filter((v) => v !== undefined && v !== null);
+                return next({ startAfterValues: vals.length > 0 ? vals : undefined });
+            },
             // The adapter's startAt is a straight delegate to startAfter.
             startAt: (...values) => q.startAfter(...values),
             endAt: () => q,

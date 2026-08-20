@@ -58,7 +58,22 @@
 
 type Doc = Record<string, any>;
 
-/** Matches lib/supabase-db.ts's DEFAULT_QUERY_LIMIT. */
+/**
+ * Rows a query with no explicit .limit() returns — the fake's copy of the
+ * adapter's DEFAULT_QUERY_LIMIT.
+ *
+ * Read from SUPABASE_DEFAULT_QUERY_LIMIT, as the adapter does, and read PER
+ * QUERY rather than frozen at import. It was a hardcoded 5000 under a comment
+ * claiming it matched the adapter, which it did only at the default: a suite
+ * setting the env var to exercise truncation got the real cap on one side and
+ * 5000 on the other. Truncation is the behaviour hardest to test and easiest to
+ * ship broken — see #193 — so it must be reachable without seeding 5,001 rows.
+ */
+export function fakeDefaultLimit(): number {
+    return Math.max(1, Number(process.env.SUPABASE_DEFAULT_QUERY_LIMIT) || 5000);
+}
+
+/** @deprecated Use fakeDefaultLimit(); kept for existing imports. */
 export const FAKE_DEFAULT_LIMIT = 5000;
 
 export interface FakeDbHandle {
@@ -402,6 +417,18 @@ function runQuery(store: Map<string, Map<string, Doc>>, q: QueryState): Array<[s
             }
             return 0;
         });
+    } else {
+        // BY ID, which is what an unordered query actually returns:
+        //
+        //     if (this._orderBy.length === 0) query = query.order('id');
+        //
+        // in SupabaseQuery._buildQuery. This used to be insertion order, and
+        // insertion order is a property of the test's seeding, not of the
+        // database — so a query whose result depends on ordering looked
+        // deterministic here and was not in production. It matters most where
+        // the default row cap truncates: which rows survive is decided by this
+        // order, and #193 is a list that lost its newest registrants to it.
+        rows = [...rows].sort((x, y) => (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : 0));
     }
 
     // startAfter is positional on the order key, matching the adapter's cursor:
@@ -419,22 +446,33 @@ function runQuery(store: Map<string, Map<string, Doc>>, q: QueryState): Array<[s
                 String(getPath(row, filterField(o.field)) ?? '') === String(cursor[i] ?? '')));
         rows = idx >= 0 ? rows.slice(idx + 1) : rows;
     } else if (q.startAfterValues && q.startAfterValues.length > 0 && q.orders.length > 0) {
-        // Flattened, because a cursor taken from a SNAPSHOT carries hydrated
-        // Timestamps while the store holds ISO strings — so an unflattened
-        // comparison stringifies to "[object Object]" and matches nothing,
-        // silently returning the FIRST page again forever. The adapter does the
-        // same conversion (`cursorValue.toDate().toISOString()` in
-        // buildCursorFilter); this is that, not a fake-only convenience.
-        const cursor = q.startAfterValues.map(flattenTimestamps);
-        const idx = rows.findIndex(([, d]) =>
-            q.orders.every((o, i) =>
-                String(getPath(d, filterField(o.field)) ?? '') === String(cursor[i] ?? '')));
-        rows = idx >= 0 ? rows.slice(idx + 1) : rows;
+        // The VALUE form — `startAfter(someDate)`. Reachable at last: the query
+        // builders only ever set startAfterDoc, so this branch was dead code
+        // guarding a cursor the adapter silently threw away. Both accept it now.
+        //
+        // Flattened, because a Date or a hydrated Timestamp stringifies to
+        // something that compares against nothing while the store holds ISO
+        // strings — the same conversion the adapter does before handing the
+        // value to PostgREST.
+        //
+        // Compared BY VALUE, not by finding the cursor row. The adapter emits
+        // `.lt(col, value)` / `.gt(col, value)`, which needs no row to exist at
+        // the cursor; an equality search would return page one again whenever
+        // the last row of the previous page had since been deleted or edited.
+        // Only the first order key participates, which is the adapter's own
+        // limitation.
+        const o = q.orders[0];
+        const cursor = String(flattenTimestamps(q.startAfterValues[0]) ?? '');
+        rows = rows.filter(([, d]) => {
+            const v = getPath(d, filterField(o.field));
+            if (v === undefined || v === null) return false;
+            return o.dir === 'desc' ? String(v) < cursor : String(v) > cursor;
+        });
     }
 
     if (q.offset) rows = rows.slice(q.offset);
 
-    const cap = q.limit ?? (q.unbounded ? undefined : FAKE_DEFAULT_LIMIT);
+    const cap = q.limit ?? (q.unbounded ? undefined : fakeDefaultLimit());
     if (cap !== undefined) rows = rows.slice(0, cap);
 
     return rows;

@@ -1444,6 +1444,16 @@ export class SupabaseQuery {
     protected _offset: number | null = null;
     protected _orderBy: OrderByClause[] = [];
     protected _startAfterDoc: SupabaseDocumentSnapshot | null = null;
+    /**
+     * The FIELD-VALUE form of startAfter — `startAfter(someDate)` rather than
+     * `startAfter(lastDoc)`. Firestore accepts both; this adapter used to
+     * accept only the snapshot and drop the other on the floor. See
+     * startAfter() for what that cost.
+     *
+     * `null` means "no value cursor". An explicit `undefined` cannot be a
+     * cursor, so the two do not need distinguishing.
+     */
+    protected _startAfterValues: unknown[] | null = null;
     protected _selectedFields: string[] | null = null;
     /** Set by supabaseDb.collectionGroup(). See that method for what it means. */
     protected _isCollectionGroup = false;
@@ -1459,6 +1469,7 @@ export class SupabaseQuery {
         q._offset = this._offset;
         q._orderBy = [...this._orderBy];
         q._startAfterDoc = this._startAfterDoc;
+        q._startAfterValues = this._startAfterValues ? [...this._startAfterValues] : null;
         q._selectedFields = this._selectedFields ? [...this._selectedFields] : null;
         q._unbounded = this._unbounded;
         q._isCollectionGroup = this._isCollectionGroup;
@@ -1516,16 +1527,59 @@ export class SupabaseQuery {
         return q;
     }
 
-    startAfter(docOrValue: any): this {
+    /**
+     * Page past a cursor — either a document snapshot or the ORDER-KEY VALUES.
+     *
+     * SEVEN LISTS THAT COULD NEVER LEAVE PAGE ONE
+     * -------------------------------------------
+     * Firestore's startAfter takes either form: a snapshot, or one value per
+     * orderBy clause. This method used to record the snapshot and SILENTLY
+     * DISCARD anything else — no throw, no warning, the cursor simply gone.
+     *
+     * Seven call sites use the value form, every one of them passing a Date:
+     *
+     *   actions/briefing-admin.ts               WAVE briefing guest list
+     *   actions/wave/_wv_resources.ts    (x2)   both member resource listings
+     *   api/marketplace/products/route.ts (x2)  public catalogue + its fallback
+     *   api/wave/training-sessions/route.ts     the training-sessions feed
+     *   api/admin/cooperative/members/route.ts  member roster, date-filtered
+     *
+     * Each reads `limit + 1` rows, reports hasMore: true and returns a
+     * nextCursor — then the next request applies no cursor at all and serves
+     * the SAME first page back. "Load more" appended the rows already on
+     * screen, for ever. The list looked paginated, reported more pages, and had
+     * exactly one.
+     *
+     * The note on the JSONB cursor in _buildQuery describes this same symptom
+     * from a different cause and calls it fixed; the value form was never
+     * covered by it.
+     *
+     * Only the first order key is applied, matching the snapshot branch below —
+     * a single-column cursor is what the JSONB/native column mapping supports.
+     * Extra values are kept so the limitation stays visible rather than looking
+     * like the caller never passed them.
+     */
+    startAfter(...docOrValues: any[]): this {
         const q = this._clone();
-        if (docOrValue instanceof SupabaseDocumentSnapshot) {
-            q._startAfterDoc = docOrValue;
+        const first = docOrValues[0];
+
+        if (first instanceof SupabaseDocumentSnapshot) {
+            q._startAfterDoc = first;
+            return q;
+        }
+
+        const values = docOrValues.filter((v) => v !== undefined && v !== null);
+        if (values.length > 0) {
+            q._startAfterValues = values;
         }
         return q;
     }
 
     startAt(docOrValue: any): this {
-        // Simplified: treat same as startAfter for pagination purposes
+        // Simplified: treat same as startAfter for pagination purposes.
+        // startAt is INCLUSIVE in Firestore and this is not; no call site in
+        // this codebase uses it, so the difference is recorded rather than
+        // implemented behind no coverage.
         return this.startAfter(docOrValue);
     }
 
@@ -1691,15 +1745,24 @@ export class SupabaseQuery {
             query = query.order('id');
         }
 
-        // Apply cursor pagination (startAfter)
-        if (this._startAfterDoc && this._orderBy.length > 0) {
+        // Apply cursor pagination (startAfter) — from a snapshot or from the
+        // order-key value the caller passed. See startAfter().
+        if ((this._startAfterDoc || this._startAfterValues) && this._orderBy.length > 0) {
             const firstOrderField = this._orderBy[0].field;
-            let cursorValue = this._startAfterDoc.get(firstOrderField)
-                ?? this._startAfterDoc.data()?.[firstOrderField];
-                
+            let cursorValue: any = this._startAfterDoc
+                ? (this._startAfterDoc.get(firstOrderField)
+                    ?? this._startAfterDoc.data()?.[firstOrderField])
+                : this._startAfterValues![0];
+
             // Convert Firestore Timestamp objects or objects with seconds to ISO strings for SQL compatibility
             if (cursorValue && typeof cursorValue === 'object') {
-                if (typeof cursorValue.toDate === 'function') {
+                if (cursorValue instanceof Date) {
+                    // The value form is a Date at every call site that uses it,
+                    // and a Date has none of the three shapes below — so it fell
+                    // through unconverted and PostgREST received
+                    // "Tue Aug 20 2026 ..." to compare against a timestamptz.
+                    cursorValue = cursorValue.toISOString();
+                } else if (typeof cursorValue.toDate === 'function') {
                     cursorValue = cursorValue.toDate().toISOString();
                 } else if (cursorValue.seconds !== undefined) {
                     cursorValue = new Date(cursorValue.seconds * 1000).toISOString();

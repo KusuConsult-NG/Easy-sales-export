@@ -3,9 +3,10 @@
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { requireSession } from "@/lib/session-guard";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { logger } from "@/lib/logger";
 import { BriefingRegistrationData, BriefingStatus } from "./briefing";
-import { serializeValue } from "@/lib/firestore-serialize";
+import { serializeValue, toMillis } from "@/lib/firestore-serialize";
 
 export interface BriefingRegistration extends BriefingRegistrationData { id: string;
     createdAt: string; // ISO string — safe for server→client boundary
@@ -23,6 +24,23 @@ export interface BriefingRegistrationsResult {
         hasMore: boolean;
         totalCount?: number;
     };
+}
+
+/**
+ * Rows the index fallback can read in one pass. Mirrors the adapter's
+ * SUPABASE_DEFAULT_QUERY_LIMIT, which is what actually caps that query — this
+ * constant exists so reaching the cap can be reported rather than guessed at.
+ */
+const FALLBACK_SAMPLE_LIMIT = Math.max(1, Number(process.env.SUPABASE_DEFAULT_QUERY_LIMIT) || 5000);
+
+/**
+ * A timestamp as an ISO string, or "" when there is no timestamp to report.
+ *
+ * Never invents one. See the createdAt note in the mapper below.
+ */
+function isoOrEmpty(value: unknown): string {
+    const ms = toMillis(value);
+    return ms > 0 ? new Date(ms).toISOString() : "";
 }
 
 /**
@@ -76,11 +94,24 @@ export async function getBriefingRegistrationsAction(
         }
         const { session } = sessionResult;
 
-        const hasAdminRole =
-            session.user.roles?.includes("admin") ||
-            session.user.roles?.includes("super_admin");
-
-        if (!hasAdminRole) { return { success: false as const, error: "Unauthorized: Admin access required", meta: { cursor: null, hasMore: false } };
+        /**
+         * The WAVE admin could not open the WAVE guest list.
+         *
+         * This was a hand-written pair — `roles.includes("admin") ||
+         * roles.includes("super_admin")` — and `wave_admin` is in neither. That
+         * role runs every other screen under /admin/wave: the application
+         * queue, training events, certificates, live sessions, withdrawals.
+         * The registrations page for the briefing it administers was the one
+         * door closed to it, and only because this file asked the role list
+         * directly instead of the matrix.
+         *
+         * "wave:approve_applications" is what the sibling application queue
+         * uses, and a briefing registration is the same kind of record: a
+         * person who has applied to attend. Same correction as #115, #122
+         * and #158.
+         */
+        if (!hasAdminPermission(session.user.roles, "wave:approve_applications")) {
+            return { success: false as const, error: "Unauthorized: WAVE admin permission required", meta: { cursor: null, hasMore: false } };
         }
 
         const pageSize = searchQuery ? 5000 : Math.min(Math.max(limit, 1), 5000);
@@ -124,11 +155,40 @@ export async function getBriefingRegistrationsAction(
             if (e.message && String(e.message).toLowerCase().includes("index")) {
                 logger.warn("Missing composite index, falling back to in-memory filter...");
                 try {
-                    const fallbackQuery: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS);
-                    
+                    /**
+                     * ORDERED, so the sample is the newest rows and not an
+                     * arbitrary slab.
+                     *
+                     * This query had no orderBy and no limit. A query with
+                     * neither is capped at SUPABASE_DEFAULT_QUERY_LIMIT (5,000)
+                     * and, with no ordering of its own, the adapter falls back
+                     * to `.order('id')` — so past 5,000 registrations this read
+                     * the first 5,000 BY ID, sorted those in memory, and
+                     * presented the top as "the most recent registrations".
+                     * The newest registrant could be absent from a list sorted
+                     * by recency, and totalCount froze at 5,000 for ever.
+                     *
+                     * Sorting on one column needs no composite index, which is
+                     * the entire premise of this fallback — the filters are
+                     * still applied in memory below.
+                     */
+                    const fallbackQuery: import("@/lib/supabase-db").SupabaseQuery = db
+                        .collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS)
+                        .orderBy("createdAt", "desc");
+
                     const allDocsSnap = await fallbackQuery.get();
                     let allDocs = allDocsSnap.docs;
-                    
+
+                    // Truncation must be visible. A short result that looks
+                    // complete is how "the report is missing rows" reaches
+                    // production — the adapter says the same about its own cap.
+                    if (allDocs.length >= FALLBACK_SAMPLE_LIMIT) {
+                        logger.warn(
+                            `[briefing-admin] Index fallback read the ${FALLBACK_SAMPLE_LIMIT}-row cap. ` +
+                            `Counts and later pages cover only the newest ${FALLBACK_SAMPLE_LIMIT} registrations.`
+                        );
+                    }
+
                     // Filter in memory
                     if (filterState) {
                         allDocs = allDocs.filter(doc => doc.data().state === filterState);
@@ -138,16 +198,18 @@ export async function getBriefingRegistrationsAction(
                     if (filterStatus) { allDocs = allDocs.filter(doc => doc.data().status === filterStatus);
                     }
                     
-                    // Sort chronologically in memory to mimic orderBy("createdAt", "desc")
-                    allDocs.sort((a, b) => { const timeA = a.data().createdAt?.toMillis?.() ?? 0;
-                        const timeB = b.data().createdAt?.toMillis?.() ?? 0;
-                        return timeB - timeA;
-                    });
-                    
+                    // Sort chronologically in memory to mimic orderBy("createdAt", "desc").
+                    //
+                    // Through toMillis, the shared helper, rather than
+                    // `createdAt?.toMillis?.()` — which scores 0 for a Date, a
+                    // number and a raw {_seconds} object, putting those rows at
+                    // the BOTTOM of a newest-first list. That is #49.
+                    allDocs.sort((a, b) => toMillis(b.data().createdAt) - toMillis(a.data().createdAt));
+
                     let startIndex = 0;
                     if (cursor) { const cursorTime = new Date(cursor).getTime();
                         if (!isNaN(cursorTime)) {
-                            while (startIndex < allDocs.length && (allDocs[startIndex].data().createdAt?.toMillis?.() ?? 0) >= cursorTime) {
+                            while (startIndex < allDocs.length && toMillis(allDocs[startIndex].data().createdAt) >= cursorTime) {
                                 startIndex++;
                             }
                         }
@@ -173,8 +235,27 @@ export async function getBriefingRegistrationsAction(
                 ...serializeValue(d),
                 id: doc.id,
                 phoneNumber: d.phoneNumber || d.phone || d.kyc?.phoneNumber || d.kyc?.phone || "",
-                createdAt: d.createdAt?.toDate?.()?.toISOString() ?? new Date().toISOString(),
-                updatedAt: d.updatedAt?.toDate?.()?.toISOString() ?? new Date().toISOString(),
+                /**
+                 * A registration with no timestamp is DATELESS, not registered
+                 * today.
+                 *
+                 * `?? new Date().toISOString()` invented the current instant
+                 * for any row whose createdAt did not answer toDate(). The
+                 * adapter hydrates ISO strings into Timestamps on read, so
+                 * those are fine; the shapes that are not are a MISSING
+                 * createdAt and a legacy `{_seconds, _nanoseconds}` object,
+                 * which convertStringsToTimestamps leaves as a plain object
+                 * with no toDate. Both came out as today, in the table's
+                 * Registered Date column and in the CSV of the same name — a
+                 * fabricated date is worse than a blank one, because nothing
+                 * about it looks wrong.
+                 *
+                 * isoOrEmpty reads every shape through the shared helper and
+                 * returns "" when there genuinely is nothing. The table renders
+                 * an em dash for an empty value and the CSV a blank cell.
+                 */
+                createdAt: isoOrEmpty(d.createdAt),
+                updatedAt: isoOrEmpty(d.updatedAt),
                 status: d.status || "registered",
                 attended: d.attended ?? false,
                 confirmationSent: d.confirmationSent ?? false } as BriefingRegistration;
@@ -189,8 +270,12 @@ export async function getBriefingRegistrationsAction(
             });
         }
 
+        // Same shape as the mapper above: `?.toDate?.()` answers for one of the
+        // several timestamp shapes this codebase writes. A cursor that came out
+        // null on a page that HAS more stops pagination dead, so this reads
+        // through the shared helper too.
         const nextCursor = hasMore && docs.length > 0
-            ? docs[docs.length - 1].data().createdAt?.toDate?.()?.toISOString() ?? null
+            ? (isoOrEmpty(docs[docs.length - 1].data().createdAt) || null)
             : null;
 
         return { error: null, success: true as const, data, meta: { cursor: nextCursor, hasMore, totalCount } };

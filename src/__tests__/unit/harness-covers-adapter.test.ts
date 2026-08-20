@@ -538,10 +538,26 @@ describe('the fake hydrates dates the way the adapter does', () => {
         expect(page.docs.map((d: any) => d.id)).toEqual(['c']);
     });
 
-    it('and a NON-snapshot cursor is ignored, as the adapter ignores it', async () => {
-        // `startAfter(docOrValue)` records the cursor only when it is a
-        // SupabaseDocumentSnapshot. Honouring a bare value would make a call
-        // site look like it paginates when in production it pages nowhere.
+    /**
+     * INVERTED BY #192. This assertion used to read:
+     *
+     *     it('and a NON-snapshot cursor is ignored, as the adapter ignores it')
+     *     ...
+     *     expect(page.docs.map(d => d.id)).toEqual(['a', 'b']);   // cursor dropped
+     *
+     * with the note that "honouring a bare value would make a call site look
+     * like it paginates when in production it pages nowhere". That was a true
+     * description of the adapter and a wrong conclusion about what to do: the
+     * adapter was the broken half. Firestore's startAfter takes field values as
+     * well as a snapshot, seven call sites in this codebase pass a Date, and
+     * every one of them served page one for ever. This test is the reason that
+     * went unnoticed — it asserted the defect, so the defect could not regress.
+     *
+     * A harness must be able to be WRONG about the adapter. When it disagrees,
+     * the question is which one is right, and the answer here was not the one
+     * this file assumed.
+     */
+    it('honours a NON-snapshot cursor, as the adapter now does', async () => {
         store.seedAll('x', {
             a: { createdAt: '2026-01-03T00:00:00.000Z' },
             b: { createdAt: '2026-01-02T00:00:00.000Z' },
@@ -552,7 +568,7 @@ describe('the fake hydrates dates the way the adapter does', () => {
             .startAfter('2026-01-03T00:00:00.000Z')
             .get() as any;
 
-        expect(page.docs.map((d: any) => d.id)).toEqual(['a', 'b']);
+        expect(page.docs.map((d: any) => d.id)).toEqual(['b']);
     });
 
     it('leaves a string that merely starts with digits alone', async () => {
