@@ -54,13 +54,25 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
             if (cached) return cached;
         } catch (e) {}
 
-        const [metrics, paymentsSnapR] = await Promise.allSettled([
+        // A SECOND QUERY WHOSE RESULT WAS NEVER READ.
+        //
+        // This ran beside the metrics call as `[metrics, paymentsSnapR]`, and
+        // nothing below ever mentioned `paymentsSnapR`. It was an unpaginated
+        // scan of processed_payments — up to the adapter's 5,000-row default —
+        // on every uncached admin dashboard load, awaited, and discarded.
+        //
+        // It was also a DUPLICATE of the query beside it. The other half of the
+        // same Promise.allSettled, userMetricsService.getCooperativeMemberMetrics,
+        // runs it identically — same collection, same
+        // `type == "cooperative_membership_registration"`, same
+        // `status == "completed"`, same `.select("userId")` — and that is the
+        // one whose result becomes `paidMembersCount`. So the dashboard asked
+        // the database the same question twice and read one of the answers.
+        //
+        // Removing it changes no number on the screen; it removes a full scan
+        // from the request.
+        const [metrics] = await Promise.allSettled([
             userMetricsService.getCooperativeMemberMetrics(adminScope || undefined),
-            db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
-                .where("type", "==", "cooperative_membership_registration")
-                .where("status", "==", "completed")
-                .select("userId")
-                .get()
         ]);
 
         const metricsData = metrics.status === "fulfilled" ? metrics.value : {

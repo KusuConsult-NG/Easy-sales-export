@@ -645,7 +645,6 @@ async function _getMarketplaceUsersAction(options: {
         // "marketplace:approve_sellers" or "marketplace:suspend_sellers".
         const maySeeBankDetails = hasAdminPermission(session.user.roles, "marketplace:approve_sellers");
 
-        const fetchLimit = options.search ? 5000 : (options.limit || 50);
         let q: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.USERS);
 
         // Query by roles array — flat indexed field, no composite index needed.
@@ -664,8 +663,35 @@ async function _getMarketplaceUsersAction(options: {
 
         q = q.orderBy("createdAt", sortDirection);
 
-        // Fetch ALL matching marketplace users (approx 600+) for accurate memory filtering
-        const snapshot = await q.get();
+        // Fetch ALL matching marketplace users for accurate in-memory search,
+        // stats and pagination — and say so to the adapter.
+        //
+        // A `fetchLimit` was computed one line above the query and never
+        // applied to it: `const fetchLimit = options.search ? 5000 : (limit || 50)`
+        // sat there while `q.get()` ran unbounded. That is not the harmless
+        // leftover it looks like, because `.get()` on a query with no `.limit()`
+        // does not return everything — it stops at the adapter's
+        // DEFAULT_QUERY_LIMIT of 5,000 rows and hands back a snapshot that
+        // looks complete. Everything below runs over that snapshot: the search
+        // filter, `stats.total`, the buyer/seller/both counts, and the paging.
+        //
+        // So past 5,000 marketplace users the admin's search silently stops
+        // finding people, and the totals beside it silently understate — the
+        // same defect getCooperativeStats already carries a comment about,
+        // fixed there and left here. `.all()` is the adapter's answer for a
+        // caller that genuinely needs every row, and it reports at error level
+        // if it reaches its far higher runaway ceiling. `truncated` is
+        // surfaced in the payload so a partial list is distinguishable from a
+        // complete one by the caller and not only in a log.
+        const snapshot = await q.all().get();
+        const truncated = Boolean((snapshot as any).truncated);
+        if (truncated) {
+            logger.error(
+                "[getMarketplaceUsersAction] hit the row ceiling — the marketplace user list, its "
+                + "search and its totals are INCOMPLETE.",
+                { search: options.search ?? null, roleFilter: options.roleFilter ?? null }
+            );
+        }
 
         let filteredDocs = snapshot.docs;
 
@@ -796,7 +822,8 @@ async function _getMarketplaceUsersAction(options: {
             data: pagedUsers,
             lastDocId: nextCursor,
             hasMore,
-            meta: { stats }
+            // A partial list must be distinguishable from a complete one.
+            meta: { stats: { ...stats, truncated } }
         };
 
     } catch (error: any) {
