@@ -124,7 +124,14 @@ describe('there is one copy of it', () => {
     ])('%s imports it rather than defining its own', (_label: string, rel: string) => {
         const src = source(rel);
 
-        expect(src).toContain('checkCourseAccess } from "@/lib/academy-plan"');
+        // Matched by shape rather than by an exact substring: the catalogue now
+        // imports normaliseAcademyPlan and ACADEMY_TIERS_OPENED from the same
+        // module, and pinning the whole import clause made adding a second name
+        // to it look like removing the first.
+        const imported = new RegExp(
+            String.raw`import\s*\{[^}]*\bcheckCourseAccess\b[^}]*\}\s*from\s*"@/lib/academy-plan"`,
+        );
+        expect(src).toMatch(imported);
         expect(src).not.toContain('function checkCourseAccess(');
     });
 
@@ -140,6 +147,24 @@ describe('there is one copy of it', () => {
         expect(source(ENROLMENT)).toContain('checkCourseAccess(userPlan, courseTier)');
         expect(source(COURSE_PAGE)).toContain('checkCourseAccess(userPlan,');
         expect(source(CATALOGUE)).toContain('checkCourseAccess(userPlan,');
+    });
+
+    /**
+     * And the catalogue has to DRAW the lock it decides on.
+     *
+     * The header above has said since this file was written that the catalogue
+     * "decides which cards show a lock". It did not: `&& hasAccess` sat in the
+     * filter predicate, so the card carrying the padlock was removed from the
+     * grid before it could render and that arm of the ternary was unreachable.
+     * The behaviour is proved in academy-catalogue-padlock.render.test.tsx,
+     * which mounts the page; this pins the specific line that caused it, since
+     * it is one word and reads like a safety measure.
+     */
+    it('and the catalogue does not filter locked courses out of its own grid', () => {
+        const src = source(CATALOGUE);
+
+        expect(src).toContain('Upgrade to Unlock');
+        expect(src).not.toMatch(/return matchesSearch[^;]*hasAccess/);
     });
 });
 

@@ -8,7 +8,7 @@ import { requireSession } from "@/lib/session-guard";
 import { revalidatePath } from "next/cache";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { stripAnswerKey, stripLockedContent } from "@/lib/academy-grading";
-import { checkCourseAccess } from "@/lib/academy-plan";
+import { checkCourseAccessForRegistration } from "@/lib/academy-plan";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
@@ -65,8 +65,13 @@ async function _getCoursesAction(
 
         // Same two rules as the single-course read below: the answer key, and
         // the paid material of a tier this viewer's plan does not open.
-        const viewerPlan = (sessionResult.session?.user as any)
-            ?.serviceRegistrations?.academy?.plan;
+        //
+        // The whole REGISTRATION, not just its plan — a plan is what somebody
+        // bought and a status is what an admin decided, and reading only the
+        // first served the paid catalogue to an applicant whose application had
+        // been rejected. See checkCourseAccessForRegistration.
+        const viewerRegistration = (sessionResult.session?.user as any)
+            ?.serviceRegistrations?.academy;
 
         const hasMore = snapshot.docs.length > limit;
         const pageDocs = hasMore ? snapshot.docs.slice(0, limit) : snapshot.docs;
@@ -75,7 +80,7 @@ async function _getCoursesAction(
         const courses = viewerIsAdmin
             ? raw
             : raw.map((c) => {
-                const visible = checkCourseAccess(viewerPlan, (c as any)?.tier)
+                const visible = checkCourseAccessForRegistration(viewerRegistration, (c as any)?.tier)
                     ? c
                     : stripLockedContent(c);
                 return stripAnswerKey(visible);
@@ -150,9 +155,15 @@ async function _getCourseByIdAction(courseId: string): Promise<ActionResponse<an
         // this is where the content is served. The redirect and the padlock were
         // drawn after the browser already held the videos they were hiding, and
         // a caller who loaded neither page could ask for them directly.
-        const viewerPlan = (sessionResult.session?.user as any)
-            ?.serviceRegistrations?.academy?.plan;
-        const opensThisTier = checkCourseAccess(viewerPlan, (formattedCourse as any)?.tier);
+        // The REGISTRATION, for the reason given on the list above: a rejected
+        // applicant keeps the plan they paid for, and the rejection has to
+        // reach the one place that actually serves the videos.
+        const viewerRegistration = (sessionResult.session?.user as any)
+            ?.serviceRegistrations?.academy;
+        const opensThisTier = checkCourseAccessForRegistration(
+            viewerRegistration,
+            (formattedCourse as any)?.tier,
+        );
 
         const visible = viewerIsAdmin || opensThisTier
             ? formattedCourse

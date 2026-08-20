@@ -40,6 +40,7 @@
  */
 
 import { ACADEMY_CONFIG } from "@/lib/constants";
+import { isDecidedAgainst } from "@/lib/registration-progress";
 
 export const ACADEMY_PLANS = ["foundation", "standard", "elite"] as const;
 
@@ -141,6 +142,46 @@ export function checkCourseAccess(userPlan: unknown, courseTier: unknown): boole
 
     return ACADEMY_TIERS_OPENED[plan].includes(tier);
 }
+
+/**
+ * The same question, asked of a REGISTRATION rather than a bare plan string.
+ *
+ * THE CONTENT GATE NEVER ASKED WHETHER THE REGISTRATION HAD BEEN REFUSED.
+ * ---------------------------------------------------------------------
+ * `checkCourseAccess` takes a plan, and a plan is what somebody BOUGHT. It is
+ * not what an admin DECIDED. Rejecting an Academy application writes
+ * `serviceRegistrations.academy.status = "rejected"` and leaves
+ * `...academy.plan` exactly as it was — deliberately, since the payment
+ * happened — so a rejected applicant who had paid the elite fee still carries
+ * `plan: "elite"` for ever.
+ *
+ * _ac_catalog.ts read that plan straight out of the session and served on it.
+ * getCourseByIdAction returns every lesson's videoUrl, documentUrl, excelUrl
+ * and body text when the tier opens; getCoursesAction returns a page of them
+ * the same way. Neither consulted the status. So the rejection took away the
+ * role (#210), the enrolment (#225) and every page that checks module access —
+ * and left the actual material reachable by calling the action directly, which
+ * is precisely the gap academy-content-gating.test.ts was written about: "the
+ * tier gate was applied everywhere except where the content is served".
+ *
+ * A DECIDED-AGAINST REGISTRATION HOLDS NO PLAN, WHICH IS NOT THE SAME AS NO ACCESS.
+ * -------------------------------------------------------------------------------
+ * It is mapped to `null` rather than refused outright, so a free-tier course
+ * stays open. `checkCourseAccess` opens a free or absent tier to everybody,
+ * signed in or not — refusing a rejected applicant something an anonymous
+ * visitor is handed would be a rule that reads backwards. What closes is
+ * exactly the paid material the plan was buying.
+ */
+export function checkCourseAccessForRegistration(
+    registration: { plan?: unknown; status?: unknown } | null | undefined,
+    courseTier: unknown,
+): boolean {
+    const plan = isDecidedAgainst(registration?.status as string | undefined | null)
+        ? null
+        : registration?.plan;
+    return checkCourseAccess(plan, courseTier);
+}
+
 
 /** Naira of rounding slack, matching what the webhook already allowed. */
 export const ACADEMY_AMOUNT_TOLERANCE = 1;

@@ -140,7 +140,7 @@ describe('the readers apply it', () => {
         const src = code(CATALOG);
         const fn = src.slice(src.indexOf('async function _getCourseByIdAction'));
 
-        expect(fn).toContain('checkCourseAccess(viewerPlan,');
+        expect(fn).toContain('checkCourseAccessForRegistration(');
         expect(fn).toContain('stripLockedContent(formattedCourse)');
     });
 
@@ -151,15 +151,19 @@ describe('the readers apply it', () => {
         const fn = src.slice(src.indexOf('async function _getCoursesAction'));
 
         expect(fn).toContain('raw.map((c) =>');
-        expect(fn).toContain('checkCourseAccess(viewerPlan, (c as any)?.tier)');
+        expect(fn).toContain('checkCourseAccessForRegistration(viewerRegistration, (c as any)?.tier)');
         expect(fn).toContain('stripLockedContent(c)');
     });
 
-    it('reading the plan from the session, not from an argument', () => {
+    it('reading the registration from the session, not from an argument', () => {
+        // It reads the whole `academy` registration rather than `...plan`,
+        // because the status is half the answer — see the rejected-applicant
+        // block at the foot of this file.
         const src = code(CATALOG);
-        const reads = src.match(/serviceRegistrations\?\.academy\?\.plan/g) || [];
+        const reads = src.match(/serviceRegistrations\?\.academy;/g) || [];
 
         expect(reads.length).toBe(2);
+        expect(src).not.toContain('serviceRegistrations?.academy?.plan');
         expect(src).toContain('sessionResult.session?.user as any');
     });
 
@@ -199,5 +203,159 @@ describe('the gate this makes redundant', () => {
 
         expect(page).toContain('checkCourseAccess(userPlan,');
         expect(page).toContain('Upgrade your subscription to access this course');
+    });
+});
+
+/**
+ * AND THE GATE ASKED WHICH PLAN YOU BOUGHT, NEVER WHETHER YOU WERE REFUSED.
+ *
+ * Rejecting an Academy application writes
+ * `serviceRegistrations.academy.status = "rejected"` and deliberately leaves
+ * `...academy.plan` alone — the learner paid, and the payment happened. So a
+ * rejected applicant who had bought the elite package carries `plan: "elite"`
+ * for ever.
+ *
+ * Both readers in _ac_catalog.ts pulled that plan straight out of the session
+ * and gated on it alone. Everything else the rejection touches held: the role
+ * was revoked (#210), enrolment was refused (#225), and every page that checks
+ * module access turned them away. The material itself did not, because these
+ * two actions are addressable directly — which is the exact gap the header of
+ * this file describes, reappearing one field over.
+ *
+ * checkCourseAccessForRegistration maps a decided-against registration onto NO
+ * PLAN rather than refusing it outright, so a free-tier course stays open:
+ * refusing a rejected applicant something an anonymous visitor is handed would
+ * be a rule that reads backwards.
+ */
+describe('a rejected applicant does not keep the material their plan paid for', () => {
+    const REJECTED = { plan: 'elite', status: 'rejected' };
+    const APPROVED = { plan: 'elite', status: 'approved' };
+
+    it('closes every paid tier the plan used to open', () => {
+        const { checkCourseAccessForRegistration } = require('@/lib/academy-plan');
+
+        for (const tier of ['foundation', 'standard', 'elite']) {
+            expect(checkCourseAccessForRegistration(APPROVED, tier)).toBe(true);
+            expect(checkCourseAccessForRegistration(REJECTED, tier)).toBe(false);
+        }
+    });
+
+    it('and leaves the free tier open, as it is for everyone', () => {
+        const { checkCourseAccessForRegistration } = require('@/lib/academy-plan');
+
+        expect(checkCourseAccessForRegistration(REJECTED, 'free')).toBe(true);
+        expect(checkCourseAccessForRegistration(REJECTED, undefined)).toBe(true);
+        expect(checkCourseAccessForRegistration(null, 'free')).toBe(true);
+    });
+
+    it('for every way a registration can be decided against, not just rejection', () => {
+        // isDecidedAgainst is the #207 vocabulary: rejected, suspended, revoked
+        // and the rest all score zero, and "not approved" cannot tell them from
+        // "not started".
+        const { checkCourseAccessForRegistration } = require('@/lib/academy-plan');
+
+        for (const status of ['rejected', 'suspended', 'revoked']) {
+            expect(checkCourseAccessForRegistration({ plan: 'elite', status }, 'elite')).toBe(false);
+        }
+    });
+
+    it('while an undecided registration is not treated as a refused one', () => {
+        // Vacuity guard: "pending" must keep whatever the plan grants, or this
+        // would lock out everyone mid-review.
+        const { checkCourseAccessForRegistration } = require('@/lib/academy-plan');
+
+        expect(checkCourseAccessForRegistration({ plan: 'elite', status: 'pending' }, 'elite')).toBe(true);
+        expect(checkCourseAccessForRegistration({ plan: 'elite' }, 'elite')).toBe(true);
+    });
+
+    it('and the status is live, not whatever the JWT was minted with', () => {
+        // The premise. requireSession force-syncs serviceRegistrations from the
+        // database over the token before any of this runs, so a rejection takes
+        // effect on the next request rather than on the next sign-in.
+        const guard = readFileSync(join(process.cwd(), 'src/lib/session-guard.ts'), 'utf-8');
+
+        expect(guard).toContain(
+            'serviceRegistrations: data?.serviceRegistrations || (session.user as any).serviceRegistrations || null'
+        );
+    });
+});
+
+/**
+ * The same rule, EXECUTED against the action that serves the videos.
+ *
+ * The assertions above are on the predicate and on the call site. This one
+ * calls getCourseByIdAction and reads what comes back, which is the only form
+ * of the question that cannot be satisfied by a correctly-shaped call to a
+ * gate that is passed the wrong thing.
+ */
+describe('getCourseByIdAction, run', () => {
+    const { installFakeDb } = require('@/lib/testing/fake-db');
+    const { COLLECTIONS } = require('@/lib/types/firestore');
+
+    let store: any;
+
+    function actAs(academy: Record<string, unknown> | null, roles: string[] = ['academy_participant']) {
+        (globalThis as any).mockRequireSession.mockImplementation(() => Promise.resolve({
+            session: {
+                user: {
+                    id: 'learner-1',
+                    email: 'l@example.com',
+                    roles,
+                    serviceRegistrations: academy ? { academy } : {},
+                },
+            },
+            error: null,
+        }));
+    }
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        store = installFakeDb();
+        store.seed(COLLECTIONS.ACADEMY_COURSES, 'elite-course', {
+            title: 'Global Trade Finance',
+            tier: 'elite',
+            modules: [{
+                id: 'm1',
+                title: 'One',
+                lessons: [{ id: 'l1', title: 'Intro', videoUrl: 'https://cdn/secret.mp4', content: 'body' }],
+            }],
+        });
+    });
+
+    async function lesson(): Promise<any> {
+        const { getCourseByIdAction } = await import('@/app/actions/academy/_ac_catalog');
+        const result: any = await getCourseByIdAction('elite-course');
+        expect(result.success).toBe(true);
+        return result.data.modules[0].lessons[0];
+    }
+
+    it('hands the elite videos to an approved elite learner', async () => {
+        // Vacuity guard, and the control for the next case.
+        actAs({ plan: 'elite', status: 'approved' });
+        expect((await lesson()).videoUrl).toBe('https://cdn/secret.mp4');
+    });
+
+    it('and withholds them from the same learner once rejected', async () => {
+        // THE test. Same plan, same course, same action — only the admin's
+        // decision differs, and it used to make no difference at all here.
+        actAs({ plan: 'elite', status: 'rejected' });
+
+        const l = await lesson();
+        expect(l.videoUrl).toBeUndefined();
+        expect(l.content).toBeUndefined();
+        expect(l.locked).toBe(true);
+        // The outline survives the strip — that is what a locked card shows.
+        expect(l.title).toBe('Intro');
+    });
+
+    it('and from a suspended one', async () => {
+        actAs({ plan: 'elite', status: 'suspended' });
+        expect((await lesson()).videoUrl).toBeUndefined();
+    });
+
+    it('while an admin still sees the material', async () => {
+        // The course editor cannot edit what it cannot see.
+        actAs({ plan: 'elite', status: 'rejected' }, ['super_admin']);
+        expect((await lesson()).videoUrl).toBe('https://cdn/secret.mp4');
     });
 });

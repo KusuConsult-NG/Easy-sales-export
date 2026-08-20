@@ -11,8 +11,9 @@ import { courseProgressSchema,
     courseEnrollmentSchema } from "@/lib/validations/course";
 import { AuditActionType, type CourseProgress } from "@/types/strict";
 import { createAdminAuditLog } from "@/lib/audit-log";
-import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
+import { checkCourseAccess, normaliseAcademyPlan } from "@/lib/academy-plan";
+import { isDecidedAgainst } from "@/lib/registration-progress";
 
 /**
  * Update lesson progress (called by video player)
@@ -89,6 +90,68 @@ export async function enrollInCourse(
     const { session } = sessionResult;
 
     try { const validated = courseEnrollmentSchema.parse(data);
+
+        /**
+         * THE SECOND ENROLMENT ENDPOINT, WITH NEITHER GATE ON IT.
+         *
+         * There are two ways to enrol in a course, and they disagreed about
+         * who may:
+         *
+         *   _ac_enrollment.ts  _enrollInCourseAction   refuses a registration
+         *                                              decided against (#225),
+         *                                              and refuses a tier the
+         *                                              learner's plan does not
+         *                                              open.
+         *   course-actions.ts  enrollInCourse          neither. Any signed-in
+         *                                              account, any course.
+         *
+         * This file is "use server" and the lesson page imports from it, so
+         * every export of it carries an action id the browser can call — the
+         * same reasoning that made autoEnrollPaidUser reachable. Having no
+         * caller in the app is not the same as being unreachable.
+         *
+         * What it granted was the ENROLMENT RECORD, not the videos:
+         * getCourseByIdAction strips locked material by tier, so the material
+         * itself stayed shut. What it did grant was a course_enrollments row
+         * and a course_progress row for an elite course held by a foundation
+         * learner — rows every dashboard, count and report reads as a real
+         * enrolment — and it granted them to an applicant an admin had
+         * rejected, which is the hole #225 closed on the other endpoint.
+         *
+         * Both gates are asked here now, in the same order and from the same
+         * source of truth (the user document, not the session token).
+         */
+        const enroleeDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const academyReg = enroleeDoc.data()?.serviceRegistrations?.academy;
+
+        if (isDecidedAgainst(academyReg?.status)) {
+            return {
+                success: false as const,
+                error: "Your Academy application was not approved, so you cannot enrol in courses. Please contact support.",
+                data: null,
+            };
+        }
+
+        const courseRecord = await loadCourseForCompletion(validated.courseId);
+        if (!courseRecord.found) {
+            return { success: false as const, error: "Course not found", data: null };
+        }
+
+        if (!checkCourseAccess(academyReg?.plan, courseRecord.tier)) {
+            // The same two refusals the sibling distinguishes: a learner who
+            // bought a lower tier is told to upgrade from it, and one who
+            // bought none is not told to upgrade from a package they never had.
+            const tier = String(courseRecord.tier ?? "");
+            const tierName = tier.charAt(0).toUpperCase() + tier.slice(1);
+            const held = normaliseAcademyPlan(academyReg?.plan);
+            return {
+                success: false as const,
+                error: held
+                    ? `Your ${held} package does not grant access to this course. Please upgrade to the ${tierName} tier or higher.`
+                    : `Your Academy registration does not include a course package yet. Please choose the ${tierName} tier or higher to enrol.`,
+                data: null,
+            };
+        }
 
         // Check if already enrolled
         const snapshot = await db.collection(COLLECTIONS.COURSE_ENROLLMENTS)
@@ -200,10 +263,25 @@ export async function getUserEnrolledCourses() { const sessionResult = await req
             .where('status', '==', 'active')
             .get();
 
+        // THIS RETURNED NOTHING. EVERY TIME.
+        //
+        // `enrollments` was computed and then dropped on the floor — the
+        // success branch returned `data: null` — so "get all enrolled courses
+        // for user" ran the query, serialized the rows, and answered with an
+        // empty success. A caller could not tell that from a learner who has
+        // enrolled in nothing.
+        //
+        // The failure branch returns `courses: []` and the success branch
+        // carried no `courses` key at all, so a caller reading `.courses` got
+        // `[]` on error and `undefined` on success — the two outcomes inverted,
+        // with the working one being the unusable one. Both shapes are filled
+        // in now.
         const enrollments = serializeDocs(snapshot.docs);
 
-        return { error: null, success: true as const, data: null };
-    } catch (error) { return { success: false as const, error: "Failed to fetch enrolled courses", courses: []};
+        return { error: null, success: true as const, data: { courses: enrollments }, courses: enrollments };
+    } catch (error) {
+        logger.error("Failed to fetch enrolled courses:", error);
+        return { success: false as const, error: "Failed to fetch enrolled courses", data: null, courses: []};
     }
 }
 
@@ -219,6 +297,7 @@ export async function getUserEnrolledCourses() { const sessionResult = await req
  */
 async function loadCourseForCompletion(courseId: string): Promise<{
     title: string | null;
+    tier: string | null;
     lessonIds: string[];
     found: boolean;
 }> {
@@ -230,9 +309,17 @@ async function loadCourseForCompletion(courseId: string): Promise<{
         const lessonIds = modules.flatMap((m: any) =>
             (Array.isArray(m?.lessons) ? m.lessons : []).map((l: any) => String(l?.id ?? "")).filter(Boolean)
         );
-        return { title: data.title ? String(data.title) : null, lessonIds, found: true };
+        return {
+            title: data.title ? String(data.title) : null,
+            // The tier comes back too, so the enrolment gate above reads the
+            // course through the same two-collection lookup the completion
+            // path does rather than guessing which collection holds it.
+            tier: data.tier != null ? String(data.tier) : null,
+            lessonIds,
+            found: true,
+        };
     }
-    return { title: null, lessonIds: [], found: false };
+    return { title: null, tier: null, lessonIds: [], found: false };
 }
 
 /** The lessons of this course the learner has actually finished. */

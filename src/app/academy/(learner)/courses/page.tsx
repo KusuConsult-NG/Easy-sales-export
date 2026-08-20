@@ -8,8 +8,6 @@ import {
     BookOpen, 
     Clock, 
     Lock, 
-    Unlock, 
-    Award, 
     Loader2, 
     ChevronRight, 
     Play, 
@@ -19,10 +17,10 @@ import {
     Compass
 } from "lucide-react";
 import Link from "next/link";
-import { getCoursesAction, getEnrolledCoursesWithDetailsAction, enrollInCourseAction, type Course } from "@/app/actions/academy";
+import { getCoursesAction, getEnrolledCoursesWithDetailsAction, type Course } from "@/app/actions/academy";
 import { useToast } from "@/contexts/ToastContext";
 import BackButton from "@/components/ui/BackButton";
-import { checkCourseAccess } from "@/lib/academy-plan";
+import { checkCourseAccess, normaliseAcademyPlan, ACADEMY_TIERS_OPENED } from "@/lib/academy-plan";
 
 
 
@@ -42,11 +40,23 @@ export default function CourseCatalogPage() {
     const [selectedTier, setSelectedTier] = useState<string>("all");
     const [sortBy, setSortBy] = useState<string>("newest");
 
-    const userId = session?.user?.id;
     const userPlan = (session?.user as any)?.serviceRegistrations?.academy?.plan || "free";
 
-    const plan = (userPlan as string || "free").toLowerCase();
-    const isPaid = ["elite", "standard", "foundation", "advanced"].includes(plan);
+    /**
+     * The plan, read through the same normaliser the access rule uses.
+     *
+     * Everything below that describes the learner's access used to be decided
+     * by raw string equality on `userPlan` — `userPlan === "elite"`, and a
+     * nested ternary for the rest — while `checkCourseAccess` beside it
+     * lower-cases, trims and maps the legacy "advanced" onto "standard". The
+     * catalogue's own test asserts that `checkCourseAccess(" Elite ", "elite")`
+     * is true, so a learner whose stored plan carried a stray capital or space
+     * was shown every elite course, told their access was "Free, Foundation &
+     * Standard", and offered an Upgrade Plan button for the tier they had
+     * already bought. `null` is its own answer: registered, no tier bought.
+     */
+    const plan = normaliseAcademyPlan(userPlan);
+    const paidTiersOpened = plan ? ACADEMY_TIERS_OPENED[plan] : [];
 
     // Load initial data
     useEffect(() => {
@@ -92,10 +102,42 @@ export default function CourseCatalogPage() {
         const matchesLevel = selectedLevel === "all" || course.level === selectedLevel;
         const matchesTier = selectedTier === "all" || (course.tier || "free") === selectedTier;
 
-        // Only show courses that are accessible under the user's active tier
-        const hasAccess = checkCourseAccess(userPlan, course.tier || "free");
-
-        return matchesSearch && matchesLevel && matchesTier && hasAccess;
+        /**
+         * THE CATALOGUE DELETED EVERY COURSE IT WAS SUPPOSED TO PADLOCK.
+         *
+         * This predicate ended `&& checkCourseAccess(userPlan, course.tier)`,
+         * under the comment "Only show courses that are accessible under the
+         * user's active tier" — so a course the learner's plan does not open
+         * never reached the grid at all.
+         *
+         * The card below then branches on the SAME call with the SAME
+         * arguments, and one arm of it is a padlock reading "Upgrade to
+         * Unlock". A pure function cannot return false in the filter and true
+         * in the render, so that arm was unreachable: the padlock this page is
+         * named for could never be drawn.
+         *
+         * Three other places say plainly that it should be. lib/academy-plan.ts
+         * lists this file as the copy that "decides which cards show a lock";
+         * academy-course-access.test.ts repeats it; academy-content-gating.test.ts
+         * says the padlock is drawn "on the card". And the server had already
+         * done the work for it — getCoursesAction calls stripLockedContent,
+         * which deliberately KEEPS the title, description, tier, level, duration
+         * and module outline and removes only videoUrl, documentUrl, excelUrl
+         * and lesson bodies. It builds a course record whose entire purpose is
+         * to be shown locked; the browser threw it away.
+         *
+         * What that cost: a Foundation learner saw no Standard or Elite course
+         * anywhere, so the catalogue could not sell the upgrade its own
+         * "Upgrade Plan" button asks for. The Tier filter offers Standard and
+         * Elite, and picking either returned "No Courses Match Your Criteria" —
+         * indistinguishable from a catalogue that has none. And a learner who
+         * had bought no tier saw only free courses, which is an empty page
+         * whenever the academy publishes none.
+         *
+         * Access still decides what the card DOES, immediately below, and the
+         * material itself was never in the browser to begin with.
+         */
+        return matchesSearch && matchesLevel && matchesTier;
     }).sort((a, b) => {
         if (sortBy === "a-z") {
             return a.title.localeCompare(b.title);
@@ -103,6 +145,17 @@ export default function CourseCatalogPage() {
         // Newest is default (createdAt desc)
         return 0; // Handled naturally by backend sorting, placeholder for frontend stability
     });
+
+    /**
+     * "Free & Foundation" — read off ACADEMY_TIERS_OPENED rather than spelled
+     * out, so this sentence cannot drift from the rule that grants the access
+     * it describes. Free is always included: a free tier is open to everybody.
+     */
+    function describeTiers(tiers: readonly string[]): string {
+        const names = ["Free", ...tiers.map((t) => t.charAt(0).toUpperCase() + t.slice(1))];
+        if (names.length === 1) return names[0];
+        return `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]}`;
+    }
 
     // Helper to get tier configuration for UI styling
     function getTierConfig(tier?: string) {
@@ -188,18 +241,18 @@ export default function CourseCatalogPage() {
                         <p className="text-sm font-semibold text-slate-500">Your Learning Plan</p>
                         <div className="flex items-center gap-2 mt-0.5">
                             <span className="text-xl font-bold text-slate-900 capitalize">
-                                {userPlan} Tier
+                                {plan ?? "Free"} Tier
                             </span>
                             <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
                             <span className="text-sm text-slate-600">
-                                {userPlan === "elite" 
-                                    ? "Unlimited access to all courses" 
-                                    : `Access to ${userPlan === "free" ? "Free" : userPlan === "foundation" ? "Free & Foundation" : "Free, Foundation & Standard"} courses`}
+                                {plan === "elite"
+                                    ? "Unlimited access to all courses"
+                                    : `Access to ${describeTiers(paidTiersOpened)} courses`}
                             </span>
                         </div>
                     </div>
                 </div>
-                {userPlan !== "elite" && (
+                {plan !== "elite" && (
                     <Link
                         href="/academy/application"
                         className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition shadow-md hover:shadow-lg text-sm shrink-0"
@@ -384,8 +437,24 @@ export default function CourseCatalogPage() {
                                                 )}
                                             </div>
 
-                                            {/* Enrollment CTA Logic */}
-                                            {isEnrolled ? (
+                                            {/* Enrollment CTA Logic.
+                                                Access is asked FIRST. `isEnrolled && !hasAccess`
+                                                is a real state — enrolled under a plan that has
+                                                since lapsed or changed — and "Resume Course" for
+                                                it linked to /academy/{id}, which checks the same
+                                                rule on load and pushes the learner to
+                                                /academy/application. A button whose only outcome
+                                                is a redirect to the upgrade page should be the
+                                                upgrade button. */}
+                                            {!hasAccess ? (
+                                                <Link
+                                                    href="/academy/application"
+                                                    className="inline-flex items-center justify-center gap-2 w-full py-3 bg-slate-50 border border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50/50 font-bold rounded-xl transition"
+                                                >
+                                                    <Lock className="w-4 h-4 shrink-0 text-slate-400 hover:text-rose-500" />
+                                                    Upgrade to Unlock
+                                                </Link>
+                                            ) : isEnrolled ? (
                                                 <Link
                                                     href={`/academy/${id}`}
                                                     className="inline-flex items-center justify-center gap-2 w-full py-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl transition-all shadow-xs border border-indigo-200"
@@ -393,21 +462,13 @@ export default function CourseCatalogPage() {
                                                     <Play className="w-4 h-4 fill-indigo-700 text-indigo-700" />
                                                     Resume Course
                                                 </Link>
-                                            ) : hasAccess ? (
+                                            ) : (
                                                 <Link
                                                     href={`/academy/${id}`}
                                                     className="inline-flex items-center justify-center gap-2 w-full py-3 bg-slate-950 hover:bg-slate-800 text-white font-bold rounded-xl transition shadow-md hover:shadow-lg"
                                                 >
                                                     <Play className="w-4 h-4 fill-white text-white" />
                                                     Start Course
-                                                </Link>
-                                            ) : (
-                                                <Link
-                                                    href="/academy/application"
-                                                    className="inline-flex items-center justify-center gap-2 w-full py-3 bg-slate-50 border border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50/50 font-bold rounded-xl transition"
-                                                >
-                                                    <Lock className="w-4 h-4 shrink-0 text-slate-400 hover:text-rose-500" />
-                                                    Upgrade to Unlock
                                                 </Link>
                                             )}
                                         </div>
