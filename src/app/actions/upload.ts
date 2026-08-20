@@ -19,9 +19,18 @@
 import { requireSession } from "@/lib/session-guard";
 import { logger } from "@/lib/logger";
 import { shouldUseLocalDiskStorage, writeToLocalDisk } from "@/lib/storage-backend";
+import { detectFileType } from "@/lib/storage-admin";
 
+// Keyed by the buffer's REAL content type (from detectFileType), not the
+// client-supplied `mimeType` form field this action used to trust outright.
+// The client's claim was never checked against the bytes, so a caller could
+// send any file — an HTML page with a script tag, an executable — labelled
+// "image/png" and it passed. /api/upload's sibling path already validates
+// content via assertAllowedFileType; this one, reached by the loan wizard's
+// document step and marketplace onboarding's business verification step,
+// did not. "image/jpg" is not a real MIME type — JPEG content is always
+// detected as image/jpeg, same reasoning as actions/certificates.ts.
 const ALLOWED_TYPES: Record<string, string> = { "image/jpeg": "jpg",
-    "image/jpg": "jpg",
     "image/png": "png",
     "application/pdf": "pdf" };
 
@@ -50,15 +59,22 @@ export async function uploadDocumentAction(
         const { session } = sessionResult;
         const userId = session.user.id;
 
-        // ── Validate mime type ───────────────────────────────────────────────
-        const ext = ALLOWED_TYPES[mimeType];
-        if (!ext) { return { success: false as const, error: "Invalid file type. Only JPG, PNG, PDF allowed.", data: null };
-        }
-
         // ── Size-check ───────────────────────────────────────────────────────
-        // size property on File is in bytes natively. 
+        // size property on File is in bytes natively.
         const sizeMB = file.size / (1024 * 1024);
         if (sizeMB > MAX_SIZE_MB) { return { success: false as const, error: `File too large. Max ${MAX_SIZE_MB}MB.` };
+        }
+
+        // ── Validate file type by CONTENT, not the client's claimed mimeType ──
+        const buffer = Buffer.from(await file.arrayBuffer());
+        let detectedType: string | undefined;
+        try {
+            detectedType = await detectFileType(buffer, fileName || file.name);
+        } catch {
+            return { success: false as const, error: "Invalid file type. Only JPG, PNG, PDF allowed.", data: null };
+        }
+        const ext = detectedType ? ALLOWED_TYPES[detectedType] : undefined;
+        if (!ext || !detectedType) { return { success: false as const, error: "Invalid file type. Only JPG, PNG, PDF allowed.", data: null };
         }
         logger.info(`[Upload:Start] User:${userId} | Stream Size: ${sizeMB.toFixed(2)}MB`);
 
@@ -110,7 +126,7 @@ export async function uploadDocumentAction(
         // publicId is already sanitised to [a-zA-Z0-9-] per segment, so it
         // cannot escape the uploads directory.
         if (useLocalDisk) {
-            const localUrl = await writeToLocalDisk(publicId, Buffer.from(await file.arrayBuffer()));
+            const localUrl = await writeToLocalDisk(publicId, buffer);
             logger.info(`[uploadDocumentAction] Wrote to local disk (no Cloudinary configured): ${localUrl}`);
             return { error: null, success: true as const, url: localUrl, data: null };
         }
@@ -119,7 +135,10 @@ export async function uploadDocumentAction(
         const signatureStr = `public_id=${publicId}&timestamp=${timestamp}${apiSecret}`;
         const signature = crypto.createHash("sha256").update(signatureStr).digest("hex");
 
-        const resourceType = mimeType === "application/pdf" ? "raw" : "image";
+        // Decided from the file's real content, not the client-claimed
+        // mimeType — otherwise a PDF labelled "image/png" would be sent to
+        // Cloudinary as an image resource and mishandled.
+        const resourceType = detectedType === "application/pdf" ? "raw" : "image";
 
         const cloudinaryForm = new FormData();
         // Zero-copy stream mapping directly from incoming request stream to Cloudinary
