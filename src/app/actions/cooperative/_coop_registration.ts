@@ -18,6 +18,23 @@ import { inviteRefusalReason, INVITE_WRONG_ACCOUNT_MESSAGE } from "@/lib/coopera
 import { mayClaimMembershipByEmail } from "@/lib/cooperative-membership-claim";
 import { revalidatePath } from "next/cache";
 import { registrationProgressScore } from "@/lib/registration-progress";
+import { hashData } from "@/lib/security";
+import { normalisePhone } from "@/lib/phone";
+
+/**
+ * Rows read per field by the cross-account duplicate guard.
+ *
+ * It read ONE, with no orderBy, and refused if that row belonged to somebody
+ * else. Postgres does not promise an order for a query that does not ask for
+ * one, so with the caller's own record beside another account's the guard's
+ * answer was decided by nothing more than how two ids happened to sort — and in
+ * the direction where the caller's own row came back first it failed OPEN,
+ * admitting the duplicate it exists to refuse.
+ *
+ * The same number and the same reasoning as DUPLICATE_SCAN_LIMIT in
+ * academy/_ac_applications.ts, which this guard is a copy of.
+ */
+const DUPLICATE_SCAN_LIMIT = 20;
 
 /**
  * 2. COMPLETE REGISTRATION (Step 2)
@@ -141,24 +158,36 @@ export async function registerCooperativeMemberAction(
 
         // 🔒 DEDUP GUARD: Collection-level phone & email check
         // Catches cross-account duplicates (same phone/email, different account)
+        //
+        // BOTH PHONE FORMS. `08012345678` and `+2348012345678` are the same
+        // person, rows already exist in each, and this compared the typed value
+        // alone — so a member whose record was stored in the other form was
+        // invisible to the guard. The academy application dedup carries this
+        // same correction, with the same helper.
+        const phoneForms = [...new Set(
+            [validatedData.phone, normalisePhone(validatedData.phone)].filter(Boolean),
+        )] as string[];
+
         const [coopPhoneExists, coopEmailExists] = await runQueryWithRetry(() => Promise.all([
             db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                .where("phone", "==", validatedData.phone)
-                .limit(1)
+                .where("phone", "in", phoneForms)
+                .limit(DUPLICATE_SCAN_LIMIT)
                 .get(),
             db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
                 .where("email", "==", validatedData.email)
-                .limit(1)
+                .limit(DUPLICATE_SCAN_LIMIT)
                 .get(),
         ]));
 
-        // Allow only if the match is for the SAME user (edit path)
-        const phoneDoc = coopPhoneExists.docs?.[0];
-        const emailDoc = coopEmailExists.docs?.[0];
+        // A row belonging to ANOTHER account is the conflict; the caller's own
+        // record is the edit path. Asked of every row read rather than of one
+        // arbitrary row — see DUPLICATE_SCAN_LIMIT.
+        const belongsToSomeoneElse = (snap: { docs: Array<{ id: string; data(): any }> }) =>
+            snap.docs.some((doc) => doc.id !== userId && (doc.data()?.userId ?? doc.id) !== userId);
 
-        if (!coopPhoneExists.empty && phoneDoc?.id !== userId) { return { error: "A cooperative member with this phone number already exists.", success: false as const, data: null };
+        if (belongsToSomeoneElse(coopPhoneExists)) { return { error: "A cooperative member with this phone number already exists.", success: false as const, data: null };
         }
-        if (!coopEmailExists.empty && emailDoc?.id !== userId) { return { error: "A cooperative member with this email address already exists.", success: false as const, data: null };
+        if (belongsToSomeoneElse(coopEmailExists)) { return { error: "A cooperative member with this email address already exists.", success: false as const, data: null };
         }
 
         // Determine if payment is already completed (user paid before or during onboarding)
@@ -201,10 +230,38 @@ export async function registerCooperativeMemberAction(
                     url: formData.get("passportPhotoUrl") as string } : undefined,
                 proofOfAddress: formData.get("proofOfAddressUrl") ? { name: formData.get("proofOfAddressName") as string,
                     url: formData.get("proofOfAddressUrl") as string } : undefined },
+            /**
+             * THE APPLICANT TYPED THESE. NOBODY CHECKED THEM.
+             *
+             * `bvnVerified: bvn ? true : false` sat here and on the user
+             * document below, asserting a verification from the PRESENCE of the
+             * field. admin/users renders each as a green "Verified" badge, so
+             * the reviewer deciding whether to approve THIS application was told
+             * the identity had already been checked — because the applicant had
+             * filled the box in. Nothing in this codebase ever verified an
+             * identity document, so the badge was never earned by anyone.
+             *
+             * This is the third writer of these fields onto the users table.
+             * The other two — marketplace/_mp_seller_verification.ts and
+             * export/_ex_onboarding.ts — were corrected with that exact
+             * reasoning, in a comment repeated verbatim in both. This one was
+             * left, and it is the only one that also writes the claim onto the
+             * application record itself.
+             *
+             * NOT WRITTEN AS `false` EITHER. admin/_users.ts toggles
+             * `bvnVerified` by hand after a real check, so writing false from
+             * here would silently undo an administrator's verification on any
+             * resubmission. The field is left to the code that can actually
+             * decide it.
+             *
+             * The number stays READABLE on this record, and only here. The
+             * member document is the application an admin reviews, and
+             * _coop_admin_members searches it by bvn — the precedent fixes left
+             * the reviewable copy alone for the same reason. The users-table
+             * replica is hashed below.
+             */
             bvn: bvn || null,
-            bvnVerified: bvn ? true : false,
             nin: nin || null,
-            ninVerified: nin ? true : false,
             state: validatedData.stateOfOrigin,
             membershipStatus: resolvedStatus,
             onboardingCompleted: true,
@@ -274,11 +331,19 @@ export async function registerCooperativeMemberAction(
                 "address.ward": validatedData.ward,
                 "address.street": validatedData.residentialAddress,
 
-                // Sync onboarding specific details for admin users modal
-                bvn: updatedData.bvn || null,
-                bvnVerified: updatedData.bvnVerified,
-                nin: updatedData.nin || null,
-                ninVerified: updatedData.ninVerified,
+                // Sync onboarding specific details for admin users modal.
+                //
+                // Hashed, matching kyc.ts, marketplace/_mp_seller_verification.ts,
+                // the WAVE application and export onboarding, which all call
+                // hashData before letting one of these near the users table.
+                // This path wrote the raw eleven digits. The reviewable copy is
+                // on the member document above, so admin review is unaffected —
+                // this replica exists for the user list.
+                //
+                // bvnVerified / ninVerified are deliberately absent: see the
+                // note on the member record above.
+                ...(bvn ? { bvn: hashData(bvn) } : {}),
+                ...(nin ? { nin: hashData(nin) } : {}),
                 nextOfKin: updatedData.nextOfKin || null,
 
                 updatedAt: FieldValue.serverTimestamp() }));
@@ -368,6 +433,32 @@ export async function joinCooperativeAction(
         }
 
         const userId = session.user.id;
+
+        /**
+         * THE OPENING BALANCE WAS WHATEVER THE CALLER SENT.
+         *
+         * `initialContribution` is a parameter and went straight into
+         * `savingsBalance` with no validation. The only thing standing near it
+         * is `if (initialContribution > 0)` below, and that guards the two
+         * LEDGER rows and the cooperative's `totalSavings` — not the balance.
+         *
+         * So `joinCooperativeAction(coopId, -50000)` opened a savings account at
+         * minus fifty thousand naira, with no transaction row behind it and the
+         * cooperative's own total untouched: a member balance no ledger explains
+         * and no reconciliation can find. This file is "use server", so the
+         * parameter is directly reachable.
+         *
+         * A non-finite value had the same shape from the other side: `NaN > 0`
+         * is false, so NaN was written as the balance and every later sum that
+         * touched it became NaN.
+         */
+        if (!Number.isFinite(initialContribution) || initialContribution < 0) {
+            return {
+                error: "The opening contribution must be zero or a positive amount.",
+                success: false as const,
+                data: null,
+            };
+        }
 
         // Check if cooperative exists
         const cooperativeRef = db.collection(COLLECTIONS.COOPERATIVES).doc(cooperativeId);
@@ -576,9 +667,41 @@ export async function resubmitCooperativeApplicationAction(
                 memberRef = docRef;
                 existingMemberData = docSnap.data();
             } else {
-                // FALLBACK: If user doc is marked as pending_repair / pending but the member record
-                // was deleted during the mock database purge, auto-heal by allowing a new creation.
-                logger.info(`[resubmitCooperativeApplication] Member doc not found for user ${session.user.id} — falling back to new registration creation.`);
+                /**
+                 * "AUTO-HEAL BY ALLOWING A NEW CREATION" — WHICH CREATED NOTHING.
+                 *
+                 * This branch exists for a user whose registration status says
+                 * pending / pending_repair while the member record has gone. It
+                 * set `memberRef = docRef` and left the rest to the batch below
+                 * — which calls `batch.update(memberRef, ...)`, and update()
+                 * does not create.
+                 *
+                 * The adapter is explicit about it: update() on a missing
+                 * document is a no-op, logged with the warning "no rows will be
+                 * affected ... use set(data, { merge: true }) if the document
+                 * may not exist yet", under a comment reading "this is how 'the
+                 * save button did nothing' bugs reach production".
+                 *
+                 * So the resubmitted application was discarded in full — every
+                 * field the member had just re-entered, and their re-uploaded
+                 * documents. The OTHER half of the batch lands, because the user
+                 * document does exist: their status was flipped to "pending",
+                 * putting a review request in the queue with no application
+                 * behind it. And the action returned success, so the member was
+                 * told their application had been resubmitted.
+                 *
+                 * The row is seeded here so the batch has something to update.
+                 * Seeding rather than switching the batch to set(merge) because
+                 * updatePayload addresses the documents by dotted path
+                 * (`documents.validId.url`), which update() resolves into the
+                 * nested map and a merging set() on a NEW document would store
+                 * as literal keys containing dots.
+                 */
+                logger.info(`[resubmitCooperativeApplication] Member doc not found for user ${session.user.id} — creating the record so the resubmission is not lost.`);
+                await runQueryWithRetry(() => docRef.set({
+                    userId: session.user.id,
+                    createdAt: FieldValue.serverTimestamp(),
+                }, { merge: true }));
                 memberRef = docRef;
                 existingMemberData = {};
             }
@@ -637,10 +760,10 @@ export async function resubmitCooperativeApplicationAction(
             nextOfKinName: validatedData.nextOfKinName,
             nextOfKinPhone: validatedData.nextOfKinPhone,
             nextOfKinAddress: validatedData.nextOfKinAddress,
+            // Readable on the application record, unverified, and not hashed
+            // here — same split as the first submission above.
             bvn: bvn || null,
-            bvnVerified: bvn ? true : false,
             nin: nin || null,
-            ninVerified: nin ? true : false,
             membershipStatus: 'pending',
             revisionNote: null,
             resubmittedAt: FieldValue.serverTimestamp(),
@@ -677,10 +800,10 @@ export async function resubmitCooperativeApplicationAction(
             'address.lga': validatedData.lga || null,
             'address.ward': validatedData.ward || null,
             'address.street': validatedData.residentialAddress || null,
-            bvn: bvn || null,
-            bvnVerified: bvn ? true : false,
-            nin: nin || null,
-            ninVerified: nin ? true : false,
+            // Hashed in the users replica, and no verification asserted — see
+            // the note on the first submission above.
+            ...(bvn ? { bvn: hashData(bvn) } : {}),
+            ...(nin ? { nin: hashData(nin) } : {}),
             nextOfKin: {
                 name: validatedData.nextOfKinName || null,
                 phone: validatedData.nextOfKinPhone || null,
