@@ -21,11 +21,59 @@ import { hasAppAccess, type AppIdentifier } from "@/lib/role-app-mapping";
 import { isPaymentBypassAccount } from "@/lib/payment-bypass";
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { toMillis } from "@/lib/firestore-serialize";
 import type { UserRole } from "@/lib/types/roles";
 import { logger } from "@/lib/logger";
 import { FieldValue } from "@/lib/firestore-compat";
 import { normalizeUserUpdate } from "@/lib/schema-normalizer";
 import { registrationProgressScore } from "@/lib/registration-progress";
+
+
+/**
+ * How many of a member's applications the fallback layers read before deciding.
+ *
+ * Was `.limit(APPLICATION_SCAN_LIMIT)` with NO ordering, at eleven sites in this file.
+ */
+const APPLICATION_SCAN_LIMIT = 25;
+
+/**
+ * The member's MOST RECENT application, or null.
+ *
+ * TWO DEFECTS IN ONE LINE OF QUERY
+ * --------------------------------
+ * Every fallback layer below read `.where("userId", "==", userId).limit(APPLICATION_SCAN_LIMIT)`
+ * with no orderBy, then trusted whatever came back.
+ *
+ *   WHICH APPLICATION ANSWERED WAS ARBITRARY. PostgREST returns rows in
+ *   whatever order the plan produces, so for a member with more than one
+ *   application two identical requests could be decided by different records.
+ *
+ *   AND AN OLD APPROVAL OVERRODE A NEW REJECTION. Apply, be approved. Reapply,
+ *   be rejected — #210 revokes the module role and marks the registration
+ *   rejected. The member then opens any page in the module: Layer 1 fails,
+ *   Layer 2 sees "rejected", and this fallback finds the OLD approved
+ *   application and writes `status: "approved"` back over the rejection, role
+ *   included. Persisted, on a page load.
+ *
+ * That is the third place this loop has been found — #207 in the login
+ * self-heal, #225 in course enrolment, and here in the access check itself.
+ * The pattern each time is a repair rule reading evidence without asking
+ * whether it is the LATEST evidence.
+ *
+ * _checkAcademyStatusAction already sorts applications this way and takes the
+ * newest; this is that rule, shared. toMillis is the reader from #49, because
+ * submittedAt arrives as a Timestamp, an ISO string or nothing at all
+ * depending on which path wrote the row.
+ */
+function latestApplication(docs: any[]): any | null {
+    if (!docs || docs.length === 0) return null;
+
+    return [...docs].sort((a, b) => {
+        const ad = a.data() ?? {};
+        const bd = b.data() ?? {};
+        return toMillis(bd.submittedAt ?? bd.createdAt) - toMillis(ad.submittedAt ?? ad.createdAt);
+    })[0];
+}
 
 /** Maps the AppIdentifier to the Firestore serviceRegistrations key */
 const APP_TO_REG_KEY: Partial<Record<AppIdentifier, string>> = {
@@ -162,15 +210,16 @@ export async function checkModuleAccess(
         if (app === "cooperatives") {
             const memberQuery = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
                 .where("userId", "==", userId)
-                .limit(1)
+                .limit(APPLICATION_SCAN_LIMIT)
                 .get();
 
             let memberDocData: any = null;
             let memberRef: any = null;
 
             if (!memberQuery.empty) {
-                memberDocData = memberQuery.docs[0].data();
-                memberRef = memberQuery.docs[0].ref;
+                const latestMember = latestApplication(memberQuery.docs);
+                memberDocData = latestMember?.data();
+                memberRef = latestMember?.ref;
             } else {
                 const memberDoc = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
                 if (memberDoc.exists) {
@@ -179,11 +228,12 @@ export async function checkModuleAccess(
                 } else if (userData.email) {
                     const emailQuery = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
                         .where("email", "==", userData.email.toLowerCase())
-                        .limit(1)
+                        .limit(APPLICATION_SCAN_LIMIT)
                         .get();
                     if (!emailQuery.empty) {
-                        memberDocData = emailQuery.docs[0].data();
-                        memberRef = emailQuery.docs[0].ref;
+                        const latestByEmail = latestApplication(emailQuery.docs);
+                        memberDocData = latestByEmail?.data();
+                        memberRef = latestByEmail?.ref;
                     }
                 }
             }
@@ -236,23 +286,25 @@ export async function checkModuleAccess(
         if (app === "academy") {
             const appQuery = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
                 .where("userId", "==", userId)
-                .limit(1)
+                .limit(APPLICATION_SCAN_LIMIT)
                 .get();
 
             let appDocData: any = null;
             let appRef: any = null;
 
             if (!appQuery.empty) {
-                appDocData = appQuery.docs[0].data();
-                appRef = appQuery.docs[0].ref;
+                const latestApp = latestApplication(appQuery.docs);
+                appDocData = latestApp?.data();
+                appRef = latestApp?.ref;
             } else if (userData.email) {
                 const emailQuery = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
                     .where("personalInfo.email", "==", userData.email.toLowerCase())
-                    .limit(1)
+                    .limit(APPLICATION_SCAN_LIMIT)
                     .get();
                 if (!emailQuery.empty) {
-                    appDocData = emailQuery.docs[0].data();
-                    appRef = emailQuery.docs[0].ref;
+                    const latestAppByEmail = latestApplication(emailQuery.docs);
+                    appDocData = latestAppByEmail?.data();
+                    appRef = latestAppByEmail?.ref;
                 }
             }
 
@@ -297,29 +349,31 @@ export async function checkModuleAccess(
         if (app === "wave") {
             const appQuery = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
                 .where("userId", "==", userId)
-                .limit(1)
+                .limit(APPLICATION_SCAN_LIMIT)
                 .get();
 
             let appDocData: any = null;
             let appRef: any = null;
 
             if (!appQuery.empty) {
-                appDocData = appQuery.docs[0].data();
-                appRef = appQuery.docs[0].ref;
+                const latestApp = latestApplication(appQuery.docs);
+                appDocData = latestApp?.data();
+                appRef = latestApp?.ref;
             } else if (userData.email) {
                 let emailQuery = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
                     .where("userEmail", "==", userData.email.toLowerCase())
-                    .limit(1)
+                    .limit(APPLICATION_SCAN_LIMIT)
                     .get();
                 if (emailQuery.empty) {
                     emailQuery = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
                         .where("email", "==", userData.email.toLowerCase())
-                        .limit(1)
+                        .limit(APPLICATION_SCAN_LIMIT)
                         .get();
                 }
                 if (!emailQuery.empty) {
-                    appDocData = emailQuery.docs[0].data();
-                    appRef = emailQuery.docs[0].ref;
+                    const latestAppByEmail = latestApplication(emailQuery.docs);
+                    appDocData = latestAppByEmail?.data();
+                    appRef = latestAppByEmail?.ref;
                 }
             }
 
@@ -363,29 +417,31 @@ export async function checkModuleAccess(
         if (app === "export") {
             const appQuery = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
                 .where("userId", "==", userId)
-                .limit(1)
+                .limit(APPLICATION_SCAN_LIMIT)
                 .get();
 
             let appDocData: any = null;
             let appRef: any = null;
 
             if (!appQuery.empty) {
-                appDocData = appQuery.docs[0].data();
-                appRef = appQuery.docs[0].ref;
+                const latestApp = latestApplication(appQuery.docs);
+                appDocData = latestApp?.data();
+                appRef = latestApp?.ref;
             } else if (userData.email) {
                 let emailQuery = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
                     .where("userEmail", "==", userData.email.toLowerCase())
-                    .limit(1)
+                    .limit(APPLICATION_SCAN_LIMIT)
                     .get();
                 if (emailQuery.empty) {
                     emailQuery = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
                         .where("profile.email", "==", userData.email.toLowerCase())
-                        .limit(1)
+                        .limit(APPLICATION_SCAN_LIMIT)
                         .get();
                 }
                 if (!emailQuery.empty) {
-                    appDocData = emailQuery.docs[0].data();
-                    appRef = emailQuery.docs[0].ref;
+                    const latestAppByEmail = latestApplication(emailQuery.docs);
+                    appDocData = latestAppByEmail?.data();
+                    appRef = latestAppByEmail?.ref;
                 }
             }
 
@@ -429,29 +485,31 @@ export async function checkModuleAccess(
         if (app === "farm-nation") {
             const appQuery = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
                 .where("userId", "==", userId)
-                .limit(1)
+                .limit(APPLICATION_SCAN_LIMIT)
                 .get();
 
             let appDocData: any = null;
             let appRef: any = null;
 
             if (!appQuery.empty) {
-                appDocData = appQuery.docs[0].data();
-                appRef = appQuery.docs[0].ref;
+                const latestApp = latestApplication(appQuery.docs);
+                appDocData = latestApp?.data();
+                appRef = latestApp?.ref;
             } else if (userData.email) {
                 let emailQuery = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
                     .where("userEmail", "==", userData.email.toLowerCase())
-                    .limit(1)
+                    .limit(APPLICATION_SCAN_LIMIT)
                     .get();
                 if (emailQuery.empty) {
                     emailQuery = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
                         .where("profile.email", "==", userData.email.toLowerCase())
-                        .limit(1)
+                        .limit(APPLICATION_SCAN_LIMIT)
                         .get();
                 }
                 if (!emailQuery.empty) {
-                    appDocData = emailQuery.docs[0].data();
-                    appRef = emailQuery.docs[0].ref;
+                    const latestAppByEmail = latestApplication(emailQuery.docs);
+                    appDocData = latestAppByEmail?.data();
+                    appRef = latestAppByEmail?.ref;
                 }
             }
 
@@ -504,12 +562,13 @@ export async function checkModuleAccess(
         if (app === "marketplace") {
             const verQuery = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
                 .where("userId", "==", userId)
-                .limit(1)
+                .limit(APPLICATION_SCAN_LIMIT)
                 .get();
 
             if (!verQuery.empty) {
-                const verDocData = verQuery.docs[0].data();
-                const verRef = verQuery.docs[0].ref;
+                const latestVer = latestApplication(verQuery.docs);
+                const verDocData = latestVer?.data();
+                const verRef = latestVer?.ref;
                 const status = verDocData.status;
                 if (status === "approved") {
                     logger.info(
