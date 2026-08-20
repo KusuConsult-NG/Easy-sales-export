@@ -323,13 +323,30 @@ export async function purgeOldAuditLogs(): Promise<number> {
 
         const snapshot = await q.get();
 
+        /**
+         * Deleted in chunks, not in one batch.
+         *
+         * This built a single batch over every expired row and committed it
+         * once. The audit log grows with every admin action on the platform and
+         * this is a scheduled job that may not have run for a while, so "every
+         * expired row" can be the whole table. One commit of that size is the
+         * one most likely to time out — and because the count was returned from
+         * a commit that either wholly succeeds or wholly fails, a failure purged
+         * nothing while the caller saw an exception with no partial progress.
+         *
+         * Chunked, each commit stands on its own: a failure part-way through
+         * leaves the earlier chunks deleted and the job resumes from there on
+         * its next run.
+         */
+        const CHUNK = 400;
         let deletedCount = 0;
-        const batch = db.batch();
-        for (const doc of snapshot.docs) {
-            batch.delete(doc.ref);
-            deletedCount++;
+        for (let i = 0; i < snapshot.docs.length; i += CHUNK) {
+            const batch = db.batch();
+            const chunk = snapshot.docs.slice(i, i + CHUNK);
+            for (const doc of chunk) batch.delete(doc.ref);
+            await batch.commit();
+            deletedCount += chunk.length;
         }
-        await batch.commit();
 
         logger.info(`Purged ${deletedCount} audit logs older than ${retentionDays} days`, { deletedCount, retentionDays });
         return deletedCount;
@@ -428,7 +445,30 @@ export async function logAuditAction(
         } else {
             // Admin signature (from src/lib/admin-audit-log.ts)
             const action = actionOrEntry as AuditAction;
-            const userId = metadata?.adminId || metadata?.userId || 'system';
+            /**
+             * `'system'` is a real answer, not a default.
+             *
+             * This fell through to it silently whenever a caller forgot to put
+             * adminId or userId in the metadata — so an action a person took was
+             * filed against nobody, and the row looked exactly like one a cron
+             * job wrote. Same family as #129 and #159, where an audit row named
+             * the wrong actor: the one question the log exists to answer is who
+             * did this.
+             *
+             * Still recorded as 'system' rather than refused, because a row with
+             * an unknown actor is worth more than no row at all — but it says so
+             * in the log and marks the row, so the gap is findable instead of
+             * indistinguishable from a genuine system action.
+             */
+            const attributed = metadata?.adminId || metadata?.userId;
+            if (!attributed) {
+                logger.warn(
+                    `[audit] ${action} on ${targetType ?? '?'}:${targetId ?? '?'} has no adminId or ` +
+                    `userId in its metadata and is being filed against "system". If a person did this, ` +
+                    `the caller needs to pass their id.`
+                );
+            }
+            const userId = attributed || 'system';
 
             await createAuditLog({
                 action,
@@ -476,9 +516,30 @@ export function getSecurityContextFromHeaders(headers?: Headers): {
  * be written the operation still succeeded and the right response is a loud log
  * and a completed request — not a rollback of something already irreversible.
  *
- * Use this at new call sites. The 118 existing createAdminAuditLog calls are
- * left as they are: changing them is a behaviour change to working paths, and
- * is separate from adding the rows that were missing entirely.
+ * Use this at new call sites.
+ *
+ * THE 116 EXISTING CALL SITES ARE COVERED NOW TOO — see createAdminAuditLog at
+ * the foot of this file. The note that used to sit here said they were "left as
+ * they are: changing them is a behaviour change to working paths". That was the
+ * cautious call at the time and it was the wrong way round, because the
+ * behaviour being preserved is the bad one. Executing the withdrawal path made
+ * it concrete:
+ *
+ *   admin/_withdrawals.ts _processWithdrawalAction fires the Paystack transfer,
+ *   marks the withdrawal `completed`, writes the global ledger row, notifies the
+ *   member that their withdrawal was approved — and THEN calls
+ *   createAdminAuditLog. A throw there lands in the function's outer catch,
+ *   which returns { success: false, error: "Failed to process withdrawal" }.
+ *
+ * The money has gone, the member has been told it is on its way, the ledger says
+ * completed, and the admin's screen says the payout failed. The one record that
+ * would tell them otherwise is precisely the one that did not get written. (They
+ * cannot double-pay by retrying — claimStatusTransition refuses a second claim —
+ * but they are lied to about an irreversible transfer.)
+ *
+ * Verified before changing it: no test asserts the throw, and no catch block
+ * after an audit call performs any compensating action. There is nothing a
+ * caller could usefully do about a failed audit write.
  */
 export async function recordAdminAction(
     entry: Omit<AuditLogEntry, 'timestamp' | 'id' | 'severity'>,
@@ -494,7 +555,22 @@ export async function recordAdminAction(
     }
 }
 
-// Backward compatibility exports for audit-log-admin.ts / admin-audit-log.ts
-export const createAdminAuditLog = createAuditLog;
+/**
+ * Backward compatibility export for audit-log-admin.ts / admin-audit-log.ts.
+ *
+ * Aliased to recordAdminAction, NOT to createAuditLog. See the long note on
+ * recordAdminAction: this alias is what the 116 existing admin call sites use,
+ * every one of them awaits it inside the same try block as the work itself, and
+ * createAuditLog rethrows — so a logging failure reported a completed,
+ * irreversible operation as a failure.
+ *
+ * createAuditLog is still exported and still throws, for any caller that
+ * genuinely wants to know. None currently does.
+ *
+ * The return type changes from Promise<string> to Promise<void>: the document id
+ * is no longer available, because a call that failed has no id to give. Nothing
+ * used it — checked across all 116 sites before making the change.
+ */
+export const createAdminAuditLog = recordAdminAction;
 export { logFinancialAction as logAdminFinancialAction };
 
