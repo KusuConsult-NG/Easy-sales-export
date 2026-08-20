@@ -365,29 +365,81 @@ export async function purgeChatbotDataOlderThan(days: number): Promise<number> {
 
         if (oldSessions.empty) return 0;
 
-        const batch = db.batch();
+        /**
+         * THE MESSAGES OUTLIVED THE PURGE THAT WAS SUPPOSED TO DELETE THEM.
+         *
+         * This is the GDPR retention cron — api/cron/gdpr-purge calls it with 90
+         * days. It deleted up to 400 sessions and, for each, up to 400 messages:
+         *
+         *     const msgs = await db.collection(CHATBOT_MESSAGES)
+         *         .where("sessionId", "==", sessionId)
+         *         .limit(400)          // ← everything past here survived
+         *         .get();
+         *
+         * A session with more than 400 messages lost its session row and kept
+         * the remainder of its messages — the user's own words, retained past
+         * the retention period. And permanently: the next run selects sessions
+         * by `lastMessageAt`, the session row is gone, so nothing ever looks for
+         * those messages again. They are unreachable, undeletable and
+         * uncounted.
+         *
+         * Each session is now drained in pages until it is actually empty.
+         *
+         * The batch was unbounded too — 400 sessions times up to 400 messages is
+         * 160,000 deletes in one commit, the commit most likely to time out, and
+         * all-or-nothing so a failure purged nothing at all. Same defect as #177
+         * in purgeOldAuditLogs, and the same fix: chunked commits, each standing
+         * on its own, so a failure part-way leaves real progress behind.
+         */
+        const CHUNK = 400;
+        let pending = db.batch();
+        let pendingOps = 0;
         let count = 0;
-        const sessionIds: string[] = [];
+
+        const flushIfFull = async () => {
+            if (pendingOps >= CHUNK) {
+                await pending.commit();
+                pending = db.batch();
+                pendingOps = 0;
+            }
+        };
 
         for (const doc of oldSessions.docs) {
-            batch.delete(doc.ref);
-            sessionIds.push(doc.id);
-            count++;
-        }
+            // Messages first: if the run dies mid-way, an orphaned SESSION is
+            // recoverable (the next run finds it again by lastMessageAt) while
+            // an orphaned MESSAGE is not.
+            for (;;) {
+                const msgs = await db
+                    .collection(COLLECTIONS.CHATBOT_MESSAGES)
+                    .where("sessionId", "==", doc.id)
+                    .limit(CHUNK)
+                    .get();
+                if (msgs.empty) break;
 
-        // Delete associated messages for those sessions
-        for (const sessionId of sessionIds) {
-            const msgs = await db
-                .collection(COLLECTIONS.CHATBOT_MESSAGES)
-                .where("sessionId", "==", sessionId)
-                .limit(400)
-                .get();
-            for (const msgDoc of msgs.docs) {
-                batch.delete(msgDoc.ref);
+                for (const msgDoc of msgs.docs) {
+                    pending.delete(msgDoc.ref);
+                    pendingOps++;
+                    await flushIfFull();
+                }
+
+                // Commit before re-querying, or the next page returns the same
+                // rows: the deletes are only queued, not applied.
+                if (pendingOps > 0) {
+                    await pending.commit();
+                    pending = db.batch();
+                    pendingOps = 0;
+                }
+
+                if (msgs.docs.length < CHUNK) break;
             }
+
+            pending.delete(doc.ref);
+            pendingOps++;
+            count++;
+            await flushIfFull();
         }
 
-        await batch.commit();
+        if (pendingOps > 0) await pending.commit();
         return count;
     } catch (err) {
         logger.error("[chatbot-db] Failed to purge chatbot data:", err);
