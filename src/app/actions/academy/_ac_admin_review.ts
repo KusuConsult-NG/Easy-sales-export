@@ -9,6 +9,7 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { ActionResponse, withFlexibleSafeAction } from "@/lib/safe-action";
 import { normaliseAcademyPlan } from "@/lib/academy-plan";
+import { moduleGrantRole } from "@/lib/module-grant-roles";
 
 /**
  * Academy Admin Actions - Application Approval/Rejection
@@ -212,6 +213,10 @@ async function _rejectAcademyApplicationAction(
                 transaction.update(userRef, {
                     "serviceRegistrations.academy.status": "rejected",
                     "serviceRegistrations.academy.rejectedAt": FieldValue.serverTimestamp(),
+                    // The role goes too, or the rejection revokes nothing —
+                    // checkModuleAccess grants Academy from the JWT role alone.
+                    // See lib/module-grant-roles.ts.
+                    roles: FieldValue.arrayRemove(moduleGrantRole("academy")),
                 });
             }
         });

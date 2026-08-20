@@ -15,6 +15,7 @@ import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { getCached, setCache } from "@/lib/redis";
 import { sendWaveApplicationEmail } from "@/lib/email-notifications";
 import { extractCanonicalUser } from "@/lib/canonical/normalizer";
+import { moduleGrantRole } from "@/lib/module-grant-roles";
 
 // ============================================================================
 // APPLICATIONS MANAGEMENT
@@ -437,6 +438,22 @@ async function _rejectWaveApplicationAction(
                     "serviceRegistrations.wave.status": "rejected",
                     "serviceRegistrations.wave.rejectedAt": FieldValue.serverTimestamp(),
                     waveStatus: "rejected",
+                    /**
+                     * The role goes too, or the rejection revokes nothing.
+                     *
+                     * checkModuleAccess grants WAVE from EITHER the JWT role
+                     * (Layer 1) or the registration status (Layer 2), so a
+                     * rejected applicant holding wave_participant kept the
+                     * dashboard, resources, training and earnings. Worse, the
+                     * login self-heal in schema-normalizer read that same role
+                     * and wrote the status back to "approved" — see #207.
+                     *
+                     * The cooperative suspend and Farm Nation seller rejection
+                     * both do this already; WAVE and Academy were the two the
+                     * correction had not reached. Reversible: approval re-adds
+                     * it through arrayUnion.
+                     */
+                    roles: FieldValue.arrayRemove(moduleGrantRole("wave")),
                     updatedAt: FieldValue.serverTimestamp(),
                     _version: FieldValue.increment(1),
                 });
