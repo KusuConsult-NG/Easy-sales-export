@@ -27,7 +27,7 @@
  *   4. name / fullName / displayName (canonical: name, also write fullName)
  */
 
-import { registrationProgressScore } from "@/lib/registration-progress";
+import { registrationProgressScore, isDecidedAgainst } from "@/lib/registration-progress";
 
 type AnyObject = Record<string, any>;
 
@@ -43,27 +43,29 @@ type AnyObject = Record<string, any>;
 export function normalizeUserUpdate(update: AnyObject): AnyObject {
     const result: AnyObject = { ...update };
 
-    // ── Rule 1: cooperative ↔ cooperatives ────────────────────────────────
-    // If any dot-notation key starts with "serviceRegistrations.cooperatives."
-    // also write the same key with "serviceRegistrations.cooperative." and vice versa.
-    for (const [key, value] of Object.entries(update)) {
-        if (key.startsWith("serviceRegistrations.cooperatives.")) {
-            const mirrorKey = key.replace("serviceRegistrations.cooperatives.", "serviceRegistrations.cooperative.");
-            if (!(mirrorKey in result)) result[mirrorKey] = value;
-        }
-        if (key.startsWith("serviceRegistrations.cooperative.")) {
-            const mirrorKey = key.replace("serviceRegistrations.cooperative.", "serviceRegistrations.cooperatives.");
-            if (!(mirrorKey in result)) result[mirrorKey] = value;
-        }
+    /**
+     * Rules 1 and 2: cooperative ↔ cooperatives, farmNation ↔ farm_nation.
+     * Each matched as a sub-path AND as the whole object.
+     *
+     * The four blocks this replaces tested `startsWith("...cooperatives.")`
+     * — with a trailing dot — so a write of the WHOLE registration under one
+     * spelling, `{"serviceRegistrations.cooperatives": {...}}`, matched nothing
+     * and left the other spelling stale. Every caller today writes a sub-path,
+     * so this had no live victim; a normaliser whose entire job is "both keys
+     * always agree" should not have a shape it silently ignores.
+     */
+    const ALIAS_PAIRS: ReadonlyArray<readonly [string, string]> = [
+        ["serviceRegistrations.cooperatives", "serviceRegistrations.cooperative"],
+        ["serviceRegistrations.farmNation", "serviceRegistrations.farm_nation"],
+    ];
 
-        // ── Rule 2: farmNation ↔ farm_nation ──────────────────────────────
-        if (key.startsWith("serviceRegistrations.farmNation.")) {
-            const mirrorKey = key.replace("serviceRegistrations.farmNation.", "serviceRegistrations.farm_nation.");
-            if (!(mirrorKey in result)) result[mirrorKey] = value;
-        }
-        if (key.startsWith("serviceRegistrations.farm_nation.")) {
-            const mirrorKey = key.replace("serviceRegistrations.farm_nation.", "serviceRegistrations.farmNation.");
-            if (!(mirrorKey in result)) result[mirrorKey] = value;
+    for (const [key, value] of Object.entries(update)) {
+        for (const pair of ALIAS_PAIRS) {
+            for (const [from, to] of [pair, [pair[1], pair[0]] as const]) {
+                if (key !== from && !key.startsWith(`${from}.`)) continue;
+                const mirrorKey = to + key.slice(from.length);
+                if (!(mirrorKey in result)) result[mirrorKey] = value;
+            }
         }
 
         // ── Rule 3: phone ↔ phoneNumber ───────────────────────────────────
@@ -73,7 +75,14 @@ export function normalizeUserUpdate(update: AnyObject): AnyObject {
         // ── Rule 4: name / fullName / displayName ─────────────────────────
         if (key === "name" && !("fullName" in result)) result["fullName"] = value;
         if (key === "fullName" && !("name" in result)) result["name"] = value;
-        if (key === "displayName" && !("name" in result)) result["name"] = value;
+        if (key === "displayName") {
+            // fullName too. normalizeUserDoc, the nested twin of this function,
+            // writes BOTH from displayName; this one wrote only `name`. Two
+            // normalisers whose whole purpose is that the aliases agree,
+            // disagreeing with each other about one of the aliases.
+            if (!("name" in result)) result["name"] = value;
+            if (!("fullName" in result)) result["fullName"] = value;
+        }
     }
 
     return result;
@@ -100,34 +109,77 @@ export function normalizeUserDoc(doc: AnyObject): AnyObject {
     const sr = result.serviceRegistrations;
     const roles: string[] = Array.isArray(result.roles) ? result.roles : [];
 
-    // Sync roles to service registration statuses (self-healing for legacy users)
+    /**
+     * Sync roles to service registration statuses (self-healing for legacy users).
+     *
+     * THIS USED TO REVERSE A REJECTION, ON LOGIN, AND PERSIST IT.
+     * ----------------------------------------------------------
+     * The rule was "if the role is present and the status is not approved, make
+     * it approved":
+     *
+     *     if (roles.includes("wave_participant")) {
+     *         if (sr.wave.status !== "approved") sr.wave.status = "approved";
+     *     }
+     *
+     * and normalizeUserDoc is called by session-guard on every uncached session
+     * resolution and by auth.ts on every login, both of which WRITE THE RESULT
+     * BACK with `set(normalized, { merge: true })`.
+     *
+     * The WAVE rejection (wave/_wv_admin_applications.ts) and both Academy
+     * rejections (admin/_academy.ts, academy/_ac_admin_review.ts) write
+     * `status: "rejected"` and do NOT strip the corresponding role. So an admin
+     * rejected an application, the applicant logged in, and the rejection was
+     * silently replaced with "approved" in the database. Farm Nation strips
+     * `farmer` on rejection but never `land_owner`, and this fires on either.
+     * The cooperative was safe only by accident — its suspend path revokes the
+     * role, which was fixed for a different reason.
+     *
+     * This is #180 inverted. There a repair tool downgraded live registrations;
+     * here a repair rule upgraded refused ones. Same lesson: a derived signal
+     * may fill in what is MISSING and must never overwrite what somebody
+     * decided.
+     *
+     * So: still heals a legacy account that has the role and no status — which
+     * is what the note above always meant — and still promotes a status that is
+     * merely less far along. It will not touch a decision.
+     */
+    const healFromRole = (keys: string[], granted: string) => {
+        /**
+         * A decision under EITHER spelling blocks the heal for BOTH.
+         *
+         * The two keys are one registration written two ways. Skipping only the
+         * spelling that carries the rejection heals its ABSENT twin to
+         * "approved" — and then the alias mirroring below, which keeps whichever
+         * side is further along, copies that straight back over the rejection.
+         * The first version of this fix did exactly that and a test caught it:
+         * the guard has to see the pair, not each key on its own.
+         */
+        if (keys.some((k) => isDecidedAgainst(sr[k]?.status))) return;
+
+        for (const key of keys) {
+            const existing = (sr[key] && typeof sr[key] === "object") ? sr[key] : {};
+            const current = existing.status;
+
+            if (registrationProgressScore(current) >= registrationProgressScore(granted)) {
+                sr[key] = existing;
+                continue;
+            }
+
+            sr[key] = { ...existing, status: granted };
+        }
+    };
+
     if (roles.includes("wave_participant")) {
-        if (!sr.wave) sr.wave = {};
-        if (sr.wave.status !== "approved") sr.wave.status = "approved";
+        healFromRole(["wave"], "approved");
     }
     if (roles.includes("cooperative_member")) {
-        if (!sr.cooperatives) sr.cooperatives = {};
-        if (sr.cooperatives.status !== "approved" && sr.cooperatives.status !== "active") {
-            sr.cooperatives.status = "approved";
-        }
-        if (!sr.cooperative) sr.cooperative = {};
-        if (sr.cooperative.status !== "approved" && sr.cooperative.status !== "active") {
-            sr.cooperative.status = "approved";
-        }
+        healFromRole(["cooperatives", "cooperative"], "approved");
     }
     if (roles.includes("academy_participant")) {
-        if (!sr.academy) sr.academy = {};
-        if (sr.academy.status !== "approved") sr.academy.status = "approved";
+        healFromRole(["academy"], "approved");
     }
     if (roles.includes("farmer") || roles.includes("land_owner")) {
-        if (!sr.farmNation) sr.farmNation = {};
-        if (sr.farmNation.status !== "approved" && sr.farmNation.status !== "verified") {
-            sr.farmNation.status = "approved";
-        }
-        if (!sr.farm_nation) sr.farm_nation = {};
-        if (sr.farm_nation.status !== "approved" && sr.farm_nation.status !== "verified") {
-            sr.farm_nation.status = "approved";
-        }
+        healFromRole(["farmNation", "farm_nation"], "approved");
     }
 
     // ── Normalize serviceRegistrations nested object ───────────────────────

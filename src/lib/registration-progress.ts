@@ -50,6 +50,47 @@ const PENDING_STATUSES = [
 /** Recorded but not yet a real submission. */
 const PROVISIONAL_STATUSES = ['pending_repair', 'legacy_pending_onboarding'] as const;
 
+/**
+ * Statuses that record a DECISION AGAINST the member.
+ *
+ * Separate from the scoring above, which answers "how far along". These answer
+ * "was this refused", and the difference matters because they all score 0 — the
+ * same as an unrecognised value — so any rule phrased as "heal anything that
+ * scores low" reverses them.
+ *
+ * That is exactly what happened. schema-normalizer's role-based self-heal ran
+ * on every login and wrote back:
+ *
+ *     if (roles.includes("wave_participant")) {
+ *         if (sr.wave.status !== "approved") sr.wave.status = "approved";
+ *     }
+ *
+ * The WAVE and Academy rejection paths write `status: "rejected"` and do NOT
+ * strip the corresponding role, so a rejected applicant logging in had the
+ * rejection silently overwritten with "approved" — and persisted. The
+ * cooperative was safe only because its suspend path revokes the role too.
+ *
+ * A decision is a decision. Nothing derived may overwrite one.
+ */
+const DECIDED_AGAINST = [
+    'rejected',
+    'declined',
+    'denied',
+    'suspended',
+    'revoked',
+    'cancelled',
+    'canceled',
+    'banned',
+    'withdrawn',
+    'terminated',
+] as const;
+
+/** Has a person decided against this registration? */
+export function isDecidedAgainst(status: string | undefined | null): boolean {
+    return (DECIDED_AGAINST as readonly string[])
+        .includes(String(status ?? '').trim().toLowerCase());
+}
+
 export const REGISTRATION_PROGRESS = {
     ACTIVE: 4,
     PENDING: 3,
