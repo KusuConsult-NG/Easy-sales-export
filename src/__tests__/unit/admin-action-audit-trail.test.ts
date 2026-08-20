@@ -74,8 +74,38 @@ const DB_WRITE = new RegExp(
     String.raw`(?:db\.[^\n;]*|[A-Za-z0-9_]*[Rr]ef|transaction|txn|tx|batch|\)\s*)\.(?:update|set|add|delete)\s*\(`
     + String.raw`|\b(?:claimStatusTransition|claimStatusTransitionFromAny|versionedUpdate|claimVersionedUpdate)\s*\(`,
 );
-const PERMISSION_GATED = /hasAdminPermission\s*\(/;
-const AUDITS = /createAdminAuditLog|createAuditLog|logAuditAction|recordAdminAction|AUDIT_LOGS/;
+/**
+ * WHAT COUNTS AS AN ADMIN-GATED WRITE.
+ *
+ * This was `hasAdminPermission(` alone, and that left a hole this audit fell
+ * into twice:
+ *
+ *   - disputes.ts gated three actions by naming two roles through hasRole().
+ *     The ratchet could not see them, so _updateDisputeStatusAction moved escrow
+ *     money and recorded nothing until #157 changed its gate — and the ratchet
+ *     then failed immediately, which is how it was found.
+ *
+ *   - Four more files are gated on requireAdmin() and nothing else:
+ *     sms-broadcast, in-app-broadcast, maintenance and admin-communications —
+ *     eighteen writes between them, including "message every member matching
+ *     this filter" and a bulk rewrite of payment and wallet timestamps. None
+ *     recorded anything, and none was visible to this check.
+ *
+ * requireAdmin() is in the pattern now. A ratchet whose blind spot has already
+ * hidden two real defects is not a ratchet.
+ */
+const PERMISSION_GATED = /hasAdminPermission\s*\(|requireAdmin\s*\(/;
+/**
+ * Every helper in lib/audit-log.ts that writes a row, not just four of them.
+ *
+ * logAdminAction and logAdminFinancialAction were missing. Widening
+ * PERMISSION_GATED immediately reported marketplace/_escrow_lifecycle.ts's
+ * _releaseEscrowAction as unrecorded — and it records through
+ * logAdminFinancialAction, which is what a money path SHOULD use. A gate that
+ * cries wolf about correct code gets switched off, so the list is now the
+ * module's actual exports.
+ */
+const AUDITS = /createAdminAuditLog|createAuditLog|logAuditAction|recordAdminAction|logAdminAction|logAdminFinancialAction|logFinancialAction|AUDIT_LOGS/;
 
 /**
  * Every permission-gated admin write that records nothing.

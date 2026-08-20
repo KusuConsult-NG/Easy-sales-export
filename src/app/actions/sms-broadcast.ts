@@ -22,6 +22,7 @@ import { ActionResponse } from "@/lib/safe-action";
 import { logger } from "@/lib/logger";
 import { categorizeUser } from "@/lib/broadcast-logic";
 import { isMarketplaceBuyer, isApprovedModuleStatus } from "@/lib/broadcast-audience";
+import { recordAdminAction } from "@/lib/audit-log";
 
 function isStateMatch(dbState: any, filterState: string | undefined): boolean { if (!filterState) return true;
     if (!dbState || typeof dbState !== 'string') return false;
@@ -851,10 +852,31 @@ export async function sendSmsBroadcastAction(
         // shape, different channel. The count is honest about what the API
         // accepted; sandboxMode is what makes it honest about what was
         // delivered.
+        /**
+         * RECORDED IN THE ADMIN AUDIT LOG, not only in sms_broadcast_logs.
+         *
+         * This action messages every member matching a filter and wrote nothing
+         * the platform-wide audit trail can see. The #66 ratchet did not catch
+         * it because that check matches writes gated on hasAdminPermission(),
+         * and this one is gated on requireAdmin() — the same blind spot that hid
+         * the dispute resolver until #157 changed its gate.
+         *
+         * sandboxMode is in the row: a broadcast that went to the sandbox
+         * reached nobody, and the audit trail should say which it was.
+         */
+        const sandboxMode = atUsername.toLowerCase() === "sandbox";
+        await recordAdminAction({
+            action: 'broadcast_sent',
+            userId: authCheck.userId,
+            targetType: 'sms_broadcast',
+            targetId: logRef.id,
+            metadata: { channel: 'sms', sent, failed, skipped, sandboxMode, filters },
+        });
+
         return {
             success: true,
             error: null,
-            data: { sent, failed, skipped, logId: logRef.id, sandboxMode: atUsername.toLowerCase() === "sandbox" },
+            data: { sent, failed, skipped, logId: logRef.id, sandboxMode },
         };
     } catch (error: any) {
         return { success: false, error: error.message, data: null };

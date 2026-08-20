@@ -47,6 +47,7 @@ export type InAppAudience =
 
 import type { Notification } from "@/lib/types/firestore";
 import { isMarketplaceBuyer, isApprovedModuleStatus } from "@/lib/broadcast-audience";
+import { recordAdminAction } from "@/lib/audit-log";
 
 export type NotificationType = Notification["type"];
 
@@ -550,11 +551,29 @@ export async function sendInAppBroadcastAction(
             linkText: linkText || null,
             audience: filters.audience,
             filters,
-            sentBy: "admin",
+            /**
+             * WHICH admin, not the literal string "admin".
+             *
+             * Every row this log has ever written says `sentBy: "admin"`. The
+             * one question a broadcast log exists to answer — who sent this to
+             * every member — was the one it could not. Same family as #129,
+             * #159 and #178, where an audit row named the wrong actor or none.
+             */
+            sentBy: authCheck.userId,
             sentAt: FieldValue.serverTimestamp(),
             totalRecipients: recipients.length,
             delivered,
             status: "done" });
+
+        // Recorded platform-wide too. Gated on requireAdmin(), so the #66
+        // ratchet — which matches hasAdminPermission() — never saw this write.
+        await recordAdminAction({
+            action: 'broadcast_sent',
+            userId: authCheck.userId,
+            targetType: 'inapp_broadcast',
+            targetId: logRef.id,
+            metadata: { channel: 'in_app', title, type, delivered, recipients: recipients.length, filters },
+        });
 
         return { success: true, error: null, data: { delivered, logId: logRef.id } };
     } catch (error: any) { return { success: false, error: error.message, data: null };
