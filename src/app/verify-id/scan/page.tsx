@@ -75,10 +75,21 @@ export default function VerifyIDPage() {
 
             const data = await response.json();
 
-            if (data.success) {
+            // /api/qr/verify returns { valid, data: payload } on success and
+            // { valid: false, error } or { error } otherwise — it has never
+            // returned `success` or `user`. Checking `data.success` meant this
+            // branch was unreachable: a correctly signed, unexpired ID was
+            // reported as invalid exactly like a forged one.
+            if (response.ok && data.valid) {
                 setResult({
                     valid: true,
-                    user: data.user,
+                    user: {
+                        fullName: data.data?.fullName,
+                        email: data.data?.email,
+                        role: data.data?.role,
+                        membershipId: data.data?.memberNumber,
+                        verified: true,
+                    },
                 });
                 showToast("ID verified successfully!", "success");
             } else {
