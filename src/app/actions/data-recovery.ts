@@ -118,7 +118,21 @@ interface RecoveryStats {
     corruptedFound: number;
     fixedCount: number;
     errors: string[];
+    /** True when the run only reported what it WOULD change. */
+    dryRun: boolean;
+    /**
+     * What a dry run would have written, one entry per affected user.
+     *
+     * THERE WAS NO WAY TO SEE THIS BEFORE PRESSING THE BUTTON. A platform-wide,
+     * destructive repair across six modules and every user, with no preview —
+     * which is exactly how #180 (the downgrade) would have been discovered too
+     * late. Capped so a large sweep does not return a payload nobody can read.
+     */
+    plannedChanges: Array<{ userId: string; updates: Record<string, unknown> }>;
 }
+
+/** Beyond this many entries a dry run reports counts only. */
+const MAX_PLANNED_CHANGES_REPORTED = 200;
 
 /**
  * High-Assurance Data Recovery & Integrity Utility
@@ -128,12 +142,16 @@ interface RecoveryStats {
  * collections to reconstruct any registration data lost due to destructive 
  * object-literal writes.
  */
-export async function runServiceRegistrationRecoveryAction(): Promise<{ success: boolean; stats: RecoveryStats }> {
+export async function runServiceRegistrationRecoveryAction(
+    options: { dryRun?: boolean; pageSize?: number; maxUsers?: number } = {},
+): Promise<{ success: boolean; stats: RecoveryStats }> {
     const stats: RecoveryStats = {
         totalUsersProcessed: 0,
         corruptedFound: 0,
         fixedCount: 0,
-        errors: []
+        errors: [],
+        dryRun: options.dryRun === true,
+        plannedChanges: [],
     };
 
     try {
@@ -144,13 +162,38 @@ export async function runServiceRegistrationRecoveryAction(): Promise<{ success:
 
         logger.info("[DataRecovery] Starting serviceRegistrations recovery audit...");
 
-        // 1. Get all users
-        // Note: For very large databases, this should be paginated. 
-        // For current scale, we'll process in chunks if possible, but start with a full sweep.
-        const usersSnap = await db.collection(COLLECTIONS.USERS).all().get();
-        stats.totalUsersProcessed = usersSnap.size;
+        /**
+         * PAGINATED, because this reads every user on the platform.
+         *
+         * It was `.all().get()` — the whole users table into memory in one go,
+         * with the note "For very large databases, this should be paginated"
+         * sitting above it. Each user then costs six more queries, so the run is
+         * 6N+1 round trips and grows without bound. At any real membership it
+         * times out PART-WAY THROUGH, having already written some users and not
+         * others, and reports nothing about where it stopped.
+         *
+         * A page at a time now, with an optional ceiling so an operator can try
+         * it on a slice before committing to the whole platform.
+         */
+        const pageSize = Math.max(1, Math.min(options.pageSize ?? 200, 1000));
+        const maxUsers = options.maxUsers && options.maxUsers > 0 ? options.maxUsers : Infinity;
 
-        for (const userDoc of usersSnap.docs) {
+        const userDocs: Array<{ id: string; data: () => any }> = [];
+        for (let offset = 0; userDocs.length < maxUsers; offset += pageSize) {
+            const page = await db.collection(COLLECTIONS.USERS)
+                .orderBy("createdAt", "asc")
+                .limit(pageSize)
+                .offset(offset)
+                .get();
+            if (page.empty) break;
+            userDocs.push(...page.docs);
+            if (page.docs.length < pageSize) break;
+        }
+
+        const scope = userDocs.slice(0, maxUsers === Infinity ? undefined : maxUsers);
+        stats.totalUsersProcessed = scope.length;
+
+        for (const userDoc of scope) {
             const userData = userDoc.data();
             const userId = userDoc.id;
             const registrations = userData.serviceRegistrations || {};
@@ -308,6 +351,15 @@ export async function runServiceRegistrationRecoveryAction(): Promise<{ success:
             // --- Apply Fixes ---
             if (needsFix) {
                 stats.corruptedFound++;
+
+                // A DRY RUN REPORTS AND WRITES NOTHING. See RecoveryStats.
+                if (options.dryRun) {
+                    if (stats.plannedChanges.length < MAX_PLANNED_CHANGES_REPORTED) {
+                        stats.plannedChanges.push({ userId, updates: { ...updates } });
+                    }
+                    continue;
+                }
+
                 try {
                     await db.collection(COLLECTIONS.USERS).doc(userId).update({
                         ...updates,
@@ -327,12 +379,15 @@ export async function runServiceRegistrationRecoveryAction(): Promise<{ success:
             action: 'data_recovery_run',
             userId: sessionResult.session.user.id,
             targetType: 'service_registrations',
+            // stats already carries dryRun, so the log distinguishes a run that
+            // wrote from one that only reported — they were indistinguishable
+            // before, and only one of them changes anybody's account.
             metadata: { stats },
         });
         return { success: true, stats };
 
     } catch (error: any) {
         logger.error("[DataRecovery] Systemic failure in recovery action:", error);
-        return { success: false, stats: { ...stats, errors: [error.message] } };
+        return { success: false, stats: { ...stats, errors: [...stats.errors, error.message] } };
     }
 }

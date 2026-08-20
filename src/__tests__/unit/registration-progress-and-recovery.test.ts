@@ -328,3 +328,97 @@ describe('what else the recovery does', () => {
         expect(res.stats.totalUsersProcessed).toBe(2);
     });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * #182 A PLATFORM-WIDE DESTRUCTIVE REPAIR WITH NO PREVIEW AND NO PAGINATION.
+ *
+ * The sweep was `.all().get()` over the whole users table — with the note "For
+ * very large databases, this should be paginated" sitting above it — and each
+ * user then costs six more queries, so the run is 6N+1 round trips. At any real
+ * membership it times out PART-WAY THROUGH, having written some users and not
+ * others, and reports nothing about where it stopped.
+ *
+ * And there was no dry run. #180 is exactly the kind of thing a preview exists
+ * to catch before it reaches anybody's account.
+ */
+describe('#182 — pagination and dry run', () => {
+    const recoverWith = async (options: Record<string, unknown>) =>
+        (await (await import('@/app/actions/data-recovery'))
+            .runServiceRegistrationRecoveryAction(options as never)) as any;
+
+    const seedMany = (n: number) => {
+        for (let i = 0; i < n; i++) {
+            store.seed(USERS, `u${i}`, {
+                email: `u${i}@e.com`, serviceRegistrations: {},
+                createdAt: `2026-01-${String((i % 28) + 1).padStart(2, '0')}T00:00:00.000Z`,
+            });
+            store.seed(COLLECTIONS.WAVE_APPLICATIONS, `w${i}`, {
+                userId: `u${i}`, status: 'approved', createdAt: '2026-05-01T00:00:00.000Z',
+            });
+        }
+    };
+
+    it('walks every user across several pages', async () => {
+        seedMany(25);
+
+        const res = await recoverWith({ pageSize: 10 });
+
+        expect(res.stats.totalUsersProcessed).toBe(25);
+        expect(res.stats.fixedCount).toBe(25);
+    });
+
+    it('honours a ceiling, so an operator can try a slice first', async () => {
+        seedMany(25);
+
+        const res = await recoverWith({ pageSize: 10, maxUsers: 5 });
+
+        expect(res.stats.totalUsersProcessed).toBe(5);
+        expect(res.stats.fixedCount).toBe(5);
+    });
+
+    it('A DRY RUN WRITES NOTHING AND SAYS WHAT IT WOULD HAVE DONE', async () => {
+        seedUser({});
+        store.seed(COLLECTIONS.WAVE_APPLICATIONS, 'w-1', {
+            userId: USER, status: 'approved', createdAt: '2026-05-01T00:00:00.000Z',
+        });
+
+        const res = await recoverWith({ dryRun: true });
+
+        expect(res.stats.dryRun).toBe(true);
+        expect(res.stats.corruptedFound).toBe(1);
+        expect(res.stats.fixedCount).toBe(0);
+        // The user is untouched.
+        expect(regs().wave).toBeUndefined();
+        expect((store.get(USERS, USER) as any)._dataIntegrityRemediated).toBeUndefined();
+        // And the operator can see what it was about to write.
+        expect(res.stats.plannedChanges).toHaveLength(1);
+        expect(res.stats.plannedChanges[0]).toMatchObject({ userId: USER });
+        // Bracket access, not toHaveProperty: these keys are literal dotted
+        // strings (Firestore field paths) and toHaveProperty would read the dots
+        // as a nested path and find nothing.
+        expect(res.stats.plannedChanges[0].updates['serviceRegistrations.wave.status'])
+            .toBe('approved');
+    });
+
+    it('a real run reports dryRun false and writes', async () => {
+        seedUser({});
+        store.seed(COLLECTIONS.WAVE_APPLICATIONS, 'w-1', {
+            userId: USER, status: 'approved', createdAt: '2026-05-01T00:00:00.000Z',
+        });
+
+        const res = await recoverWith({});
+
+        expect(res.stats.dryRun).toBe(false);
+        expect(res.stats.fixedCount).toBe(1);
+        expect(regs().wave.status).toBe('approved');
+    });
+
+    it('the audit row distinguishes a dry run from a real one', async () => {
+        seedUser({});
+        await recoverWith({ dryRun: true });
+
+        const [[entry]] = (globalThis as any).mockRecordAdminAction.mock.calls;
+        expect(entry.metadata.stats.dryRun).toBe(true);
+    });
+});
