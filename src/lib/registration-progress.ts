@@ -67,8 +67,16 @@ const PROVISIONAL_STATUSES = ['pending_repair', 'legacy_pending_onboarding'] as 
  *
  * The WAVE and Academy rejection paths write `status: "rejected"` and do NOT
  * strip the corresponding role, so a rejected applicant logging in had the
- * rejection silently overwritten with "approved" — and persisted. The
- * cooperative was safe only because its suspend path revokes the role too.
+ * rejection silently overwritten with "approved" — and persisted.
+ *
+ * THIS COMMENT USED TO SAY the cooperative was safe because its suspend path
+ * revokes the role too. That was wrong, and the sweep for the same shape found
+ * where: module-access-check Layer 2.6 and the cooperative ID card both healed a
+ * suspended member back to "active" and re-granted the role (#229, #230) — one
+ * on any cooperative page load, one from a read-only screen. Revoking a role
+ * means nothing while a repair rule re-grants it without reading the decision.
+ * The academy payment paths (#231) and the reapplication path (#232) were two
+ * more.
  *
  * A decision is a decision. Nothing derived may overwrite one.
  */

@@ -10,6 +10,7 @@ import { requireSession } from "@/lib/session-guard";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { NIGERIAN_LOCATIONS } from "@/lib/locations";
+import { isDecidedAgainst } from "@/lib/registration-progress";
 import { revalidatePath } from "next/cache";
 import type { SupabaseDocumentSnapshot } from "@/lib/supabase-db";
 
@@ -250,12 +251,47 @@ export async function getCooperativeMemberIdCardAction(): Promise<
             };
         }
 
+        // A SUSPENSION WAS UNDONE BY OPENING THE ID CARD.
+        //
+        // The heal below asks whether the member paid and finished onboarding.
+        // A suspended member satisfies both — they paid to join — so viewing
+        // their own membership card wrote `membershipStatus: "active"` back onto
+        // the member document and `serviceRegistrations.cooperatives.status:
+        // "active"` onto the user document. checkModuleAccess grants the
+        // cooperative module on that status alone (Layer 2), so the admin's
+        // Suspend was reversed by the member, in the database, from a read-only
+        // screen.
+        //
+        // Same shape as the Layer 2.6 heal in module-access-check.ts, and the
+        // same rule closes it: a decision is a decision, and nothing derived may
+        // overwrite one.
+        //
+        // Computed OUTSIDE the premium bypass on purpose. `isPremiumSubscriber`
+        // is read from `serviceRegistrations.academy.plan` — an ACADEMY
+        // subscription — and it skipped every cooperative gate below, so a
+        // suspended member who had bought an Academy plan was still issued a
+        // valid cooperative membership card. Buying a course is not a
+        // cooperative membership, and it is certainly not an appeal.
+        const decidedAgainst = isDecidedAgainst(d.membershipStatus) || isDecidedAgainst(d.status);
+
+        if (decidedAgainst) {
+            // Said plainly. Falling through to Gate 2 told the member their
+            // membership was "pending admin approval" — an approval that is not
+            // coming, because it has already been decided the other way.
+            return {
+                success: false as const,
+                error: "Your cooperative membership is not currently active. Please contact the cooperative administrator.",
+                reason: "membership_inactive",
+                data: null
+            };
+        }
+
         // Standard gating bypass for premium subscription plan holders
         if (!isPremiumSubscriber) {
             const isLegacy = d.isLegacy === true || !!userData?.legacyOnboardedBy;
             let isApprovedOrActive = d.membershipStatus === "active" || d.membershipStatus === "approved" || d.status === "approved";
 
-            const isCentralActive = 
+            const isCentralActive =
                 userData?.serviceRegistrations?.cooperative?.status === "active" ||
                 userData?.serviceRegistrations?.cooperatives?.status === "active" ||
                 userData?.serviceRegistrations?.cooperative?.status === "approved" ||

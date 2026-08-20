@@ -10,6 +10,8 @@ import { claimPaymentOnce, incrementWithinCeiling, CLAIM_TYPE, markFulfilmentFai
 import { checkOrderPaymentAmount } from "@/lib/order-payment-amount";
 import { checkAcademyPayment } from "@/lib/academy-plan";
 import { escrowIdFor } from "@/lib/escrow-status";
+import { isDecidedAgainst } from "@/lib/registration-progress";
+import { latestApplication, APPLICATION_SCAN_LIMIT } from "@/lib/latest-application";
 
 /**
  * Handle Marketplace Order Fulfillment
@@ -866,13 +868,46 @@ export async function processAcademyRegistration(reference: string, amount: numb
 
     const planToStore = verdict.plan;
 
+    // THE LATEST APPLICATION, AND ONLY IF IT WAS NOT DECIDED AGAINST.
+    //
+    // This read `.limit(1)` with no orderBy and trusted whatever came back —
+    // the #227 shape, in the path that GRANTS academy access. For an applicant
+    // with more than one application, which record this handler approved was
+    // whatever order the query plan produced.
+    //
+    // And it approved unconditionally: `status: "approved"`, `reviewedBy:
+    // "paystack_auto_approval"`, `arrayUnion("academy_participant")`,
+    // `isVerified: true`. Paying the registration fee is what admits a NEW
+    // applicant, so that is right for one — but nothing asked whether an admin
+    // had already decided the other way. A rejected applicant who paid again had
+    // the rejection overwritten and the role #210 revoked handed back.
+    //
+    // The client-side verify path (academy/_payment.ts) races this one by
+    // design, so both halves need the same rule or whichever wins decides.
     const appQuery = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
         .where("userId", "==", userId)
-        .limit(1)
+        .limit(APPLICATION_SCAN_LIMIT)
         .get();
 
+    const latestApp = latestApplication<any>(appQuery.docs);
+    const decidedAgainst = isDecidedAgainst(latestApp?.data()?.status);
+
+    if (decidedAgainst) {
+        logger.warn(
+            "[Paystack Webhook] Academy payment received for an application already decided against — "
+            + "recording the payment, NOT approving. Refund or manual review required.",
+            {
+                reference,
+                userId,
+                applicationId: latestApp?.id,
+                applicationStatus: latestApp?.data()?.status,
+                amount,
+            },
+        );
+    }
+
     const hasApp = !appQuery.empty;
-    const appDoc = hasApp ? appQuery.docs[0] : null;
+    const appDoc = decidedAgainst ? null : latestApp;
 
     // Claim the payment before fulfilling any of it.
     //
@@ -921,7 +956,12 @@ export async function processAcademyRegistration(reference: string, amount: numb
                     paymentAmount: amount,
                     plan: planToStore,
                     paidAt: paymentTimestamp,
-                    status: appDoc ? "approved" : "pending",
+                    // The status key is omitted entirely when a decision stands.
+                    // Writing "pending" would be its own reversal — it clears the
+                    // rejection from the user document while leaving it on the
+                    // application, and Layer 2 of checkModuleAccess reads the user
+                    // document first.
+                    ...(decidedAgainst ? {} : { status: appDoc ? "approved" : "pending" }),
                 }
             },
             updatedAt: FieldValue.serverTimestamp(),

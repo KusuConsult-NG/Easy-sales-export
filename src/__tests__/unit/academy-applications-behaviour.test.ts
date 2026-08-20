@@ -685,3 +685,105 @@ describe('resubmitAcademyApplicationAction', () => {
         expect(store.get(APPS, 'app-1')!.status).toBe('pending');
     });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ *   #232 REAPPLYING AFTER A REJECTION WENT STRAIGHT PAST THE ADMIN.
+ *
+ *        `isPaid` is the auto-approval switch: a paid applicant's application is
+ *        written `status: "approved"`, `reviewedBy: "system_auto_approval"`,
+ *        with `academy_participant` granted and `isVerified` set. That is
+ *        deliberate for a FIRST application — paying the registration fee is
+ *        what admits a learner.
+ *
+ *        But the fee is paid once, and the dedup guard above deliberately lets a
+ *        rejected applicant reapply, because the rejection email invites exactly
+ *        that ("Re-apply after making necessary improvements"). So the applicant
+ *        an admin had just rejected submitted a new form and was auto-approved
+ *        by their OLD payment, in the same request, with the role back. The
+ *        admin who rejected them had no way to make it stick.
+ *
+ *        A reapplication that follows a decision goes to the admin instead.
+ *        Nothing is lost — the payment still counts, and the admin can approve,
+ *        which is the outcome auto-approval would have produced. It just cannot
+ *        happen without them.
+ *
+ *        Fifth instance of the shape fixed in #207, #225, #227 and #229.
+ */
+describe('#232 — a reapplication after a decision needs an admin', () => {
+    const submit = async (f = form()) =>
+        (await (await actions()).submitAcademyApplicationAction(f)) as any;
+
+    const PAID = { paymentStatus: 'completed', paymentAmount: 45_000, plan: 'foundation' };
+
+    it.each(['rejected', 'declined', 'revoked', 'suspended', 'cancelled'])(
+        'DOES NOT AUTO-APPROVE AFTER %s', async (status) => {
+            seedUser({ serviceRegistrations: { academy: { ...PAID, status } } });
+
+            expect(await submit()).toMatchObject({ success: true });
+
+            // Was: "approved", reviewedBy "system_auto_approval".
+            expect(onlyApp().status).toBe('pending');
+            expect(onlyApp().reviewedBy).toBeNull();
+            expect(reg().status).toBe('pending');
+        });
+
+    it('AND DOES NOT HAND BACK THE ROLE THE REJECTION REVOKED', async () => {
+        seedUser({ serviceRegistrations: { academy: { ...PAID, status: 'rejected' } } });
+
+        await submit();
+
+        expect(readUser().roles).not.toContain('academy_participant');
+        expect(readUser().isVerified).not.toBe(true);
+    });
+
+    it('and the payment is still carried onto the new application', async () => {
+        // The applicant is not asked to pay twice. The fee they already paid is
+        // recorded on the new row; it simply no longer approves it by itself.
+        seedUser({ serviceRegistrations: { academy: { ...PAID, status: 'rejected' } } });
+
+        await submit();
+
+        expect(onlyApp().paymentStatus).toBe('completed');
+        expect(onlyApp().paymentAmount).toBe(45_000);
+        expect(onlyApp().plan).toBe('foundation');
+    });
+
+    it('and reapplying is still ALLOWED — this refuses the shortcut, not the applicant', async () => {
+        seedUser({ serviceRegistrations: { academy: { ...PAID, status: 'rejected' } } });
+        store.seed(APPS, 'old-rejected', {
+            userId: LEARNER, status: 'rejected',
+            personalInfo: { email: 'ada@example.com', phone: '08012345678' },
+            submittedAt: '2026-01-01T00:00:00.000Z',
+        });
+
+        expect(await submit()).toMatchObject({ success: true });
+    });
+
+    // ── and a first-time paid applicant is still admitted without an admin ───
+
+    it('still auto-approves a paid applicant with no prior decision', async () => {
+        seedUser({ serviceRegistrations: { academy: PAID } });
+
+        expect(await submit()).toMatchObject({ success: true });
+        expect(onlyApp().status).toBe('approved');
+        expect(reg().status).toBe('approved');
+        expect(readUser().roles).toContain('academy_participant');
+    });
+
+    it('still leaves an unpaid applicant pending, as before', async () => {
+        seedUser();
+
+        expect(await submit()).toMatchObject({ success: true });
+        expect(onlyApp().status).toBe('pending');
+        expect(readUser().roles).not.toContain('academy_participant');
+    });
+
+    it('still auto-approves after a revision request, which is not a decision against', async () => {
+        // revision_required means "come back with more", not "no".
+        seedUser({ serviceRegistrations: { academy: { ...PAID, status: 'revision_required' } } });
+
+        expect(await submit()).toMatchObject({ success: true });
+        expect(onlyApp().status).toBe('approved');
+    });
+});

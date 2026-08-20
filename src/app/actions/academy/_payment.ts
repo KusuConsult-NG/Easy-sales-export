@@ -15,6 +15,7 @@ import { rateLimitConfig } from '@/lib/rate-limits.config';
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { getBaseUrl } from "@/lib/server-utils";
 import { checkOrderPaymentAmount } from "@/lib/order-payment-amount";
+import { isDecidedAgainst } from "@/lib/registration-progress";
 import {
     checkAcademyPayment,
     normaliseAcademyPlan,
@@ -368,6 +369,24 @@ async function _initiateAcademyPaymentAction(plan: "foundation" | "standard" | "
             return { error: null, success: true as const, data: { paymentUrl: "/academy/application" } };
         }
 
+        // DO NOT TAKE MONEY YOU WILL NOT HONOUR.
+        //
+        // Paying the registration fee is what admits an Academy applicant —
+        // verifyAcademyPaymentAction and the webhook both auto-approve on it. So
+        // a rejected applicant who reached this page paid ₦45,000 and had their
+        // rejection overwritten. Both fulfilment paths now refuse to approve
+        // over a decision; this refuses to charge for one in the first place,
+        // which is the half that leaves nothing to refund.
+        const decidedStatus = userDoc.data()?.serviceRegistrations?.academy?.status;
+        if (isDecidedAgainst(decidedStatus)) {
+            return {
+                error: "Your Academy application is not currently approved, so this payment cannot be started. "
+                    + "Please contact support or submit a new application.",
+                success: false as const,
+                data: null,
+            };
+        }
+
         const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
         if (!paystackSecretKey) {
             return { error: "Payment system not configured", success: false as const , data: null };
@@ -549,17 +568,65 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<ActionRes
             hasApp = !appSnap.empty;
             const appDoc = hasApp ? appSnap.docs[0] : null;
 
+            // PAYING DID NOT OVERTURN A REJECTION.
+            //
+            // This path auto-approves: find the applicant's latest application,
+            // write `status: "approved"` with `reviewedBy:
+            // "paystack_auto_approval"`, grant `academy_participant` and set
+            // `isVerified`. That is the intended model for a NEW applicant —
+            // paying the registration fee is what admits them, and no admin need
+            // review it.
+            //
+            // It did not ask whether an admin had already decided. Nothing
+            // stopped a rejected applicant from opening the payment page and
+            // paying again, and when they did, the rejection on the application
+            // document was overwritten with "approved" — attributed to
+            // "paystack_auto_approval" — and the role #210 revoked was handed
+            // straight back. An admin's decision was reversible for ₦45,000.
+            //
+            // The money is still recorded. claimPaymentOnce has already banked
+            // the reference and the ledger row below is still written, so the
+            // payment is visible to support and refundable. What does not happen
+            // is the approval. The initiate path now refuses to start such a
+            // payment at all, so reaching here means the applicant was rejected
+            // between initiating and returning — rare, and exactly the case that
+            // needs the money trail intact rather than the approval.
+            const decidedAgainst = isDecidedAgainst(appDoc?.data()?.status);
+            const autoApprove = hasApp && !!appDoc && !decidedAgainst;
+
+            if (decidedAgainst) {
+                logger.warn(
+                    "[verifyAcademyPaymentAction] Payment received for an application already decided against — "
+                    + "recorded, NOT approved. Refund or manual review required.",
+                    {
+                        reference,
+                        userId: session.user.id,
+                        applicationId: appDoc?.id,
+                        applicationStatus: appDoc?.data()?.status,
+                        paidAmount,
+                    },
+                );
+            }
+
             const userUpdate: any = {
                 "serviceRegistrations.academy.paymentStatus": "completed",
                 "serviceRegistrations.academy.paymentReference": reference,
                 "serviceRegistrations.academy.paymentAmount": paidAmount,
                 "serviceRegistrations.academy.plan": resolvedPlan,
                 "serviceRegistrations.academy.paidAt": FieldValue.serverTimestamp(),
-                "serviceRegistrations.academy.status": hasApp ? "approved" : "pending",
                 "updatedAt": FieldValue.serverTimestamp(),
             };
 
-            if (hasApp && appDoc) {
+            // The status key is omitted entirely when a decision stands. Writing
+            // "pending" here would be its own reversal — it would clear the
+            // rejection from the user document while leaving it on the
+            // application, which is the divergence Layer 2 of checkModuleAccess
+            // reads first.
+            if (!decidedAgainst) {
+                userUpdate["serviceRegistrations.academy.status"] = hasApp ? "approved" : "pending";
+            }
+
+            if (autoApprove) {
                 userUpdate["serviceRegistrations.academy.approvedAt"] = FieldValue.serverTimestamp();
                 userUpdate["serviceRegistrations.academy.applicationId"] = appDoc.id;
                 userUpdate["roles"] = FieldValue.arrayUnion("academy_participant");
@@ -572,7 +639,7 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<ActionRes
             // (The processed_payments row is written by claimPaymentOnce above.)
 
             // Update matching application if it exists
-            if (hasApp && appDoc) {
+            if (autoApprove) {
                 await appDoc.ref.update({
                     status: "approved",
                     paymentStatus: "completed",

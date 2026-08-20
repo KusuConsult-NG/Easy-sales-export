@@ -21,59 +21,13 @@ import { hasAppAccess, type AppIdentifier } from "@/lib/role-app-mapping";
 import { isPaymentBypassAccount } from "@/lib/payment-bypass";
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { toMillis } from "@/lib/firestore-serialize";
 import type { UserRole } from "@/lib/types/roles";
 import { logger } from "@/lib/logger";
 import { FieldValue } from "@/lib/firestore-compat";
 import { normalizeUserUpdate } from "@/lib/schema-normalizer";
-import { registrationProgressScore } from "@/lib/registration-progress";
+import { registrationProgressScore, isDecidedAgainst } from "@/lib/registration-progress";
+import { latestApplication, APPLICATION_SCAN_LIMIT } from "@/lib/latest-application";
 
-
-/**
- * How many of a member's applications the fallback layers read before deciding.
- *
- * Was `.limit(APPLICATION_SCAN_LIMIT)` with NO ordering, at eleven sites in this file.
- */
-const APPLICATION_SCAN_LIMIT = 25;
-
-/**
- * The member's MOST RECENT application, or null.
- *
- * TWO DEFECTS IN ONE LINE OF QUERY
- * --------------------------------
- * Every fallback layer below read `.where("userId", "==", userId).limit(APPLICATION_SCAN_LIMIT)`
- * with no orderBy, then trusted whatever came back.
- *
- *   WHICH APPLICATION ANSWERED WAS ARBITRARY. PostgREST returns rows in
- *   whatever order the plan produces, so for a member with more than one
- *   application two identical requests could be decided by different records.
- *
- *   AND AN OLD APPROVAL OVERRODE A NEW REJECTION. Apply, be approved. Reapply,
- *   be rejected — #210 revokes the module role and marks the registration
- *   rejected. The member then opens any page in the module: Layer 1 fails,
- *   Layer 2 sees "rejected", and this fallback finds the OLD approved
- *   application and writes `status: "approved"` back over the rejection, role
- *   included. Persisted, on a page load.
- *
- * That is the third place this loop has been found — #207 in the login
- * self-heal, #225 in course enrolment, and here in the access check itself.
- * The pattern each time is a repair rule reading evidence without asking
- * whether it is the LATEST evidence.
- *
- * _checkAcademyStatusAction already sorts applications this way and takes the
- * newest; this is that rule, shared. toMillis is the reader from #49, because
- * submittedAt arrives as a Timestamp, an ISO string or nothing at all
- * depending on which path wrote the row.
- */
-function latestApplication(docs: any[]): any | null {
-    if (!docs || docs.length === 0) return null;
-
-    return [...docs].sort((a, b) => {
-        const ad = a.data() ?? {};
-        const bd = b.data() ?? {};
-        return toMillis(bd.submittedAt ?? bd.createdAt) - toMillis(ad.submittedAt ?? ad.createdAt);
-    })[0];
-}
 
 /** Maps the AppIdentifier to the Firestore serviceRegistrations key */
 const APP_TO_REG_KEY: Partial<Record<AppIdentifier, string>> = {
@@ -241,7 +195,45 @@ export async function checkModuleAccess(
             if (memberDocData) {
                 const status = memberDocData.membershipStatus || memberDocData.status;
                 const isApprovedOrActive = status === "active" || status === "approved";
-                const isHealable = !isApprovedOrActive && memberDocData.onboardingCompleted === true && memberDocData.paymentStatus === "completed";
+
+                // A SUSPENSION WAS UNDONE BY THE NEXT PAGE LOAD.
+                //
+                // isHealable asked "did they pay and finish onboarding?" and
+                // never "was a decision made against them?". A suspended member
+                // satisfies it exactly: they paid to join and their onboarding
+                // is complete, and `suspended` is not "active" or "approved" —
+                // so the heal below fired, wrote `membershipStatus: "active"`
+                // back onto the member document, wrote
+                // `serviceRegistrations.cooperatives.status: "active"` and
+                // `arrayUnion("cooperative_member")` onto the user document, and
+                // returned true.
+                //
+                // _coop_admin_members.ts was taught to revoke the role on
+                // suspension precisely so a suspended member loses the module.
+                // This layer handed it back on the very next cooperative page
+                // load, in the database — savings, loans, contributions and
+                // withdrawals with it.
+                //
+                // registration-progress.ts states "the cooperative was safe only
+                // because its suspend path revokes the role too". That was
+                // wrong, and this is why: revoking a role means nothing while a
+                // repair rule re-grants it without reading the decision. Fourth
+                // instance of the same shape — #207 (login self-heal), #225
+                // (course enrolment), #227 (the application picked here).
+                const decidedAgainst = isDecidedAgainst(status);
+
+                const isHealable = !isApprovedOrActive
+                    && !decidedAgainst
+                    && memberDocData.onboardingCompleted === true
+                    && memberDocData.paymentStatus === "completed";
+
+                if (decidedAgainst) {
+                    logger.info(
+                        `[ModuleAccess] Layer 2.6 — cooperative membership decided against `
+                        + `(uid: ${userId}, status: ${status}). No access, and no heal.`
+                    );
+                    return false;
+                }
 
                 if (isApprovedOrActive || isHealable) {
                     logger.info(
@@ -566,10 +558,10 @@ export async function checkModuleAccess(
                 .get();
 
             if (!verQuery.empty) {
-                const latestVer = latestApplication(verQuery.docs);
+                const latestVer = latestApplication<any>(verQuery.docs);
                 const verDocData = latestVer?.data();
                 const verRef = latestVer?.ref;
-                const status = verDocData.status;
+                const status = verDocData?.status;
                 if (status === "approved") {
                     logger.info(
                         `[ModuleAccess] Layer 2.11 — Direct Seller Verification query confirmed '${app}' access (uid: ${userId}, status: ${status}).`

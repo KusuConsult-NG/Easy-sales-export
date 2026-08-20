@@ -13,6 +13,7 @@ import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { AcademyApplicationInputSchema, AcademyApplicationInput } from "@/lib/validations/academy";
 import { normaliseAcademyPlan } from "@/lib/academy-plan";
 import { normalisePhone } from "@/lib/phone";
+import { isDecidedAgainst } from "@/lib/registration-progress";
 import type { AcademyApplicationData } from "@/lib/types/academy-actions";
 
 const ACADEMY_REGISTRATION_FEE = 0;
@@ -178,7 +179,32 @@ async function _submitAcademyApplicationAction(
             finalApplicationId = applicationId;
             const appRef = collectionsContext.doc(applicationId);
 
-            isPaid = ["completed", "paid", "successful"].includes(existingPaymentStatus);
+            // A REAPPLICATION AFTER A REJECTION WENT STRAIGHT PAST THE ADMIN.
+            //
+            // `isPaid` is the auto-approval switch: a paid applicant's
+            // application is written `status: "approved"`, `reviewedBy:
+            // "system_auto_approval"`, with `academy_participant` granted. That
+            // is the intended model for a first application — paying the
+            // registration fee is what admits a learner, and no admin need
+            // review it.
+            //
+            // But the registration fee is paid ONCE, and the duplicate guard
+            // above deliberately lets a rejected applicant reapply — the
+            // rejection email invites exactly that ("Re-apply after making
+            // necessary improvements"). So the applicant an admin had just
+            // rejected submitted a new form and was auto-approved by their old
+            // payment, in the same request, with the role back. The admin who
+            // rejected them had no way to make it stick.
+            //
+            // A reapplication that follows a decision goes to the admin instead.
+            // Nothing is lost: the payment is still recorded and the admin can
+            // approve, which is the outcome auto-approval would have produced —
+            // it just cannot happen without them. Fifth instance of the shape
+            // fixed in #207, #225, #227 and #229.
+            const previouslyDecidedAgainst = isDecidedAgainst(existingStatus);
+
+            isPaid = !previouslyDecidedAgainst
+                && ["completed", "paid", "successful"].includes(existingPaymentStatus);
 
             // Save to Firestore
             t.set(appRef, {

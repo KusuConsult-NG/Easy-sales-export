@@ -839,3 +839,153 @@ describe('verifyEnrollmentPaymentAction', () => {
         expect(studentsWhenClaimed).toBe(7);
     });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ *   #231 PAYING AGAIN OVERTURNED AN ADMIN'S REJECTION.
+ *
+ *        Paying the registration fee is what admits a NEW Academy applicant —
+ *        this path auto-approves on it, writing `status: "approved"` with
+ *        `reviewedBy: "paystack_auto_approval"`, granting `academy_participant`
+ *        and setting `isVerified`. That is deliberate and stays.
+ *
+ *        Nothing asked whether an admin had already decided the other way.
+ *        A rejected applicant opening the payment page and paying had the
+ *        rejection on the application document overwritten with "approved" —
+ *        attributed to Paystack — and the role #210 revokes handed straight
+ *        back. An admin's decision was reversible for ₦45,000.
+ *
+ *        The money is not the fix. Initiating such a payment is refused, so
+ *        there is nothing to refund; and if a rejection lands between initiating
+ *        and returning, the payment is still claimed, still ledgered and still
+ *        recorded on the registration — only the APPROVAL does not happen, and a
+ *        warning names the reference so support can refund it.
+ */
+describe('#231 — a decided-against applicant cannot pay their way back in', () => {
+    const REJECTED = { status: 'rejected', paymentStatus: 'pending' };
+
+    it('REFUSES TO EVEN START THE PAYMENT', async () => {
+        seedUser({ serviceRegistrations: { academy: REJECTED } });
+
+        const res = await initiate('foundation');
+
+        expect(res.success).toBe(false);
+        expect(res.error).toMatch(/not currently approved/i);
+        // Nothing to refund, because nothing was charged.
+        expect(initializePaystackPayment).not.toHaveBeenCalled();
+    });
+
+    it.each(['rejected', 'declined', 'revoked', 'suspended', 'cancelled'])(
+        'for %s, not just the one spelling', async (status) => {
+            seedUser({ serviceRegistrations: { academy: { status } } });
+
+            expect(await initiate('foundation')).toMatchObject({ success: false });
+            expect(initializePaystackPayment).not.toHaveBeenCalled();
+        });
+
+    it('AND IF A PAYMENT ARRIVES ANYWAY, IT DOES NOT APPROVE', async () => {
+        // The race: rejected after initiating, before returning from Paystack.
+        seedUser({ serviceRegistrations: { academy: { status: 'rejected' } } });
+        store.seed(APPS, 'app-1', {
+            userId: LEARNER, status: 'rejected',
+            submittedAt: '2026-01-01T00:00:00.000Z',
+        });
+
+        const res = await verify();
+
+        expect(res.success).toBe(true);          // the payment IS accepted
+        expect(store.get(APPS, 'app-1')?.status).toBe('rejected');
+        expect(reg().status).toBe('rejected');
+        expect(readUser().roles).not.toContain('academy_participant');
+        expect(readUser().isVerified).not.toBe(true);
+    });
+
+    it('AND THE MONEY IS STILL RECORDED, SO IT CAN BE REFUNDED', async () => {
+        seedUser({ serviceRegistrations: { academy: { status: 'rejected' } } });
+        store.seed(APPS, 'app-1', {
+            userId: LEARNER, status: 'rejected',
+            submittedAt: '2026-01-01T00:00:00.000Z',
+        });
+
+        await verify();
+
+        // Claimed in Postgres, ledgered, and visible on the registration.
+        expect(claimPaymentOnce).toHaveBeenCalled();
+        expect(store.get(COLLECTIONS.TRANSACTIONS, 'PSK-REF-1')?.amount).toBe(FEES.foundation);
+        expect(reg().paymentStatus).toBe('completed');
+        expect(reg().paymentReference).toBe('PSK-REF-1');
+    });
+
+    it('and the rejection is not softened to "pending" on the user document', async () => {
+        // Writing "pending" here would be its own reversal: it clears the
+        // decision from the user document while leaving it on the application,
+        // and Layer 2 of checkModuleAccess reads the user document first.
+        seedUser({ serviceRegistrations: { academy: { status: 'rejected' } } });
+        store.seed(APPS, 'app-1', {
+            userId: LEARNER, status: 'rejected',
+            submittedAt: '2026-01-01T00:00:00.000Z',
+        });
+
+        await verify();
+
+        expect(reg().status).toBe('rejected');
+        expect(reg().status).not.toBe('pending');
+    });
+
+    it('decides on the LATEST application, not an arbitrary one', async () => {
+        // An old approval must not license the payment either — same rule as
+        // #228, in the path that grants the role.
+        seedUser({ serviceRegistrations: { academy: { status: 'rejected' } } });
+        store.seed(APPS, 'a-old-approved', {
+            userId: LEARNER, status: 'approved',
+            submittedAt: '2026-01-01T00:00:00.000Z',
+        });
+        store.seed(APPS, 'b-new-rejected', {
+            userId: LEARNER, status: 'rejected',
+            submittedAt: '2026-06-01T00:00:00.000Z',
+        });
+
+        await verify();
+
+        expect(readUser().roles).not.toContain('academy_participant');
+        expect(store.get(APPS, 'a-old-approved')?.status).toBe('approved');
+        expect(store.get(APPS, 'b-new-rejected')?.status).toBe('rejected');
+    });
+
+    // ── and every legitimate registration still works ────────────────────────
+
+    it('still starts a payment for a pending applicant', async () => {
+        seedUser({ serviceRegistrations: { academy: { status: 'pending' } } });
+
+        expect(await initiate('foundation')).toMatchObject({ success: true });
+        expect(initializePaystackPayment).toHaveBeenCalled();
+    });
+
+    it('still starts a payment for somebody who has never applied', async () => {
+        seedUser();
+
+        expect(await initiate('foundation')).toMatchObject({ success: true });
+    });
+
+    it('still auto-approves a first-time applicant who pays', async () => {
+        seedUser();
+        store.seed(APPS, 'app-1', {
+            userId: LEARNER, status: 'pending',
+            submittedAt: '2026-01-01T00:00:00.000Z',
+        });
+
+        expect(await verify()).toMatchObject({ success: true });
+        expect(store.get(APPS, 'app-1')?.status).toBe('approved');
+        expect(reg().status).toBe('approved');
+        expect(readUser().roles).toContain('academy_participant');
+    });
+
+    it('still records a payment made before any application exists', async () => {
+        seedUser();
+
+        expect(await verify()).toMatchObject({ success: true });
+        expect(reg().status).toBe('pending');
+        expect(reg().paymentStatus).toBe('completed');
+        expect(readUser().roles).not.toContain('academy_participant');
+    });
+});

@@ -148,9 +148,30 @@ describe('the form really does pay before it submits', () => {
     });
 
     it('and both fulfilment paths only touch an application that already exists', () => {
-        // Which is why nothing corrected the literal afterwards.
-        expect(code('src/app/actions/academy/_payment.ts')).toContain('if (hasApp && appDoc)');
-        expect(code('src/infrastructure/payments/service.ts')).toContain('if (appDoc) {');
+        // Which is why nothing corrected the literal afterwards. Asserted as
+        // "neither path CREATES an application row" rather than by pinning the
+        // spelling of the guard: this test used to require the literal
+        // `if (hasApp && appDoc)`, and it broke when #231 renamed that condition
+        // to `autoApprove` — a rename that changed nothing about the property
+        // being tested. The property is that only an existing application is
+        // written to.
+        for (const file of [
+            'src/app/actions/academy/_payment.ts',
+            'src/infrastructure/payments/service.ts',
+        ]) {
+            const src = code(file);
+
+            // Every write to an application goes through the ref of a document
+            // that was read back, never through a freshly minted doc().
+            expect(src).not.toMatch(/ACADEMY_APPLICATIONS\)\s*\.doc\(/);
+            expect(src).toContain('COLLECTIONS.ACADEMY_APPLICATIONS');
+        }
+
+        // And each application update is reached only with a document in hand.
+        expect(code('src/app/actions/academy/_payment.ts'))
+            .toMatch(/autoApprove\s*=\s*hasApp\s*&&\s*!!appDoc/);
+        expect(code('src/infrastructure/payments/service.ts'))
+            .toContain('if (appDoc) {');
     });
 });
 
