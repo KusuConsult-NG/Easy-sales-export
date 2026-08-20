@@ -120,6 +120,8 @@ export type AuditAction =
     | 'course_created'
     | 'course_updated'
     | 'course_deleted'
+    // Already here, and _ac_enrollment filed its enrolments as 'user_update'
+    // anyway — the name existed and the writer did not use it.
     | 'course_enrolled'
     | 'course_completed'
     | 'certificate_issued'
