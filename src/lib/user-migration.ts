@@ -3,6 +3,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { normalizeUserDoc } from "@/lib/schema-normalizer";
 import { includesPrivilegedRole } from "@/lib/admin-permissions";
+import { registrationProgressScore } from "@/lib/registration-progress";
 
 /**
  * Migration utility for moving legacy user data (linked under legacy Firebase UID)
@@ -86,33 +87,13 @@ export async function migrateLegacyUserData(
                 ...(activeData.serviceRegistrations || {})
             };
 
-            const getProgressScore = (status: string) => {
-                switch (status) {
-                    case 'active':
-                    case 'approved':
-                    case 'verified':
-                        return 4;
-                    case 'pending':
-                    case 'pending_review':
-                    case 'under_review':
-                    case 'revision_required':
-                        return 3;
-                    case 'pending_repair':
-                    case 'legacy_pending_onboarding':
-                        return 2;
-                    case 'not_started':
-                        return 1;
-                    default:
-                        return 0;
-                }
-            };
 
             for (const key of Object.keys(mergedServiceRegistrations)) {
                 const legacyVal = legacyData.serviceRegistrations?.[key];
                 const activeVal = activeData.serviceRegistrations?.[key];
                 if (legacyVal && activeVal) {
-                    const scoreLegacy = getProgressScore(legacyVal.status || '');
-                    const scoreActive = getProgressScore(activeVal.status || '');
+                    const scoreLegacy = registrationProgressScore(legacyVal.status || '');
+                    const scoreActive = registrationProgressScore(activeVal.status || '');
                     mergedServiceRegistrations[key] = scoreActive > scoreLegacy ? activeVal : legacyVal;
                 }
             }

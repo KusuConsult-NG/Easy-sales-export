@@ -27,6 +27,8 @@
  *   4. name / fullName / displayName (canonical: name, also write fullName)
  */
 
+import { registrationProgressScore } from "@/lib/registration-progress";
+
 type AnyObject = Record<string, any>;
 
 /**
@@ -138,26 +140,8 @@ export function normalizeUserDoc(doc: AnyObject): AnyObject {
         } else if (sr.cooperative && !sr.cooperatives) {
             sr.cooperatives = deepClone(sr.cooperative);
         } else if (sr.cooperative && sr.cooperatives) {
-            const getProgressScore = (status: string) => {
-                switch (status) {
-                    case 'active':
-                    case 'approved':
-                        return 4;
-                    case 'pending':
-                    case 'pending_review':
-                    case 'revision_required':
-                        return 3;
-                    case 'pending_repair':
-                    case 'legacy_pending_onboarding':
-                        return 2;
-                    case 'not_started':
-                        return 1;
-                    default:
-                        return 0;
-                }
-            };
-            const scorePlural = getProgressScore(sr.cooperatives.status || '');
-            const scoreSingular = getProgressScore(sr.cooperative.status || '');
+            const scorePlural = registrationProgressScore(sr.cooperatives.status || '');
+            const scoreSingular = registrationProgressScore(sr.cooperative.status || '');
             
             const mergedCoop = scoreSingular > scorePlural
                 ? { ...sr.cooperatives, ...sr.cooperative }
@@ -173,27 +157,8 @@ export function normalizeUserDoc(doc: AnyObject): AnyObject {
         } else if (sr.farm_nation && !sr.farmNation) {
             sr.farmNation = deepClone(sr.farm_nation);
         } else if (sr.farmNation && sr.farm_nation) {
-            const getProgressScore = (status: string) => {
-                switch (status) {
-                    case 'active':
-                    case 'approved':
-                    case 'verified':
-                        return 4;
-                    case 'pending':
-                    case 'pending_review':
-                    case 'revision_required':
-                        return 3;
-                    case 'pending_repair':
-                    case 'legacy_pending_onboarding':
-                        return 2;
-                    case 'not_started':
-                        return 1;
-                    default:
-                        return 0;
-                }
-            };
-            const scorePlural = getProgressScore(sr.farmNation.status || '');
-            const scoreSingular = getProgressScore(sr.farm_nation.status || '');
+            const scorePlural = registrationProgressScore(sr.farmNation.status || '');
+            const scoreSingular = registrationProgressScore(sr.farm_nation.status || '');
             
             const mergedFn = scoreSingular > scorePlural
                 ? { ...sr.farmNation, ...sr.farm_nation }

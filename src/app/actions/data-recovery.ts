@@ -7,6 +7,7 @@ import { requireSession } from "@/lib/session-guard";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { FieldValue } from "@/lib/firestore-compat";
 import { recordAdminAction } from "@/lib/audit-log";
+import { registrationProgressScore } from "@/lib/registration-progress";
 
 /**
  * The most recent application in a collection, and the date it was submitted.
@@ -56,6 +57,60 @@ async function latestApplicationFor(
         data,
         submittedAt: data.submittedAt ?? data.applicationDate ?? data.createdAt ?? null,
     };
+}
+
+/**
+ * Should the recovery overwrite this module's registration?
+ *
+ * IT USED TO OVERWRITE WHENEVER THE TWO MERELY DIFFERED:
+ *
+ *     if (!registrations.wave || registrations.wave.status !== waveData.status)
+ *
+ * — six times, once per module. The registration is the LIVE record and the
+ * application row is the historical one, so "different" routinely means the
+ * registration is AHEAD. An admin approves a WAVE application by writing
+ * `serviceRegistrations.wave.status = "approved"` on the user; if the
+ * application row still reads `pending`, this tool put the member back to
+ * pending. A repair utility revoking approved, paid-for memberships across six
+ * modules at once, for every user on the platform, from one button.
+ *
+ * The codebase already knows how to answer this — merges compare the two
+ * statuses and keep whichever is further along. That rule now lives in
+ * lib/registration-progress.ts and this uses it: a registration is only
+ * rewritten when it is MISSING, or when the application is genuinely further
+ * along than what the user currently has.
+ */
+function shouldRecover(
+    current: { status?: string } | undefined,
+    applicationStatus: string | undefined,
+): boolean {
+    if (!current) return true;
+    return registrationProgressScore(applicationStatus) > registrationProgressScore(current.status);
+}
+
+/**
+ * Assign only when there is something to assign.
+ *
+ * The `submittedAt` writes below were already guarded — the header of this file
+ * explains why, at length: an undefined value written over a real one is a
+ * repair tool corrupting the field it repairs. That guard was applied to
+ * `submittedAt` ALONE, and the fields beside it kept the bug:
+ *
+ *     updates["serviceRegistrations.academy.plan"]           = academyData.plan;
+ *     updates["serviceRegistrations.cooperatives.tier"]      = cData.tier;
+ *     updates["serviceRegistrations.farmNation.role"]        = fData.role;
+ *     updates["serviceRegistrations.marketplace.accountType"] = mData.accountType || "seller";
+ *
+ * An application without a `plan` erased the learner's plan; without a `tier`,
+ * the member's tier; without a `role`, their Farm Nation role. The marketplace
+ * one is worse than undefined — it DEFAULTS to "seller", so a buyer-only
+ * account whose verification row carries no accountType was rewritten as a
+ * seller.
+ */
+function setIfPresent(updates: Record<string, any>, key: string, value: unknown): void {
+    if (value !== undefined && value !== null && value !== "") {
+        updates[key] = value;
+    }
 }
 
 interface RecoveryStats {
@@ -110,7 +165,7 @@ export async function runServiceRegistrationRecoveryAction(): Promise<{ success:
 
             if (waveApps) {
                 const waveData = waveApps.data;
-                if (!registrations.wave || registrations.wave.status !== waveData.status) {
+                if (shouldRecover(registrations.wave, waveData.status)) {
                     updates["serviceRegistrations.wave.status"] = waveData.status;
                     if (waveApps.submittedAt) {
                         updates["serviceRegistrations.wave.submittedAt"] = waveApps.submittedAt;
@@ -125,9 +180,9 @@ export async function runServiceRegistrationRecoveryAction(): Promise<{ success:
 
             if (academyApps) {
                 const academyData = academyApps.data;
-                if (!registrations.academy || registrations.academy.status !== academyData.status) {
+                if (shouldRecover(registrations.academy, academyData.status)) {
                     updates["serviceRegistrations.academy.status"] = academyData.status;
-                    updates["serviceRegistrations.academy.plan"] = academyData.plan;
+                    setIfPresent(updates, "serviceRegistrations.academy.plan", academyData.plan);
                     if (academyApps.submittedAt) {
                         updates["serviceRegistrations.academy.submittedAt"] = academyApps.submittedAt;
                     }
@@ -142,7 +197,7 @@ export async function runServiceRegistrationRecoveryAction(): Promise<{ success:
             if (exportApps) {
                 const exportData = exportApps.data;
                 const status = exportData.status === "pending_review" ? "pending" : exportData.status;
-                if (!registrations.export || registrations.export.status !== status) {
+                if (shouldRecover(registrations.export, status)) {
                     updates["serviceRegistrations.export.status"] = status;
                     if (exportApps.submittedAt) {
                         updates["serviceRegistrations.export.submittedAt"] = exportApps.submittedAt;
@@ -157,9 +212,9 @@ export async function runServiceRegistrationRecoveryAction(): Promise<{ success:
 
             if (marketplaceApps) {
                 const mData = marketplaceApps.data;
-                if (!registrations.marketplace || registrations.marketplace.status !== mData.status) {
+                if (shouldRecover(registrations.marketplace, mData.status)) {
                     updates["serviceRegistrations.marketplace.status"] = mData.status;
-                    updates["serviceRegistrations.marketplace.accountType"] = mData.accountType || "seller";
+                    setIfPresent(updates, "serviceRegistrations.marketplace.accountType", mData.accountType);
                     if (marketplaceApps.submittedAt) {
                         updates["serviceRegistrations.marketplace.submittedAt"] = marketplaceApps.submittedAt;
                     }
@@ -173,9 +228,9 @@ export async function runServiceRegistrationRecoveryAction(): Promise<{ success:
 
             if (coopApps) {
                 const cData = coopApps.data;
-                if (!registrations.cooperatives || registrations.cooperatives.status !== cData.status) {
+                if (shouldRecover(registrations.cooperatives, cData.status)) {
                     updates["serviceRegistrations.cooperatives.status"] = cData.status;
-                    updates["serviceRegistrations.cooperatives.tier"] = cData.tier;
+                    setIfPresent(updates, "serviceRegistrations.cooperatives.tier", cData.tier);
                     if (coopApps.submittedAt) {
                         updates["serviceRegistrations.cooperatives.submittedAt"] = coopApps.submittedAt;
                     }
@@ -189,9 +244,9 @@ export async function runServiceRegistrationRecoveryAction(): Promise<{ success:
 
             if (farmApps) {
                 const fData = farmApps.data;
-                if (!registrations.farmNation || registrations.farmNation.status !== fData.status) {
+                if (shouldRecover(registrations.farmNation, fData.status)) {
                     updates["serviceRegistrations.farmNation.status"] = fData.status;
-                    updates["serviceRegistrations.farmNation.role"] = fData.role;
+                    setIfPresent(updates, "serviceRegistrations.farmNation.role", fData.role);
                     if (farmApps.submittedAt) {
                         updates["serviceRegistrations.farmNation.submittedAt"] = farmApps.submittedAt;
                     }

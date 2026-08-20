@@ -14,6 +14,7 @@ import { serializeDoc } from "@/lib/firestore-serialize";
 import { registerCooperativeMemberAction } from "./_coop_registration";
 import { isAdmin } from "@/lib/admin-permissions";
 import { mayClaimMembershipByEmail } from "@/lib/cooperative-membership-claim";
+import { registrationProgressScore } from "@/lib/registration-progress";
 
 /** How many members one directory read will return. */
 const DIRECTORY_ROW_CAP = 2000;
@@ -159,29 +160,11 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
         const coopReg = userData?.serviceRegistrations?.cooperatives;
         const legacyReg = userData?.serviceRegistrations?.cooperative;
 
-        const getProgressScore = (status: string) => {
-            switch (status) {
-                case 'active':
-                case 'approved':
-                    return 4;
-                case 'pending':
-                case 'pending_review':
-                case 'revision_required':
-                    return 3;
-                case 'pending_repair':
-                case 'legacy_pending_onboarding':
-                    return 2;
-                case 'not_started':
-                    return 1;
-                default:
-                    return 0;
-            }
-        };
 
         let registration = coopReg || legacyReg;
         if (coopReg && legacyReg) {
-            const scorePlural = getProgressScore(coopReg.status || '');
-            const scoreSingular = getProgressScore(legacyReg.status || '');
+            const scorePlural = registrationProgressScore(coopReg.status || '');
+            const scoreSingular = registrationProgressScore(legacyReg.status || '');
             if (scoreSingular > scorePlural) {
                 registration = legacyReg;
             }
@@ -238,8 +221,8 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
             const derivedStatus = memberDocData.membershipStatus ?? memberDocData.status ?? 'pending';
 
             // Compare progress scores between user doc registration and member doc derivedStatus
-            const scoreUser = getProgressScore(registrationStatus || '');
-            const scoreMember = getProgressScore(derivedStatus);
+            const scoreUser = registrationProgressScore(registrationStatus || '');
+            const scoreMember = registrationProgressScore(derivedStatus);
 
             // Heal the membership document with the userId if missing
             if (!memberDocData.userId && memberRef) {

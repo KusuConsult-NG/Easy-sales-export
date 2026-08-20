@@ -25,6 +25,7 @@ import type { UserRole } from "@/lib/types/roles";
 import { logger } from "@/lib/logger";
 import { FieldValue } from "@/lib/firestore-compat";
 import { normalizeUserUpdate } from "@/lib/schema-normalizer";
+import { registrationProgressScore } from "@/lib/registration-progress";
 
 /** Maps the AppIdentifier to the Firestore serviceRegistrations key */
 const APP_TO_REG_KEY: Partial<Record<AppIdentifier, string>> = {
@@ -95,28 +96,10 @@ export async function checkModuleAccess(
                 const coopReg = serviceRegistrations["cooperatives"];
                 const legacyReg = serviceRegistrations["cooperative"];
 
-                const getProgressScore = (status: string) => {
-                    switch (status) {
-                        case 'active':
-                        case 'approved':
-                            return 4;
-                        case 'pending':
-                        case 'pending_review':
-                        case 'revision_required':
-                            return 3;
-                        case 'pending_repair':
-                        case 'legacy_pending_onboarding':
-                            return 2;
-                        case 'not_started':
-                            return 1;
-                        default:
-                            return 0;
-                    }
-                };
 
                 if (coopReg && legacyReg) {
-                    const scorePlural = getProgressScore(coopReg.status || '');
-                    const scoreSingular = getProgressScore(legacyReg.status || '');
+                    const scorePlural = registrationProgressScore(coopReg.status || '');
+                    const scoreSingular = registrationProgressScore(legacyReg.status || '');
                     registration = scoreSingular > scorePlural ? legacyReg : coopReg;
                 } else {
                     registration = coopReg || legacyReg;
@@ -127,29 +110,10 @@ export async function checkModuleAccess(
                 const fnReg = serviceRegistrations["farmNation"];
                 const legacyFnReg = serviceRegistrations["farm_nation"];
 
-                const getProgressScore = (status: string) => {
-                    switch (status) {
-                        case 'active':
-                        case 'approved':
-                        case 'verified':
-                            return 4;
-                        case 'pending':
-                        case 'pending_review':
-                        case 'revision_required':
-                            return 3;
-                        case 'pending_repair':
-                        case 'legacy_pending_onboarding':
-                            return 2;
-                        case 'not_started':
-                            return 1;
-                        default:
-                            return 0;
-                    }
-                };
 
                 if (fnReg && legacyFnReg) {
-                    const scorePlural = getProgressScore(fnReg.status || '');
-                    const scoreSingular = getProgressScore(legacyFnReg.status || '');
+                    const scorePlural = registrationProgressScore(fnReg.status || '');
+                    const scoreSingular = registrationProgressScore(legacyFnReg.status || '');
                     registration = scoreSingular > scorePlural ? legacyFnReg : fnReg;
                 } else {
                     registration = fnReg || legacyFnReg;
