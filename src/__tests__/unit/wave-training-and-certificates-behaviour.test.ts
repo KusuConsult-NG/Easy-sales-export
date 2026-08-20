@@ -314,6 +314,39 @@ describe('#163 — starting and ending a live session', () => {
         }));
     });
 
+    it('DOES NOT WRITE THE STATUS ITSELF, alongside the claim', async () => {
+        /**
+         * The mutation that the tests above miss.
+         *
+         * claimStatusTransitionFromAny is mocked here — the real one is SQL and
+         * fake-db deliberately does not implement the RPC (see its own note;
+         * the CAS functions are covered by the db-integration suites). So a
+         * stray `.update({ status: "ongoing" })` left in beside the claim would
+         * pass every assertion above: the claim is still called with the right
+         * fromAny, and the refusals are still honoured, because the mock decides
+         * them.
+         *
+         * With the claim mocked out, the ONLY thing that can move this row's
+         * status is the action writing it directly. It must not.
+         */
+        mockClaimFromAny.mockResolvedValue({ claimed: true, status: 'upcoming' });
+
+        await goLive('https://meet.example/abc');
+
+        expect(store.get(EVENTS, EVENT)).toMatchObject({ status: 'upcoming' });
+    });
+
+    it('and leaves a refused event exactly as it found it', async () => {
+        store.seed(EVENTS, EVENT, {
+            title: 'Export Readiness', duration: '2 hours', status: 'completed',
+        });
+        mockClaimFromAny.mockResolvedValue({ claimed: false, status: 'completed' });
+
+        await goLive();
+
+        expect(store.get(EVENTS, EVENT)).toMatchObject({ status: 'completed' });
+    });
+
     it('creates the room with the parsed duration and the custom link', async () => {
         const res = await goLive('https://meet.example/abc');
 
@@ -382,6 +415,17 @@ describe('#163 — starting and ending a live session', () => {
             fromAny: ['ongoing'], to: 'completed',
         }));
         expect(store.get(SESSIONS, 'sess-1')).toMatchObject({ isActive: false });
+    });
+
+    it('does not write "completed" itself either', async () => {
+        store.seed(SESSIONS, 'sess-1', { roomName: `wave-training-${EVENT}`, isActive: true });
+        mockClaimFromAny.mockResolvedValue({ claimed: true, status: 'ongoing' });
+
+        await end();
+
+        // Same reasoning as the start path: with the claim mocked, only a direct
+        // write could move this.
+        expect(store.get(EVENTS, EVENT)).toMatchObject({ status: 'upcoming' });
     });
 
     it('WILL NOT COMPLETE A SESSION THAT NEVER STARTED', async () => {
