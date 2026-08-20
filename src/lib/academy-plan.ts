@@ -95,6 +95,43 @@ export function resolveApplicationPlan(
     return normaliseAcademyPlan(applicationPlan) ?? normaliseAcademyPlan(userAcademyPlan);
 }
 
+/**
+ * Did this learner buy a package? — one answer, in the vocabulary of the rule
+ * that grants the access.
+ *
+ * FOUR HAND-ROLLED COPIES, AND NONE OF THEM TRIMMED
+ * -------------------------------------------------
+ *   _getEnrolledCoursesWithDetailsAction  ["elite","standard","foundation","advanced"]
+ *   api/academy/dashboard/route.ts        the same four, copy-pasted
+ *   autoEnrollPaidUser                    eleven entries, including the
+ *                                         STATUSES "active", "enrolled" and
+ *                                         "approved" and four plan names
+ *                                         nothing in this codebase writes
+ *
+ * All three call sites lower-cased and none trimmed, while
+ * normaliseAcademyPlan — which the checkCourseAccess call two lines further on
+ * uses — does both, and maps the legacy "advanced" onto standard.
+ * academy-course-access.test.ts asserts checkCourseAccess(" Elite ", "elite")
+ * is true.
+ *
+ * So a plan stored with a stray space opened every elite course in the
+ * catalogue and handed over every video through getCourseByIdAction, and failed
+ * all three of these gates — the auto-enrolment sweep never ran for that
+ * learner. They were shown the whole catalogue unlocked and a dashboard saying
+ * they were enrolled in nothing. Same shape as #228, one file over.
+ *
+ * The eleven-entry list is narrower now, deliberately. For all eight of its
+ * extra tokens normaliseAcademyPlan already returned null, so checkCourseAccess
+ * — which autoEnrollPaidUser applies per course a few lines later — refused
+ * every paid tier for them anyway. The only enrolments they produced were in
+ * FREE courses, which are open to everybody with or without a row. Nothing that
+ * was reachable stops being reachable; the sweep just stops running for a
+ * learner whose recorded plan is a status word.
+ */
+export function isPaidAcademyPlan(plan: unknown): boolean {
+    return normaliseAcademyPlan(plan) !== null;
+}
+
 /** What a plan costs, in naira. */
 export function academyPlanFee(plan: unknown): number {
     const normalised = normaliseAcademyPlan(plan) ?? DEFAULT_ACADEMY_PLAN;

@@ -7,6 +7,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isIssuedCertificate } from "@/lib/certificate-kind";
 import { autoEnrollPaidUser } from "@/app/actions/academy";
+import { isPaidAcademyPlan } from "@/lib/academy-plan";
 
 /**
  * API Route: Get Student Dashboard Data
@@ -23,10 +24,13 @@ export async function GET(request: NextRequest) {
 
         const userId = session.user.id;
 
-        // Auto-enroll if the user has an active paid plan
-        const userPlan = (session.user as any)?.serviceRegistrations?.academy?.plan || "free";
-        const isPaid = ["elite", "standard", "foundation", "advanced"].includes(userPlan.toLowerCase());
-        if (isPaid) {
+        // Auto-enroll if the user has an active paid plan.
+        // The fourth copy of this list lived here. See isPaidAcademyPlan: none
+        // of the copies trimmed, while the access rule they gate does, so a
+        // plan stored as " Elite " unlocked the whole catalogue and was
+        // auto-enrolled in nothing.
+        const userPlan = (session.user as any)?.serviceRegistrations?.academy?.plan;
+        if (isPaidAcademyPlan(userPlan)) {
             await autoEnrollPaidUser(userId, userPlan);
         }
 

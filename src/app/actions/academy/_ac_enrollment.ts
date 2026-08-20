@@ -10,7 +10,7 @@ import { revalidatePath } from "next/cache";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import type { Course, EnrolledCourseWithDetails, UserProgress } from "@/lib/types/academy-actions";
-import { normaliseAcademyPlan, checkCourseAccess } from "@/lib/academy-plan";
+import { normaliseAcademyPlan, checkCourseAccess, isPaidAcademyPlan } from "@/lib/academy-plan";
 import { isDecidedAgainst } from "@/lib/registration-progress";
 
 /**
@@ -32,44 +32,91 @@ async function _checkAcademyStatusAction(): Promise<ActionResponse<string | null
         // ── AUTHORITATIVE CHECK: Check real application record ──────
         // If status is not approved, check the source of truth for applications.
         if (currentStatus !== "approved") {
-            let appDoc: any = null;
+            /**
+             * THE TWO FALLBACK LOOKUPS DECIDED BY AN ARBITRARY APPLICATION,
+             * AND THEN MADE THE GUESS PERMANENT.
+             *
+             * The primary query sorts by submittedAt and takes the newest,
+             * because a learner can hold more than one application and the
+             * decision that counts is the LAST one. Neither fallback did.
+             *
+             * They are reached when no application carries `userId` — legacy
+             * rows, from before the submit flow recorded it. One looked the
+             * application up by `serviceRegistrations.academy.applicationId`;
+             * the other queried `personalInfo.email` with `.limit(1)` and no
+             * `orderBy`, so Postgres returned whichever row it liked.
+             *
+             * Choosing wrong would be bad enough on its own. What made it stick
+             * is what the block below does with the answer: on
+             * `status === "approved"` it WRITES
+             * `serviceRegistrations.academy.status = "approved"` onto the user
+             * document, and the fallback backfills `userId` onto the row it
+             * chose — so the ordered query above then finds only that one, and
+             * the guess becomes the record.
+             *
+             * The promotion is one-directional: only "approved" is ever written
+             * back. So a learner holding an old approval and a newer rejection
+             * could have the rejection undone by loading a page. That is
+             * #207-#209 exactly, reappearing through the two branches that fix
+             * did not reach.
+             *
+             * All three sources are gathered and the newest is chosen, by the
+             * comparator the primary query already used. The `.limit(1)` is
+             * gone because it was choosing the answer.
+             */
+            const submittedMillis = (doc: any): number => {
+                const value = doc.data()?.submittedAt || doc.data()?.createdAt;
+                return value?.toMillis?.()
+                    || value?.seconds * 1000
+                    || (value ? new Date(value).getTime() : 0);
+            };
+
+            const candidates = new Map<string, any>();
+
             const appSnap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
                 .where("userId", "==", session.user.id)
                 .get();
+            for (const doc of appSnap.docs) candidates.set(doc.id, doc);
 
-            if (!appSnap.empty) {
-                const sortedDocs = appSnap.docs.sort((a, b) => {
-                    const aVal = a.data().submittedAt || a.data().createdAt;
-                    const bVal = b.data().submittedAt || b.data().createdAt;
-                    const aTime = aVal?.toMillis?.() || aVal?.seconds * 1000 || (aVal ? new Date(aVal).getTime() : 0);
-                    const bTime = bVal?.toMillis?.() || bVal?.seconds * 1000 || (bVal ? new Date(bVal).getTime() : 0);
-                    return bTime - aTime;
-                });
-                appDoc = sortedDocs[0];
-            } else if (userData?.serviceRegistrations?.academy?.applicationId) {
-                const appId = userData.serviceRegistrations.academy.applicationId;
-                const directDoc = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(appId).get();
-                if (directDoc.exists) {
-                    appDoc = directDoc;
-                    // Self-healing: backfill userId on direct application doc if missing
-                    const appData = directDoc.data()!;
-                    if (!appData.userId) {
-                        await directDoc.ref.update({ userId: session.user.id });
-                    }
+            // The fallbacks run only when nothing is linked to this learner yet
+            // — the case they exist for — and BOTH run, rather than the second
+            // being skipped whenever an applicationId happens to be recorded.
+            // A stored applicationId names the application that wrote it, which
+            // is not necessarily the most recent one.
+            if (candidates.size === 0) {
+                const appId = userData?.serviceRegistrations?.academy?.applicationId;
+                if (appId) {
+                    const directDoc = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(appId).get();
+                    if (directDoc.exists) candidates.set(directDoc.id, directDoc);
                 }
-            } else if (userData?.email) {
-                const emailQuery = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
-                    .where("personalInfo.email", "==", userData.email.toLowerCase())
-                    .limit(1)
-                    .get();
-                if (!emailQuery.empty) {
-                    appDoc = emailQuery.docs[0];
-                    // Self-healing: backfill userId on application doc if missing
-                    const appData = appDoc.data()!;
-                    if (!appData.userId) {
-                        await appDoc.ref.update({ userId: session.user.id });
-                    }
+
+                if (userData?.email) {
+                    // Deliberately unbounded: this is an equality on one
+                    // person's email address, so the result is the handful of
+                    // applications that person has ever submitted. The `.limit(1)`
+                    // that was here is what chose the answer, and a limit
+                    // without an orderBy would choose it again — while an
+                    // orderBy in the database would put rows MISSING
+                    // submittedAt first on a DESC sort (finding #49), which is
+                    // exactly the legacy rows this branch exists for. The
+                    // comparator below handles a missing date; the query must
+                    // not pre-filter.
+                    const emailQuery = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+                        .where("personalInfo.email", "==", userData.email.toLowerCase())
+                        .get();
+                    for (const doc of emailQuery.docs) candidates.set(doc.id, doc);
                 }
+            }
+
+            const appDoc = [...candidates.values()].sort((a, b) => submittedMillis(b) - submittedMillis(a))[0] ?? null;
+
+            // Self-healing: link the application this settled on to the learner,
+            // so the ordered query above finds it directly next time. On the row
+            // that was actually chosen — the backfill used to run on whichever
+            // row the fallback had picked, which is how a wrong choice became
+            // the stored one.
+            if (appDoc && !appDoc.data()?.userId) {
+                await appDoc.ref.update({ userId: session.user.id });
             }
 
             if (appDoc) {
@@ -294,9 +341,13 @@ export async function autoEnrollPaidUser(userId: string, userPlan: string) {
 
     const sessionUser = sessionResult.session.user as any;
     const resolvedUserId = sessionUser.id;
-    const resolvedPlan = sessionUser?.serviceRegistrations?.academy?.plan || "free";
+    const resolvedPlan = sessionUser?.serviceRegistrations?.academy?.plan;
 
-    if (!resolvedUserId || !resolvedPlan) return;
+    // `if (!resolvedUserId || !resolvedPlan) return;` stood here. The second
+    // half could never fire: resolvedPlan was `... || "free"`, so it was a
+    // non-empty string whatever the registration held. The id is already
+    // established by the session guard above.
+    if (!resolvedUserId) return;
 
     // A decided-against registration enrols in nothing, for the same reason
     // enrollInCourseAction now refuses one: a plan is what somebody bought and a
@@ -306,9 +357,11 @@ export async function autoEnrollPaidUser(userId: string, userPlan: string) {
     // courses the module gate will not let them open.
     if (isDecidedAgainst(sessionUser?.serviceRegistrations?.academy?.status)) return;
 
-    const plan = String(resolvedPlan).toLowerCase();
-    const isPaid = ["elite", "standard", "foundation", "advanced", "member", "student", "academy_student", "scholarship", "active", "enrolled", "approved"].includes(plan);
-    if (!isPaid) return;
+    // One predicate, shared with the two call sites that decide whether to run
+    // this at all — see isPaidAcademyPlan for what the four hand-rolled lists
+    // disagreed about, and why the longest of them is narrower now.
+    const plan = String(resolvedPlan).trim().toLowerCase();
+    if (!isPaidAcademyPlan(plan)) return;
 
     try {
         // 1. Fetch all courses
@@ -459,17 +512,23 @@ async function _getEnrolledCoursesWithDetailsAction(): Promise<ActionResponse<an
 
         const userId = session.user.id;
 
-        // Auto-enroll if the user has an active paid plan
-        const userPlan = (session.user as any)?.serviceRegistrations?.academy?.plan || "free";
-        const isPaid = ["elite", "standard", "foundation", "advanced"].includes(userPlan.toLowerCase());
-        if (isPaid) {
+        // Auto-enroll if the user has an active paid plan.
+        // Asked of the same predicate the access rule uses, so this cannot
+        // withhold the sweep from a learner the catalogue already unlocks.
+        const userPlan = (session.user as any)?.serviceRegistrations?.academy?.plan;
+        if (isPaidAcademyPlan(userPlan)) {
             await autoEnrollPaidUser(userId, userPlan);
         }
 
 
         // 1. Fetch all progress records for this user
         const progressSnap = await db.collection(`user_progress/${userId}/courses`).get();
-        if (progressSnap.empty) return { error: null, success: true as const, data: null };
+        // An empty enrolment set is an empty LIST. This returned `data: null`,
+        // so the one success shape a caller can rely on — `data.courses` — was
+        // absent for exactly the learner who has enrolled in nothing, which is
+        // the case a "your courses" screen most needs to render. Same shape as
+        // the sibling in course-actions.ts.
+        if (progressSnap.empty) return { error: null, success: true as const, data: { courses: [] } };
 
         // 2. Batch-fetch course metadata for each enrolled course
         const courseIds = progressSnap.docs.map((d) => d.id);
