@@ -130,12 +130,25 @@ describe('#166 — resolveMatch decides who is verified', () => {
         'pending_review',
         'something_qoreid_added_last_tuesday',
     ])('REFUSES THE UNRECOGNISED TOP-LEVEL STATUS %s', (topStatus) => {
-        // The old guard named four failure spellings and let everything else
-        // through to the positive checks below, so an inner check reading
-        // "complete" turned an unknown status into a verified identity.
+        /**
+         * The inner check here is EXACT_MATCH, deliberately, and the first
+         * version of this test used "complete" instead — which made it useless.
+         *
+         * Two defects were fixed in resolveMatch: the top-level denylist, and
+         * "complete" being accepted as a positive inner check. With a "complete"
+         * inner check, EITHER fix alone makes this return false, so restoring
+         * the denylist on its own broke nothing and the mutation passed. Each
+         * fix was masking the other.
+         *
+         * EXACT_MATCH isolates the denylist: the inner check is genuinely
+         * positive, so the ONLY thing that can refuse this lookup is the
+         * top-level status being required to say id_verified. QoreID saying "the
+         * name matches the record" while its overall verdict is something other
+         * than id_verified is precisely the case that must not read as verified.
+         */
         expect(resolveMatch({
             status: { status: topStatus, state: 'complete' },
-            summary: { bvn_check: { status: 'complete' } },
+            summary: { bvn_check: { status: 'EXACT_MATCH' } },
         })).toBe(false);
     });
 
