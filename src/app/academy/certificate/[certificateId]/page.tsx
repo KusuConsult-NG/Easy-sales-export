@@ -8,7 +8,7 @@ import { Award, Download, Share2, CheckCircle, Loader2, ArrowLeft, Linkedin } fr
 import Image from "next/image";
 import { getCourseByIdAction, getUserProgressAction, type Course, type UserProgress } from "@/app/actions/academy";
 import { useToast } from "@/contexts/ToastContext";
-import { academyCertificateNumber, completionDateOf } from "@/lib/academy-certificate";
+import { academyCertificateNumber, completionDateOf, hasEarnedAcademyCertificate } from "@/lib/academy-certificate";
 
 export default function CertificatePage() {
     const params = useParams();
@@ -117,7 +117,15 @@ export default function CertificatePage() {
         );
     }
 
-    if (!course || !progress || progress.overallProgress !== 100) {
+    // The shared bar, not a hand-rolled inline comparison against 100.
+    //
+    // academy-certificate.ts introduced ACADEMY_CERTIFICATE_MIN_PROGRESS and
+    // hasEarnedAcademyCertificate so "the download cannot disagree with the
+    // screen that offered it" — its words — and the PDF route adopted it while
+    // this screen, which is the one that offers the download, kept its own
+    // comparison. The listing at /dashboard/certificates now asks the same
+    // predicate, so all three agree on what "earned" means.
+    if (!course || !progress || !hasEarnedAcademyCertificate(progress)) {
         return (
             <div className="min-h-screen bg-slate-50 flex items-center justify-center p-8">
                 <div className="text-center max-w-md">

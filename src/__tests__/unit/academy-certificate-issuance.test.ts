@@ -130,8 +130,25 @@ describe('the certificate number', () => {
 
 describe('who has earned one', () => {
     it('is the same bar the page applies', () => {
+        // The page used to hand-roll `progress.overallProgress !== 100` beside
+        // this constant, which is agreement by coincidence rather than by
+        // construction — and it is the screen that OFFERS the download, so it
+        // is the one this file's "the download cannot disagree with the screen
+        // that offered it" is about. It asks the predicate now, as the PDF
+        // route and the /dashboard/certificates listing both do.
         expect(ACADEMY_CERTIFICATE_MIN_PROGRESS).toBe(100);
-        expect(source(CERT_PAGE)).toContain('progress.overallProgress !== 100');
+        expect(source(CERT_PAGE)).toContain('!hasEarnedAcademyCertificate(progress)');
+        expect(source(CERT_PAGE)).not.toContain('overallProgress !== 100');
+    });
+
+    it('and every surface that decides it asks the same predicate', () => {
+        for (const rel of [
+            'src/app/academy/certificate/[certificateId]/page.tsx',
+            'src/app/api/academy/certificate/[certificateId]/route.tsx',
+            'src/app/api/academy/certificates/route.ts',
+        ]) {
+            expect(source(rel)).toContain('hasEarnedAcademyCertificate');
+        }
     });
 
     it('refuses anything short of it', () => {

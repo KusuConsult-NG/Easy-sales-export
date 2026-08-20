@@ -24,6 +24,8 @@ interface AcademyCertificate {
     courseId: string;
     issuedAt: Date;
     certificateUrl?: string;
+    /** Where to open it. Supplied by the route — see the View link below. */
+    viewUrl?: string;
     grade?: string;
 }
 
@@ -54,8 +56,17 @@ export default function CertificatesPage() {
             const certsData = await certsRes.json();
             if (certsData.success) setCertificates(certsData.certificates || []);
 
+            // `data.certificates`, which is what the route returns — and has
+            // returned since it grew a cursor. This read `acData.certificates`,
+            // a key that is not in the payload, so the Academy tab was set to
+            // [] on every load regardless of what came back. Two independent
+            // reasons the tab was empty: the route was querying a state nothing
+            // wrote, and this would have discarded the answer anyway.
+            //
+            // /api/certificates above returns its list at the top level, which
+            // is where this shape came from.
             const acData = await acRes.json();
-            if (acData.success) setAcademyCerts(acData.certificates || []);
+            if (acData.success) setAcademyCerts(acData.data?.certificates || []);
         } catch (error) {
             logger.error("Failed to fetch certificates:", error);
         } finally {
@@ -262,13 +273,24 @@ export default function CertificatesPage() {
                                                     Download
                                                 </a>
                                             )}
-                                            <a
-                                                href={`/academy/certificate/${cert.id}`}
-                                                className="flex items-center gap-1.5 px-3 py-2 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition font-semibold"
-                                            >
-                                                <ExternalLink className="w-4 h-4" />
-                                                View
-                                            </a>
+                                            {/* The route says where it opens.
+                                                This built `/academy/certificate/${cert.id}`
+                                                from the DOCUMENT id, and that
+                                                page reads its segment as a
+                                                COURSE id — so View led to a page
+                                                that could not resolve a course.
+                                                WAVE rows have no such page and
+                                                now show no View button rather
+                                                than a broken one. */}
+                                            {cert.viewUrl && (
+                                                <a
+                                                    href={cert.viewUrl}
+                                                    className="flex items-center gap-1.5 px-3 py-2 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition font-semibold"
+                                                >
+                                                    <ExternalLink className="w-4 h-4" />
+                                                    View
+                                                </a>
+                                            )}
                                         </div>
                                     </div>
                                 ))}
