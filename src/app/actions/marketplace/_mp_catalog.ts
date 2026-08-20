@@ -10,6 +10,19 @@ import type { Product } from "@/lib/types/marketplace";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { ProductSchema } from "@/lib/validations/marketplace";
 import { withSafeAction, ActionResponse } from "@/lib/safe-action";
+import { hydrateSellerTrust, resolveSellerTrust, SELLER_NAME_FALLBACK } from "@/lib/seller-trust";
+import {
+    PRODUCT_SEARCH_SCAN_LIMIT,
+    filterProductsByQuery,
+    pageFilteredProducts,
+    categorySpellings,
+} from "@/lib/product-search";
+
+/** Reads a seller's user document, for hydrateSellerTrust. */
+async function readSeller(sellerId: string): Promise<Record<string, any> | null> {
+    const snap = await db.collection(COLLECTIONS.USERS).doc(sellerId).get();
+    return snap.exists ? (snap.data() ?? null) : null;
+}
 
 /**
  * Get Marketplace Products
@@ -29,8 +42,20 @@ async function _getMarketplaceProductsAction(params: {
 
         let query = db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active") as import("@/lib/supabase-db").SupabaseQuery;
 
-        if (category && category !== "all") { 
-            query = query.where("category", "==", category);
+        /**
+         * Every stored spelling of the category, not just the one asked for.
+         *
+         * This matched the raw string while _buyer.ts and _searchProductsAction
+         * both expanded it through the alias table — so selecting "roots" here
+         * missed every product stored as "tubers", "yam" or "cassava", and the
+         * same choice returned different catalogues depending on which action
+         * the page happened to call. Four category filters, three behaviours.
+         */
+        if (category && category !== "all") {
+            const mapped = categorySpellings(category);
+            query = mapped.length > 1
+                ? query.where("category", "in", mapped)
+                : query.where("category", "==", mapped[0]);
         }
 
         if (location) { 
@@ -50,7 +75,19 @@ async function _getMarketplaceProductsAction(params: {
                 orderedQuery = query.orderBy("createdAt", "desc");
         }
 
-        if (lastId) {
+        /**
+         * A text search pages the MATCHES, not the newest twelve rows.
+         *
+         * The filter below used to run after this page had already been taken,
+         * so the search only ever saw `limitCount` rows — see lib/product-search.ts
+         * for what that did to a buyer looking for a product by name. When a
+         * query is present the database read becomes a bounded scan and the
+         * paging happens after the match.
+         */
+        const searching = typeof search === "string" && search.trim() !== "";
+        const readSize = searching ? PRODUCT_SEARCH_SCAN_LIMIT : limitCount;
+
+        if (lastId && !searching) {
             const lastDoc = await db.collection(COLLECTIONS.PRODUCTS).doc(lastId).get();
             if (lastDoc.exists) {
                 orderedQuery = orderedQuery.startAfter(lastDoc);
@@ -60,24 +97,29 @@ async function _getMarketplaceProductsAction(params: {
         let snapshot;
         let indexError = false;
         try {
-            snapshot = await orderedQuery.limit(limitCount).get();
+            snapshot = await orderedQuery.limit(readSize).get();
         } catch (e: any) {
             if (e.message && e.message.toLowerCase().includes("index")) {
                 logger.warn("Marketplace products search failed due to missing index. Falling back.", { error: e.message });
                 indexError = true;
                 
                 let fallbackQuery = db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active");
-                if (category && category !== "all") fallbackQuery = fallbackQuery.where("category", "==", category);
+                if (category && category !== "all") {
+                    const mapped = categorySpellings(category);
+                    fallbackQuery = mapped.length > 1
+                        ? fallbackQuery.where("category", "in", mapped)
+                        : fallbackQuery.where("category", "==", mapped[0]);
+                }
                 if (location) fallbackQuery = fallbackQuery.where("location.state", "==", location);
                 
-                if (lastId) {
+                if (lastId && !searching) {
                     const lastDoc = await db.collection(COLLECTIONS.PRODUCTS).doc(lastId).get();
                     if (lastDoc.exists) {
                         fallbackQuery = fallbackQuery.startAfter(lastDoc);
                     }
                 }
-                
-                snapshot = await fallbackQuery.limit(limitCount).get();
+
+                snapshot = await fallbackQuery.limit(readSize).get();
             } else {
                 throw e;
             }
@@ -110,22 +152,43 @@ async function _getMarketplaceProductsAction(params: {
             });
         }
 
-        if (search) { 
-            const searchLower = search.toLowerCase().trim();
-            products = products.filter((p) => {
-                const searchString = [p.title, p.description].filter(Boolean).map(String).join(" ").toLowerCase();
-                return searchString.includes(searchLower);
-            });
-        }
-
-        let newLastId = undefined;
+        let newLastId: string | undefined = undefined;
         let hasMore = false;
-        if (snapshot.docs.length === limitCount) {
+
+        if (searching) {
+            if (snapshot.docs.length === PRODUCT_SEARCH_SCAN_LIMIT) {
+                logger.warn(
+                    `[getMarketplaceProducts] search scanned the ${PRODUCT_SEARCH_SCAN_LIMIT}-row cap; ` +
+                    `matches beyond it are not shown.`,
+                    { search, category, location },
+                );
+            }
+
+            const matched = filterProductsByQuery(products, search);
+            const paged = pageFilteredProducts(matched as { id?: string }[], lastId, limitCount);
+
+            products = paged.page as typeof products;
+            hasMore = paged.hasMore;
+            newLastId = paged.lastId;
+        } else if (snapshot.docs.length === limitCount) {
+            // No query: the database did the paging, so the page being full is
+            // the signal that another one exists.
             hasMore = true;
             newLastId = snapshot.docs[snapshot.docs.length - 1].id;
         }
 
-        return { error: null, success: true as const, data: { products, lastId: newLastId, hasMore } };
+        // The badge is read live, not served from the product document.
+        //
+        // `sellerVerified` is copied onto a product when it is created and never
+        // updated, so this list showed the badge a seller had at the time of each
+        // listing. Granting the badge did not add it to existing products, and
+        // revoking it did not remove it from any. See lib/seller-trust.ts.
+        //
+        // One read per unique seller, after pagination — so at most `limitCount`
+        // extra reads, and normally far fewer.
+        const withTrust = await hydrateSellerTrust(products as any[], readSeller);
+
+        return { error: null, success: true as const, data: { products: withTrust, lastId: newLastId, hasMore } };
     } catch (error) { 
         logger.error("Get products error:", {
             error: error instanceof Error ? error.message : String(error)
@@ -163,17 +226,23 @@ async function _getProductByIdAction(productId: string): Promise<ActionResponse<
         let product: Product;
 
         if (isFlashSale && data) {
-            // Map to standard product structure
-            let sellerName = "Verified Seller";
+            // Map to standard product structure.
+            //
+            // The fallback name was "Verified Seller", so a flash-sale seller
+            // with no name recorded was LABELLED verified in the name field —
+            // and `sellerVerified` below was the literal `true`, so the shield
+            // was shown too. Neither had anything to do with the seller's badge.
+            // One rule now, in lib/seller-trust.ts, reading the live user doc.
+            let sellerName = SELLER_NAME_FALLBACK;
+            let sellerVerified = false;
             try {
                 if (data.sellerId) {
-                    const sellerDoc = await db.collection(COLLECTIONS.USERS).doc(data.sellerId).get();
-                    if (sellerDoc.exists) {
-                        sellerName = sellerDoc.data()?.businessName || sellerDoc.data()?.displayName || "Verified Seller";
-                    }
+                    const trust = resolveSellerTrust(await readSeller(data.sellerId));
+                    sellerName = trust.sellerName;
+                    sellerVerified = trust.sellerVerified;
                 }
             } catch (err) {
-                logger.error("Failed to fetch seller name for flash sale product:", err);
+                logger.error("Failed to read seller for flash sale product:", err);
             }
 
             const mappedData = {
@@ -198,10 +267,15 @@ async function _getProductByIdAction(productId: string): Promise<ActionResponse<
                 exportReady: false,
                 views: 0,
                 orders: 0,
-                rating: 5,
+                // Was `rating: 5` with reviewCount 0. The card renders a rating
+                // only when `rating > 0`, so every flash-sale product displayed a
+                // perfect score with nothing behind it, and "Highest Rated"
+                // sorting placed all of them above real products with genuine
+                // ratings below 5. Zero means "no reviews yet", which is true.
+                rating: 0,
                 reviewCount: 0,
                 sellerName: sellerName,
-                sellerVerified: true,
+                sellerVerified,
                 createdAt: data.createdAt || new Date(),
                 updatedAt: data.createdAt || new Date(),
                 isFlashSale: true,
@@ -210,16 +284,53 @@ async function _getProductByIdAction(productId: string): Promise<ActionResponse<
                 eventId: data.eventId
             };
 
+            /**
+             * ProductSchema strips what it does not know, and it does not know
+             * about flash sales.
+             *
+             * `isFlashSale`, `originalPrice`, `flashPrice` and `eventId` are
+             * built one line above and are not fields of ProductSchema, so
+             * `.parse()` removed all four — the function assembled the flash-sale
+             * shape and then discarded the part that makes it one.
+             *
+             * /marketplace/products/[id] reads `isFlashSale` to decide whether to
+             * show the sale treatment, and `flashPrice`/`originalPrice` to strike
+             * the old price through. All three arrived undefined, so a flash-sale
+             * product's detail page showed an ordinary product at the sale price
+             * with no sale on it. The buyer LIST does the same mapping in the
+             * browser without the schema, which is why the badge appeared there
+             * and vanished when you clicked it.
+             */
+            const flashFields = {
+                isFlashSale: true,
+                originalPrice: data.price,
+                flashPrice: data.flashPrice,
+                eventId: data.eventId,
+            };
+
             try {
-                product = serializeValue(ProductSchema.parse(mappedData)) as Product;
+                product = { ...(serializeValue(ProductSchema.parse(mappedData)) as Product), ...flashFields } as Product;
             } catch (e) {
                 product = serializeValue(mappedData) as Product;
             }
         } else {
+            // The badge, live, on the ordinary product branch too.
+            //
+            // The first pass at this fixed the FLASH branch above and left this
+            // one serving the product document's own `sellerVerified` — the
+            // create-time snapshot. So the product detail page still showed a
+            // revoked seller as verified. Fixing readers from a hand-written
+            // list is what allowed that; the test now enumerates them.
+            const raw: Record<string, any> = { id: doc.id, ...(data ?? {}) };
+            const trust = resolveSellerTrust(
+                raw.sellerId ? await readSeller(String(raw.sellerId)) : null,
+            );
+            const hydrated = { ...raw, sellerName: raw.sellerName || trust.sellerName, sellerVerified: trust.sellerVerified };
+
             try {
-                product = serializeValue(ProductSchema.parse({ id: doc.id, ...data })) as Product;
+                product = serializeValue(ProductSchema.parse(hydrated)) as Product;
             } catch (e) {
-                product = serializeValue({ id: doc.id, ...data }) as Product;
+                product = serializeValue(hydrated) as Product;
             }
         }
 
@@ -288,8 +399,10 @@ async function _getRecommendedProductsAction(limitCount: number = 3): Promise<Ac
             });
         }
 
-        return { error: null, success: true as const, data: { products } };
-    } catch (error) { 
+        const withTrust = await hydrateSellerTrust(products as any[], readSeller);
+
+        return { error: null, success: true as const, data: { products: withTrust } };
+    } catch (error) {
         logger.error("Get recommended products error:", {
             error: error instanceof Error ? error.message : String(error)
         });
@@ -302,7 +415,11 @@ export const getRecommendedProductsAction = withSafeAction("getRecommendedProduc
 
 
 /**
- * Get related products based on category and location
+ * Get related products in the same category.
+ *
+ * The heading said "based on category and location" and the query has never
+ * touched location — worth saying plainly rather than leaving a description of
+ * a feature that does not exist.
  */
 async function _getRelatedProductsAction(productId: string, limit: number = 4): Promise<ActionResponse<{ products: Product[] }>> { 
     try {
@@ -318,16 +435,23 @@ async function _getRelatedProductsAction(productId: string, limit: number = 4): 
         const snapshot = await db.collection(COLLECTIONS.PRODUCTS)
             .where("category", "==", product.category)
             .where("status", "==", "active")
+            .where("availableQuantity", ">", 0)
             .limit(limit + 1)
             .get();
 
         const { serializeValue } = await import("@/lib/firestore-serialize");
+        // Sold-out rows were included here and excluded everywhere else — the
+        // catalogue search requires availableQuantity > 0 — so the one place a
+        // buyer is offered "you might also like" was the one place that could
+        // offer them something nobody can buy.
         const products = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }))
             .filter((p: any) => p.id !== productId);
 
-        return { error: null, success: true as const, data: { 
-                products: serializeValue(products.slice(0, limit)) 
- } 
+        const withTrust = await hydrateSellerTrust(products.slice(0, limit) as any[], readSeller);
+
+        return { error: null, success: true as const, data: {
+                products: serializeValue(withTrust)
+ }
         };
     } catch (error: any) { 
         logger.error("Get related products error:", error);
@@ -338,21 +462,6 @@ async function _getRelatedProductsAction(productId: string, limit: number = 4): 
 export const getRelatedProductsAction = withSafeAction("getRelatedProductsAction", _getRelatedProductsAction);
 
 
-const categoryMapping: Record<string, string[]> = {
-    grains: ["grains", "cereal", "cereals"],
-    roots: ["roots", "roots_tubers", "roots & tubers", "tuber", "tubers", "yam", "yams", "cassava"],
-    vegetables: ["vegetables", "vegetable", "horticultural"],
-    fruits: ["fruits", "fruit"],
-    nuts: ["nuts", "nut", "seed", "seeds", "sesame", "sesame seeds", "sesame_seeds"],
-    spices: ["spices", "spices_herbs_seasonings", "spices & herbs", "spices_herbs", "hibiscus", "zobo"],
-    livestock: ["livestock"],
-    poultry: ["poultry"],
-    dairy: ["dairy", "dairy & eggs", "dairy_eggs"],
-    processed: ["processed", "processed foods", "processed_foods", "natural_oils", "beverages"],
-    organic: ["organic", "organics"],
-    sea_foods: ["sea_foods", "fishery"],
-    fishery: ["fishery", "sea_foods"],
-};
 
 
 /**
@@ -371,7 +480,7 @@ async function _searchProductsAction(params: { query?: string;
             .where("availableQuantity", ">", 0);
 
         if (params.category && params.category !== "All Categories") {
-            const mapped = categoryMapping[params.category.toLowerCase()] || [params.category];
+            const mapped = categorySpellings(params.category);
             if (mapped.length > 1) {
                 query = query.where("category", "in", mapped);
             } else {
@@ -393,14 +502,22 @@ async function _searchProductsAction(params: { query?: string;
             query = query.orderBy("createdAt", "desc");
         }
 
-        if (params.lastId) { 
+        /**
+         * Same correction as getMarketplaceProductsAction: with a query, read a
+         * bounded window and page the matches. The filter at the bottom of this
+         * function ran after `.limit(12)`, so a search saw twelve rows of the
+         * catalogue and reported what it found among them.
+         */
+        const searching = typeof params.query === "string" && params.query.trim() !== "";
+
+        if (params.lastId && !searching) {
             const lastDoc = await db.collection(COLLECTIONS.PRODUCTS).doc(params.lastId).get();
             if (lastDoc.exists) {
                 query = query.startAfter(lastDoc);
             }
         }
 
-        query = query.limit(limit);
+        query = query.limit(searching ? PRODUCT_SEARCH_SCAN_LIMIT : limit);
 
         let snapshot;
         let indexError = false;
@@ -415,7 +532,7 @@ async function _searchProductsAction(params: { query?: string;
                 // Fallback: simple query with status and category
                 let fallbackQuery = db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active");
                 if (params.category && params.category !== "All Categories") {
-                    const mapped = categoryMapping[params.category.toLowerCase()] || [params.category];
+                    const mapped = categorySpellings(params.category);
                     if (mapped.length > 1) {
                         fallbackQuery = fallbackQuery.where("category", "in", mapped);
                     } else {
@@ -431,8 +548,8 @@ async function _searchProductsAction(params: { query?: string;
 
         // DISEASE 5 FIX: serialize before any in-memory processing
         let productsData = serializeDocs(snapshot.docs);
-        let lastVisible = indexError ? null : snapshot.docs[snapshot.docs.length - 1];
-        let hasMore = indexError ? false : snapshot.docs.length === limit;
+        let lastVisible = indexError || searching ? null : snapshot.docs[snapshot.docs.length - 1];
+        let hasMore = indexError || searching ? false : snapshot.docs.length === limit;
 
         if (indexError) {
             // Apply availableQuantity filter
@@ -463,19 +580,23 @@ async function _searchProductsAction(params: { query?: string;
                 });
             }
             
-            // Apply pagination in memory
-            if (params.lastId) {
-                const startIndex = productsData.findIndex((p: any) => p.id === params.lastId);
-                if (startIndex !== -1) {
-                    productsData = productsData.slice(startIndex + 1);
+            // Apply pagination in memory — unless a query is running, in which
+            // case the matches are paged below and slicing here would take the
+            // page BEFORE the filter all over again.
+            if (!searching) {
+                if (params.lastId) {
+                    const startIndex = productsData.findIndex((p: any) => p.id === params.lastId);
+                    if (startIndex !== -1) {
+                        productsData = productsData.slice(startIndex + 1);
+                    }
                 }
-            }
-            
-            hasMore = productsData.length > limit;
-            productsData = productsData.slice(0, limit);
-            if (productsData.length > 0) {
-                const lastId = productsData[productsData.length - 1].id;
-                lastVisible = snapshot.docs.find(d => d.id === lastId) || null;
+
+                hasMore = productsData.length > limit;
+                productsData = productsData.slice(0, limit);
+                if (productsData.length > 0) {
+                    const lastId = productsData[productsData.length - 1].id;
+                    lastVisible = snapshot.docs.find(d => d.id === lastId) || null;
+                }
             }
         }
 
@@ -487,43 +608,48 @@ async function _searchProductsAction(params: { query?: string;
             }
         });
 
-        // Fetch seller names (optimize this with a separate user index/cache later)
-        const productsWithSellers = await Promise.all(
-            products.map(async (product) => { 
-                let sellerName = "Unknown Seller";
-                if (product.sellerId) {
-                    if (product.sellerName) {
-                        sellerName = product.sellerName; 
-                    } else { 
-                        const userRef = db.collection(COLLECTIONS.USERS).doc(product.sellerId);
-                        const userSnap = await userRef.get();
-                        if (userSnap.exists) {
-                            const userData = userSnap.data();
-                            sellerName = userData?.businessName || userData?.displayName || "Unknown Seller";
-                        }
-                    }
-                }
-                return { ...product, sellerName };
-            })
-        );
+        // Seller name AND badge, both live, one read per unique seller.
+        //
+        // This block used to read a user document per PRODUCT that had no
+        // denormalised sellerName — the comment said "optimize this with a
+        // separate user index/cache later" — and it never touched
+        // sellerVerified, so search results served the create-time snapshot of
+        // the badge. Batching by unique sellerId fixes both at once: fewer reads
+        // than before AND a badge that reflects a revocation.
+        //
+        // "Unknown Seller" was a fourth spelling of the missing-name fallback,
+        // after "Verified Seller", "Easy Sales Seller" and the ProductSchema
+        // default. One spelling now, and not a claim.
+        const productsWithSellers = await hydrateSellerTrust(products as any[], readSeller);
 
         let finalProducts = productsWithSellers;
-        if (params.query) { 
-            const lowerQuery = params.query.toLowerCase();
-            finalProducts = finalProducts.filter(p =>
-                p.title?.toLowerCase()?.includes(lowerQuery) ||
-                p.description?.toLowerCase()?.includes(lowerQuery)
-            );
+        let outLastId: string | undefined = lastVisible ? lastVisible.id : undefined;
+
+        if (searching) {
+            if (snapshot.docs.length >= PRODUCT_SEARCH_SCAN_LIMIT) {
+                logger.warn(
+                    `[searchProducts] scanned the ${PRODUCT_SEARCH_SCAN_LIMIT}-row cap; ` +
+                    `matches beyond it are not shown.`,
+                    { query: params.query, category: params.category, state: params.state },
+                );
+            }
+
+            const matched = filterProductsByQuery(finalProducts, params.query);
+            const paged = pageFilteredProducts(matched as { id?: string }[], params.lastId, limit);
+
+            finalProducts = paged.page as typeof finalProducts;
+            hasMore = paged.hasMore;
+            outLastId = paged.lastId;
         }
 
         const { serializeValue } = await import("@/lib/firestore-serialize");
-        return { 
-            error: null, 
-            success: true as const, 
-            data: { 
-                products: serializeValue(finalProducts), 
-                lastId: lastVisible ? lastVisible.id : undefined, 
-                hasMore: hasMore 
+        return {
+            error: null,
+            success: true as const,
+            data: {
+                products: serializeValue(finalProducts),
+                lastId: outLastId,
+                hasMore: hasMore
             }
         };
 

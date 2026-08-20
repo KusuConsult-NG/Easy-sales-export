@@ -97,18 +97,56 @@ describe('the approval backlog counts listings awaiting approval', () => {
         // fourth from inventing its own answer.
         const { AWAITING_REVIEW_STATUSES } = require('@/lib/land-listing-status');
 
-        expect(AWAITING_REVIEW_STATUSES).toEqual(['pending_verification']);
+        // `inspection_scheduled` was added, and this assertion is what caught it.
+        // It used to pin ['pending_verification'] alone, which was the set the
+        // dashboards counted while the admin queue an operator actually works
+        // from counted pending_verification AND inspection_scheduled. Two numbers
+        // from the same collection, differing by every outstanding inspection.
+        expect([...AWAITING_REVIEW_STATUSES].sort())
+            .toEqual(['inspection_scheduled', 'pending_verification']);
         expect(source('src/app/actions/global-aggregation.ts')).toContain('AWAITING_REVIEW_STATUSES');
         expect(source('src/services/analytics.service.ts')).toContain('AWAITING_REVIEW_STATUSES');
     });
 
+    it('queries the whole set, never just its first element', () => {
+        // The trap the widening exposed. Both call sites wrote
+        // `AWAITING_REVIEW_STATUSES[0]` — correct while the set had one element,
+        // and a silent undercount from the moment it had two. Using the shared
+        // constant is not enough on its own; it has to be used as a set.
+        for (const rel of [
+            'src/app/actions/global-aggregation.ts',
+            'src/services/analytics.service.ts',
+        ]) {
+            // Comment lines are stripped first. global-aggregation.ts explains the
+            // trap in a comment that names `AWAITING_REVIEW_STATUSES[0]`
+            // verbatim, and a substring check over the whole file flagged the
+            // explanation as the defect. Recorded here so the stripping is not
+            // mistaken for a loophole and removed.
+            const code = source(rel)
+                .split('\n')
+                .filter((l) => !l.trim().startsWith('//') && !l.trim().startsWith('*'))
+                .join('\n');
+
+            expect(code).not.toContain('AWAITING_REVIEW_STATUSES[0]');
+            expect(code).toContain('"status", "in", [...AWAITING_REVIEW_STATUSES]');
+        }
+    });
+
     it('agrees with the screens that were already right', () => {
         // farm-nation-admin.ts and admin-content.ts were correct all along, and
-        // are the reason the right answer was knowable.
-        expect(source('src/app/actions/farm-nation-admin/_fna_verifications.ts'))
-            .toContain('where("status", "==", "pending_verification")');
-        expect(source('src/app/actions/admin-content.ts'))
-            .toContain('where("status", "==", "pending_verification")');
+        // are the reason the right answer was knowable. Both now read the same
+        // constant as the dashboards, so "correct all along" no longer depends on
+        // four files independently choosing the same literal.
+        //
+        // Asserted as the absence of the literal AND the presence of the
+        // constant: either alone can be satisfied while the other drifts.
+        for (const rel of [
+            'src/app/actions/farm-nation-admin/_fna_verifications.ts',
+            'src/app/actions/admin-content.ts',
+        ]) {
+            expect(source(rel)).not.toContain('where("status", "==", "pending_verification")');
+            expect(source(rel)).toContain('AWAITING_REVIEW_STATUSES');
+        }
     });
 });
 

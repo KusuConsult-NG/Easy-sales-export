@@ -5,6 +5,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { requireAdmin } from "@/lib/require-admin";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { logger } from "@/lib/logger";
+import { recordAdminAction } from "@/lib/audit-log";
 
 /**
  * 1. The Migration Script: Fixing Corrupted Transaction Records
@@ -54,6 +55,22 @@ export async function repairDataAction() { const authCheck = await requireAdmin(
 
         if (walletCount > 0) { await walletBatch.commit();
         }
+
+        /**
+         * A BULK MUTATION OF PAYMENT AND WALLET ROWS, RECORDED NOWHERE.
+         *
+         * This rewrites timestamps across PROCESSED_PAYMENTS and
+         * WALLET_TRANSACTIONS and left no trace of who ran it or what it
+         * touched. The #66 ratchet did not catch it: that check matches writes
+         * gated on hasAdminPermission(), and this is gated on requireAdmin() —
+         * the same blind spot that hid the dispute resolver until #157.
+         */
+        await recordAdminAction({
+            action: 'data_recovery_run',
+            userId: authCheck.userId,
+            targetType: 'timestamp_repair',
+            metadata: { paymentRecordsHealed: count, walletRecordsHealed: walletCount },
+        });
 
         return {
             error: null,

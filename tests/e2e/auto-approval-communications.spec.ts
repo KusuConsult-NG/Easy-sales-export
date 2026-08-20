@@ -13,7 +13,20 @@ test.describe('E2E: Auto-Approval and Communications Hub Filters', () => {
         await page.waitForLoadState('load');
 
         // 3. Select Academy Users audience radio
-        const academyRadio = page.locator('input[value="academy_users"]');
+        //
+        // Addressed by role, not by input[value=...]. The attribute selector hit
+        // a strict mode violation — "resolved to 2 elements", both the same
+        // radio — which is a transient during hydration, not two radios on the
+        // page: sampling the DOM from navigation-commit shows the duplicate
+        // appear and disappear within about a tenth of a second while React
+        // reconciles, and the settled page has one.
+        //
+        // Playwright's own error is the evidence for which element survives in
+        // the accessibility tree: it named the first getByRole('radio', ...) and
+        // the second getByLabel(...).nth(1). Addressing by role therefore
+        // resolves to one element throughout, and asserts what a user actually
+        // operates rather than an attribute value.
+        const academyRadio = page.getByRole('radio', { name: /Academy Users/i });
         await expect(academyRadio).toBeVisible();
         await academyRadio.click();
 

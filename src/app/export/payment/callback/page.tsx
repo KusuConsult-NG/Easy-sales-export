@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { verifyInvestmentPaymentAction } from "@/app/actions/export-payment";
+import { verifyExportInvestmentAction } from "@/app/actions/export";
 import { CheckCircle, XCircle, Loader2, Home, TrendingUp } from "lucide-react";
 import Link from "next/link";
 
@@ -24,7 +25,34 @@ function PaymentCallbackContent() {
             }
 
             try {
-                const result = await verifyInvestmentPaymentAction(reference) as any;
+                // Which of the two investment flows came back here.
+                //
+                // The platform initiates an export investment from two places,
+                // and they are different subsystems, not two names for one:
+                //
+                //   initializeInvestmentPaymentAction  creates a pending
+                //   (export-payment.ts)                EXPORT_INVESTMENTS record
+                //                                      first, and its verifier
+                //                                      looks that record up.
+                //
+                //   investInExportAction               creates nothing up front;
+                //   (export/_ex_investments.ts)        its verifier writes an
+                //                                      EXPORT_SLOTS row.
+                //
+                // investInExportAction used to name /dashboard/export/verify as
+                // its callback — a route segment that does not exist at all — so
+                // an investor paying through it was charged and landed on a 404
+                // with nothing fulfilled. Simply redirecting it here would not
+                // have helped: the default verifier below would look for an
+                // EXPORT_INVESTMENTS record that action never creates and answer
+                // "Investment record not found".
+                //
+                // An absent flow means the pre-existing pair, so the live path
+                // is unchanged.
+                const flow = searchParams.get("flow");
+                const result = (flow === "window"
+                    ? await verifyExportInvestmentAction(reference)
+                    : await verifyInvestmentPaymentAction(reference)) as any;
 
                 if (result.success ) {
                     setStatus("success");

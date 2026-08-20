@@ -164,6 +164,123 @@ export function gradeModuleQuiz(
 }
 
 /**
+ * Removes the paid material from a course the viewer's plan does not open.
+ *
+ * THE TIER GATE WAS APPLIED EVERYWHERE EXCEPT WHERE THE CONTENT IS SERVED
+ * ----------------------------------------------------------------------
+ * checkCourseAccess decides which tiers a learner's plan opens, and it is
+ * consulted in three places: the enrolment action refuses on it, the course page
+ * redirects on it, and the catalogue draws a padlock on it.
+ *
+ * getCourseByIdAction consulted it nowhere. It returned the whole course
+ * document — every lesson's videoUrl, documentUrl, excelUrl and body text — to
+ * any caller, and getCoursesAction returned up to `limit` of them the same way.
+ * Neither requires a session at all.
+ *
+ * So the padlock on the catalogue card and the redirect on the course page were
+ * drawn AFTER the browser already held the material they were hiding, and a
+ * caller who never loaded either page could ask for it directly. The tier a
+ * learner pays for gated the enrolment record and not the videos.
+ *
+ * The outline survives — module and lesson titles, ordering, durations, the
+ * quiz's existence — because that is the course description a prospective buyer
+ * is meant to see. What goes is the material itself.
+ *
+ * `locked: true` is set on each stripped lesson so a client can tell "this
+ * lesson has no video" apart from "you cannot see this lesson's video yet".
+ */
+export function stripLockedContent<T>(course: T): T {
+    const c = course as any;
+    if (!c || !Array.isArray(c.modules)) return course;
+
+    return {
+        ...c,
+        modules: c.modules.map((mod: any) => ({
+            ...mod,
+            lessons: Array.isArray(mod?.lessons)
+                ? mod.lessons.map((lesson: any) => {
+                    // Deleted, not blanked: a client reading `videoUrl` cannot
+                    // tell an empty string from a withheld one, and anything
+                    // iterating keys would still see the field. Same reasoning
+                    // as stripAnswerKey below.
+                    const {
+                        content: _content,
+                        videoUrl: _video,
+                        documentUrl: _document,
+                        excelUrl: _excel,
+                        ...rest
+                    } = lesson ?? {};
+                    return { ...rest, locked: true };
+                })
+                : mod?.lessons,
+        })),
+    };
+}
+
+/** A question as the admin quiz editor stores it, in COLLECTIONS.ACADEMY_QUIZZES. */
+export interface EditorQuizQuestion {
+    id: string;
+    text: string;
+    options: Array<{ id: string; text: string; isCorrect: boolean }>;
+}
+
+/**
+ * Converts the admin editor's questions into the shape the learner is graded on.
+ *
+ * A THIRD QUIZ STORE, WHICH NOTHING READ
+ * --------------------------------------
+ * The header above names two storages, COLLECTIONS.QUIZZES and
+ * course.modules[].quiz. There is a third: COLLECTIONS.ACADEMY_QUIZZES.
+ *
+ * saveQuizAction writes it, getQuizAction reads it back, and both are called by
+ * one page — /admin/academy/[courseId]/quiz/[quizId], the editor reached from
+ * the "Edit Quiz" button on every quiz lesson in the course editor. That is the
+ * ONLY quiz-authoring screen the admin UI links to.
+ *
+ * No learner path reads that collection. /academy/[courseId]/quiz/[moduleId]
+ * loads the quiz from course.modules[].quiz through getCourseByIdAction, and
+ * _submitQuizScoreAction grades against the same place. So an admin could write
+ * a quiz, be told it was saved, read it back in the editor unchanged — and the
+ * learners were served nothing, because `module.quiz` was still undefined.
+ *
+ * `if (courseModule?.quiz && graded.passed)` in _submitQuizScoreAction is why
+ * this was quiet: with no quiz on the module the submission scored zero out of
+ * zero and the module was simply never completed.
+ *
+ * The editor's shape carries the correct answer as a flag on each option; the
+ * graded shape carries it as the index of the correct option. saveQuizAction
+ * already refuses a question that does not have exactly one correct option, so
+ * the index below is always found.
+ */
+export function editorQuestionsToModuleQuiz(
+    questions: EditorQuizQuestion[]
+): ModuleQuizQuestion[] {
+    return (questions ?? []).map((q) => {
+        const options = q.options ?? [];
+        const index = options.findIndex((o) => o.isCorrect);
+
+        return {
+            id: q.id,
+            question: q.text,
+            options: options.map((o) => o.text),
+            // NOT -1 when nothing is marked correct.
+            //
+            // gradeModuleQuiz scores a question when
+            // `typeof correctAnswer === "number" && answers[id] === correctAnswer`,
+            // so storing -1 makes a submission of -1 a correct answer — a free
+            // point on a question that has no right answer at all. Leaving it
+            // undefined is what that guard was written for, and matches the
+            // reasoning already applied to gradeStoredQuiz's missing points.
+            //
+            // saveQuizAction refuses a question without exactly one correct
+            // option, so this arises only if the helper is reused elsewhere.
+            // That is precisely when a quiet -1 would be missed.
+            correctAnswer: index >= 0 ? index : undefined,
+        };
+    }) as ModuleQuizQuestion[];
+}
+
+/**
  * Removes the answer key from a course before it is sent to a learner.
  *
  * Returns a copy — mutating the document read from the database would strip the

@@ -52,6 +52,7 @@ import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { isPlausibleEmail, MAX_CSV_RECIPIENTS } from '@/lib/broadcast-logic';
+import { hasAdminPermission, isAdmin } from '@/lib/admin-permissions';
 
 function source(rel: string): string {
     return readFileSync(join(process.cwd(), rel), 'utf-8');
@@ -189,11 +190,30 @@ describe('what was already right', () => {
     });
 });
 
-describe('recorded, not fixed', () => {
-    it('ten roles can broadcast to the whole platform', () => {
-        // The isAdmin/matrix divergence from admin-route-authority.test.ts,
-        // noted here because this is where its blast radius is largest: support
-        // and every module admin can email the entire user base.
-        expect(route).toContain('isAdmin(session.user.roles)');
+describe('who may broadcast to the whole platform', () => {
+    it('asks the matrix, not "is this some kind of admin"', () => {
+        // FIXED. This was recorded here rather than in
+        // admin-route-authority.test.ts because this is where the isAdmin/matrix
+        // divergence had its largest blast radius: every module admin could
+        // email the entire user base.
+        //
+        // "announcements:manage" is the matrix's own name for this, and it
+        // belongs to super_admin and admin alone. See
+        // admin-permission-gates.test.ts for the full sweep.
+        expect(route).toContain('hasAdminPermission(session.user.roles, "announcements:manage")');
+        expect(route).not.toContain('!isAdmin(session.user.roles)');
+    });
+
+    it('which no module admin holds', () => {
+        // Vacuity guard: the assertion above is only worth anything if the
+        // permission actually excludes somebody isAdmin() admitted.
+        for (const role of ['academy_admin', 'wave_admin', 'export_admin',
+                            'marketplace_admin', 'cooperative_admin', 'farm_nation_admin']) {
+            expect(hasAdminPermission([role], 'announcements:manage')).toBe(false);
+            expect(isAdmin([role])).toBe(true);
+        }
+
+        expect(hasAdminPermission(['admin'], 'announcements:manage')).toBe(true);
+        expect(hasAdminPermission(['super_admin'], 'announcements:manage')).toBe(true);
     });
 });

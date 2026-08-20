@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { filterByLoanProduct } from "@/lib/loan-product";
 import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { loanApplicationSchema,
@@ -14,11 +15,16 @@ import { calculateRepaymentTerms } from "@/lib/loan-terms";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import { logger } from "@/lib/logger";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { creditWalletOnce, debitWalletLocked, claimSingleOpenLoanApplication } from "@/lib/wallet-ledger";
-import { needsDualControl } from "@/lib/loan-approval-policy";
+import {
+    needsDualControl,
+    guarantorBlocksApproval,
+    GUARANTOR_UNVERIFIED_MESSAGE,
+} from "@/lib/loan-approval-policy";
 
 /**
  * Submit a new loan application
@@ -72,6 +78,10 @@ export async function submitLoanApplication(
                 row: {
                     ...validated,
                     userId: session.user.id,
+                    // Which product this is. LOAN_APPLICATIONS holds two, and
+                    // no row said which, so every admin queue showed both.
+                    // See lib/loan-product.ts.
+                    loanProduct: "business" as const,
                     status: LoanStatus.PENDING,
                     guarantorVerified: true, // General loans have no guarantor and are pre-verified
                     // interestRate is a MONTHLY percentage. See src/lib/loan-terms.ts —
@@ -155,7 +165,27 @@ export async function getLoanApplication(loanId: string) { const sessionResult =
         const data = loanDoc.data()!;
 
         // Check authorization - user can only view their own loans unless admin
-        if (data.userId !== session.user.id && !(session.user.roles?.includes('admin') || session.user.roles?.includes('super_admin'))) { return { success: false as const, error: "Unauthorized to view this loan", loan: null, data: null };
+        //
+        // "cooperatives:approve_loans", not a hand-written ['admin',
+        // 'super_admin'].
+        //
+        // This file is the THIRD door onto LOAN_APPLICATIONS — alongside
+        // cooperative/_loans_decisions.ts and
+        // api/admin/cooperative/approve-loan — and it was the only one still
+        // naming roles instead of asking PERMISSION_MATRIX. The list it named
+        // omits `cooperative_admin`, which is the role whose entire job this
+        // is: the matrix grants it "cooperatives:approve_loans" and the other
+        // two doors honour that. So a cooperative administrator could approve a
+        // loan through two paths and was refused by the third, for the same
+        // application in the same collection.
+        //
+        // Narrower than the matrix rather than wider, so this was a lockout
+        // rather than a hole — but a rule that disagrees with the platform's
+        // own answer is how the other five hand-written role sets in this
+        // codebase went wrong. Five checks in this file, all the same
+        // substitution; `admin` and `super_admin` both hold the permission, so
+        // nobody who could act before loses the ability.
+        if (data.userId !== session.user.id && !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) { return { success: false as const, error: "Unauthorized to view this loan", loan: null, data: null };
         }
 
         const loan = serializeDoc<LoanApplication>(loanDoc.id, data);
@@ -171,7 +201,7 @@ export async function getLoanApplication(loanId: string) { const sessionResult =
 export async function getPendingLoanApplications() { const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
-    if (!session || !(session.user.roles?.includes('admin') || session.user.roles?.includes('super_admin'))) { return { success: false as const, error: "Unauthorized - Admin only", loans: [], data: null };
+    if (!session || !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) { return { success: false as const, error: "Unauthorized - Admin only", loans: [], data: null };
     }
 
     try { const loansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
@@ -179,7 +209,18 @@ export async function getPendingLoanApplications() { const sessionResult = await
             .orderBy('createdAt', 'desc');
 
         const snapshot = await loansQuery.get();
-        const loans = serializeDocs<LoanApplication>(snapshot.docs);
+
+        // ONE COLLECTION, TWO PRODUCTS. This queue is /loans/approve, the
+        // BUSINESS door — collateral and business details, no membership, no
+        // guarantor, no savings cap. It filtered on status alone, so it also
+        // listed every pending cooperative application, whose underwriting is
+        // entirely different and invisible here.
+        //
+        // Filtered in memory rather than with a `where`: rows written before
+        // the discriminator existed carry no value, and a where clause would
+        // silently drop every one of them. See lib/loan-product.ts.
+        const businessDocs = filterByLoanProduct(snapshot.docs, 'business');
+        const loans = serializeDocs<LoanApplication>(businessDocs);
 
         return { error: null, success: true as const, data: loans };
     } catch (error) { return { success: false as const, error: "Failed to fetch pending loans", data: null };
@@ -194,7 +235,7 @@ export async function approveLoanApplication(
 ) { const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
-    if (!session || !(session.user.roles?.includes('admin') || session.user.roles?.includes('super_admin'))) { return { success: false as const, error: "Unauthorized - Admin only", data: null };
+    if (!session || !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) { return { success: false as const, error: "Unauthorized - Admin only", data: null };
     }
 
     try {
@@ -271,6 +312,31 @@ export async function approveLoanApplication(
             }
 
             return { error: null, success: true as const, data: null };
+        }
+
+        // A guarantor who has not been verified blocks approval — the third
+        // door finally applying the control the other two already do.
+        //
+        // getPendingLoanApplications above filters on `status == PENDING` and
+        // nothing else, so this queue contains EVERY pending row in
+        // LOAN_APPLICATIONS — including cooperative applications, which record
+        // a guarantor and require an admin to verify them through
+        // /api/admin/cooperative/verify-guarantor.
+        //
+        // cooperative/_loans_decisions.ts and api/admin/cooperative/approve-loan
+        // both call guarantorBlocksApproval. This one did not. So the same
+        // application, with the same unverified guarantor, was refused on two
+        // screens and approved on the third — and /loans/approve is the screen
+        // an admin reaches from the "Loan Application" notification that
+        // admin/_loans.ts sends.
+        //
+        // Safe for the business-loan product this file was written for:
+        // guarantorBlocksApproval is false when no guarantor is recorded, and
+        // the schema /loans/apply validates against has no guarantor fields at
+        // all. Only an unverified-guarantor cooperative application is newly
+        // refused, which is precisely the control being restored.
+        if (guarantorBlocksApproval(loanData)) {
+            return { success: false as const, error: GUARANTOR_UNVERIFIED_MESSAGE, data: null };
         }
 
         const requiresDualControl = needsDualControl(loanData.amount);
@@ -397,7 +463,7 @@ export async function approveLoanApplication(
 export async function disburseLoan(loanId: string, disbursementNotes?: string) { const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
     const { session } = sessionResult;
-    if (!session || !(session.user.roles?.includes('admin') || session.user.roles?.includes('super_admin'))) { return { success: false as const, error: "Unauthorized - Admin only"};
+    if (!session || !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) { return { success: false as const, error: "Unauthorized - Admin only"};
     }
 
     try {
@@ -558,7 +624,7 @@ export async function disburseLoan(loanId: string, disbursementNotes?: string) {
 export async function getLoanStatistics() { const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
-    if (!session || !(session.user.roles?.includes('admin') || session.user.roles?.includes('super_admin'))) { return { success: false as const, error: "Unauthorized - Admin only", stats: null, data: null };
+    if (!session || !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) { return { success: false as const, error: "Unauthorized - Admin only", stats: null, data: null };
     }
 
     try { // Optimization: Select only necessary fields to reduce bandwidth

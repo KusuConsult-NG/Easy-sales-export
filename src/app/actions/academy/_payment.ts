@@ -14,7 +14,14 @@ import { rateLimit } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { getBaseUrl } from "@/lib/server-utils";
-import { ACADEMY_CONFIG } from "@/lib/constants";
+import { checkOrderPaymentAmount } from "@/lib/order-payment-amount";
+import { isDecidedAgainst } from "@/lib/registration-progress";
+import {
+    checkAcademyPayment,
+    normaliseAcademyPlan,
+    academyPlanFee,
+    DEFAULT_ACADEMY_PLAN,
+} from "@/lib/academy-plan";
 
 const paymentLimiter = rateLimit(rateLimitConfig.payment);
 
@@ -97,8 +104,15 @@ export async function initializeEnrollmentPaymentAction(
         if (existingEnrollment.exists) { return { error: "You are already enrolled in this course", success: false as const, data: null };
         }
 
+        // /academy/verify-payment is not a page. Paying for a course enrolment
+        // charged the learner and dropped them on a 404, and the Paystack
+        // webhook has no `academy_enrollment` case, so the verify action that
+        // missing page would have called was the only thing that could enrol
+        // them. `flow=enrollment` picks that verifier on the callback page,
+        // which otherwise defaults to the registration one and would have
+        // refused this payment as the wrong type.
         const baseUrl = await getBaseUrl();
-        const callbackUrl = `${baseUrl}/academy/verify-payment`;
+        const callbackUrl = `${baseUrl}/academy/payment/callback?flow=enrollment`;
 
         // Initialize payment with Paystack
         const { authorizationUrl, reference } = await initializePaystackPayment(
@@ -189,14 +203,29 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
         const courseData = courseDoc.data();
         const expectedPrice = courseData?.price || 0;
 
-        // Verify paid amount matches course price (allow slight epsilon for potential floating point issues, though unlikely with Paystack)
-        if (Math.abs(amountInNaira - expectedPrice) > 50) { // 50 Naira margin for safety/fees? No, should be exact. Let's make it tight. 
-            // Actually, Paystack returns exact amount paid. 
-            // If the user paid less, we reject.
-            if (amountInNaira < expectedPrice) {
-                logger.warn(`Price mismatch for course ${metadata.courseId}. Expected ${expectedPrice}, got ${amountInNaira}`);
-                return { success: false as const, error: `Payment amount (${amountInNaira}) does not match current course price (${expectedPrice}).` , data: null };
-            }
+        // Underpayment is refused — at any size.
+        //
+        // The check here was nested:
+        //
+        //     if (Math.abs(paid - expected) > 50) {
+        //         if (paid < expected) { reject }
+        //     }
+        //
+        // so the reject was unreachable for any shortfall of ₦50 or less. The
+        // outer condition was written as a float-tolerance guard and the comment
+        // beside it argues with itself — "50 Naira margin for safety/fees? No,
+        // should be exact" — and then leaves the 50 in. Paying ₦50 under the
+        // course price was accepted, silently, on every course.
+        //
+        // checkOrderPaymentAmount is the rule the marketplace order path already
+        // uses: it refuses any shortfall beyond one naira of rounding slack, and
+        // ACCEPTS overpayment rather than stranding a learner who has been
+        // charged. That is what the nested version did by accident on the
+        // overpayment side, and what it failed to do on the underpayment side.
+        const amountVerdict = checkOrderPaymentAmount(amountInNaira, expectedPrice);
+        if (!amountVerdict.ok) {
+            logger.warn(`Price mismatch for course ${metadata.courseId}. Expected ${expectedPrice}, got ${amountInNaira}`);
+            return { success: false as const, error: `Payment amount (${amountInNaira}) does not match current course price (${expectedPrice}).`, data: null };
         }
 
         // "SECURITY FIX #4: Use Firestore transaction for atomicity" provided
@@ -216,23 +245,64 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
             metadata: { courseId: metadata.courseId, enrollmentId },
         });
 
+        // The enrolment record, written the same way whichever branch runs.
+        //
+        // TWO COLLECTIONS, ONE ENROLMENT
+        // ------------------------------
+        // The duplicate branch below used to write COLLECTIONS.ACADEMY_ENROLLMENTS
+        // while the primary branch updated COLLECTIONS.ENROLLMENTS. They are
+        // different tables, and the choice depended on whether the payment had
+        // already been claimed.
+        //
+        // That mattered because the admin Academy enrolments report
+        // (_ac_admin_reports.ts) and the platform enrolment metrics
+        // (userMetrics.service.ts) both read ACADEMY_ENROLLMENTS. So the only
+        // enrolments they could see were the ones produced by a DUPLICATE
+        // delivery — the recovery branch was healing the table the admin reads,
+        // and the path that actually enrols somebody was writing elsewhere.
+        //
+        // Both branches now write both: ENROLLMENTS is what
+        // initializeEnrollmentPaymentAction created and what dashboard.ts reads,
+        // and the ACADEMY_ENROLLMENTS mirror is what the admin sees. Neither
+        // reader is repointed, so nothing that works today stops working.
+        const mirrorEnrolmentForAdmin = async () => {
+            try {
+                await db.collection(COLLECTIONS.ACADEMY_ENROLLMENTS).doc(enrollmentId).set({
+                    userId: session.user.id,
+                    courseId: metadata.courseId,
+                    courseTitle: courseData?.title ?? metadata.courseTitle ?? null,
+                    status: "active",
+                    paymentStatus: "completed",
+                    paymentReference: reference,
+                    amount: amountInNaira,
+                    enrolledAt: FieldValue.serverTimestamp(),
+                }, { merge: true });
+            } catch (syncErr: unknown) {
+                // Non-fatal: the learner is enrolled either way, and the mirror
+                // is a reporting copy.
+                logger.warn(`[verifyEnrollmentPaymentAction] Enrollment mirror failed (non-fatal): ${String(syncErr)}`);
+            }
+        };
+
         if (!claim.claimed) {
             // Already applied, by the webhook or by an earlier delivery. Sync
             // the enrolment doc so the user is not told verification failed
             // after paying, then report success — a duplicate is a success.
             logger.info(`[verifyEnrollmentPaymentAction] Payment ${reference} already claimed — syncing enrollment status.`);
             try {
-                await db.collection(COLLECTIONS.ACADEMY_ENROLLMENTS ?? "academy_enrollments").doc(enrollmentId).set({
+                await db.collection(COLLECTIONS.ENROLLMENTS).doc(enrollmentId).set({
                     userId: session.user.id,
                     courseId: metadata.courseId,
                     status: "active",
                     paymentStatus: "completed",
                     paymentReference: reference,
-                    enrolledAt: FieldValue.serverTimestamp(),
+                    paymentVerifiedAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp(),
                 }, { merge: true });
             } catch (syncErr: unknown) {
                 logger.warn(`[verifyEnrollmentPaymentAction] Enrollment sync failed (non-fatal): ${String(syncErr)}`);
             }
+            await mirrorEnrolmentForAdmin();
             return { error: null, success: true as const, data: null };
         }
 
@@ -245,6 +315,8 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
                 paymentStatus: "completed",
                 paymentVerifiedAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp() });
+
+            await mirrorEnrolmentForAdmin();
 
             // Increment course student count.
             //
@@ -297,22 +369,41 @@ async function _initiateAcademyPaymentAction(plan: "foundation" | "standard" | "
             return { error: null, success: true as const, data: { paymentUrl: "/academy/application" } };
         }
 
+        // DO NOT TAKE MONEY YOU WILL NOT HONOUR.
+        //
+        // Paying the registration fee is what admits an Academy applicant —
+        // verifyAcademyPaymentAction and the webhook both auto-approve on it. So
+        // a rejected applicant who reached this page paid ₦45,000 and had their
+        // rejection overwritten. Both fulfilment paths now refuse to approve
+        // over a decision; this refuses to charge for one in the first place,
+        // which is the half that leaves nothing to refund.
+        const decidedStatus = userDoc.data()?.serviceRegistrations?.academy?.status;
+        if (isDecidedAgainst(decidedStatus)) {
+            return {
+                error: "Your Academy application is not currently approved, so this payment cannot be started. "
+                    + "Please contact support or submit a new application.",
+                success: false as const,
+                data: null,
+            };
+        }
+
         const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
         if (!paystackSecretKey) {
             return { error: "Payment system not configured", success: false as const , data: null };
         }
 
-        let amount: number = ACADEMY_CONFIG.plans.foundation.fee; // Default to Foundation
-        let planToStore = plan;
-
-        if (plan === "foundation") {
-            amount = ACADEMY_CONFIG.plans.foundation.fee;
-        } else if (plan === "standard" || (plan as string) === "advanced") {
-            amount = ACADEMY_CONFIG.plans.standard.fee;
-            planToStore = "standard";
-        } else if (plan === "elite") {
-            amount = ACADEMY_CONFIG.plans.elite.fee;
-        }
+        // The plan charged for and the plan recorded, from the same rule the two
+        // fulfilment paths verify against.
+        //
+        // This is a "use server" export, so `plan` is whatever the caller sent
+        // regardless of its declared type. The if/else chain here fell through to
+        // the Foundation FEE for an unrecognised plan while storing the
+        // unrecognised STRING in the Paystack metadata — so a registration could
+        // be charged ₦45,000 and carry a plan no fee lookup answers. Normalising
+        // here means the amount charged and the plan stored always agree, and
+        // agree with what checkAcademyPayment will compare them to later.
+        const planToStore = normaliseAcademyPlan(plan) ?? DEFAULT_ACADEMY_PLAN;
+        const amount: number = academyPlanFee(planToStore);
 
         const baseUrl = await getBaseUrl();
         const callbackUrl = `${baseUrl}/academy/payment/callback`;
@@ -365,6 +456,40 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<ActionRes
         }
 
         const paidAmount = verify.data.amount / 100;
+
+        // The amount, checked against what the plan costs.
+        //
+        // This path had NO amount validation. It read verify.data.amount, wrote
+        // it as paymentAmount, marked paymentStatus "completed", granted the
+        // academy_participant role and isVerified, auto-approved the application
+        // and wrote a completed ledger row — without ever comparing what was paid
+        // against what the plan costs.
+        //
+        // The WEBHOOK (processAcademyRegistration) has always derived the fee from
+        // the plan and thrown on underpayment. The two race by design: the webhook
+        // usually finishes before the user is redirected back. So which one reached
+        // a payment first decided whether an underpaid registration was accepted.
+        // Same shape as the marketplace order defect, with the permissive path on
+        // the other side. See lib/academy-plan.ts.
+        const amountVerdict = checkAcademyPayment(paidAmount, metadata.plan);
+        if (!amountVerdict.ok) {
+            logger.error("[verifyAcademyPaymentAction] Academy payment refused on amount", {
+                reference,
+                reason: amountVerdict.reason,
+                paidAmount,
+                plan: metadata.plan,
+            });
+            return { success: false as const, error: amountVerdict.message, data: null };
+        }
+
+        // A real plan, never the string "registration".
+        //
+        // The user update below stored `metadata.plan || "registration"`, and
+        // "registration" is not one of the three plans sold — so a record carrying
+        // it matches no plan lookup and the fee it was meant to cover cannot be
+        // determined afterwards.
+        const resolvedPlan = amountVerdict.plan;
+
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
 
         // ✅ FIX: If the Paystack webhook already processed this payment, return SUCCESS.
@@ -378,14 +503,22 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<ActionRes
         if (existingProcessed.exists) {
             logger.info(`[verifyAcademyPaymentAction] Payment ${reference} already processed by webhook — syncing USERS doc and returning success.`);
             try {
-                const processedData = existingProcessed.data();
+                // The amount and plan already in hand, not a re-read of the
+                // processed_payments row.
+                //
+                // That row lives in a DEDICATED table and the plan was passed as
+                // `metadata: { plan }`, so it is stored in raw_data rather than as
+                // a column — `processedData?.plan` was undefined and this wrote
+                // `plan: null` over a registration that had one. `paidAmount` and
+                // `resolvedPlan` are derived above from the Paystack response,
+                // which is the same source the webhook uses.
                 await db.collection(COLLECTIONS.USERS).doc(session.user.id).set({
                     serviceRegistrations: {
                         academy: {
                             paymentStatus: "completed",
                             paymentReference: reference,
-                            paymentAmount: processedData?.amount ?? null,
-                            plan: processedData?.plan ?? null,
+                            paymentAmount: paidAmount,
+                            plan: resolvedPlan,
                         }
                     },
                     updatedAt: FieldValue.serverTimestamp(),
@@ -415,7 +548,7 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<ActionRes
             amount: paidAmount,
             type: "academy_registration",
             source: "client_verify",
-            metadata: { plan: metadata.plan || "foundation" },
+            metadata: { plan: resolvedPlan },
         });
 
         if (!claim.claimed) {
@@ -435,17 +568,65 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<ActionRes
             hasApp = !appSnap.empty;
             const appDoc = hasApp ? appSnap.docs[0] : null;
 
+            // PAYING DID NOT OVERTURN A REJECTION.
+            //
+            // This path auto-approves: find the applicant's latest application,
+            // write `status: "approved"` with `reviewedBy:
+            // "paystack_auto_approval"`, grant `academy_participant` and set
+            // `isVerified`. That is the intended model for a NEW applicant —
+            // paying the registration fee is what admits them, and no admin need
+            // review it.
+            //
+            // It did not ask whether an admin had already decided. Nothing
+            // stopped a rejected applicant from opening the payment page and
+            // paying again, and when they did, the rejection on the application
+            // document was overwritten with "approved" — attributed to
+            // "paystack_auto_approval" — and the role #210 revoked was handed
+            // straight back. An admin's decision was reversible for ₦45,000.
+            //
+            // The money is still recorded. claimPaymentOnce has already banked
+            // the reference and the ledger row below is still written, so the
+            // payment is visible to support and refundable. What does not happen
+            // is the approval. The initiate path now refuses to start such a
+            // payment at all, so reaching here means the applicant was rejected
+            // between initiating and returning — rare, and exactly the case that
+            // needs the money trail intact rather than the approval.
+            const decidedAgainst = isDecidedAgainst(appDoc?.data()?.status);
+            const autoApprove = hasApp && !!appDoc && !decidedAgainst;
+
+            if (decidedAgainst) {
+                logger.warn(
+                    "[verifyAcademyPaymentAction] Payment received for an application already decided against — "
+                    + "recorded, NOT approved. Refund or manual review required.",
+                    {
+                        reference,
+                        userId: session.user.id,
+                        applicationId: appDoc?.id,
+                        applicationStatus: appDoc?.data()?.status,
+                        paidAmount,
+                    },
+                );
+            }
+
             const userUpdate: any = {
                 "serviceRegistrations.academy.paymentStatus": "completed",
                 "serviceRegistrations.academy.paymentReference": reference,
                 "serviceRegistrations.academy.paymentAmount": paidAmount,
-                "serviceRegistrations.academy.plan": metadata.plan || "registration",
+                "serviceRegistrations.academy.plan": resolvedPlan,
                 "serviceRegistrations.academy.paidAt": FieldValue.serverTimestamp(),
-                "serviceRegistrations.academy.status": hasApp ? "approved" : "pending",
                 "updatedAt": FieldValue.serverTimestamp(),
             };
 
-            if (hasApp && appDoc) {
+            // The status key is omitted entirely when a decision stands. Writing
+            // "pending" here would be its own reversal — it would clear the
+            // rejection from the user document while leaving it on the
+            // application, which is the divergence Layer 2 of checkModuleAccess
+            // reads first.
+            if (!decidedAgainst) {
+                userUpdate["serviceRegistrations.academy.status"] = hasApp ? "approved" : "pending";
+            }
+
+            if (autoApprove) {
                 userUpdate["serviceRegistrations.academy.approvedAt"] = FieldValue.serverTimestamp();
                 userUpdate["serviceRegistrations.academy.applicationId"] = appDoc.id;
                 userUpdate["roles"] = FieldValue.arrayUnion("academy_participant");
@@ -458,12 +639,12 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<ActionRes
             // (The processed_payments row is written by claimPaymentOnce above.)
 
             // Update matching application if it exists
-            if (hasApp && appDoc) {
+            if (autoApprove) {
                 await appDoc.ref.update({
                     status: "approved",
                     paymentStatus: "completed",
                     paymentAmount: paidAmount,
-                    plan: metadata.plan || "foundation",
+                    plan: resolvedPlan,
                     paymentVerifiedAt: FieldValue.serverTimestamp(),
                     reviewedAt: FieldValue.serverTimestamp(),
                     reviewedBy: "paystack_auto_approval",

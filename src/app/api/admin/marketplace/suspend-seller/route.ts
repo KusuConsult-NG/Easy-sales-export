@@ -6,7 +6,7 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { FieldValue } from "@/lib/firestore-compat";
 
 /**
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Check if user is admin
-        if (!isAdmin(session.user.roles)) {
+        if (!hasAdminPermission(session.user.roles, "marketplace:suspend_sellers")) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }

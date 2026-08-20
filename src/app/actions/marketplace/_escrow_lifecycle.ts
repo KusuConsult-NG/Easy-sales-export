@@ -3,8 +3,9 @@
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from '@/lib/logger';
 import { requireAdmin } from "@/lib/require-admin";
-import { claimStatusTransition } from "@/lib/status-transition";
-import { claimPaymentOnce } from "@/lib/wallet-ledger";
+import { claimStatusTransition, claimStatusTransitionFromAny } from "@/lib/status-transition";
+import { ESCROW_RELEASABLE_FROM } from "@/lib/escrow-status";
+import { claimPaymentOnce, markFulfilmentFailed, creditWalletOnce } from "@/lib/wallet-ledger";
 import { FieldValue } from "@/lib/firestore-compat";
 import { createAdminAuditLog, logAdminFinancialAction } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
@@ -50,17 +51,32 @@ async function _createEscrowAction(data: { buyerId: string;
             return { success: false as const, error: "Invalid seller", data: null };
         }
 
-        // NOTE ON THE ORDERING BELOW, which is load-bearing.
-        //
-        // `...data` is spread FIRST and the security-relevant fields are set
-        // AFTER, so a caller who sends `status: "funded"` has it overwritten.
-        // Reversing these lines would turn this into a privilege escalation:
-        // an escrow could be created already funded, without payment.
-        //
-        // Fourteen sites in this codebase spread caller data into a write and
-        // every one of them is safe for exactly this reason. That is a property
-        // of field order in an object literal, which is a thin thing to rest on.
-        const escrow: Omit<EscrowTransaction, "id"> & { _version: number } = { ...data,
+        /**
+         * Named fields, not the caller's object.
+         *
+         * This spread `...data` and then set the security-relevant fields AFTER,
+         * relying on later keys winning in an object literal. That worked, and the
+         * comment here said so — while also saying it was "a thin thing to rest
+         * on", because reversing two lines turns it into a privilege escalation: an
+         * escrow created already `funded`, without payment.
+         *
+         * It is not only ordering. `data` is whatever arrived over the wire — a
+         * server action's parameter type is erased — so the spread also wrote any
+         * OTHER field a caller invented onto the escrow document: `netAmount`,
+         * `platformFee`, `releasedAt`, `disputeId`. None of those are overwritten
+         * below, because nothing below mentions them.
+         *
+         * Listing the fields removes both problems, and the safety no longer
+         * depends on line order.
+         */
+        const escrow: Omit<EscrowTransaction, "id"> & { _version: number } = {
+            buyerId: data.buyerId,
+            buyerEmail: data.buyerEmail,
+            sellerId: data.sellerId,
+            sellerEmail: data.sellerEmail,
+            amount: data.amount,
+            productName: data.productName,
+            productDescription: data.productDescription,
             participants: [data.buyerId, data.sellerId],
             status: "pending",
             _version: 0,
@@ -153,7 +169,29 @@ async function _confirmEscrowPaymentAction(
         const escrowDoc = escrowSnap.data() as EscrowTransaction;
 
         const paidAmountNaira = paystackData.data.amount / 100;
-        const expectedAmount = escrowDoc.amount;
+        const expectedAmount = Number(escrowDoc.amount);
+
+        /**
+         * An unreadable expected amount is a refusal, not a pass.
+         *
+         * `Math.abs(paid - expected) > 1` was the whole amount check, and
+         * `expected` came straight off the document. When the escrow carries no
+         * `amount`, or carries a string this adapter did not coerce, the
+         * subtraction is NaN and `NaN > 1` is FALSE — so the mismatch branch was
+         * skipped and the escrow was funded by a payment of any size at all. The
+         * one comparison protecting the amount is the one that fails open.
+         *
+         * _createEscrowAction validates the amount, but it is not the only
+         * writer of this collection, and a comparison that treats "I cannot tell"
+         * as "it matches" is wrong however the row got there.
+         */
+        if (!Number.isFinite(expectedAmount) || expectedAmount <= 0) {
+            logger.error(
+                `[confirmEscrowPayment] escrow ${escrowId} has an unusable amount ` +
+                `(${String(escrowDoc.amount)}); refusing to fund it.`
+            );
+            return { success: false as const, error: "This escrow has no valid amount and cannot be funded." };
+        }
 
         if (Math.abs(paidAmountNaira - expectedAmount) > 1) {
             logger.warn(
@@ -171,6 +209,48 @@ async function _confirmEscrowPaymentAction(
         if (escrowDoc.buyerId !== callerId) {
             logger.warn(`[confirmEscrowPayment] ${callerId} attempted to confirm escrow ${escrowId} owned by ${escrowDoc.buyerId}`);
             return { success: false as const, error: "Unauthorized" };
+        }
+
+        /**
+         * THE PAYMENT MUST BE THE CALLER'S PAYMENT.
+         *
+         * Nothing here tied the reference to the person spending it. The checks
+         * were "Paystack says this reference succeeded", "the amount is within ₦1
+         * of this escrow", and "the escrow is mine" — all three of which hold for
+         * a reference belonging to SOMEBODY ELSE. The caller chooses the escrow's
+         * amount when they create it, so they can match any payment they have
+         * seen a reference for (a callback URL, a shared screen, a support
+         * thread) and fund their own escrow with a stranger's money. Release then
+         * pays that money to the seller they nominated.
+         *
+         * claimPaymentOnce below stops the same reference being spent twice; it
+         * does not care whose reference it is, and it runs first, so the theft
+         * also burns the real payer's reference.
+         *
+         * Every other verifier in this codebase makes this check —
+         * marketplace/_payment_verify.ts, academy/_payment.ts,
+         * farm-nation-payment.ts, export-payment.ts all compare
+         * `metadata.userId` to the session. This one was missed. Nothing in the
+         * app initialises an escrow payment today, so metadata may be absent
+         * entirely; the customer email Paystack records is then the only identity
+         * on the transaction, and it must match the caller's. Neither one
+         * present means the payment cannot be shown to be theirs, and that is a
+         * refusal rather than a pass.
+         */
+        const payerId = (paystackData.data.metadata as Record<string, any> | undefined)?.userId;
+        const payerEmail = String(paystackData.data.customer?.email ?? "").trim().toLowerCase();
+        const callerEmail = String(sessionResult.session.user.email ?? "").trim().toLowerCase();
+
+        const identifiesCaller = payerId !== undefined && payerId !== null && String(payerId) !== ""
+            ? String(payerId) === callerId
+            : payerEmail !== "" && payerEmail === callerEmail;
+
+        if (!identifiesCaller) {
+            logger.warn(
+                `[confirmEscrowPayment] ${callerId} presented reference ${paymentReference}, ` +
+                `which belongs to ${payerId ?? (payerEmail || "nobody identifiable")}.`
+            );
+            return { success: false as const, error: "Payment verification failed: this payment was not made by you" };
         }
 
         // Claim the payment reference. ONE reference funds ONE escrow.
@@ -200,8 +280,6 @@ async function _confirmEscrowPaymentAction(
             return { success: false as const, error: "This payment has already been applied" };
         }
 
-        const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId);
-
         // pending -> funded as a claim, not a read-then-write.
         //
         // The check that was here compared data.status inside runTransaction,
@@ -223,11 +301,43 @@ async function _confirmEscrowPaymentAction(
         });
 
         if (!statusClaim.claimed) {
+            /**
+             * The payment is claimed and the escrow was NOT funded.
+             *
+             * The reference is burned at this point: claimPaymentOnce ran above and
+             * succeeded, so a retry takes the "already applied" branch and the buyer
+             * can never fund this escrow with the money they have paid. Returning a
+             * bare error leaves a real payment recorded as `escrow_funding` against
+             * an escrow that is not funded — money in, nothing held, and nothing to
+             * find it by.
+             *
+             * Reachable whenever the escrow moved between the read above and this
+             * claim: cancelled by the other party, or already funded.
+             *
+             * markFulfilmentFailed patches the processed_payments row to
+             * `fulfilment_failed` with the reason. It does not release the claim —
+             * releasing it would let the same reference fund something else — and it
+             * does not refund. It makes the payment visible to reconcile-fulfilment,
+             * which is what an admin acts on. Same treatment as the Farm Nation
+             * fulfilment failures.
+             */
+            const reason = statusClaim.status === null
+                ? "Escrow transaction not found when applying payment"
+                : `Escrow was '${statusClaim.status}', not 'pending', when the payment was applied`;
+
+            await markFulfilmentFailed(paymentReference, reason);
+
+            logger.error(
+                `[confirmEscrowPayment] PAID BUT NOT FUNDED — escrow ${escrowId}, reference ` +
+                `${paymentReference}, ₦${paidAmountNaira} taken from ${callerId}. ${reason}. Needs refund.`
+            );
+
             return {
                 success: false as const,
                 error: statusClaim.status === null
-                    ? "Escrow transaction not found"
-                    : `Invalid state transition: expected 'pending', got '${statusClaim.status}'`,
+                    ? "Escrow transaction not found. You have been charged — this payment has been flagged for refund."
+                    : `This escrow is no longer awaiting payment (it is '${statusClaim.status}'). ` +
+                      `You have been charged — this payment has been flagged for refund.`,
             };
         }
 
@@ -380,10 +490,21 @@ async function _releaseEscrowAction(
         }
         escrowData = preClaim.data() as EscrowTransaction;
 
-        const claim = await claimStatusTransition({
+        // Every releasable status, not "funded" alone.
+        //
+        // This claimed `from: "funded"`, so the moment a buyer confirmed receipt —
+        // which moves the escrow to "delivered" — this admin release failed with
+        // "Invalid state transition: expected 'funded', got 'delivered'". The
+        // normal, expected flow disabled the admin's release, and the seller's
+        // money sat there.
+        //
+        // The other two release paths (_escrow_actions.ts, order-management.ts)
+        // already released from delivered, in_transit and disputed. Three release
+        // paths, three different opinions; one set now. See lib/escrow-status.ts.
+        const claim = await claimStatusTransitionFromAny({
             collection: COLLECTIONS.ESCROW_TRANSACTIONS,
             id: escrowId,
-            from: "funded",
+            fromAny: [...ESCROW_RELEASABLE_FROM],
             to: "released",
             patch: { releasedBy: adminId, releasedAt: new Date().toISOString() },
         });
@@ -391,45 +512,72 @@ async function _releaseEscrowAction(
         if (!claim.claimed) {
             return {
                 success: false as const,
-                error: `Invalid state transition: expected 'funded', got '${claim.status ?? "missing"}'`,
+                error: `Invalid state transition: this escrow is '${claim.status ?? "missing"}' and cannot be released from that state`,
                 data: null,
             };
         }
 
+        const releasing = escrowData as EscrowTransaction;
+        const gross = Number((releasing as any).amount) || 0;
+
+        // The seller's share, net of the platform fee — see the note in
+        // _escrow_actions.ts. The fee was computed on every escrow and taken
+        // from none of them.
+        const netStored = Number((releasing as any).netAmount);
+        const sellerPayout = Number.isFinite(netStored) && netStored > 0 ? netStored : gross;
+
+        // CREDITED THROUGH THE LEDGER PRIMITIVE, not by hand.
+        //
+        // This read the wallet and wrote a computed balance:
+        //
+        //     if (!walletSnap.exists) tx.set(walletRef, { balance: data.amount })
+        //     else                    tx.update(walletRef, { balance: increment(...) })
+        //
+        // The increment branch is safe. The other is not, and the claim above
+        // does not cover it: the claim stops the same escrow being released
+        // twice, while this loses money when TWO DIFFERENT escrows for the same
+        // seller are released at once before that seller has a wallet row —
+        // both take the set branch and the last write wins, so one release is
+        // simply gone. db.runTransaction takes no lock on this adapter and
+        // cannot roll back.
+        //
+        // It was also the only release path with no idempotency reference, so a
+        // retry credited again. Its sibling in _escrow_actions.ts was moved onto
+        // credit_wallet_once for exactly these reasons; this one was missed,
+        // which is easy to do because nothing imports it — see the note on the
+        // export below.
+        //
+        // status "disbursement", NOT "completed": platform_revenue_totals() sums
+        // completed rows, and an escrow release is money going OUT.
+        const credit = await creditWalletOnce({
+            reference: `escrow-release:${escrowId}`,
+            userId: releasing.sellerId,
+            amount: sellerPayout,
+            paymentType: "escrow_release",
+            source: "marketplace_escrow",
+            status: "disbursement",
+            metadata: { escrowId, productName: (releasing as any).productName ?? "" },
+        });
+
+        const balanceAfter = credit.balance;
+        const balanceBefore = credit.claimed ? balanceAfter - sellerPayout : balanceAfter;
+
         await db.runTransaction(async (tx) => {
             const data = escrowData as EscrowTransaction;
 
-            // Credit the Seller's Wallet
-            const walletRef = db.collection(COLLECTIONS.WALLETS).doc(data.sellerId);
-            const walletSnap = await tx.get(walletRef);
-            let balanceBefore = 0;
-            
-            if (!walletSnap.exists) {
-                tx.set(walletRef, {
-                    userId: data.sellerId,
-                    balance: data.amount,
-                    currency: "NGN",
-                    createdAt: FieldValue.serverTimestamp(),
-                    updatedAt: FieldValue.serverTimestamp()
-                });
-            } else {
-                balanceBefore = walletSnap.data()?.balance || 0;
-                tx.update(walletRef, {
-                    balance: FieldValue.increment(data.amount),
-                    updatedAt: FieldValue.serverTimestamp()
-                });
-            }
-
             // Record transaction in seller's wallet_transactions history
-            const sellerTxnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc();
+            // Derived from the escrow rather than auto-generated, so a retry
+            // overwrites the row instead of showing the seller two payouts.
+            const sellerTxnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS)
+                .doc(`escrow-release-${escrowId}`);
             tx.set(sellerTxnRef, {
                 id: sellerTxnRef.id,
                 walletId: data.sellerId,
                 userId: data.sellerId,
                 type: "funding",
-                amount: data.amount,
+                amount: sellerPayout,
                 balanceBefore,
-                balanceAfter: balanceBefore + data.amount,
+                balanceAfter,
                 reference: escrowId,
                 description: `Payout for escrow #${escrowId.substring(0, 8)} (Escrow released)`,
                 status: "completed",
@@ -445,7 +593,7 @@ async function _releaseEscrowAction(
                 userId: data.sellerId,
                 type: "escrow_payout",
                 module: "escrow",
-                amount: data.amount,
+                amount: sellerPayout,
                 currency: "NGN",
                 status: "completed",
                 date: FieldValue.serverTimestamp(),
@@ -456,21 +604,33 @@ async function _releaseEscrowAction(
 
         if (escrowData) { const tx = escrowData as EscrowTransaction;
 
+            /**
+             * The figures reported are the figures paid.
+             *
+             * These read `tx.amount` — the gross — while the credit above is
+             * `sellerPayout`, net of the platform fee. The seller was told,
+             * by notification and by SMS, a number larger than the one that
+             * arrived in their wallet, and the financial audit row recorded the
+             * gross as the amount disbursed. Its sibling in _escrow_actions.ts
+             * reports the payout and carries the gross alongside it.
+             */
             await logAdminFinancialAction(
                 "escrow_released",
                 adminId,
-                tx.amount,
+                sellerPayout,
                 escrowId,
                 {
                     sellerId: tx.sellerId,
-                    buyerId: tx.buyerId }
+                    buyerId: tx.buyerId,
+                    gross,
+                    platformFee: (tx as any).platformFee ?? 0 }
             );
 
             await createNotificationAction({
                 userId: tx.sellerId,
                 type: "escrow",
                 title: "Escrow Funds Released",
-                message: `₦${tx.amount.toLocaleString()} for "${tx.productName}" has been released to you by an admin.`,
+                message: `₦${sellerPayout.toLocaleString()} for "${tx.productName}" has been released to you by an admin.`,
                 link: `/escrow/${escrowId}`,
                 linkText: "View Details" }).catch((e) => logger.error("[releaseEscrowAction] Seller notification failed:", e));
 
@@ -489,8 +649,8 @@ async function _releaseEscrowAction(
             const sellerPhone: string | undefined = sellerDoc.data()?.phone ?? sellerDoc.data()?.phoneNumber;
             const orderRef = escrowId; 
             await Promise.allSettled([
-                sellerPhone ? smsEscrowReleased(sellerPhone, orderRef, tx.amount) : Promise.resolve(),
-                pushEscrowReleased(tx.sellerId, orderRef, tx.amount, escrowId),
+                sellerPhone ? smsEscrowReleased(sellerPhone, orderRef, sellerPayout) : Promise.resolve(),
+                pushEscrowReleased(tx.sellerId, orderRef, sellerPayout, escrowId),
                 pushDisputeResolved(tx.buyerId, tx.sellerId, orderRef),
             ]);
         }
@@ -506,4 +666,17 @@ async function _releaseEscrowAction(
 }
 
 
+/**
+ * NOTHING CALLS THIS.
+ *
+ * No page and no route. `index.ts` re-exports the whole module, so this is a
+ * registered server action rather than dead code — but the release the admin
+ * escrow screens actually invoke is releaseEscrowFunds in _escrow_actions.ts.
+ *
+ * It is left in place rather than deleted because removing a "use server"
+ * export is a decision for the owner, not a side effect of a bug fix — the same
+ * call as the /vendor parallel. But a dead path that credits wallets is a
+ * defect waiting to be re-wired, so it has been brought onto the same
+ * primitives as the live one instead of being left as it was.
+ */
 export const releaseEscrowAction = withFlexibleSafeAction("releaseEscrowAction", _releaseEscrowAction);

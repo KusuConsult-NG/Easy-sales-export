@@ -160,7 +160,7 @@ describe('createFixedSavingsAction — where the plan is filed', () => {
         const { createFixedSavingsAction } = await import('@/app/actions/cooperative/_coop_money');
         global.mockFirestoreGet.mockResolvedValue({
             empty: false,
-            docs: [{ id: USER_ID, data: () => ({ userId: USER_ID, savingsBalance: 500_000 }) }],
+            docs: [{ id: USER_ID, data: () => ({ userId: USER_ID, savingsBalance: 500_000, membershipStatus: 'active' }) }],
         });
         const fd = new FormData();
         fd.set('amount', String(amount));

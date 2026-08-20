@@ -13,6 +13,8 @@ import {
 } from "@/lib/cooperative-savings";
 import { FieldValue } from "@/lib/firestore-compat";
 import { debitJsonbBalance } from "@/lib/wallet-ledger";
+import { canTransactAsMember, NOT_A_TRANSACTING_MEMBER_MESSAGE } from "@/lib/cooperative-membership-status";
+import { compensateJsonbDebit } from "@/lib/wallet-ledger";
 
 /**
  * API Route: Create Fixed Savings Plan
@@ -57,9 +59,11 @@ export async function POST(request: NextRequest) {
         }
 
         const memberData = memberDoc.data()!;
-        if (memberData.membershipStatus !== "approved" && memberData.membershipStatus !== "active") {
+        // This door already accepted either spelling; it is the shared rule now
+        // so the two that accepted only "active" cannot drift back.
+        if (!canTransactAsMember(memberData)) {
             return NextResponse.json(
-                { success: false, message: "Your membership must be approved first" },
+                { success: false, message: NOT_A_TRANSACTING_MEMBER_MESSAGE },
                 { status: 403 }
             );
         }
@@ -124,7 +128,11 @@ export async function POST(request: NextRequest) {
         // that took a lock. The two writes below are plain sequential writes —
         // the runTransaction wrapper around them bought nothing, since the
         // adapter flushes queued writes one at a time after the callback anyway.
+        // From here the balance is ALREADY DOWN. A failure below used to leave
+        // the member's savings reduced with no plan recorded — the money gone
+        // and nothing to show for it.
         const planRef = db.collection(COLLECTIONS.FIXED_SAVINGS_PLANS).doc();
+        try {
         await planRef.set({
             memberId: userId,
             amount,
@@ -191,6 +199,17 @@ export async function POST(request: NextRequest) {
             status: "completed",
             date: FieldValue.serverTimestamp(),
         });
+
+        } catch (workError) {
+            await compensateJsonbDebit({
+                table: "cooperative_members",
+                id: userId,
+                field: "savingsBalance",
+                amount,
+                reason: "fixed savings plan could not be recorded after the debit",
+            });
+            throw workError;
+        }
 
         const result = planRef.id;
 

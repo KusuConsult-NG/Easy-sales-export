@@ -3,9 +3,11 @@
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
-import { requireSession, isAdmin } from "@/lib/session-guard";
+import { requireSession } from "@/lib/session-guard";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { serializeValue } from "@/lib/firestore-serialize";
+import { recordAdminAction } from "@/lib/audit-log";
 
 export async function submitExportProductAction(productData: any) { try {
         const sessionResult = await requireSession();
@@ -129,13 +131,19 @@ export async function deleteExportProductAction(productId: string) {
         if (productData?.userId !== userId) {
             const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
             const roles = userDoc.data()?.roles || [];
-            if (!isAdmin(roles)) {
+            if (!hasAdminPermission(roles, "export:approve_applications")) {
                 return { success: false as const, error: "Unauthorized: You do not own this product", data: null };
             }
         }
 
         await productRef.delete();
 
+        await recordAdminAction({
+            action: 'export_product_delete',
+            userId: userId,
+            targetId: productId,
+            targetType: 'export_product',
+        });
         return { error: null, success: true as const, data: { message: "Product deleted successfully" } };
     } catch (error: any) {
         logger.error("Delete export product error:", error);

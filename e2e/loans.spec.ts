@@ -121,17 +121,19 @@ test.describe('Loan Application Flow', () => {
         console.log('✅ Loan application submitted via wizard');
     });
 
-    test.skip('should display user eligibility information (cooperative-only feature)', async ({ page }) => {
-        await page.goto('/loans/apply');
-
-        // Check for eligibility info
-        const eligibilityCard = page.locator('[data-testid="eligibility-info"]');
-        await expect(eligibilityCard).toBeVisible({ timeout: 5000 });
-
-        // Should show tier and max loan amount
-        await expect(page.locator('text=Your Tier')).toBeVisible();
-        await expect(page.locator('text=Max Loan Amount')).toBeVisible();
-    });
+    // 'should display user eligibility information' is REMOVED rather than
+    // enabled.
+    //
+    // It waited for [data-testid="eligibility-info"] and the strings "Your
+    // Tier" and "Max Loan Amount". None of the three exists anywhere in the
+    // codebase — checked. It describes a tier/eligibility panel that was never
+    // built, which is why it was switched off instead of fixed.
+    //
+    // Loan eligibility IS enforced, and it IS tested: isEligibleForLoan in
+    // src/lib/cooperative-loan-policy.ts, applied by
+    // src/app/actions/cooperative/_coop_money.ts, with unit coverage. What is
+    // missing is a UI that shows the borrower their limit before they apply —
+    // a feature request, not a broken test.
 });
 
 /**
@@ -182,22 +184,21 @@ test.describe('Loan Application Validation', () => {
         await expect(amountField).toBeVisible({ timeout: 15000 });
         await expect(amountField).toHaveValue('10000', { timeout: 15000 });
 
-        // Fill and RE-fill until it sticks.
+        // A plain fill, deliberately, with no retry.
         //
-        // Retrying the ASSERTION cannot help and Playwright already does it:
-        // when this goes wrong the field reverts to its default and stays
-        // there, so the fill is what has to be repeated. The layout remounts
-        // after navigation — NotificationCenter was measured issuing 6
-        // server-action POSTs in 20 idle seconds, three times the single 10s
-        // poll it schedules — and each remount re-initialises react-hook-form
-        // from defaultValues, putting 10000 back.
+        // This used to read back "10000" — the react-hook-form default — on
+        // roughly two runs in five, and was worked around by retrying the fill
+        // until it stuck. The cause was found and fixed in
+        // src/components/layout/ClientLayout.tsx: `children` appeared in two
+        // different tree positions depending on whether the sidebar showed, so
+        // the moment useSession resolved from "loading" the whole page subtree
+        // was unmounted and remounted, re-initialising the form from its
+        // defaults. Module pages now wait for the session before mounting.
         //
-        // Belt and braces alongside the single login above; the polling
-        // multiplication is recorded separately as a defect of its own.
-        await expect.poll(async () => {
-            await amountField.fill('0');
-            return amountField.inputValue();
-        }, { timeout: 20000, message: 'amount field kept reverting to its default' }).toBe('0');
+        // The retry is gone on purpose. Kept, it would swallow that regression
+        // if it ever came back.
+        await amountField.fill('0');
+        await expect(amountField).toHaveValue('0');
         await page.click('text=Next');
 
         // Should see validation error

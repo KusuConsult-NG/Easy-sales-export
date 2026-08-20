@@ -79,6 +79,32 @@ const EXPECTED_ACTIONS = [
     'verifyLandListing',
 ].sort();
 
+/**
+ * Actions added to the domain SINCE the split.
+ *
+ * Kept separate from the 39 above rather than merged into them, because those 39
+ * are a historical fact — the export surface of admin.ts at 3864c026 — and the
+ * "nothing missing" assertion is only meaningful while that list stays exactly
+ * what it was. Merging new names in would let a future dropped export hide
+ * behind an addition.
+ *
+ * Anything here is a deliberate new admin capability with a reason recorded:
+ *
+ *   getAdminProductsAction, reviewProductAction
+ *     There was no admin path to a marketplace PRODUCT at all. createProductAction
+ *     wrote status "pending", every buyer-facing reader filters on "active", and
+ *     nothing moved a product between them — so the seller form linked from six
+ *     places produced listings no buyer could see and no admin could release.
+ *     admin-content.ts counted the backlog without offering any way to clear it.
+ *     See lib/product-status.ts.
+ */
+const ADDED_SINCE_SPLIT = [
+    'getAdminProductsAction',
+    'reviewProductAction',
+].sort();
+
+const ALL_EXPECTED = [...EXPECTED_ACTIONS, ...ADDED_SINCE_SPLIT].sort();
+
 describe('the admin barrel exports what admin.ts exported', () => {
     it('every action is still reachable at @/app/actions/admin', async () => {
         // THE test. A dropped export type-checks fine at the barrel and fails
@@ -106,13 +132,21 @@ describe('the admin barrel exports what admin.ts exported', () => {
 
         const extra = Object.keys(mod)
             .filter((k) => k !== '__esModule' && k !== 'default')
-            .filter((k) => !EXPECTED_ACTIONS.includes(k));
+            .filter((k) => !ALL_EXPECTED.includes(k));
 
         expect(extra).toEqual([]);
     });
 
     it('the count is the 39 the old file had', async () => {
         expect(EXPECTED_ACTIONS).toHaveLength(39);
+    });
+
+    it('and every action added since the split is reachable and callable too', async () => {
+        // Without this, ADDED_SINCE_SPLIT would only ever WIDEN the leak check —
+        // a name could be listed there, never exported, and nothing would notice.
+        const mod: Record<string, unknown> = await import('@/app/actions/admin');
+
+        expect(ADDED_SINCE_SPLIT.filter((n) => typeof mod[n] !== 'function')).toEqual([]);
     });
 });
 

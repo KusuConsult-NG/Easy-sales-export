@@ -7,7 +7,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { generateAndSendWhatsAppInvite } from "@/lib/whatsapp-invites";
 
-import { processMarketplaceOrder, processExportInvestment, processCooperativeRegistration, processAcademyRegistration, processCooperativeContribution } from "@/infrastructure/payments/service";
+import { processMarketplaceOrder, processExportInvestment, processCooperativeRegistration, processAcademyRegistration, processCooperativeContribution, exportWindowIdFromMetadata } from "@/infrastructure/payments/service";
 import { claimPaymentOnce } from "@/lib/wallet-ledger";
 
 /**
@@ -103,8 +103,12 @@ export async function POST(req: NextRequest) {
                 if (type === "marketplace_order") {
                     await processMarketplaceOrder(reference, amountPaidv, userId, paidAtDate);
                 } else if (type === "export_investment") {
-                    const exportId = metadata.exportId;
-                    await processExportInvestment(reference, amountPaidv, userId, exportId, paidAtDate);
+                    // Either name — see exportWindowIdFromMetadata. This read
+                    // `metadata.exportId` alone, which the only initiator with a
+                    // UI does not write, so no live investment was ever fulfilled
+                    // here.
+                    const exportId = exportWindowIdFromMetadata(metadata);
+                    await processExportInvestment(reference, amountPaidv, userId, exportId as string, paidAtDate);
                 } else if (type === "cooperative_membership_registration") {
                     const tier = metadata.membershipTier || metadata.plan || "Member";
                     // Legacy payments from old portal may not have membershipId — fall back to userId

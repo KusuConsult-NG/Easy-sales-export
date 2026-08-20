@@ -65,6 +65,20 @@ jest.mock('@/lib/audit-log', () => ({
     createAdminAuditLog: jest.fn(async () => ({})),
     logAdminFinancialAction: jest.fn(async () => ({})),
 }));
+/**
+ * The reservation added with the double-charge fix.
+ *
+ * initializePropertyPaymentAction now CLAIMS the listing before it calls
+ * Paystack, so with the real primitive running against these hand-built
+ * snapshots nothing is ever claimed and the action returns before reaching any
+ * of the price logic below. The claim succeeding is the precondition for every
+ * assertion in this file; whether it can be lost is
+ * farm-nation-payment-behaviour.test.ts's subject.
+ */
+jest.mock('@/lib/status-transition', () => ({
+    claimStatusTransition: jest.fn(async () => ({ claimed: true, status: 'pending_escrow' })),
+    claimStatusTransitionFromAny: jest.fn(async () => ({ claimed: true, status: 'pending_escrow' })),
+}));
 jest.mock('@/app/actions/notifications', () => ({ createNotificationAction: jest.fn(async () => ({})) }));
 
 /**

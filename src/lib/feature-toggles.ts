@@ -47,6 +47,10 @@ export const DEFAULT_TOGGLES: Record<string, boolean> = {
     // Wallet features (disabled for production rollout)
     wallet_deposits: false,
     wallet_withdrawals: false,
+    // Disabled, exactly as the hard-coded return in withdrawEarningsAction was.
+    // A toggle rather than a `return` so it can be turned back on without a
+    // deploy, and so the page can tell a member before they fill in the form.
+    wave_withdrawals: false,
 };
 
 /**
@@ -181,6 +185,13 @@ export const FEATURE_METADATA: Record<string, FeatureMetadata> = {
         id: "wallet_withdrawals",
         name: "Wallet Withdrawals",
         description: "Allow users to withdraw funds from their marketplace wallet",
+        category: "CORE",
+        defaultEnabled: false,
+    },
+    wave_withdrawals: {
+        id: "wave_withdrawals",
+        name: "WAVE Earnings Withdrawals",
+        description: "Allow WAVE members to withdraw their commission earnings",
         category: "CORE",
         defaultEnabled: false,
     },

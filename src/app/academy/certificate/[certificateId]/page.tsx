@@ -8,6 +8,7 @@ import { Award, Download, Share2, CheckCircle, Loader2, ArrowLeft, Linkedin } fr
 import Image from "next/image";
 import { getCourseByIdAction, getUserProgressAction, type Course, type UserProgress } from "@/app/actions/academy";
 import { useToast } from "@/contexts/ToastContext";
+import { academyCertificateNumber, completionDateOf } from "@/lib/academy-certificate";
 
 export default function CertificatePage() {
     const params = useParams();
@@ -60,10 +61,10 @@ export default function CertificatePage() {
 
     function handleDownload() {
         setDownloading(true);
-        // Use Server-Side PDF Generation API
-        const date = new Date().toISOString().split('T')[0];
-        const name = encodeURIComponent(session?.user?.name || 'Student');
-        const url = `/api/academy/certificate/${courseId}?name=${name}&date=${date}`;
+        // The route derives the name from the session and the date from the
+        // progress record. Passing them here was how the date became
+        // caller-controlled; sending them now would only imply they matter.
+        const url = `/api/academy/certificate/${courseId}`;
 
         // Open in new tab (browser handles download/view)
         window.open(url, '_blank');
@@ -77,7 +78,9 @@ export default function CertificatePage() {
         const orgName = encodeURIComponent("Easy Sales Export Academy");
         const issueYear = completionDate.getFullYear();
         const issueMonth = completionDate.getMonth() + 1; // LinkedIn expects 1-indexed month
-        const certId = encodeURIComponent(`ACAD-${issueYear}-${courseId.substring(0, 6).toUpperCase()}`);
+        const certId = encodeURIComponent(
+            academyCertificateNumber(session?.user?.id ?? "", courseId, completionDate)
+        );
         const certUrl = encodeURIComponent(`${window.location.origin}/academy/verify/${certId}`);
 
         const linkedInUrl =
@@ -136,10 +139,13 @@ export default function CertificatePage() {
         );
     }
 
-    const certNumber = `ACAD-${new Date().getFullYear()}-${courseId.substring(0, 6).toUpperCase()}`;
-    const completionDate = progress.completedAt && 'toDate' in progress.completedAt
-        ? progress.completedAt.toDate()
-        : new Date();
+    const completionDate = completionDateOf(progress.completedAt) ?? new Date();
+    // One number, shared with the PDF and the LinkedIn entry.
+    //
+    // This was `ACAD-${new Date().getFullYear()}-${courseId.slice(0,6)}` — the
+    // same string for EVERY learner who finished this course, and carrying the
+    // year the page was opened rather than the year the course was completed.
+    const certNumber = academyCertificateNumber(session?.user?.id ?? "", courseId, completionDate);
 
     return (
         <div className="min-h-screen bg-slate-50 py-12 px-4">

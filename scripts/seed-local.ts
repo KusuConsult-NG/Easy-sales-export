@@ -213,6 +213,57 @@ async function main() {
         .in('user_id', personaIds);
     if (clrCoop) fail(`clearing cooperative_loans: ${clrCoop.message}`);
 
+    // Academy progress, for exactly the same reason as the loans above.
+    //
+    // platform-flows.spec.ts enrols a learner and completes a lesson. A lesson
+    // already completed renders "Completed" instead of the "Mark as Complete"
+    // button, so the spec passed on a fresh database and then timed out waiting
+    // for a control that will never appear again — 90 seconds, on every run
+    // afterwards, reported as if the feature were broken.
+    //
+    // Progress lives in the flattened subcollection
+    // "user_progress/<uid>/courses", one collection per learner, so the seeded
+    // personas are cleared by name. Nothing else can match: the ids are the
+    // ones this script just created.
+    for (const personaId of personaIds) {
+        const { error: clrProgress } = await admin
+            .from('document_collections')
+            .delete()
+            .eq('collection_name', `user_progress/${personaId}/courses`);
+        if (clrProgress) fail(`clearing academy progress for ${personaId}: ${clrProgress.message}`);
+    }
+
+    // Enrolments, which gate the lesson pages the spec walks through.
+    const { error: clrEnrol } = await admin
+        .from('document_collections')
+        .delete()
+        .eq('collection_name', 'academy_enrollments')
+        .in('raw_data->>userId', personaIds);
+    if (clrEnrol) fail(`clearing academy_enrollments: ${clrEnrol.message}`);
+
+    // WAVE applications, and again for the same reason.
+    //
+    // wave-submission.spec.ts fills in seven sections and submits. The action
+    // refuses a second application from an address that already has one
+    // pending, so on every run after the first the submit did nothing, the URL
+    // never changed, and the spec failed 40 seconds later.
+    //
+    // It looked like a broken form. It was not: the toast said "Your
+    // application using this email address is currently pending", but the
+    // spec's own debug output read the toasts AFTER waiting 40 seconds for the
+    // redirect, by which time the toast had auto-dismissed and it printed an
+    // empty string.
+    //
+    // wave_members is NOT cleared — that is a fixture this script owns and
+    // re-creates, and it is what grants the wave persona access in the first
+    // place.
+    const { error: clrWave } = await admin
+        .from('document_collections')
+        .delete()
+        .eq('collection_name', 'wave_applications')
+        .in('raw_data->>userId', personaIds);
+    if (clrWave) fail(`clearing wave_applications: ${clrWave.message}`);
+
     const now = new Date().toISOString();
 
     // Cooperative membership for the member user — ACTIVE and paid, with

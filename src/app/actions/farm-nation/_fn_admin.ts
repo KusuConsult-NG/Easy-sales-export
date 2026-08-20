@@ -7,7 +7,10 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { invalidateUserCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
+import { claimStatusTransitionFromAny } from "@/lib/status-transition";
+import { APPROVABLE_FROM_STATUSES } from "@/lib/land-listing-status";
 import type { Property } from "@/lib/types/farm-nation-actions";
+import { recordAdminAction } from "@/lib/audit-log";
 
 async function _approveFarmNationSellerAction(userId: string): Promise<ActionResponse<null>> { 
     try {
@@ -38,8 +41,8 @@ async function _approveFarmNationSellerAction(userId: string): Promise<ActionRes
         // _verifyPropertyAction — which is the third admin action here and was
         // already guarded. One of three checked and two not is the shape this
         // audit keeps finding.
-        const { isAdmin } = await import("@/lib/admin-permissions");
-        if (!isAdmin(session?.user?.roles)) {
+        const { hasAdminPermission } = await import("@/lib/admin-permissions");
+        if (!hasAdminPermission(session?.user?.roles, "farm_nation:verify_applications")) {
             return { success: false as const, error: "Unauthorized", data: null, meta: null };
         }
 
@@ -101,6 +104,12 @@ async function _approveFarmNationSellerAction(userId: string): Promise<ActionRes
             logger.error("Failed to invalidate cache after Farm Nation approval:", err);
         }
 
+        await recordAdminAction({
+            action: 'farm_nation_approve',
+            userId: session.user.id,
+            targetId: userId,
+            targetType: 'user',
+        });
         return { error: null, success: true as const, data: null, meta: null };
     } catch (error: any) { 
         logger.error("Approve seller error:", error);
@@ -130,8 +139,8 @@ async function _rejectFarmNationSellerAction(userId: string, reason: string): Pr
         // anybody with an account, and the record would name the caller as
         // `rejectedBy` — an audit trail agreeing with an action nobody was
         // entitled to take.
-        const { isAdmin } = await import("@/lib/admin-permissions");
-        if (!isAdmin(session?.user?.roles)) {
+        const { hasAdminPermission } = await import("@/lib/admin-permissions");
+        if (!hasAdminPermission(session?.user?.roles, "farm_nation:verify_applications")) {
             return { success: false as const, error: "Unauthorized", data: null, meta: null };
         }
 
@@ -181,6 +190,13 @@ async function _rejectFarmNationSellerAction(userId: string, reason: string): Pr
             logger.error("Failed to invalidate cache after Farm Nation rejection:", err);
         }
 
+        await recordAdminAction({
+            action: 'farm_nation_reject',
+            userId: session.user.id,
+            targetId: userId,
+            targetType: 'user',
+            metadata: { reason },
+        });
         return { error: null, success: true as const, data: null, meta: null };
     } catch (error: any) { 
         logger.error("Reject Farm Nation seller error:", error);
@@ -209,8 +225,8 @@ async function _verifyPropertyAction(propertyId: string, verified: boolean): Pro
         const { session } = sessionResult;
         
         // Check admin role
-        const { isAdmin } = await import("@/lib/admin-permissions");
-        if (!isAdmin(session?.user?.roles)) { 
+        const { hasAdminPermission } = await import("@/lib/admin-permissions");
+        if (!hasAdminPermission(session?.user?.roles, "land:verify_listings")) { 
             return { success: false as const, error: "Unauthorized", data: null, meta: null };
         }
 
@@ -229,14 +245,100 @@ async function _verifyPropertyAction(propertyId: string, verified: boolean): Pro
             }
         }
 
-        await propertyRef.update({ 
-            verified: verified,
-            verifiedAt: verified ? FieldValue.serverTimestamp() : null,
-            verifiedBy: verified ? session.user.id : null,
-            updatedAt: FieldValue.serverTimestamp(),
-            // Ensure status reflects verification
-            status: verified ? "available" : property.status // Keep existing if un-verifying, or reset? Let's leave status alone unless it was explicitly pending.
-        });
+        /**
+         * Which statuses this may act on, and why it writes "verified".
+         *
+         * FOUR DEFECTS WERE HERE
+         * ----------------------
+         * 1. It wrote `status: "available"`. That is a for-sale status, but it was
+         *    NOT in PUBLIC_LAND_STATUSES, so verifying a property through this
+         *    action made it invisible to /api/farm-nation/listings and /land —
+         *    the opposite of what "verify" means to whoever clicked it. The other
+         *    admin path, /api/admin/farm-nation/approve-land, writes "verified".
+         *    Two admin routes for one decision, producing different visibility.
+         *
+         *    PUBLIC_LAND_STATUSES now derives from PURCHASABLE_STATUSES so all
+         *    three spellings are honoured, but this writes the canonical
+         *    "verified" so both admin paths agree.
+         *
+         * 2. No status guard, and the trailing comment admitted the author was
+         *    unsure ("Keep existing if un-verifying, or reset?"). The code did not
+         *    do what the comment mused about: it overwrote unconditionally. On a
+         *    listing in pending_escrow that discarded the escrow's state while a
+         *    buyer's money was held — the same defect as approve-land,
+         *    reject-land and dispatch-inspector.
+         *
+         * 3. The guard's list was hand-written here, as it was at four other
+         *    decision paths, and the five disagreed. This one was the most
+         *    permissive; approve-land's was the least, and omitted the very
+         *    status farm-nation creates. The set is now shared — see
+         *    APPROVABLE_FROM_STATUSES.
+         *
+         * 4. `update()` is a blind write even with the guard above it: the status
+         *    was read, checked, and then written in a separate call, so a purchase
+         *    that moved the listing into escrow in between was overwritten anyway.
+         *    The check has to be part of the write, which is what
+         *    claimStatusTransitionFromAny does.
+         */
+        if (verified) {
+            const transition = await claimStatusTransitionFromAny({
+                collection: COLLECTIONS.LAND_LISTINGS,
+                id: propertyId,
+                fromAny: [...APPROVABLE_FROM_STATUSES],
+                // "verified" — the canonical public spelling, matching approve-land.
+                to: "verified",
+                patch: {
+                    verified: true,
+                    verifiedAt: FieldValue.serverTimestamp(),
+                    verifiedBy: session.user.id,
+                    // The string shape, as everywhere else. See
+                    // land-listing-status.ts for the four values this field held.
+                    verificationStatus: "approved",
+                    rejectionReason: null,
+                    updatedAt: FieldValue.serverTimestamp(),
+                },
+                recordPreviousAs: "statusBeforeVerification",
+            });
+
+            if (!transition.claimed) {
+                return {
+                    success: false as const,
+                    error: transition.status === null
+                        ? (transition.exists
+                            ? "This property has no status recorded, so its verification cannot be changed."
+                            : "Property not found")
+                        : `This property is '${transition.status}' and its verification cannot be ` +
+                          `changed from that state. A listing with a purchase in progress must be ` +
+                          `resolved first.`,
+                    data: null,
+                    meta: null,
+                };
+            }
+        } else {
+            // Un-verifying leaves the status alone rather than guessing, which is
+            // what the old comment wanted and the old code did not do. No status
+            // write means no transition to claim — but the guard still applies,
+            // so a listing with money against it is not quietly un-verified
+            // either.
+            if (!APPROVABLE_FROM_STATUSES.includes(String(property.status))) {
+                return {
+                    success: false as const,
+                    error:
+                        `This property is '${property.status}' and its verification cannot be changed ` +
+                        `from that state. A listing with a purchase in progress must be resolved first.`,
+                    data: null,
+                    meta: null,
+                };
+            }
+
+            await propertyRef.update({
+                verified: false,
+                verifiedAt: null,
+                verifiedBy: null,
+                verificationStatus: "pending",
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+        }
 
         // 📜 Audit Log
         const { logAuditAction } = await import("@/lib/audit-log");

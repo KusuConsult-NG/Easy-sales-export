@@ -145,12 +145,17 @@ const resources = [
         icon: Youtube,
         link: "#"
     },
-    {
-        title: "API Documentation",
-        description: "For developers and integrations",
-        icon: FileText,
-        link: "/help/api-docs"
-    },
+    // "API Documentation" was removed rather than relinked. It pointed at
+    // /help/api-docs, which is not a route — there is no /help segment beyond
+    // this page — so the card 404'd. There is no API documentation to link to
+    // and this platform exposes no public API, so advertising it and sending
+    // people nowhere is worse than not offering it.
+    //
+    // Deliberately NOT changed to "#" like its three siblings: an inert card
+    // that looks clickable is the same defect this audit removed from the admin
+    // and cooperative screens. Those three placeholders are a content gap —
+    // real pages someone intends to write — and are left for the owner rather
+    // than quietly deleted here.
     {
         title: "Community Forum",
         description: "Connect with other users",

@@ -2,6 +2,8 @@ import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { normalizeUserDoc } from "@/lib/schema-normalizer";
+import { includesPrivilegedRole } from "@/lib/admin-permissions";
+import { registrationProgressScore } from "@/lib/registration-progress";
 
 /**
  * Migration utility for moving legacy user data (linked under legacy Firebase UID)
@@ -14,6 +16,43 @@ import { normalizeUserDoc } from "@/lib/schema-normalizer";
  * 4. Processed payment records
  * 5. Academy and Farm Nation applications
  */
+/**
+ * Fields where the ACTIVE document wins if it defines them at all.
+ *
+ * Money and the counters derived from it. A legacy record is by definition the
+ * older of the two, and a member who has been using the new account has a live
+ * balance on it; letting a stale figure overwrite that is how #84 zeroed
+ * people's savings from the legacy-onboarding screen.
+ */
+const ACTIVE_WINS_FIELDS = [
+    'walletBalance',
+    'savingsBalance',
+    'loanBalance',
+    'totalContributions',
+    'totalSavings',
+    'lockedBalance',
+    'availableBalance',
+] as const;
+
+function preserveActiveValues(
+    activeData: Record<string, any>,
+    legacyData: Record<string, any>,
+): Record<string, any> {
+    const kept: Record<string, any> = {};
+    for (const field of ACTIVE_WINS_FIELDS) {
+        if (activeData[field] !== undefined && activeData[field] !== null) {
+            if (legacyData[field] !== undefined && legacyData[field] !== activeData[field]) {
+                logger.warn(
+                    `[UserMigration] Kept the live ${field} (${activeData[field]}) rather than the ` +
+                    `legacy value (${legacyData[field]}).`
+                );
+            }
+            kept[field] = activeData[field];
+        }
+    }
+    return kept;
+}
+
 export async function migrateLegacyUserData(
     firebaseUid: string,
     supabaseUid: string,
@@ -48,49 +87,75 @@ export async function migrateLegacyUserData(
                 ...(activeData.serviceRegistrations || {})
             };
 
-            const getProgressScore = (status: string) => {
-                switch (status) {
-                    case 'active':
-                    case 'approved':
-                    case 'verified':
-                        return 4;
-                    case 'pending':
-                    case 'pending_review':
-                    case 'under_review':
-                    case 'revision_required':
-                        return 3;
-                    case 'pending_repair':
-                    case 'legacy_pending_onboarding':
-                        return 2;
-                    case 'not_started':
-                        return 1;
-                    default:
-                        return 0;
-                }
-            };
 
             for (const key of Object.keys(mergedServiceRegistrations)) {
                 const legacyVal = legacyData.serviceRegistrations?.[key];
                 const activeVal = activeData.serviceRegistrations?.[key];
                 if (legacyVal && activeVal) {
-                    const scoreLegacy = getProgressScore(legacyVal.status || '');
-                    const scoreActive = getProgressScore(activeVal.status || '');
+                    const scoreLegacy = registrationProgressScore(legacyVal.status || '');
+                    const scoreActive = registrationProgressScore(activeVal.status || '');
                     mergedServiceRegistrations[key] = scoreActive > scoreLegacy ? activeVal : legacyVal;
                 }
             }
 
-            // Merge legacy data with active data, prioritizing legacy data for profile configurations,
-            // but keeping current active IDs and safely merged registrations.
+            /**
+             * THE LEGACY DOCUMENT USED TO WIN ON EVERY FIELD.
+             *
+             * `{ ...activeData, ...legacyData }` spreads legacy LAST, so every
+             * key on the legacy record overwrote the live one. This function is
+             * called from the LOGIN path (auth.ts preValidateLoginAction) for
+             * any user whose email matches a legacy record, so that overwrite is
+             * automatic and unattended. Two things must not travel that way,
+             * and this audit has already closed both of them elsewhere:
+             *
+             *   ROLES (#87's defect, in a second place). If the legacy document
+             *   carries `roles: ['admin']`, signing in merged those roles onto
+             *   the live account. admin/_legacy.ts was closed on exactly this —
+             *   "any resulting role set containing a privileged role needs a
+             *   super_admin to write it" — and this path had no guard at all.
+             *   Non-privileged roles still carry forward, which is the point of
+             *   a migration; a privileged one is logged for a super_admin to
+             *   grant deliberately, and never granted by a login.
+             *
+             *   BALANCES (#84's defect, in a second place). Legacy onboarding
+             *   was zeroing an existing member's savings, loans and
+             *   contributions on every re-run. The same shape is here: a stale
+             *   legacy balance overwriting the live one. The active value wins
+             *   wherever the active document actually defines it.
+             *
+             * Everything else keeps the previous precedence — legacy first for
+             * profile configuration, which is what the migration is for.
+             */
+            const legacyRoles: string[] = Array.isArray(legacyData.roles) ? legacyData.roles : [];
+            const activeRoles: string[] = Array.isArray(activeData.roles) ? activeData.roles : [];
+
+            const escalating = legacyRoles.filter(
+                (r) => includesPrivilegedRole([r]) && !activeRoles.includes(r),
+            );
+            if (escalating.length) {
+                logger.error(
+                    `[UserMigration] REFUSED to grant privileged role(s) [${escalating.join(', ')}] to ` +
+                    `${supabaseUid} through an automatic migration from ${firebaseUid}. A super_admin ` +
+                    `must assign them deliberately if they are still warranted.`
+                );
+            }
+
+            const safeRoles = Array.from(new Set([
+                ...activeRoles,
+                ...legacyRoles.filter((r) => !escalating.includes(r)),
+            ]));
+
             const mergedUser = normalizeUserDoc({
                 ...activeData,
                 ...legacyData,
+                // Re-applied AFTER the legacy spread, so the legacy record cannot
+                // reintroduce what the two rules above removed.
+                ...preserveActiveValues(activeData, legacyData),
+                roles: safeRoles.length ? safeRoles : undefined,
                 serviceRegistrations: mergedServiceRegistrations,
                 uid: supabaseUid,
                 supabaseAuthId: supabaseUid,
                 updatedAt: new Date().toISOString(),
-                // Keep tracks of legacy ID origin
-                _legacyFirebaseUid: firebaseUid,
-                _migratedAt: new Date().toISOString()
             });
 
             await activeUserDocRef.set(mergedUser, { merge: true });
@@ -268,6 +333,31 @@ export async function migrateLegacyUserData(
             }
             logger.info(`[UserMigration] Migrated ${waveQuery.size} wave applications.`);
         }
+
+        /**
+         * THE COMPLETION MARKER IS WRITTEN LAST, AND IT WAS WRITTEN FIRST.
+         *
+         * `_migratedAt` and `_legacyFirebaseUid` used to go onto the user
+         * document in step 1, before the ten collections below had moved. The
+         * caller decides whether to migrate with
+         *
+         *     !userDoc.data()?._migratedAt && !userDoc.data()?._legacyFirebaseUid
+         *
+         * so any throw between step 1 and here — one bad row in the loans query,
+         * a timeout on transactions — left the marker set and the remaining
+         * collections behind. The next login sees a migrated user and never
+         * retries, so the member's loans, savings, withdrawals and payments stay
+         * keyed to an id nothing reads. Permanently, and silently.
+         *
+         * Written here instead: reaching this line means every step above
+         * returned. A failure now leaves the marker unset and the next login
+         * runs the whole thing again — which is safe, because each step moves
+         * rows by id and finds nothing left to move on a second pass.
+         */
+        await db.collection(COLLECTIONS.USERS).doc(supabaseUid).set({
+            _legacyFirebaseUid: firebaseUid,
+            _migratedAt: new Date().toISOString(),
+        }, { merge: true });
 
         logger.info(`[UserMigration] Completed migration for ${firebaseUid} → ${supabaseUid}`);
         return { success: true };

@@ -22,25 +22,9 @@ import Link from "next/link";
 import { getCoursesAction, getEnrolledCoursesWithDetailsAction, enrollInCourseAction, type Course } from "@/app/actions/academy";
 import { useToast } from "@/contexts/ToastContext";
 import BackButton from "@/components/ui/BackButton";
+import { checkCourseAccess } from "@/lib/academy-plan";
 
-// Helper client-side check replicated from checkCourseAccess inside _actions.ts
-function checkCourseAccess(userPlan: string, courseTier: string): boolean {
-    const normalizedTier = (courseTier || "free").toLowerCase();
-    const normalizedPlan = (userPlan || "free").toLowerCase();
 
-    if (normalizedTier === "free") return true;
-    if (normalizedPlan === "elite") return true;
-    
-    if (normalizedPlan === "standard" || normalizedPlan === "advanced") {
-        return normalizedTier === "foundation" || normalizedTier === "standard";
-    }
-    
-    if (normalizedPlan === "foundation") {
-        return normalizedTier === "foundation";
-    }
-    
-    return false;
-}
 
 export default function CourseCatalogPage() {
     const { data: session } = useSession();

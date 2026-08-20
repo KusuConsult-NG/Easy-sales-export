@@ -6,7 +6,7 @@ import { requireSession } from "@/lib/session-guard";
 import { csvDocument } from "@/lib/csv-safe";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 
 /**
  * API Route: Export WAVE Compliance Reports (PDF/CSV)
@@ -22,7 +22,14 @@ export async function POST(request: NextRequest) {
         }
 
         // Check admin role from session (not from DB query)
-        if (!isAdmin(session.user.roles)) {
+        // A CSV of every WAVE applicant — name, email, phone, state.
+        //
+        // isAdmin() is true for EVERY admin role, so support, moderator
+        // and every module admin could download this — an academy admin
+        // could take the contact details of every member on the platform.
+        // canAccessAdminRoute already silos these people by module at the
+        // route layer; this aligns the data layer with that.
+        if (!hasAdminPermission(session.user.roles, "users:export")) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }
@@ -57,7 +64,12 @@ export async function POST(request: NextRequest) {
             query = query.where("createdAt", ">=", dateFilter);
         }
 
-        const applicationsSnapshot = await query.get();
+        // .all() — this is an EXPORT, so a silent cap at DEFAULT_QUERY_LIMIT
+        // (5,000) hands the admin a file that looks complete and is not.
+        const applicationsSnapshot = await query.all().get();
+        if (applicationsSnapshot.truncated) {
+            logger.error("[wave/reports/export] WAVE applications sweep hit the unbounded ceiling — the export below is incomplete.");
+        }
         
         // Fetch linked user documents
         const userIds = [...new Set(applicationsSnapshot.docs.map(doc => doc.data().userId).filter(Boolean))];
@@ -101,7 +113,7 @@ export async function POST(request: NextRequest) {
             if (isPlaceholder(phone)) phone = "";
 
             // Resolve state
-            let state = appData.state || appData.residentialState || fallbackUser.state || fallbackUser.stateOfOrigin || fallbackUser.address?.state || fallbackUser.verificationProfile?.address?.state || "";
+            let state = appData.stateOfResidence || appData.stateOfOrigin || appData.state || appData.residentialState || fallbackUser.state || fallbackUser.stateOfOrigin || fallbackUser.address?.state || fallbackUser.verificationProfile?.address?.state || "";
             if (isPlaceholder(state) && fallbackUser.serviceRegistrations) {
                 for (const reg of Object.values(fallbackUser.serviceRegistrations) as any[]) {
                     const profile = reg?.profile || reg;
@@ -125,7 +137,10 @@ export async function POST(request: NextRequest) {
                 phone,
                 state,
                 email: appData.email || fallbackUser.email || "",
-                createdAt: appData.createdAt?.toDate?.()?.toISOString?.() ?? appData.createdAt ?? new Date().toISOString(),
+                // NOT `?? new Date().toISOString()`. An application with no date
+                // was stamped with the export date, so a compliance report showed
+                // it as submitted today. Left null and rendered as "Unknown".
+                createdAt: appData.createdAt?.toDate?.()?.toISOString?.() ?? appData.createdAt ?? null,
             };
         });
 
@@ -149,36 +164,56 @@ export async function POST(request: NextRequest) {
 }
 
 function generateCSV(applications: any[], timeframe: string) {
+    /**
+     * Columns the WAVE application collection actually has.
+     *
+     * FIVE OF THE THIRTEEN WERE PHANTOMS
+     * ----------------------------------
+     * Business Name, Business Type, Years in Business, Amount Requested and Amount
+     * Disbursed are not fields on a WAVE application — the schema in
+     * _wv_applications.ts has none of them, and no writer sets any. Every row
+     * exported blank or 0 in those five columns, on a compliance report.
+     *
+     * They are replaced with the fields the form does collect: occupation, income
+     * band, value-chain interests, commodities and cooperative membership. That
+     * changes the shape of the downloaded file, deliberately — five empty columns
+     * are not a format worth preserving.
+     */
     const headers = [
         "Application ID",
         "Full Name",
         "Email",
         "Phone",
-        "Business Name",
-        "Business Type",
-        "Years in Business",
         "Status",
-        "Amount Requested",
-        "Amount Disbursed",
-        "State",
+        "State of Residence",
+        "LGA of Residence",
         "Age",
+        "Occupation",
+        "Monthly Income Band",
+        "Value Chain Areas",
+        "Preferred Commodities",
+        "Cooperative Member",
         "Application Date",
     ];
+
+    const list = (v: unknown) => (Array.isArray(v) ? v.join("; ") : (v ?? ""));
 
     const rows = applications.map(app => [
         app.id,
         app.fullName || "",
         app.email || "",
         app.phone || "",
-        app.businessName || "",
-        app.businessType || "",
-        app.yearsInBusiness || "",
         app.status || "pending",
-        app.amountRequested || 0,
-        app.amountDisbursed || 0,
         app.state || "",
+        app.lgaOfResidence || app.lgaOfOrigin || "",
         app.age || "",
-        app.createdAt ? new Date(app.createdAt).toLocaleDateString() : "",
+        app.currentOccupation || "",
+        app.averageMonthlyIncome || "",
+        list(app.valueChainAreas),
+        list(app.preferredCommodities),
+        app.isMemberOfCooperative === true ? "Yes" : app.isMemberOfCooperative === false ? "No" : "",
+        // "Unknown" rather than the export date. See the createdAt note above.
+        app.createdAt ? new Date(app.createdAt).toLocaleDateString() : "Unknown",
     ]);
 
     const csvContent = csvDocument(headers, rows);
@@ -198,9 +233,19 @@ function generatePDFReport(applications: any[], timeframe: string) {
     const rejected = applications.filter(app => app.status === "rejected").length;
     const pending = applications.filter(app => app.status === "pending").length;
 
-    const totalDisbursed = applications
-        .filter(app => app.status === "approved" && app.amountDisbursed)
-        .reduce((sum, app) => sum + (app.amountDisbursed || 0), 0);
+    /**
+     * Disbursement is NOT TRACKED on a WAVE application.
+     *
+     * `amountDisbursed` is not a field in the schema and no writer sets it, so this
+     * sum has always been 0 — and the report presented "Total Disbursed: ₦0" and
+     * "Average Loan Size: ₦0" as measured figures on a compliance document. Zero
+     * and not-recorded are different claims, and only one of them was true.
+     */
+    const disbursementRows = applications.filter(app => Number(app.amountDisbursed) > 0);
+    const disbursementTracked = disbursementRows.length > 0;
+    const totalDisbursed = disbursementRows
+        .filter(app => app.status === "approved")
+        .reduce((sum, app) => sum + (Number(app.amountDisbursed) || 0), 0);
 
     const htmlContent = `
 <!DOCTYPE html>
@@ -235,24 +280,30 @@ function generatePDFReport(applications: any[], timeframe: string) {
     </div>
 
     <h2>Financial Summary</h2>
+    ${disbursementTracked ? `
     <p><strong>Total Disbursed:</strong> ₦${totalDisbursed.toLocaleString()}</p>
     <p><strong>Average Loan Size:</strong> ₦${approved > 0 ? (totalDisbursed / approved).toLocaleString() : 0}</p>
+    ` : `
+    <p><em>Disbursement is not recorded against WAVE applications, so no
+    disbursed total or average loan size can be reported for this period. This is
+    an absence of data, not a figure of zero.</em></p>
+    `}
 
     <h2>Application Details</h2>
     <table>
         <thead>
-            <tr><th>Name</th><th>Business</th><th>Status</th><th>Amount</th><th>Date</th></tr>
+            <tr><th>Name</th><th>State</th><th>Occupation</th><th>Status</th><th>Date</th></tr>
         </thead>
         <tbody>
             ${applications.slice(0, 50).map(app => `
                 <tr>
                     <td>${app.fullName || "N/A"}</td>
-                    <td>${app.businessName || "N/A"}</td>
+                    <td>${app.state || "N/A"}</td>
+                    <td>${app.currentOccupation || "N/A"}</td>
                     <td style="color: ${app.status === 'approved' ? '#059669' : app.status === 'rejected' ? '#dc2626' : '#f59e0b'}">
                         ${(app.status || 'pending').toUpperCase()}
                     </td>
-                    <td>₦${(app.amountDisbursed || app.amountRequested || 0).toLocaleString()}</td>
-                    <td>${app.createdAt ? new Date(app.createdAt).toLocaleDateString() : "N/A"}</td>
+                    <td>${app.createdAt ? new Date(app.createdAt).toLocaleDateString() : "Unknown"}</td>
                 </tr>
             `).join("")}
         </tbody>

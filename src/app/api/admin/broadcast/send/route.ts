@@ -13,9 +13,10 @@ import { sendBatchEmailNotifications } from "@/lib/email-notifications";
 import { FieldValue } from "@/lib/firestore-compat";
 import { collectRecipients } from "@/app/actions/broadcast";
 import { logger } from "@/lib/logger";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { rateLimit, createRateLimitResponse } from "@/lib/rate-limiter";
 import { rateLimitConfig } from "@/lib/rate-limits.config";
+import { recordAdminAction } from "@/lib/audit-log";
 
 export const maxDuration = 300; // 5 min timeout for Pro plan
 
@@ -66,7 +67,7 @@ export async function POST(req: NextRequest) {
         const db = getAdminDb();
 
         // Verify admin role
-        if (!isAdmin(session.user.roles)) {
+        if (!hasAdminPermission(session.user.roles, "announcements:manage")) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
         }
 
@@ -213,6 +214,12 @@ export async function POST(req: NextRequest) {
             }
         });
 
+        await recordAdminAction({
+            action: 'broadcast_sent',
+            userId: session.user.id,
+            targetType: 'broadcast',
+            metadata: { subject, filters },
+        });
         return NextResponse.json({
             success: true,
             sent: allRecipients.length,

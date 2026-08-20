@@ -13,6 +13,7 @@ import type { Product } from "@/lib/types/marketplace";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { MarketplaceOnboardingSchema } from "@/lib/validations/marketplace";
 import { withSafeAction, ActionResponse } from "@/lib/safe-action";
+import { toMillis } from "@/lib/firestore-serialize";
 
 // ============================================
 // Check Marketplace Application Status Action
@@ -40,8 +41,8 @@ async function _checkMarketplaceStatusAction(): Promise<ActionResponse<{ status:
 
             if (!verSnap.empty) {
                 const sortedDocs = verSnap.docs.sort((a, b) => {
-                    const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
-                    const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+                    const aTime = toMillis(a.data().createdAt);
+                    const bTime = toMillis(b.data().createdAt);
                     return bTime - aTime;
                 });
                 verDoc = sortedDocs[0];
@@ -127,8 +128,8 @@ async function _checkMarketplaceStatusAction(): Promise<ActionResponse<{ status:
             .get();
 
         if (!verificationSnap.empty) { const sortedDocs = verificationSnap.docs.map(d => d.data()).sort((a, b) => {
-                const aTime = (a as any).createdAt?.toMillis?.() || (a as any).createdAt?.seconds * 1000 || 0;
-                const bTime = (b as any).createdAt?.toMillis?.() || (b as any).createdAt?.seconds * 1000 || 0;
+                const aTime = toMillis((a as any).createdAt);
+                const bTime = toMillis((b as any).createdAt);
                 return bTime - aTime;
             });
             const vData = sortedDocs[0];
@@ -207,6 +208,62 @@ async function _submitMarketplaceOnboardingAction(
         }
 
 
+        // EVERY validation first, then the uploads.
+        //
+        // The location, bank-account and JSON checks used to run AFTER the file
+        // uploads, so a submission that failed any of them had already written a
+        // business registration, farm photos and product samples to storage. The
+        // seller saw an error, retried, and uploaded them all again — orphaned
+        // copies accumulating in the bucket on every failed attempt, none of them
+        // referenced by any record.
+        //
+        // Nothing below this block touches storage until the request is known to
+        // be complete.
+        const parseJsonField = <T,>(key: string, fallback: T): { ok: true; value: T } | { ok: false } => {
+            const raw = formData.get(key) as string | null;
+            if (!raw) return { ok: true, value: fallback };
+            try {
+                return { ok: true, value: JSON.parse(raw) as T };
+            } catch {
+                // `sellerCategories` and `certifications` were parsed with no
+                // guard at all, while `location` and `bankAccount` twenty lines
+                // away were wrapped. A malformed value threw into the outer catch
+                // and the seller was told "Failed to submit" with no clue which
+                // field was wrong — after the uploads had already happened.
+                logger.warn("Malformed JSON in onboarding field", { userId, key });
+                return { ok: false };
+            }
+        };
+
+        const locationParsed = parseJsonField<{ state?: string; lga?: string; address?: string }>("location", {});
+        if (!locationParsed.ok) {
+            return { success: false as const, error: "Location details could not be read. Please re-enter them.", data: null };
+        }
+        const location = locationParsed.value ?? {};
+
+        if (!location?.state || !location?.lga || !location?.address) {
+            return { success: false as const, error: "Location details (State, LGA, Address) are required.", data: null };
+        }
+
+        const bankParsed = parseJsonField<{ bankName?: string; accountNumber?: string; accountName?: string }>("bankAccount", {});
+        if (!bankParsed.ok) {
+            return { success: false as const, error: "Bank account details could not be read. Please re-enter them.", data: null };
+        }
+        const bankAccount = bankParsed.value ?? {};
+
+        const isSeller = accountType === "seller" || accountType === "both";
+        if (isSeller && (!bankAccount?.bankName || !bankAccount?.accountNumber || !bankAccount?.accountName)) {
+            return { success: false as const, error: "Bank account details (Bank Name, Account Number, Account Name) are required.", data: null };
+        }
+
+        const categoriesParsed = parseJsonField<string[]>("sellerCategories", []);
+        const certificationsParsed = parseJsonField<string[]>("certifications", []);
+        if (!categoriesParsed.ok || !certificationsParsed.ok) {
+            return { success: false as const, error: "Categories or certifications could not be read. Please re-select them.", data: null };
+        }
+        const sellerCategories = categoriesParsed.value ?? [];
+        const certifications = certificationsParsed.value ?? [];
+
         // 1. Handle File Uploads (Admin SDK Storage)
         const uploadFile = async (file: File, path: string) => {
             const extension = file.name.split('.').pop();
@@ -250,31 +307,8 @@ async function _submitMarketplaceOnboardingAction(
             }
         }
 
-        // 2. Prepare Data
-        const locationStr = formData.get("location") as string;
-        let location = { state: "", lga: "", address: "" };
-        try { 
-            location = JSON.parse(locationStr);
-        } catch (e) { 
-            logger.warn("Failed to parse location JSON, using defaults", { userId }); 
-        }
-
-        if (!location?.state || !location?.lga || !location?.address) {
-            return { success: false as const, error: "Location details (State, LGA, Address) are required.", data: null };
-        }
-
-        const bankAccountStr = formData.get("bankAccount") as string;
-        let bankAccount = { bankName: "", accountNumber: "", accountName: "" };
-        try { 
-            bankAccount = JSON.parse(bankAccountStr);
-        } catch (e) { 
-            logger.warn("Failed to parse bankAccount JSON, using defaults", { userId }); 
-        }
-
-        const isSeller = accountType === "seller" || accountType === "both";
-        if (isSeller && (!bankAccount?.bankName || !bankAccount?.accountNumber || !bankAccount?.accountName)) {
-            return { success: false as const, error: "Bank account details (Bank Name, Account Number, Account Name) are required.", data: null };
-        }
+        // 2. Prepare Data — location, bankAccount, categories and
+        // certifications were all parsed and validated above, before any upload.
 
         const verificationId = `seller_${userId}_${timestamp}`;
         const verificationRef = db.collection(COLLECTIONS.SELLER_VERIFICATIONS).doc(verificationId);
@@ -289,9 +323,9 @@ async function _submitMarketplaceOnboardingAction(
             location,
             sellerCategory: (formData.get("sellerCategory") as string) || "retail",
             accountType: formData.get("accountType"), 
-            sellerCategories: JSON.parse(formData.get("sellerCategories") as string || "[]"),
+            sellerCategories,
             productionCapacity: formData.get("productionCapacity"),
-            certifications: JSON.parse(formData.get("certifications") as string || "[]"),
+            certifications,
             documents: {
                 businessRegistrationUrl,
                 farmPhotoUrls,

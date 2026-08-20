@@ -3,10 +3,11 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
+import { recordAdminAction } from "@/lib/audit-log";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 
 /**
  * API Route: Update Loan Product (Admin Only)
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Check if user is admin
-        if (!isAdmin(session.user.roles)) {
+        if (!hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }
@@ -76,6 +77,21 @@ export async function POST(request: NextRequest) {
             isActive: Boolean(isActive),
             updatedAt: FieldValue.serverTimestamp(),
             updatedBy: session.user.id,
+        });
+
+        // The interest rate every future borrower on this product will pay.
+        // create and delete are recorded; leaving update out would mean the log
+        // shows a product created at one rate and deleted at another with no
+        // trace of the change between.
+        await recordAdminAction({
+            action: "loan_product_updated",
+            userId: session.user.id,
+            targetId: productId,
+            targetType: "loan_product",
+            metadata: {
+                before: productDoc.data() ?? null,
+                after: { name, minAmount: Number(minAmount), maxAmount: Number(maxAmount), interestRate: Number(interestRate), durationMonths: Number(durationMonths), isActive: Boolean(isActive) },
+            },
         });
 
         return NextResponse.json({

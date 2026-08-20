@@ -8,8 +8,9 @@ import { hasAdminPermission } from "@/lib/admin-permissions";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { financeService } from "@/services";
+import { paystackBaseUrl } from "@/lib/paystack-host";
 
-const PAYSTACK_BASE_URL = "https://api.paystack.co";
+const PAYSTACK_BASE_URL = paystackBaseUrl();
 
 interface PaystackTx {
     reference: string;
@@ -68,7 +69,21 @@ export async function GET(req: NextRequest) {
         const localMetrics = await financeService.getVerifiedRevenueMetrics();
 
         // 3. Retrieve all processed payments references from Firestore to identify missing ones
-        const localPaymentsSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS).get();
+        //
+        // .all(), because this is the set the whole report is diffed against.
+        // A bare .get() stops at DEFAULT_QUERY_LIMIT (5,000) and hands back a
+        // snapshot indistinguishable from a complete one — so every Paystack
+        // transaction whose local record sat past row 5,000 was reported as
+        // "missing in local": money Paystack took that the platform appears
+        // never to have recorded. A reconciliation that manufactures its own
+        // discrepancies is worse than one that does not run.
+        const localPaymentsSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS).all().get();
+        if (localPaymentsSnap.truncated) {
+            logger.error(
+                "[PaystackReconciliation] processed_payments hit the unbounded ceiling — "
+                + "the report below understates local records and will over-report missing payments.",
+            );
+        }
         const localReferences = new Set<string>();
         const localDetails: Record<string, number> = {};
 

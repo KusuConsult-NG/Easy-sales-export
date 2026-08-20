@@ -6,17 +6,26 @@
 
 import { requireSession, isAdmin } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
-import { claimStatusTransitionFromAny } from "@/lib/status-transition";
+import { claimStatusTransition, claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { creditWalletOnce } from "@/lib/wallet-ledger";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Dispute, Order, DisputeReason, DisputeResolution } from "@/lib/types/marketplace";
 import { hasRole } from "@/lib/role-utils";
+import { hasAdminPermission } from "@/lib/admin-permissions";
+import { recordAdminAction } from "@/lib/audit-log";
 import { FieldValue, Timestamp, FieldPath } from "@/lib/firestore-compat";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { smsDisputeResolved } from "@/lib/africastalking";
 import { pushDisputeResolved } from "@/lib/fcm";
+import {
+    ESCROW_FREEZABLE_STATUSES,
+    ESCROW_RELEASABLE_FROM,
+    ESCROW_REFUNDABLE_FROM,
+    isActiveEscrowStatus,
+    isFreezableEscrowStatus,
+} from "@/lib/escrow-status";
 
 function serializeTimestamp(ts: any): string | null {
     if (!ts) return null;
@@ -144,6 +153,104 @@ async function _createDisputeAction(params: { orderId: string;
                     : "Cannot dispute completed or cancelled orders");
         }
 
+        /**
+         * FREEZE THE MONEY, not just the order.
+         *
+         * THE DEFECT
+         * ----------
+         * This claimed the ORDER into "disputed" and never touched
+         * ESCROW_TRANSACTIONS. The auto-release cron
+         * (api/cron/release-escrow) selects escrows on
+         *
+         *     status == "funded" AND releaseRequestedAt <= threshold
+         *
+         * and its comment states the guard it relies on: "a buyer filing a
+         * dispute moves the status off 'funded', and this then refuses to
+         * release." That is true of the OTHER dispute path —
+         * marketplace/_escrow_disputes.ts sets `status: "disputed"` on the escrow
+         * — and it was false here.
+         *
+         * Both paths are live. /escrow/[id]/dispute uses the escrow-keyed one;
+         * /dashboard/disputes/new uses this one. So a buyer who disputed from the
+         * dashboard had the order marked disputed while the money stayed
+         * releasable, and the cron paid the seller out from under an open
+         * dispute.
+         *
+         * It then compounded: resolveDisputeAction claims the escrow from
+         * ["funded", "disputed", "pending"], so once the cron had moved it to
+         * "released" the dispute could not be resolved either — a refund decision
+         * with no way to execute it.
+         *
+         * The escrow is located exactly as resolveDisputeAction locates it — by
+         * orderId, taking the active row — so the two agree on which record the
+         * money hangs off.
+         */
+        let escrowFrozen = false;
+        let escrowAlreadySettled: string | null = null;
+
+        try {
+            const escrowQuery = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
+                .where("orderId", "==", orderId)
+                .limit(10)
+                .get();
+
+            // EVERY active status, not three of them.
+            //
+            // This searched for `funded | disputed | pending` and froze only from
+            // `"funded"`. An escrow at `in_transit` or `delivered` was not even
+            // FOUND here, so a dispute raised after the goods shipped — or after
+            // the buyer confirmed receipt, which is what moves an escrow to
+            // "delivered" — froze nothing and recorded nothing.
+            //
+            // Both release paths (_escrow_actions.ts, order-management.ts) release
+            // from "delivered". So the dispute existed, the escrow stayed
+            // releasable, and the seller was paid anyway: the exact hole the
+            // freeze was written to close, left open for two of the three
+            // statuses a dispute can be raised from. See lib/escrow-status.ts.
+            const activeEscrow = escrowQuery.docs.find(doc =>
+                isActiveEscrowStatus(doc.data()?.status));
+
+            if (activeEscrow) {
+                const status = String(activeEscrow.data()?.status ?? "");
+
+                if (isFreezableEscrowStatus(status)) {
+                    const escrowClaim = await claimStatusTransitionFromAny({
+                        collection: COLLECTIONS.ESCROW_TRANSACTIONS,
+                        id: activeEscrow.id,
+                        fromAny: [...ESCROW_FREEZABLE_STATUSES],
+                        to: "disputed",
+                        patch: {
+                            disputeId: disputeRef.id,
+                            disputedAt: new Date().toISOString(),
+                        },
+                    });
+                    escrowFrozen = escrowClaim.claimed;
+
+                    if (!escrowClaim.claimed) {
+                        // It moved between the read and the claim. `released` here is
+                        // the case that matters and is recorded below.
+                        escrowAlreadySettled = escrowClaim.status ?? null;
+                    }
+                } else {
+                    // `disputed` already — the other path got there first, which is
+                    // fine. `pending` means the escrow was never funded, so there is
+                    // nothing for the cron to release.
+                    escrowFrozen = status === "disputed";
+                }
+            } else if (!escrowQuery.empty) {
+                // Every escrow on this order is already released or refunded. The
+                // dispute is still valid — a buyer may dispute a completed order —
+                // but an admin resolving it cannot move money that has gone, and
+                // must not discover that only when the refund fails.
+                escrowAlreadySettled = String(escrowQuery.docs[0].data()?.status ?? "settled");
+            }
+        } catch (e) {
+            logger.error("[createDispute] Could not freeze the escrow for the disputed order", {
+                orderId,
+                error: e instanceof Error ? e.message : String(e),
+            });
+        }
+
         {
             const disputeData: Partial<Dispute> = { orderId,
                 buyerId: userId,
@@ -153,11 +260,28 @@ async function _createDisputeAction(params: { orderId: string;
                 evidenceUrls,
                 status: "open",
                 _version: 0,
+                // Recorded on the dispute so the admin resolving it knows whether
+                // there is money left to move, before choosing a resolution.
+                escrowFrozen,
+                escrowAlreadySettled,
                 createdAt: FieldValue.serverTimestamp() as any,
                 updatedAt: FieldValue.serverTimestamp() as any };
 
             await disputeRef.set(disputeData);
             await orderRef.update({ _version: FieldValue.increment(1) });
+
+            if (escrowAlreadySettled) {
+                logger.warn(
+                    `[createDispute] Dispute ${disputeRef.id} filed on order ${orderId} whose escrow ` +
+                    `is already '${escrowAlreadySettled}'. The funds have left escrow; a refund ` +
+                    `resolution cannot be executed against it.`
+                );
+            } else if (!escrowFrozen) {
+                logger.warn(
+                    `[createDispute] Dispute ${disputeRef.id} filed on order ${orderId} but no funded ` +
+                    `escrow was frozen. Verify the auto-release cron cannot pay this out.`
+                );
+            }
         }
 
         return { error: null, success: true as const, data: null };
@@ -256,8 +380,14 @@ async function _getAdminDisputesAction(options: { status?: "open" | "under_revie
         // Deliberately NOT switched to isAdmin(), which also admits moderator,
         // support and every module admin. Widening review moderation while
         // fixing a lockout would be a bad trade made quietly.
+        //
+        // Now asked of PERMISSION_MATRIX rather than by naming the two roles
+        // here. "finance:resolve_disputes" is held by super_admin and admin and
+        // nobody else, so the set is unchanged — but the eleven other lists
+        // closed in #151 all ask the matrix, and a hand-written pair of role
+        // names is how the same screen ends up gated two ways.
         const callerRoles = userData?.roles || [];
-        if (!hasRole(callerRoles, "admin") && !hasRole(callerRoles, "super_admin")) {
+        if (!hasAdminPermission(callerRoles, "finance:resolve_disputes")) {
             return { success: false as const, error: "Not authorized as admin", data: null };
         }
 
@@ -373,7 +503,15 @@ async function _getDisputeByIdAction(disputeId: string) { let sessionResult;
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const userData = userDoc.data();
-        const isAdminUser = isAdmin(userData?.roles);
+        const callerRoles = userData?.roles || [];
+        // WHO SEES BANK DETAILS, AND WHO MERELY SEES THE DISPUTE.
+        //
+        // The admin arm was isAdmin(), true for all ten admin roles, where the
+        // sibling getAdminDisputesAction requires admin or super_admin for the
+        // very same fields. Matched to the sibling so one dispute cannot be read
+        // two ways depending on which endpoint is asked.
+        const isResolver = hasAdminPermission(callerRoles, "finance:resolve_disputes");
+        const isAdminUser = isAdmin(callerRoles);
         const isBuyer = dispute.buyerId === userId;
         const isSeller = dispute.sellerId === userId;
 
@@ -382,42 +520,51 @@ async function _getDisputeByIdAction(disputeId: string) { let sessionResult;
 
         const disputeData: Dispute & { buyerDetails?: any; sellerDetails?: any } = serializeDisputeDoc(disputeDoc.id, dispute);
 
+        /**
+         * THE COUNTERPARTY'S BANK ACCOUNT IS NOT PART OF A DISPUTE.
+         *
+         * Both profile blocks below attached bankDetails — bank name, account
+         * number, account name, bank code — unconditionally, to every caller the
+         * check above admits. That includes the buyer and the seller. So filing
+         * a dispute handed the buyer the seller's bank account number, and
+         * handed the seller the buyer's.
+         *
+         * The details exist here for one reason: an admin resolving a dispute
+         * may have to move money, and needs the destination. Nobody else does.
+         * The parties keep the contact fields they need in order to be
+         * identified in the dispute; the account numbers are attached only for a
+         * caller who can actually resolve it.
+         */
+        const profileOf = (data: Record<string, any>) => {
+            const profile: Record<string, unknown> = {
+                firstName: data.firstName,
+                lastName: data.lastName,
+                email: data.email,
+                phoneNumber: data.phoneNumber || data.phone || "N/A",
+            };
+            if (isResolver) {
+                profile.bankDetails = data.bankDetails || {
+                    bankName: data.bankName || data.bankAccount?.bankName || "N/A",
+                    accountNumber: data.accountNumber || data.bankAccountNumber || data.bankAccount?.accountNumber || "N/A",
+                    accountName: data.accountName || data.bankAccountName || data.bankAccount?.accountName || "N/A",
+                    bankCode: data.bankCode || data.bankAccount?.bankCode || "N/A",
+                };
+            }
+            return profile;
+        };
+
         // Fetch profiles for detail view
         if (dispute.buyerId) {
             const buyerDoc = await db.collection(COLLECTIONS.USERS).doc(dispute.buyerId).get();
             if (buyerDoc.exists) {
-                const bData = buyerDoc.data()!;
-                disputeData.buyerDetails = {
-                    firstName: bData.firstName,
-                    lastName: bData.lastName,
-                    email: bData.email,
-                    phoneNumber: bData.phoneNumber || bData.phone || "N/A",
-                    bankDetails: bData.bankDetails || {
-                        bankName: bData.bankName || bData.bankAccount?.bankName || "N/A",
-                        accountNumber: bData.accountNumber || bData.bankAccount?.accountNumber || "N/A",
-                        accountName: bData.accountName || bData.bankAccountName || bData.bankAccount?.accountName || "N/A",
-                        bankCode: bData.bankCode || bData.bankAccount?.bankCode || "N/A"
-                    }
-                };
+                disputeData.buyerDetails = profileOf(buyerDoc.data()!);
             }
         }
 
         if (dispute.sellerId) {
             const sellerDoc = await db.collection(COLLECTIONS.USERS).doc(dispute.sellerId).get();
             if (sellerDoc.exists) {
-                const sData = sellerDoc.data()!;
-                disputeData.sellerDetails = {
-                    firstName: sData.firstName,
-                    lastName: sData.lastName,
-                    email: sData.email,
-                    phoneNumber: sData.phoneNumber || sData.phone || "N/A",
-                    bankDetails: sData.bankDetails || {
-                        bankName: sData.bankName || sData.bankAccount?.bankName || "N/A",
-                        accountNumber: sData.accountNumber || sData.bankAccountNumber || sData.bankAccount?.accountNumber || "N/A",
-                        accountName: sData.accountName || sData.bankAccountName || sData.bankAccount?.accountName || "N/A",
-                        bankCode: sData.bankCode || sData.bankAccount?.bankCode || "N/A"
-                    }
-                };
+                disputeData.sellerDetails = profileOf(sellerDoc.data()!);
             }
         }
 
@@ -459,8 +606,14 @@ async function _updateDisputeStatusAction(
         // Deliberately NOT switched to isAdmin(), which also admits moderator,
         // support and every module admin. Widening review moderation while
         // fixing a lockout would be a bad trade made quietly.
+        //
+        // Now asked of PERMISSION_MATRIX rather than by naming the two roles
+        // here. "finance:resolve_disputes" is held by super_admin and admin and
+        // nobody else, so the set is unchanged — but the eleven other lists
+        // closed in #151 all ask the matrix, and a hand-written pair of role
+        // names is how the same screen ends up gated two ways.
         const callerRoles = userData?.roles || [];
-        if (!hasRole(callerRoles, "admin") && !hasRole(callerRoles, "super_admin")) {
+        if (!hasAdminPermission(callerRoles, "finance:resolve_disputes")) {
             return { success: false as const, error: "Not authorized as admin", data: null };
         }
 
@@ -483,11 +636,15 @@ async function _updateDisputeStatusAction(
             return { success: false as const, error: "Associated escrow transaction not found for this dispute", data: null };
         }
 
-        // Find the active escrow transaction (funded or disputed or pending)
-        const escrowDocSnap = escrowQuery.docs.find(doc => {
-            const status = doc.data().status;
-            return status === "funded" || status === "disputed" || status === "pending";
-        }) || escrowQuery.docs[0];
+        // Find the active escrow transaction — every active status.
+        //
+        // The same three-status list createDisputeAction used, and it has to stay
+        // the same, or the freeze and the resolution attach to different rows.
+        // Neither included "in_transit" or "delivered", so a dispute on a shipped
+        // or received order was resolved against whichever escrow happened to be
+        // first in the result set.
+        const escrowDocSnap = escrowQuery.docs.find(doc =>
+            isActiveEscrowStatus(doc.data()?.status)) || escrowQuery.docs[0];
         const escrowId = escrowDocSnap.id;
         const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId);
 
@@ -525,10 +682,81 @@ async function _updateDisputeStatusAction(
         const finalEscrowStatus = resolution === "release_seller" ? "released" : "refunded";
         const nowIso = new Date().toISOString();
 
+        // FOUR RESOLUTIONS, TWO OF THEM EXECUTED.
+        //
+        // DisputeResolution is "refund_buyer" | "release_seller" |
+        // "partial_refund" | "no_action", and everything below treated it as a
+        // binary: anything that was not "release_seller" refunded the buyer
+        // `escrowAmount` — the WHOLE escrow.
+        //
+        // The admin dispute detail page offers "Partial Refund" and collects an
+        // amount. That amount was written onto the dispute as `refundAmount`
+        // and then ignored, so a ₦5,000 partial refund on a ₦50,000 order paid
+        // out ₦50,000 and recorded ₦5,000 beside it. The other admin dispute
+        // list calls this action with no refundAmount at all.
+        //
+        // A partial refund is now executed as what the words mean and as what
+        // the escrow requires: the buyer is credited the stated amount and the
+        // seller the remainder, so the escrow is fully disbursed and nothing is
+        // stranded in a row marked "refunded".
+        //
+        // "no_action" is REFUSED rather than guessed at. It has no caller and
+        // no defined execution — dismissing a dispute without moving money
+        // leaves the escrow frozen at "disputed", and choosing between that and
+        // a release is a decision for the owner, not one to make silently
+        // inside a bug fix. Refusing is what the old code should have done
+        // instead of refunding in full.
+        if (resolution === "no_action") {
+            return {
+                success: false as const,
+                error: "\"No action\" has no defined outcome for the escrow. Use release to seller, refund to buyer, or a partial refund.",
+                data: null,
+            };
+        }
+
+        let buyerShare = 0;
+        if (resolution === "partial_refund") {
+            const requested = Number(refundAmount);
+            if (!Number.isFinite(requested) || requested <= 0) {
+                return {
+                    success: false as const,
+                    error: "A partial refund needs a refund amount greater than zero.",
+                    data: null,
+                };
+            }
+            if (requested > escrowAmount) {
+                return {
+                    success: false as const,
+                    error: `A partial refund cannot exceed the escrow amount of ₦${Number(escrowAmount).toLocaleString()}.`,
+                    data: null,
+                };
+            }
+            buyerShare = requested;
+        }
+
+        // The shared sets, and NOT from "pending".
+        //
+        // This claimed `["funded", "disputed", "pending"]` for both outcomes.
+        // Two problems.
+        //
+        // "pending" means the escrow was never funded — no money reached the
+        // platform — and both branches below credit a wallet with
+        // `freshEscrow.amount`, which is written at creation regardless. So
+        // resolving a dispute on an unfunded escrow paid out real money for a
+        // payment that never happened.
+        //
+        // And it omitted "in_transit" and "delivered", so a dispute on a shipped
+        // or received order could not be resolved at all — the admin got
+        // "Cannot transition" on the only escrows a dispute is usually about,
+        // since confirming receipt is what moves an escrow to "delivered".
+        const resolvableFrom = resolution === "release_seller"
+            ? ESCROW_RELEASABLE_FROM
+            : ESCROW_REFUNDABLE_FROM;
+
         const escrowClaim = await claimStatusTransitionFromAny({
             collection: COLLECTIONS.ESCROW_TRANSACTIONS,
             id: escrowId,
-            fromAny: ["funded", "disputed", "pending"],
+            fromAny: [...resolvableFrom],
             to: finalEscrowStatus,
             patch: {
                 releasedBy: userId,
@@ -552,18 +780,49 @@ async function _updateDisputeStatusAction(
             // status is NOT "completed" — this is money leaving escrow to a
             // user, not revenue arriving, and platform_revenue_totals() sums
             // completed rows.
+            // What the beneficiary of the primary credit receives. For a
+            // partial refund that is the stated amount, not the whole escrow.
+            const primaryAmount = resolution === "partial_refund" ? buyerShare : escrowAmount;
+
             const credit = await creditWalletOnce({
                 reference: `DISPUTE-RES-${disputeId}`,
                 userId: targetId,
-                amount: escrowAmount,
+                amount: primaryAmount,
                 paymentType: resolution === "release_seller" ? "dispute_payout" : "dispute_refund",
                 source: "escrow",
                 status: resolution === "release_seller" ? "disbursement" : "refund",
                 metadata: { disputeId, escrowId, orderId: freshDispute.orderId },
             });
 
+            // The remainder of a partial refund goes to the seller. Without it
+            // the escrow is marked "refunded" while part of the money it held
+            // belongs to nobody — the balance simply disappears.
+            //
+            // Its own reference, so the two credits claim independently and a
+            // retry cannot double either.
+            const sellerShare = resolution === "partial_refund"
+                ? Number((escrowAmount - buyerShare).toFixed(2))
+                : 0;
+
+            if (sellerShare > 0 && freshDispute.sellerId) {
+                await creditWalletOnce({
+                    reference: `DISPUTE-RES-SELLER-${disputeId}`,
+                    userId: freshDispute.sellerId,
+                    amount: sellerShare,
+                    paymentType: "dispute_payout",
+                    source: "escrow",
+                    status: "disbursement",
+                    metadata: { disputeId, escrowId, orderId: freshDispute.orderId, partial: true },
+                });
+            } else if (sellerShare > 0) {
+                logger.error(
+                    `[resolveDisputeAction] Partial refund on dispute ${disputeId} leaves ` +
+                    `₦${sellerShare} with no seller recorded on the dispute. Needs manual settlement.`
+                );
+            }
+
             const balanceAfter = credit.balance;
-            const balanceBefore = credit.claimed ? balanceAfter - escrowAmount : balanceAfter;
+            const balanceBefore = credit.claimed ? balanceAfter - primaryAmount : balanceAfter;
 
             const updateData: Record<string, unknown> = { status: "resolved",
                 resolution,
@@ -604,7 +863,9 @@ async function _updateDisputeStatusAction(
                     walletId: targetId,
                     userId: targetId,
                     type: resolution === "release_seller" ? "funding" : "refund",
-                    amount: escrowAmount,
+                    // The amount CREDITED, which for a partial refund is the
+                    // buyer's share rather than the whole escrow.
+                    amount: primaryAmount,
                     balanceBefore,
                     balanceAfter,
                     reference: escrowId,
@@ -623,7 +884,7 @@ async function _updateDisputeStatusAction(
                     userId: targetId,
                     type: resolution === "release_seller" ? "dispute_payout" : "dispute_refund",
                     module: "escrow",
-                    amount: escrowAmount,
+                    amount: primaryAmount,
                     currency: "NGN",
                     status: "completed",
                     date: FieldValue.serverTimestamp(),
@@ -636,6 +897,37 @@ async function _updateDisputeStatusAction(
                 });
             }
         }
+
+        /**
+         * THE RESOLUTION LEFT NO ADMIN RECORD.
+         *
+         * This action moves escrow money to a buyer or a seller, closes the
+         * dispute and completes or cancels the order — and wrote nothing to the
+         * admin audit log. Its sibling in marketplace/_escrow_actions.ts records
+         * a mere status edit; the one that decides who keeps the money did not.
+         *
+         * The #66 ratchet did not see it: it matches permission-gated writes,
+         * and until #151 this action named its two roles by hand, so the ratchet
+         * read it as ungated and skipped it. Putting the gate on the matrix is
+         * what surfaced this.
+         *
+         * After the money, so the record describes a resolution that happened;
+         * before the notifications, so a failed SMS cannot skip it.
+         */
+        await recordAdminAction({
+            action: 'dispute_resolved',
+            userId,
+            targetId: disputeId,
+            targetType: 'dispute',
+            metadata: {
+                resolution,
+                escrowId,
+                orderId: freshDispute.orderId,
+                amount: escrowAmount,
+                refundAmount: refundAmount ?? null,
+                beneficiaryId: targetId,
+            },
+        });
 
         // Post-transaction notifications (non-fatal)
         try {

@@ -131,6 +131,28 @@ const getCachedExportOpportunityById = (id: string) => unstable_cache(
 
             const data = snapshot.data() as ExportWindow;
 
+            // Only a window that is actually open for investment.
+            //
+            // The LIST above filters `status in ["open", "active"]`. This
+            // by-id sibling filtered nothing, so it served ANY export window to
+            // an unauthenticated caller who knew its id — including the windows
+            // createExportWindowAction writes for an exporter at
+            // `status: "pending"`, which are that exporter's private trade
+            // record: commodity, quantity, contract value (mapped below as
+            // `minInvestment: data.amount`), destination and delivery date.
+            //
+            // It also mapped every status other than "active" to the label
+            // "Open", so a pending or completed window was presented as
+            // investable.
+            //
+            // Saying it is no longer open, rather than "not found", because a
+            // bookmarked opportunity that has since closed is a real and
+            // ordinary case and the visitor should be told which it is.
+            const investable = data.status === "open" || data.status === "active";
+            if (!investable) {
+                return { success: false as const, error: "This export opportunity is no longer open", meta: null };
+            }
+
             const opportunity: ExportOpportunity = { id: snapshot.id,
                 commodity: data.commodity,
                 destination: (data as ExportWindow & { destination?: string }).destination || "International",

@@ -7,7 +7,15 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
 import { debitJsonbBalanceWithFloor } from "@/lib/wallet-ledger";
-import { COOPERATIVE_MINIMUM_BALANCE } from "@/lib/cooperative-limits";
+import { compensateJsonbDebit } from "@/lib/wallet-ledger";
+import {
+    COOPERATIVE_MINIMUM_BALANCE,
+    COOPERATIVE_MINIMUM_WITHDRAWAL,
+    formatMinimumBalance,
+    formatMinimumWithdrawal,
+    availableAboveFloor,
+} from "@/lib/cooperative-limits";
+import { canTransactAsMember, NOT_A_TRANSACTING_MEMBER_MESSAGE } from "@/lib/cooperative-membership-status";
 import { rateLimit, createRateLimitResponse } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 
@@ -59,9 +67,9 @@ export async function POST(request: NextRequest) {
         const { amount, reason, accountNumber, bankName, accountName } = await request.json();
 
         // Validation
-        if (!amount || amount < 1000) {
+        if (!amount || amount < COOPERATIVE_MINIMUM_WITHDRAWAL) {
             return NextResponse.json(
-                { success: false, message: 'Minimum withdrawal amount is ₦1,000' },
+                { success: false, message: `Minimum withdrawal amount is ${formatMinimumWithdrawal()}` },
                 { status: 400 }
             );
         }
@@ -85,10 +93,15 @@ export async function POST(request: NextRequest) {
 
         const membershipData = membershipDoc.data()!;
 
-        // Check if member is active
-        if (membershipData.membershipStatus !== 'active') {
+        // "approved" is the LEGACY spelling of "active", not a lesser status —
+        // the member directory and the admin list both query for either, under
+        // the comment "both are fully approved members". Refusing it here left a
+        // legacy member holding the role, listed in the directory and carrying
+        // an ID card, unable to do this. One rule now, in
+        // lib/cooperative-membership-status.ts.
+        if (!canTransactAsMember(membershipData)) {
             return NextResponse.json(
-                { success: false, message: 'Only active members can request withdrawals' },
+                { success: false, message: NOT_A_TRANSACTING_MEMBER_MESSAGE },
                 { status: 403 }
             );
         }
@@ -163,7 +176,7 @@ export async function POST(request: NextRequest) {
             // funds" to someone with a healthy balance would be false.
             const message =
                 debit.reason === "below_floor"
-                    ? `You must maintain a minimum balance of ₦${MINIMUM_BALANCE.toLocaleString()}. Available for withdrawal: ₦${Math.max(0, Number(debit.balance) - MINIMUM_BALANCE).toLocaleString()}`
+                    ? `You must keep a minimum balance of ${formatMinimumBalance()}. Available to withdraw: ₦${availableAboveFloor(Number(debit.balance)).toLocaleString()}`
                     : debit.reason === "insufficient_funds"
                         ? `Insufficient balance. Available: ₦${Number(debit.balance).toLocaleString()}`
                         : 'You must be a cooperative member to request withdrawal';
@@ -171,14 +184,24 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ success: false, message }, { status: 400 });
         }
 
+        // From here the balance is ALREADY DOWN.
+        //
+        // The debit is one round trip and the writes below are separate ones,
+        // flushed by the adapter one at a time. A timeout between them left the
+        // member's savings reduced with nothing recorded — no plan, no request,
+        // nothing for anyone to act on — and the catch below only logged it.
+        let locked = false;
         const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
+        // Declared outside the try so the response below can still name it.
+        const withdrawalRef = db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).doc();
+        try {
         await memberRef.update({
             lockedBalance: FieldValue.increment(amount),
             updatedAt: FieldValue.serverTimestamp(),
         });
+        locked = true;
 
         // Create withdrawal request (Admin SDK with server timestamps)
-        const withdrawalRef = db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).doc();
         const withdrawalData = {
             userId,
             userEmail: session.user.email,
@@ -200,6 +223,17 @@ export async function POST(request: NextRequest) {
         };
 
         await withdrawalRef.set(withdrawalData);
+        } catch (workError) {
+            await compensateJsonbDebit({
+                table: "cooperative_members",
+                id: userId,
+                field: "savingsBalance",
+                amount,
+                reason: "withdrawal request could not be recorded after the debit",
+                ...(locked ? { also: { lockedBalance: -amount } } : {}),
+            });
+            throw workError;
+        }
 
         return NextResponse.json({
             success: true,

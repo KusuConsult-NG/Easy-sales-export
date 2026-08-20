@@ -57,12 +57,12 @@ export default function CooperativeHistoryPage() {
                         View all your cooperative activities and transactions
                     </p>
                 </div>
-                <div className="flex gap-2">
-                    <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition">
-                        <Download className="w-4 h-4" />
-                        <span>Export</span>
-                    </button>
-                </div>
+                {/*
+                  * An "Export" button lived here with no onClick — no CSV, no
+                  * download, nothing. A member clicked it and their transaction
+                  * history did not export. Implementing one is a feature;
+                  * removing a control that promises it is the fix.
+                  */}
             </div>
 
             {/* Filters */}
@@ -92,9 +92,8 @@ export default function CooperativeHistoryPage() {
                         </select>
                         <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                     </div>
-                    <button className="p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 hover:text-purple-600">
-                        <Calendar className="w-5 h-5" />
-                    </button>
+                    {/* Same again: a date-filter button with no onClick and no
+                      * date state behind it. */}
                 </div>
             </div>
 

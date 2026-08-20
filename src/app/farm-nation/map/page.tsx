@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import dynamic from "next/dynamic";
 import { Filter, Grid, MapIcon, Search } from "lucide-react";
 import Image from "next/image";
+import { isPurchasable } from "@/lib/land-listing-status";
 
 // Dynamically import map component to avoid SSR issues
 const MapView = dynamic(() => import("@/components/farm-nation/MapView"), {
@@ -93,9 +94,27 @@ export default function FarmNationMapPage() {
             const data = await response.json();
 
             if (data.success && data.data?.listings) {
-                // Only show verified listings with GPS coordinates on the map
+                // Only show listings that are actually for sale, and have GPS
+                // coordinates to place.
+                //
+                // This read `(l.verificationStatus === "verified" || l.status ===
+                // "verified")`, and BOTH halves were wrong:
+                //
+                //   verificationStatus  no writer ever sets it to "verified" —
+                //                       the values written are "pending",
+                //                       "approved" and "rejected" — so that half
+                //                       never matched anything. Dead code that
+                //                       looked like a fallback.
+                //   status              "verified" alone, missing the "available"
+                //                       farm-nation's own creation path writes and
+                //                       the "approved" the endpoint feeding this
+                //                       page publishes.
+                //
+                // So the map showed a strict subset of the listings /land showed,
+                // from the same response, and a farm-nation-created parcel with
+                // GPS coordinates never appeared on it at all.
                 const mappableListings = data.data.listings.filter(
-                    (l: LandListing) => (l.verificationStatus === "verified" || l.status === "verified") && l.gpsCoordinates
+                    (l: LandListing) => isPurchasable(l.status) && l.gpsCoordinates
                 );
                 setListings(mappableListings);
             }

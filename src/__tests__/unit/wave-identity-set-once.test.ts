@@ -124,11 +124,37 @@ describe('gender is no longer overwritten', () => {
     });
 
     it('the exemptions that make this reachable are still there', () => {
-        // Pinning WHY the unconditional write was wrong. If the exemptions ever
-        // go, the reasoning changes and whoever changes it should see this.
-        expect(wave).toMatch(
-            /isMale && !isUserAdmin && !isAcademyElite && !hasWaveRole && !hasWaveReg/
-        );
+        // Pinning WHY the unconditional write was wrong: a male applicant CAN
+        // reach the enrolment path, through any of these exemptions, so writing
+        // `gender: "Female"` unconditionally rewrote his record.
+        //
+        // The exemptions moved into the shared rule when four hand-written copies
+        // of the eligibility check were unified, so they are asserted there — one
+        // case per exemption, which the single regex this replaced could not do.
+        const { checkWaveEligibility } = require('@/lib/wave-eligibility');
+
+        const male = { gender: 'male', createdAt: '2020-01-01T00:00:00.000Z' };
+
+        // Admin.
+        expect(checkWaveEligibility({ ...male, roles: ['admin'] }).eligible).toBe(true);
+        // Academy Elite.
+        expect(checkWaveEligibility({
+            ...male,
+            roles: [],
+            serviceRegistrations: { academy: { plan: 'elite', status: 'approved' } },
+        }).eligible).toBe(true);
+        // A pre-existing WAVE role.
+        expect(checkWaveEligibility({ ...male, roles: ['wave_participant'] }).eligible).toBe(true);
+        // A pre-existing WAVE registration.
+        expect(checkWaveEligibility({
+            ...male,
+            roles: [],
+            serviceRegistrations: { wave: { status: 'pending' } },
+        }).eligible).toBe(true);
+
+        // And an ordinary male account is still refused, so the four above are
+        // exemptions from something.
+        expect(checkWaveEligibility({ ...male, roles: [] }).eligible).toBe(false);
     });
 });
 

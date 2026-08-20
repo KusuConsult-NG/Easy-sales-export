@@ -12,8 +12,12 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { cooperativeMembershipSchema, type MembershipRegistrationState } from "@/lib/types/cooperative";
 import { parseFormData } from "@/lib/form-validation";
 import type { JoinCooperativeState } from "@/lib/types/cooperative";
-import { serializeValue } from "@/lib/firestore-serialize";
+import { serializeValue, toMillis } from "@/lib/firestore-serialize";
+import { claimStatusTransition } from "@/lib/status-transition";
+import { inviteRefusalReason, INVITE_WRONG_ACCOUNT_MESSAGE } from "@/lib/cooperative-invite";
+import { mayClaimMembershipByEmail } from "@/lib/cooperative-membership-claim";
 import { revalidatePath } from "next/cache";
+import { registrationProgressScore } from "@/lib/registration-progress";
 
 /**
  * 2. COMPLETE REGISTRATION (Step 2)
@@ -21,7 +25,11 @@ import { revalidatePath } from "next/cache";
  */
 export async function registerCooperativeMemberAction(
     formData: FormData
-): Promise<MembershipRegistrationState> { try {
+): Promise<MembershipRegistrationState> {
+    /** Set once an invite token has been consumed, so a later failure can return it. */
+    let claimedInvite: string | null = null;
+
+    try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
         const { session } = sessionResult;
@@ -57,6 +65,41 @@ export async function registerCooperativeMemberAction(
             if (!inviteRes.success) { return { error: inviteRes.error || "Invalid invitation token", success: false as const, data: null };
             }
             isLegacyImport = true;
+
+            // ONE TOKEN, ONE MEMBERSHIP.
+            //
+            // The token was read here and marked "used" much later, by a blind
+            // `transaction.update` inside runTransaction — which takes no lock on
+            // this adapter. Two registrations submitted with the same link both
+            // read `status: "pending"` and both wrote "used", and an invite is
+            // what waives the ₦ registration fee: `paymentStatus: "completed"` is
+            // set from `if (inviteToken)` alone. So one invitation could admit
+            // two fee-free members.
+            //
+            // Claimed here rather than in the transaction, because a claim made
+            // after the membership is written cannot refuse anything — the member
+            // is already recorded as paid by then. Burning the token on a later
+            // failure is the cost, and it is compensated below.
+            const inviteClaim = await claimStatusTransition({
+                collection: COLLECTIONS.COOPERATIVES_INVITES,
+                id: inviteToken,
+                from: "pending",
+                to: "used",
+                patch: {
+                    usedBy: userId,
+                    usedAt: new Date().toISOString(),
+                },
+            });
+
+            if (!inviteClaim.claimed) {
+                return {
+                    error: "This invitation has already been used or revoked.",
+                    success: false as const,
+                    data: null,
+                };
+            }
+
+            claimedInvite = inviteToken;
         } else { // Legacy check
             if (memberData?.onboardingCompleted && memberData?.paymentStatus === "completed") { return { error: "You have already completed onboarding. Profile updates require admin approval.", success: false as const, data: null };
             }
@@ -197,13 +240,8 @@ export async function registerCooperativeMemberAction(
             // 1. Save/Merge Member Data
             transaction.set(existingMemberRef, updatedData, { merge: true });
 
-            // 2. If an invite token was used, mark it as completed
-            if (inviteToken) { transaction.update(db.collection(COLLECTIONS.COOPERATIVES_INVITES).doc(inviteToken), {
-                    status: "used",
-                    usedBy: userId,
-                    usedAt: FieldValue.serverTimestamp()
-                });
-            }
+            // The invite was marked used here, blind. It is claimed before the
+            // transaction now — see the note at the claim.
 
             // 3. Update user service registration and sync profile data
             transaction.update(db.collection(COLLECTIONS.USERS).doc(userId), normalizeUserUpdate({ 
@@ -264,9 +302,40 @@ export async function registerCooperativeMemberAction(
     } catch (error) { logger.error("Membership registration failed:", {
             error: error instanceof Error ? error.message : String(error)
         });
+
+        // Give the invitation back.
+        //
+        // The token is claimed before the writes, which is the only order that
+        // can refuse a second use — but it means a failure afterwards would
+        // otherwise leave an invited member holding a link that now reports
+        // "already used", with no way to register and no fee waiver. The most
+        // common failure here is the transient network one this very handler
+        // classifies below, where retrying is exactly what the member is told
+        // to do.
+        //
+        // Released only from "used", so a token some other registration has
+        // since consumed is left alone.
+        if (claimedInvite) {
+            try {
+                await claimStatusTransition({
+                    collection: COLLECTIONS.COOPERATIVES_INVITES,
+                    id: claimedInvite,
+                    from: "used",
+                    to: "pending",
+                    patch: { usedBy: null, usedAt: null },
+                });
+            } catch (releaseError) {
+                logger.error(
+                    "[registerCooperativeMember] invitation could not be released after a failed "
+                    + "registration — the member cannot retry with this link and needs a new invite.",
+                    { token: claimedInvite, error: releaseError instanceof Error ? releaseError.message : String(releaseError) }
+                );
+            }
+        }
+
         const errMsg = error instanceof Error ? error.message : String(error);
-        const isTransient = errMsg.includes("Premature close") || 
-                            errMsg.includes("socket hang up") || 
+        const isTransient = errMsg.includes("Premature close") ||
+                            errMsg.includes("socket hang up") ||
                             errMsg.includes("ECONNRESET") ||
                             errMsg.includes("Client network socket disconnected") ||
                             errMsg.includes("FetchError") ||
@@ -276,8 +345,8 @@ export async function registerCooperativeMemberAction(
                             errMsg.includes("UNAVAILABLE") ||
                             errMsg.includes("stream terminated") ||
                             errMsg.includes("ERR_STREAM_PREMATURE_CLOSE");
-        const userFriendlyMessage = isTransient 
-            ? "A temporary connection issue occurred. Please try again." 
+        const userFriendlyMessage = isTransient
+            ? "A temporary connection issue occurred. Please try again."
             : errMsg;
         return { error: userFriendlyMessage, success: false as const, data: null };
     }
@@ -364,7 +433,11 @@ export async function joinCooperativeAction(
         await batch.commit();
 
         revalidatePath("/cooperatives");
-        revalidatePath("/dashboard/cooperatives");
+        // /dashboard/cooperatives has no route — the cooperative dashboard is
+        // /cooperatives/dashboard, which is revalidated on the line below. A
+        // revalidatePath on a path with no route is a silent no-op, so this
+        // line invalidated nothing at all. Same as the academy and export
+        // dashboards, fixed in their own passes.
         revalidatePath("/cooperatives/dashboard");
 
         return { error: null, success: true as const,
@@ -418,7 +491,15 @@ export async function getCooperativeApplicationAction(): Promise<
                     .limit(1)
                     .get();
                 if (!emailQuery.empty) {
+                    // See lib/cooperative-membership-claim.ts — this returns the
+                    // application for editing, KYC and documents included.
                     const memberDoc = emailQuery.docs[0];
+                    const mayClaim = await mayClaimMembershipByEmail(
+                        db, { data: memberDoc.data(), id: memberDoc.id }, session.user.id,
+                    );
+                    if (!mayClaim) {
+                        return { success: false as const, error: 'No application found'};
+                    }
                     if (!memberDoc.data().userId) {
                         await memberDoc.ref.update({ userId: session.user.id });
                     }
@@ -431,8 +512,8 @@ export async function getCooperativeApplicationAction(): Promise<
             }
         }
 
-        const sortedDocs = snap.docs.map(d => d.data()).sort((a: any, b: any) => { const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
-            const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
+        const sortedDocs = snap.docs.map(d => d.data()).sort((a: any, b: any) => { const aTime = toMillis(a.createdAt);
+            const bTime = toMillis(b.createdAt);
             return bTime - aTime;
         });
         const data = serializeValue(sortedDocs[0]);
@@ -465,29 +546,11 @@ export async function resubmitCooperativeApplicationAction(
         const coopReg = userData?.serviceRegistrations?.cooperatives;
         const legacyReg = userData?.serviceRegistrations?.cooperative;
 
-        const getProgressScore = (status: string) => {
-            switch (status) {
-                case 'active':
-                case 'approved':
-                    return 4;
-                case 'pending':
-                case 'pending_review':
-                case 'revision_required':
-                    return 3;
-                case 'pending_repair':
-                case 'legacy_pending_onboarding':
-                    return 2;
-                case 'not_started':
-                    return 1;
-                default:
-                    return 0;
-            }
-        };
 
         let registration = coopReg || legacyReg;
         if (coopReg && legacyReg) {
-            const scorePlural = getProgressScore(coopReg.status || '');
-            const scoreSingular = getProgressScore(legacyReg.status || '');
+            const scorePlural = registrationProgressScore(coopReg.status || '');
+            const scoreSingular = registrationProgressScore(legacyReg.status || '');
             if (scoreSingular > scorePlural) {
                 registration = legacyReg;
             }
@@ -520,8 +583,8 @@ export async function resubmitCooperativeApplicationAction(
                 existingMemberData = {};
             }
         } else {
-            const sortedDocs = snap.docs.sort((a, b) => { const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
-                const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+            const sortedDocs = snap.docs.sort((a, b) => { const aTime = toMillis(a.data().createdAt);
+                const bTime = toMillis(b.data().createdAt);
                 return bTime - aTime;
             });
             memberRef = sortedDocs[0].ref;
@@ -676,7 +739,32 @@ export async function validateCooperativeInviteAction(
 
         const data = inviteDoc.data()!;
 
-        if (data.status !== "pending") { return { success: false as const, error: "This invitation has already been used or revoked.", data: null };
+        // One policy, asked by both doors.
+        //
+        // This used to check `status !== "pending"` and nothing else — no
+        // expiry, and the invite's recorded `email` compared to nothing at all,
+        // so a forwarded link admitted whoever held it, fee-free and for ever.
+        // See lib/cooperative-invite.ts for why the binding fails CLOSED here
+        // when the session-revocation check fails open.
+        //
+        // The caller's email comes from the session rather than a parameter, so
+        // the redemption path in registerCooperativeMember cannot forget to pass
+        // it — that is the shape this codebase keeps getting wrong when one rule
+        // has two doors. Signed out, the binding is skipped and only status and
+        // age are checked: this action is also the onboarding page's link
+        // preview, and a preview is not the fee waiver.
+        const previewSession = await requireSession();
+        const callerEmail = previewSession.session?.user?.email ?? undefined;
+
+        const refusal = inviteRefusalReason(data, callerEmail);
+        if (refusal) {
+            if (callerEmail && refusal === INVITE_WRONG_ACCOUNT_MESSAGE) {
+                logger.warn(
+                    "[invite] refused: the link was issued to a different address",
+                    { token, caller: callerEmail },
+                );
+            }
+            return { success: false as const, error: refusal, data: null };
         }
 
         return { error: null, success: true as const, data: { message: "Invite valid" },

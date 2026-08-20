@@ -12,7 +12,15 @@ import { requireSession } from "@/lib/session-guard";
 import { logAuditAction } from "@/app/actions/audit";
 import { invalidateCooperativeCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { debitJsonbBalance, claimSingleOpenLoanApplication } from "@/lib/wallet-ledger";
+import { debitJsonbBalance, debitJsonbBalanceWithFloor, claimSingleOpenLoanApplication, compensateJsonbDebit } from "@/lib/wallet-ledger";
+import { canTransactAsMember, NOT_A_TRANSACTING_MEMBER_MESSAGE } from "@/lib/cooperative-membership-status";
+import {
+    COOPERATIVE_MINIMUM_BALANCE,
+    COOPERATIVE_MINIMUM_WITHDRAWAL,
+    formatMinimumBalance,
+    formatMinimumWithdrawal,
+    availableAboveFloor,
+} from "@/lib/cooperative-limits";
 import { COOPERATIVE_CONFIG } from "@/lib/constants";
 import { contributionSchema, loanApplicationSchema, fixedSavingsSchema, type MembershipRegistrationState, type LoanApplicationState, type FixedSavingsState, type WithdrawalActionState } from "@/lib/types/cooperative";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
@@ -264,7 +272,11 @@ async function _makeContributionAction(
         });
 
         revalidatePath("/cooperatives");
-        revalidatePath("/dashboard/cooperatives");
+        // /dashboard/cooperatives has no route — the cooperative dashboard is
+        // /cooperatives/dashboard, which is revalidated on the line below. A
+        // revalidatePath on a path with no route is a silent no-op, so this
+        // line invalidated nothing at all. Same as the academy and export
+        // dashboards, fixed in their own passes.
         revalidatePath("/cooperatives/dashboard");
         return { error: null, success: true as const, data: { message: "Contribution successful" }, meta: null };
     } catch (error) { logger.error("Contribution failed:", {
@@ -296,14 +308,31 @@ async function _submitWithdrawalAction(
         if (isNaN(amount) || amount <= 0) { return { error: "Amount must be greater than zero", success: false as const, data: null };
         }
 
+        // The third door onto one minimum. /api/cooperative/withdraw refuses
+        // anything under ₦1,000; this asked only that the amount be positive.
+        // See lib/cooperative-limits.ts.
+        if (amount < COOPERATIVE_MINIMUM_WITHDRAWAL) {
+            return {
+                error: `Minimum withdrawal amount is ${formatMinimumWithdrawal()}`,
+                success: false as const,
+                data: null,
+            };
+        }
+
         try { bankAccount = bankAccountStr ? JSON.parse(bankAccountStr) : null;
         } catch (e) { return { error: "Invalid bank account details", success: false as const, data: null };
         }
 
         // Membership must be active before any money moves.
+        //
+        // This accepted "active" alone. "approved" is the LEGACY spelling of the
+        // same state — the directory and the admin list both query for either,
+        // under the comment "both are fully approved members" — so a legacy
+        // member holding the role and listed in the directory was refused their
+        // own savings here. See lib/cooperative-membership-status.ts.
         const membershipSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
-        if (!membershipSnap.exists || membershipSnap.data()?.membershipStatus !== "active") {
-            return { success: false as const, error: "You are not an active cooperative member", data: null };
+        if (!membershipSnap.exists || !canTransactAsMember(membershipSnap.data())) {
+            return { success: false as const, error: NOT_A_TRANSACTING_MEMBER_MESSAGE, data: null };
         }
 
         // Reserve the funds under a row lock.
@@ -316,19 +345,31 @@ async function _submitWithdrawalAction(
         // Migration 010 made that worse rather than better: the increments used
         // to lose one another, which accidentally hid the overdraft. Once they
         // apply correctly, both deductions land.
-        const debit = await debitJsonbBalance({
+        //
+        // The minimum balance applies here too, and did not.
+        //
+        // This is a withdrawal — the same operation /api/cooperative/withdraw
+        // performs, which refuses below COOPERATIVE_MINIMUM_BALANCE through
+        // debitJsonbBalanceWithFloor, as repayLoanFromSavingsAction does for the
+        // same balance. Two of the paths that reduce a member's savings enforced
+        // the floor and two did not, so which answer a member got depended on
+        // which screen they withdrew from. See lib/cooperative-limits.ts.
+        const debit = await debitJsonbBalanceWithFloor({
             table: "cooperative_members",
             id: userId,
             field: "savingsBalance",
             amount,
+            floor: COOPERATIVE_MINIMUM_BALANCE,
         });
 
         if (!debit.ok) {
             return {
                 success: false as const,
-                error: debit.reason === "insufficient_funds"
-                    ? "Insufficient savings balance"
-                    : "You are not an active cooperative member",
+                error: debit.reason === "below_floor"
+                    ? `You must keep a minimum balance of ${formatMinimumBalance()}. Available to withdraw: ₦${availableAboveFloor(Number(debit.balance)).toLocaleString()}`
+                    : debit.reason === "insufficient_funds"
+                        ? "Insufficient savings balance"
+                        : "You are not an active cooperative member",
                 data: null,
             };
         }
@@ -346,10 +387,21 @@ async function _submitWithdrawalAction(
         // Ordering: after the debit, never before. The debit is the step that
         // can legitimately fail on insufficient funds; incrementing first would
         // lock funds that were never taken.
+        //
+        // And from here the savings are ALREADY DOWN. Everything below is
+        // several separate round trips which, as the comment further down says,
+        // "the adapter flushes one by one" — so a timeout between them left the
+        // member's savings reduced with no locked balance and no request row,
+        // and the bare catch at the end of this function simply logged it. The
+        // money was gone. `locked` records how far this got so the compensation
+        // reverses exactly that much.
+        let locked = false;
+        try {
         await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).update({
             lockedBalance: FieldValue.increment(amount),
             updatedAt: FieldValue.serverTimestamp(),
         });
+        locked = true;
 
         // The funds are already reserved by the debit above, which is the only
         // thing here that took a lock. Wrapping the two writes below in
@@ -373,6 +425,18 @@ async function _submitWithdrawalAction(
             "withdrawal",
             { amount, reason }
         );
+
+        } catch (workError) {
+            await compensateJsonbDebit({
+                table: "cooperative_members",
+                id: userId,
+                field: "savingsBalance",
+                amount,
+                reason: "withdrawal request could not be recorded after the debit",
+                ...(locked ? { also: { lockedBalance: -amount } } : {}),
+            });
+            throw workError;
+        }
 
         revalidatePath("/cooperatives/withdrawals");
         return { error: null,  success: true as const,
@@ -463,6 +527,19 @@ async function _applyForLoanAction(
 
         const membershipDoc = membershipSnapshot.docs[0];
         const membershipData = membershipDoc.data();
+
+        // NO STATUS CHECK AT ALL, where the route doing the same work has one.
+        //
+        // /api/cooperative/apply-loan refuses a member who is not active. This
+        // asked only that a membership ROW exist, so a member still at
+        // "pending" — registered, unpaid, onboarding incomplete — could file a
+        // loan application through the page while the route refused them.
+        // Bounded by the savings-multiple eligibility check below, since a
+        // pending member has no savings, but a control that holds only because
+        // another number happens to be zero is not a control.
+        if (!canTransactAsMember(membershipData)) {
+            throw new Error(NOT_A_TRANSACTING_MEMBER_MESSAGE);
+        }
 
         const loansRef = db.collection(COLLECTIONS.COOPERATIVE_LOANS);
 
@@ -649,6 +726,17 @@ async function _createFixedSavingsAction(
             return { success: false as const, error: "Membership not found", data: null };
         }
 
+        // NO STATUS CHECK AT ALL, where the route doing the same work has one.
+        //
+        // /api/cooperative/create-fixed-savings refuses a member who is not
+        // approved or active. This asked only that a membership row exist — and
+        // unlike the loan path there is no second number bounding it: a pending
+        // member whose contribution had already landed could lock it into a
+        // fixed plan they were not entitled to open.
+        if (!canTransactAsMember(membershipSnapshot.docs[0].data())) {
+            return { success: false as const, error: NOT_A_TRANSACTING_MEMBER_MESSAGE, data: null };
+        }
+
         const membershipId = membershipSnapshot.docs[0].id;
 
         // Lock the savings before creating the plan.
@@ -673,6 +761,9 @@ async function _createFixedSavingsAction(
             };
         }
 
+        // From here the balance is ALREADY DOWN. A failure below left the
+        // member's savings reduced with no plan recorded.
+        try {
         // Create Fixed Savings Record. This is a single write; the
         // runTransaction wrapper around it bought nothing at all.
         //
@@ -741,6 +832,16 @@ async function _createFixedSavingsAction(
             description: `Locked into a ${durationMonths}-month fixed savings plan`,
             status: "completed",
             date: FieldValue.serverTimestamp() });
+        } catch (workError) {
+            await compensateJsonbDebit({
+                table: "cooperative_members",
+                id: membershipId,
+                field: "savingsBalance",
+                amount,
+                reason: "fixed savings plan could not be recorded after the debit",
+            });
+            throw workError;
+        }
 
         return { error: null, success: true as const, data: { message: "Fixed savings plan created" }  };
     } catch (error) { logger.error("Fixed savings creation failed:", {

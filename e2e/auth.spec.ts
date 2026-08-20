@@ -8,7 +8,7 @@ test.describe('Authentication Flow', () => {
 
         // 2. Verify login page loaded
         await expect(page).toHaveTitle(/Easy Sales Export/);
-        await expect(page.locator('h1')).toContainText(/Login|Sign In|Welcome Back/i);
+        await expect(page.getByRole('heading', { level: 1 })).toContainText(/Login|Sign In|Welcome Back/i);
 
         // 3. Fill in credentials
         await page.fill('input[type="email"]', process.env.TEST_USER_EMAIL || 'e2e.user@easysalesexport.com');
@@ -24,7 +24,7 @@ test.describe('Authentication Flow', () => {
         // 6. Verify dashboard loaded
         await expect(page).toHaveURL(/\/dashboard/);
         await expect(page.locator('text=Loading dashboard...').first()).not.toBeVisible({ timeout: 20000 });
-        await expect(page.locator('h1').first()).toContainText(/Dashboard|Welcome|Hello/i, { timeout: 15000 });
+        await expect(page.getByRole('heading', { level: 1 }).first()).toContainText(/Dashboard|Welcome|Hello/i, { timeout: 15000 });
 
         console.log('✅ Login successful');
     });

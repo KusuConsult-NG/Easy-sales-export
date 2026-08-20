@@ -11,10 +11,18 @@ import { FieldPath } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log";
-import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
+import { serializeDocs, serializeValue, toMillis } from "@/lib/firestore-serialize";
 import { normalizeAggressive } from "@/lib/canonical/normalizer";
 import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
+import { stripPii } from "@/lib/admin-pii";
 import { safeToISOString } from "@/lib/date-utils";
+import { claimStatusTransitionFromAny } from "@/lib/status-transition";
+import { normaliseSellerVerification } from "@/lib/seller-verification-shape";
+import {
+    PRODUCT_APPROVABLE_FROM,
+    PRODUCT_REJECTABLE_FROM,
+    normaliseProductStatus,
+} from "@/lib/product-status";
 
 // ============================================
 // Seller Verification (Marketplace)
@@ -68,7 +76,22 @@ async function _approveSellerVerificationAction(
                 verifiedBy: session.user.id,
                 verifiedAt: FieldValue.serverTimestamp(),
                 roles: FieldValue.arrayUnion("seller"),
-                "serviceRegistrations.marketplace.status": "active",
+                // "approved", not "active".
+                //
+                // Two approval implementations write this field:
+                // /api/admin/marketplace/approve-seller writes "approved", and
+                // this action wrote "active". Every reader tests for "approved"
+                // — marketplace/seller/layout.tsx redirects to /onboarding when
+                // `registration.status !== "approved"`, and
+                // checkMarketplaceStatusAction re-queries the verification
+                // record for the same reason.
+                //
+                // NOT a live lockout: the admin sellers page calls the API
+                // route, so approvals made through the UI have always written
+                // the value readers accept. This action is exported from the
+                // admin barrel and reachable, and would have locked an approved
+                // seller out of their own dashboard.
+                "serviceRegistrations.marketplace.status": "approved",
                 "serviceRegistrations.marketplace.accountType": verificationData.accountType || "seller",
                 "serviceRegistrations.marketplace.paymentStatus": "completed",
                 "serviceRegistrations.marketplace.approvedAt": FieldValue.serverTimestamp(),
@@ -206,8 +229,24 @@ async function _toggleVerifiedBadgeAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
-            return { error: "Unauthorized: Permission required - users:update", success: false as const };
+        /**
+         * The marketplace permission, not the global user one.
+         *
+         * This required "users:update", which only super_admin and admin hold.
+         * marketplace_admin does not — and /admin/marketplace/sellers, the ONLY
+         * screen with this button, is a route marketplace_admin is explicitly
+         * allowed to reach (see canAccessAdminRoute). So the role whose job is
+         * approving sellers could open the seller screen, approve an application
+         * with "marketplace:approve_sellers" two functions up, and then get
+         * "Unauthorized: Permission required - users:update" from the Grant Badge
+         * button beside it, every time.
+         *
+         * "marketplace:approve_sellers" is held by super_admin, admin and
+         * marketplace_admin — the same set as before plus the role that owns the
+         * screen. Nobody else gains anything.
+         */
+        if (!session?.user || !hasAdminPermission(session.user.roles, "marketplace:approve_sellers")) {
+            return { error: "Unauthorized: Permission required - marketplace:approve_sellers", success: false as const };
         }
 
         const ref = db.collection(COLLECTIONS.SELLER_VERIFICATIONS).doc(verificationId);
@@ -307,6 +346,20 @@ async function _getStandardSellerVerificationsAction(
         if (!isAdmin(session.user.roles)) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
+
+        /**
+         * isAdmin() is true for all TEN admin roles, and every row below carries
+         * the applicant's bank details AND the URLs of their ID card and
+         * business certificate. Approving, rejecting or suspending a seller —
+         * the only things this screen does — requires
+         * "marketplace:approve_sellers", which the action fifty lines above
+         * already enforces: super_admin, admin and marketplace_admin.
+         *
+         * So an academy_admin or a support user could not decide a single
+         * application and could read every seller's account number and download
+         * their identity documents.
+         */
+        const maySeeVerificationPii = hasAdminPermission(session.user.roles, "marketplace:approve_sellers");
 
         let cursorSnap = null;
         if (cursorId) {
@@ -442,6 +495,12 @@ async function _getStandardSellerVerificationsAction(
                 null  // WAVE data (not needed for seller view)
             );
 
+            // Typed as a Record: NormalisedSellerVerification carries an index
+            // signature so unknown fields pass through, but TypeScript drops
+            // index signatures across an object spread — without this the
+            // downstream sort on `data.createdAt` stops compiling.
+            const canonical: Record<string, any> = normaliseSellerVerification(app);
+
             return {
                 id: app.id,
                 user: {
@@ -453,15 +512,48 @@ async function _getStandardSellerVerificationsAction(
                     address: normalized.address?.street || "Unknown",
                     state: normalized.address?.state || "Unknown",
                     lga: normalized.address?.lga || "Unknown",
-                    bankDetails: normalized.verificationProfile?.bankDetails,
-                    documents: normalized.verificationProfile?.documents
+                    ...(maySeeVerificationPii ? {
+                        bankDetails: normalized.verificationProfile?.bankDetails,
+                        documents: normalized.verificationProfile?.documents,
+                    } : {}),
                 },
                 status: normalized.verificationProfile?.status || "pending",
-                data: {
-                    ...app,
-                    bankDetails: normalized.verificationProfile?.bankDetails,
-                    documents: normalized.verificationProfile?.documents
-                }
+                // Normalised onto the shape the admin screen reads.
+                //
+                // SELLER_VERIFICATIONS has two writers and neither produces what
+                // this screen expects. Address, state and LGA were blank for both
+                // paths; business name and phone were blank for applications
+                // submitted through the verification form; and the detail modal
+                // renders `{data.address}` directly, which for that path is an
+                // OBJECT — React throws "Objects are not valid as a React child"
+                // and the admin screen came down.
+                //
+                // Normalising on READ rather than migrating: records already
+                // exist in both shapes, so changing the writers fixes nothing
+                // already stored. See lib/seller-verification-shape.ts.
+                //
+                // Applied BEFORE the normalizeAggressive fields, so those still
+                // win — they draw on the user document as well as the
+                // application, which is a wider source than this adapter has.
+                // `canonical` is the raw application normalised, so it carries
+                // whatever the two writers put there — account number, BVN and
+                // NIN among it. Stripped rather than overridden field by field:
+                // a spread of a document nobody controls cannot be gated by
+                // naming the keys you happen to know about.
+                data: maySeeVerificationPii ? {
+                    ...canonical,
+                    // normalizeAggressive draws on the USER document as well as
+                    // the application, which is a wider source than the adapter
+                    // has, so it wins where it has a value.
+                    bankDetails: normalized.verificationProfile?.bankDetails ?? canonical.bankDetails,
+                    documents: {
+                        // Its own keys (businessCert / idCard) are kept for the
+                        // raw view; the three the screen reads come from the
+                        // adapter, which is the only place they line up.
+                        ...(normalized.verificationProfile?.documents ?? {}),
+                        ...canonical.documents,
+                    }
+                } : stripPii(canonical)
             };
         });
 
@@ -481,22 +573,28 @@ async function _getStandardSellerVerificationsAction(
 
             // Sort the final forms in memory
             const dir = sortOrder || "desc";
-            finalForms.sort((a, b) => {
-                const dateA = new Date(a.data?.createdAt?.toDate ? a.data.createdAt.toDate().toISOString() : a.data?.createdAt || 0).getTime();
-                const dateB = new Date(b.data?.createdAt?.toDate ? b.data.createdAt.toDate().toISOString() : b.data?.createdAt || 0).getTime();
+            finalForms.sort((a: any, b: any) => {
+                // toMillis, not another hand-rolled coercion.
+                //
+                // This read `new Date(x?.toDate ? x.toDate().toISOString() : x || 0)`,
+                // which covers a Timestamp with toDate() and a string — and not a
+                // plain `{seconds}` object, for which `new Date({...})` is an
+                // Invalid Date, getTime() is NaN, and a comparator returning NaN
+                // does not order anything. Same family as the 34 sort keys fixed
+                // in de0a1a87.
+                const dateA = toMillis(a.data?.createdAt);
+                const dateB = toMillis(b.data?.createdAt);
                 return dir === "desc" ? dateB - dateA : dateA - dateB;
             });
         }
 
         // ALWAYS apply date filters in memory as a definitive backstop.
         if (dateFrom) {
-            const from = new Date(dateFrom);
-            from.setHours(0, 0, 0, 0);
+            const from = dateRangeStart(dateFrom);
             finalForms = finalForms.filter((app: any) => new Date(app.data?.createdAt?.toDate ? app.data.createdAt.toDate().toISOString() : app.data?.createdAt || 0) >= from);
         }
         if (dateTo) {
-            const to = new Date(dateTo);
-            to.setHours(23, 59, 59, 999);
+            const to = dateRangeEnd(dateTo);
             finalForms = finalForms.filter((app: any) => new Date(app.data?.createdAt?.toDate ? app.data.createdAt.toDate().toISOString() : app.data?.createdAt || 0) <= to);
         }
 
@@ -540,6 +638,12 @@ async function _getMarketplaceUsersAction(options: {
         if (!isAdmin(session.user.roles)) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
+
+        // Same shape as the seller verification list above: isAdmin() admits
+        // every admin role, and each row carried a marketplace buyer's or
+        // seller's bank account. Acting on one requires
+        // "marketplace:approve_sellers" or "marketplace:suspend_sellers".
+        const maySeeBankDetails = hasAdminPermission(session.user.roles, "marketplace:approve_sellers");
 
         const fetchLimit = options.search ? 5000 : (options.limit || 50);
         let q: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.USERS);
@@ -630,24 +734,24 @@ async function _getMarketplaceUsersAction(options: {
                 buyerRole,
                 status: data.status || "active",
                 createdAt: safeToISOString(data.createdAt, new Date(0).toISOString()),
-                bankDetails: serializeValue(data.bankDetails || {
-                    bankName: data.bankName || data.bankAccount?.bankName || "",
-                    accountNumber: data.accountNumber || data.bankAccountNumber || data.bankAccount?.accountNumber || "",
-                    accountName: data.accountName || data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : ""),
-                    bankCode: data.bankCode || data.bankAccount?.bankCode || ""
-                }) ?? null
+                ...(maySeeBankDetails ? {
+                    bankDetails: serializeValue(data.bankDetails || {
+                        bankName: data.bankName || data.bankAccount?.bankName || "",
+                        accountNumber: data.accountNumber || data.bankAccountNumber || data.bankAccount?.accountNumber || "",
+                        accountName: data.accountName || data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : ""),
+                        bankCode: data.bankCode || data.bankAccount?.bankCode || ""
+                    }) ?? null,
+                } : {}),
             };
         }).filter(Boolean) as any[];
 
         // ALWAYS apply date filters in memory as a definitive backstop.
         if (options.dateFrom) {
-            const from = new Date(options.dateFrom);
-            from.setHours(0, 0, 0, 0);
+            const from = dateRangeStart(options.dateFrom);
             users = users.filter((u: any) => new Date(u.createdAt) >= from);
         }
         if (options.dateTo) {
-            const to = new Date(options.dateTo);
-            to.setHours(23, 59, 59, 999);
+            const to = dateRangeEnd(options.dateTo);
             users = users.filter((u: any) => new Date(u.createdAt) <= to);
         }
 
@@ -755,7 +859,12 @@ async function _approveMarketplaceUserAction(userId: string): Promise<ActionResp
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null };
-        if (!isAdmin(sessionResult.session.user.roles)) return { success: false as const, error: "Unauthorized", data: null };
+        // marketplace:approve_sellers, not "is some kind of admin".
+        //
+        // isAdmin() is true for every admin role, so an academy_admin or a
+        // wave_admin could approve a marketplace seller. The matrix grants this
+        // to super_admin, admin and marketplace_admin only.
+        if (!hasAdminPermission(sessionResult.session.user.roles, "marketplace:approve_sellers")) return { success: false as const, error: "Unauthorized", data: null };
 
         await db.collection(COLLECTIONS.USERS).doc(userId).update({
             status: "active",
@@ -796,7 +905,8 @@ async function _rejectMarketplaceUserAction(options: { userId: string; reason: s
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null };
-        if (!isAdmin(sessionResult.session.user.roles)) return { success: false as const, error: "Unauthorized", data: null };
+        // marketplace:suspend_sellers — see the note on the approve path above.
+        if (!hasAdminPermission(sessionResult.session.user.roles, "marketplace:suspend_sellers")) return { success: false as const, error: "Unauthorized", data: null };
 
         await db.collection(COLLECTIONS.USERS).doc(options.userId).update({
             status: "rejected",
@@ -830,3 +940,203 @@ async function _rejectMarketplaceUserAction(options: { userId: string; reason: s
 }
 
 export const rejectMarketplaceUserAction = withFlexibleSafeAction("rejectMarketplaceUserAction", _rejectMarketplaceUserAction);
+
+// ============================================
+// Product moderation
+// ============================================
+
+/**
+ * Admin: list products by status, so a moderator can see them at all.
+ *
+ * WHY THIS DID NOT EXIST
+ * ----------------------
+ * There was no admin screen or action anywhere that listed or acted on a
+ * product. createProductAction wrote `status: "pending"`, every buyer-facing
+ * reader filters on `status == "active"`, and nothing moved a product between
+ * the two — so the primary seller form produced listings no buyer could see and
+ * no admin could release. admin-content.ts COUNTED pending products, which meant
+ * the dashboard displayed the size of the backlog without offering any way to
+ * clear it.
+ *
+ * PRODUCT_INITIAL_STATUS is "active" now, so new listings are not held. This
+ * exists to release the backlog that accumulated, and to give moderation a
+ * mechanism at all — see lib/product-status.ts for the reasoning and for how to
+ * switch to approval-before-publication.
+ */
+async function _getAdminProductsAction(options: {
+    status?: string;
+    limitCount?: number;
+    lastId?: string;
+} = {}): Promise<ActionResponse<{ products: any[]; lastId?: string; hasMore: boolean; stats: Record<string, number> }>> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
+        const { session } = sessionResult;
+        // A READ, so isAdmin is the right gate here: every admin role holds
+        // "users:read" and seeing the moderation queue is not acting on it.
+        // Narrowing this to content:approve would blind marketplace_admin to
+        // its own backlog. The gate that needed tightening is the write —
+        // _reviewProductAction below.
+        if (!session?.user || !isAdmin(session.user.roles)) {
+            return { success: false as const, error: "Unauthorized", data: null };
+        }
+
+        const limitCount = Math.min(Math.max(Number(options.limitCount) || 25, 1), 100);
+        const status = normaliseProductStatus(options.status);
+
+        const col = db.collection(COLLECTIONS.PRODUCTS);
+
+        // Counts per status, so the page can show the backlog it is clearing.
+        // Server-side COUNT, not a length of a capped page — the mistake #37 and
+        // the WAVE admin list both made.
+        const countable = ["pending", "active", "rejected", "suspended", "draft"] as const;
+        const counts = await Promise.all(
+            countable.map((s) => col.where("status", "==", s).count().get()),
+        );
+        const stats: Record<string, number> = {};
+        countable.forEach((s, i) => { stats[s] = counts[i].data().count; });
+
+        let query: import("@/lib/supabase-db").SupabaseQuery = status
+            ? (col.where("status", "==", status) as any)
+            : (col as any);
+        query = query.orderBy("createdAt", "desc");
+
+        if (options.lastId) {
+            const lastDoc = await col.doc(options.lastId).get();
+            if (lastDoc.exists) query = query.startAfter(lastDoc);
+        }
+
+        const snapshot = await query.limit(limitCount + 1).get();
+        const hasMore = snapshot.docs.length > limitCount;
+        const docs = hasMore ? snapshot.docs.slice(0, limitCount) : snapshot.docs;
+
+        return {
+            success: true as const,
+            error: null,
+            data: {
+                products: serializeDocs(docs),
+                lastId: docs.length > 0 ? docs[docs.length - 1].id : undefined,
+                hasMore,
+                stats,
+            },
+        };
+    } catch (error: any) {
+        logger.error("Get admin products error:", error);
+        return { success: false as const, error: "Failed to fetch products", data: null };
+    }
+}
+
+export const getAdminProductsAction = withFlexibleSafeAction("getAdminProductsAction", _getAdminProductsAction);
+
+/**
+ * Admin: publish, reject or suspend a product listing.
+ *
+ * ON THE PRIMITIVE
+ * ----------------
+ * claimStatusTransitionFromAny, not a read-then-write and not runTransaction.
+ * supabaseDb.runTransaction takes no lock (see the note at the top of
+ * lib/types/marketplace-escrow.ts), so a status check inside it is an ordinary
+ * read and two admins acting at once would both proceed. The claim advances the
+ * status only if it still holds one of the expected values, and tells the caller
+ * whether it was the one that changed it — so exactly one admin's decision, and
+ * one audit row, results from a double-click or two moderators on the same
+ * queue.
+ *
+ * `products` is not in DEDICATED_TABLE_MAP, so it lives in
+ * document_collections and claim_status_transition can reach it. That is worth
+ * stating because #15 was exactly the opposite case.
+ */
+async function _reviewProductAction(input: {
+    productId: string;
+    action: "approve" | "reject" | "suspend";
+    reason?: string;
+}): Promise<ActionResponse<{ status: string }>> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
+        const { session } = sessionResult;
+        // content:approve — putting a product live, refusing it or suspending
+        // it is content moderation, which the matrix grants to super_admin,
+        // admin and moderator. isAdmin() is true for every admin role, so an
+        // academy_admin or an export_admin could publish a marketplace product.
+        if (!session?.user || !hasAdminPermission(session.user.roles, "content:approve")) {
+            return { success: false as const, error: "Unauthorized", data: null };
+        }
+
+        const productId = String(input?.productId ?? "").trim();
+        if (!productId) {
+            return { success: false as const, error: "A product id is required", data: null };
+        }
+        if (!["approve", "reject", "suspend"].includes(input?.action)) {
+            return { success: false as const, error: "Unknown review action", data: null };
+        }
+
+        // A rejection or suspension that does not say why leaves the seller with
+        // an unexplained dead listing and nothing to fix.
+        const reason = String(input.reason ?? "").trim();
+        if (input.action !== "approve" && reason.length < 5) {
+            return {
+                success: false as const,
+                error: "Please give a reason of at least 5 characters, so the seller knows what to change",
+                data: null,
+            };
+        }
+
+        const to = input.action === "approve" ? "active" : input.action === "reject" ? "rejected" : "suspended";
+        const from = input.action === "approve" ? PRODUCT_APPROVABLE_FROM : PRODUCT_REJECTABLE_FROM;
+
+        const claim = await claimStatusTransitionFromAny({
+            collection: COLLECTIONS.PRODUCTS,
+            id: productId,
+            fromAny: [...from],
+            to,
+            patch: {
+                reviewedBy: session.user.id,
+                reviewedAt: new Date().toISOString(),
+                ...(input.action === "approve"
+                    ? { rejectionReason: null }
+                    : { rejectionReason: reason }),
+            },
+        });
+
+        if (!claim.claimed) {
+            if (claim.status === null) {
+                return {
+                    success: false as const,
+                    error: claim.exists === false
+                        ? "Product not found"
+                        : "This product has no status recorded, so it cannot be reviewed.",
+                    data: null,
+                };
+            }
+            return {
+                success: false as const,
+                error: `This product is '${claim.status}' and cannot be ${input.action}d from that state.`,
+                data: null,
+            };
+        }
+
+        await createAdminAuditLog({
+            action: input.action === "approve"
+                ? "product_approved"
+                : input.action === "reject"
+                    ? "product_rejected"
+                    : "product_suspended",
+            userId: session.user.id,
+            targetId: productId,
+            targetType: "product",
+            metadata: { decision: input.action, from: claim.status, to, reason: reason || null },
+        });
+
+        revalidatePath("/admin/marketplace/products");
+        revalidatePath("/marketplace/buyer/products");
+        revalidatePath(`/marketplace/products/${productId}`);
+
+        return { success: true as const, error: null, data: { status: to } };
+    } catch (error: any) {
+        logger.error("Review product error:", error);
+        return { success: false as const, error: "Failed to review product", data: null };
+    }
+}
+
+export const reviewProductAction = withFlexibleSafeAction("reviewProductAction", _reviewProductAction);

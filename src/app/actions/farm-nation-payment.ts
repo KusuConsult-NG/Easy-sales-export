@@ -9,8 +9,10 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { rateLimit } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
-import { claimPaymentOnce } from "@/lib/wallet-ledger";
+import { claimPaymentOnce, markFulfilmentFailed } from "@/lib/wallet-ledger";
 import { getBaseUrl } from "@/lib/server-utils";
+import { claimStatusTransitionFromAny } from "@/lib/status-transition";
+import { PURCHASABLE_STATUSES, isPurchasable, statusAfterCancellation } from "@/lib/land-listing-status";
 
 const paymentLimiter = rateLimit(rateLimitConfig.payment);
 
@@ -101,36 +103,124 @@ async function _initializePropertyPaymentAction(
             return { success: false, error: "This property has no price set and cannot be purchased.", data: null };
         }
 
-        if (propertyData.status !== "verified") { 
+        /**
+         * THE SHARED PURCHASABLE RULE, NOT THE LITERAL "verified".
+         *
+         * LAND_LISTINGS is written by two modules with different vocabularies.
+         * _fn_listings.ts creates a farm-nation property as "available"; the
+         * land module's admin approval writes "verified". PURCHASABLE_STATUSES
+         * covers both — it exists because requiring one spelling made the other
+         * module's listings unbuyable, and BROWSABLE_STATUSES is the same set,
+         * so the browse page shows both as for sale.
+         *
+         * This required "verified" exactly. So EVERY property listed through
+         * Farm Nation itself was visible, clickable, and refused at checkout
+         * with "Property is no longer available" — the module's own listings
+         * could not be bought through the only checkout page the app has.
+         * _fn_purchases.ts was widened to the shared rule; this, the path the
+         * page actually calls, was not.
+         */
+        if (!isPurchasable(propertyData.status)) {
             return { success: false, error: "Property is no longer available", data: null };
         }
 
         // Buyer cannot purchase their own property
-        if (propertyData.ownerId === session.user.id) { 
+        if (propertyData.ownerId === session.user.id) {
             return { success: false, error: "You cannot purchase your own property", data: null };
+        }
+
+        /**
+         * RESERVE THE PROPERTY BEFORE CHARGING ANYBODY.
+         *
+         * The status write used to be a bare `update({ status: "pending_escrow" })`
+         * AFTER the Paystack session was created. Two buyers reaching checkout
+         * on one listing therefore both read "verified", both got an
+         * authorization URL, and BOTH WERE CHARGED — the second update simply
+         * overwrote the first. One property, two payments, and only one of them
+         * can ever be fulfilled.
+         *
+         * _fn_purchases.ts documents fixing exactly this with a claim, and says
+         * why: "exactly one buyer wins, and the loser is told it has gone rather
+         * than being taken to payment for something they cannot have". That fix
+         * landed on the path with no UI and not on this one.
+         *
+         * Claiming FIRST means the loser never reaches Paystack.
+         * `recordPreviousAs` stores what it was reserved from, so cancelling
+         * restores "verified" rather than dropping the listing to "available"
+         * — which would take it out of the land module's public view, since
+         * getVerifiedLandListings queries that exact status.
+         */
+        const reservation = await claimStatusTransitionFromAny({
+            collection: COLLECTIONS.LAND_LISTINGS,
+            id: propertyId,
+            fromAny: [...PURCHASABLE_STATUSES],
+            to: "pending_escrow",
+            patch: { pendingBuyerId: session.user.id, pendingSince: new Date().toISOString() },
+            recordPreviousAs: "previousStatus",
+        });
+
+        if (!reservation.claimed) {
+            return { success: false, error: "Property is no longer available", data: null };
         }
 
         const baseUrl = await getBaseUrl();
         const callbackUrl = `${baseUrl}/farm-nation/payment/callback`;
 
+        /**
+         * A reservation that cannot be paid for must be given back.
+         *
+         * Everything from here on can fail — Paystack can be unreachable, the
+         * record write can throw — and the listing is already reserved. Without
+         * this the property is off the market permanently: no buyer can claim
+         * it, and its would-be buyer has no purchase record to cancel, because
+         * the record is written below.
+         */
+        const releaseReservation = async (why: string) => {
+            try {
+                // Back to whatever it was reserved FROM — the same rule the
+                // cancel path uses, so a listing reserved from "verified" does
+                // not come back as "available" and drop out of the land view.
+                await propertyRef.update({
+                    status: statusAfterCancellation(propertyData.status),
+                    pendingBuyerId: null,
+                    previousStatus: null,
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+            } catch (releaseError) {
+                logger.error(
+                    `[initializePropertyPayment] property ${propertyId} is reserved and could not be released ` +
+                    `after ${why}; it needs to be freed by hand.`,
+                    releaseError,
+                );
+            }
+        };
+
         // Initialize payment with Paystack
-        const { authorizationUrl, reference } = await initializePaystackPayment(
-            session.user.email || "",
-            nairaToKobo(listedPrice),
-            {
-                userId: session.user.id,
-                propertyId,
-                propertyTitle: listingTitle,
-                sellerId: listingSellerId,
-                type: "property_purchase",
-                callback_url: callbackUrl 
-            },
-            callbackUrl
-        );
+        let authorizationUrl: string;
+        let reference: string;
+        try {
+            ({ authorizationUrl, reference } = await initializePaystackPayment(
+                session.user.email || "",
+                nairaToKobo(listedPrice),
+                {
+                    userId: session.user.id,
+                    propertyId,
+                    propertyTitle: listingTitle,
+                    sellerId: listingSellerId,
+                    type: "property_purchase",
+                    callback_url: callbackUrl
+                },
+                callbackUrl
+            ));
+        } catch (initError: any) {
+            await releaseReservation("the Paystack session could not be created");
+            throw initError;
+        }
 
         // Create pending purchase record in FARM_NATION_TRANSACTIONS
         const purchaseId = `${session.user.id}_${propertyId}_${Date.now()}`;
-        await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).doc(purchaseId).set({ 
+        try {
+            await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).doc(purchaseId).set({ 
             id: purchaseId,
             propertyId,
             propertyName: listingTitle,
@@ -150,12 +240,16 @@ async function _initializePropertyPaymentAction(
             zoningComplianceDeclarationAccepted: true,
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp() 
-        });
-        
-        await propertyRef.update({ 
-            status: "pending_escrow", // Update status to reflect it's being purchased
-            updatedAt: FieldValue.serverTimestamp() 
-        });
+            });
+        } catch (recordError: any) {
+            await releaseReservation("the purchase record could not be written");
+            throw recordError;
+        }
+
+        // The status write that used to sit here — a bare update to
+        // "pending_escrow", after Paystack had already been called — is the
+        // claim above now. See the comment there for what two simultaneous
+        // buyers did to it.
 
         return { 
             success: true, 
@@ -245,7 +339,16 @@ async function _verifyPropertyPaymentAction(reference: string): Promise<ActionRe
             } as any;
         }
 
-        {
+        // Everything below runs AFTER the claim, so a failure here means the
+        // money was taken and nothing was delivered. claim_payment_once already
+        // wrote status 'completed' (its default), and
+        // reconcilePendingFulfillments only looks for 'pending_fulfilment' — so
+        // without the catch below, a throw here leaves a payment that looks
+        // settled, delivered nothing, and is invisible to reconciliation.
+        //
+        // Three things in this block throw: property missing, wrong status, and
+        // underpayment.
+        try {
             const freshPropertyDoc = await propertyRef.get();
             if (!freshPropertyDoc.exists) {
                 throw new Error("Property not found");
@@ -267,13 +370,45 @@ async function _verifyPropertyPaymentAction(reference: string): Promise<ActionRe
             //
             // ₦1 of tolerance, matching confirmWalletFundingAction and the
             // cooperative contribution path.
-            const listedPrice = Number(freshData.price || 0);
-            if (Number.isFinite(listedPrice) && listedPrice > 0 && amountInNaira + 1 < listedPrice) {
+            //
+            // COMPARED AGAINST THE PRICE THE BUYER WAS QUOTED, NOT THE LIVE ONE.
+            //
+            // This read `freshData.price`, the listing's CURRENT price, which the
+            // owner can change. So an owner who repriced between a buyer's
+            // initialisation and their return from Paystack made the buyer's
+            // payment look like an underpayment, and this threw — after the claim,
+            // so the buyer had paid and received nothing.
+            //
+            // The purchase record written at initialisation holds `propertyPrice`,
+            // which IS the figure Paystack was asked to collect. That is the
+            // contract, so that is what the payment is checked against.
+            // updatePropertyAction now also refuses to move these terms while a
+            // purchase is in flight; this is the half that does not depend on
+            // winning a race with the status write.
+            //
+            // Falls back to the listing price when no purchase record exists —
+            // a reference arriving from outside the normal flow, which is the case
+            // the original check was added for.
+            const quotedSnap = await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS)
+                .where("paymentReference", "==", reference)
+                .limit(1)
+                .get();
+
+            const quotedPrice = quotedSnap.empty
+                ? Number(freshData.price || 0)
+                : Number(quotedSnap.docs[0].data()?.propertyPrice ?? freshData.price ?? 0);
+
+            if (Number.isFinite(quotedPrice) && quotedPrice > 0 && amountInNaira + 1 < quotedPrice) {
                 logger.error("[FarmNationPayment] Underpayment for property", {
-                    propertyId, paid: amountInNaira, listed: listedPrice, reference,
+                    propertyId,
+                    paid: amountInNaira,
+                    quoted: quotedPrice,
+                    listedNow: Number(freshData.price || 0),
+                    quoteSource: quotedSnap.empty ? "listing (no purchase record)" : "purchase record",
+                    reference,
                 });
                 throw new Error(
-                    `Payment of ₦${amountInNaira.toLocaleString()} does not cover the property price of ₦${listedPrice.toLocaleString()}.`
+                    `Payment of ₦${amountInNaira.toLocaleString()} does not cover the property price of ₦${quotedPrice.toLocaleString()}.`
                 );
             }
 
@@ -334,9 +469,18 @@ async function _verifyPropertyPaymentAction(reference: string): Promise<ActionRe
                     status: "payment_confirmed",
                     escrowStatus: "held",
                     paymentVerifiedAt: FieldValue.serverTimestamp(),
-                    updatedAt: FieldValue.serverTimestamp() 
+                    updatedAt: FieldValue.serverTimestamp()
                 });
             }
+        } catch (fulfilmentError: any) {
+            // Marked, then rethrown unchanged. The outer catch still turns this
+            // into the user-facing "contact support with reference" response;
+            // this only makes the payment findable so somebody can act on it.
+            await markFulfilmentFailed(
+                reference,
+                fulfilmentError?.message ?? String(fulfilmentError)
+            );
+            throw fulfilmentError;
         }
 
         return {

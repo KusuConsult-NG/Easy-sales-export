@@ -25,7 +25,7 @@ test.describe('System Health Diagnostic Suite', () => {
 
     test('should load the health dashboard and display metrics', async ({ page }) => {
         // Check if the dashboard header is visible
-        await expect(page.locator('h1')).toContainText(/System Health Monitor/i);
+        await expect(page.getByRole('heading', { level: 1 })).toContainText(/System Health Monitor/i);
 
         // Wait for the diagnostic loading state to complete
         await expect(page.locator('text=Running platform-wide structural tests...').first()).not.toBeVisible({ timeout: 30000 });

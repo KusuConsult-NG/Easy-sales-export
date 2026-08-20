@@ -168,7 +168,20 @@ export default function StudentQuizPage(props: StudentQuizPageProps) {
             const data = await response.json();
 
             if (data.success) {
-                router.push(`/academy/courses/${params.courseId}/quiz/results?attemptId=${data.attemptId}`);
+                // There is no results page.
+                //
+                // This pushed /academy/courses/{id}/quiz/results — a route that
+                // does not exist anywhere in the app, so submitting a graded
+                // quiz took the learner to a 404 and their score went with it.
+                // The submit response already carries the score and the verdict,
+                // which is the whole of what that page would have shown, so it
+                // is shown here and the learner lands back on the course.
+                showToast(
+                    `${data.message ?? (data.passed ? "You passed!" : "Not passed this time.")}` +
+                    (typeof data.score === "number" ? ` Score: ${data.score}%` : ""),
+                    data.passed ? "success" : "info"
+                );
+                router.push(`/academy/${params.courseId}`);
             } else {
                 showToast(data.message || "Failed to submit quiz", "error");
             }

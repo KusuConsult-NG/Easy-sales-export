@@ -13,6 +13,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { requireSession } from "@/lib/session-guard";
+import { MODULE_ADMIN_ROLE } from "@/lib/admin-permissions";
 
 /**
  * Enforces strict role-based and context-based boundaries on conversations.
@@ -56,7 +57,15 @@ function validateConversationAccess(conversation: Conversation, userId: string, 
         return true;
     }
 
-    const hasFarmNationAdmin = roles.includes("farmnation_admin");
+    // `farm_nation_admin`, not "farmnation_admin".
+    //
+    // The role tested here does not exist. Nothing in the codebase writes it;
+    // the role is farm_nation_admin, in the canonical list and in the permission
+    // matrix. So a real Farm Nation admin passed the endsWith("_admin") gate in
+    // getAllConversationsAdmin, matched none of these module filters, and saw an
+    // empty conversation list — and this function refused them every individual
+    // conversation for the same reason. See MODULE_ADMIN_ROLE.
+    const hasFarmNationAdmin = roles.includes(MODULE_ADMIN_ROLE.farmnation);
     if (hasFarmNationAdmin && (conversation.context === "farmnation_support" || conversation.orderId?.startsWith("farm_"))) {
         return true;
     }
@@ -104,7 +113,7 @@ export async function getAllConversationsAdmin(roles: string[]) {
         if (roles.includes("academy_admin") && (c.context === "academy_support" || c.orderId?.startsWith("academy_"))) return true;
         if (roles.includes("wave_admin") && (c.context === "wave_support" || c.orderId?.startsWith("wave_"))) return true;
         if (roles.includes("export_admin") && (c.context === "export_support" || c.orderId?.startsWith("export_"))) return true;
-        if (roles.includes("farmnation_admin") && (c.context === "farmnation_support" || c.orderId?.startsWith("farm_"))) return true;
+        if (roles.includes(MODULE_ADMIN_ROLE.farmnation) && (c.context === "farmnation_support" || c.orderId?.startsWith("farm_"))) return true;
         
         // Fallback for uncategorized legacy support chats using email keyword matching
         if (!c.context) {
@@ -199,7 +208,29 @@ export async function sendMessage(conversationId: string, userId: string, userNa
  */
 export async function markAsRead(conversationId: string, userId: string) {
     const conversationRef = db.collection(COLLECTIONS.CONVERSATIONS).doc(conversationId);
-    
+
+    // THE ONE ENTRY POINT WITH NO ACCESS CHECK.
+    //
+    // getMessages and sendMessage both call validateConversationAccess before
+    // touching the thread. This one took a conversation id and a user id and
+    // wrote `participantDetails.<userId>.lastRead` straight onto the document —
+    // so any signed-in caller could inject a key into ANY conversation,
+    // including threads they are not part of and cannot read.
+    //
+    // Marking a thread read is something only a PARTICIPANT does. A module
+    // admin may read a conversation in their scope, but their read receipt does
+    // not belong in the participants' record, so participation is the test here
+    // rather than validateConversationAccess.
+    const conversationDoc = await conversationRef.get();
+    if (!conversationDoc.exists) {
+        throw new Error("Conversation not found");
+    }
+
+    const conversation = conversationDoc.data() as Conversation;
+    if (!Array.isArray(conversation.participants) || !conversation.participants.includes(userId)) {
+        throw new Error("Access denied: Unauthorized to mark this conversation read");
+    }
+
     await conversationRef.update({
         [`participantDetails.${userId}.lastRead`]: FieldValue.serverTimestamp()
     });

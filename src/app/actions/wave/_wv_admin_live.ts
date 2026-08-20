@@ -4,10 +4,11 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { FieldValue } from "@/lib/firestore-compat";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { createAdminAuditLog } from "@/lib/audit-log";
+import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 
 async function _startWaveLiveSessionAction(
     eventId: string,
@@ -25,7 +26,7 @@ async function _startWaveLiveSessionAction(
             return { success: false as const, error: "Not authenticated" , data: null };
         }
 
-        if (!isAdmin(session.user.roles)) {
+        if (!hasAdminPermission(session.user.roles, "wave:manage_training")) {
             return { success: false as const, error: "Unauthorized" , data: null };
         }
 
@@ -52,12 +53,59 @@ async function _startWaveLiveSessionAction(
         const roomName = `wave-training-${eventId}`;
         const finalMeetingLink = customMeetingLink || `/wave/live-training`;
 
-        // 3. Update event status to ongoing
-        await db.collection(COLLECTIONS.WAVE_TRAINING_EVENTS).doc(eventId).update({
-            status: "ongoing",
-            meetingLink: finalMeetingLink,
-            updatedAt: FieldValue.serverTimestamp(),
+        /**
+         * 3. CLAIM the event as ongoing, rather than declaring it so.
+         *
+         * This was a blind `.update({ status: "ongoing" })`. It read no status
+         * and compared nothing, so Go Live worked on an event in ANY state:
+         *
+         *   - completed  → the finished session reopened. Members whose
+         *                  registrations were closed out see it live again, and
+         *                  endWaveLiveSessionAction will mark it completed a
+         *                  second time.
+         *   - cancelled  → a cancelled event went live. Nothing told the
+         *                  registrants it was back on.
+         *   - ongoing    → two admins pressing Go Live both "started" it, each
+         *                  writing their own meetingLink over the other's. The
+         *                  members who joined through the first link were left in
+         *                  a room the admin is no longer in.
+         *
+         * Same defect and same fix as the land status writes (#27) and the admin
+         * land editor (#143): the transition is claimed in SQL, so exactly one
+         * caller starts a given session.
+         *
+         * `upcoming` is the only starting state, which is what the admin screen
+         * already assumes — it renders Go Live behind
+         * `event.status === "upcoming"`. The claim closes the direct path the
+         * button's condition could not.
+         *
+         * Safe to be this strict: WAVE_TRAINING_EVENTS has exactly one creator,
+         * createTrainingEventAction, and it always writes "upcoming". There are
+         * no rows with a missing or legacy status to lock out.
+         */
+        const claim = await claimStatusTransitionFromAny({
+            collection: COLLECTIONS.WAVE_TRAINING_EVENTS,
+            id: eventId,
+            fromAny: ["upcoming"],
+            to: "ongoing",
+            patch: {
+                meetingLink: finalMeetingLink,
+                startedBy: session.user.id,
+                startedAt: new Date().toISOString(),
+            },
         });
+
+        if (!claim.claimed) {
+            return {
+                success: false as const,
+                data: null,
+                error: claim.status === null
+                    ? "Event not found"
+                    : claim.status === "ongoing"
+                        ? "This session is already live. Open the classroom instead of starting it again."
+                        : `This event is ${claim.status} and cannot be started.`,
+            };
+        }
 
         // 4. Create/overwrite the live training session document
         const sessionQuery = await db.collection(COLLECTIONS.WAVE_TRAINING_SESSIONS)
@@ -93,6 +141,11 @@ async function _startWaveLiveSessionAction(
             userId: session.user.id,
             targetType: "wave_training_event",
             targetId: eventId,
+            // Start and end shared one action name and carried no metadata, so
+            // the log could not distinguish "went live" from "ended the session"
+            // from "edited the title" — which is what you need it for when a
+            // member disputes whether a session ran.
+            metadata: { phase: "start", roomName, meetingLink: finalMeetingLink },
         });
 
         return { error: null, success: true as const, data: { roomName } };
@@ -125,15 +178,41 @@ async function _endWaveLiveSessionAction(
             return { success: false as const, error: "Not authenticated", data: null };
         }
 
-        if (!isAdmin(session.user.roles)) {
+        if (!hasAdminPermission(session.user.roles, "wave:manage_training")) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
 
-        // 1. Mark the training event as completed
-        await db.collection(COLLECTIONS.WAVE_TRAINING_EVENTS).doc(eventId).update({
-            status: "completed",
-            updatedAt: FieldValue.serverTimestamp(),
+        /**
+         * 1. CLAIM the event as completed.
+         *
+         * Blind `.update({ status: "completed" })` before this, with the same
+         * consequences as the start path in reverse: End Session on an
+         * `upcoming` event marked a session completed that never ran, and on a
+         * `cancelled` one it un-cancelled it into completion. Only an ongoing
+         * session can end.
+         */
+        const claim = await claimStatusTransitionFromAny({
+            collection: COLLECTIONS.WAVE_TRAINING_EVENTS,
+            id: eventId,
+            fromAny: ["ongoing"],
+            to: "completed",
+            patch: {
+                endedBy: session.user.id,
+                endedAt: new Date().toISOString(),
+            },
         });
+
+        if (!claim.claimed) {
+            return {
+                success: false as const,
+                data: null,
+                error: claim.status === null
+                    ? "Event not found"
+                    : claim.status === "completed"
+                        ? "This session has already ended."
+                        : `This event is ${claim.status}, so there is no live session to end.`,
+            };
+        }
 
         // 2. Mark the training session document as inactive
         const roomName = `wave-training-${eventId}`;
@@ -154,6 +233,7 @@ async function _endWaveLiveSessionAction(
             userId: session.user.id,
             targetType: "wave_training_event",
             targetId: eventId,
+            metadata: { phase: "end", roomName },
         });
 
         return { error: null, success: true as const, data: null };

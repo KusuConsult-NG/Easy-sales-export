@@ -7,8 +7,9 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { CooperativeMembership, CooperativeTransaction } from "@/lib/types/cooperative";
-import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
+import { serializeDoc, serializeDocs, toMillis } from "@/lib/firestore-serialize";
 import { runQueryWithRetry } from "@/lib/firestore-utils";
+import { mayClaimMembershipByEmail } from "@/lib/cooperative-membership-claim";
 
 /**
  * Optimized dashboard data loader
@@ -97,18 +98,14 @@ export async function getDashboardDataAction() {
                     // reference matches this membership AND whose userId is the
                     // caller. That ties the record to the caller's money rather than
                     // to a string they can edit.
-                    let mayClaim = false;
-                    if (memberData.userId === userId) {
-                        mayClaim = true; // already theirs
-                    } else if (!memberData.userId && memberData.paymentReference) {
-                        const proof = await runQueryWithRetry(() =>
-                            db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
-                                .where("reference", "==", memberData.paymentReference)
-                                .limit(1)
-                                .get()
-                        );
-                        mayClaim = !proof.empty && proof.docs[0].data()?.userId === userId;
-                    }
+                    // The rule this file introduced, now shared — it was the only
+                    // one of FIVE email fallbacks that had it, and the other four
+                    // could bind the row before this one ever ran, after which
+                    // `memberData.userId === userId` passed trivially here.
+                    // See lib/cooperative-membership-claim.ts.
+                    const mayClaim = await mayClaimMembershipByEmail(
+                        db, { data: memberData, id: memberDoc.id }, userId,
+                    );
 
                     if (mayClaim) {
                         logger.info(`[getDashboardData] Found membership via Email fallback for user: ${userId}`);
@@ -207,11 +204,30 @@ export async function getDashboardDataAction() {
         }
 
         // ── Transactions ───────────────────────────────────────────────────────
-        // Note: Removed .orderBy('date') to bypass missing index error while index is provisioning
+        //
+        // THE "RECENT TRANSACTIONS" LIST WAS NOT THE RECENT ONES.
+        //
+        // The note here read "Removed .orderBy('date') to bypass missing index
+        // error while index is provisioning", and the limit below it said "Fetch
+        // extra to allow in-memory sort". Those two together are the defect: the
+        // database returned an arbitrary 50 of the member's transactions and the
+        // sort then picked the newest TEN OF THOSE FIFTY. For any member with
+        // more than fifty transactions — which is a member who has contributed
+        // monthly for four years, or weekly for one — the dashboard's recent
+        // activity could be entirely stale while newer entries existed.
+        //
+        // Truncating before sorting is only safe when the truncation is itself
+        // ordered. The index the note was waiting on is not a live concern: the
+        // two other readers of this exact collection, _getTransactionsAction and
+        // getAdminTransactionsAction, both order by this exact field with no
+        // fallback today.
+        //
+        // The in-memory sort below is kept as a belt, since it costs nothing.
         const transactionsSnapshot = await runQueryWithRetry(() =>
             db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS)
                 .where('userId', '==', userId)
-                .limit(50) // Fetch extra to allow in-memory sort
+                .orderBy('date', 'desc')
+                .limit(50)
                 .get()
         );
 
@@ -251,8 +267,8 @@ export async function getDashboardDataAction() {
         logger.info(`[getDashboardData] Found ${membershipSnapshot.size} membership docs for user: ${userId}`);
 
         const sortedDocs = membershipSnapshot.docs.sort((a, b) => {
-            const aTime = a.data().createdAt?.toMillis?.() || (a.data().createdAt?.seconds ?? 0) * 1000;
-            const bTime = b.data().createdAt?.toMillis?.() || (b.data().createdAt?.seconds ?? 0) * 1000;
+            const aTime = toMillis(a.data().createdAt);
+            const bTime = toMillis(b.data().createdAt);
             return bTime - aTime;
         });
         const membershipDoc = sortedDocs[0];

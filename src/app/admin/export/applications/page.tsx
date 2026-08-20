@@ -455,7 +455,21 @@ export default function AdminExportApplicationsPage() {
                                     <td className="px-6 py-4">
                                         <div className="flex items-center justify-end gap-2">
                                             {/* Detail */}
+                                            {/*
+                                              * This had no onClick and no
+                                              * className: the eye rendered
+                                              * unstyled beside four working
+                                              * siblings and did nothing when
+                                              * clicked. The panel it should
+                                              * open already exists — it is
+                                              * rendered on `selectedApp` below
+                                              * — so the handler was simply
+                                              * never written.
+                                              */}
                                             <button
+                                                type="button"
+                                                onClick={() => { setSelectedApp(standardApp); setIsRawDetailOpen(false); }}
+                                                className="p-1.5 text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition"
                                                 title="View Details"
                                             >
                                                 <Eye className="w-4 h-4" />
@@ -552,7 +566,16 @@ export default function AdminExportApplicationsPage() {
             </div>
 
             {/* Detail Drawer / Modal */}
-            {selectedApp && (
+            {/*
+              * `!isRawDetailOpen`, which was missing.
+              *
+              * Both this panel and the raw-details modal below render off the
+              * same `selectedApp`, and only the second one also checks
+              * isRawDetailOpen. So "Full Raw Details" opened BOTH: the raw
+              * modal on top of this drawer, with this drawer's backdrop
+              * swallowing the click that was meant to dismiss the modal.
+              */}
+            {selectedApp && !isRawDetailOpen && (
                 <div
                     className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
                     onClick={() => setSelectedApp(null)}

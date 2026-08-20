@@ -1,5 +1,6 @@
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { logger } from "@/lib/logger";
 import type { FinanceServiceContract, RevenueMetrics } from "@easy-sales/services";
 
 /**
@@ -15,10 +16,23 @@ export class FinanceService implements FinanceServiceContract {
      */
     static async deriveUserBalance(userId: string): Promise<number> {
         const db = getAdminDb();
+        // .all(), not a bare .get().
+        //
+        // This class opens with "Balances must be derived from ledger totals
+        // only", and a bare .get() on an unbounded query stops at
+        // DEFAULT_QUERY_LIMIT (5,000) and returns a snapshot indistinguishable
+        // from a complete one. A total derived from the first 5,000 of a
+        // member's ledger is not that member's balance — it is a smaller number
+        // that looks exactly like one. .all() is the escape hatch the adapter
+        // provides for genuine aggregations, and this is one.
         const ledgerSnap = await db.collection("financial_ledger")
             .where("userId", "==", userId)
             .where("status", "==", "completed")
+            .all()
             .get();
+        if (ledgerSnap.truncated) {
+            logger.error(`[FinanceService] financial_ledger sweep truncated for user ${userId} — derived balance understates the true figure.`);
+        }
 
         let balance = 0;
         ledgerSnap.docs.forEach(doc => {
@@ -48,7 +62,16 @@ export class FinanceService implements FinanceServiceContract {
             query = query.where("module", "==", module);
         }
 
-        const snap = await query.get();
+        // .all() — see deriveUserBalance. This one is the platform's TOTAL
+        // revenue and its total transaction count, and both were capped at
+        // 5,000 completed payments: the figure the finance dashboard showed,
+        // and the figure the Paystack reconciliation diffs against, silently
+        // stopped counting there. Every payment beyond the cap was money the
+        // platform had taken and did not report.
+        const snap = await query.all().get();
+        if (snap.truncated) {
+            logger.error("[FinanceService] processed_payments sweep truncated — verifiedRevenue and transactionCount both understate the true figures.");
+        }
         let totalRevenue = 0;
         
         snap.docs.forEach(doc => {
@@ -76,10 +99,15 @@ export class FinanceService implements FinanceServiceContract {
      */
     static async deriveMarketplaceWalletBalance(userId: string): Promise<number> {
         const db = getAdminDb();
+        // .all() — see deriveUserBalance.
         const snap = await db.collection(COLLECTIONS.WALLET_TRANSACTIONS)
             .where("userId", "==", userId)
             .where("status", "==", "completed")
+            .all()
             .get();
+        if (snap.truncated) {
+            logger.error(`[FinanceService] wallet_transactions sweep truncated for user ${userId} — derived balance understates the true figure.`);
+        }
 
         let balance = 0;
         snap.docs.forEach(doc => {

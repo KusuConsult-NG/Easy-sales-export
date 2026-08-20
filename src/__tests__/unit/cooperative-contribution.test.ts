@@ -72,6 +72,12 @@ jest.mock('@/lib/paystack-server', () => ({
 }));
 jest.mock('@/lib/wallet-ledger', () => ({
     claimPaymentOnce: (...a: any[]) => mockClaimPayment(...a),
+    // The real value, not a placeholder. _payment.ts reads
+    // CLAIM_TYPE.COOPERATIVE_CONTRIBUTION when claiming, so a mock omitting it
+    // makes the action throw on a property of undefined and every assertion here
+    // fails with `undefined` rather than naming the cause.
+    CLAIM_TYPE: { COOPERATIVE_CONTRIBUTION: 'contribution' },
+    LEGACY_COOPERATIVE_CONTRIBUTION_CLAIM_TYPE: 'cooperative_contribution',
     creditWalletOnce: jest.fn(), debitWalletOnce: jest.fn(), debitWalletLocked: jest.fn(),
     debitJsonbBalance: jest.fn(), debitJsonbBalanceWithFloor: jest.fn(),
     claimVersionedUpdate: jest.fn(), claimIdempotencyKey: jest.fn(),

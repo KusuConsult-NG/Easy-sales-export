@@ -2,6 +2,37 @@ import { defineConfig, devices } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { detectChromium } from './e2e/helpers/chromium';
+
+/**
+ * The local stack's environment, loaded explicitly for the server Playwright
+ * starts.
+ *
+ * scripts/local-stack/up.sh writes .env.development.local, and Next reads that
+ * file ONLY in development. `next start` does not, so a production build came
+ * up with no Supabase URL and no NEXTAUTH_SECRET and every request died with
+ *
+ *     [auth][error] MissingSecret: Please define a `secret`
+ *
+ * Passing it through webServer.env is what makes a production build usable
+ * against the local stack. Read here rather than renamed on disk, so nothing
+ * has to change about how up.sh works or which file `next dev` picks up.
+ *
+ * Absent — a CI runner with real environment variables, or a staging URL —
+ * this contributes nothing and the process environment is used as-is.
+ */
+function localStackEnv(): Record<string, string> {
+    const file = path.resolve(__dirname, '.env.development.local');
+    if (!fs.existsSync(file)) return {};
+
+    const parsed: Record<string, string> = {};
+    for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+        const match = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
+        if (!match) continue;
+        parsed[match[1]] = match[2].trim().replace(/^["']|["']$/g, '');
+    }
+    return parsed;
+}
 
 /**
  * Playwright E2E Test Configuration
@@ -24,6 +55,28 @@ import path from 'node:path';
  *   full      → All specs in both e2e/ and tests/e2e/ — requires running server + seed data
  */
 
+/**
+ * The same variables, also given to the TEST PROCESS — not just the server.
+ *
+ * webServer.env below configures the server Playwright starts. It does nothing
+ * for this process, and specs read process.env directly to decide what they can
+ * assert. tests/e2e/public-routes.spec.ts computes
+ *
+ *     const DB_CONFIGURED = ... process.env.NEXT_PUBLIC_SUPABASE_URL ...
+ *
+ * and calls test.skip() when it is absent. So "Marketplace public catalog loads
+ * without auth" skipped itself in both the smoke and chromium projects — the two
+ * skips in an otherwise green run — even though the database was up and the
+ * server could see it. A spec that silently opts out is worse than one that
+ * fails: the run reports success having not checked the thing.
+ *
+ * Assigned only where the process does not already have a value, so a CI
+ * runner's real environment still wins.
+ */
+for (const [key, value] of Object.entries(localStackEnv())) {
+    if (process.env[key] === undefined) process.env[key] = value;
+}
+
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
 
 /**
@@ -38,46 +91,10 @@ const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
  * Set PLAYWRIGHT_CHROMIUM_PATH to the chrome binary to use it instead.
  * Unset, Playwright resolves its own download exactly as before.
  */
-const CHROMIUM_PATH = process.env.PLAYWRIGHT_CHROMIUM_PATH || detectChromium();
+const CHROMIUM_PATH = detectChromium();
 const chromiumLaunch = CHROMIUM_PATH
     ? { launchOptions: { executablePath: CHROMIUM_PATH } }
     : {};
-
-/**
- * Find a usable Chromium when PLAYWRIGHT_CHROMIUM_PATH is not set.
- *
- * The env var alone was not enough: nobody sets it, so `npm run test:e2e` in an
- * image that ships its own browser still died on the first test with
- *
- *     Executable doesn't exist at .../chromium_headless_shell-1208/...
- *
- * while a working Chromium sat at /opt/pw-browsers/chromium. Playwright pins an
- * exact build per release (1208 for 1.58.1) and the image had 1194 — a version
- * mismatch, not a missing browser. Downloading the pinned build is blocked in
- * exactly the environments this matters in.
- *
- * Returns undefined when nothing is found, so Playwright resolves its own
- * download and behaviour is unchanged wherever that works.
- */
-function detectChromium(): string | undefined {
-    const root = process.env.PLAYWRIGHT_BROWSERS_PATH;
-    const candidates = [
-        root ? path.join(root, 'chromium') : null,
-        '/opt/pw-browsers/chromium',
-        '/usr/bin/chromium',
-        '/usr/bin/chromium-browser',
-        '/usr/bin/google-chrome',
-    ].filter(Boolean) as string[];
-
-    for (const candidate of candidates) {
-        try {
-            // statSync, not existsSync: these are usually symlinks into a
-            // versioned directory, and a dangling one must not be selected.
-            if (fs.statSync(candidate).isFile()) return candidate;
-        } catch { /* next candidate */ }
-    }
-    return undefined;
-}
 
 /**
  * WebKit is a separate download, and the images that lack a matching Chromium
@@ -158,9 +175,60 @@ export default defineConfig({
     ],
 
     webServer: {
-        command: 'npm run dev',
+        /**
+         * A PRODUCTION BUILD, not `next dev`.
+         *
+         * WHY, measured rather than assumed:
+         *
+         *   `next dev` took 256 SECONDS to answer its first request on this
+         *   machine, because Turbopack compiles each route on demand and the
+         *   root page is the first one asked for. Then it does that again for
+         *   every one of the ~205 pages the smoke suites visit, which is why
+         *   full runs took 27–32 minutes.
+         *
+         *   A build compiles everything once. The server then answers
+         *   immediately and every page is already built.
+         *
+         * This was not possible until sign-ins came down. consumeLoginAttempt
+         * enforces 5 attempts per 15 minutes PER EMAIL once NODE_ENV is
+         * production, and the suite used to sign in ~205 times, so a production
+         * build would have rate-limited itself and the failures would have read
+         * as broken authentication. global-setup now signs in nine times, once
+         * per persona — comfortably inside the limit, and each a different
+         * address.
+         *
+         * It also means the suite exercises what users actually get: the
+         * production bundle, with production's rate limiting and no dev overlay.
+         *
+         * Override with PLAYWRIGHT_BASE_URL to point at a server you started
+         * yourself; reuseExistingServer means an already-running one is adopted.
+         */
+        command: 'npm run build && npm run start',
         url: BASE_URL,
+        // See localStackEnv(): `next start` ignores .env.development.local, so
+        // without this a production build has no database and no auth secret.
+        // Process environment wins, so a CI runner's real values are not
+        // overridden by whatever is on this machine's disk.
+        env: { ...localStackEnv(), ...process.env } as Record<string, string>,
         reuseExistingServer: !process.env.CI,
-        timeout: 120_000,
+        /**
+         * Build plus start, with room to spare.
+         *
+         * 120s failed here, then 300s failed too — and a webServer timeout
+         * fails the ENTIRE run before a single test, which is an expensive way
+         * to find out the machine was busy. The build is the long pole at a few
+         * minutes; the server itself starts in seconds once it exists.
+         */
+        timeout: 900_000,
+        /**
+         * Both streams piped.
+         *
+         * stdout was 'ignore', which hid the one thing needed when this times
+         * out: whether the server was starting slowly or failing outright. The
+         * 300s timeout above produced a log with nothing in it but Sentry
+         * deprecation notices.
+         */
+        stdout: 'pipe',
+        stderr: 'pipe',
     },
 });

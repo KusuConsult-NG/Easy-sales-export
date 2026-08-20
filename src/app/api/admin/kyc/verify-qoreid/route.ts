@@ -5,8 +5,9 @@ import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { qoreIdService } from "@/lib/qoreid";
+import { recordAdminAction } from "@/lib/audit-log";
 
 const ALLOWED_COLLECTIONS = [
     "wave_applications",
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Check if user is admin
-        if (!isAdmin(session.user.roles)) {
+        if (!hasAdminPermission(session.user.roles, "users:update")) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }
@@ -82,6 +83,12 @@ export async function POST(request: NextRequest) {
         });
 
         logger.info(`[Admin KYC QoreID] Unconditionally marked verified`, { docId, field });
+        await recordAdminAction({
+            action: 'kyc_qoreid_verify',
+            userId: session.user.id,
+            targetId: docId,
+            targetType: 'docId',
+        });
         return NextResponse.json({
             success: true,
             isMatch: true,

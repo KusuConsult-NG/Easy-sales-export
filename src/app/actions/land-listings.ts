@@ -4,15 +4,24 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
+import { recordAdminAction } from "@/lib/audit-log";
 import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { createAdminAuditLog, logAdminAction } from "@/lib/audit-log";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { createNotificationAction } from "@/app/actions/notifications";
-import { isAdmin } from "@/lib/admin-permissions";
+import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { revalidateTag } from "next/cache";
 import { invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
+import { claimStatusTransitionFromAny } from "@/lib/status-transition";
+import {
+    PURCHASABLE_STATUSES,
+    APPROVABLE_FROM_STATUSES,
+    REJECTABLE_FROM_STATUSES,
+    type LandListingStatus,
+    type LandVerificationStatus,
+} from "@/lib/land-listing-status";
 
 /**
  * Farm Nation - Land Listings & Verification
@@ -38,17 +47,27 @@ export interface LandListing {
     waterSource?: string;
     images: string[];
     documents: string[];
-    status: "draft" | "pending_verification" | "verified" | "rejected" | "sold" | "leased";
+    // The shared union, not a local one. This listed six of the fifteen statuses
+    // the collection uses — no "available" (what farm-nation creates), no
+    // "approved", and none of the escrow states — so the type asserted that
+    // values this very file reads and writes could not occur.
+    status: LandListingStatus;
     availableForSale?: boolean;
     availableForRent?: boolean;
     availableForLease?: boolean;
     escrowAvailable?: boolean;
-    verificationStatus?: { 
-        verified: boolean;
-        verifiedBy?: string;
-        verifiedAt?: FieldValue | Timestamp;
-        rejectionReason?: string;
-    };
+    /**
+     * A string, matching types/index.ts and the database query in
+     * admin/_land.ts. It was declared here as an object while four other writers
+     * put a string on the same field; see land-listing-status.ts for which
+     * readers each half broke. The decision detail lives in the four fields
+     * below, which admin/_land.ts and _fn_admin.ts already wrote.
+     */
+    verificationStatus?: LandVerificationStatus;
+    verified?: boolean;
+    verifiedBy?: string;
+    verifiedAt?: FieldValue | Timestamp;
+    rejectionReason?: string | null;
     createdAt: FieldValue | Timestamp;
     updatedAt: FieldValue | Timestamp;
 }
@@ -83,9 +102,34 @@ async function _createLandListingAction(data: {
         const { session } = sessionResult;
         const ownerId = session.user.id;
 
+        // Fields listed, not spread.
+        //
+        // `...data` came first and the trusted values after it, so a
+        // caller-supplied ownerId could not survive. That handled callers
+        // OVERWRITING the fields below; it did nothing about callers ADDING
+        // fields these lines never mention. `LandListing` declares
+        // `verified`, `verificationStatus`, `verifiedBy`, `verifiedAt` and
+        // `escrowAvailable` — all of them records of an admin decision made in
+        // verifyLandListingAction — and a create request could simply include
+        // them. The listing still could not reach a purchasable status without
+        // the admin transition, so this was a false badge rather than a false
+        // sale, but a create endpoint has no business writing the verification
+        // record at all.
+        //
+        // The parameter contract is eleven fields. Those eleven are what gets
+        // written. `type` and the availableFor* flags are on the interface but
+        // not on this signature, so they were never accepted here either — the
+        // API route at api/farm-nation/create-listing is the writer that
+        // handles them.
         const listing: Omit<LandListing, "id"> = {
-            ...data,
-            // After the spread, so a caller-supplied ownerId cannot survive.
+            title: data.title,
+            description: data.description,
+            location: data.location,
+            size: data.size,
+            price: data.price,
+            ...(data.category !== undefined ? { category: data.category } : {}),
+            ...(data.soilType !== undefined ? { soilType: data.soilType } : {}),
+            ...(data.waterSource !== undefined ? { waterSource: data.waterSource } : {}),
             ownerId,
             ownerName: session.user.name || data.ownerName,
             ownerEmail: session.user.email || data.ownerEmail,
@@ -184,7 +228,7 @@ async function _verifyLandListingAction(
         if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         
-        if (!isAdmin(session?.user?.roles)) { 
+        if (!hasAdminPermission(session?.user?.roles, "land:verify_listings")) { 
             return { success: false, error: "Unauthorized: Admin access required", data: null };
         }
 
@@ -195,15 +239,58 @@ async function _verifyLandListingAction(
             return { success: false, error: "Listing not found", data: null };
         }
 
-        await listingRef.update({ 
-            status: "verified",
-            verificationStatus: {
+        // THE THIRD blind verify path in this module, after
+        // /api/admin/farm-nation/approve-land and _fn_admin.verifyPropertyAction.
+        // Same two problems as both of those:
+        //
+        //   1. No status guard — an existence check, then an unconditional write.
+        //      Applied to a listing in pending_escrow it put land back on the
+        //      public market while a buyer's money was held, or discarded the
+        //      escrow's state.
+        //   2. `verificationStatus` was assigned a FRESH object, so verifying a
+        //      previously rejected listing erased the rejection reason and who
+        //      gave it — the record of the earlier decision vanishing exactly
+        //      when it matters.
+        //
+        // The set of statuses this may act on is shared with the other four
+        // decision paths rather than written out here; see
+        // APPROVABLE_FROM_STATUSES for what the five copies disagreed about.
+        const transition = await claimStatusTransitionFromAny({
+            collection: COLLECTIONS.LAND_LISTINGS,
+            id: listingId,
+            fromAny: [...APPROVABLE_FROM_STATUSES],
+            to: "verified",
+            patch: {
+                // A string, not an object. The object shape was unqueryable —
+                // admin/_land.ts's pending queue asks the database for
+                // `verificationStatus == "pending"` — and spreading the previous
+                // value forward broke outright when it was the string
+                // create-listing writes. The decision detail goes to the
+                // top-level fields, which every other writer already sets.
+                verificationStatus: "approved",
                 verified: true,
                 verifiedBy: adminId,
-                verifiedAt: FieldValue.serverTimestamp() 
+                verifiedAt: FieldValue.serverTimestamp(),
+                // The prior rejection reason is cleared on the record but kept in
+                // the audit log below, which is where a reversed decision belongs.
+                rejectionReason: null,
+                updatedAt: FieldValue.serverTimestamp()
             },
-            updatedAt: FieldValue.serverTimestamp() 
+            recordPreviousAs: "statusBeforeVerification",
         });
+
+        if (!transition.claimed) {
+            return {
+                success: false,
+                error: transition.status === null
+                    ? (transition.exists
+                        ? "This listing has no status recorded, so it cannot be verified."
+                        : "Listing not found")
+                    : `This listing is '${transition.status}' and cannot be verified from that state. ` +
+                      `A listing with a purchase in progress must be resolved first.`,
+                data: null,
+            };
+        }
 
         await logAdminAction(
             "land_verified",
@@ -215,6 +302,16 @@ async function _verifyLandListingAction(
         revalidateTag("land-listings", "page");
         revalidateTag(`property-${listingId}`, "page");
         await invalidateAdminGlobalStats();
+
+        // A verified listing is what a buyer trusts. Who verified it, and when,
+        // was recorded nowhere — 'land_verified' has been in the audit
+        // vocabulary all along with nothing writing it.
+        await recordAdminAction({
+            action: "land_verified",
+            userId: session.user.id,
+            targetId: listingId,
+            targetType: "land_listing",
+        });
 
         return { success: true, error: null, data: null };
     } catch (error: any) { 
@@ -239,7 +336,7 @@ async function _rejectLandListingAction(
         if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         
-        if (!isAdmin(session?.user?.roles)) { 
+        if (!hasAdminPermission(session?.user?.roles, "land:verify_listings")) { 
             return { success: false, error: "Unauthorized: Admin access required", data: null };
         }
 
@@ -250,16 +347,37 @@ async function _rejectLandListingAction(
             return { success: false, error: "Listing not found", data: null };
         }
 
-        await listingRef.update({ 
-            status: "rejected",
-            verificationStatus: {
+        // Same guard as the verify path above. Rejecting a listing in
+        // pending_escrow took it off the market while a buyer's money was held
+        // against it.
+        const rejectTransition = await claimStatusTransitionFromAny({
+            collection: COLLECTIONS.LAND_LISTINGS,
+            id: listingId,
+            fromAny: [...REJECTABLE_FROM_STATUSES],
+            to: "rejected",
+            patch: {
+                verificationStatus: "rejected",
                 verified: false,
                 verifiedBy: adminId,
                 verifiedAt: FieldValue.serverTimestamp(),
-                rejectionReason: reason 
+                rejectionReason: reason,
+                updatedAt: FieldValue.serverTimestamp()
             },
-            updatedAt: FieldValue.serverTimestamp() 
+            recordPreviousAs: "statusBeforeRejection",
         });
+
+        if (!rejectTransition.claimed) {
+            return {
+                success: false,
+                error: rejectTransition.status === null
+                    ? (rejectTransition.exists
+                        ? "This listing has no status recorded, so it cannot be rejected."
+                        : "Listing not found")
+                    : `This listing is '${rejectTransition.status}' and cannot be rejected from that ` +
+                      `state. A listing with a purchase in progress must be resolved first.`,
+                data: null,
+            };
+        }
 
         await logAdminAction(
             "land_rejected",
@@ -272,6 +390,14 @@ async function _rejectLandListingAction(
         revalidateTag("land-listings", "page");
         revalidateTag(`property-${listingId}`, "page");
         await invalidateAdminGlobalStats();
+
+        await recordAdminAction({
+            action: "land_rejected",
+            userId: session.user.id,
+            targetId: listingId,
+            targetType: "land_listing",
+            metadata: { reason: reason ?? null },
+        });
 
         return { success: true, error: null, data: null };
     } catch (error: any) { 
@@ -321,7 +447,14 @@ async function _searchLandListingsAction(filters: {
 }): Promise<ActionResponse<{ listings: LandListing[]; lastDocId: string | null }>> { 
     try {
         let q = db.collection(COLLECTIONS.LAND_LISTINGS)
-            .where("status", "==", "verified")
+            // Every for-sale spelling, not just "verified".
+            //
+            // This filtered on "verified" alone — a FOURTH vocabulary for the same
+            // idea — so listings farm-nation created as "available", and any an
+            // admin marked "approved", never appeared in search results at all.
+            // Invisible inventory, in a different reader from the one already
+            // fixed in land-visibility.ts.
+            .where("status", "in", [...PURCHASABLE_STATUSES])
             .orderBy("createdAt", "desc");
 
         if (filters.state) {
@@ -348,7 +481,7 @@ async function _searchLandListingsAction(filters: {
                 indexError = true;
                 
                 // Fallback without orderBy
-                let fallbackQuery = db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "verified");
+                let fallbackQuery = db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "in", [...PURCHASABLE_STATUSES]);
                 if (filters.state) fallbackQuery = fallbackQuery.where("location.state", "==", filters.state);
                 
                 if (filters.lastDocId) { 
@@ -791,7 +924,7 @@ async function _deleteLandListingAction(
         if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         
-        if (!isAdmin(session?.user?.roles)) { 
+        if (!hasAdminPermission(session?.user?.roles, "land:verify_listings")) { 
             return { success: false, error: "Unauthorized: Admin access required", data: null };
         }
 
@@ -815,6 +948,14 @@ async function _deleteLandListingAction(
         revalidateTag("land-listings", "page");
         revalidateTag(`property-${listingId}`, "page");
         await invalidateAdminGlobalStats();
+
+        // Irreversible, and nothing else records that the listing ever existed.
+        await recordAdminAction({
+            action: "land_deleted",
+            userId: session.user.id,
+            targetId: listingId,
+            targetType: "land_listing",
+        });
 
         return { success: true, error: null, data: null };
     } catch (error: any) { 

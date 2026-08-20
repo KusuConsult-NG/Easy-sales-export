@@ -175,6 +175,26 @@ export default function AdminUsersPage() {
         limit: 20
     });
 
+    /**
+     * Seed the search box from ?search=.
+     *
+     * The system-health page links here to say "look at this user" — its
+     * "Verify" button used to point at /admin/users/<uid>, a route that has
+     * never existed, so every one of those 404'd. There is nowhere else for it
+     * to go: this list is the only per-user admin surface. Reading the query
+     * parameter is what makes the link land on the user it names.
+     *
+     * window.location rather than useSearchParams: this is the only place in
+     * the admin tree that needs it, and useSearchParams would require a
+     * Suspense boundary around the page for no other benefit.
+     */
+    useEffect(() => {
+        const initial = new URLSearchParams(window.location.search).get("search");
+        if (initial) setSearch(initial);
+        // Once, on mount — afterwards the search box owns this state.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     const hasActiveFilters = !!(filters.state || filters.lga || filters.fromDate || filters.toDate ||
         (filters.role && filters.role !== "all") || (filters.status && filters.status !== "all") ||
         (filters.sortOrder && filters.sortOrder !== "desc") || (filters.sortBy && filters.sortBy !== "createdAt") ||

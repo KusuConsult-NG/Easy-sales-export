@@ -18,7 +18,7 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { rateLimit, getActionClientIp } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
-import { normalisePhone } from '@/lib/phone';
+import { normalisePhone, phoneLookupVariants } from '@/lib/phone';
 
 const loginLimiter = rateLimit(rateLimitConfig.login);
 
@@ -394,6 +394,40 @@ export async function preValidateLoginAction(credentials: any): Promise<{ succes
 
         const uid = responseData.user.id;
 
+        // 3b. Reset the rate limit — the password is now proven correct.
+        //
+        // THIS ACTION CONSUMED AN ATTEMPT AND NEVER GAVE IT BACK
+        // -----------------------------------------------------
+        // Step 2 above calls consumeLoginAttempt, and the limit is deliberately
+        // consumed BEFORE the password is checked. lib/auth.ts does the same and
+        // then clears the counter at its STEP 5 on success. This action did not,
+        // so it only ever counted upwards.
+        //
+        // In production with Upstash reachable, both paths share one Redis
+        // counter, so authorize()'s reset happened to cover this one too and the
+        // gap was invisible. It stops being invisible the moment either path
+        // falls back to the in-memory store, because Next compiles this Server
+        // Action and the NextAuth route handler into SEPARATE server bundles —
+        // separate module instances, separate Maps. authorize()'s reset then
+        // clears its own Map and cannot reach this one, so this counter climbs
+        // by one per successful login and locks the account out on the sixth
+        // with "Too many failed login attempts" after five clean sign-ins.
+        //
+        // Measured, not reasoned about: a production-build Playwright run
+        // allowed e2e.user exactly five sign-ins and refused the sixth, with the
+        // correct password on screen.
+        //
+        // Placed here rather than at the `success: true` return so that a
+        // correct password clears the counter even when a later profile check
+        // fails — the limiter bounds password guessing, and the guessing is over.
+        try {
+            const { resetLoginAttempts } = await import("@/lib/rate-limit");
+            await resetLoginAttempts(email);
+        } catch (err: any) {
+            // Never block a login on a reset failure, same as lib/auth.ts.
+            logger.error(`[PreValidate:Fallback] resetLoginAttempts failed. Error: ${err.message}`);
+        }
+
         // 4. Fetch user profile and check status
         let userDoc = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS).doc(uid).get());
 
@@ -524,8 +558,17 @@ export async function registerAction(prevState: any, formData: FormData) { const
         // 🔒 DEDUP GUARD: Check phone uniqueness before touching Firebase Auth
         // Prevents multi-account fraud (same phone, different email addresses)
         const normalisedPhone = normalisePhone(validatedData.phone) || validatedData.phone;
-        if (normalisedPhone) { const phoneCheck = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS)
-                .where("phone", "==", normalisedPhone)
+        // EVERY spelling that might be stored, not just the normalised one.
+        //
+        // This action normalises before it writes, so an account created HERE
+        // carries +234…. The bulk member import, seller approval, export
+        // onboarding and the KYC action all write the raw value to the same
+        // field — so asking only for +234… could not see a member who arrived by
+        // any of those routes, and the bulk import is where most members came
+        // from. See phoneLookupVariants.
+        const phoneVariants = phoneLookupVariants(validatedData.phone);
+        if (phoneVariants.length > 0) { const phoneCheck = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS)
+                .where("phone", "in", phoneVariants)
                 .limit(1)
                 .get());
             if (!phoneCheck.empty) {
@@ -906,10 +949,51 @@ export async function changePasswordAction(
         // stores by this point; failing the whole operation because a flag write
         // failed would tell the user their password did not change when it did.
         // The worst case here is being asked to change it again.
+        // ── Revoke every OTHER session ────────────────────────────────────
+        //
+        // `passwordChangedAt` was written here and READ NOWHERE, so changing
+        // your password left every other session signed in for the remaining
+        // eight hours of its maxAge — including the stolen one you changed it
+        // because of.
+        //
+        // resetPasswordAction already stamps `sessionsValidFrom` and the jwt
+        // callback compares it against the token's issue time. The reason this
+        // path was left out was that its two callers stay signed in and carry
+        // on — /auth/reset-legacy-password pushes to /dashboard, /profile shows
+        // an inline success — so stamping Date.now() would have signed the user
+        // out of the flow they were standing in.
+        //
+        // The predicate is strictly-before, which resolves that: stamping the
+        // CURRENT session's own issue time revokes everything minted before it
+        // and keeps this one. That is what "sign out my other sessions" means,
+        // and it needs no change to the flow.
+        //
+        // A stolen cookie is necessarily older than the session you are sitting
+        // in when you notice and react, so this covers the case the feature
+        // exists for. A session minted AFTER this one survives, deliberately: it
+        // could only have been created with a password, and after this call that
+        // is the new one.
+        //
+        // Fails OPEN when the issue time is unknown — the same asymmetry
+        // resetPasswordAction reasons about. A wrong value here signs out a user
+        // who did nothing wrong; a missing one leaves a stale session that still
+        // expires within maxAge.
+        const revokeBefore = session.user.authAt;
+        if (typeof revokeBefore !== "number" || !(revokeBefore > 0)) {
+            logger.error(
+                "[changePassword] password changed but other sessions were NOT revoked: "
+                + "this session records no issue time",
+                { userId: session.user.id },
+            );
+        }
+
         try {
             await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
                 requiresPasswordChange: FieldValue.delete(),
                 passwordChangedAt: FieldValue.serverTimestamp(),
+                ...(typeof revokeBefore === "number" && revokeBefore > 0
+                    ? { sessionsValidFrom: revokeBefore }
+                    : {}),
                 updatedAt: FieldValue.serverTimestamp(),
             });
         } catch (flagErr: any) {

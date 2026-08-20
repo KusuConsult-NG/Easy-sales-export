@@ -5,7 +5,7 @@ import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { normalizeUserUpdate } from "@/lib/schema-normalizer";
-import { isAdmin } from "@/lib/admin-permissions";
+import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { FieldValue } from "@/lib/firestore-compat";
 import { FieldPath } from "@/lib/firestore-compat";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
@@ -17,6 +17,7 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { Resend } from "resend";
 import { deleteCache, invalidateCooperativeCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { extractCanonicalUser } from "@/lib/canonical/normalizer";
+import { recordAdminAction } from "@/lib/audit-log";
 
 // ============================================================================
 // MEMBER MANAGEMENT
@@ -43,6 +44,15 @@ async function _getAllMembersAction(options?: {
                 return { success: false as const, error: "Unauthorized", data: null };
             }
         }
+
+        /**
+         * Bank details go only to the callers who can act on these records.
+         * `roles` above is the LIVE set this action already resolves, so the
+         * check below inherits that. Seventh and eighth instances of a list
+         * gated more loosely than the action it feeds; see the WAVE withdrawal
+         * queue for the six before them.
+         */
+        const maySeeBankDetails = hasAdminPermission(roles, "cooperatives:approve_members");
 
         // Audit logging
         await createAdminAuditLog({
@@ -122,7 +132,7 @@ async function _getAllMembersAction(options?: {
                     name: canonical.name,
                     email: canonical.email,
                     phone: canonical.phone,
-                    bankDetails: canonical.bankDetails
+                    ...(maySeeBankDetails ? { bankDetails: canonical.bankDetails } : {}),
                 }
             };
         });
@@ -153,7 +163,35 @@ async function _getAllMembersAction(options?: {
             });
         }
 
-        return { error: null, success: true as const, data: { members }, meta: { hasMore: false, cursor: null } };
+        // `hasMore: false`, hardcoded, over a query that caps at fetchLimit and
+        // then slices to options.limit. So this reader always told its caller it
+        // had returned every member, whatever it had actually returned — and the
+        // 500-row default cap on the underlying query was never reported either.
+        //
+        // Both are answered honestly now. This action has no caller in the app
+        // today (the members page uses getStandardCooperativeMembersAction), but
+        // it is an exported server action returning member PII and a reader that
+        // lies about completeness is how "the list is missing people" reaches
+        // production.
+        const truncated = snapshot.docs.length >= fetchLimit;
+        if (truncated) {
+            logger.warn(
+                `[getAllMembers] hit the ${fetchLimit}-row cap — the member list returned is INCOMPLETE`,
+                { adminScope, status: options?.status }
+            );
+        }
+
+        return {
+            error: null,
+            success: true as const,
+            data: { members },
+            meta: {
+                hasMore: truncated || (!options?.search && !!options?.limit && membersRaw.length > options.limit),
+                cursor: null,
+                truncated,
+                rowCap: fetchLimit,
+            },
+        };
     } catch (error) {
         logger.error("Get all members error:", {
             userId: sessionResult?.session?.user?.id,
@@ -180,10 +218,13 @@ async function _updateMemberStatusAction(
         }
 
         let roles = session.user.roles;
-        if (!isAdmin(roles)) {
+        if (!hasAdminPermission(roles, "cooperatives:approve_members")) {
             const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
             const liveRoles = liveUserDoc.data()?.roles;
-            if (isAdmin(liveRoles)) {
+            // The SAME question as the gate above. This asked isAdmin(), so a
+            // caller the gate refused could be admitted by the stale-session
+            // retry — a fallback that is wider than what it falls back from.
+            if (hasAdminPermission(liveRoles, "cooperatives:approve_members")) {
                 roles = liveRoles;
             } else {
                 return { success: false as const, error: "Unauthorized", data: null };
@@ -197,6 +238,26 @@ async function _updateMemberStatusAction(
         }
         
         const memberData = memberDoc.data()!;
+
+        // A SCOPED ADMIN COULD ACT ON ANY COOPERATIVE'S MEMBERS.
+        //
+        // getAdminScope was called in this function, but only at the end, to
+        // pick which cache keys to clear — never to decide whether the caller
+        // was entitled to touch this member. Both withdrawal actions in the
+        // sibling file carry the check, labelled "Prevent IDOR"; this one, which
+        // grants the `cooperative_member` role and sets isVerified, did not.
+        //
+        // So an administrator scoped to one cooperative could activate, approve
+        // or suspend a member of any other.
+        const memberScope = await getAdminScope(session.user.id, roles);
+        if (memberScope && memberData.cooperativeId && memberData.cooperativeId !== memberScope) {
+            return {
+                success: false as const,
+                error: "Unauthorized: Cannot change membership status for another cooperative",
+                data: null,
+            };
+        }
+
         let targetUserId = memberData.userId;
 
         if (!targetUserId && memberData.email) {
@@ -290,6 +351,45 @@ async function _updateMemberStatusAction(
                 } else {
                     await userRef.update(normalizeUserUpdate(userDocUpdate));
                 }
+            } else if (status === "suspended") {
+                // SUSPENSION CHANGED A LABEL AND REVOKED NOTHING.
+                //
+                // This branch did not exist. Suspending wrote
+                // `membershipStatus: "suspended"` onto the member document and
+                // stopped, leaving the USER document exactly as it was:
+                // `roles` still containing "cooperative_member" and
+                // `serviceRegistrations.cooperatives.status` still "active".
+                //
+                // checkModuleAccess grants cooperative access from EITHER —
+                // Layer 1 is the JWT role alone, Layer 2 the registration
+                // status — so a suspended member kept the dashboard,
+                // contributions, loans, withdrawals and the member directory.
+                // An admin pressing Suspend achieved nothing except a different
+                // word on the admin's own screen.
+                //
+                // Both are revoked now, which is exactly what the Farm Nation
+                // equivalent does when it rejects a seller
+                // (farm-nation/_fn_admin.ts strips the `farmer` role the same
+                // way). Reactivating re-adds them through the arrayUnion in the
+                // branch above, so this is reversible rather than destructive.
+                const suspendUpdate: Record<string, any> = {
+                    roles: FieldValue.arrayRemove("cooperative_member"),
+                    "serviceRegistrations.cooperatives.status": "suspended",
+                    "serviceRegistrations.cooperatives.suspendedAt": FieldValue.serverTimestamp(),
+                    "serviceRegistrations.cooperatives.suspendedBy": session.user.id,
+                    updatedAt: FieldValue.serverTimestamp(),
+                    _version: FieldValue.increment(1),
+                };
+
+                if (userDoc?.exists) {
+                    await userRef.update(normalizeUserUpdate(suspendUpdate));
+                } else {
+                    logger.warn(
+                        "[updateMemberStatus] suspended a member with no user document — "
+                        + "nothing to revoke, which is expected for a legacy import",
+                        { memberId, targetUserId }
+                    );
+                }
             }
             return { notificationInfo, targetUserId };
         })();
@@ -344,6 +444,13 @@ async function _updateMemberStatusAction(
                 logger.error('Cooperative approval email failed (non-blocking):', emailError);
             }
         }
+        await recordAdminAction({
+            action: 'cooperative_member_status_update',
+            userId: session.user.id,
+            targetId: memberId,
+            targetType: 'cooperative_member',
+            metadata: { status },
+        });
         return { error: null, success: true as const, data: null, meta: null };
     } catch (error) {
         logger.error("Update member status error:", {
@@ -378,10 +485,13 @@ export async function requestCooperativeRevisionAction(
         }
 
         let roles = session.user.roles;
-        if (!isAdmin(roles)) {
+        if (!hasAdminPermission(roles, "cooperatives:approve_members")) {
             const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
             const liveRoles = liveUserDoc.data()?.roles;
-            if (isAdmin(liveRoles)) {
+            // The SAME question as the gate above. This asked isAdmin(), so a
+            // caller the gate refused could be admitted by the stale-session
+            // retry — a fallback that is wider than what it falls back from.
+            if (hasAdminPermission(liveRoles, "cooperatives:approve_members")) {
                 roles = liveRoles;
             } else {
                 return { success: false as const, error: 'Admin access required', data: null };
@@ -451,6 +561,13 @@ export async function requestCooperativeRevisionAction(
             logger.error('Cooperative revision email failed (non-blocking):', emailError);
         }
 
+        await recordAdminAction({
+            action: 'cooperative_revision_request',
+            userId: session.user.id,
+            targetId: memberId,
+            targetType: 'cooperative_member',
+            metadata: { reason },
+        });
         return { success: true, error: null, data: { message: "Revision requested" }, meta: null };
     } catch (error: any) {
         logger.error('requestCooperativeRevisionAction error:', error);
@@ -835,7 +952,41 @@ export async function getStandardCooperativeMembersAction(
             });
         }
 
-        return paginatedOk(standardForms, _nextCursor, stats ? { stats } : undefined);
+        // A COHORT CAPPED AT 5,000 REPORTED ITSELF AS COMPLETE.
+        //
+        // Any filtered view — a search, a date range, a state, an LGA, a
+        // registry, or a gender sort — switches to in-memory pagination and
+        // fetches fetchLimit + 1 rows. `hasMoreRaw` records whether that cap was
+        // reached, and then the memory branch computed _hasMore purely from the
+        // length of what it had:
+        //
+        //     offset + limitCount < applications.length
+        //
+        // So on a cooperative larger than the cap, an admin paged to the end of
+        // the first 5,000, was told there was no more, and never saw the rest —
+        // and the cohort `stats` beside the list counted only those 5,000 while
+        // presenting as the whole cohort.
+        //
+        // Reported rather than silently paged past, the same way the loans
+        // export and the cooperative financial totals now report theirs.
+        const cohortTruncated = useMemoryPagination && hasMoreRaw;
+        if (cohortTruncated) {
+            logger.error(
+                `[getStandardCooperativeMembers] the filtered cohort hit the ${fetchLimit}-row cap — `
+                + `the list AND the stats beside it are INCOMPLETE. Narrow the filters.`,
+                { adminScope, statusFilter, paymentFilter }
+            );
+        }
+
+        return paginatedOk(
+            standardForms,
+            _nextCursor,
+            {
+                ...(stats ? { stats } : {}),
+                truncated: cohortTruncated,
+                rowCap: fetchLimit,
+            },
+        );
     } catch (error) {
         logger.error(`getStandardCooperativeMembersAction error:`, error);
         return paginatedErr("Failed to load cooperative members");

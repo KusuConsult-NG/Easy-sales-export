@@ -287,6 +287,29 @@ async function _getUserProgressAction(
     courseId: string
 ): Promise<ActionResponse<any>> {
     try {
+        // Whose progress this is, decided by the session and not by the caller.
+        //
+        // This function had no session check of any kind. It is a "use server"
+        // export re-exported through academy/index.ts, so it is a reachable HTTP
+        // endpoint whatever the UI does — and it took the user id as its first
+        // argument. getUserProgressAction(anyone, anyCourse) returned that
+        // learner's completed lessons, their quiz SCORES and their completion
+        // date, to an unauthenticated caller.
+        //
+        // Its five siblings in this file all check `session.user.id !== userId`.
+        // It was the one that did not, and it was parked in
+        // action-auth-baseline.json — whose own header says that list is a
+        // ratchet and "must never become a place to park things quietly".
+        //
+        // All eight call sites already pass session.user.id, so nothing
+        // legitimate changes.
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: 'Unauthorized', data: null };
+        const { session } = sessionResult;
+        if (!session?.user?.id || session.user.id !== userId) {
+            return { success: false as const, error: "Unauthorized", data: null };
+        }
+
         const progressDoc = await db.doc(`user_progress/${userId}/courses/${courseId}`).get();
 
         if (!progressDoc.exists) {
@@ -426,6 +449,21 @@ export const logLessonActivityAction = withFlexibleSafeAction("logLessonActivity
  */
 async function _calculateStreakAction(userId: string): Promise<ActionResponse<any>> {
     try {
+        // Same as getUserProgressAction above: the caller named the user.
+        //
+        // No session check at all, and the id came from the argument, so
+        // calculateStreakAction(anyone) returned that learner's day-by-day
+        // activity record. Its writing counterpart, logLessonActivityAction,
+        // takes no id precisely because it derives one from the session.
+        //
+        // Its single call site passes the session user's id.
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: 'Unauthorized', data: null };
+        const { session } = sessionResult;
+        if (!session?.user?.id || session.user.id !== userId) {
+            return { success: false as const, error: "Unauthorized", data: null };
+        }
+
         // Fetch the last 90 days of activity (enough for any realistic streak)
         const snap = await db
             .collection(COLLECTIONS.USER_ACTIVITY_LOGS)
@@ -440,22 +478,39 @@ async function _calculateStreakAction(userId: string): Promise<ActionResponse<an
         const activeDays = new Set(snap.docs.map(d => d.id)); // Set of "YYYY-MM-DD" strings
 
         let streak = 0;
-        // Start from today and walk back
+        // Start from today and walk back.
+        //
+        // UTC throughout, because the day ids being matched are UTC days.
+        // logLessonActivityAction names each document
+        // `new Date().toISOString().split("T")[0]` — the UTC calendar date — and
+        // this loop used to walk the LOCAL one: `setHours(0,0,0,0)` then
+        // `toISOString()`, which is local midnight expressed in UTC.
+        //
+        // On a UTC server the two agree and nothing shows. On a server east of
+        // UTC they do not: local midnight in Lagos (UTC+1) is 23:00 the previous
+        // day in UTC, so the walk started one day BEHIND the id the writer had
+        // just created. Today's lesson never counted, and a learner who studied
+        // today but not yesterday was told their streak was 0 — on the very day
+        // they earned it.
+        //
+        // Fixed on the reading side rather than the writing side: the ids
+        // already in the database are UTC days, and changing the writer would
+        // split the collection into two calendars.
         const cursor = new Date();
-        cursor.setHours(0, 0, 0, 0);
+        cursor.setUTCHours(0, 0, 0, 0);
 
         while (true) {
             const dateStr = cursor.toISOString().split("T")[0];
             if (activeDays.has(dateStr)) {
                 streak++;
-                cursor.setDate(cursor.getDate() - 1);
+                cursor.setUTCDate(cursor.getUTCDate() - 1);
             } else if (streak === 0) {
                 // Allow one day gap at the start (e.g. user completed lessons yesterday but not today yet)
-                cursor.setDate(cursor.getDate() - 1);
+                cursor.setUTCDate(cursor.getUTCDate() - 1);
                 const yesterdayStr = cursor.toISOString().split("T")[0];
                 if (activeDays.has(yesterdayStr)) {
                     streak++;
-                    cursor.setDate(cursor.getDate() - 1);
+                    cursor.setUTCDate(cursor.getUTCDate() - 1);
                 } else {
                     break;
                 }

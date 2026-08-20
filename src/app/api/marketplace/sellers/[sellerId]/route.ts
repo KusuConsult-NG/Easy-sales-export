@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
+import { toMillis } from "@/lib/firestore-serialize";
 
 export const dynamic = "force-dynamic";
 
@@ -29,8 +30,8 @@ export async function GET(
 
         if (!verSnap.empty) {
             verSnap.docs.sort((a, b) => {
-                const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
-                const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+                const aTime = toMillis(a.data().createdAt);
+                const bTime = toMillis(b.data().createdAt);
                 return bTime - aTime;
             });
         }
@@ -73,9 +74,21 @@ export async function GET(
         let avgRating = 0;
         let reviewCount = 0;
         try {
+            // APPROVED ONLY, like every other reader of this figure.
+            //
+            // This counted every seller review regardless of status, so the
+            // public rating included reviews still waiting on a moderator AND
+            // reviews a moderator had explicitly REJECTED. getSellerReviewSummaryAction
+            // computes the same average from the same collection with
+            // `status == "approved"`, so the platform showed two different
+            // ratings for one seller and the permissive one was the public route.
+            //
+            // Rejecting a fake one-star changed nothing a buyer could see here,
+            // which is the one thing the moderation queue exists for.
             const reviewSnap = await db
                 .collection(COLLECTIONS.SELLER_REVIEWS)
                 .where("sellerId", "==", sellerId)
+                .where("status", "==", "approved")
                 .get();
 
             reviewCount = reviewSnap.size;

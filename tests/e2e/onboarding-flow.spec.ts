@@ -25,7 +25,7 @@ test.describe('User Onboarding Journey', () => {
 
         // 2. Expect redirect to Get Started (Module Selection)
         await expect(page).toHaveURL(/\/auth\/get-started/, { timeout: 15000 });
-        await expect(page.locator('h1')).toContainText('Choose Your Module');
+        await expect(page.getByRole('heading', { level: 1 })).toContainText('Choose Your Module');
 
         // 3. Select Marketplace
         await page.click('text=Marketplace');
@@ -56,6 +56,6 @@ test.describe('User Onboarding Journey', () => {
 
         // 8. Expect redirect to Buyer Dashboard
         await expect(page).toHaveURL(/\/marketplace\/buyer\/dashboard/, { timeout: 15000 });
-        await expect(page.locator('h1')).toContainText('Buyer Dashboard');
+        await expect(page.getByRole('heading', { level: 1 })).toContainText('Buyer Dashboard');
     });
 });

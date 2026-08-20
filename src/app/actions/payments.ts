@@ -96,14 +96,29 @@ export async function createPaymentRecordAction(data: { userId: string;
             userEmail = String(targetSnap.data()?.email ?? "");
         }
 
-        const payment: Omit<PaymentRecord, "id"> = { ...data,
-            // After the spread, so the caller's copies of these are recorded
-            // nowhere.
+        // Fields listed, not spread.
+        //
+        // The previous version was `{ ...data, amount, userEmail, status, ... }`
+        // with a comment noting that the trusted values came after the spread so
+        // the caller's copies were recorded nowhere. True, and only half of it:
+        // ordering stops a caller overwriting the fields named here, but nothing
+        // stopped them adding fields these lines never mention. `PaymentRecord`
+        // declares `completedAt` and `paystackResponse`, so a caller could file
+        // a "pending" payment that already carried a gateway response and a
+        // completion time.
+        const payment: Omit<PaymentRecord, "id"> = {
+            userId: data.userId,
+            currency: data.currency,
+            paymentReference: data.paymentReference,
             amount,
             userEmail,
             status: "pending",
             paymentMethod: data.paymentMethod,
             purpose: data.purpose,
+            // Optional, and only written when supplied: the JSONB writer stores
+            // an explicit `undefined` as a null column rather than dropping it.
+            ...(data.relatedId ? { relatedId: data.relatedId } : {}),
+            ...(data.metadata ? { metadata: data.metadata } : {}),
             initiatedAt: FieldValue.serverTimestamp() };
 
         const docRef = await db.collection(COLLECTIONS.PAYMENTS).add(payment);

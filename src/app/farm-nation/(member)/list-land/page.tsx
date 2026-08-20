@@ -215,6 +215,30 @@ export default function ListLandPage() {
         }
     };
 
+    /**
+     * What still has to be supplied before the listing can be submitted.
+     *
+     * ONE LIST, used both to disable the button and to say why. It was three
+     * conditions inlined on the button's `disabled` prop and nothing else:
+     *
+     *     disabled={isSubmitting || media.images.length === 0
+     *               || !documents.landTitle || !documents.surveyPlan}
+     *
+     * A seller who filled the whole form but had no survey plan — or no photo —
+     * got a dead grey button and no indication of which of the three it wanted.
+     * handleSubmit's own error messages do not help either: the only field it
+     * names is the land category, and that check never runs, because the button
+     * cannot be clicked to reach it.
+     *
+     * Derived once so the message cannot drift from the rule. Two copies of a
+     * requirement is how a form ends up refusing something it claims to accept.
+     */
+    const missingRequirements: string[] = [
+        media.images.length === 0 ? "at least one land photo" : null,
+        !documents.landTitle ? "the Land Title Document" : null,
+        !documents.surveyPlan ? "the Survey Plan" : null,
+    ].filter((requirement): requirement is string => requirement !== null);
+
     return (
         <div className="min-h-screen bg-slate-50 py-8">
             <div className="max-w-5xl mx-auto px-4">
@@ -259,7 +283,7 @@ export default function ListLandPage() {
                                     <input
                                         type="text"
                                         value={formData.title}
-                                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
                                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         placeholder="e.g., 50 Acres Farmland in Kaduna"
                                         required
@@ -296,7 +320,7 @@ export default function ListLandPage() {
                                     </label>
                                     <textarea
                                         value={formData.description}
-                                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                                         rows={5}
                                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         placeholder="Describe the land, its features, soil type, water access, nearby infrastructure, etc."
@@ -321,7 +345,7 @@ export default function ListLandPage() {
                                         </label>
                                         <select
                                             value={formData.state}
-                                            onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                                            onChange={(e) => setFormData(prev => ({ ...prev, state: e.target.value }))}
                                             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                             required
                                         >
@@ -338,7 +362,7 @@ export default function ListLandPage() {
                                         <input
                                             type="text"
                                             value={formData.lga}
-                                            onChange={(e) => setFormData({ ...formData, lga: e.target.value })}
+                                            onChange={(e) => setFormData(prev => ({ ...prev, lga: e.target.value }))}
                                             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                             placeholder="Enter LGA"
                                             required
@@ -352,7 +376,7 @@ export default function ListLandPage() {
                                     </label>
                                     <textarea
                                         value={formData.address}
-                                        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
                                         rows={2}
                                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         placeholder="Full address with landmarks"
@@ -375,7 +399,7 @@ export default function ListLandPage() {
                                             <input
                                                 type="number"
                                                 value={formData.latitude}
-                                                onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
+                                                onChange={(e) => setFormData(prev => ({ ...prev, latitude: e.target.value }))}
                                                 className="w-full px-3 py-2 bg-white border border-blue-300 rounded-lg text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                 placeholder="e.g., 9.0820"
                                                 step="0.000001"
@@ -390,7 +414,7 @@ export default function ListLandPage() {
                                             <input
                                                 type="number"
                                                 value={formData.longitude}
-                                                onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
+                                                onChange={(e) => setFormData(prev => ({ ...prev, longitude: e.target.value }))}
                                                 className="w-full px-3 py-2 bg-white border border-blue-300 rounded-lg text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                 placeholder="e.g., 8.6753"
                                                 step="0.000001"
@@ -417,7 +441,7 @@ export default function ListLandPage() {
                                     <input
                                         type="number"
                                         value={formData.size}
-                                        onChange={(e) => setFormData({ ...formData, size: e.target.value })}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, size: e.target.value }))}
                                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         placeholder="0"
                                         min="0"
@@ -432,7 +456,7 @@ export default function ListLandPage() {
                                     </label>
                                     <select
                                         value={formData.unit}
-                                        onChange={(e) => setFormData({ ...formData, unit: e.target.value as "acres" | "hectares" })}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, unit: e.target.value as "acres" | "hectares" }))}
                                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         required
                                     >
@@ -448,7 +472,7 @@ export default function ListLandPage() {
                                     <input
                                         type="number"
                                         value={formData.pricePerUnit}
-                                        onChange={(e) => setFormData({ ...formData, pricePerUnit: e.target.value })}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, pricePerUnit: e.target.value }))}
                                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         placeholder="0"
                                         min="0"
@@ -637,7 +661,7 @@ export default function ListLandPage() {
                         <div className="flex gap-4 pt-4">
                             <button
                                 type="submit"
-                                disabled={isSubmitting || media.images.length === 0 || !documents.landTitle || !documents.surveyPlan}
+                                disabled={isSubmitting || missingRequirements.length > 0}
                                 className="flex-1 px-8 py-4 bg-linear-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                             >
                                 {isSubmitting ? (
@@ -653,6 +677,26 @@ export default function ListLandPage() {
                                 )}
                             </button>
                         </div>
+
+                        {/*
+                          * Says what the disabled button is waiting for.
+                          *
+                          * role="status" rather than a plain div: a seller
+                          * using a screen reader gets no signal at all from a
+                          * button that is merely greyed out.
+                          */}
+                        {missingRequirements.length > 0 && (
+                            <div
+                                role="status"
+                                className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
+                            >
+                                <span className="font-semibold">Before you can submit, please add </span>
+                                {missingRequirements.length === 1
+                                    ? missingRequirements[0]
+                                    : `${missingRequirements.slice(0, -1).join(", ")} and ${missingRequirements[missingRequirements.length - 1]}`}
+                                .
+                            </div>
+                        )}
 
                         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                             <p className="text-sm text-yellow-900">

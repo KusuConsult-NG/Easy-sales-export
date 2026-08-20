@@ -5,7 +5,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { isAdmin } from "@/lib/admin-permissions";
+import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { serializeDocs, serializeDoc } from "@/lib/firestore-serialize";
 import { FieldPath } from "@/lib/firestore-compat";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
@@ -122,6 +122,18 @@ async function _getStandardFarmNationRegistrantsAction(options: {
             return { success: false, error: "Unauthorized", data: null };
         }
 
+        /**
+         * Bank details and identity numbers go only to the callers who can pay
+         * a seller out. isAdmin() is true for all TEN admin roles, and this list
+         * hands over every registrant's account number, account name, bank code
+         * — and, through the `...uData` spread below, their hashed NIN and BVN.
+         *
+         * Fourth copy of this defect: the admin withdrawal list, the marketplace
+         * escrow list and the farm-nation transaction list were each closed by
+         * requiring the permission that lets you process the payout.
+         */
+        const maySeeBankDetails = hasAdminPermission(session.user.roles, "finance:resolve_disputes");
+
         const useMemoryPagination = options.sortBy === "gender" || !!options.search || !!options.dateFrom || !!options.dateTo;
         const fetchLimit = useMemoryPagination ? 5000 : (options.limit || 50);
         const applicationsSortDirection = options.sortOrder || "desc";
@@ -154,16 +166,14 @@ async function _getStandardFarmNationRegistrantsAction(options: {
                 applications = applications.filter(app => app.status === options.status);
             }
             if (options.dateFrom) {
-                const from = new Date(options.dateFrom);
-                from.setHours(0, 0, 0, 0);
+                const from = dateRangeStart(options.dateFrom);
                 applications = applications.filter(app => {
                     const d = app.submittedAt?.seconds ? new Date(app.submittedAt.seconds * 1000) : new Date(app.submittedAt);
                     return d >= from;
                 });
             }
             if (options.dateTo) {
-                const to = new Date(options.dateTo);
-                to.setHours(23, 59, 59, 999);
+                const to = dateRangeEnd(options.dateTo);
                 applications = applications.filter(app => {
                     const d = app.submittedAt?.seconds ? new Date(app.submittedAt.seconds * 1000) : new Date(app.submittedAt);
                     return d <= to;
@@ -228,16 +238,26 @@ async function _getStandardFarmNationRegistrantsAction(options: {
                 ? `${profile.firstName} ${profile.lastName || ''}`.trim() 
                 : (profile.fullName || uData.fullName || uData.name || "Unknown");
 
-            // Canonical bankDetails injection
-            const bankDetails = uData.bankDetails || {
-                bankName: uData.bankName || "N/A",
-                accountNumber: uData.bankAccountNumber || "N/A",
-                accountName: uData.bankAccountName || "N/A",
-                bankCode: uData.bankCode || "N/A"
-            };
+            // Canonical bankDetails injection — for the callers entitled to it.
+            const bankDetails = maySeeBankDetails
+                ? (uData.bankDetails || {
+                    bankName: uData.bankName || "N/A",
+                    accountNumber: uData.bankAccountNumber || "N/A",
+                    accountName: uData.bankAccountName || "N/A",
+                    bankCode: uData.bankCode || "N/A"
+                })
+                : undefined;
+
+            // The spread below carries the whole user document. Strip what the
+            // caller may not see, or the gate above is decorative.
+            const {
+                bankDetails: _bd, bankName: _bn, bankAccountNumber: _ban,
+                bankAccountName: _bacn, bankCode: _bc, nin: _nin, bvn: _bvn,
+                ...uDataSafe
+            } = uData as Record<string, unknown>;
 
             const mergedData = {
-                ...uData,
+                ...(maySeeBankDetails ? uData : uDataSafe),
                 ...app,
                 // Flatten profile fields to top-level for UI consistency
                 phone: app.phone || profile.phone || profile.phoneNumber || uData.phone || uData.phoneNumber || uData.kyc?.phoneNumber || uData.kyc?.phone || null,
@@ -305,16 +325,14 @@ async function _getStandardFarmNationRegistrantsAction(options: {
 
         // ALWAYS apply date filters in memory as a definitive backstop.
         if (options.dateFrom) {
-            const from = new Date(options.dateFrom);
-            from.setHours(0, 0, 0, 0);
+            const from = dateRangeStart(options.dateFrom);
             finalApplications = finalApplications.filter((app: any) => {
                 const d = app.submittedAt?.seconds ? new Date(app.submittedAt.seconds * 1000) : new Date(app.submittedAt);
                 return d >= from;
             });
         }
         if (options.dateTo) {
-            const to = new Date(options.dateTo);
-            to.setHours(23, 59, 59, 999);
+            const to = dateRangeEnd(options.dateTo);
             finalApplications = finalApplications.filter((app: any) => {
                 const d = app.submittedAt?.seconds ? new Date(app.submittedAt.seconds * 1000) : new Date(app.submittedAt);
                 return d <= to;

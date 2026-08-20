@@ -3,12 +3,17 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
+import { recordAdminAction } from "@/lib/audit-log";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
-import { needsDualControl } from "@/lib/loan-approval-policy";
+import {
+    needsDualControl,
+    guarantorBlocksApproval,
+    GUARANTOR_UNVERIFIED_MESSAGE,
+} from "@/lib/loan-approval-policy";
 import { resolveLoanApplication } from "@/lib/loan-application-location";
 
 /**
@@ -26,7 +31,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Check if user is admin
-        if (!isAdmin(session.user.roles)) {
+        if (!hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }
@@ -64,20 +69,26 @@ export async function POST(request: NextRequest) {
         // loan page lives in cooperative_loans, and this route answered 404 for
         // it. See lib/loan-application-location.ts.
         const resolvedApp = await resolveLoanApplication(applicationId);
-        const applicationRef = resolvedApp?.ref ?? db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(applicationId);
-        const applicationCollection = resolvedApp?.collection ?? COLLECTIONS.LOAN_APPLICATIONS;
-        const applicationDoc = await applicationRef.get();
 
-        if (!applicationDoc.exists) {
+        if (!resolvedApp) {
             return NextResponse.json({ success: false, message: "Application not found" }, { status: 404 });
         }
 
-        const appData = applicationDoc.data()!;
+        const applicationCollection = resolvedApp.collection;
+        const appData = resolvedApp.snap.data()!;
         userId = appData.userId;
 
-        if (appData.tier && !appData.guarantorVerified) {
+        // The guarantor gate keyed on `tier`, which only the wizard writes.
+        //
+        // Every application filed through /api/cooperative/apply-loan records a
+        // guarantor and `guarantorVerified: false` and NO tier, so this check
+        // was skipped for exactly the applications that had an unverified
+        // guarantor on file. The rule is about the guarantor, not about a tier —
+        // see lib/loan-approval-policy.ts, which also explains why the sibling
+        // action's unconditional demand was wrong in the other direction.
+        if (guarantorBlocksApproval(appData)) {
             return NextResponse.json(
-                { success: false, message: "Guarantor verification required before loan approval." },
+                { success: false, message: GUARANTOR_UNVERIFIED_MESSAGE },
                 { status: 400 }
             );
         }
@@ -182,6 +193,26 @@ export async function POST(request: NextRequest) {
                 logger.error('[Approve Loan Route Cache] Cache clear error:', cacheError);
             }
         }
+
+        // Who approved this loan, and for how much.
+        //
+        // The audit vocabulary has named 'loan_approved' all along and nothing
+        // wrote it here — so the one question an owner asks after a loan goes
+        // wrong ("who approved it?") had no answer for approvals made through
+        // this route. recordAdminAction rather than createAdminAuditLog: the
+        // money has already moved by this line, and a failure to write the
+        // record must not report the approval as failed.
+        await recordAdminAction({
+            action: "loan_approved",
+            userId: session.user.id,
+            targetId: applicationId,
+            targetType: "loan_application",
+            metadata: {
+                borrowerId: appData.userId,
+                amount: appData.amount,
+                requiresDualControl,
+            },
+        });
 
         return NextResponse.json({
             success: true,

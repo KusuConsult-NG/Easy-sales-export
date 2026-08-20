@@ -71,7 +71,9 @@ const FILTER_OPTIONS: { value: EscrowStatus | "all"; label: string }[] = [
     { value: "delivered", label: "Delivered" },
     { value: "released", label: "Released" },
     { value: "refunded", label: "Refunded" },
-    { value: "completed", label: "Completed" },
+    // "completed" removed: no escrow is ever written with that status, so this
+    // filter option always returned an empty list. `released` above is the same
+    // idea under the name the application actually uses.
     { value: "cancelled", label: "Cancelled" },
 ];
 

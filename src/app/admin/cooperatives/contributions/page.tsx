@@ -67,10 +67,13 @@ export default function AdminContributionsPage() {
                             Track and analyze member contributions
                         </p>
                     </div>
-                    <button className="px-6 py-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 transition flex items-center gap-2">
-                        <Download className="w-5 h-5" />
-                        Export Report
-                    </button>
+                    {/*
+                      * An "Export Report" button lived here with no onClick.
+                      * The admin clicked it and no report was exported — the
+                      * same inert control found four times over on the member
+                      * pages. Implementing an export is a feature; removing a
+                      * button that promises one is the fix.
+                      */}
                 </div>
 
                 {/* Stats Cards */}

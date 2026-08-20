@@ -25,76 +25,21 @@ import { invalidateCacheForCollection } from './cache-map';
 import { logger } from './logger';
 
 // ─── Table Mapping ─────────────────────────────────────────────────────────────
-// Maps Firestore collection names → dedicated Supabase table names.
-// Collections NOT listed here fall back to the `document_collections` generic table.
+// Declared in ./supabase-table-map so the browser-side reader shares them
+// rather than keeping a hand-copied set that drifts. Re-exported because
+// several modules and jest.setup.js import them from here by name.
 
-const DEDICATED_TABLE_MAP: Record<string, string> = {
-    'users': 'users',
-    'cooperative_members': 'cooperative_members',
-    'cooperative_loans': 'cooperative_loans',
-    'transactions': 'transactions',
-    'processedPayments': 'processed_payments',  // Firestore camelCase → snake_case table
-    'processed_payments': 'processed_payments', // Also accept snake_case
-    'marketplaceOrders': 'marketplace_orders',  // Firestore camelCase → snake_case table
-    'marketplace_orders': 'marketplace_orders', // Also accept snake_case
-    'wallets': 'wallets',
-    'academy_applications': 'academy_applications',
-};
+export {
+    DEDICATED_TABLE_MAP,
+    NATIVE_COLUMNS,
+    FIELD_TO_COLUMN,
+} from './supabase-table-map';
 
-// Native typed columns per dedicated table (used to route .where() filters efficiently)
-// Fields NOT listed here are stored in raw_data JSONB and queried via raw_data->>'field'
-const NATIVE_COLUMNS: Record<string, string[]> = {
-    'users': ['id', 'email', 'roles', 'created_at', 'updated_at'],
-    'cooperative_members': ['id', 'user_id', 'status', 'created_at', 'updated_at'],
-    'cooperative_loans': ['id', 'user_id', 'amount', 'status', 'created_at', 'updated_at'],
-    'transactions': ['id', 'user_id', 'amount', 'type', 'status', 'created_at', 'updated_at'],
-    'processed_payments': ['id', 'user_id', 'amount', 'reference', 'created_at', 'updated_at'],
-    'marketplace_orders': ['id', 'user_id', 'status', 'total_amount', 'created_at', 'updated_at'],
-    'wallets': ['id', 'balance', 'created_at', 'updated_at'],
-    'academy_applications': ['id', 'user_id', 'status', 'created_at', 'updated_at'],
-};
-
-// Firestore field name → Supabase native column name (for dedicated tables)
-// These map the app's data model field names to the actual SQL column names
-const FIELD_TO_COLUMN: Record<string, Record<string, string>> = {
-    'users': {
-        'email': 'email',
-        'roles': 'roles',
-    },
-    'cooperative_members': {
-        'userId': 'user_id',
-        'membershipStatus': 'status',
-        'status': 'status',
-    },
-    'cooperative_loans': {
-        'userId': 'user_id',
-        'status': 'status',
-        'amount': 'amount',
-    },
-    'transactions': {
-        'userId': 'user_id',
-        'type': 'type',
-        'status': 'status',
-        'amount': 'amount',
-    },
-    'processed_payments': {
-        'userId': 'user_id',
-        'reference': 'reference',
-        'amount': 'amount',
-    },
-    'marketplace_orders': {
-        'userId': 'user_id',
-        'status': 'status',
-        'totalAmount': 'total_amount',
-    },
-    'wallets': {
-        'balance': 'balance',
-    },
-    'academy_applications': {
-        'userId': 'user_id',
-        'status': 'status',
-    },
-};
+import {
+    DEDICATED_TABLE_MAP,
+    NATIVE_COLUMNS,
+    FIELD_TO_COLUMN,
+} from './supabase-table-map';
 
 /**
  * Rows returned by a query that specifies no .limit().
@@ -1444,6 +1389,16 @@ export class SupabaseQuery {
     protected _offset: number | null = null;
     protected _orderBy: OrderByClause[] = [];
     protected _startAfterDoc: SupabaseDocumentSnapshot | null = null;
+    /**
+     * The FIELD-VALUE form of startAfter — `startAfter(someDate)` rather than
+     * `startAfter(lastDoc)`. Firestore accepts both; this adapter used to
+     * accept only the snapshot and drop the other on the floor. See
+     * startAfter() for what that cost.
+     *
+     * `null` means "no value cursor". An explicit `undefined` cannot be a
+     * cursor, so the two do not need distinguishing.
+     */
+    protected _startAfterValues: unknown[] | null = null;
     protected _selectedFields: string[] | null = null;
     /** Set by supabaseDb.collectionGroup(). See that method for what it means. */
     protected _isCollectionGroup = false;
@@ -1459,6 +1414,7 @@ export class SupabaseQuery {
         q._offset = this._offset;
         q._orderBy = [...this._orderBy];
         q._startAfterDoc = this._startAfterDoc;
+        q._startAfterValues = this._startAfterValues ? [...this._startAfterValues] : null;
         q._selectedFields = this._selectedFields ? [...this._selectedFields] : null;
         q._unbounded = this._unbounded;
         q._isCollectionGroup = this._isCollectionGroup;
@@ -1516,16 +1472,59 @@ export class SupabaseQuery {
         return q;
     }
 
-    startAfter(docOrValue: any): this {
+    /**
+     * Page past a cursor — either a document snapshot or the ORDER-KEY VALUES.
+     *
+     * SEVEN LISTS THAT COULD NEVER LEAVE PAGE ONE
+     * -------------------------------------------
+     * Firestore's startAfter takes either form: a snapshot, or one value per
+     * orderBy clause. This method used to record the snapshot and SILENTLY
+     * DISCARD anything else — no throw, no warning, the cursor simply gone.
+     *
+     * Seven call sites use the value form, every one of them passing a Date:
+     *
+     *   actions/briefing-admin.ts               WAVE briefing guest list
+     *   actions/wave/_wv_resources.ts    (x2)   both member resource listings
+     *   api/marketplace/products/route.ts (x2)  public catalogue + its fallback
+     *   api/wave/training-sessions/route.ts     the training-sessions feed
+     *   api/admin/cooperative/members/route.ts  member roster, date-filtered
+     *
+     * Each reads `limit + 1` rows, reports hasMore: true and returns a
+     * nextCursor — then the next request applies no cursor at all and serves
+     * the SAME first page back. "Load more" appended the rows already on
+     * screen, for ever. The list looked paginated, reported more pages, and had
+     * exactly one.
+     *
+     * The note on the JSONB cursor in _buildQuery describes this same symptom
+     * from a different cause and calls it fixed; the value form was never
+     * covered by it.
+     *
+     * Only the first order key is applied, matching the snapshot branch below —
+     * a single-column cursor is what the JSONB/native column mapping supports.
+     * Extra values are kept so the limitation stays visible rather than looking
+     * like the caller never passed them.
+     */
+    startAfter(...docOrValues: any[]): this {
         const q = this._clone();
-        if (docOrValue instanceof SupabaseDocumentSnapshot) {
-            q._startAfterDoc = docOrValue;
+        const first = docOrValues[0];
+
+        if (first instanceof SupabaseDocumentSnapshot) {
+            q._startAfterDoc = first;
+            return q;
+        }
+
+        const values = docOrValues.filter((v) => v !== undefined && v !== null);
+        if (values.length > 0) {
+            q._startAfterValues = values;
         }
         return q;
     }
 
     startAt(docOrValue: any): this {
-        // Simplified: treat same as startAfter for pagination purposes
+        // Simplified: treat same as startAfter for pagination purposes.
+        // startAt is INCLUSIVE in Firestore and this is not; no call site in
+        // this codebase uses it, so the difference is recorded rather than
+        // implemented behind no coverage.
         return this.startAfter(docOrValue);
     }
 
@@ -1691,15 +1690,24 @@ export class SupabaseQuery {
             query = query.order('id');
         }
 
-        // Apply cursor pagination (startAfter)
-        if (this._startAfterDoc && this._orderBy.length > 0) {
+        // Apply cursor pagination (startAfter) — from a snapshot or from the
+        // order-key value the caller passed. See startAfter().
+        if ((this._startAfterDoc || this._startAfterValues) && this._orderBy.length > 0) {
             const firstOrderField = this._orderBy[0].field;
-            let cursorValue = this._startAfterDoc.get(firstOrderField)
-                ?? this._startAfterDoc.data()?.[firstOrderField];
-                
+            let cursorValue: any = this._startAfterDoc
+                ? (this._startAfterDoc.get(firstOrderField)
+                    ?? this._startAfterDoc.data()?.[firstOrderField])
+                : this._startAfterValues![0];
+
             // Convert Firestore Timestamp objects or objects with seconds to ISO strings for SQL compatibility
             if (cursorValue && typeof cursorValue === 'object') {
-                if (typeof cursorValue.toDate === 'function') {
+                if (cursorValue instanceof Date) {
+                    // The value form is a Date at every call site that uses it,
+                    // and a Date has none of the three shapes below — so it fell
+                    // through unconverted and PostgREST received
+                    // "Tue Aug 20 2026 ..." to compare against a timestamptz.
+                    cursorValue = cursorValue.toISOString();
+                } else if (typeof cursorValue.toDate === 'function') {
                     cursorValue = cursorValue.toDate().toISOString();
                 } else if (cursorValue.seconds !== undefined) {
                     cursorValue = new Date(cursorValue.seconds * 1000).toISOString();
@@ -1902,13 +1910,28 @@ export class SupabaseQuery {
      * broadcast-logic.ts.
      */
     stream(): Readable {
-        const self = this;
+        // Arrow functions rather than `const self = this`.
+        //
+        // An async generator cannot be an arrow function, so it does not inherit
+        // `this` — which is why this started as a `self` alias. Arrows capture
+        // `this` lexically, so binding the two members the generator needs gives
+        // the same access without the alias, and keeps the query LAZY: it is
+        // still built on first iteration rather than when stream() is called.
+        //
+        // Not cosmetic. @typescript-eslint/no-this-alias is an error in this
+        // project's config, so the alias failed `npm run lint` in CI while
+        // passing tsc, jest and the browser suite locally.
+        const buildQuery = () => this._buildQuery();
+        const mapRow = (row: Record<string, unknown>, isDedicated: boolean) =>
+            this._mapRow(row, isDedicated);
+        const explicitLimit = this._limit;
+
         const limitVal = this._limit ?? UNBOUNDED_CEILING;
         const offsetVal = this._offset ?? 0;
         const collection = this._collection;
 
         async function* rows() {
-            const { query, isDedicated } = self._buildQuery();
+            const { query, isDedicated } = buildQuery();
             let fetchedSoFar = 0;
 
             while (fetchedSoFar < limitVal) {
@@ -1925,14 +1948,14 @@ export class SupabaseQuery {
                 // Yield per document rather than accumulating: holding all
                 // 41,000 users in memory would defeat the point of streaming.
                 for (const row of batchData) {
-                    yield self._mapRow(row, isDedicated);
+                    yield mapRow(row, isDedicated);
                 }
 
                 fetchedSoFar += batchData.length;
                 if (batchData.length < batchLimit) return;
             }
 
-            if (self._limit == null && fetchedSoFar >= UNBOUNDED_CEILING) {
+            if (explicitLimit == null && fetchedSoFar >= UNBOUNDED_CEILING) {
                 // Same reasoning as .all() in get(): a sweep that quietly
                 // covers part of a collection is worse than one that fails.
                 logger.error(
@@ -2079,7 +2102,7 @@ export const supabaseDb = {
             );
         }
         const q = new SupabaseQuery(name);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         (q as any)._isCollectionGroup = true;
         return q;
     },

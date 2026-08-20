@@ -15,11 +15,27 @@ import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { serializeValue, serializeDocs } from "@/lib/firestore-serialize";
 import { smsEscrowReleased } from "@/lib/africastalking";
 import { pushEscrowReleased } from "@/lib/fcm";
-import { isAdmin } from "@/lib/admin-permissions";
+import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
+import {
+    ESCROW_STATUSES,
+    ESCROW_DISPUTEABLE_STATUSES,
+    ESCROW_RELEASABLE_FROM,
+    ESCROW_REFUNDABLE_FROM,
+    participantSourcesFor,
+} from "@/lib/escrow-status";
+import { recordAdminAction } from "@/lib/audit-log";
 
 // Validation schemas
 const escrowAmountSchema = z.number().min(100).max(100000000); // ₦100 to ₦100M
-const escrowStatusSchema = z.enum(["pending", "funded", "in_transit", "delivered", "released", "refunded", "disputed", "cancelled"]);
+/**
+ * The shared union, not a second copy.
+ *
+ * This enum listed eight statuses while EscrowTransaction.status declared five,
+ * and the two disagreed about in_transit, delivered and cancelled — which this
+ * application writes. Every caller then hand-wrote its own from-set and they
+ * drifted apart. See lib/escrow-status.ts.
+ */
+const escrowStatusSchema = z.enum(ESCROW_STATUSES);
 
 /**
  * Get user's escrow transactions
@@ -78,6 +94,29 @@ async function _getAllEscrowTransactionsAdmin(options: { status?: EscrowStatus;
         const callerRoles: string[] = callerDoc.data()?.roles ?? [];
         if (!isAdmin(callerRoles)) { return { success: false as const, error: "Admin access required", data: null };
         }
+
+        /**
+         * Bank details go only to the callers who can actually pay them out.
+         *
+         * This list hydrates BOTH parties of every escrow with their account
+         * number, account name, bank code, email and phone — and its gate was
+         * isAdmin(), true for all TEN admin roles. So an academy_admin or a
+         * wave_admin could open /admin/marketplace/escrow and read the banking
+         * instrument of every buyer and seller on the platform, in bulk.
+         *
+         * The withdrawal list had exactly this defect and was closed by
+         * requiring the permission that lets you process the payout. The same
+         * line applies here: releaseEscrowFunds and refundEscrowToBuyer, the two
+         * actions this screen exists to drive, both require
+         * "finance:resolve_disputes", and the page renders bank details ONLY
+         * inside their confirmation modal.
+         *
+         * Names, emails and phone numbers stay for every admin — they are what
+         * the list and its search are built on, and losing them would break the
+         * screen for the module admin who runs it. The account is the part that
+         * needs the higher bar.
+         */
+        const maySeeBankDetails = hasAdminPermission(callerRoles, "finance:resolve_disputes");
 
         const fetchLimit = options.search ? 5000 : (options.limit || 50);
         const sortDirection = options.sortOrder || "desc";
@@ -138,12 +177,16 @@ async function _getAllEscrowTransactionsAdmin(options: { status?: EscrowStatus;
                     lastName: data.lastName,
                     email: data.email,
                     phoneNumber: data.phoneNumber || data.phone || "N/A",
-                    bankDetails: data.bankDetails || {
-                        bankName: data.bankName || data.bankAccount?.bankName || "N/A",
-                        accountNumber: data.accountNumber || data.bankAccountNumber || data.bankAccount?.accountNumber || "N/A",
-                        accountName: data.accountName || data.bankAccountName || data.bankAccount?.accountName || "N/A",
-                        bankCode: data.bankCode || data.bankAccount?.bankCode || "N/A"
-                    }
+                    ...(maySeeBankDetails
+                        ? {
+                            bankDetails: data.bankDetails || {
+                                bankName: data.bankName || data.bankAccount?.bankName || "N/A",
+                                accountNumber: data.accountNumber || data.bankAccountNumber || data.bankAccount?.accountNumber || "N/A",
+                                accountName: data.accountName || data.bankAccountName || data.bankAccount?.accountName || "N/A",
+                                bankCode: data.bankCode || data.bankAccount?.bankCode || "N/A"
+                            }
+                        }
+                        : {}),
                 };
             }));
         }
@@ -213,42 +256,78 @@ async function _updateEscrowStatus(
 
         const txRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(transactionId);
 
-        await db.runTransaction(async (tx) => { const txDoc = await tx.get(txRef);
-            if (!txDoc.exists) throw new Error("Transaction not found");
+        // Money-moving statuses are not this action's job.
+        //
+        // The old table named `completed` as a target, which is not an escrow
+        // status at all — the vocabulary calls it `released` — so
+        // escrowStatusSchema.parse threw before the table was consulted and both
+        // rows mentioning it were dead. Saying so explicitly is better than
+        // failing with "Invalid status value" on a status that IS valid but
+        // belongs elsewhere.
+        if (status === "released" || status === "refunded") {
+            return {
+                success: false as const,
+                error: `Use the ${status === "released" ? "release" : "refund"} action for this — it moves money and writes the ledger.`,
+                data: null,
+            };
+        }
 
-            const txData = txDoc.data()!;
+        // Participation is checked before the claim, because the claim cannot
+        // express "and the caller is one of these two parties".
+        const preRead = await txRef.get();
+        if (!preRead.exists) {
+            return { success: false as const, error: "Transaction not found", data: null };
+        }
+        const preData = preRead.data()!;
+        if (preData.buyerId !== userId && preData.sellerId !== userId) {
+            return { success: false as const, error: "Not authorized to update this transaction", data: null };
+        }
 
-            // Verify user is participant
-            if (txData.buyerId !== userId && txData.sellerId !== userId) {
-                throw new Error("Not authorized to update this transaction");
-            }
+        // Leaving `disputed` is an admin decision, made through dispute
+        // resolution. The old guard was
+        // `(currentStatus === "disputed" || status === "completed")`, and since
+        // "completed" could never arrive, only the first half ever did anything.
+        if (preData.status === "disputed" && !hasAdminPermission(session.user.roles, "finance:resolve_disputes")) {
+            return { success: false as const, error: "Admin access required to perform this transition", data: null };
+        }
 
-            // Validate state transitions
-            const currentStatus = txData.status;
-            const validTransitions: Record<string, string[]> = { pending: ["funded", "cancelled"],
-                funded: ["in_transit", "disputed", "cancelled"],
-                in_transit: ["delivered", "disputed"],
-                delivered: ["completed", "disputed"],
-                completed: [],
-                disputed: ["completed", "cancelled"],
-                cancelled: [] };
+        // Claimed, not checked-then-written.
+        //
+        // The participant check, the transition check, the admin check and the
+        // write all sat inside runTransaction — which takes NO lock in this
+        // adapter — so two callers both passed every check and both wrote. This
+        // is the primitive every other escrow path in this codebase was moved
+        // onto; this one was missed.
+        //
+        // The from-set comes from ESCROW_PARTICIPANT_TRANSITIONS, which no longer
+        // permits cancelling a FUNDED escrow. That let either party strand real
+        // money permanently: `cancelled` is settled, so the seller could not be
+        // paid, the buyer could not be refunded, and a dispute could not find the
+        // record to freeze. See lib/escrow-status.ts.
+        const sources = participantSourcesFor(status);
+        if (sources.length === 0) {
+            return {
+                success: false as const,
+                error: `'${status}' is not a status a buyer or seller can set.`,
+                data: null,
+            };
+        }
 
-            if (!validTransitions[currentStatus]?.includes(status)) {
-                throw new Error(`Invalid status transition from ${currentStatus} to ${status}`);
-            }
-
-            if (
-                (currentStatus === "disputed" || status === "completed") &&
-                !isAdmin(session.user.roles)
-            ) { throw new Error("Admin access required to perform this transition");
-            }
-
-            tx.update(txRef, {
-                status,
-                updatedAt: FieldValue.serverTimestamp(),
-                [`${status}At`]: FieldValue.serverTimestamp(),
-                _version: FieldValue.increment(1) });
+        const claim = await claimStatusTransitionFromAny({
+            collection: COLLECTIONS.ESCROW_TRANSACTIONS,
+            id: transactionId,
+            fromAny: [...sources],
+            to: status,
+            patch: { [`${status}At`]: new Date().toISOString() },
         });
+
+        if (!claim.claimed) {
+            return {
+                success: false as const,
+                error: `Invalid status transition from ${claim.status ?? "missing"} to ${status}`,
+                data: null,
+            };
+        }
 
         // Notifications
         const txDoc = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(transactionId).get();
@@ -270,6 +349,13 @@ async function _updateEscrowStatus(
                 linkText: "View Escrow" }).catch((e) => logger.error("[updateEscrowStatus] Notification failed:", e));
         }
 
+        await recordAdminAction({
+            action: 'escrow_status_update',
+            userId: userId,
+            targetId: transactionId,
+            targetType: 'escrow_transaction',
+            metadata: { status },
+        });
         return { error: null,  success: true as const, data: null };
     } catch (error: any) { logger.error("Update escrow status error:", {
             userId: sessionResult?.session?.user?.id,
@@ -303,35 +389,73 @@ async function _createEscrowDispute(
         const txRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(transactionId);
         const disputeRef = db.collection(COLLECTIONS.DISPUTES).doc();
 
-        await db.runTransaction(async (tx) => { const txDoc = await tx.get(txRef);
-            if (!txDoc.exists) throw new Error("Transaction not found");
+        // Participation is checked before the claim, because the claim cannot
+        // express "and the caller is one of these two parties" — the same
+        // ordering _updateEscrowStatus above uses.
+        const preRead = await txRef.get();
+        if (!preRead.exists) {
+            return { success: false as const, error: "Transaction not found" };
+        }
+        const txData = preRead.data()!;
+        if (txData.buyerId !== userId && txData.sellerId !== userId) {
+            return { success: false as const, error: "Not authorized to dispute this transaction" };
+        }
 
-            const txData = txDoc.data()!;
-            if (txData.buyerId !== userId && txData.sellerId !== userId) {
-                throw new Error("Not authorized to dispute this transaction");
-            }
+        // One active dispute per escrow.
+        //
+        // The sibling creator in _escrow_disputes.ts checks this; this one did
+        // not check at all, so a second dispute on the same escrow was simply
+        // created.
+        const existing = await db.collection(COLLECTIONS.DISPUTES)
+            .where("escrowId", "==", transactionId)
+            .where("status", "in", ["open", "under_review"])
+            .limit(1)
+            .get();
 
-            const disputeableStatuses = ["funded", "in_transit", "delivered"];
-            if (!disputeableStatuses.includes(txData.status)) {
-                throw new Error(`Cannot dispute transaction in ${txData.status} status`);
-            }
+        if (!existing.empty) {
+            return { success: false as const, error: "An active dispute already exists for this transaction" };
+        }
 
-            tx.set(disputeRef, { escrowId: transactionId,
-                buyerId: txData.buyerId,
-                sellerId: txData.sellerId,
-                reason,
-                description: reason,
-                raisedBy: userId,
-                status: "open",
-                createdAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
-                _version: 0 });
-
-            tx.update(txRef, { status: "disputed",
+        // CLAIMED, not checked-then-written.
+        //
+        // The status check and the write sat inside runTransaction, which takes
+        // NO lock in this adapter, so two callers both read a disputeable status
+        // and both created a DISPUTES row — the escrow keeping whichever
+        // disputeId was written last and the other dispute orphaned where no
+        // resolution path can reach it. actions/disputes.ts fixed exactly this
+        // and records the reasoning; this creator and the one in
+        // _escrow_disputes.ts kept the old shape.
+        const disputeClaim = await claimStatusTransitionFromAny({
+            collection: COLLECTIONS.ESCROW_TRANSACTIONS,
+            id: transactionId,
+            fromAny: [...ESCROW_DISPUTEABLE_STATUSES],
+            to: "disputed",
+            patch: {
                 disputeId: disputeRef.id,
-                updatedAt: FieldValue.serverTimestamp(),
-                _version: FieldValue.increment(1) });
+                updatedAt: new Date().toISOString(),
+            },
         });
+
+        if (!disputeClaim.claimed) {
+            return {
+                success: false as const,
+                error: disputeClaim.status === null
+                    ? "Transaction not found"
+                    : `Cannot dispute transaction in ${disputeClaim.status} status`,
+            };
+        }
+
+        await disputeRef.set({
+            escrowId: transactionId,
+            buyerId: txData.buyerId,
+            sellerId: txData.sellerId,
+            reason,
+            description: reason,
+            raisedBy: userId,
+            status: "open",
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+            _version: 0 });
 
         return { error: null,  success: true as const, data: null };
     } catch (error: any) { logger.error("Create escrow dispute error:", {
@@ -354,7 +478,7 @@ async function _releaseEscrowFunds(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
         const { session } = sessionResult;
 
-        if (!isAdmin(session.user.roles)) { return { success: false as const, error: "Admin access required"};
+        if (!hasAdminPermission(session.user.roles, "finance:resolve_disputes")) { return { success: false as const, error: "Admin access required"};
         }
 
         const userId = session.user.id;
@@ -365,6 +489,37 @@ async function _releaseEscrowFunds(
 
         const escrowAmount = data.amount || data.grossAmount || 0;
         if (escrowAmount <= 0) return { success: false as const, error: "Invalid transaction amount" };
+
+        /**
+         * WHAT THE SELLER IS OWED — net of the platform fee.
+         *
+         * THE DEFECT
+         * ----------
+         * Three escrow creators compute `platformFee` from
+         * MARKETPLACE_CONFIG.platformFee (5%) and store it, with `netAmount`,
+         * on every escrow row:
+         *
+         *   _payment_orders.ts            at order placement
+         *   _payment_verify.ts            at payment verification
+         *   infrastructure/payments       at the webhook
+         *
+         * NOTHING READ EITHER FIELD. Both release paths credited the seller
+         * `data.amount` — the gross — so the platform's commission was computed
+         * on every sale, written to the database, and never taken. The seller
+         * onboarding pages state "Platform fee: 5% per transaction" as an agreed
+         * term (BankAccountStep, TermsStep), and the marketplace collected none
+         * of it.
+         *
+         * The refund path is different and correct: a refunded buyer gets the
+         * GROSS back, because gross is what they paid.
+         *
+         * `netAmount` is preferred and the gross is the fallback, so an escrow
+         * written before the fee was recorded still pays out in full rather
+         * than paying nothing.
+         */
+        const sellerPayout = Number.isFinite(Number(data.netAmount)) && Number(data.netAmount) > 0
+            ? Number(data.netAmount)
+            : escrowAmount;
 
         const orderId = data.orderId;
 
@@ -386,7 +541,7 @@ async function _releaseEscrowFunds(
         const claim = await claimStatusTransitionFromAny({
             collection: COLLECTIONS.ESCROW_TRANSACTIONS,
             id: transactionId,
-            fromAny: ["delivered", "disputed", "funded"],
+            fromAny: [...ESCROW_RELEASABLE_FROM],
             to: "released",
             patch: { releasedBy: userId, releasedAt: new Date().toISOString() },
         });
@@ -426,7 +581,7 @@ async function _releaseEscrowFunds(
         const credit = await creditWalletOnce({
             reference: `escrow-release:${transactionId}`,
             userId: data.sellerId,
-            amount: escrowAmount,
+            amount: sellerPayout,
             paymentType: "escrow_release",
             source: "marketplace_escrow",
             status: "disbursement",
@@ -436,7 +591,7 @@ async function _releaseEscrowFunds(
         // claimed:false means an earlier attempt already credited this escrow.
         // That is success, not an error — the money is where it should be.
         const balanceAfter = credit.balance;
-        const balanceBefore = credit.claimed ? balanceAfter - escrowAmount : balanceAfter;
+        const balanceBefore = credit.claimed ? balanceAfter - sellerPayout : balanceAfter;
 
         await db.runTransaction(async (tx) => {
             // Create payout instruction
@@ -446,7 +601,7 @@ async function _releaseEscrowFunds(
                 escrowId: transactionId,
                 recipientId: data.sellerId,
                 recipientEmail: data.sellerEmail || "",
-                amount: escrowAmount,
+                amount: sellerPayout,
                 status: "pending_admin_action",
                 description: `Release escrow funds for ${data.productName}`,
                 createdAt: FieldValue.serverTimestamp(),
@@ -466,7 +621,7 @@ async function _releaseEscrowFunds(
                 walletId: data.sellerId,
                 userId: data.sellerId,
                 type: "funding",
-                amount: escrowAmount,
+                amount: sellerPayout,
                 balanceBefore,
                 balanceAfter,
                 reference: transactionId,
@@ -484,7 +639,7 @@ async function _releaseEscrowFunds(
                 userId: data.sellerId,
                 type: "escrow_payout",
                 module: "escrow",
-                amount: escrowAmount,
+                amount: sellerPayout,
                 currency: "NGN",
                 status: "completed",
                 date: FieldValue.serverTimestamp(),
@@ -538,7 +693,7 @@ async function _releaseEscrowFunds(
             action: 'escrow_released',
             targetId: transactionId,
             targetType: "escrow",
-            metadata: { sellerId: data.sellerId, amount: escrowAmount }
+            metadata: { sellerId: data.sellerId, amount: sellerPayout, gross: escrowAmount, platformFee: data.platformFee ?? 0 }
         });
 
         await Promise.allSettled([
@@ -546,7 +701,7 @@ async function _releaseEscrowFunds(
                 userId: data.sellerId,
                 type: "escrow",
                 title: "Escrow Funds Released",
-                message: `₦${escrowAmount.toLocaleString()} for "${data.productName}" has been released.`,
+                message: `₦${sellerPayout.toLocaleString()} for "${data.productName}" has been released.`,
                 link: `/escrow/${transactionId}`,
                 linkText: "View Details" }),
             createNotificationAction({
@@ -564,8 +719,8 @@ async function _releaseEscrowFunds(
         const orderRef = data.orderId;
 
         await Promise.allSettled([
-            sellerPhone ? smsEscrowReleased(sellerPhone, orderRef, escrowAmount) : Promise.resolve(),
-            pushEscrowReleased(data.sellerId, orderRef, escrowAmount, transactionId),
+            sellerPhone ? smsEscrowReleased(sellerPhone, orderRef, sellerPayout) : Promise.resolve(),
+            pushEscrowReleased(data.sellerId, orderRef, sellerPayout, transactionId),
         ]).catch((e) => logger.error("[releaseEscrowFunds] SMS/Push notifications failed:", e));
 
         return { error: null,  success: true as const, data: null };
@@ -589,7 +744,7 @@ async function _refundEscrowToBuyer(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
         const { session } = sessionResult;
 
-        if (!isAdmin(session.user.roles)) { return { success: false as const, error: "Admin access required"};
+        if (!hasAdminPermission(session.user.roles, "finance:resolve_disputes")) { return { success: false as const, error: "Admin access required"};
         }
 
         const userId = session.user.id;
@@ -619,7 +774,10 @@ async function _refundEscrowToBuyer(
         const refundClaim = await claimStatusTransitionFromAny({
             collection: COLLECTIONS.ESCROW_TRANSACTIONS,
             id: transactionId,
-            fromAny: ["funded", "in_transit", "disputed"],
+            // "delivered" was missing here, so a buyer who had confirmed
+            // receipt could not be refunded at all — which is exactly when a
+            // problem with the goods comes to light. See lib/escrow-status.ts.
+            fromAny: [...ESCROW_REFUNDABLE_FROM],
             to: "refunded",
             patch: { refundedAt: new Date().toISOString(), refundedBy: userId },
         });

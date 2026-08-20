@@ -464,7 +464,10 @@ async function _editApplicationAction(params: {
         // Bust Next.js route cache so the admin users list shows fresh data
         // immediately on the next navigation without a full browser reload.
         revalidatePath('/admin/users');
-        revalidatePath('/admin/cooperative/members');
+        // Was '/admin/cooperative/members' — singular. The route is
+        // /admin/cooperatives/members, so this invalidated nothing and the
+        // admin member list kept serving a stale cache after an approval.
+        revalidatePath('/admin/cooperatives/members');
         revalidatePath('/admin/export/applications');
         revalidatePath('/admin/wave/applications');
         revalidatePath('/admin/farm-nation/applications');

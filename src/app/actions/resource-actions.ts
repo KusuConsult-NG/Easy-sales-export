@@ -10,7 +10,8 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { serializeDocs } from "@/lib/firestore-serialize";
-import { isAdmin } from "@/lib/admin-permissions";
+import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
+import { isResourceWithdrawn, RESOURCE_LIVE_FIELDS, RESOURCE_WITHDRAWN_FIELDS } from "@/lib/wave-resource-visibility";
 
 export interface WaveResource { id?: string;
     title: string;
@@ -83,7 +84,7 @@ export async function uploadResourceAction(formData: FormData): Promise<
         const userDoc = await userRef.get();
         const userData = userDoc.data();
         const userRoles: string[] = userData?.roles || (userData?.role ? [userData.role] : []);
-        if (!userDoc.exists || !userData || !isAdmin(userRoles)) { return { success: false as const, error: "Admin access required", data: null };
+        if (!userDoc.exists || !userData || !hasAdminPermission(userRoles, "wave:manage_training")) { return { success: false as const, error: "Admin access required", data: null };
         }
 
         const file = formData.get("file") as File;
@@ -138,7 +139,7 @@ export async function uploadResourceAction(formData: FormData): Promise<
             uploadedByName: session.user.name || "Unknown",
             downloads: 0,
             tags: tags ? tags.split(",").map(t => t.trim()) : [],
-            isActive: true,
+            ...RESOURCE_LIVE_FIELDS,
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp() };
 
@@ -177,8 +178,19 @@ export async function getResourcesAction(category?: string): Promise<
             return { success: false as const, error: access.error, data: null };
         }
 
+        // Withdrawal is filtered in memory, not in SQL.
+        //
+        // This queried `.where("isActive", "==", true)`, and a resource created
+        // through wave/_wv_admin_resources.ts has no `isActive` at all — so this
+        // listing, which is what /wave/(member)/resources shows, excluded every
+        // resource uploaded from that screen. The library was there and members
+        // could not see it.
+        //
+        // "true or absent" is not expressible as one equality, and the alternative
+        // — backfilling `isActive` across the collection — is a migration to fix a
+        // reader. isResourceWithdrawn honours all three shapes live rows hold; see
+        // wave-resource-visibility.ts for why absent counts as visible.
         let query = db.collection(COLLECTIONS.WAVE_RESOURCES)
-            .where("isActive", "==", true)
             .orderBy("uploadedAt", "desc");
 
         if (category) {
@@ -186,8 +198,9 @@ export async function getResourcesAction(category?: string): Promise<
         }
 
         const snapshot = await query.get();
+        const visible = snapshot.docs.filter((doc) => !isResourceWithdrawn(doc.data()));
 
-        return { error: null, success: true as const, data: serializeDocs(snapshot.docs) as unknown as WaveResource[] };
+        return { error: null, success: true as const, data: serializeDocs(visible) as unknown as WaveResource[] };
     } catch (error) { logger.error("Failed to fetch resources:", error);
         return { success: false as const, error: "Failed to fetch resources", data: null };
     }
@@ -215,15 +228,19 @@ export async function downloadResourceAction(resourceId: string): Promise<
 
         // A deleted resource is not downloadable.
         //
-        // deleteResourceAction is a SOFT delete — it sets isActive: false — and
-        // getResourcesAction filters on `.where("isActive", "==", true)`, so a
-        // deleted resource disappears from the list. This path fetched by id and
-        // never looked, so anyone holding the id could still download the file
+        // This path fetched by id and never looked at whether the resource had
+        // been withdrawn, so anyone holding the id could still download the file
         // after an admin removed it. The deletion looked effective and was not.
+        //
+        // The check is now the shared predicate rather than `isActive === false`.
+        // There are TWO delete actions on this collection: this file's sets
+        // `isActive: false`, and wave/_wv_admin_resources.ts's set `deleted: true`
+        // — which this guard did not test, so a resource withdrawn through the WAVE
+        // admin screen was still downloadable. See wave-resource-visibility.ts.
         //
         // Reported as "not found", the same as a missing id, so the endpoint
         // does not confirm that a withdrawn resource exists.
-        if ((resource as any).isActive === false) {
+        if (isResourceWithdrawn(resource as any)) {
             return { success: false as const, error: "Resource not found", data: null };
         }
 
@@ -262,13 +279,13 @@ export async function deleteResourceAction(resourceId: string): Promise<
         const userDoc = await userRef.get();
         const userData = userDoc.data();
         const userRoles: string[] = userData?.roles || (userData?.role ? [userData.role] : []);
-        if (!userDoc.exists || !userData || !isAdmin(userRoles)) { return { success: false as const, error: "Admin access required", data: null };
+        if (!userDoc.exists || !userData || !hasAdminPermission(userRoles, "wave:manage_training")) { return { success: false as const, error: "Admin access required", data: null };
         }
 
         const resourceRef = db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId);
 
         // Soft delete
-        await resourceRef.update({ isActive: false,
+        await resourceRef.update({ ...RESOURCE_WITHDRAWN_FIELDS,
             updatedAt: FieldValue.serverTimestamp(),
             deletedAt: FieldValue.serverTimestamp() });
 
@@ -308,7 +325,7 @@ export async function updateResourceAction(
         const userDoc = await userRef.get();
         const userData = userDoc.data();
         const userRoles: string[] = userData?.roles || (userData?.role ? [userData.role] : []);
-        if (!userDoc.exists || !userData || !isAdmin(userRoles)) { return { success: false as const, error: "Admin access required", data: null };
+        if (!userDoc.exists || !userData || !hasAdminPermission(userRoles, "wave:manage_training")) { return { success: false as const, error: "Admin access required", data: null };
         }
 
         const resourceRef = db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId);

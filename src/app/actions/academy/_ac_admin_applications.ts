@@ -10,6 +10,7 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { ActionResponse, withFlexibleSafeAction } from "@/lib/safe-action";
+import { resolveApplicationPlan } from "@/lib/academy-plan";
 
 /**
  * Get Pending Academy Applications (Admin)
@@ -148,6 +149,19 @@ async function _getStandardAcademyApplicationsAction(options: {
             return { success: false, error: "Unauthorized", data: null };
         }
 
+        /**
+         * isAdmin() is true for all TEN admin roles, and both mappers below
+         * attach the applicant's bank name, account number, account name and
+         * bank code. Approving or rejecting an academy application requires
+         * "academy:approve_applications" — super_admin, admin and academy_admin.
+         * A wave_admin or a support user could not act on one row and could read
+         * every learner's account.
+         *
+         * The list itself stays open: a support user answering "did my academy
+         * application go through" needs the status. The bank block does not.
+         */
+        const maySeeBankDetails = hasAdminPermission(session.user.roles, "academy:approve_applications");
+
         const useMemoryPagination = !!options.search || !!options.dateFrom || !!options.dateTo || (options.paymentStatus && options.paymentStatus !== "all") || (options.registry && options.registry !== "all") || options.sortBy === "gender";
         const fetchLimit = useMemoryPagination ? 5000 : (options.limit || 50);
         const orderDirection = options.sortOrder || "desc";
@@ -220,16 +234,14 @@ async function _getStandardAcademyApplicationsAction(options: {
         if (useMemoryPagination) {
             // Apply date filters in memory if they were not applied in Firestore query
             if (options.dateFrom) {
-                const from = new Date(options.dateFrom);
-                from.setHours(0, 0, 0, 0);
+                const from = dateRangeStart(options.dateFrom);
                 applications = applications.filter(app => {
                     const d = app.submittedAt?.seconds ? new Date(app.submittedAt.seconds * 1000) : new Date(app.submittedAt);
                     return d >= from;
                 });
             }
             if (options.dateTo) {
-                const to = new Date(options.dateTo);
-                to.setHours(23, 59, 59, 999);
+                const to = dateRangeEnd(options.dateTo);
                 applications = applications.filter(app => {
                     const d = app.submittedAt?.seconds ? new Date(app.submittedAt.seconds * 1000) : new Date(app.submittedAt);
                     return d <= to;
@@ -347,15 +359,26 @@ async function _getStandardAcademyApplicationsAction(options: {
                     stateOfOrigin: app.stateOfOrigin || pi.stateOfOrigin || uData.state || uData.stateOfOrigin || (typeof uData.address === 'object' ? uData.address?.state : uData.stateOfOrigin) || uData.verificationProfile?.address?.state || null,
                     lga: app.lga || pi.lga || uData.lga || (typeof uData.address === 'object' ? uData.address?.lga : uData.lga) || null,
                     residentialAddress: app.residentialAddress || pi.residentialAddress || (typeof uData.address === 'object' ? uData.address?.street : uData.address) || null,
-                    fullName: userName
+                    fullName: userName,
+                    // The tier, repaired on read. `...app` above carries the
+                    // literal "registration" that every application row was
+                    // written with, so the badge and the CSV said "Registration"
+                    // for every learner — including everyone who paid the elite
+                    // fee, with the correct amount displayed beside it. The user
+                    // document holds the plan the fulfilment paths verified the
+                    // payment against. See lib/academy-plan.ts.
+                    plan: resolveApplicationPlan(
+                        app.plan,
+                        uData?.serviceRegistrations?.academy?.plan,
+                    ),
                 };
 
-                const bankDetails = uData.bankDetails || {
+                const bankDetails = maySeeBankDetails ? (uData.bankDetails || {
                     bankName: uData.bankName || "N/A",
                     accountNumber: uData.bankAccountNumber || "N/A",
                     accountName: uData.bankAccountName || "N/A",
                     bankCode: uData.bankCode || "N/A"
-                };
+                }) : undefined;
 
                 return {
                     id: app.id,
@@ -370,7 +393,7 @@ async function _getStandardAcademyApplicationsAction(options: {
                         state: mergedData.stateOfOrigin || "Unknown",
                         lga: mergedData.lga || "Unknown",
                         gender: mergedData.gender || "Unknown",
-                        bankDetails
+                        ...(bankDetails ? { bankDetails } : {}),
                     },
                     status: app.status || "pending",
                     data: mergedData,
@@ -425,15 +448,26 @@ async function _getStandardAcademyApplicationsAction(options: {
                     stateOfOrigin: app.stateOfOrigin || pi.stateOfOrigin || uData.state || uData.stateOfOrigin || (typeof uData.address === 'object' ? uData.address?.state : uData.stateOfOrigin) || uData.verificationProfile?.address?.state || null,
                     lga: app.lga || pi.lga || uData.lga || (typeof uData.address === 'object' ? uData.address?.lga : uData.lga) || null,
                     residentialAddress: app.residentialAddress || pi.residentialAddress || (typeof uData.address === 'object' ? uData.address?.street : uData.address) || null,
-                    fullName: userName
+                    fullName: userName,
+                    // The tier, repaired on read. `...app` above carries the
+                    // literal "registration" that every application row was
+                    // written with, so the badge and the CSV said "Registration"
+                    // for every learner — including everyone who paid the elite
+                    // fee, with the correct amount displayed beside it. The user
+                    // document holds the plan the fulfilment paths verified the
+                    // payment against. See lib/academy-plan.ts.
+                    plan: resolveApplicationPlan(
+                        app.plan,
+                        uData?.serviceRegistrations?.academy?.plan,
+                    ),
                 };
 
-                const bankDetails = uData.bankDetails || {
+                const bankDetails = maySeeBankDetails ? (uData.bankDetails || {
                     bankName: uData.bankName || "N/A",
                     accountNumber: uData.bankAccountNumber || "N/A",
                     accountName: uData.bankAccountName || "N/A",
                     bankCode: uData.bankCode || "N/A"
-                };
+                }) : undefined;
 
                 return {
                     id: app.id,
@@ -448,7 +482,7 @@ async function _getStandardAcademyApplicationsAction(options: {
                         state: mergedData.stateOfOrigin || "Unknown",
                         lga: mergedData.lga || "Unknown",
                         gender: mergedData.gender || "Unknown",
-                        bankDetails
+                        ...(bankDetails ? { bankDetails } : {}),
                     },
                     status: app.status || "pending",
                     data: mergedData,

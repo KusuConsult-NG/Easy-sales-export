@@ -59,6 +59,17 @@ export default function QuizBuilderPage(props: QuizBuilderPageProps) {
 
     const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
     const [isQuestionModalOpen, setIsQuestionModalOpen] = useState(false);
+    /**
+     * The "Add Question" menu opened on CSS :hover alone —
+     * `opacity-0 invisible group-hover:opacity-100`. A touch device has no
+     * hover, so on a tablet the button did nothing at all, and the empty state
+     * two elements below says in as many words: `Click "Add Question" to get
+     * started.` Clicking was the one thing that did not work.
+     *
+     * Click now toggles it. The hover classes stay, so the pointer behaviour an
+     * admin on a desktop is used to is unchanged.
+     */
+    const [isQuestionMenuOpen, setIsQuestionMenuOpen] = useState(false);
 
     const questionTypes: { value: QuestionType; label: string }[] = [
         { value: "mcq-single", label: "Multiple Choice (Single Answer)" },
@@ -198,7 +209,17 @@ export default function QuizBuilderPage(props: QuizBuilderPageProps) {
 
             if (data.success) {
                 showToast("Quiz saved successfully", "success");
-                router.push(`/ admin / academy / courses / ${params.courseId} `);
+                // Two things were wrong here.
+                //
+                // The spaces were literal, so this pushed
+                // "/%20admin%20/%20academy%20/%20courses%20/<id>%20". Removing
+                // them gave `/admin/academy/courses/<id>`, which does not exist
+                // either — the admin course detail route is
+                // `/admin/academy/[courseId]`, with no `courses` segment. (This
+                // page's own path has one, which is presumably where the mistake
+                // came from.) So saving a quiz has always navigated somewhere
+                // that 404s.
+                router.push(`/admin/academy/${params.courseId}`);
             } else {
                 showToast(data.message || "Failed to save quiz", "error");
             }
@@ -336,15 +357,20 @@ export default function QuizBuilderPage(props: QuizBuilderPageProps) {
                                 Questions ({quizData.questions.length})
                             </h2>
                             <div className="relative group">
-                                <button className="px-4 py-2 bg-primary hover:bg-primary/90 text-white font-semibold rounded-lg transition-all flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    aria-expanded={isQuestionMenuOpen}
+                                    onClick={() => setIsQuestionMenuOpen((open) => !open)}
+                                    className="px-4 py-2 bg-primary hover:bg-primary/90 text-white font-semibold rounded-lg transition-all flex items-center gap-2"
+                                >
                                     <Plus className="w-5 h-5" />
                                     Add Question
                                 </button>
-                                <div className="absolute right-0 mt-2 w-72 bg-white rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+                                <div className={`absolute right-0 mt-2 w-72 bg-white rounded-lg shadow-xl transition-all z-10 group-hover:opacity-100 group-hover:visible ${isQuestionMenuOpen ? "opacity-100 visible" : "opacity-0 invisible"}`}>
                                     {questionTypes.map(type => (
                                         <button
                                             key={type.value}
-                                            onClick={() => addQuestion(type.value)}
+                                            onClick={() => { addQuestion(type.value); setIsQuestionMenuOpen(false); }}
                                             className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-900 hover:bg-slate-100 first:rounded-t-lg last:rounded-b-lg transition-colors"
                                         >
                                             {type.label}

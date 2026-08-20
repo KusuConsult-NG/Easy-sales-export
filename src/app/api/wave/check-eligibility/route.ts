@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { checkWaveEligibility } from "@/lib/wave-eligibility";
 
 /**
  * GET /api/wave/check-eligibility
@@ -35,27 +36,17 @@ export async function GET(_request: NextRequest) {
 
         const userData = userDoc.data()!;
         const gender: string | null = userData.gender || null;
-        const roles: string[] = userData.roles || [];
-        const isUserAdmin = roles.includes("admin") || roles.includes("super_admin");
-        const academyReg = userData.serviceRegistrations?.academy;
-        const isAcademyElite = academyReg?.plan === 'elite' && (academyReg?.status === 'approved' || academyReg?.status === 'active');
-        const hasWaveRole = roles.includes("wave_participant");
-        const hasWaveReg = userData.serviceRegistrations?.wave?.status !== undefined;
 
-        const isMale = gender?.toLowerCase() === "male";
-        const userCreatedAt = userData.createdAt;
-        const CUTOFF_DATE = new Date("2026-06-17T00:00:00.000Z");
-        let registeredOnOrAfterCutoff = false;
-        if (userCreatedAt) {
-            const dateVal = typeof userCreatedAt.toDate === "function" 
-                ? userCreatedAt.toDate() 
-                : (userCreatedAt.seconds ? new Date(userCreatedAt.seconds * 1000) : new Date(userCreatedAt));
-            registeredOnOrAfterCutoff = dateVal >= CUTOFF_DATE;
-        }
-        const isNewMaleUser = isMale && registeredOnOrAfterCutoff;
-
-        const isWaveBlocked = isMale && (isNewMaleUser || (!hasWaveRole && !hasWaveReg));
-        const eligible = !isWaveBlocked || isUserAdmin || isAcademyElite;
+        /**
+         * The shared rule.
+         *
+         * This file carried a line-for-line copy of _checkWaveEligibilityAction,
+         * including the CUTOFF_DATE literal — and a THIRD copy in the submit action
+         * had no cutoff at all, so this endpoint reported ineligible for accounts
+         * whose applications the submit action then accepted. See
+         * wave-eligibility.ts.
+         */
+        const eligible = checkWaveEligibility(userData).eligible;
 
         // Check application status from user's serviceRegistrations (single source of truth)
         const applicationStatus: string =

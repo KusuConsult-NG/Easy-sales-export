@@ -33,11 +33,17 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 const mockClaimPaymentOnce = jest.fn() as jest.Mock<any>;
 const mockIncrementWithinCeiling = jest.fn() as jest.Mock<any>;
 const mockDecrementManyOrFail = jest.fn() as jest.Mock<any>;
+const mockMarkFulfilmentFailed = jest.fn() as jest.Mock<any>;
 
 jest.mock('@/lib/wallet-ledger', () => ({
     claimPaymentOnce: (...args: any[]) => mockClaimPaymentOnce(...args),
     incrementWithinCeiling: (...args: any[]) => mockIncrementWithinCeiling(...args),
     decrementManyOrFail: (...args: any[]) => mockDecrementManyOrFail(...args),
+    // Called from the action's catch when fulfilment fails after the payment was
+    // already claimed — which is exactly what the overfunding case below is. A
+    // mock omitting it turns that assertion into
+    // "markFulfilmentFailed is not a function" and hides what is being tested.
+    markFulfilmentFailed: (...args: any[]) => mockMarkFulfilmentFailed(...args),
 }));
 
 const mockVerifyPaystack = jest.fn() as jest.Mock<any>;

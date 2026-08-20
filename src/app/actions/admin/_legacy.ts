@@ -14,7 +14,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { LegacyOnboardingSchema } from "@/lib/schemas";
 import { sendLegacyMemberWelcomeEmail } from "@/lib/email-notifications";
-import { hasAdminPermission } from "@/lib/admin-permissions";
+import { hasAdminPermission, includesPrivilegedRole, isSuperAdmin } from "@/lib/admin-permissions";
 import { requireAdmin } from "@/lib/require-admin";
 // ============================================
 // Import Legacy Cooperative Member
@@ -194,6 +194,34 @@ async function _onboardLegacyMemberAction(
         }
 
         const data = validated.data;
+
+        /**
+         * THE THIRD ROLE-WRITER, and the one that had no escalation guard.
+         *
+         * admin-permissions.ts's includesPrivilegedRole exists because both
+         * role-writing endpoints accepted whatever list they were handed, and
+         * its header names them: bulkAssignRolesAction and
+         * updateUserRolesAction. Both route through it now.
+         *
+         * This is a third. `data.roles` is written wholesale onto the user
+         * document below, LegacyOnboardingSchema's UserRoleSchema accepts
+         * "admin" and "super_admin" as values, and the only gate in front of it
+         * is `users:create` — which PERMISSION_MATRIX gives to plain `admin`.
+         *
+         * So an admin could open the legacy-onboarding screen, type any email
+         * address, tick super_admin, and mint an account holding exactly the
+         * permissions the matrix withholds from them — collecting them on a new
+         * identity rather than their own, which is if anything harder to notice.
+         *
+         * Same rule, same helper, so the three cannot drift: any resulting role
+         * set containing a privileged role needs a super_admin to write it.
+         */
+        if (includesPrivilegedRole(data.roles) && !isSuperAdmin(roles)) {
+            return {
+                error: "Only a super admin can onboard a member with admin roles",
+                success: false as const,
+            };
+        }
         data.email = data.email.toLowerCase(); // Permanent Fix: Force lowercase normalization
 
         // 1. Resolve Identity and Enforce Uniqueness (with Auto-Resolution)
@@ -512,6 +540,47 @@ async function _onboardLegacyMemberAction(
             userDoc.requiresPasswordChange = true;
         }
 
+        /**
+         * WHAT THIS SCREEN MUST NOT DO IS RE-INITIALISE SOMEBODY.
+         *
+         * Every provisioning block below is a `set(..., { merge: true })`, and
+         * `merge` protects fields the payload OMITS — not fields it names. The
+         * payloads named `savingsBalance: 0`, `loanBalance: 0`,
+         * `totalContributions: 0`, `points: 0`, `paymentAmount: 0` and a fresh
+         * `createdAt`, unconditionally.
+         *
+         * So running this action a second time on somebody who is already a
+         * cooperative member — to add a module, to correct a phone number, to
+         * attach a document — set their savings balance, their loan balance and
+         * their lifetime contributions to ZERO, and reported "successfully
+         * updated". A member with ₦300,000 contributed lost the record of it,
+         * silently, and the same call reset their WAVE points and their join
+         * dates.
+         *
+         * It is also reachable through the migration path above: an unaligned
+         * document is moved to the auth UID with its balances intact, and then
+         * this block zeroes them.
+         *
+         * The zeroes are correct for a member who does not exist yet — a new
+         * record starts at zero — so they are applied only then. `existing`
+         * below is read once per collection and decides it.
+         */
+        const readExisting = async (collection: string, id: string) => {
+            const snap = await db.collection(collection).doc(id).get();
+            return snap.exists ? (snap.data() ?? {}) : null;
+        };
+
+        /**
+         * The fields that must survive a re-run. Present on a NEW document,
+         * absent on an existing one — so `merge: true` leaves whatever is there.
+         */
+        const initialOnly = (existing: Record<string, any> | null, fields: Record<string, any>) =>
+            (existing ? {} : fields);
+
+        const existingCoopMember = (data.services?.cooperative || data.roles.includes("cooperative_member"))
+            ? await readExisting(COLLECTIONS.COOPERATIVE_MEMBERS, userRecord.uid)
+            : null;
+
         const batch = db.batch();
         batch.set(db.collection(COLLECTIONS.USERS).doc(userRecord.uid), userDoc, { merge: true });
 
@@ -543,17 +612,21 @@ async function _onboardLegacyMemberAction(
                     proofOfAddress: data.proofOfAddressUrl ? { url: data.proofOfAddressUrl, name: "Proof of Address" } : undefined,
                 } : undefined,
                 bvn: data.bvn,
-                savingsBalance: 0,
-                loanBalance: 0,
-                totalContributions: 0,
+                // Zeroed only for a member who does not exist yet — see the note
+                // above `readExisting`. A re-run must not wipe a real balance.
+                ...initialOnly(existingCoopMember, {
+                    savingsBalance: 0,
+                    loanBalance: 0,
+                    totalContributions: 0,
+                    tier: "tier1",
+                    createdAt: FieldValue.serverTimestamp(),
+                }),
                 membershipStatus: "active",
                 paymentStatus: "completed",
                 isLegacy: true,
-                tier: "tier1",
                 onboardingCompleted: true,
                 bankAccountNumber: data.accountNumber,
                 bankName: data.bankName,
-                createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
             }, { merge: true });
         }
@@ -621,6 +694,7 @@ async function _onboardLegacyMemberAction(
 
             // Enrollment record — queried by getAcademyEnrollmentsAction
             const enrollmentRef = db.collection(COLLECTIONS.ACADEMY_ENROLLMENTS).doc(userRecord.uid);
+            const existingEnrolment = await readExisting(COLLECTIONS.ACADEMY_ENROLLMENTS, userRecord.uid);
             academyBatch.set(enrollmentRef, {
                 userId: userRecord.uid,
                 studentName: data.fullName,
@@ -629,10 +703,14 @@ async function _onboardLegacyMemberAction(
                 plan: data.academyPlan || "foundation",
                 status: "active",
                 paymentStatus: "completed",
-                paymentAmount: 0,
                 onboardingCompleted: true,
-                enrolledAt: FieldValue.serverTimestamp(),
-                createdAt: FieldValue.serverTimestamp(),
+                // The amount a learner actually paid, and when they enrolled,
+                // are not this screen's to reset on a re-run.
+                ...initialOnly(existingEnrolment, {
+                    paymentAmount: 0,
+                    enrolledAt: FieldValue.serverTimestamp(),
+                    createdAt: FieldValue.serverTimestamp(),
+                }),
                 updatedAt: FieldValue.serverTimestamp(),
                 _isLegacy: true,
                 _legacyOnboardedBy: session.user.id,
@@ -720,16 +798,20 @@ async function _onboardLegacyMemberAction(
             
             // WAVE Member Profile
             const waveMemberRef = db.collection(COLLECTIONS.WAVE_MEMBERS).doc(userRecord.uid);
+            const existingWaveMember = await readExisting(COLLECTIONS.WAVE_MEMBERS, userRecord.uid);
             waveBatch.set(waveMemberRef, {
                 userId: userRecord.uid,
                 email: data.email,
                 name: data.fullName,
                 phone: data.phone,
-                joinDate: FieldValue.serverTimestamp(),
                 status: "active",
-                tier: "standard",
-                points: 0,
-                createdAt: FieldValue.serverTimestamp(),
+                // Points earned and the date they joined survive a re-run.
+                ...initialOnly(existingWaveMember, {
+                    joinDate: FieldValue.serverTimestamp(),
+                    tier: "standard",
+                    points: 0,
+                    createdAt: FieldValue.serverTimestamp(),
+                }),
                 updatedAt: FieldValue.serverTimestamp(),
                 _isLegacy: true,
             }, { merge: true });

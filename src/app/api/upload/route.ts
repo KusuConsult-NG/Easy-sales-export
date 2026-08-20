@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { withRateLimit } from "@/lib/rate-limit";
 import { assertAllowedFileType, detectFileType } from "@/lib/storage-admin";
+import { shouldUseLocalDiskStorage, writeToLocalDisk } from "@/lib/storage-backend";
 
 /**
  * What this route accepts, by CONTENT.
@@ -121,15 +122,25 @@ async function uploadHandler(request: NextRequest) {
         // e2e specs covering them failed on a local stack with the listing
         // silently never created.
         //
-        // Files are written under public/uploads/local, which `next dev`
-        // serves statically, so the returned URL behaves like the remote one.
+        // Files are written under public/uploads/local, which both `next dev`
+        // and `next start` serve statically — public/ is read at request time,
+        // not baked into the build — so a file written after the build is still
+        // served and the returned URL behaves like the remote one. That matters
+        // now that the e2e suite runs a production build.
         //
         // GUARDED ON NODE_ENV, NOT ON A FLAG. A production deployment that
         // loses its Cloudinary credentials must keep failing loudly — writing
         // customer uploads onto an ephemeral container filesystem would look
         // like it worked and lose them at the next deploy. The 503 below is
         // still the production behaviour.
-        const useLocalDisk = (!cloudName || !apiKey || !apiSecret) && process.env.NODE_ENV !== "production";
+        // The rule lives in src/lib/storage-backend.ts, and only there.
+        //
+        // It used to be written out here, again in actions/upload.ts, and a
+        // third time as a hard throw in storage-admin.ts. The copies drifted
+        // twice — see storage-backend.ts for the history — and the second time
+        // cost two e2e failures that presented as a missing confirmation
+        // message rather than as "uploads are switched off".
+        const useLocalDisk = shouldUseLocalDiskStorage();
 
         if (!useLocalDisk && (!cloudName || !apiKey || !apiSecret)) {
             logger.error("Upload failed: Cloudinary environment variables not configured");
@@ -219,28 +230,9 @@ async function uploadHandler(request: NextRequest) {
         // local upload is checked exactly as a remote one is — a permissive
         // development path would hide a validation bug rather than surface it.
         if (useLocalDisk) {
-            const { writeFile, mkdir } = await import("fs/promises");
-            const path = await import("path");
-
             // publicId is already sanitised — every segment has been stripped
-            // to [a-zA-Z0-9-] — so it cannot escape the directory below.
-            const relative = path.posix.join("uploads", "local", publicId);
-            const absolute = path.join(process.cwd(), "public", relative);
-
-            await mkdir(path.dirname(absolute), { recursive: true });
-            await writeFile(absolute, buffer);
-
-            // ABSOLUTE, like Cloudinary's secure_url.
-            //
-            // A relative "/uploads/..." satisfies an <img src> but fails
-            // z.string().url(), which loanApplicationSchema applies to every
-            // document. The file uploaded, the form field was set, and step 4
-            // still refused to advance — the local backend has to honour the
-            // same contract as the remote one, not merely produce something
-            // that renders.
-            const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-            const url = `${base}/${relative}`;
-            logger.info(`File written to local disk (no Cloudinary configured): ${url}`);
+            // to [a-zA-Z0-9-] — so it cannot escape the uploads directory.
+            const url = await writeToLocalDisk(publicId, buffer);
             return NextResponse.json({
                 success: true,
                 url,

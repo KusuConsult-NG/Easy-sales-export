@@ -18,6 +18,7 @@
 
 import { requireSession } from "@/lib/session-guard";
 import { logger } from "@/lib/logger";
+import { shouldUseLocalDiskStorage, writeToLocalDisk } from "@/lib/storage-backend";
 
 const ALLOWED_TYPES: Record<string, string> = { "image/jpeg": "jpg",
     "image/jpg": "jpg",
@@ -77,10 +78,15 @@ export async function uploadDocumentAction(
         // one rule between them is the duplication pattern this audit keeps
         // finding; they now behave identically.
         //
-        // GUARDED ON NODE_ENV, NOT A FLAG. Production must keep failing loudly:
-        // writing customer documents onto an ephemeral container filesystem
-        // would look like it worked and lose them at the next deploy.
-        const useLocalDisk = (!cloudName || !apiKey || !apiSecret) && process.env.NODE_ENV !== "production";
+        // The rule now lives in ONE place: src/lib/storage-backend.ts.
+        //
+        // It was written out here, in /api/upload and (as a hard throw) in
+        // storage-admin.ts. The copies drifted twice: once when /api/upload was
+        // fixed and this action was not, and again when the e2e suite moved to a
+        // production build — `NODE_ENV !== "production"` stopped being true, the
+        // route was widened to recognise a local stack, and this copy was
+        // missed, so the loan wizard's document step still 503'd.
+        const useLocalDisk = shouldUseLocalDiskStorage();
 
         if (!useLocalDisk && (!cloudName || !apiKey || !apiSecret)) { logger.error("[uploadDocumentAction] Cloudinary environment variables not configured");
             return { success: false as const, error: "Upload service is temporarily unavailable. Please try again later or contact support."};
@@ -100,29 +106,11 @@ export async function uploadDocumentAction(
         const safeName = baseDocType.replace(/[^a-zA-Z0-9-]/g, "-");
         const publicId = `documents/${userId}/${safeName}-${timestamp}${extension}`;
 
-        // Local disk backend, mirroring /api/upload. publicId is already
-        // sanitised to [a-zA-Z0-9-] per segment, so it cannot escape the
-        // directory below.
+        // Local disk backend — the shared implementation, not a copy of it.
+        // publicId is already sanitised to [a-zA-Z0-9-] per segment, so it
+        // cannot escape the uploads directory.
         if (useLocalDisk) {
-            const { writeFile, mkdir } = await import("fs/promises");
-            const path = await import("path");
-
-            const relative = path.posix.join("uploads", "local", publicId);
-            const absolute = path.join(process.cwd(), "public", relative);
-
-            await mkdir(path.dirname(absolute), { recursive: true });
-            await writeFile(absolute, Buffer.from(await file.arrayBuffer()));
-
-            // ABSOLUTE, like Cloudinary's secure_url.
-            //
-            // A relative "/uploads/..." satisfies an <img src> but fails
-            // z.string().url(), which loanApplicationSchema applies to every
-            // document. The file uploaded, the form field was set, and step 4
-            // still refused to advance — the local backend has to honour the
-            // same contract as the remote one, not merely produce something
-            // that renders.
-            const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-            const localUrl = `${base}/${relative}`;
+            const localUrl = await writeToLocalDisk(publicId, Buffer.from(await file.arrayBuffer()));
             logger.info(`[uploadDocumentAction] Wrote to local disk (no Cloudinary configured): ${localUrl}`);
             return { error: null, success: true as const, url: localUrl, data: null };
         }

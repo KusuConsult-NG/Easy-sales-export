@@ -25,6 +25,9 @@ import type { UserRole } from "@/lib/types/roles";
 import { logger } from "@/lib/logger";
 import { FieldValue } from "@/lib/firestore-compat";
 import { normalizeUserUpdate } from "@/lib/schema-normalizer";
+import { registrationProgressScore, isDecidedAgainst } from "@/lib/registration-progress";
+import { latestApplication, APPLICATION_SCAN_LIMIT } from "@/lib/latest-application";
+
 
 /** Maps the AppIdentifier to the Firestore serviceRegistrations key */
 const APP_TO_REG_KEY: Partial<Record<AppIdentifier, string>> = {
@@ -95,28 +98,10 @@ export async function checkModuleAccess(
                 const coopReg = serviceRegistrations["cooperatives"];
                 const legacyReg = serviceRegistrations["cooperative"];
 
-                const getProgressScore = (status: string) => {
-                    switch (status) {
-                        case 'active':
-                        case 'approved':
-                            return 4;
-                        case 'pending':
-                        case 'pending_review':
-                        case 'revision_required':
-                            return 3;
-                        case 'pending_repair':
-                        case 'legacy_pending_onboarding':
-                            return 2;
-                        case 'not_started':
-                            return 1;
-                        default:
-                            return 0;
-                    }
-                };
 
                 if (coopReg && legacyReg) {
-                    const scorePlural = getProgressScore(coopReg.status || '');
-                    const scoreSingular = getProgressScore(legacyReg.status || '');
+                    const scorePlural = registrationProgressScore(coopReg.status || '');
+                    const scoreSingular = registrationProgressScore(legacyReg.status || '');
                     registration = scoreSingular > scorePlural ? legacyReg : coopReg;
                 } else {
                     registration = coopReg || legacyReg;
@@ -127,29 +112,10 @@ export async function checkModuleAccess(
                 const fnReg = serviceRegistrations["farmNation"];
                 const legacyFnReg = serviceRegistrations["farm_nation"];
 
-                const getProgressScore = (status: string) => {
-                    switch (status) {
-                        case 'active':
-                        case 'approved':
-                        case 'verified':
-                            return 4;
-                        case 'pending':
-                        case 'pending_review':
-                        case 'revision_required':
-                            return 3;
-                        case 'pending_repair':
-                        case 'legacy_pending_onboarding':
-                            return 2;
-                        case 'not_started':
-                            return 1;
-                        default:
-                            return 0;
-                    }
-                };
 
                 if (fnReg && legacyFnReg) {
-                    const scorePlural = getProgressScore(fnReg.status || '');
-                    const scoreSingular = getProgressScore(legacyFnReg.status || '');
+                    const scorePlural = registrationProgressScore(fnReg.status || '');
+                    const scoreSingular = registrationProgressScore(legacyFnReg.status || '');
                     registration = scoreSingular > scorePlural ? legacyFnReg : fnReg;
                 } else {
                     registration = fnReg || legacyFnReg;
@@ -198,15 +164,16 @@ export async function checkModuleAccess(
         if (app === "cooperatives") {
             const memberQuery = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
                 .where("userId", "==", userId)
-                .limit(1)
+                .limit(APPLICATION_SCAN_LIMIT)
                 .get();
 
             let memberDocData: any = null;
             let memberRef: any = null;
 
             if (!memberQuery.empty) {
-                memberDocData = memberQuery.docs[0].data();
-                memberRef = memberQuery.docs[0].ref;
+                const latestMember = latestApplication(memberQuery.docs);
+                memberDocData = latestMember?.data();
+                memberRef = latestMember?.ref;
             } else {
                 const memberDoc = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
                 if (memberDoc.exists) {
@@ -215,11 +182,12 @@ export async function checkModuleAccess(
                 } else if (userData.email) {
                     const emailQuery = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
                         .where("email", "==", userData.email.toLowerCase())
-                        .limit(1)
+                        .limit(APPLICATION_SCAN_LIMIT)
                         .get();
                     if (!emailQuery.empty) {
-                        memberDocData = emailQuery.docs[0].data();
-                        memberRef = emailQuery.docs[0].ref;
+                        const latestByEmail = latestApplication(emailQuery.docs);
+                        memberDocData = latestByEmail?.data();
+                        memberRef = latestByEmail?.ref;
                     }
                 }
             }
@@ -227,7 +195,45 @@ export async function checkModuleAccess(
             if (memberDocData) {
                 const status = memberDocData.membershipStatus || memberDocData.status;
                 const isApprovedOrActive = status === "active" || status === "approved";
-                const isHealable = !isApprovedOrActive && memberDocData.onboardingCompleted === true && memberDocData.paymentStatus === "completed";
+
+                // A SUSPENSION WAS UNDONE BY THE NEXT PAGE LOAD.
+                //
+                // isHealable asked "did they pay and finish onboarding?" and
+                // never "was a decision made against them?". A suspended member
+                // satisfies it exactly: they paid to join and their onboarding
+                // is complete, and `suspended` is not "active" or "approved" —
+                // so the heal below fired, wrote `membershipStatus: "active"`
+                // back onto the member document, wrote
+                // `serviceRegistrations.cooperatives.status: "active"` and
+                // `arrayUnion("cooperative_member")` onto the user document, and
+                // returned true.
+                //
+                // _coop_admin_members.ts was taught to revoke the role on
+                // suspension precisely so a suspended member loses the module.
+                // This layer handed it back on the very next cooperative page
+                // load, in the database — savings, loans, contributions and
+                // withdrawals with it.
+                //
+                // registration-progress.ts states "the cooperative was safe only
+                // because its suspend path revokes the role too". That was
+                // wrong, and this is why: revoking a role means nothing while a
+                // repair rule re-grants it without reading the decision. Fourth
+                // instance of the same shape — #207 (login self-heal), #225
+                // (course enrolment), #227 (the application picked here).
+                const decidedAgainst = isDecidedAgainst(status);
+
+                const isHealable = !isApprovedOrActive
+                    && !decidedAgainst
+                    && memberDocData.onboardingCompleted === true
+                    && memberDocData.paymentStatus === "completed";
+
+                if (decidedAgainst) {
+                    logger.info(
+                        `[ModuleAccess] Layer 2.6 — cooperative membership decided against `
+                        + `(uid: ${userId}, status: ${status}). No access, and no heal.`
+                    );
+                    return false;
+                }
 
                 if (isApprovedOrActive || isHealable) {
                     logger.info(
@@ -272,23 +278,25 @@ export async function checkModuleAccess(
         if (app === "academy") {
             const appQuery = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
                 .where("userId", "==", userId)
-                .limit(1)
+                .limit(APPLICATION_SCAN_LIMIT)
                 .get();
 
             let appDocData: any = null;
             let appRef: any = null;
 
             if (!appQuery.empty) {
-                appDocData = appQuery.docs[0].data();
-                appRef = appQuery.docs[0].ref;
+                const latestApp = latestApplication(appQuery.docs);
+                appDocData = latestApp?.data();
+                appRef = latestApp?.ref;
             } else if (userData.email) {
                 const emailQuery = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
                     .where("personalInfo.email", "==", userData.email.toLowerCase())
-                    .limit(1)
+                    .limit(APPLICATION_SCAN_LIMIT)
                     .get();
                 if (!emailQuery.empty) {
-                    appDocData = emailQuery.docs[0].data();
-                    appRef = emailQuery.docs[0].ref;
+                    const latestAppByEmail = latestApplication(emailQuery.docs);
+                    appDocData = latestAppByEmail?.data();
+                    appRef = latestAppByEmail?.ref;
                 }
             }
 
@@ -333,29 +341,31 @@ export async function checkModuleAccess(
         if (app === "wave") {
             const appQuery = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
                 .where("userId", "==", userId)
-                .limit(1)
+                .limit(APPLICATION_SCAN_LIMIT)
                 .get();
 
             let appDocData: any = null;
             let appRef: any = null;
 
             if (!appQuery.empty) {
-                appDocData = appQuery.docs[0].data();
-                appRef = appQuery.docs[0].ref;
+                const latestApp = latestApplication(appQuery.docs);
+                appDocData = latestApp?.data();
+                appRef = latestApp?.ref;
             } else if (userData.email) {
                 let emailQuery = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
                     .where("userEmail", "==", userData.email.toLowerCase())
-                    .limit(1)
+                    .limit(APPLICATION_SCAN_LIMIT)
                     .get();
                 if (emailQuery.empty) {
                     emailQuery = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
                         .where("email", "==", userData.email.toLowerCase())
-                        .limit(1)
+                        .limit(APPLICATION_SCAN_LIMIT)
                         .get();
                 }
                 if (!emailQuery.empty) {
-                    appDocData = emailQuery.docs[0].data();
-                    appRef = emailQuery.docs[0].ref;
+                    const latestAppByEmail = latestApplication(emailQuery.docs);
+                    appDocData = latestAppByEmail?.data();
+                    appRef = latestAppByEmail?.ref;
                 }
             }
 
@@ -399,29 +409,31 @@ export async function checkModuleAccess(
         if (app === "export") {
             const appQuery = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
                 .where("userId", "==", userId)
-                .limit(1)
+                .limit(APPLICATION_SCAN_LIMIT)
                 .get();
 
             let appDocData: any = null;
             let appRef: any = null;
 
             if (!appQuery.empty) {
-                appDocData = appQuery.docs[0].data();
-                appRef = appQuery.docs[0].ref;
+                const latestApp = latestApplication(appQuery.docs);
+                appDocData = latestApp?.data();
+                appRef = latestApp?.ref;
             } else if (userData.email) {
                 let emailQuery = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
                     .where("userEmail", "==", userData.email.toLowerCase())
-                    .limit(1)
+                    .limit(APPLICATION_SCAN_LIMIT)
                     .get();
                 if (emailQuery.empty) {
                     emailQuery = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
                         .where("profile.email", "==", userData.email.toLowerCase())
-                        .limit(1)
+                        .limit(APPLICATION_SCAN_LIMIT)
                         .get();
                 }
                 if (!emailQuery.empty) {
-                    appDocData = emailQuery.docs[0].data();
-                    appRef = emailQuery.docs[0].ref;
+                    const latestAppByEmail = latestApplication(emailQuery.docs);
+                    appDocData = latestAppByEmail?.data();
+                    appRef = latestAppByEmail?.ref;
                 }
             }
 
@@ -465,29 +477,31 @@ export async function checkModuleAccess(
         if (app === "farm-nation") {
             const appQuery = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
                 .where("userId", "==", userId)
-                .limit(1)
+                .limit(APPLICATION_SCAN_LIMIT)
                 .get();
 
             let appDocData: any = null;
             let appRef: any = null;
 
             if (!appQuery.empty) {
-                appDocData = appQuery.docs[0].data();
-                appRef = appQuery.docs[0].ref;
+                const latestApp = latestApplication(appQuery.docs);
+                appDocData = latestApp?.data();
+                appRef = latestApp?.ref;
             } else if (userData.email) {
                 let emailQuery = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
                     .where("userEmail", "==", userData.email.toLowerCase())
-                    .limit(1)
+                    .limit(APPLICATION_SCAN_LIMIT)
                     .get();
                 if (emailQuery.empty) {
                     emailQuery = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
                         .where("profile.email", "==", userData.email.toLowerCase())
-                        .limit(1)
+                        .limit(APPLICATION_SCAN_LIMIT)
                         .get();
                 }
                 if (!emailQuery.empty) {
-                    appDocData = emailQuery.docs[0].data();
-                    appRef = emailQuery.docs[0].ref;
+                    const latestAppByEmail = latestApplication(emailQuery.docs);
+                    appDocData = latestAppByEmail?.data();
+                    appRef = latestAppByEmail?.ref;
                 }
             }
 
@@ -540,13 +554,14 @@ export async function checkModuleAccess(
         if (app === "marketplace") {
             const verQuery = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
                 .where("userId", "==", userId)
-                .limit(1)
+                .limit(APPLICATION_SCAN_LIMIT)
                 .get();
 
             if (!verQuery.empty) {
-                const verDocData = verQuery.docs[0].data();
-                const verRef = verQuery.docs[0].ref;
-                const status = verDocData.status;
+                const latestVer = latestApplication<any>(verQuery.docs);
+                const verDocData = latestVer?.data();
+                const verRef = latestVer?.ref;
+                const status = verDocData?.status;
                 if (status === "approved") {
                     logger.info(
                         `[ModuleAccess] Layer 2.11 — Direct Seller Verification query confirmed '${app}' access (uid: ${userId}, status: ${status}).`

@@ -13,6 +13,8 @@ import { hasRole } from "@/lib/role-utils";
 import { ProductSchema } from "@/lib/validations/marketplace";
 import { withSafeAction, ActionResponse } from "@/lib/safe-action";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
+import { newestVerification, SELLER_NAME_FALLBACK } from "@/lib/seller-trust";
+import { PRODUCT_INITIAL_STATUS } from "@/lib/product-status";
 
 // ============================================================================
 // PRODUCT MANAGEMENT
@@ -170,10 +172,25 @@ async function _createProductAction(prevState: unknown, formData: FormData): Pro
         ]);
 
         const vendorData = vendorDoc.data();
-        const verificationData = verificationSnap.empty ? null : verificationSnap.docs[0].data();
 
-        const sellerName = vendorData?.storeInfo?.name || session.user.name || "Easy Sales Seller";
-        const sellerVerified = verificationData?.isVerifiedBadge || false;
+        // NEWEST verification, not docs[0].
+        //
+        // The query has no ordering, so a seller with more than one verification
+        // record got whichever row the database happened to return first — which
+        // is how a superseded verification could decide the badge and the
+        // category. marketplace/seller/layout.tsx sorts this exact query by
+        // createdAt for the same reason.
+        const verificationData = newestVerification(
+            verificationSnap.docs.map((d: any) => d.data()),
+        );
+
+        const sellerName = vendorData?.storeInfo?.name || session.user.name || SELLER_NAME_FALLBACK;
+        // Written for the shape's other readers (the export catalog, the admin
+        // views). NO buyer-facing path trusts this copy any more: it is a
+        // snapshot taken now and never refreshed, so granting the badge would
+        // not add it to this product and revoking would not remove it. Every
+        // read path resolves the badge live — see lib/seller-trust.ts.
+        const sellerVerified = verificationData?.isVerifiedBadge === true;
         const sellerCategory = verificationData?.sellerCategory || "retail";
 
         // Create product
@@ -193,13 +210,34 @@ async function _createProductAction(prevState: unknown, formData: FormData): Pro
             unit: validatedData.unit,
             location: {
                 state: validatedData.location.state,
-                lga: validatedData.location.lga 
+                lga: validatedData.location.lga,
+                // Collected by both forms, validated into `validatedData`, and
+                // then dropped — the same shape as the certifications defect,
+                // one field over in the same object. /api/marketplace/create-product
+                // writes it, and the seller edit page reads it back into its own
+                // field and re-sends it, so an edit made through that page
+                // silently erased the nearest market the seller had entered and
+                // showed the box empty the next time they opened it.
+                nearestMarket: validatedData.location.nearestMarket,
             },
             deliveryMethod: validatedData.deliveryMethod,
             estimatedDeliveryDays: validatedData.estimatedDeliveryDays,
             bulkAvailable: validatedData.bulkAvailable || false,
             exportReady: validatedData.exportReady || false,
-            status: "pending",
+            // Collected from the form, validated by ProductSchema — and then
+            // dropped. This object never mentioned `certifications`, so a
+            // seller's certifications were parsed and discarded, while
+            // marketplace/products/[id] has a whole section that renders them
+            // and /api/marketplace/create-product writes them.
+            certifications: validatedData.certifications ?? certifications ?? [],
+            // ONE answer for both creators, from lib/product-status.ts.
+            //
+            // This wrote "pending" while /api/marketplace/create-product wrote
+            // "active" and ProductSchema defaults to "draft". Every buyer-facing
+            // reader filters on "active" alone, and nothing anywhere released a
+            // pending product — so this action, reached from six links, produced
+            // listings no buyer could see and no admin could publish.
+            status: PRODUCT_INITIAL_STATUS,
             sellerName,
             sellerVerified,
             sellerCategory,
@@ -349,8 +387,12 @@ async function _updateProductAction(prevState: unknown, formData: FormData): Pro
         };
 
         const imageUrls: string[] = [];
+        // Whether the form carried image fields AT ALL, as distinct from
+        // carrying none. See the note on the write below.
+        let formCarriedImages = false;
         for (const key of Array.from(formData.keys())) { 
             if (key.startsWith("productImages_") || key.startsWith("image")) {
+                formCarriedImages = true;
                 const val = formData.get(key);
                 if (val) {
                     if (typeof val === "string" && val.startsWith("http")) {
@@ -368,7 +410,16 @@ async function _updateProductAction(prevState: unknown, formData: FormData): Pro
             title: validatedData.title,
             description: validatedData.description,
             category: validatedData.category,
-            images: imageUrls,
+            // KEPT when the form did not carry any.
+            //
+            // This wrote `imageUrls` unconditionally, and that list is built by
+            // scanning the form for productImages_*/image* keys. A caller that
+            // sends none — this is a "use server" export, so that is any caller
+            // — therefore had every photo removed from the listing by an edit
+            // that never mentioned images. The seller edit page does re-send
+            // the existing URLs, so this half was latent; the certifications
+            // below were not.
+            images: formCarriedImages ? imageUrls : (productData?.images ?? []),
             videoUrl: (validatedData.videoUrl as string) || undefined,
             pricingTiers: validatedData.pricingTiers,
             availableQuantity: validatedData.availableQuantity,
@@ -376,15 +427,45 @@ async function _updateProductAction(prevState: unknown, formData: FormData): Pro
             unit: validatedData.unit,
             location: {
                 state: validatedData.location.state,
-                lga: validatedData.location.lga 
+                lga: validatedData.location.lga,
+                // Collected by both forms, validated into `validatedData`, and
+                // then dropped — the same shape as the certifications defect,
+                // one field over in the same object. /api/marketplace/create-product
+                // writes it, and the seller edit page reads it back into its own
+                // field and re-sends it, so an edit made through that page
+                // silently erased the nearest market the seller had entered and
+                // showed the box empty the next time they opened it.
+                nearestMarket: validatedData.location.nearestMarket,
             },
             deliveryMethod: validatedData.deliveryMethod,
             estimatedDeliveryDays: validatedData.estimatedDeliveryDays,
             bulkAvailable: validatedData.bulkAvailable || false,
             exportReady: validatedData.exportReady || false,
+            // KEPT when the form did not carry them, which is EVERY EDIT.
+            //
+            // certifications was originally dropped from both writes; restoring
+            // it to the update introduced a second fault, because the value
+            // being restored is `JSON.parse(formData.get("certifications") ??
+            // "[]")` and the seller edit page
+            // (/marketplace/seller/products/[id]/edit) never appends that
+            // field. So every edit wrote an empty array over whatever the
+            // create path had saved, and the certifications section on
+            // /marketplace/products/[id] went blank. On an agricultural export
+            // marketplace those badges are the product's selling point.
+            //
+            // ProductSchema defaults the field to [], so validatedData cannot
+            // distinguish "sent empty" from "not sent" — the FORM is asked
+            // instead.
+            certifications: formData.has("certifications")
+                ? (validatedData.certifications ?? certifications ?? [])
+                : (productData?.certifications ?? []),
             updatedAt: FieldValue.serverTimestamp()
         };
 
+        // `status` is deliberately NOT in this patch. An edit must not change
+        // whether a listing is published — that is reviewProductAction's job,
+        // and an admin who suspended a product would otherwise see the seller
+        // republish it by saving the edit form.
         await productRef.update(updatedProduct);
 
         return { error: null, success: true as const, data: { productId } };

@@ -17,6 +17,7 @@
  */
 
 import type { FieldValue, Timestamp } from "@/lib/firestore-compat";
+import type { EscrowStatus } from "@/lib/escrow-status";
 
 /**
  * Marketplace Escrow System
@@ -53,7 +54,19 @@ export interface EscrowTransaction { id?: string;
     productDescription: string;
     /** participants[] is required so getUserEscrowTransactions' array-contains query resolves correctly */
     participants: string[];
-    status: "pending" | "funded" | "released" | "refunded" | "disputed";
+    /**
+     * The shared union, not a local one.
+     *
+     * This listed five of the eight statuses the collection uses — no
+     * "in_transit", no "delivered" (which _confirmOrderReceiptAction writes on
+     * every receipt confirmation), no "cancelled" — so the type asserted that
+     * values this application writes on its main path could not occur.
+     *
+     * The same defect LandListingStatus had, and it cost the same thing: every
+     * caller hand-wrote its own idea of which statuses it would act on, and they
+     * disagreed. See lib/escrow-status.ts.
+     */
+    status: EscrowStatus;
     paymentReference?: string;
     createdAt: FieldValue | Timestamp;
     paidAt?: FieldValue | Timestamp;

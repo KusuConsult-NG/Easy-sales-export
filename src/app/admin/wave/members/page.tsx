@@ -16,7 +16,15 @@ import ImportLegacyModal from "@/components/admin/ImportLegacyModal";
 interface WaveMember {
     id: string; // userId
     active: boolean;
-    enrolledAt: Date;
+    /**
+     * Nullable, because it could not always be resolved.
+     *
+     * Both mappings below fell back to `new Date()`, so a member whose approval
+     * timestamp was missing was shown — and exported to CSV — as having enrolled
+     * TODAY. The admin list, the detail panel and two CSVs all stated a date
+     * nobody had recorded.
+     */
+    enrolledAt: Date | null;
     applicationId?: string;
     // From joined wave_applications data (if available)
     fullName?: string;
@@ -65,7 +73,7 @@ export default function AdminWaveMembersPage() {
                 return {
                     id: item.user.id || item.id,
                     active: true,
-                    enrolledAt: data.approvalTimestamp?.toDate?.() || data.reviewedAt?.toDate?.() || data.createdAt?.toDate?.() || new Date(),
+                    enrolledAt: data.approvalTimestamp?.toDate?.() || data.reviewedAt?.toDate?.() || data.createdAt?.toDate?.() || null,
                     applicationId: item.id,
                     fullName: data.fullName,
                     surname: data.surname,
@@ -126,7 +134,7 @@ export default function AdminWaveMembersPage() {
                 const data = item.data;
                 return {
                     id: item.user.id || item.id,
-                    enrolledAt: data.approvalTimestamp?.toDate?.() || data.reviewedAt?.toDate?.() || data.createdAt?.toDate?.() || new Date(),
+                    enrolledAt: data.approvalTimestamp?.toDate?.() || data.reviewedAt?.toDate?.() || data.createdAt?.toDate?.() || null,
                     applicationId: item.id,
                     fullName: data.fullName,
                     surname: data.surname,
@@ -162,7 +170,7 @@ export default function AdminWaveMembersPage() {
                 m.farmSize || "",
                 m.nin || "",
                 m.bvn || "",
-                m.enrolledAt ? new Date(m.enrolledAt).toLocaleDateString("en-NG") : "",
+                m.enrolledAt ? new Date(m.enrolledAt).toLocaleDateString("en-NG") : "Unknown",
                 m.applicationId || "",
             ]);
 
@@ -322,7 +330,9 @@ export default function AdminWaveMembersPage() {
                                         <td className="px-5 py-4 text-sm text-slate-600">
                                             <div className="flex items-center gap-2">
                                                 <CheckCircle className="w-4 h-4 text-green-500" />
-                                                {new Date(member.enrolledAt).toLocaleDateString("en-NG")}
+                                                {member.enrolledAt
+                                                    ? new Date(member.enrolledAt).toLocaleDateString("en-NG")
+                                                    : "Unknown"}
                                             </div>
                                         </td>
                                         <td className="px-5 py-4">
@@ -386,7 +396,9 @@ export default function AdminWaveMembersPage() {
                                 { label: "Farm Size", value: selectedMember.farmSize },
                                 { label: "NIN", value: selectedMember.nin ? `${selectedMember.nin.slice(0, 4)}****${selectedMember.nin.slice(-4)}` : undefined },
                                 { label: "BVN", value: selectedMember.bvn ? `${selectedMember.bvn.slice(0, 4)}****${selectedMember.bvn.slice(-4)}` : undefined },
-                                { label: "Enrolled", value: new Date(selectedMember.enrolledAt).toLocaleDateString("en-NG", { weekday: "long", year: "numeric", month: "long", day: "numeric" }) },
+                                { label: "Enrolled", value: selectedMember.enrolledAt
+                                    ? new Date(selectedMember.enrolledAt).toLocaleDateString("en-NG", { weekday: "long", year: "numeric", month: "long", day: "numeric" })
+                                    : "Unknown" },
                                 { label: "Application ID", value: selectedMember.applicationId },
                                 { label: "User ID", value: selectedMember.id },
                             ].map(({ label, value }) => value ? (
@@ -410,7 +422,7 @@ export default function AdminWaveMembersPage() {
                                         `Bank,"${selectedMember.bankName || ''}"`,
                                         `Account,"${selectedMember.accountNumber || ''}"`,
                                         `Farm Size,"${selectedMember.farmSize || ''}"`,
-                                        `Enrolled,"${new Date(selectedMember.enrolledAt).toLocaleDateString('en-NG')}"`,
+                                        `Enrolled,"${selectedMember.enrolledAt ? new Date(selectedMember.enrolledAt).toLocaleDateString('en-NG') : "Unknown"}"`,
                                     ].join("\n");
                                     const blob = new Blob([csvContent], { type: "text/csv" });
                                     const url = URL.createObjectURL(blob);

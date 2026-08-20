@@ -7,7 +7,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
 import { checkModuleAccess } from "@/lib/module-access-check";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { serializeValue } from "@/lib/firestore-serialize";
+import { serializeValue, toMillis } from "@/lib/firestore-serialize";
 // ============================================
 // Submit Export Onboarding Action
 // ============================================
@@ -206,25 +206,49 @@ export async function checkExportStatusAction(): Promise<string | null> { try {
                     }
                 }
             } else if (session.user.email || userData?.email) {
+                /**
+                 * Claiming a legacy application by email — narrowed twice, the
+                 * same two ways checkWaveStatus was.
+                 *
+                 * That fix (#36) landed on WAVE alone. This copy and the one in
+                 * farm-nation/_fn_onboarding.ts kept both defects, which is the
+                 * shape this audit keeps meeting: one control applied on two
+                 * doors out of three.
+                 *
+                 * DEFECT 1: IT MATCHED A FIELD NOBODY AUTHENTICATED AS
+                 * When the `userEmail` query came back empty it fell back to
+                 * `profile.email`. `userEmail` is written from
+                 * `session.user.email` at submission and is the address the
+                 * account actually signed in as; `profile.email` is not — it
+                 * arrives from an import or an admin edit and carries no such
+                 * guarantee.
+                 *
+                 * DEFECT 2: IT ADOPTED APPLICATIONS THAT ALREADY HAD AN OWNER
+                 * The `!appData.userId` test guarded only the backfill WRITE. The
+                 * document became `appDoc` either way, so an application
+                 * belonging to a different user id was still read — and the block
+                 * below promotes an `approved` application's status onto the
+                 * caller AND writes it to their user record, which
+                 * module-access-check reads. Only an unclaimed application can be
+                 * claimed.
+                 */
                 const userEmail = (session.user.email || userData?.email || "").toLowerCase().trim();
                 if (userEmail) {
-                    let emailQuery = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
+                    const emailQuery = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
                         .where("userEmail", "==", userEmail)
-                        .limit(1)
+                        .limit(5)
                         .get();
-                    if (emailQuery.empty) {
-                        emailQuery = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
-                            .where("profile.email", "==", userEmail)
-                            .limit(1)
-                            .get();
-                    }
-                    if (!emailQuery.empty) {
-                        appDoc = emailQuery.docs[0];
-                        // Self-healing: backfill userId on direct application doc if missing
-                        const appData = appDoc.data()!;
-                        if (!appData.userId) {
-                            await appDoc.ref.update({ userId: session.user.id });
-                        }
+
+                    const unclaimed = emailQuery.docs.find(d => !d.data()?.userId);
+
+                    if (unclaimed) {
+                        appDoc = unclaimed;
+                        await unclaimed.ref.update({ userId: session.user.id });
+                    } else if (!emailQuery.empty) {
+                        logger.warn(
+                            `[checkExportStatus] ${emailQuery.docs.length} application(s) match ` +
+                            `${userEmail} but every one already belongs to another account; none claimed.`
+                        );
                     }
                 }
             }
@@ -253,8 +277,8 @@ export async function checkExportStatusAction(): Promise<string | null> { try {
             .get();
 
         if (!legacySnap.empty) { const sortedDocs = legacySnap.docs.map(d => d.data()).sort((a: any, b: any) => {
-                const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
-                const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
+                const aTime = toMillis(a.createdAt);
+                const bTime = toMillis(b.createdAt);
                 return bTime - aTime;
             });
             const legacyData = sortedDocs[0];
@@ -317,8 +341,8 @@ export async function getExportApplicationAction(): Promise<
 
             if (!snap.empty) {
                 const sortedDocs = snap.docs.sort((a, b) => {
-                    const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
-                    const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+                    const aTime = toMillis(a.data().createdAt);
+                    const bTime = toMillis(b.data().createdAt);
                     return bTime - aTime;
                 });
                 appDoc = sortedDocs[0];
@@ -441,70 +465,65 @@ export async function requestExportRevisionAction(
 /**
  * Admin: Approve an export onboarding application — sets status + sends approval email
  */
+/**
+ * Admin: Approve an export onboarding application.
+ *
+ * TWO APPROVALS, DOING DIFFERENT THINGS
+ * -------------------------------------
+ * The platform has two export approval endpoints over the same collection, and
+ * this was the weaker one. /admin/export/applications calls the other —
+ * approveExportOnboardingAction in admin/_exports.ts — while this one is
+ * re-exported through the export barrel and reachable regardless.
+ *
+ *   GUARD        canonical: hasAdminPermission(users:update) OR
+ *                           export:approve_applications, then admin/super_admin
+ *                this one:  the literal session-token roles admin/super_admin,
+ *                           so an admin holding export:approve_applications was
+ *                           allowed by one and refused by the other.
+ *
+ *   FIELD NAMES  canonical writes reviewedBy / reviewedAt
+ *                this one wrote approvedBy / approvedAt
+ *                — so who approved an application, and when, was recorded under
+ *                  whichever pair of names the caller happened to reach, and a
+ *                  screen reading one pair showed nothing for applications
+ *                  approved through the other.
+ *
+ *   isVerified   canonical sets it, with verifiedBy/verifiedAt; this one did not.
+ *   PAYMENT      canonical sets serviceRegistrations.export.paymentStatus and
+ *                approvedAt; this one set neither.
+ *   CACHE        canonical invalidates the export service cache and the global
+ *                admin stats. This one invalidated nothing, so an approval did
+ *                not take effect until the cache expired.
+ *   LOOKUP       canonical resolves the application by document id OR by its
+ *                applicationId field; this one by document id alone, so an id
+ *                taken from a screen showing applicationId simply missed.
+ *
+ * Rather than delete a reachable endpoint, it delegates. One implementation, so
+ * the two cannot drift again, and any caller still pointing here gets the
+ * behaviour the platform considers correct.
+ */
 export async function approveExportApplicationAction(
     applicationId: string
 ): Promise<
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
-> { try {
-        const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired"};
-        const { session } = sessionResult;
-        if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) { return { success: false as const, error: 'Admin access required', meta: null };
-        }
-
-        const appRef = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).doc(applicationId);
-        const appDoc = await appRef.get();
-        if (!appDoc.exists) return { success: false as const, error: 'Application not found', meta: null };
-
-        const appData = appDoc.data();
-        const userId = appData?.userId;
-
-        const batch = db.batch();
-        batch.update(appRef, { status: 'approved',
-            approvedAt: FieldValue.serverTimestamp(),
-            approvedBy: session.user.id,
-            updatedAt: FieldValue.serverTimestamp() });
-
-        if (userId) { batch.update(db.collection(COLLECTIONS.USERS).doc(userId), {
-                'serviceRegistrations.export.status': 'approved',
-                roles: FieldValue.arrayUnion('export_participant'),
-                updatedAt: FieldValue.serverTimestamp() });
-        }
-        await batch.commit();
-
-        // Send approval email (non-blocking)
-        try { const { Resend } = await import('resend');
-            const resend = new Resend(process.env.RESEND_API_KEY);
-            const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-            const email = userDoc.data()?.email;
-            const name = userDoc.data()?.fullName || userDoc.data()?.displayName || 'Investor';
-            if (email) {
-                await resend.emails.send({
-                    from: process.env.EMAIL_FROM || 'Easy Sales Export <info@easysalesexport.com>',
-                    to: email,
-                    subject: '✅ Your Export Application Has Been Approved!',
-                    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
-                        <div style="background:linear-gradient(135deg,#ea580c,#f97316);padding:32px;border-radius:12px;text-align:center;margin-bottom:24px;">
-                            <h1 style="color:white;margin:0;">You're Verified! 🚀</h1>
-                        </div>
-                        <p>Dear <strong>${name}</strong>,</p>
-                        <p>Congratulations! Your <strong>Export Windows</strong> onboarding application has been approved. You now have full access to invest in export opportunities.</p>
-                        <div style="text-align:center;margin:24px 0;">
-                            <a href="${process.env.NEXTAUTH_URL || 'https://easysalesexport.com'}/export/dashboard" style="background:#ea580c;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;">View Export Dashboard</a>
-                        </div>
-                        <p style="color:#6b7280;font-size:14px;">Easy Sales Export Team</p>
-                    </div>` });
-            }
-        } catch (emailError) { logger.error('Export approval email failed (non-blocking):', emailError);
-        }
-
-        return { error: null, success: true as const, data: { message: "Application approved" }, meta: null };
-    } catch (error) { logger.error('approveExportApplicationAction error:', error);
-        return { success: false as const, data: null, error: 'Failed to approve application', meta: null };
+> {
+    // Fails fast for an anonymous caller; the AUTHORISATION decision — which
+    // roles may approve — belongs to the canonical implementation alone, so
+    // there is still only one answer to it. A strictly weaker precondition, not
+    // a second rule that could disagree with the first.
+    const sessionResult = await requireSession();
+    if (!sessionResult.session?.user?.id) {
+        return { success: false as const, error: 'Unauthorized', data: null, meta: null };
     }
-}
 
+    const { approveExportOnboardingAction } = await import("@/app/actions/admin/_exports");
+    const result = await approveExportOnboardingAction(applicationId);
+
+    return result.success
+        ? { error: null, success: true as const, data: { message: "Application approved" }, meta: null }
+        : { success: false as const, error: result.error ?? "Failed to approve application", data: null, meta: null };
+}
 
 // ============================================================================
 // USER RESUBMIT — Export Onboarding
@@ -549,8 +568,8 @@ export async function resubmitExportApplicationAction(
 
             if (!snap.empty) {
                 const sortedDocs = snap.docs.sort((a, b) => {
-                    const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
-                    const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+                    const aTime = toMillis(a.data().createdAt);
+                    const bTime = toMillis(b.data().createdAt);
                     return bTime - aTime;
                 });
                 appRef = sortedDocs[0].ref;

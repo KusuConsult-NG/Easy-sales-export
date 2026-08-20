@@ -10,8 +10,12 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { revalidatePath } from "next/cache";
 
 import { withSafeAction, type ActionResponse } from "@/lib/safe-action";
+import { normaliseExportWindowStatus, refuseExportStatusChange } from "@/lib/export-window-status";
 
-type ExportStatus = "pending" | "in_transit" | "delivered" | "completed";
+// The four statuses now live in lib/export-window-status.ts, alongside the rule
+// about who may set which of them — a local copy of the list here is how the
+// sibling endpoint came to have its own.
+export type { ExportWindowStatus as ExportStatus } from "@/lib/export-window-status";
 
 /**
  * Server action to update export status
@@ -26,11 +30,10 @@ async function _updateExportStatusAction(
 
         const exportId = (formData.get("exportId") as string | null)?.trim() ?? "";
         const rawStatus = (formData.get("status") as string | null)?.trim() ?? "";
-        const validStatuses: ExportStatus[] = ["pending", "in_transit", "delivered", "completed"];
-        if (!validStatuses.includes(rawStatus as ExportStatus)) {
+        const newStatus = normaliseExportWindowStatus(rawStatus);
+        if (!newStatus) {
             return { error: "Invalid status value", success: false as const, data: null, meta: null };
         }
-        const newStatus = rawStatus as ExportStatus;
 
         if (!exportId || !newStatus) { return { error: "Missing required fields", success: false as const, data: null, meta: null };
         }
@@ -50,35 +53,22 @@ async function _updateExportStatusAction(
         const exportData = exportDoc.data()!;
         const callerDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const roles: string[] = callerDoc.data()?.roles ?? [];
-        const hasExportAccess = roles.some(r => r === "admin" || r === "super_admin" || r === "export_admin");
-        if (exportData.userId !== session.user.id && !hasExportAccess) { return { error: "Unauthorized to update this export", success: false as const, data: null, meta: null };
-        }
 
-        // An owner moves their export along. They do not settle it, and they do
-        // not reopen it.
+        // The rule, shared with the other updateExportStatusAction.
         //
-        // Any of the four statuses could be set from any other, by the window's
-        // owner as readily as by an admin. Two consequences worth separating:
-        //
-        //   "completed" is a settlement statement. An owner could declare their
-        //   own export finished without an admin ever seeing it.
-        //
-        //   Moving OUT of "completed" reopens a settled record. dashboard.ts
-        //   sums windows in in_transit/delivered as the owner's Total Escrow,
-        //   so the same call that reopens the record also puts the figure back.
-        //
-        // Admins keep full control, including correcting a mistake in either
-        // direction. This is deliberately not a full state machine — which
-        // transitions are legal in the middle of the flow is a wider question
-        // than this function should answer alone, the same line drawn for
-        // export order status in #112.
-        if (!hasExportAccess) {
-            if (newStatus === "completed") {
-                return { error: "Only an administrator can mark an export completed", success: false as const, data: null, meta: null };
-            }
-            if (exportData.status === "completed") {
-                return { error: "This export is completed and can only be changed by an administrator", success: false as const, data: null, meta: null };
-            }
+        // It used to live here as an inline check, which is how the sibling
+        // endpoint in export/_ex_windows.ts came to apply none of it. See
+        // lib/export-window-status.ts.
+        const refusal = refuseExportStatusChange({
+            callerId: session.user.id,
+            callerRoles: roles,
+            ownerId: exportData.userId,
+            currentStatus: exportData.status,
+            newStatus,
+            window: exportData,
+        });
+        if (refusal) {
+            return { error: refusal, success: false as const, data: null, meta: null };
         }
 
         // Update status
@@ -88,7 +78,11 @@ async function _updateExportStatusAction(
         // Revalidate the frontend cache so the user instantly sees the update
         revalidatePath("/admin");
         revalidatePath("/marketplace/seller/orders");
-        revalidatePath("/dashboard/export");
+        // /dashboard/export is not a route — the export dashboard is at
+        // /export/dashboard (the (app) segment is a route group and does not
+        // appear in the URL). revalidatePath on a path with no route behind it
+        // is a silent no-op, so this invalidated nothing.
+        revalidatePath("/export/dashboard");
 
         return { error: null, success: true as const, data: { message: `Status updated to ${newStatus.replace("_", " ")}` } };
     } catch (error: any) {

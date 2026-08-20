@@ -6,7 +6,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { FieldPath } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
-import { isAdmin } from "@/lib/admin-permissions";
+import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { ActionResponse, withFlexibleSafeAction } from "@/lib/safe-action";
 
@@ -26,6 +26,18 @@ async function _getAcademyEnrollmentsAction(options?: {
         if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized", data: null };
         }
+
+        /**
+         * Bank details go only to the callers who can act on these records.
+         *
+         * The gate above admits every admin role; this list carries account
+         * numbers, account names and bank codes. Six lists were already closed
+         * this way — the admin withdrawal queue, the marketplace escrow list,
+         * the farm-nation transaction and registrant lists, the land
+         * verification queue and the WAVE withdrawal queue — each on the
+         * permission required by the action the screen exists to perform.
+         */
+        const maySeeBankDetails = hasAdminPermission(session.user.roles, "academy:approve_applications");
 
         let q: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.ACADEMY_ENROLLMENTS);
         const fetchLimit = options?.search ? 5000 : (options?.limit || 50);
@@ -60,7 +72,7 @@ async function _getAcademyEnrollmentsAction(options?: {
 
             return {
                 ...e,
-                bankDetails,
+                ...(maySeeBankDetails ? { bankDetails } : {}),
                 userProfile: {
                     name: uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (uData.name || e.studentName || "Unknown"),
                     email: uData.email || e.studentEmail || "N/A",
@@ -132,8 +144,26 @@ async function _getAcademyStatsAction(): Promise<ActionResponse<any>> {
             registrationStats
         } = metrics;
 
+        // The `type` a course purchase is actually claimed under.
+        //
+        // This filtered on "academy_course_purchase", and that string appears in
+        // exactly two places in the whole codebase: written here as the query
+        // value, and written by _ac_course_payment.ts as the claim's `source`.
+        // Nothing has ever written it as a `type`.
+        //
+        // So the query matched nothing, every time. totalCourseRevenue was
+        // always 0, which made monthlyRevenue 0, previousMonthRevenue 0 and —
+        // through the division guard — revenueGrowth 0. The Academy stats screen
+        // reported no course revenue and no growth no matter how much was sold.
+        //
+        // Both paths that take money for a course claim it as
+        // type: "academy_enrollment" (with source "academy_course_purchase" or
+        // "client_verify"), and academy REGISTRATION is a different type
+        // entirely — "academy_registration", counted separately below as
+        // totalRegistrationRevenue. So this is the whole of course revenue and
+        // none of the registration revenue it is added to.
         const courseRevenueSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
-            .where("type", "==", "academy_course_purchase")
+            .where("type", "==", "academy_enrollment")
             .where("status", "==", "completed")
             .get();
 

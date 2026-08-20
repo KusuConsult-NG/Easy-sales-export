@@ -87,6 +87,8 @@ export {
     getAdminSellerStatsAction,
     approveMarketplaceUserAction,
     rejectMarketplaceUserAction,
+    getAdminProductsAction,
+    reviewProductAction,
 } from "./_marketplace";
 
 // ─── Platform settings (_settings.ts) ─────────────────────────────────────────

@@ -5,7 +5,8 @@ import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { isBrowsable } from "@/lib/land-listing-status";
+import { isBrowsable, AWAITING_VERIFICATION_STATUS } from "@/lib/land-listing-status";
+import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { isValidState, isValidLGA, normalizeLocation } from "@/lib/locations";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
@@ -399,6 +400,67 @@ async function _updatePropertyAction(propertyId: string, updates: Partial<Proper
             if (updates.lga) updateData.lga = newLGA;
         }
 
+        /**
+         * The COMMERCIAL terms are frozen once money is committed.
+         *
+         * THE DEFECT
+         * ----------
+         * `price` was writable at any time, by the owner, with no reference to the
+         * listing's status — and verifyPropertyPaymentAction compares what the
+         * buyer paid against the LIVE listing price:
+         *
+         *     if (amountInNaira + 1 < listedPrice) throw new Error("Payment ... does not cover ...")
+         *
+         * So this sequence took a buyer's money and refused them:
+         *
+         *   1. owner lists at ₦5,000,000; an admin verifies it
+         *   2. buyer initialises — charged the listed ₦5,000,000, and the listing
+         *      moves to pending_escrow
+         *   3. buyer pays on Paystack
+         *   4. owner updates price to ₦50,000,000
+         *   5. the buyer returns, verification reads the NEW price, and throws
+         *
+         * The payment is claimed by then, so the buyer has paid and received
+         * nothing. It works as deliberate griefing, but it does not need malice:
+         * an owner legitimately repricing between a buyer's initialisation and
+         * their return from Paystack breaks that purchase the same way.
+         *
+         * Descriptive fields — name, description, location, features — stay
+         * editable, because correcting a typo mid-sale harms nobody. It is the
+         * terms the buyer was quoted on that must not move under them.
+         */
+        const TERMS_LOCKED_IN = [
+            // A buyer reservation, same as the states below it. The admin
+            // editor in farm-nation-admin/_fna_verifications.ts uses the same
+            // list; two editors of one set of terms have to agree.
+            "pending",
+            "pending_escrow",
+            "pending_payment",
+            "payment_confirmed",
+            "pending_transfer",
+            "sold",
+            "completed",
+        ];
+
+        const changesTerms =
+            updates.price !== undefined ||
+            updates.size !== undefined ||
+            updates.type !== undefined ||
+            updates.category !== undefined ||
+            updates.leaseDuration !== undefined;
+
+        if (changesTerms && TERMS_LOCKED_IN.includes(String(property?.status))) {
+            return {
+                success: false as const,
+                error:
+                    `This property has a purchase in progress (${property?.status}), so its price, ` +
+                    `size, type and lease terms cannot be changed. Descriptive details can still be ` +
+                    `edited, or resolve the purchase first.`,
+                data: null,
+                meta: null,
+            };
+        }
+
         if (updates.price !== undefined) updateData.price = updates.price;
         if (updates.size !== undefined) updateData.size = updates.size;
         if (updates.type) updateData.type = updates.type;
@@ -454,11 +516,66 @@ async function _uploadPropertyDocumentsAction(
         const currentDocs = property?.documents || {};
         const newDocs = { ...currentDocs, ...documents };
 
-        await propertyRef.update({ 
+        await propertyRef.update({
             documents: newDocs,
             updatedAt: FieldValue.serverTimestamp(),
-            verificationStatus: "pending_review" // Reset verification status if new docs added
         });
+
+        /**
+         * Re-entering the review queue, which the comment here claimed to do and
+         * the code did not.
+         *
+         * It wrote `verificationStatus: "pending_review"` and called that
+         * "Reset verification status if new docs added". Two things were wrong
+         * with it:
+         *
+         *   1. "pending_review" is a value nothing reads. The review queues
+         *      match "pending" (admin/_land.ts, before it moved to `status`) or
+         *      derive their state from `status` (_fna_verifications.ts). So the
+         *      reset resolved to nothing anywhere.
+         *
+         *   2. It never touched `status`, which is what the queues actually
+         *      select on. This action exists for an owner whose listing was
+         *      REJECTED for missing documents — the whole reason to upload them —
+         *      and after uploading, the listing stayed `rejected`. It never came
+         *      back to an admin, and the owner had no way to make it. That is a
+         *      listing permanently stuck one action away from approval.
+         *
+         * Only `rejected` and `draft` are resubmitted. A listing that is already
+         * live must not be pulled off the market because its owner attached
+         * another document, and one with money against it is not this action's to
+         * move.
+         */
+        const RESUBMITTABLE_FROM = ["rejected", "draft"];
+
+        if (RESUBMITTABLE_FROM.includes(String(property?.status))) {
+            const resubmitted = await claimStatusTransitionFromAny({
+                collection: COLLECTIONS.LAND_LISTINGS,
+                id: propertyId,
+                fromAny: RESUBMITTABLE_FROM,
+                to: "pending_verification",
+                patch: {
+                    verificationStatus: AWAITING_VERIFICATION_STATUS,
+                    verified: false,
+                    // The reason is cleared because it has been addressed. The
+                    // admin audit log holds the history.
+                    rejectionReason: null,
+                    resubmittedAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp(),
+                },
+                recordPreviousAs: "statusBeforeResubmission",
+            });
+
+            // A refusal here is not an error for the caller: the documents were
+            // saved, which is what they asked for. It means the listing moved on
+            // between the read and the write.
+            if (!resubmitted.claimed) {
+                logger.warn(
+                    `[uploadPropertyDocuments] Documents saved for ${propertyId} but ` +
+                    `resubmission skipped: status is '${resubmitted.status}'.`
+                );
+            }
+        }
 
         return { error: null, success: true as const, data: null };
     } catch (error: any) { 

@@ -82,7 +82,11 @@ export const POLICY_CONCEPTS: PolicyConcept[] = [
     },
     {
         concept: "maximum loan amount / multiplier",
-        namePattern: /^max_?loan(_?amount|_?multiplier)?$/i,
+        // `available_?credit` and `credit_?limit` are here because
+        // lib/cooperative-utils.ts held the multiplier twice under
+        // `availableCredit` — the same rule ("how much may this member borrow
+        // against their savings") under a name the pattern did not cover.
+        namePattern: /^(max_?loan(_?amount|_?multiplier)?|available_?credit|credit_?limit|borrowing_?power)$/i,
         canonical: "getMaxLoanAmount / COOPERATIVE_TIERS.Member.maxLoanMultiplier from @/lib/cooperative-tiers",
         // loan-terms.ts owns MIN_LOAN_AMOUNT / MAX_LOAN_AMOUNT, which are the
         // absolute naira bounds a business loan may be written for — a
@@ -147,17 +151,82 @@ function sourceFiles(): string[] {
 }
 
 /**
- * A numeric literal, including a negated one. Anything else — an identifier, a
- * property access, a call, an expression — is a derived value and is fine.
+ * A numeric literal, including a negated one, INCLUDING ONE BURIED IN
+ * ARITHMETIC.
+ *
+ * THE HOLE THIS CLOSES
+ * --------------------
+ * The original rule was "a bare numeric literal assigned to a policy-named
+ * variable", and the comment above it said an expression "is a derived value
+ * and is fine". That is true when the expression derives from the constant:
+ *
+ *     const maxLoanAmount = getMaxLoanAmount(savings);          // fine
+ *     const maxLoanAmount = savings * TIERS[t].maxLoanMultiplier; // fine
+ *
+ * It is not true when the expression contains the policy number itself:
+ *
+ *     const availableCredit = Math.max(0, savingsBalance * 0.5 - loanBalance);
+ *
+ * That is a copy of maxLoanMultiplier wearing an arithmetic disguise, and
+ * lib/cooperative-utils.ts held two of them — a fourth copy of the very rule
+ * this scanner was written to stop, sitting in its blind spot the whole time.
+ *
+ * So: an initializer is searched for numeric literals. An expression built
+ * ENTIRELY from identifiers, property accesses and calls still passes, because
+ * it contains no literal to find.
  */
+/**
+ * `0` and `1` are never a policy number here.
+ *
+ * Every rule in POLICY_CONCEPTS is a balance, a fee, a multiplier or a rate —
+ * 5000, 10000, 0.5, 14, 5. Zero and one are identity and empty values:
+ * `availableCredit: 0` in a not-a-member branch, `Math.max(0, ...)`, `x * 1`.
+ * Flagging them is noise, and this scanner's value rests on having none.
+ */
+const NEVER_A_POLICY_VALUE = new Set(["0", "1"]);
+
+/**
+ * Is this a Zod schema, whose numbers are validation BOUNDS rather than values?
+ *
+ * `interestRate: z.number().min(0).max(100, "must be 0-100%")` says a percentage
+ * cannot exceed one hundred. It is not a copy of the interest rate, and the
+ * first version of the widened scan flagged it.
+ */
+function isValidationBound(node: ts.Node): boolean {
+    let cursor: ts.Node = node;
+    while (
+        ts.isCallExpression(cursor) ||
+        ts.isPropertyAccessExpression(cursor)
+    ) {
+        cursor = ts.isCallExpression(cursor) ? cursor.expression : cursor.expression;
+    }
+    return ts.isIdentifier(cursor) && cursor.text === "z";
+}
+
 function numericLiteralText(init: ts.Node | undefined): string | null {
     if (!init) return null;
-    if (ts.isNumericLiteral(init)) return init.text;
+    if (isValidationBound(init)) return null;
+
+    if (ts.isNumericLiteral(init)) {
+        return NEVER_A_POLICY_VALUE.has(init.text) ? null : init.text;
+    }
     if (ts.isPrefixUnaryExpression(init) && ts.isNumericLiteral(init.operand)) {
         const sign = init.operator === ts.SyntaxKind.MinusToken ? "-" : "";
         return `${sign}${init.operand.text}`;
     }
-    return null;
+
+    // A literal anywhere inside the expression.
+    let found: string | null = null;
+    const search = (node: ts.Node) => {
+        if (found !== null) return;
+        if (ts.isNumericLiteral(node) && !NEVER_A_POLICY_VALUE.has(node.text)) {
+            found = node.text;
+            return;
+        }
+        ts.forEachChild(node, search);
+    };
+    search(init);
+    return found;
 }
 
 /**

@@ -8,12 +8,24 @@ import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
-import { serializeValue } from "@/lib/firestore-serialize";
+import { serializeValue, toMillis } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { AcademyApplicationInputSchema, AcademyApplicationInput } from "@/lib/validations/academy";
+import { normaliseAcademyPlan } from "@/lib/academy-plan";
+import { normalisePhone } from "@/lib/phone";
+import { isDecidedAgainst } from "@/lib/registration-progress";
 import type { AcademyApplicationData } from "@/lib/types/academy-actions";
 
 const ACADEMY_REGISTRATION_FEE = 0;
+
+/**
+ * How many rows sharing one identity the dedup guard examines.
+ *
+ * The check used `.limit(1)`, so whichever row the database returned first
+ * decided the answer. With one of the caller's own rows and one belonging to
+ * somebody else, the outcome depended on row order.
+ */
+const DUPLICATE_SCAN_LIMIT = 20;
 
  // Registration is now free, users pay only for tiers
 
@@ -32,7 +44,9 @@ async function _submitAcademyApplicationAction(
         }
 
         const phone = applicationData.personalInfo.phone;
-        const email = applicationData.personalInfo.email;
+        // Lowercased and trimmed, because that is the form every other reader
+        // looks for. See the dedup guard below.
+        const normalisedEmail = String(applicationData.personalInfo.email ?? "").trim().toLowerCase() || null;
         const userRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
 
         let finalApplicationId: string = "";
@@ -58,22 +72,106 @@ async function _submitAcademyApplicationAction(
             const existingPaymentStatus = userData?.serviceRegistrations?.academy?.paymentStatus || "pending";
             const existingPaymentAmount = userData?.serviceRegistrations?.academy?.paymentAmount || 0;
 
+            // The tier the learner actually bought — not the literal "registration".
+            //
+            // This row used to be written with `plan: "registration"` unconditionally.
+            // The application form pays FIRST: step 5 only renders the Submit button
+            // once paymentStatus is "paid", so by the time this runs the learner has
+            // already been charged for foundation, standard or elite. And because no
+            // application document existed at payment time, both fulfilment paths
+            // skipped their `if (appDoc)` update — so nothing ever corrected it.
+            //
+            // The result was that the admin applications screen, its plan badge and
+            // its CSV export said "Registration" for EVERY learner, including
+            // everyone who paid the ₦270,000 elite fee. The amount column was right
+            // beside it and disagreed.
+            //
+            // null, not a placeholder, when there is genuinely no tier: registration
+            // itself is free (ACADEMY_REGISTRATION_FEE above), so "applied without
+            // buying a tier" is a real state and deserves an honest absence rather
+            // than a word that reads like a product.
+            const existingPlan = normaliseAcademyPlan(
+                userData?.serviceRegistrations?.academy?.plan
+            );
+
             // 🔒 DEDUP GUARD: Collection-level phone and email check within transaction
+            //
+            // WHAT WAS WRONG
+            // --------------
+            // Both halves refused on ANY match, including the caller's own row.
+            //
+            // _rejectAcademyApplicationAction sets the application to "rejected"
+            // and emails the applicant a list headed "What You Can Do" whose last
+            // item is "Re-apply after making necessary improvements". Neither of
+            // the blocks above stops a rejected applicant — line 52 only blocks
+            // pending/under_review, line 55 only blocks approved — so they reach
+            // here, their own rejected row matches on phone, and they are told
+            // "An Academy application with this phone number already exists."
+            // The platform invited them to reapply and then made it impossible,
+            // permanently, with a message that reads like someone else took
+            // their number.
+            //
+            // The rule below is the one WAVE already uses
+            // (_wv_applications.ts): another account's application is always a
+            // conflict, and the caller's own is a conflict only while it is
+            // still live. `rejected` and `revision_required` are finished, so
+            // they do not block a fresh application.
+            //
+            // AND THE MATCHES WERE LITERAL
+            // ----------------------------
+            // The form stores what the applicant typed. Three separate lookups —
+            // checkAcademyStatusAction, checkAcademyPaymentStatusAction and
+            // module-access-check Layer 2.7, which GRANTS academy access — query
+            // `personalInfo.email == userData.email.toLowerCase()`, and user
+            // emails are lowercased at registration. So an applicant who typed a
+            // capital letter was invisible to all three, and could also submit a
+            // second application by varying the case. The email is normalised
+            // before it is stored and before it is queried; the phone is matched
+            // in both the typed and the E.164 form, since rows already exist in
+            // each.
             const collectionsContext = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS);
-            if (phone) {
-                const phoneQuery = collectionsContext.where("personalInfo.phone", "==", phone).limit(1);
-                const phoneSnap = await t.get(phoneQuery);
-                if (!phoneSnap.empty) {
-                    throw new Error("An Academy application with this phone number already exists.");
+
+            /**
+             * Refuses a live application, whoever owns it — and refuses another
+             * account's application whatever its status.
+             */
+            const conflict = (snap: any, field: string): string | null => {
+                if (!snap || snap.empty) return null;
+
+                // A foreign owner wins whichever order the rows arrive in, so the
+                // whole set is scanned before any of the caller's own rows can
+                // clear the check.
+                for (const doc of snap.docs) {
+                    if (doc.data()?.userId && doc.data().userId !== session.user.id) {
+                        return `An Academy application with this ${field} already exists under a different account.`;
+                    }
                 }
+
+                for (const doc of snap.docs) {
+                    const status = doc.data()?.status;
+                    if (status !== "rejected" && status !== "revision_required") {
+                        return `Your Academy application using this ${field} is currently ${status || "open"}.`;
+                    }
+                }
+
+                return null;
+            };
+
+            if (phone) {
+                const phoneForms = [...new Set([phone, normalisePhone(phone)].filter(Boolean))] as string[];
+                const phoneSnap = await t.get(
+                    collectionsContext.where("personalInfo.phone", "in", phoneForms).limit(DUPLICATE_SCAN_LIMIT)
+                );
+                const message = conflict(phoneSnap, "phone number");
+                if (message) throw new Error(message);
             }
 
-            if (email) {
-                const emailQuery = collectionsContext.where("personalInfo.email", "==", email).limit(1);
-                const emailSnap = await t.get(emailQuery);
-                if (!emailSnap.empty) {
-                    throw new Error("An Academy application with this email already exists.");
-                }
+            if (normalisedEmail) {
+                const emailSnap = await t.get(
+                    collectionsContext.where("personalInfo.email", "==", normalisedEmail).limit(DUPLICATE_SCAN_LIMIT)
+                );
+                const message = conflict(emailSnap, "email address");
+                if (message) throw new Error(message);
             }
 
             // Generate unique application ID
@@ -81,17 +179,49 @@ async function _submitAcademyApplicationAction(
             finalApplicationId = applicationId;
             const appRef = collectionsContext.doc(applicationId);
 
-            isPaid = ["completed", "paid", "successful"].includes(existingPaymentStatus);
+            // A REAPPLICATION AFTER A REJECTION WENT STRAIGHT PAST THE ADMIN.
+            //
+            // `isPaid` is the auto-approval switch: a paid applicant's
+            // application is written `status: "approved"`, `reviewedBy:
+            // "system_auto_approval"`, with `academy_participant` granted. That
+            // is the intended model for a first application — paying the
+            // registration fee is what admits a learner, and no admin need
+            // review it.
+            //
+            // But the registration fee is paid ONCE, and the duplicate guard
+            // above deliberately lets a rejected applicant reapply — the
+            // rejection email invites exactly that ("Re-apply after making
+            // necessary improvements"). So the applicant an admin had just
+            // rejected submitted a new form and was auto-approved by their old
+            // payment, in the same request, with the role back. The admin who
+            // rejected them had no way to make it stick.
+            //
+            // A reapplication that follows a decision goes to the admin instead.
+            // Nothing is lost: the payment is still recorded and the admin can
+            // approve, which is the outcome auto-approval would have produced —
+            // it just cannot happen without them. Fifth instance of the shape
+            // fixed in #207, #225, #227 and #229.
+            const previouslyDecidedAgainst = isDecidedAgainst(existingStatus);
+
+            isPaid = !previouslyDecidedAgainst
+                && ["completed", "paid", "successful"].includes(existingPaymentStatus);
 
             // Save to Firestore
             t.set(appRef, {
                 ...applicationData,
+                // Overwrites the typed casing from the spread above. The three
+                // recovery lookups all query the lowercased form, and one of
+                // them grants academy module access.
+                personalInfo: {
+                    ...applicationData.personalInfo,
+                    email: normalisedEmail,
+                },
                 userId: session.user.id,
                 applicationId,
                 status: isPaid ? "approved" : "pending",
                 paymentStatus: existingPaymentStatus,
                 paymentAmount: existingPaymentAmount,
-                plan: "registration",
+                plan: existingPlan,
                 submittedAt: FieldValue.serverTimestamp(),
                 reviewedAt: isPaid ? FieldValue.serverTimestamp() : null,
                 reviewedBy: isPaid ? "system_auto_approval" : null,
@@ -196,8 +326,8 @@ async function _getAcademyApplicationAction(): Promise<ActionResponse<any>> {
 
             if (!snap.empty) {
                 const sortedDocs = snap.docs.sort((a: any, b: any) => {
-                    const aTime = a.data().submittedAt?.toMillis?.() || a.data().submittedAt?.seconds * 1000 || a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
-                    const bTime = b.data().submittedAt?.toMillis?.() || b.data().submittedAt?.seconds * 1000 || b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+                    const aTime = a.data().submittedAt?.toMillis?.() || a.data().submittedAt?.seconds * 1000 || toMillis(a.data().createdAt);
+                    const bTime = b.data().submittedAt?.toMillis?.() || b.data().submittedAt?.seconds * 1000 || toMillis(b.data().createdAt);
                     return bTime - aTime;
                 });
                 appDoc = sortedDocs[0];
@@ -320,78 +450,54 @@ export const requestAcademyRevisionAction = withFlexibleSafeAction("requestAcade
 
 
 /**
- * Admin: Approve an academy application — sets status + sends approval email
+ * Admin: Approve an academy application.
+ *
+ * TWO APPROVALS, DOING DIFFERENT THINGS
+ * -------------------------------------
+ * There are two functions with this name. academy/index.ts says so, and calls
+ * the one in _ac_admin_review.ts "canonical" while excluding this one from the
+ * barrel as "a legacy duplicate".
+ *
+ * Excluding it from the barrel does nothing. This file is "use server", so every
+ * export of it is a reachable HTTP endpoint whether the barrel names it or not
+ * — the same reasoning that applies to autoEnrollPaidUser in _ac_enrollment.ts.
+ * So the platform had two live approval endpoints that did not agree:
+ *
+ *   GUARD          canonical: hasAdminPermission(users:update) OR academy_admin
+ *                  this one:  the literal roles 'admin' or 'super_admin'
+ *                  — an academy_admin could approve through one and not the
+ *                    other.
+ *
+ *   FIELD NAMES    canonical writes reviewedAt / reviewedBy
+ *                  this one wrote approvedAt / approvedBy
+ *                  — so which admin approved an application, and when, was
+ *                    recorded under whichever pair of names the caller happened
+ *                    to hit, and a screen reading one pair showed nothing for
+ *                    applications approved through the other.
+ *
+ *   isVerified     canonical sets it; this one did not.
+ *   CACHE          canonical invalidates the academy service cache; this one did
+ *                  not, so the approval did not take effect until it expired.
+ *   AUDIT LOG      canonical writes one; this one wrote nothing at all.
+ *
+ * Rather than delete a reachable endpoint, it delegates. One implementation, so
+ * the two cannot drift again, and any caller still pointing here gets the
+ * behaviour the platform considers correct.
  */
 async function _approveAcademyApplicationAction(
     applicationId: string
 ): Promise<ActionResponse<null>> {
-    try {
-        const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: 'Unauthorized', data: null };
-        const { session } = sessionResult;
-        if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
-            return { success: false as const, error: 'Admin access required', data: null };
-        }
-
-        const appRef = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId);
-        let userId: string | undefined;
-        let appData: any;
-
-        // Atomic update using a transaction
-        await db.runTransaction(async (transaction) => {
-            const appDoc = await transaction.get(appRef);
-            if (!appDoc.exists) throw new Error('Application not found');
-
-            appData = appDoc.data();
-            userId = appData?.userId;
-
-            // 1. Update application status
-            transaction.update(appRef, {
-                status: 'approved',
-                approvedAt: FieldValue.serverTimestamp(),
-                approvedBy: session.user.id,
-                updatedAt: FieldValue.serverTimestamp(),
-            });
-
-            // 2. Update user document
-            if (userId) {
-                const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
-                transaction.update(userRef, {
-                    'serviceRegistrations.academy.status': 'approved',
-                    roles: FieldValue.arrayUnion('academy_participant'),
-                    updatedAt: FieldValue.serverTimestamp(),
-                });
-            }
-        });
-
-        if (userId) {
-            try {
-                const { Resend } = await import('resend');
-                const resend = new Resend(process.env.RESEND_API_KEY);
-                const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-                const email = userDoc.data()?.email;
-            const name = appData?.personalInfo?.firstName ? `${appData.personalInfo.firstName} ${appData.personalInfo.lastName || ''}`.trim() : appData?.personalInfo?.fullName || 'Learner';
-            if (email) {
-                const { data, error } = await resend.emails.send({
-                    from: process.env.EMAIL_FROM || 'Easy Sales Export Academy <info@easysalesexport.com>',
-                    to: email,
-                    subject: 'Congratulations! Your Academy Application is Approved',
-                    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;"><div style="background:linear-gradient(135deg,#2563eb,#4f46e5);padding:32px;border-radius:12px;text-align:center;margin-bottom:24px;"><h1 style="color:white;margin:0;">You are Accepted!</h1></div><p>Dear <strong>${name}</strong>,</p><p>Your <strong>Easy Sales Export Academy</strong> application has been <strong>approved</strong>!</p><div style="text-align:center;margin:24px 0;"><a href="${process.env.NEXTAUTH_URL || 'https://easysalesexport.com'}/academy/dashboard" style="background:#2563eb;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;">Go to Academy Dashboard</a></div></div>`,
-                });
-                if (error) {
-                    logger.error("Resend API Error (Academy approval email):", error);
-                }
-            }
-            } catch (emailError) {
-                logger.error('Academy approval email failed (non-blocking):', emailError);
-            }
-        }
-
-        return { success: true, error: null, data: null };
-    } catch (error) {
-        logger.error('approveAcademyApplicationAction error:', error);
-        return { success: false as const, error: 'Failed to approve application' , data: null };
+    // Fails fast for an anonymous caller; the AUTHORISATION decision — which
+    // roles may approve — belongs to the canonical implementation alone, so
+    // there is still only one answer to it. This is a strictly weaker
+    // precondition, not a second rule that could disagree with the first.
+    const sessionResult = await requireSession();
+    if (!sessionResult.session?.user?.id) {
+        return { success: false as const, error: 'Unauthorized', data: null };
     }
+
+    const { approveAcademyApplicationAction: canonical } = await import("./_ac_admin_review");
+    return canonical(applicationId) as Promise<ActionResponse<null>>;
 }
 
 
@@ -436,8 +542,8 @@ async function _resubmitAcademyApplicationAction(
             const sortedDocs = snap.docs.sort((a, b) => {
                 const aData = a.data();
                 const bData = b.data();
-                const aTime = aData.createdAt?.toMillis?.() || aData.createdAt?.seconds * 1000 || 0;
-                const bTime = bData.createdAt?.toMillis?.() || bData.createdAt?.seconds * 1000 || 0;
+                const aTime = toMillis(aData.createdAt);
+                const bTime = toMillis(bData.createdAt);
                 return bTime - aTime;
             });
 

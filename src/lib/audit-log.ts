@@ -93,11 +93,20 @@ export type AuditAction =
     | 'seller_badge_revoke'
     | 'approve_marketplace_user'
     | 'reject_marketplace_user'
+    // Product moderation. There was no admin path to a product at all before
+    // reviewProductAction, so there was nothing to audit and no action name.
+    | 'product_approved'
+    | 'product_rejected'
+    | 'product_suspended'
     // WAVE Actions
     | 'wave_enrollment'
     | 'wave_training_created'
     | 'wave_training_updated'
     | 'wave_training_deleted'
+    // A member taking a place on a session. Was filed as 'user_update', which
+    // is the catch-all for an unclassified write — so the one question this row
+    // exists to answer, who took which seat, could not be asked of it.
+    | 'training_registered'
     | 'wave_application_approved'
     | 'wave_application_rejected'
     | 'wave_approve'
@@ -111,6 +120,8 @@ export type AuditAction =
     | 'course_created'
     | 'course_updated'
     | 'course_deleted'
+    // Already here, and _ac_enrollment filed its enrolments as 'user_update'
+    // anyway — the name existed and the writer did not use it.
     | 'course_enrolled'
     | 'course_completed'
     | 'certificate_issued'
@@ -153,7 +164,33 @@ export type AuditAction =
     | 'FETCH_COOPERATIVE_MEMBERS'
     | 'FETCH_COOPERATIVE_TRANSACTIONS'
     | 'FETCH_WAVE_APPLICATIONS'
-    | 'telemetry_broadcast_sent';
+    | 'telemetry_broadcast_sent'
+    // ── Added when the unaudited-write baseline was cleared ──────────────
+    // Twenty-nine permission-gated admin writes recorded nothing. Most were
+    // already named by this union — 'content:approve', 'export_create',
+    // 'farm_nation_reject', 'quiz_created' — which is what showed the
+    // convention was ninety-percent applied rather than unbuilt. These are the
+    // names it was missing.
+    | 'broadcast_sent'
+    | 'cooperative_member_status_update'
+    | 'cooperative_revision_request'
+    | 'data_recovery_run'
+    | 'escrow_status_update'
+    | 'export_catalog_delete'
+    | 'export_product_delete'
+    | 'export_product_review'
+    | 'farm_nation_approve'
+    | 'guarantor_verified'
+    | 'inspector_dispatched'
+    | 'kyc_qoreid_verify'
+    | 'password_resets_purged'
+    | 'paystack_sync_run'
+    | 'recovery_emails_sent'
+    | 'review_moderate'
+    | 'village_market_event_created'
+    | 'village_market_event_status_update'
+    | 'village_market_merchant_added'
+    | 'wave_shipment_status_update';
 
 export type AuditSeverity = 'info' | 'warning' | 'critical';
 
@@ -292,13 +329,30 @@ export async function purgeOldAuditLogs(): Promise<number> {
 
         const snapshot = await q.get();
 
+        /**
+         * Deleted in chunks, not in one batch.
+         *
+         * This built a single batch over every expired row and committed it
+         * once. The audit log grows with every admin action on the platform and
+         * this is a scheduled job that may not have run for a while, so "every
+         * expired row" can be the whole table. One commit of that size is the
+         * one most likely to time out — and because the count was returned from
+         * a commit that either wholly succeeds or wholly fails, a failure purged
+         * nothing while the caller saw an exception with no partial progress.
+         *
+         * Chunked, each commit stands on its own: a failure part-way through
+         * leaves the earlier chunks deleted and the job resumes from there on
+         * its next run.
+         */
+        const CHUNK = 400;
         let deletedCount = 0;
-        const batch = db.batch();
-        for (const doc of snapshot.docs) {
-            batch.delete(doc.ref);
-            deletedCount++;
+        for (let i = 0; i < snapshot.docs.length; i += CHUNK) {
+            const batch = db.batch();
+            const chunk = snapshot.docs.slice(i, i + CHUNK);
+            for (const doc of chunk) batch.delete(doc.ref);
+            await batch.commit();
+            deletedCount += chunk.length;
         }
-        await batch.commit();
 
         logger.info(`Purged ${deletedCount} audit logs older than ${retentionDays} days`, { deletedCount, retentionDays });
         return deletedCount;
@@ -397,7 +451,30 @@ export async function logAuditAction(
         } else {
             // Admin signature (from src/lib/admin-audit-log.ts)
             const action = actionOrEntry as AuditAction;
-            const userId = metadata?.adminId || metadata?.userId || 'system';
+            /**
+             * `'system'` is a real answer, not a default.
+             *
+             * This fell through to it silently whenever a caller forgot to put
+             * adminId or userId in the metadata — so an action a person took was
+             * filed against nobody, and the row looked exactly like one a cron
+             * job wrote. Same family as #129 and #159, where an audit row named
+             * the wrong actor: the one question the log exists to answer is who
+             * did this.
+             *
+             * Still recorded as 'system' rather than refused, because a row with
+             * an unknown actor is worth more than no row at all — but it says so
+             * in the log and marks the row, so the gap is findable instead of
+             * indistinguishable from a genuine system action.
+             */
+            const attributed = metadata?.adminId || metadata?.userId;
+            if (!attributed) {
+                logger.warn(
+                    `[audit] ${action} on ${targetType ?? '?'}:${targetId ?? '?'} has no adminId or ` +
+                    `userId in its metadata and is being filed against "system". If a person did this, ` +
+                    `the caller needs to pass their id.`
+                );
+            }
+            const userId = attributed || 'system';
 
             await createAuditLog({
                 action,
@@ -432,7 +509,74 @@ export function getSecurityContextFromHeaders(headers?: Headers): {
     };
 }
 
-// Backward compatibility exports for audit-log-admin.ts / admin-audit-log.ts
-export const createAdminAuditLog = createAuditLog;
+/**
+ * Record an admin action WITHOUT ever failing the operation it records.
+ *
+ * createAuditLog rethrows. Every existing call site awaits it inside the same
+ * try block as the work itself, so a logging failure — a transient database
+ * error, a full disk — aborts an operation that has already happened. On a
+ * money path that is the worst possible outcome: the withdrawal was paid, the
+ * loan disbursed, and the caller is told it failed.
+ *
+ * An audit row is a record OF the operation, not a part of it. When one cannot
+ * be written the operation still succeeded and the right response is a loud log
+ * and a completed request — not a rollback of something already irreversible.
+ *
+ * Use this at new call sites.
+ *
+ * THE 116 EXISTING CALL SITES ARE COVERED NOW TOO — see createAdminAuditLog at
+ * the foot of this file. The note that used to sit here said they were "left as
+ * they are: changing them is a behaviour change to working paths". That was the
+ * cautious call at the time and it was the wrong way round, because the
+ * behaviour being preserved is the bad one. Executing the withdrawal path made
+ * it concrete:
+ *
+ *   admin/_withdrawals.ts _processWithdrawalAction fires the Paystack transfer,
+ *   marks the withdrawal `completed`, writes the global ledger row, notifies the
+ *   member that their withdrawal was approved — and THEN calls
+ *   createAdminAuditLog. A throw there lands in the function's outer catch,
+ *   which returns { success: false, error: "Failed to process withdrawal" }.
+ *
+ * The money has gone, the member has been told it is on its way, the ledger says
+ * completed, and the admin's screen says the payout failed. The one record that
+ * would tell them otherwise is precisely the one that did not get written. (They
+ * cannot double-pay by retrying — claimStatusTransition refuses a second claim —
+ * but they are lied to about an irreversible transfer.)
+ *
+ * Verified before changing it: no test asserts the throw, and no catch block
+ * after an audit call performs any compensating action. There is nothing a
+ * caller could usefully do about a failed audit write.
+ */
+export async function recordAdminAction(
+    entry: Omit<AuditLogEntry, 'timestamp' | 'id' | 'severity'>,
+): Promise<void> {
+    try {
+        await createAuditLog(entry);
+    } catch (error) {
+        logger.error(
+            `[audit] Could not record ${entry.action} on ${entry.targetType ?? "?"}:${entry.targetId ?? "?"} `
+            + `by ${entry.userId} — THE OPERATION ITSELF SUCCEEDED and is not recorded.`,
+            error instanceof Error ? error : undefined,
+        );
+    }
+}
+
+/**
+ * Backward compatibility export for audit-log-admin.ts / admin-audit-log.ts.
+ *
+ * Aliased to recordAdminAction, NOT to createAuditLog. See the long note on
+ * recordAdminAction: this alias is what the 116 existing admin call sites use,
+ * every one of them awaits it inside the same try block as the work itself, and
+ * createAuditLog rethrows — so a logging failure reported a completed,
+ * irreversible operation as a failure.
+ *
+ * createAuditLog is still exported and still throws, for any caller that
+ * genuinely wants to know. None currently does.
+ *
+ * The return type changes from Promise<string> to Promise<void>: the document id
+ * is no longer available, because a call that failed has no id to give. Nothing
+ * used it — checked across all 116 sites before making the change.
+ */
+export const createAdminAuditLog = recordAdminAction;
 export { logFinancialAction as logAdminFinancialAction };
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { paystackBaseUrl } from "@/lib/paystack-host";
 
 declare global {
     interface Window {
@@ -100,7 +101,7 @@ export function generateReference(prefix: string = "PAY"): string {
 export async function verifyPaystackPayment(reference: string) {
     try {
         const response = await fetch(
-            `https://api.paystack.co/transaction/verify/${reference}`,
+            `${paystackBaseUrl()}/transaction/verify/${reference}`,
             {
                 method: "GET",
                 headers: {

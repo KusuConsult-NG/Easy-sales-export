@@ -5,8 +5,9 @@ import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { csvDocument } from "@/lib/csv-safe";
+import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
 
 export async function GET(request: NextRequest) {
     try {
@@ -15,7 +16,14 @@ export async function GET(request: NextRequest) {
             return new NextResponse("Unauthorized", { status: 401 });
         }
 
-        if (!isAdmin(session.user.roles)) {
+        // A CSV of every cooperative member — name, email, phone, state.
+        //
+        // isAdmin() is true for EVERY admin role, so support, moderator
+        // and every module admin could download this — an academy admin
+        // could take the contact details of every member on the platform.
+        // canAccessAdminRoute already silos these people by module at the
+        // route layer; this aligns the data layer with that.
+        if (!hasAdminPermission(session.user.roles, "users:export")) {
             return new NextResponse("Admin access required", { status: 403 });
         }
 
@@ -28,16 +36,23 @@ export async function GET(request: NextRequest) {
 
         let query: import("@/lib/supabase-db").SupabaseQuery = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
 
+        // Both boundaries from the shared helpers. `from` was `new Date(fromDate)`
+        // — UTC midnight — while `to` used setHours, which is LOCAL end of day. The
+        // two ends of one range were computed in different timezones, so the range
+        // was the wrong length by the process's UTC offset.
         if (fromDate) {
-            query = query.where("createdAt", ">=", new Date(fromDate));
+            query = query.where("createdAt", ">=", dateRangeStart(fromDate));
         }
         if (toDate) {
-            const tDate = new Date(toDate);
-            tDate.setHours(23, 59, 59, 999);
-            query = query.where("createdAt", "<=", tDate);
+            query = query.where("createdAt", "<=", dateRangeEnd(toDate));
         }
 
-        const snapshot = await query.get();
+        // .all() — this is an EXPORT, so a silent cap at DEFAULT_QUERY_LIMIT
+        // (5,000) hands the admin a file that looks complete and is not.
+        const snapshot = await query.all().get();
+        if (snapshot.truncated) {
+            logger.error("[export/cooperative-members] cooperative members sweep hit the unbounded ceiling — the export below is incomplete.");
+        }
         // Fallback user mapping to get names and emails for members missing them
         const userIds = [...new Set(snapshot.docs.map(doc => doc.data().userId || doc.id))];
         const userFallbackMap = new Map<string, any>();

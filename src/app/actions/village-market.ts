@@ -23,7 +23,9 @@ import type {
     ExternalMerchant,
 } from "@/lib/types/marketplace";
 import { notifyVillageMarketCreated } from "@/lib/marketplace-notifications";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
+import { hydrateSellerTrust } from "@/lib/seller-trust";
+import { recordAdminAction } from "@/lib/audit-log";
 
 // ---------------------------------------------------------------------------
 // Admin: Create a Village Market Event
@@ -49,7 +51,7 @@ export async function createVillageMarketEventAction(data: {
         const userId = sessionResult.session.user.id;
 
         // Admins only
-        if (!isAdmin(sessionResult.session.user.roles)) {
+        if (!hasAdminPermission(sessionResult.session.user.roles, "marketplace:manage_village_market")) {
             return { success: false as const, error: "Unauthorized: admin role required" , data: null };
         }
 
@@ -92,6 +94,13 @@ export async function createVillageMarketEventAction(data: {
             startTime,
         });
 
+        await recordAdminAction({
+            action: 'village_market_event_created',
+            userId: userId,
+            targetId: eventDoc.id,
+            targetType: 'village_market_event',
+            metadata: { title: data.title, state: data.state },
+        });
         return { error: null, success: true as const, eventId: eventDoc.id , data: null };
     } catch (err: any) {
         logger.error("createVillageMarketEventAction error:", err);
@@ -317,7 +326,7 @@ export async function addExternalMerchantAction(
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" , data: null };
         const userId = sessionResult.session.user.id;
 
-        if (!isAdmin(sessionResult.session.user.roles)) {
+        if (!hasAdminPermission(sessionResult.session.user.roles, "marketplace:manage_village_market")) {
             return { success: false as const, error: "Unauthorized: admin role required" , data: null };
         }
 
@@ -329,6 +338,13 @@ export async function addExternalMerchantAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
+        await recordAdminAction({
+            action: 'village_market_merchant_added',
+            userId: userId,
+            targetId: eventId,
+            targetType: 'village_market_event',
+            metadata: { merchantId, displayName: merchant.displayName },
+        });
         return { error: null, success: true as const, merchantId , data: null };
     } catch (err: any) {
         logger.error("addExternalMerchantAction error:", err);
@@ -352,7 +368,7 @@ export async function updateVillageMarketEventStatusAction(
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" , data: null };
         const userId = sessionResult.session.user.id;
 
-        if (!isAdmin(sessionResult.session.user.roles)) {
+        if (!hasAdminPermission(sessionResult.session.user.roles, "marketplace:manage_village_market")) {
             return { success: false as const, error: "Unauthorized" , data: null };
         }
 
@@ -361,6 +377,13 @@ export async function updateVillageMarketEventStatusAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
+        await recordAdminAction({
+            action: 'village_market_event_status_update',
+            userId: userId,
+            targetId: eventId,
+            targetType: 'village_market_event',
+            metadata: { status },
+        });
         return { error: null, success: true as const , data: null };
     } catch (err: any) {
         logger.error("updateVillageMarketEventStatusAction error:", err);
@@ -410,7 +433,7 @@ export async function getAdminVillageMarketEventsAction(options: {
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" , data: null };
         const userId = sessionResult.session.user.id;
 
-        if (!isAdmin(sessionResult.session.user.roles)) {
+        if (!hasAdminPermission(sessionResult.session.user.roles, "marketplace:manage_village_market")) {
             return { success: false as const, error: "Unauthorized" , data: null };
         }
 
@@ -457,26 +480,19 @@ export async function getActiveFlashSaleProductsAction(): Promise<FlashSaleProdu
 
         const products = serializeDocs(snap.docs) as unknown as FlashSaleProduct[];
         
-        // Fetch seller names to populate sellerName
-        const uniqueSellerIds = Array.from(new Set(products.map(p => p.sellerId).filter(Boolean)));
-        const sellerNames: Record<string, string> = {};
-        
-        if (uniqueSellerIds.length > 0) {
-            const sellerDocs = await Promise.all(
-                uniqueSellerIds.map(id => db.collection(COLLECTIONS.USERS).doc(id).get())
-            );
-            sellerDocs.forEach(doc => {
-                if (doc.exists) {
-                    const data = doc.data();
-                    sellerNames[doc.id] = data?.displayName || data?.businessName || data?.name || "Verified Seller";
-                }
-            });
-        }
-        
-        return products.map(p => ({
-            ...p,
-            sellerName: sellerNames[p.sellerId] || "Verified Seller"
-        }));
+        // Seller name AND badge, one read per unique seller.
+        //
+        // This already batched by unique sellerId — the pattern is unchanged. Two
+        // things are different. The fallback name was "Verified Seller", so a
+        // seller with no name recorded was labelled verified in the name field
+        // itself. And the badge was not resolved at all: the buyer products page
+        // mapped these rows into a Product with `sellerVerified: true` hardcoded,
+        // so every Village Market listing showed the verified shield. Returning
+        // the real value here is what lets that page stop inventing one.
+        return hydrateSellerTrust(products as any[], async (id) => {
+            const snap = await db.collection(COLLECTIONS.USERS).doc(id).get();
+            return snap.exists ? (snap.data() ?? null) : null;
+        });
     } catch (err) {
         logger.error("getActiveFlashSaleProductsAction error:", err);
         return [];

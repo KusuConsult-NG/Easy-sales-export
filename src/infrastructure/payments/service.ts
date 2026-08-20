@@ -5,9 +5,13 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { generateAndSendWhatsAppInvite } from "@/lib/whatsapp-invites";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
-import { ACADEMY_CONFIG } from "@/lib/constants";
 import { normalizeUserDoc } from "@/lib/schema-normalizer";
-import { claimPaymentOnce, incrementWithinCeiling } from "@/lib/wallet-ledger";
+import { claimPaymentOnce, incrementWithinCeiling, CLAIM_TYPE, markFulfilmentFailed } from "@/lib/wallet-ledger";
+import { checkOrderPaymentAmount } from "@/lib/order-payment-amount";
+import { checkAcademyPayment } from "@/lib/academy-plan";
+import { escrowIdFor } from "@/lib/escrow-status";
+import { isDecidedAgainst } from "@/lib/registration-progress";
+import { latestApplication, APPLICATION_SCAN_LIMIT } from "@/lib/latest-application";
 
 /**
  * Handle Marketplace Order Fulfillment
@@ -28,12 +32,38 @@ export async function processMarketplaceOrder(reference: string, amount: number,
     const orderDoc = orderQuery.docs[0];
     const orderData = orderDoc.data();
 
-    // Verify Amount (Security Check)
-    if (Math.abs(amount - orderData.totalAmount) > 1) {
-        logger.warn(`[Paystack Webhook] Amount mismatch for ${reference}. Paid: ${amount}, Expected: ${orderData.totalAmount}`);
-        if (amount < orderData.totalAmount) {
-            throw new Error("Payment amount insufficient");
-        }
+    /**
+     * Verify Amount — through the rule the interactive path also uses.
+     *
+     * This checked only underpayment; _payment_verify.ts refused ANY mismatch and
+     * also re-applied the platform's min/max order bounds. Same payment, two
+     * answers, decided by which path arrived first — and they race by design.
+     *
+     * The overpayment case was the one with no record at all: it logged a warning
+     * and fulfilled at the order amount, leaving the surplus untracked. Export
+     * investments already route an overpayment to `overfunded_review` and keep it
+     * out of revenue; a marketplace order had no equivalent.
+     */
+    const amountVerdict = checkOrderPaymentAmount(amount, orderData.totalAmount);
+
+    if (!amountVerdict.ok) {
+        logger.error(
+            `[Paystack Webhook] Payment ${reference} refused on amount: ${amountVerdict.reason}. ` +
+            `Paid ₦${amount}, order total ₦${orderData.totalAmount}.`
+        );
+        throw new Error(
+            amountVerdict.reason === "underpaid"
+                ? "Payment amount insufficient"
+                : "Order total missing; payment cannot be matched"
+        );
+    }
+
+    if (amountVerdict.overpaidBy > 0) {
+        logger.warn(
+            `[Paystack Webhook] Payment ${reference} OVERPAID by ₦${amountVerdict.overpaidBy} ` +
+            `(paid ₦${amount}, order total ₦${orderData.totalAmount}). Fulfilling the order and ` +
+            `recording the surplus for review — refusing would leave a charged buyer with nothing.`
+        );
     }
 
     // Fetch buyer and seller emails first (outside transaction, to satisfy read-before-write)
@@ -117,8 +147,39 @@ export async function processMarketplaceOrder(reference: string, amount: number,
             paymentVerifiedAt: paymentTimestamp,
             paidAmount: amount,
             updatedAt: FieldValue.serverTimestamp(),
-            paymentMethod: "paystack_webhook"
+            paymentMethod: "paystack_webhook",
+            // The surplus, recorded on the order rather than only in a log line.
+            // It was previously untracked entirely: the warning said the amounts
+            // differed and nothing carried the difference forward, so nobody could
+            // find the money owed back without re-reading Paystack.
+            ...(amountVerdict.overpaidBy > 0
+                ? {
+                    overpaidBy: amountVerdict.overpaidBy,
+                    overpaymentStatus: "pending_review",
+                    overpaymentRecordedAt: paymentTimestamp,
+                }
+                : {}),
         });
+
+        // And a FAILED_PAYMENTS row for the surplus, matching how an overfunded
+        // export investment is routed to review. That collection is what an admin
+        // works from, and platform_revenue_totals() does not count these rows.
+        if (amountVerdict.overpaidBy > 0) {
+            await db.collection(COLLECTIONS.FAILED_PAYMENTS).doc(`${reference}-overpayment`).set({
+                reference,
+                type: "marketplace_order_overpayment",
+                userId: buyerId,
+                orderId: orderData.orderId || orderDoc.id,
+                amount: amountVerdict.overpaidBy,
+                amountPaid: amount,
+                orderTotal: orderData.totalAmount,
+                status: "overfunded_review",
+                gatewayResponse: "Buyer paid more than the order total; order fulfilled, surplus owed back",
+                failedAt: paymentTimestamp,
+            }, { merge: true }).catch((e) => logger.error(
+                `[Paystack Webhook] Could not record the ₦${amountVerdict.overpaidBy} overpayment on ${reference}`, e
+            ));
+        }
 
         // 2. (The processed_payments row is written by claimPaymentOnce above.
         //    Writing it here as well was what made the marker land AFTER the
@@ -160,7 +221,7 @@ export async function processMarketplaceOrder(reference: string, amount: number,
         // would race the rest of fulfilment and their failures would be
         // unobservable.
         for (const [sellerId, totalAmount] of Object.entries(sellerTotals)) {
-            const escrowId = `ESC-${orderData.orderId}-${sellerId.substring(0, 5)}`;
+            const escrowId = escrowIdFor(orderData.orderId, sellerId, Object.keys(sellerTotals));
             const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId);
 
             const platformFee = Math.round(totalAmount * fees.platformFeePercentage);
@@ -336,6 +397,47 @@ export async function reconcilePendingFulfillments() {
 /**
  * Handle Export Investment Fulfillment
  */
+/**
+ * Which export window a payment is for — under either of the two names.
+ *
+ * THE DEFECT
+ * ----------
+ * Three server-side entry points fulfil `type: "export_investment"` and all
+ * three read `metadata.exportId`:
+ *
+ *   api/webhooks/paystack               the live webhook
+ *   api/cron/reconcile-paystack         the nightly heal
+ *   api/admin/finance/paystack-sync     the admin heal
+ *
+ * There are two initiators, and they disagree about the key:
+ *
+ *   initializeInvestmentPaymentAction   writes `windowId`. Called from
+ *   (actions/export-payment.ts)         /export/windows/[id] — the ONLY
+ *                                       investment button in the app.
+ *
+ *   investInExportAction                writes `exportId`. No caller.
+ *   (actions/export/_ex_investments.ts)
+ *
+ * So for every investment anybody has actually made, `metadata.exportId` is
+ * undefined and processExportInvestment threw on its first line. The webhook
+ * never fulfilled one, and neither reconciliation job could heal it — they fail
+ * on the same missing key, which is why the gap was invisible: the job that
+ * exists to report unfulfilled payments could not fulfil these either.
+ *
+ * The investor was left depending entirely on getting back to the callback page
+ * so verifyInvestmentPaymentAction could run. Close the tab, lose signal, or
+ * let the redirect fail, and the money was taken with nothing recorded.
+ *
+ * Reading both names is the fix, in one place so a third caller cannot get it
+ * wrong again. `exportId` is preferred so nothing that works today changes.
+ */
+export function exportWindowIdFromMetadata(
+    metadata: Record<string, unknown> | null | undefined,
+): string | undefined {
+    const id = metadata?.exportId ?? metadata?.windowId;
+    return typeof id === "string" && id.trim() !== "" ? id : undefined;
+}
+
 export async function processExportInvestment(reference: string, amount: number, userId: string, exportId: string, paidAt?: Date) {
     if (!exportId) throw new Error("Missing exportId in metadata");
 
@@ -481,6 +583,72 @@ export async function processExportInvestment(reference: string, amount: number,
         exportId,
         processedAt: paymentTimestamp,
     });
+
+    // The investor-facing record, settled — TWO COLLECTIONS, ONE INVESTMENT.
+    //
+    // This path writes EXPORT_SLOTS. The four export pages an investor actually
+    // looks at — dashboard, portfolio, transactions and investments/[id] — read
+    // EXPORT_INVESTMENTS by `investorId`, plus INVESTOR_PORTFOLIOS for the
+    // headline figures. initializeInvestmentPaymentAction creates that
+    // EXPORT_INVESTMENTS row as `pending_payment` before sending the investor
+    // to Paystack, and only verifyInvestmentPaymentAction ever settled it.
+    //
+    // Which means that once the window-id fix above lets the webhook fulfil
+    // these payments — and the webhook usually wins the race — the window would
+    // be funded, the slot written, and the investor would still be looking at a
+    // pending investment and a portfolio of zero. Fixing the id without this
+    // trades "nothing happens" for "everything happens except what the investor
+    // can see", so the two land together.
+    //
+    // Neither reader is repointed: EXPORT_SLOTS stays exactly as it was.
+    try {
+        const pendingInvestment = await db.collection(COLLECTIONS.EXPORT_INVESTMENTS)
+            .where("paymentReference", "==", reference)
+            .limit(1)
+            .get();
+
+        if (!pendingInvestment.empty) {
+            const investmentDoc = pendingInvestment.docs[0];
+            const investmentData = investmentDoc.data() ?? {};
+
+            await investmentDoc.ref.update({
+                status: "active",
+                paymentStatus: "completed",
+                paymentVerifiedAt: paymentTimestamp,
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+
+            const portfolioRef = db.collection(COLLECTIONS.INVESTOR_PORTFOLIOS).doc(userId);
+            const portfolioSnap = await portfolioRef.get();
+
+            if (portfolioSnap.exists) {
+                await portfolioRef.update({
+                    totalInvested: FieldValue.increment(amount),
+                    totalExpectedReturns: FieldValue.increment(investmentData.expectedReturn || expectedReturn),
+                    activeInvestments: FieldValue.increment(1),
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+            } else {
+                await portfolioRef.set({
+                    investorId: userId,
+                    investorEmail: investmentData.investorEmail ?? null,
+                    totalInvested: amount,
+                    totalExpectedReturns: investmentData.expectedReturn || expectedReturn,
+                    totalReturned: 0,
+                    activeInvestments: 1,
+                    completedInvestments: 0,
+                    createdAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+            }
+        }
+    } catch (settleErr: unknown) {
+        // Non-fatal: the money is applied and the slot exists either way, and a
+        // throw here would leave the claimed row at "pending_fulfilment" for a
+        // payment that WAS fulfilled — the one direction reconcile-fulfilment
+        // cannot tell apart.
+        logger.warn(`[Paystack Fulfillment] Investor record not settled for ${reference} (non-fatal): ${String(settleErr)}`);
+    }
 
     // Unified ledger, written last: a crash part-way leaves an investor with a
     // slot and no ledger row rather than a ledger row and no slot.
@@ -680,26 +848,66 @@ export async function processCooperativeRegistration(reference: string, amount: 
  * Handle Academy Registration Fulfillment
  */
 export async function processAcademyRegistration(reference: string, amount: number, userId: string, plan: string, paidAt?: Date) {
-    const normalisedPlan = (plan || "foundation").toLowerCase();
-
-    let expectedAmount = ACADEMY_CONFIG.plans.foundation.fee;
-    if (normalisedPlan === "standard" || normalisedPlan === "advanced") expectedAmount = ACADEMY_CONFIG.plans.standard.fee;
-    if (normalisedPlan === "elite") expectedAmount = ACADEMY_CONFIG.plans.elite.fee;
-
-    const planToStore = (normalisedPlan === "advanced") ? "standard" : normalisedPlan;
-
-    if (amount < expectedAmount - 1) {
-        logger.error(`[Paystack Webhook] Academy Payment Underpaid. Expected ${expectedAmount}, Paid ${amount}`);
+    // The shared rule, so the two fulfilment paths cannot drift again.
+    //
+    // This logic was correct and _verifyAcademyPaymentAction had none at all, so
+    // which path reached a payment first decided whether an underpaid
+    // registration was accepted — and they race by design. The fee table, the
+    // "advanced" → "standard" mapping and the one-naira tolerance all live in
+    // lib/academy-plan.ts now; this is the same behaviour, expressed once.
+    const verdict = checkAcademyPayment(amount, plan);
+    if (!verdict.ok) {
+        logger.error(`[Paystack Webhook] Academy payment refused on amount`, {
+            reference,
+            reason: verdict.reason,
+            paid: amount,
+            expected: verdict.reason === "underpaid" ? verdict.fee : null,
+        });
         throw new Error("Insufficient payment amount");
     }
 
+    const planToStore = verdict.plan;
+
+    // THE LATEST APPLICATION, AND ONLY IF IT WAS NOT DECIDED AGAINST.
+    //
+    // This read `.limit(1)` with no orderBy and trusted whatever came back —
+    // the #227 shape, in the path that GRANTS academy access. For an applicant
+    // with more than one application, which record this handler approved was
+    // whatever order the query plan produced.
+    //
+    // And it approved unconditionally: `status: "approved"`, `reviewedBy:
+    // "paystack_auto_approval"`, `arrayUnion("academy_participant")`,
+    // `isVerified: true`. Paying the registration fee is what admits a NEW
+    // applicant, so that is right for one — but nothing asked whether an admin
+    // had already decided the other way. A rejected applicant who paid again had
+    // the rejection overwritten and the role #210 revoked handed back.
+    //
+    // The client-side verify path (academy/_payment.ts) races this one by
+    // design, so both halves need the same rule or whichever wins decides.
     const appQuery = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
         .where("userId", "==", userId)
-        .limit(1)
+        .limit(APPLICATION_SCAN_LIMIT)
         .get();
 
+    const latestApp = latestApplication<any>(appQuery.docs);
+    const decidedAgainst = isDecidedAgainst(latestApp?.data()?.status);
+
+    if (decidedAgainst) {
+        logger.warn(
+            "[Paystack Webhook] Academy payment received for an application already decided against — "
+            + "recording the payment, NOT approving. Refund or manual review required.",
+            {
+                reference,
+                userId,
+                applicationId: latestApp?.id,
+                applicationStatus: latestApp?.data()?.status,
+                amount,
+            },
+        );
+    }
+
     const hasApp = !appQuery.empty;
-    const appDoc = hasApp ? appQuery.docs[0] : null;
+    const appDoc = decidedAgainst ? null : latestApp;
 
     // Claim the payment before fulfilling any of it.
     //
@@ -748,7 +956,12 @@ export async function processAcademyRegistration(reference: string, amount: numb
                     paymentAmount: amount,
                     plan: planToStore,
                     paidAt: paymentTimestamp,
-                    status: appDoc ? "approved" : "pending",
+                    // The status key is omitted entirely when a decision stands.
+                    // Writing "pending" would be its own reversal — it clears the
+                    // rejection from the user document while leaving it on the
+                    // application, and Layer 2 of checkModuleAccess reads the user
+                    // document first.
+                    ...(decidedAgainst ? {} : { status: appDoc ? "approved" : "pending" }),
                 }
             },
             updatedAt: FieldValue.serverTimestamp(),
@@ -995,7 +1208,9 @@ export async function processCooperativeContribution(reference: string, amount: 
         reference,
         userId: activeUserId,
         amount,
-        type: "contribution",
+        // Same constant the browser-redirect path uses, so one event cannot be
+        // filed under two names depending on which path wins the race.
+        type: CLAIM_TYPE.COOPERATIVE_CONTRIBUTION,
         source: "webhook",
     });
 
@@ -1004,6 +1219,18 @@ export async function processCooperativeContribution(reference: string, amount: 
         return;
     }
 
+    // Wrapped because everything in here runs AFTER the claim.
+    //
+    // claim_payment_once wrote status 'completed' (its default), and the only
+    // try/catch further down covers a cache clear, not fulfilment. So a throw in
+    // here — the member record being missing is the one that can happen —
+    // propagates to the webhook handler leaving a payment that reads as a
+    // completed cooperative contribution with nothing credited, and
+    // reconcilePendingFulfillments only looks for 'pending_fulfilment' so it
+    // never finds it.
+    //
+    // Marked and rethrown: the webhook handler still sees the original error, and
+    // Paystack still gets its non-2xx, but the payment is now findable.
     const result = await (async () => {
         const memberDoc = await memberRef.get();
         if (!memberDoc.exists) {
@@ -1063,7 +1290,13 @@ export async function processCooperativeContribution(reference: string, amount: 
         });
 
         return { success: true };
-    })();
+    })().catch(async (fulfilmentError: any) => {
+        await markFulfilmentFailed(
+            reference,
+            fulfilmentError?.message ?? String(fulfilmentError)
+        );
+        throw fulfilmentError;
+    });
 
     if (!result?.success) {
         // The reference is already claimed, so this will not be retried

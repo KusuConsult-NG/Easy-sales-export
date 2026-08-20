@@ -9,7 +9,7 @@ import { waveApplicationSchema,
     academyEnrollmentSchema,
     withdrawalSchema } from "@/lib/schemas";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { claimIdempotencyKey, debitJsonbBalanceWithFloor } from "@/lib/wallet-ledger";
+import { claimIdempotencyKey, debitJsonbBalanceWithFloor, compensateJsonbDebit } from "@/lib/wallet-ledger";
 import { ZodError } from "zod";
 import { revalidatePath } from "next/cache";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
@@ -286,9 +286,20 @@ export async function submitWithdrawalAction(
             };
         }
 
+        // From here the member's savings are ALREADY DOWN.
+        //
+        // The debit is one round trip and the two writes below are two more,
+        // flushed one at a time. A timeout between them left the savings reduced
+        // with no locked balance and no withdrawal request — nothing for an
+        // admin to approve or reject — and the catch at the end of this function
+        // only logged it. `locked` records how far this got so the compensation
+        // reverses exactly that much.
+        let locked = false;
+        try {
         await memberRef.update({
             lockedBalance: FieldValue.increment(validatedData.amount),
             updatedAt: FieldValue.serverTimestamp() });
+        locked = true;
 
         // 2. Create Withdrawal Request
         const withdrawalRef = db.collection(COLLECTIONS.WITHDRAWALS).doc(withdrawalId);
@@ -304,10 +315,25 @@ export async function submitWithdrawalAction(
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp() });
 
+        } catch (workError) {
+            await compensateJsonbDebit({
+                table: "cooperative_members",
+                id: session.user.id,
+                field: "savingsBalance",
+                amount: validatedData.amount,
+                reason: "withdrawal request could not be recorded after the debit",
+                ...(locked ? { also: { lockedBalance: -validatedData.amount } } : {}),
+            });
+            throw workError;
+        }
+
         // (The idempotency key row is written by claimIdempotencyKey above.)
 
         revalidatePath("/cooperatives");
-        revalidatePath("/dashboard/cooperatives");
+        // /dashboard/cooperatives has no route; the cooperative dashboard is
+        // /cooperatives/dashboard. revalidatePath on a path with no route is a
+        // silent no-op, so a member who withdrew kept seeing a cached balance.
+        revalidatePath("/cooperatives/dashboard");
         revalidatePath("/admin/withdrawals");
 
         return {

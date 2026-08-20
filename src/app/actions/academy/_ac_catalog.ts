@@ -7,8 +7,9 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
 import { revalidatePath } from "next/cache";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { stripAnswerKey } from "@/lib/academy-grading";
-import { isAdmin } from "@/lib/admin-permissions";
+import { stripAnswerKey, stripLockedContent } from "@/lib/academy-grading";
+import { checkCourseAccess } from "@/lib/academy-plan";
+import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import type { Course, CourseModule } from "@/lib/types/academy-actions";
@@ -31,16 +32,60 @@ async function _getCoursesAction(
             }
         }
 
-        q = q.limit(limit);
+        /**
+         * `limit + 1`, so "is there more" is observed rather than guessed.
+         *
+         * This fetched exactly `limit` and inferred hasMore from a FULL page:
+         *
+         *     const hasMore = snapshot.docs.length === limit;
+         *
+         * which is true on the last page whenever the catalogue size is an exact
+         * multiple of the page size. The admin then pressed "load more" and got
+         * an empty page. Every other paginated list here reads one extra row for
+         * exactly this reason.
+         */
+        q = q.limit(limit + 1);
 
         const snapshot = await q.get();
 
-        const courses = serializeDocs<Course>(snapshot.docs);
+        // The answer key does not go to the browser — from the LIST either.
+        //
+        // getCourseByIdAction below strips modules[].quiz.questions[].correctAnswer
+        // for non-admins. This function did not, and it returns whole course
+        // documents: calling it fetched up to `limit` courses complete with the
+        // answers to every quiz in them. The fix on the single-course read was
+        // bypassed entirely by its own sibling, so the rule was enforced on one
+        // of the two ways to obtain exactly the same document.
+        //
+        // Same admin carve-out as the sibling, and for the same reason:
+        // /admin/academy lists courses for an editor that cannot edit questions
+        // it cannot see.
+        const sessionResult = await requireSession();
+        const viewerIsAdmin = isAdmin(sessionResult.session?.user?.roles);
 
-        const newLastDocId = snapshot.docs.length === limit ? snapshot.docs[snapshot.docs.length - 1].id : null;
-        const hasMore = snapshot.docs.length === limit;
+        // Same two rules as the single-course read below: the answer key, and
+        // the paid material of a tier this viewer's plan does not open.
+        const viewerPlan = (sessionResult.session?.user as any)
+            ?.serviceRegistrations?.academy?.plan;
 
-        return { 
+        const hasMore = snapshot.docs.length > limit;
+        const pageDocs = hasMore ? snapshot.docs.slice(0, limit) : snapshot.docs;
+
+        const raw = serializeDocs<Course>(pageDocs);
+        const courses = viewerIsAdmin
+            ? raw
+            : raw.map((c) => {
+                const visible = checkCourseAccess(viewerPlan, (c as any)?.tier)
+                    ? c
+                    : stripLockedContent(c);
+                return stripAnswerKey(visible);
+            });
+
+        const newLastDocId = hasMore && pageDocs.length > 0
+            ? pageDocs[pageDocs.length - 1].id
+            : null;
+
+        return {
             success: true, 
             error: null, 
             data: courses,
@@ -98,10 +143,25 @@ async function _getCourseByIdAction(courseId: string): Promise<ActionResponse<an
         const sessionResult = await requireSession();
         const viewerIsAdmin = isAdmin(sessionResult.session?.user?.roles);
 
+        // And the paid material does not go to a plan that does not open it.
+        //
+        // The tier gate is consulted by the enrolment action, by the course
+        // page's redirect and by the catalogue's padlock — but not here, and
+        // this is where the content is served. The redirect and the padlock were
+        // drawn after the browser already held the videos they were hiding, and
+        // a caller who loaded neither page could ask for them directly.
+        const viewerPlan = (sessionResult.session?.user as any)
+            ?.serviceRegistrations?.academy?.plan;
+        const opensThisTier = checkCourseAccess(viewerPlan, (formattedCourse as any)?.tier);
+
+        const visible = viewerIsAdmin || opensThisTier
+            ? formattedCourse
+            : stripLockedContent(formattedCourse);
+
         return {
             error: null,
             success: true as const,
-            data: viewerIsAdmin ? formattedCourse : stripAnswerKey(formattedCourse),
+            data: viewerIsAdmin ? visible : stripAnswerKey(visible),
         };
     } catch (error) {
         logger.error("[getCourseByIdAction] Failed to fetch course:", {
@@ -127,8 +187,26 @@ async function _createCourseAction(data: any): Promise<ActionResponse<{ id: stri
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: 'Unauthorized', data: null };
         const { session } = sessionResult;
-        if (!session?.user?.id) {
-            return { success: false as const, error: "Unauthorized", data: null };
+        /**
+         * THIS HAD NO ADMIN GATE.
+         *
+         * It checked `session?.user?.id` and nothing else, so any signed-in
+         * account could create a course in the Academy catalogue — and the
+         * createAdminAuditLog call below recorded it as an admin action naming
+         * the caller. The three sibling writes in this file at least asked for a
+         * role; this one asked only that somebody was logged in.
+         *
+         * The audit ratchet could not see it: admin-action-audit-trail matches
+         * `hasAdminPermission(` or `requireAdmin(`, and a file using neither is
+         * never inspected. That is #190's blind spot in its third form — a gate
+         * so weak the ratchet did not recognise the file as gated at all.
+         *
+         * academy:manage_courses is what the OTHER implementation of this same
+         * operation uses (_ac_admin_catalog.ts's upsert), so this is the two
+         * paths agreeing rather than a new rule.
+         */
+        if (!hasAdminPermission(session?.user?.roles, "academy:manage_courses")) {
+            return { success: false as const, error: "Unauthorized: academy:manage_courses required", data: null };
         }
 
         // Validate with Zod
@@ -181,12 +259,52 @@ async function _updateCourseAction(courseId: string, data: Partial<Course>): Pro
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: 'Unauthorized', data: null };
         const { session } = sessionResult;
-        if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
-            return { success: false as const, error: "Unauthorized", data: null };
+        /**
+         * The ACADEMY admin could not edit an Academy course.
+         *
+         * A hand-written `admin || super_admin` pair, and `academy_admin` is in
+         * neither — while the read above uses isAdmin(), which admits all ten
+         * roles. So the academy admin could open the course editor, see every
+         * quiz answer, and save nothing. The OTHER implementation of this write
+         * (_ac_admin_catalog.ts) already gates on academy:manage_courses, so the
+         * two paths disagreed about who may edit a course.
+         *
+         * Same correction as #115, #122, #158 and #195.
+         */
+        if (!hasAdminPermission(session?.user?.roles, "academy:manage_courses")) {
+            return { success: false as const, error: "Unauthorized: academy:manage_courses required", data: null };
+        }
+
+        /**
+         * VALIDATED, not spread.
+         *
+         * This was `{ ...data, updatedAt }` with `data: Partial<Course>` — a
+         * TypeScript annotation, which is nothing at a server-action boundary.
+         * Any field the caller named was written, including `tier` (the paid
+         * access gate checkCourseAccess reads), `status`, `instructorId`,
+         * `studentsCount` and `createdAt`. The sibling implementation of this
+         * write validates with courseSchema; this one, the path the admin editor
+         * actually calls, validated nothing. #43 and #45's family.
+         *
+         * `.partial()` of the create schema, so the editable set is exactly the
+         * creatable set and Zod drops everything else. The editor sends title,
+         * description, instructor and tier — all four are in it, and tier is in
+         * it BECAUSE of the fix above; validating against the old schema would
+         * have silently dropped the field the editor exists to set.
+         */
+        const { createCourseSchema } = await import("@/lib/validations/course");
+        const validation = createCourseSchema.partial().safeParse(data);
+
+        if (!validation.success) {
+            return {
+                success: false as const,
+                error: validation.error.issues[0]?.message || "Validation failed",
+                data: null,
+            };
         }
 
         await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId).update({
-            ...data,
+            ...validation.data,
             updatedAt: FieldValue.serverTimestamp(),
         });
 
@@ -219,8 +337,20 @@ async function _updateCourseModulesAction(courseId: string, modules: CourseModul
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: 'Unauthorized', data: null };
         const { session } = sessionResult;
-        if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
-            return { success: false as const, error: "Unauthorized", data: null };
+        /**
+         * The ACADEMY admin could not edit an Academy course.
+         *
+         * A hand-written `admin || super_admin` pair, and `academy_admin` is in
+         * neither — while the read above uses isAdmin(), which admits all ten
+         * roles. So the academy admin could open the course editor, see every
+         * quiz answer, and save nothing. The OTHER implementation of this write
+         * (_ac_admin_catalog.ts) already gates on academy:manage_courses, so the
+         * two paths disagreed about who may edit a course.
+         *
+         * Same correction as #115, #122, #158 and #195.
+         */
+        if (!hasAdminPermission(session?.user?.roles, "academy:manage_courses")) {
+            return { success: false as const, error: "Unauthorized: academy:manage_courses required", data: null };
         }
 
         logger.info(`[updateCourseModulesAction] Saving ${modules?.length} modules for course ${courseId}`);
@@ -260,8 +390,20 @@ async function _deleteCourseAction(courseId: string): Promise<ActionResponse<nul
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: 'Unauthorized', data: null };
         const { session } = sessionResult;
-        if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
-            return { success: false as const, error: "Unauthorized", data: null };
+        /**
+         * The ACADEMY admin could not edit an Academy course.
+         *
+         * A hand-written `admin || super_admin` pair, and `academy_admin` is in
+         * neither — while the read above uses isAdmin(), which admits all ten
+         * roles. So the academy admin could open the course editor, see every
+         * quiz answer, and save nothing. The OTHER implementation of this write
+         * (_ac_admin_catalog.ts) already gates on academy:manage_courses, so the
+         * two paths disagreed about who may edit a course.
+         *
+         * Same correction as #115, #122, #158 and #195.
+         */
+        if (!hasAdminPermission(session?.user?.roles, "academy:manage_courses")) {
+            return { success: false as const, error: "Unauthorized: academy:manage_courses required", data: null };
         }
 
         await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId).delete();

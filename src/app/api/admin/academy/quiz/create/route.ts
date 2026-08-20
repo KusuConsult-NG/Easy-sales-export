@@ -6,7 +6,8 @@ import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
+import { recordAdminAction } from "@/lib/audit-log";
 
 /**
  * API Route: Create Quiz (Admin)
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Admin role check (includes super_admin)
-        if (!isAdmin(session.user.roles)) {
+        if (!hasAdminPermission(session.user.roles, "academy:manage_quizzes")) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }
@@ -31,8 +32,13 @@ export async function POST(request: NextRequest) {
 
         const quizData = await request.json();
 
-        // Validate required fields
-        if (!quizData.title || !quizData.courseId || quizData.questions.length === 0) {
+        // Validate required fields.
+        //
+        // `quizData.questions.length` was read without checking that `questions`
+        // exists, so a body missing that key threw a TypeError, was swallowed by
+        // the catch below, and came back as a 500 "Internal server error"
+        // instead of the 400 this branch is written to return.
+        if (!quizData?.title || !quizData?.courseId || !Array.isArray(quizData.questions) || quizData.questions.length === 0) {
             return NextResponse.json(
                 { success: false, message: "Missing required fields" },
                 { status: 400 }
@@ -48,6 +54,12 @@ export async function POST(request: NextRequest) {
             updatedAt: FieldValue.serverTimestamp(),
         });
 
+        await recordAdminAction({
+            action: 'quiz_created',
+            userId: session.user.id,
+            targetId: quizRef.id,
+            targetType: 'academy_quiz',
+        });
         return NextResponse.json({
             success: true,
             message: "Quiz created successfully",

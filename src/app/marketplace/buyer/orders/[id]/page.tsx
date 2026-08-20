@@ -146,9 +146,24 @@ export default function BuyerOrderDetailPage() {
         !order.buyerConfirmed &&
         (order.status === "processing" || order.status === "shipped" || order.status === "payment_received") &&
         escrowActive;
+    /**
+     * The next item still waiting for a review.
+     *
+     * The link below was hardcoded to `order.items[0]`, and `reviewSubmitted`
+     * was set by the FIRST review of any item — so on a multi-item order the
+     * buyer reviewed item one and the control vanished. With the flag corrected
+     * to mean "every item reviewed", the control stays; pointing it at items[0]
+     * would now send them back to the product they have already reviewed, which
+     * the action refuses. It has to walk to the next unreviewed one.
+     */
+    const reviewedIds: string[] = ((order as unknown as { reviewedProductIds?: string[] }).reviewedProductIds) ?? [];
+    const nextUnreviewedItem = (order.items ?? []).find(
+        (item) => !reviewedIds.includes(String((item as { productId?: string }).productId ?? "")),
+    );
     const canReview =
         (order.status === "delivered" || order.status === "completed") &&
-        !order.reviewSubmitted;
+        !order.reviewSubmitted &&
+        !!nextUnreviewedItem;
     const canDispute = ["processing", "shipped", "delivered"].includes(order.status) &&
         order.status !== "disputed" && order.status !== "completed" && order.status !== "cancelled";
 
@@ -407,7 +422,7 @@ export default function BuyerOrderDetailPage() {
 
                     {canReview && (
                         <Link
-                            href={`/marketplace/buyer/orders/${id}/review?productId=${order.items[0]?.productId || ""}&sellerId=${order.sellerId}`}
+                            href={`/marketplace/buyer/orders/${id}/review?productId=${(nextUnreviewedItem as { productId?: string })?.productId || ""}&sellerId=${order.sellerId}`}
                             className="flex-1 flex items-center justify-center gap-2 px-6 py-3 border-2 border-yellow-400 text-yellow-700 rounded-xl font-bold hover:bg-yellow-50 transition-all"
                         >
                             <Star className="w-5 h-5" />

@@ -38,9 +38,18 @@
  * ------------------------------
  * That the payout ever reaches the seller. It writes a row with
  * `status: "pending_transfer"` and nothing in the repository consumes it — the
- * transfer is manual. That is a product arrangement, not a defect to fix
- * unilaterally, but it does mean the "release" here moves a record and not
- * money.
+ * transfer is manual.
+ *
+ * THAT READING WAS TOO GENEROUS, and executing the action showed why. A manual
+ * transfer needs somebody to be shown the queue, and `farm_nation_payouts` is
+ * written in that one place and read NOWHERE: no admin screen, no cron, no
+ * script, no query. There was no manual process for the arrangement to be. The
+ * release transferred the property to the buyer, closed the transaction, and
+ * left the seller's money in a collection nobody opens.
+ *
+ * It credits the seller's wallet now, through the primitive the marketplace's
+ * escrow release already uses, and the payout row records where the money went.
+ * See farm-nation-escrow-release-behaviour.test.ts (#141).
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
@@ -59,10 +68,20 @@ jest.mock('@/lib/status-transition', () => ({
     claimStatusTransition: (...a: any[]) => mockClaimStatus(...a),
     claimStatusTransitionFromAny: jest.fn(),
 }));
+const mockCreditWallet = jest.fn(async () => ({ claimed: true, balance: 0 })) as jest.Mock<any>;
+jest.mock('@/lib/wallet-ledger', () => ({
+    creditWalletOnce: (...a: any[]) => mockCreditWallet(...a),
+    claimPaymentOnce: jest.fn(), debitWalletOnce: jest.fn(), debitWalletLocked: jest.fn(),
+    incrementWithinCeiling: jest.fn(), decrementManyOrFail: jest.fn(), markFulfilmentFailed: jest.fn(),
+}));
 jest.mock('@/lib/audit-log', () => ({
     createAdminAuditLog: jest.fn(async () => ({})),
     logAdminAction: jest.fn(async () => ({})),
     logAdminFinancialAction: jest.fn(async () => ({})),
+    // The money paths record who approved or rejected. Mocking the module
+    // without this export made the call a TypeError, which the action's own
+    // catch turned into a failed response — the operation looked broken.
+    recordAdminAction: jest.fn(async () => undefined),
 }));
 jest.mock('@/app/actions/notifications', () => ({
     createNotificationAction: jest.fn(async () => ({})),
@@ -193,7 +212,7 @@ describe('releaseFarmNationEscrowAction — nothing is claimed until it can be f
         expect(ownershipWrites).toEqual([]);
     });
 
-    it('transfers the property to the buyer and queues the payout', async () => {
+    it('transfers the property to the buyer and pays the seller', async () => {
         // Vacuity guard. Every refusal above is satisfied by an action that
         // releases nothing, which would strand every completed sale.
         const r: any = await release();
@@ -205,7 +224,12 @@ describe('releaseFarmNationEscrowAction — nothing is claimed until it can be f
         expect(ownership?.previousOwnerId).toBe(SELLER);
         expect(ownership?.status).toBe('sold');
 
-        const payout = allWrites().find((p) => p && 'status' in p && p.status === 'pending_transfer');
+        // The money moves; the payout row records that it did.
+        expect(mockCreditWallet).toHaveBeenCalledWith(expect.objectContaining({
+            userId: SELLER, amount: AMOUNT, status: 'disbursement',
+        }));
+
+        const payout = allWrites().find((p) => p && 'status' in p && p.status === 'paid_to_wallet');
         expect(payout?.sellerId).toBe(SELLER);
         expect(payout?.amount).toBe(AMOUNT);
     });

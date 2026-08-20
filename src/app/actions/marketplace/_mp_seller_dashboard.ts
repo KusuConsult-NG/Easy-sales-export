@@ -10,6 +10,17 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Product, Order } from "@/lib/types/marketplace";
 import { ProductSchema, OrderSchema, SellerAnalyticsSchema } from "@/lib/validations/marketplace";
 import { withSafeAction, ActionResponse } from "@/lib/safe-action";
+import { toMillis } from "@/lib/firestore-serialize";
+import { countsAsSellerRevenue, orderAmount } from "@/lib/order-status";
+
+/**
+ * The most rows the analytics summary will read from each collection.
+ *
+ * Both queries were unbounded. A seller with a long history loaded every order
+ * and every product to produce a handful of totals, and the monthly figures the
+ * page leads with depend only on recent rows anyway.
+ */
+const SELLER_ANALYTICS_CAP = 2000;
 
 /**
  * Get seller's products
@@ -281,10 +292,14 @@ async function _getSellerAnalyticsAction(): Promise<ActionResponse<{ analytics: 
 
         const userId = session.user.id;
 
+        // Capped. Both queries fetched every order and every product the seller
+        // has ever had, unbounded, to produce a handful of summary numbers.
         const ordersRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
-            .where("sellerIds", "array-contains", userId);
+            .where("sellerIds", "array-contains", userId)
+            .limit(SELLER_ANALYTICS_CAP);
         const productsRef = db.collection(COLLECTIONS.PRODUCTS)
-            .where("sellerId", "==", userId);
+            .where("sellerId", "==", userId)
+            .limit(SELLER_ANALYTICS_CAP);
 
         // Fetch all matching orders and products in parallel to avoid index errors on status inequalities
         const [ordersSnapshot, productsSnapshot] = await Promise.all([
@@ -292,13 +307,12 @@ async function _getSellerAnalyticsAction(): Promise<ActionResponse<{ analytics: 
             productsRef.get()
         ]);
 
+        // The shared coercion. This was a fifth hand-rolled copy of it — correct,
+        // like the one in _ex_investments.ts, and duplicated all the same. The
+        // copies that were NOT correct are what de0a1a87 fixed.
         const getOrderDate = (createdAt: any): Date | null => {
-            if (!createdAt) return null;
-            if (typeof createdAt.toDate === "function") return createdAt.toDate();
-            if (createdAt instanceof Date) return createdAt;
-            if (createdAt.seconds) return new Date(createdAt.seconds * 1000);
-            const parsed = new Date(createdAt);
-            return isNaN(parsed.getTime()) ? null : parsed;
+            const ms = toMillis(createdAt);
+            return ms > 0 ? new Date(ms) : null;
         };
 
         let totalSales = 0;
@@ -318,10 +332,22 @@ async function _getSellerAnalyticsAction(): Promise<ActionResponse<{ analytics: 
         ordersSnapshot.docs.forEach(doc => {
             const data = doc.data();
             const status = data.status || "";
-            const totalAmount = data.totalAmount || 0;
+            const totalAmount = orderAmount(data);
             const orderDate = getOrderDate(data.createdAt);
 
-            if (status !== "cancelled" && status !== "disputed") {
+            // Revenue counts only orders that were actually PAID for.
+            //
+            // This excluded `cancelled` and `disputed` — correctly — and let
+            // `pending_payment` through. That is the status an order is created
+            // in, before the buyer is charged anything, so an abandoned checkout
+            // was reported as revenue, including in the monthly figure a seller
+            // judges their business by.
+            //
+            // `disputed` stays excluded: that money is in escrow, not the
+            // seller's. The buyer dashboard counts it as spent, because they did
+            // pay it — the two questions differ on exactly that status, which is
+            // why lib/order-status.ts names both sets.
+            if (countsAsSellerRevenue(status)) {
                 totalSales += totalAmount;
                 totalOrdersCount += 1;
 

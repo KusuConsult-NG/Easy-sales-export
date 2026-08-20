@@ -51,6 +51,23 @@ export const authConfig = {
         async jwt({ token, user }) {
             // Edge-compatible user info mapping (critical for Edge Middleware role detection)
             if (user) {
+                /**
+                 * When this session was authenticated.
+                 *
+                 * Resetting a password has to be able to end the sessions that
+                 * were opened with the OLD one — that is the whole reason
+                 * somebody resets after a compromise. Sessions here are
+                 * stateless JWTs with an 8-hour maxAge, so there is no server
+                 * record to delete; the only way to disown one is to know when
+                 * it was minted and compare that against a revocation point on
+                 * the profile. See the sync block in lib/auth.ts.
+                 *
+                 * Stamped rather than read from the JWT's own `iat` so the check
+                 * does not depend on NextAuth's encoding internals. `iat` is
+                 * still used as a fallback, which is what lets sessions minted
+                 * before this existed be revoked too.
+                 */
+                token.authAt = Date.now();
                 token.id = user.id;
                 token.email = user.email;
                 token.name = user.name;
@@ -104,6 +121,13 @@ export const authConfig = {
                 session.user.currentModuleId = token.currentModuleId as string || "platform";
                 session.user.gender = token.gender as "male" | "female" | undefined;
                 session.user.createdAt = token.createdAt as string | undefined;
+                // Surfaced for changePasswordAction, which revokes every session
+                // OLDER than this one. `iat` is the fallback for sessions minted
+                // before `authAt` was stamped, exactly as the revocation
+                // predicate in lib/auth.ts resolves it.
+                session.user.authAt = typeof token.authAt === "number"
+                    ? token.authAt
+                    : (typeof token.iat === "number" ? token.iat * 1000 : undefined);
             }
             return session;
         },

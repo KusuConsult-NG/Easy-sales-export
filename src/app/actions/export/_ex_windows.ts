@@ -5,9 +5,12 @@ import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { claimStatusTransitionFromAny } from "@/lib/status-transition";
+import { refuseExportStatusChange, hasExportAdminAccess, EXPORT_WINDOW_ALL_STATUSES } from "@/lib/export-window-status";
 import { claimIdempotencyKey } from "@/lib/wallet-ledger";
 import { revalidatePath } from "next/cache";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
+import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import type { ExportWindow } from "@/lib/types/firestore";
 import { exportWindowSchema } from "@/lib/types/export-actions";
@@ -43,6 +46,40 @@ export async function createExportWindowAction(
 
         let finalOrderId = "";
 
+        /**
+         * COMPLIANCE IS CHECKED BEFORE THE KEY IS CLAIMED.
+         *
+         * The claim used to come first, and both compliance checks below THREW
+         * — so a submission that failed KYC burned the idempotency key and
+         * never released it. ExportWindowModal generates the key once, when the
+         * modal OPENS, and never regenerates it:
+         *
+         *     useEffect(() => { if (isOpen) setIdempotencyKey(crypto.randomUUID()) }, [isOpen])
+         *
+         * So the member read "You must complete KYC verification", completed
+         * their KYC, pressed Create again in the same open modal — and got
+         * "Duplicate transaction detected. Please wait." A message telling them
+         * to wait for something that would never resolve, escapable only by
+         * closing and reopening the modal, which nothing on the screen suggests.
+         *
+         * These are reads with no side effects, so they cost nothing to run
+         * first. The key is claimed immediately before the write it protects,
+         * which is the only place it protects anything.
+         */
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const userData = userDoc.data();
+
+        if (!userData?.isVerified) {
+            return { error: "Compliance Error: You must complete KYC verification to create Export Windows.", success: false as const, data: null };
+        }
+
+        const exportReg = userData?.serviceRegistrations?.export;
+        const serviceNumber = exportReg?.registrationNumber || userData?.cacNumber;
+
+        if (!serviceNumber && exportReg?.status !== "approved") {
+            return { error: "Compliance Error: Missing Export Service Registration (NEPC/CAC).", success: false as const, data: null };
+        }
+
         // The idempotency key used to be read here and written at the end, with
         // the window creation in between, so two submissions carrying the same
         // key both read "absent" and both created a window. It is claimed now —
@@ -58,21 +95,6 @@ export async function createExportWindowAction(
         }
 
         await (async () => {
-            // 1. Check if user is verified (KYC)
-            const userRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
-            const userDoc = await userRef.get();
-            const userData = userDoc.data();
-
-            if (!userData?.isVerified) { throw new Error("Compliance Error: You must complete KYC verification to create Export Windows.");
-            }
-
-            // 2. Check for Service Registration (CAC/NEPC)
-            const exportReg = userData?.serviceRegistrations?.export;
-            const serviceNumber = exportReg?.registrationNumber || userData?.cacNumber;
-
-            if (!serviceNumber && userData?.serviceRegistrations?.export?.status !== "approved") { throw new Error("Compliance Error: Missing Export Service Registration (NEPC/CAC).");
-            }
-
             // Generate unique order ID
             const orderId = `EXP-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
             finalOrderId = orderId;
@@ -87,6 +109,11 @@ export async function createExportWindowAction(
             // Save to Firestore
             const exportWindowRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc();
             await exportWindowRef.set({ orderId,
+                // export_windows holds two entities. This is the SHIPMENT one —
+                // a private export request moving pending → in_transit →
+                // delivered → completed. Stamped so the status rule does not
+                // have to infer it. See lib/export-window-status.ts.
+                windowKind: "shipment" as const,
                 commodity: validatedData.commodity,
                 quantity: validatedData.quantity,
                 amount: validatedData.amount,
@@ -103,18 +130,40 @@ export async function createExportWindowAction(
         })();
 
         revalidatePath("/export");
-        revalidatePath("/dashboard/export");
+        // /dashboard/export is not a route — the export dashboard is at
+        // /export/dashboard (the (app) segment is a route group and does not
+        // appear in the URL). revalidatePath on a path with no route behind it
+        // is a silent no-op, so this invalidated nothing.
+        revalidatePath("/export/dashboard");
 
         return { error: null, success: true as const, message: `Export window created successfully! Order ID: ${finalOrderId }`,
             meta: null
         , data: { orderId: finalOrderId } };
     } catch (error: any) { logger.error("Create export window error:", error);
 
-        if (error.message && error.message.includes("Duplicate") || error.message.includes("Compliance")) {
-            return { error: error.message, success: false as const, data: null };
+        /**
+         * THE GUARD COVERED ONE OF THE TWO CALLS IT WAS WRITTEN FOR.
+         *
+         *     if (error.message && error.message.includes("Duplicate") || error.message.includes("Compliance"))
+         *
+         * groups as `(A && B) || C`, so whenever `error.message` was undefined
+         * the first half was falsy and the SECOND `.includes` ran on undefined
+         * — a TypeError, thrown from inside the catch block, which turns a
+         * handled failure into an unhandled rejection out of a server action.
+         * The `error.message &&` was plainly meant to protect both.
+         *
+         * Read from a single normalised string now, so there is nothing to get
+         * the precedence of. The compliance messages are returned rather than
+         * thrown as of this change, so this branch only still catches a
+         * "Duplicate" raised from deeper down.
+         */
+        const message = typeof error?.message === "string" ? error.message : "";
+
+        if (message.includes("Duplicate") || message.includes("Compliance")) {
+            return { error: message, success: false as const, data: null };
         }
 
-        if (error.name === "ZodError") { return { error: "Please fill in all required fields correctly", success: false as const, data: null };
+        if (error?.name === "ZodError") { return { error: "Please fill in all required fields correctly", success: false as const, data: null };
         }
 
         return { error: "Failed to create export window. Please try again.", success: false as const, data: null };
@@ -143,18 +192,73 @@ export async function updateExportStatusAction(
         }
 
         const data = exportDoc.data();
-        // Verify ownership (unless admin)
-        if (data?.userId !== session.user.id && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) { return { error: "Unauthorized to update this export", success: false as const, data: null };
+
+        // The same rule the other updateExportStatusAction applies.
+        //
+        // This one checked ownership-or-admin and nothing else: any of the four
+        // statuses could be set from any other, by the window's owner as readily
+        // as by an admin. And this endpoint does strictly MORE than change a
+        // field — on "completed" it emails every investor a statement of their
+        // returns and marks every one of their slots completed. So an owner
+        // could settle their own export, tell every investor it had paid out,
+        // and close their slots, with no admin involved.
+        //
+        // Two further divergences from the hardened sibling, both fixed by using
+        // the shared rule: roles came from the session TOKEN rather than the
+        // database, and `export_admin` was not recognised at all — so a genuine
+        // export administrator was refused here and allowed there.
+        const callerDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const callerRoles: string[] = callerDoc.data()?.roles ?? [];
+
+        const refusal = refuseExportStatusChange({
+            callerId: session.user.id,
+            callerRoles,
+            ownerId: data?.userId,
+            currentStatus: data?.status,
+            newStatus,
+            // The document itself, so the legal vocabulary is chosen by which
+            // entity this is — an aggregation window's statuses are open /
+            // closed / completed, not the shipment four.
+            window: data,
+        });
+        if (refusal) {
+            return { error: refusal, success: false as const, data: null };
         }
 
         // Prevent duplicate status updates to avoid multiple completion emails
-        if (data?.status === newStatus) {
-            return { error: `Status is already ${newStatus}`, success: false as const };
-        }
+        //
+        // This was a read of `data.status` followed by an unguarded update, and
+        // the comment above states exactly what that costs: two callers landing
+        // together both read a status that is not yet `newStatus`, both pass,
+        // and both proceed to email EVERY investor a statement of their returns.
+        // The check existed for the emails and did not survive concurrency —
+        // which is the only condition it was there for.
+        //
+        // Claimed instead, so exactly one caller wins and only the winner
+        // notifies. `fromAny` is every status a window can hold except the
+        // target: export_windows carries two vocabularies, because it holds two
+        // different entities — see lib/export-window-status.ts.
+        const claim = await claimStatusTransitionFromAny({
+            collection: COLLECTIONS.EXPORT_WINDOWS,
+            id: exportId,
+            fromAny: EXPORT_WINDOW_ALL_STATUSES.filter((s) => s !== newStatus),
+            to: newStatus,
+            patch: { updatedAt: FieldValue.serverTimestamp() },
+        });
 
-        // Update status
-        await exportRef.update({ status: newStatus,
-            updatedAt: FieldValue.serverTimestamp() });
+        if (!claim.claimed) {
+            if (claim.status === newStatus) {
+                return { error: `Status is already ${newStatus}`, success: false as const };
+            }
+            if (claim.exists === false) {
+                return { error: "Export window not found", success: false as const, data: null };
+            }
+            return {
+                error: `This export is '${claim.status ?? "in an unrecorded state"}' and cannot be moved to ${newStatus}.`,
+                success: false as const,
+                data: null,
+            };
+        }
 
         // When a window completes, email all investors with their returns
         if (newStatus === "completed") { try {
@@ -167,13 +271,42 @@ export async function updateExportStatusAction(
                 const windowTitle = data?.title || "Export Window";
                 const roi = data?.roi || data?.returnRate || "N/A";
 
-                await Promise.all(slotsSnap.docs.map(async (slotDoc) => { const slot = slotDoc.data();
+                /**
+                 * A FAILED EMAIL LEFT THAT INVESTOR'S SLOT OPEN FOR EVER.
+                 *
+                 * Each callback emailed the investor and THEN marked the slot
+                 * completed, so an email that threw skipped the write beside it.
+                 * The status transition had already been claimed by then, so
+                 * there was no second chance: calling the action again returns
+                 * "Status is already completed". That investor's slot stayed
+                 * `status: "active"` permanently while the window said settled,
+                 * with nothing in between to reconcile them.
+                 *
+                 * The slot closes FIRST now. The money outcome is not contingent
+                 * on a mail server.
+                 *
+                 * CORRECTION TO MY OWN FIRST NOTE HERE, kept because the mistake
+                 * is instructive: I wrote that Promise.all "abandons the rest",
+                 * and mutation-testing disproved it — .map() has already started
+                 * every promise, so a rejection abandons only the AWAIT, not the
+                 * work. Every investor was in fact emailed. What Promise.all
+                 * really cost was VISIBILITY: the aggregate rejection went to the
+                 * catch below, which logs one generic line, so nobody could tell
+                 * which investors had been missed or how many. allSettled counts
+                 * and names them.
+                 */
+                const outcomes = await Promise.allSettled(slotsSnap.docs.map(async (slotDoc) => {
+                    const slot = slotDoc.data();
                     if (!slot.userId) return;
 
-                    // Fetch user email
                     const userDoc = await db.collection(COLLECTIONS.USERS).doc(slot.userId).get();
                     const userEmail = userDoc.data()?.email;
                     const userName = userDoc.data()?.name || userDoc.data()?.displayName || "Investor";
+
+                    // The slot closes whether or not the notification lands.
+                    // Emailing first and marking second meant a mail failure
+                    // left the slot open with no second chance at either.
+                    await slotDoc.ref.update({ status: "completed", completedAt: FieldValue.serverTimestamp() });
 
                     if (!userEmail) return;
 
@@ -185,12 +318,22 @@ export async function updateExportStatusAction(
                         slot.expectedReturn || 0,
                         String(roi)
                     );
-
-                    // Mark slot as completed
-                    await slotDoc.ref.update({ status: "completed", completedAt: FieldValue.serverTimestamp() });
                 }));
 
-                logger.info(`[Export Complete] Notified investors for window: ${exportId}`);
+                const failures = outcomes.filter((o) => o.status === "rejected");
+                if (failures.length > 0) {
+                    logger.error(
+                        `[Export Complete] ${failures.length} of ${outcomes.length} investor slots on window ` +
+                        `${exportId} did not settle cleanly. The window is already 'completed' and this action ` +
+                        `cannot be re-run, so these need reconciling by hand.`,
+                        failures.map((f) => (f as PromiseRejectedResult).reason)
+                    );
+                }
+
+                logger.info(
+                    `[Export Complete] Settled ${outcomes.length - failures.length} of ${outcomes.length} ` +
+                    `investor slots for window: ${exportId}`
+                );
             } catch (emailErr) { logger.error("[Export Complete] Failed to notify investors:", emailErr);
                 // Don't block the status update on email failure
             }
@@ -219,8 +362,16 @@ export async function updateExportWindowAction(
         if (!session?.user) { return { error: "Authentication required", success: false as const, meta: null };
         }
 
-        // Verify Admin
-        if ((!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) { return { error: "Unauthorized access", success: false as const, meta: null };
+        // Verify Admin — through the shared list, which includes export_admin.
+        //
+        // This checked the session token for admin/super_admin only, while the
+        // status endpoint in this same file recognises export_admin and reads
+        // roles from the database. An export administrator could settle a window
+        // — the larger power — and not edit its description.
+        const callerDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const callerRoles: string[] = callerDoc.data()?.roles ?? [];
+        if (!hasExportAdminAccess(callerRoles)) {
+            return { error: "Unauthorized access", success: false as const, meta: null };
         }
 
         const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
@@ -230,6 +381,48 @@ export async function updateExportWindowAction(
         delete cleanData.id;
         delete cleanData.createdAt;
         delete cleanData.updatedAt;
+
+        // The fields this endpoint has no business writing.
+        //
+        // `cleanData` is spread into the update, so every key the caller sends
+        // lands on the window. Three groups of them belong to code that holds a
+        // lock or performs side effects, and writing them here silently skips
+        // that:
+        //
+        //   fundedAmount / currentFunding / currentVolume / spotsFilled
+        //     maintained by incrementWithinCeiling, which locks the row and
+        //     checks the ceiling in one statement. A plain write here desyncs
+        //     the counters from the payments and bookings that produced them,
+        //     and the desync is invisible.
+        //
+        //   status
+        //     updateExportStatusAction applies refuseExportStatusChange AND, on
+        //     "completed", emails every investor a statement of their returns
+        //     and closes their slots. Setting it here settles a window with none
+        //     of that happening.
+        //
+        // The admin edit form sends none of these — its only `status` fields are
+        // on timeline phases — so refusing them changes nothing it does.
+        const PROTECTED_FIELDS = [
+            "status",
+            "fundedAmount",
+            "currentFunding",
+            "currentVolume",
+            "spotsFilled",
+            "participantsCount",
+            "investorCount",
+            "userId",
+            "createdBy",
+        ];
+        const refused = PROTECTED_FIELDS.filter((f) => f in cleanData);
+        if (refused.length > 0) {
+            return {
+                error: `These fields cannot be edited here: ${refused.join(", ")}. `
+                    + `Use the status action for status, and the payment or booking flows for funding totals.`,
+                success: false as const,
+                meta: null,
+            };
+        }
 
         await exportRef.update({ ...cleanData,
             updatedAt: FieldValue.serverTimestamp() });
@@ -271,6 +464,38 @@ export async function getExportWindowsAction(
         if (statusFilter && statusFilter !== "all") { exportsQuery = exportsQuery.where("status", "==", statusFilter);
         }
 
+        /**
+         * THE DATE FILTER MATCHED NOTHING. EVER.
+         *
+         * It ran in memory, over serialized documents, and compared like this:
+         *
+         *     const createdDate = exp.createdAt;                 // an ISO STRING
+         *     return createdDate >= new Date(fromDate)           // string >= Date
+         *
+         * serializeDoc turns a Timestamp into an ISO string, and `>=` between a
+         * string and a Date coerces the Date to a number and then the string to
+         * a number — `Number("2026-05-01T00:00:00.000Z")` is NaN. Every
+         * comparison with NaN is false, in BOTH directions. So filtering the
+         * export window list by any date returned an empty list, always, and it
+         * looked exactly like having no windows in that range.
+         *
+         * The filter belongs in the query anyway. The note this replaces —
+         * "date filtering + pagination is complex in NoSQL without composite
+         * indexes" — described Firestore; this runs on Postgres through
+         * PostgREST, where a range predicate beside an equality and an order is
+         * ordinary. admin/_academy.ts already filters this way.
+         *
+         * dateRangeStart / dateRangeEnd are the shared helpers from #33, which
+         * exists because a hand-rolled boundary put the query in UTC and the
+         * backstop in local time.
+         */
+        if (fromDate) {
+            exportsQuery = exportsQuery.where("createdAt", ">=", dateRangeStart(fromDate));
+        }
+        if (toDate) {
+            exportsQuery = exportsQuery.where("createdAt", "<=", dateRangeEnd(toDate));
+        }
+
         // Apply sorting
         exportsQuery = exportsQuery.orderBy("createdAt", "desc");
 
@@ -281,31 +506,24 @@ export async function getExportWindowsAction(
             }
         }
 
-        // Apply Limit
-        exportsQuery = exportsQuery.limit(limit);
+        // One extra row, so "is there more" is observed rather than guessed.
+        // `snapshot.docs.length === limit` is true on the LAST page whenever the
+        // total is an exact multiple of the page size, and the caller then asked
+        // for a page that does not exist. Same correction as #216.
+        exportsQuery = exportsQuery.limit(limit + 1);
 
         const snapshot = await exportsQuery.get();
 
-        let exports = serializeDocs<ExportWindow>(snapshot.docs);
+        const hasMore = snapshot.docs.length > limit;
+        const pageDocs = hasMore ? snapshot.docs.slice(0, limit) : snapshot.docs;
 
-        // Apply client-side date filtering (Note: This breaks pagination if used with limit. 
-        // For now we keep it but warn that date filtering + pagination is complex in NoSQL without composite indexes)
-        if (fromDate || toDate) { exports = exports.filter(exp => {
-                const createdDate = exp.createdAt;
+        const exports = serializeDocs<ExportWindow>(pageDocs);
 
-                if (fromDate && toDate) {
-                    return createdDate >= new Date(fromDate) && createdDate <= new Date(toDate);
-                } else if (fromDate) { return createdDate >= new Date(fromDate);
-                } else if (toDate) { return createdDate <= new Date(toDate);
-                }
+        const lastDocId = hasMore && pageDocs.length > 0
+            ? pageDocs[pageDocs.length - 1].id
+            : null;
 
-                return true;
-            });
-        }
-
-        const lastDocId = snapshot.docs.length === limit ? snapshot.docs[snapshot.docs.length - 1].id : null;
-
-        return { error: null, success: true as const, data: exports, meta: { cursor: lastDocId, hasMore: !!lastDocId }
+        return { error: null, success: true as const, data: exports, meta: { cursor: lastDocId, hasMore }
         };
     } catch (error: any) { logger.error("Get export windows error:", error);
         return { error: "Failed to fetch export windows", success: false as const, meta: null };
@@ -343,8 +561,21 @@ export async function getExportWindowDetailsAction(
         if (!data) { return { error: "Export window data is missing", success: false as const, data: null };
         }
 
-        // Verify ownership (unless admin)
-        if (data.userId !== session.user.id && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) { return { error: "Unauthorized to view this export", success: false as const, data: null };
+        /**
+         * The third gate in this file, and the only one that disagreed.
+         *
+         * A hand-written `admin || super_admin` read from the session TOKEN.
+         * The two WRITE actions above both resolve roles from the database and
+         * ask hasExportAdminAccess, which recognises `export_admin` — so an
+         * export administrator could settle a window and edit its details, and
+         * could not open it. Both of those comments record fixing exactly this
+         * divergence; the read was left behind.
+         */
+        const viewerDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const viewerRoles: string[] = viewerDoc.data()?.roles ?? [];
+
+        if (data.userId !== session.user.id && !hasExportAdminAccess(viewerRoles)) {
+            return { error: "Unauthorized to view this export", success: false as const, data: null };
         }
 
         const exportWindow = serializeDoc<ExportWindow>(exportDoc.id, data);

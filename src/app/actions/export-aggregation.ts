@@ -17,6 +17,16 @@ import { requireSession } from "@/lib/session-guard";
  */
 
 export interface ExportWindow { id?: string;
+    /**
+     * Always "aggregation" for a window this file creates. export_windows holds
+     * a second entity — private export SHIPMENTS — and nothing on the row said
+     * which, so the status vocabulary was one-way: an aggregation window moved
+     * onto a shipment status could never be set back to "open" and left the
+     * investor browse query for good. See lib/export-window-status.ts.
+     */
+    windowKind?: "shipment" | "aggregation";
+    /** What this window is raising: targetVolume x slotPrice. */
+    fundingGoal?: number;
     title: string;
     commodity: string;
     targetVolume: number; // in kg
@@ -80,6 +90,20 @@ export async function createExportWindowAction(data: { title: string;
         }
 
         const window: Omit<ExportWindow, "id"> = { title: data.title,
+            // The AGGREGATION entity — a crowdfunded opportunity, browsed by
+            // investors through `where status == "open"`. Stamped so the status
+            // rule knows "open" is legal here and "in_transit" is not.
+            windowKind: "aggregation" as const,
+            // What this window is raising, RECORDED rather than left derivable.
+            //
+            // Nothing wrote fundingGoal onto a window, so the overfunding
+            // machinery in all three fulfilment paths was inert:
+            // incrementWithinCeiling treats a missing ceiling field as
+            // unbounded, and it reads a STORED field through a Postgres
+            // function, so deriving it in JavaScript would not cap anything.
+            // admin/_exports.ts already computed this exact number for display
+            // and threw it away.
+            fundingGoal: targetVolume * slotPrice,
             commodity: data.commodity,
             targetVolume,
             currentVolume: 0,

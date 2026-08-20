@@ -195,10 +195,20 @@ describe('the check WAVE relies on, and the route that may still change it', () 
     it('WAVE still gates enrolment on the stored gender', async () => {
         // If this ever stops being true the set-once rule loses its reason, and
         // whoever removes it should see that here.
+        //
+        // Asserted against the shared rule rather than a literal expression in the
+        // application path. That path held one of FOUR hand-written copies of the
+        // eligibility rule and the copies had drifted — see wave-eligibility.ts —
+        // so it now calls checkWaveEligibility. The property this test exists for
+        // is unchanged and is now checkable as behaviour instead of as source text.
         const wave = await source('src/app/actions/wave/_wv_applications.ts');
+        expect(wave).toContain('checkWaveEligibility(userData)');
 
-        expect(wave).toContain('Only female applicants are eligible to enroll in the WAVE program.');
-        expect(wave).toMatch(/isMale\s*=\s*applicantGender\?\.toLowerCase\(\)\s*===\s*"male"/);
+        const { checkWaveEligibility } = await import('@/lib/wave-eligibility');
+
+        // The stored gender is what decides it.
+        expect(checkWaveEligibility({ gender: 'male', roles: [] }).eligible).toBe(false);
+        expect(checkWaveEligibility({ gender: 'female', roles: [] }).eligible).toBe(true);
     });
 
     it('an admin route still exists to correct a wrong record', async () => {

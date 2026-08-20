@@ -157,6 +157,20 @@ describe('cancelOrderAction — the restock that erased other writes', () => {
     it('restocks by increment, never by a computed total', async () => {
         // THE test. `currentQty + item.quantity` erases a concurrent
         // purchase's decrement, so the shop oversells afterwards.
+        //
+        // Seeded at "processing" rather than "pending_payment" — see #107. An
+        // order at pending_payment has reserved NO stock, so there is nothing
+        // to put back and the restock is now skipped entirely. This test is
+        // about the SHAPE of the restock when one is due, and the buyer action
+        // only claims from pending_payment today, so the branch it asserts is
+        // reached through the general rule rather than through that claim.
+        // Which statuses restock at all is covered next.
+        setDocs({
+            buyerId: 'buyer-1',
+            status: 'processing',
+            items: [{ productId: 'prod-a', quantity: 3, sellerId: 'seller-1' }],
+        });
+
         const { cancelOrderAction } = await import('@/app/actions/marketplace/_buyer');
         await cancelOrderAction('order-1');
 
@@ -166,6 +180,18 @@ describe('cancelOrderAction — the restock that erased other writes', () => {
             _methodName: 'FieldValue.increment',
             _operand: 3,
         });
+    });
+
+    it('and puts NOTHING back for an order that never reserved any', async () => {
+        // #107. pending_payment is the state before the reservation: the
+        // Paystack creator writes the order without touching
+        // availableQuantity. Restocking it invented inventory the seller never
+        // had, repeatably.
+        const { cancelOrderAction } = await import('@/app/actions/marketplace/_buyer');
+        await cancelOrderAction('order-1');
+
+        const updates = (global as any).mockFirestoreUpdate.mock.calls.map((c: any) => c[1]);
+        expect(updates.find((u: any) => u.availableQuantity !== undefined)).toBeUndefined();
     });
 
     it('restocks nothing when the cancellation claim is lost', async () => {
@@ -183,7 +209,7 @@ describe('mark-withdrawal-completed route', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         setSession('admin-A');
-        mockClaim.mockResolvedValue({ claimed: true, status: 'completed' });
+        mockClaimFromAny.mockResolvedValue({ claimed: true, status: 'completed' });
         setDocs({ userId: 'member-1', status: 'approved_pending_payout' });
     });
 
@@ -194,14 +220,46 @@ describe('mark-withdrawal-completed route', () => {
         const { PATCH } = await import('@/app/api/admin/cooperative/mark-withdrawal-completed/route');
         await PATCH({ json: async () => ({ withdrawalId: 'wd-1', transactionReference: 'TRF-1' }) } as any);
 
-        const call = mockClaim.mock.calls[0][0] as any;
-        expect(call.from).toBe('approved_pending_payout');
+        const call = mockClaimFromAny.mock.calls[0][0] as any;
         expect(call.to).toBe('completed');
         expect(call.patch.transactionReference).toBe('TRF-1');
     });
 
+    it('and accepts BOTH states an approval can leave it in', async () => {
+        // It accepted only "approved_pending_payout" — the state
+        // admin/_withdrawals.ts writes when its Paystack transfer FAILS.
+        // cooperative/_coop_admin_money.ts approveWithdrawalAction, the screen
+        // built for cooperative withdrawals, leaves them at "approved", and
+        // nothing transitioned that anywhere. So a withdrawal approved there sat
+        // at "approved" for ever, and the member's own history — which sums
+        // `status === "completed"` — reported ₦0 withdrawn however much had been
+        // paid to them.
+        //
+        // The WAVE equivalent already claims fromAny the same pair.
+        const { PATCH } = await import('@/app/api/admin/cooperative/mark-withdrawal-completed/route');
+        await PATCH({ json: async () => ({ withdrawalId: 'wd-1' }) } as any);
+
+        const call = mockClaimFromAny.mock.calls[0][0] as any;
+        expect(call.fromAny).toEqual(['approved_pending_payout', 'approved']);
+    });
+
+    it('which is the state the cooperative approval really leaves', async () => {
+        // Vacuity guard, read off the source: if approveWithdrawalAction wrote
+        // "approved_pending_payout" there would have been nothing to fix.
+        const { readFileSync } = require('fs');
+        const { join } = require('path');
+        const src = readFileSync(
+            join(process.cwd(), 'src/app/actions/cooperative/_coop_admin_money.ts'),
+            'utf-8',
+        );
+
+        expect(src).toContain('from: "pending",');
+        expect(src).toContain('to: "approved",');
+        expect(src).not.toContain('to: "approved_pending_payout"');
+    });
+
     it('reports a conflict when another admin already completed it', async () => {
-        mockClaim.mockResolvedValue({ claimed: false, status: 'completed' });
+        mockClaimFromAny.mockResolvedValue({ claimed: false, status: 'completed' });
 
         const { PATCH } = await import('@/app/api/admin/cooperative/mark-withdrawal-completed/route');
         const res: any = await PATCH({ json: async () => ({ withdrawalId: 'wd-1' }) } as any);

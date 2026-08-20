@@ -3,6 +3,7 @@ import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { toMillis } from "@/lib/firestore-serialize";
 
 // Force dynamic execution - don't try to statically generate this route
 export const dynamic = 'force-dynamic';
@@ -53,7 +54,14 @@ export async function GET(
             name: userData?.name || '',
             email: userData?.email || '',
             role: userData?.role || 'member',
-            createdAt: userData?.createdAt?.toMillis?.() || Date.now(),
+            // toMillis, not `?.toMillis?.() || Date.now()`.
+            //
+            // The JSONB writer stores a `new Date()` as an ISO string, for which
+            // `toMillis` is undefined — so this reported the CURRENT moment as
+            // the account's creation date for every user whose createdAt was
+            // written that way. Date.now() stays as the last resort for a value
+            // that genuinely cannot be read.
+            createdAt: toMillis(userData?.createdAt) || Date.now(),
             phone: userData?.phone || '',
             location: userData?.location || '',
         });

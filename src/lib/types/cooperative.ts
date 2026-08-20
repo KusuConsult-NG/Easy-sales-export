@@ -215,7 +215,20 @@ export type LoanApplication = {
 // ============================================
 
 export type CooperativeMembership = {
-    id: string; // Document ID (User ID in this case)
+    /**
+     * The membership DOCUMENT id.
+     *
+     * This said "(User ID in this case)", and callers believed it — the member
+     * loans page passed it where a user id was required. It is usually the same,
+     * because most writers key the document by the user id, but
+     * joinCooperativeAction creates one with an AUTO-GENERATED id and the email
+     * and paymentReference fallbacks return whatever document they matched.
+     *
+     * Use `userId` when you mean the member. Use this when you mean the row.
+     */
+    id: string;
+    /** The member this row belongs to. Every writer sets it; the type omitted it. */
+    userId?: string;
     cooperativeId: string;
     cooperativeName: string;
     savingsBalance: number;

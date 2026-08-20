@@ -54,9 +54,12 @@
  * actually write.
  */
 
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect, beforeEach } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { supabaseDb as db } from '@/lib/supabase-db';
+import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
+import { stripComments } from '@/lib/testing/strip-comments';
 
 /** Method names the adapter exposes on a collection/query or on db itself. */
 function adapterMethods(): Set<string> {
@@ -78,9 +81,26 @@ function adapterMethods(): Set<string> {
     return names;
 }
 
+/**
+ * The harness is TWO files now.
+ *
+ * jest.setup.js used to carry the whole fluent surface twice over, once per
+ * mocked module. It was deduplicated into src/lib/testing/firestore-mock-db.js,
+ * so a check that reads only jest.setup.js now reads the wiring and not the
+ * surface — and would report every method missing while the harness was
+ * complete. Both files, always.
+ */
+const HARNESS_FILES = ['jest.setup.js', 'src/lib/testing/firestore-mock-db.js'];
+
+function harnessSource(): string {
+    return HARNESS_FILES
+        .map((f) => readFileSync(join(process.cwd(), f), 'utf-8'))
+        .join('\n');
+}
+
 /** Method names the mock implements, however they are written. */
 function harnessMethods(): Set<string> {
-    const src = readFileSync(join(process.cwd(), 'jest.setup.js'), 'utf-8');
+    const src = harnessSource();
     const names = new Set<string>();
 
     // `foo: (` — arrow-style stubs, and `foo: docObj` — reference-style.
@@ -144,13 +164,17 @@ describe('the jest harness against the real adapter', () => {
         // failure that no assertion can distinguish from a refusal.
         const DOC_REF_SURFACE = ['get', 'set', 'update', 'delete'];
 
-        const src = readFileSync(join(process.cwd(), 'jest.setup.js'), 'utf-8');
+        const src = harnessSource();
 
-        // Each `const docObj = (id) => { ... };` block, plus the modular
-        // docRefFor. Located by name so a new shape has to be added here
-        // deliberately.
+        // Each document-ref shape, located by name so a new one has to be added
+        // here deliberately. There used to be three — two copies of `docObj` and
+        // the modular `docRefFor` — which is exactly why `delete` could be
+        // missing from two of them while the flat check above saw it as covered.
+        // Deduplicating them into `makeDocRef` is what removed that class of gap;
+        // the older names stay in the pattern so re-introducing a second shape is
+        // still caught.
         const shapes: Array<{ name: string; body: string }> = [];
-        for (const m of src.matchAll(/const (docObj|docRefFor) = \([^)]*\) =>/g)) {
+        for (const m of src.matchAll(/(?:const (?:docObj|docRefFor) = \([^)]*\) =>|function (makeDocRef)\()/g)) {
             const start = m.index ?? 0;
             // Take the balanced body that follows.
             let depth = 0, end = start;
@@ -173,12 +197,23 @@ describe('the jest harness against the real adapter', () => {
                     return !t.startsWith('//') && !t.startsWith('*') && !t.startsWith('/*');
                 })
                 .join('\n');
-            shapes.push({ name: `${m[1]} @ line ${src.slice(0, start).split('\n').length}`, body });
+            shapes.push({ name: `${m[1] ?? m[2] ?? 'shape'} @ line ${src.slice(0, start).split('\n').length}`, body });
         }
 
-        // Sanity: without this the loop below can pass against zero shapes,
-        // which is the vacuity failure this file exists to prevent.
-        expect(shapes.length).toBeGreaterThanOrEqual(3);
+        // At least one shape must be found, or the loop below passes against
+        // nothing — the vacuity failure this file exists to prevent.
+        expect(shapes.length).toBeGreaterThanOrEqual(1);
+
+        // And a SYNTHETIC POSITIVE CONTROL, because a count floor stops meaning
+        // anything once the count is one. The detector is run over a planted
+        // shape that is missing `delete`, and must flag it. If the regex ever
+        // stops matching the real shape, this still fails.
+        const planted = `function makeDocRef(collection, id) {
+            return { get: () => 1, set: () => 2, update: () => 3 };
+        }`;
+        const plantedGaps = DOC_REF_SURFACE.filter(
+            (m) => !new RegExp(`\\b${m}\\s*:`).test(planted));
+        expect(plantedGaps).toEqual(['delete']);
 
         const gaps: string[] = [];
         for (const shape of shapes) {
@@ -219,7 +254,7 @@ describe('the jest harness against the real adapter', () => {
         // The supabase-db surface has been checked since #144. This module was
         // not, purely because the earlier failures happened to be there.
         const realSrc = readFileSync(join(process.cwd(), 'src/lib/firebase-admin.ts'), 'utf-8');
-        const harnessSrc = readFileSync(join(process.cwd(), 'jest.setup.js'), 'utf-8');
+        const harnessSrc = harnessSource();
 
         const exported = [...realSrc.matchAll(/^export (?:async )?(?:function|const) ([a-zA-Z][a-zA-Z0-9_]*)/gm)]
             .map((m) => m[1]);
@@ -255,7 +290,7 @@ describe('the jest harness against the real adapter', () => {
     it('gives the mocked auth handle the methods src calls on it', () => {
         // `adminAuth: {}` satisfies a presence check and throws on every call.
         // These are the methods actually reached from src.
-        const harnessSrc = readFileSync(join(process.cwd(), 'jest.setup.js'), 'utf-8');
+        const harnessSrc = harnessSource();
         // Comment lines removed before matching.
         //
         // The comment explaining this fix quotes `adminAuth: {}` to say what was
@@ -305,7 +340,7 @@ describe('the jest harness against the real adapter', () => {
         // and nothing said so. The check above passes happily, because it only
         // ever looked at class members.
         const adapterSrc = readFileSync(join(process.cwd(), 'src/lib/supabase-db.ts'), 'utf-8');
-        const harnessSrc = readFileSync(join(process.cwd(), 'jest.setup.js'), 'utf-8');
+        const harnessSrc = harnessSource();
 
         const exported = [...adapterSrc.matchAll(/^export (?:async )?(?:function|const) ([a-zA-Z][a-zA-Z0-9_]*)/gm)]
             .map((m) => m[1]);
@@ -332,7 +367,7 @@ describe('the jest harness against the real adapter', () => {
         // The narrower lesson from docRef.set(). A write stub that returns a
         // resolved promise and calls no jest.fn() is indistinguishable from a
         // working one, right up until a test asserts on it.
-        const src = readFileSync(join(process.cwd(), 'jest.setup.js'), 'utf-8');
+        const src = harnessSource();
         const writeStubs = ['set', 'update', 'add', 'delete', 'create'];
 
         const lines = src.split('\n');
@@ -342,10 +377,24 @@ describe('the jest harness against the real adapter', () => {
             const m = lines[i].match(/^\s+(set|update|add|delete|create):\s*\([^)]*\)\s*=>\s*(.*)$/);
             if (!m) continue;
 
-            // A stub may be one line, or open a block and record on the next.
-            // Reading only the first line reported every multi-line stub as
-            // silent — which is what the first version of this check did.
-            const body = [m[2], ...lines.slice(i + 1, i + 4)].join(' ');
+            // A stub may be one line, or open a block and record several lines
+            // down. Reading only the first line reported every multi-line stub as
+            // silent, which is what the first version of this check did — and a
+            // fixed four-line window then reported a correct stub as silent the
+            // moment an explanatory comment sat between the arrow and the
+            // recorder. Neither is a property of the stub.
+            //
+            // So the body is the whole property: everything up to the next line
+            // indented no deeper than the stub itself. That is what "does this
+            // stub record" is actually a question about.
+            const indent = lines[i].match(/^\s*/)![0].length;
+            const bodyLines = [m[2]];
+            for (let j = i + 1; j < lines.length; j++) {
+                const line = lines[j];
+                if (line.trim().length > 0 && line.match(/^\s*/)![0].length <= indent) break;
+                bodyLines.push(line);
+            }
+            const body = bodyLines.join(' ');
             // Any global recorder, not just the mockFirestore family.
             //
             // This tested /mockFirestore/, which was every recorder in the file
@@ -368,5 +417,286 @@ describe('the jest harness against the real adapter', () => {
             );
         }
         expect(silent).toEqual([]);
+    });
+});
+
+/**
+ * The fake must hand back what the ADAPTER hands back, not what was stored.
+ *
+ * supabase-db writes ISO strings into JSONB (convertTimestampsToStrings) and
+ * revives them into Timestamp objects on every read
+ * (convertStringsToTimestamps). So `doc.data().createdAt.toDate()` works in
+ * production even though the column holds a string.
+ *
+ * The fake used to hand back the raw string, and that is a divergence in the
+ * dangerous direction. This codebase is full of
+ * `v?.toDate ? v.toDate() : new Date(v)`; with plain strings every one of those
+ * took its FALLBACK arm, so a behavioural test could assert the fallback's
+ * answer while the arm that actually runs in production went unexercised. The
+ * cooperative ID card computes the card's issue and expiry dates through
+ * exactly that shape.
+ *
+ * Both directions are gated here, because reproducing only the read would
+ * round-trip a Timestamp object into the store and corrupt the document.
+ */
+describe('the fake hydrates dates the way the adapter does', () => {
+    let store: FakeDbHandle;
+    beforeEach(() => { store = installFakeDb(); });
+
+    it('doc.data() gives a Timestamp for a stored ISO string', async () => {
+        store.seed('x', 'a', { createdAt: '2026-01-02T03:04:05.000Z', name: 'ada' });
+
+        const snap = await db.collection('x').doc('a').get();
+        const data = snap.data() as Record<string, any>;
+
+        expect(typeof data.createdAt.toDate).toBe('function');
+        expect(data.createdAt.toDate().toISOString()).toBe('2026-01-02T03:04:05.000Z');
+        expect(typeof data.createdAt.toMillis).toBe('function');
+        expect(data.name).toBe('ada');
+    });
+
+    it('a query snapshot hydrates too, not only a document read', async () => {
+        store.seed('x', 'a', { createdAt: '2026-01-02T03:04:05.000Z' });
+
+        const snap = await db.collection('x')
+            .where('createdAt', '==', '2026-01-02T03:04:05.000Z').get() as any;
+
+        expect(snap.docs).toHaveLength(1);
+        expect(typeof snap.docs[0].data().createdAt.toDate).toBe('function');
+    });
+
+    it('a Timestamp written back becomes an ISO string in the store', async () => {
+        // Without this the JSON clone would put a Timestamp's internals into the
+        // document, and the next read would hand back an object that is neither
+        // a date nor a string.
+        store.seed('x', 'a', { createdAt: '2026-01-02T03:04:05.000Z' });
+        const read = (await db.collection('x').doc('a').get()).data() as Record<string, any>;
+
+        await db.collection('x').doc('a').update({ copiedAt: read.createdAt });
+
+        expect(store.get('x', 'a')!.copiedAt).toBe('2026-01-02T03:04:05.000Z');
+    });
+
+    it('a Date written straight in becomes an ISO string too', async () => {
+        await db.collection('x').doc('a').set({ when: new Date('2026-05-06T07:08:09.000Z') });
+        expect(store.get('x', 'a')!.when).toBe('2026-05-06T07:08:09.000Z');
+    });
+
+    it('and the FILTERS still compare the stored string, as Postgres does', async () => {
+        // raw_data->>'k' is text. Hydration is a read-side concern only; if it
+        // leaked into the query evaluation the comparisons would change meaning.
+        store.seedAll('x', {
+            a: { createdAt: '2026-01-01T00:00:00.000Z' },
+            b: { createdAt: '2026-06-01T00:00:00.000Z' },
+        });
+
+        const snap = await db.collection('x')
+            .where('createdAt', '>', '2026-03-01T00:00:00.000Z').get() as any;
+
+        expect(snap.docs.map((d: any) => d.id)).toEqual(['b']);
+    });
+
+    it('a cursor taken from a SNAPSHOT still matches the stored value', async () => {
+        // The trap hydration introduced: startAfter(snapshot) reads the order
+        // key off `snapshot.data()`, which is hydrated, while the rows are
+        // compared against the stored ISO string. Unflattened it stringifies to
+        // "[object Object]", matches nothing, and every page is page one — a
+        // paginated list that silently never advances. The adapter converts the
+        // cursor the same way in buildCursorFilter.
+        store.seedAll('x', {
+            a: { createdAt: '2026-01-03T00:00:00.000Z' },
+            b: { createdAt: '2026-01-02T00:00:00.000Z' },
+            c: { createdAt: '2026-01-01T00:00:00.000Z' },
+        });
+
+        const cursorDoc = await db.collection('x').doc('b').get();
+        const page = await db.collection('x')
+            .orderBy('createdAt', 'desc').startAfter(cursorDoc).limit(2).get() as any;
+
+        expect(page.docs.map((d: any) => d.id)).toEqual(['c']);
+    });
+
+    it('the cursor is resolved when the query RUNS, not when startAfter is called', async () => {
+        // SupabaseQuery stores the snapshot in `_startAfterDoc` and reads it in
+        // buildCursorFilter, so `.startAfter(doc)` BEFORE `.orderBy(...)` works.
+        // Several actions are written that way — _mp_seller_dashboard.ts is —
+        // and a fake resolving the cursor eagerly got an empty one and returned
+        // page one forever, which is a "load more" button that never advances.
+        store.seedAll('x', {
+            a: { createdAt: '2026-01-03T00:00:00.000Z' },
+            b: { createdAt: '2026-01-02T00:00:00.000Z' },
+            c: { createdAt: '2026-01-01T00:00:00.000Z' },
+        });
+
+        const cursorDoc = await db.collection('x').doc('b').get();
+        const page = await db.collection('x')
+            .startAfter(cursorDoc)          // <- before the orderBy
+            .orderBy('createdAt', 'desc')
+            .limit(2)
+            .get() as any;
+
+        expect(page.docs.map((d: any) => d.id)).toEqual(['c']);
+    });
+
+    /**
+     * INVERTED BY #192. This assertion used to read:
+     *
+     *     it('and a NON-snapshot cursor is ignored, as the adapter ignores it')
+     *     ...
+     *     expect(page.docs.map(d => d.id)).toEqual(['a', 'b']);   // cursor dropped
+     *
+     * with the note that "honouring a bare value would make a call site look
+     * like it paginates when in production it pages nowhere". That was a true
+     * description of the adapter and a wrong conclusion about what to do: the
+     * adapter was the broken half. Firestore's startAfter takes field values as
+     * well as a snapshot, seven call sites in this codebase pass a Date, and
+     * every one of them served page one for ever. This test is the reason that
+     * went unnoticed — it asserted the defect, so the defect could not regress.
+     *
+     * A harness must be able to be WRONG about the adapter. When it disagrees,
+     * the question is which one is right, and the answer here was not the one
+     * this file assumed.
+     */
+    it('honours a NON-snapshot cursor, as the adapter now does', async () => {
+        store.seedAll('x', {
+            a: { createdAt: '2026-01-03T00:00:00.000Z' },
+            b: { createdAt: '2026-01-02T00:00:00.000Z' },
+        });
+
+        const page = await db.collection('x')
+            .orderBy('createdAt', 'desc')
+            .startAfter('2026-01-03T00:00:00.000Z')
+            .get() as any;
+
+        expect(page.docs.map((d: any) => d.id)).toEqual(['b']);
+    });
+
+    it('leaves a string that merely starts with digits alone', async () => {
+        store.seed('x', 'a', { name: '2026-not-a-date', code: '12345678901' });
+
+        const data = (await db.collection('x').doc('a').get()).data() as Record<string, any>;
+
+        expect(data.name).toBe('2026-not-a-date');
+        expect(data.code).toBe('12345678901');
+    });
+});
+
+/**
+ * The transaction must behave like SupabaseTransaction, which is not the
+ * intuitive thing.
+ *
+ * `t.get` is literally `refOrQuery.get()`, so it accepts a QUERY as well as a
+ * document reference — academy's dedup guard reads a filtered query that way.
+ * And `t.set` / `t.update` / `t.delete` push closures into `_pendingWrites`
+ * that only run in `_commit()`, AFTER the callback returns.
+ *
+ * The fake used to accept only a ref (a query came back as a non-existent
+ * document, and the action's catch turned the resulting throw into a generic
+ * failure) and to apply writes immediately (so a callback that threw still left
+ * writes in the store, and a read-after-write inside one callback saw the new
+ * value where production sees the old).
+ *
+ * Still NO LOCK, which is the one thing that must not be simulated.
+ */
+describe('the fake transaction behaves like SupabaseTransaction', () => {
+    let store: FakeDbHandle;
+    beforeEach(() => { store = installFakeDb(); });
+
+    it('t.get accepts a query, and the filters actually run', async () => {
+        store.seedAll('x', {
+            a: { status: 'open' },
+            b: { status: 'closed' },
+            c: { status: 'open' },
+        });
+
+        const rows = await db.runTransaction(async (t: any) => {
+            const snap = await t.get(db.collection('x').where('status', '==', 'open'));
+            return snap.docs.map((d: any) => d.id);
+        });
+
+        expect(rows.sort()).toEqual(['a', 'c']);
+    });
+
+    it('t.get still accepts a document reference', async () => {
+        store.seed('x', 'a', { status: 'open' });
+
+        const status = await db.runTransaction(async (t: any) => {
+            const snap = await t.get(db.collection('x').doc('a'));
+            return snap.data().status;
+        });
+
+        expect(status).toBe('open');
+    });
+
+    it('a callback that THROWS writes nothing', async () => {
+        store.seed('x', 'a', { status: 'open' });
+
+        await expect(db.runTransaction(async (t: any) => {
+            t.update(db.collection('x').doc('a'), { status: 'closed' });
+            throw new Error('refused');
+        })).rejects.toThrow('refused');
+
+        expect(store.get('x', 'a')!.status).toBe('open');
+    });
+
+    it('a read after a write, inside one callback, sees the OLD value', async () => {
+        store.seed('x', 'a', { status: 'open' });
+
+        const seen = await db.runTransaction(async (t: any) => {
+            t.update(db.collection('x').doc('a'), { status: 'closed' });
+            const snap = await t.get(db.collection('x').doc('a'));
+            return snap.data().status;
+        });
+
+        expect(seen).toBe('open');
+        // ...and the write does land, once the callback has returned.
+        expect(store.get('x', 'a')!.status).toBe('closed');
+    });
+
+    it('the writes land in the order they were queued', async () => {
+        await db.runTransaction(async (t: any) => {
+            t.set(db.collection('x').doc('a'), { n: 1 });
+            t.update(db.collection('x').doc('a'), { n: 2 });
+        });
+
+        expect(store.get('x', 'a')!.n).toBe(2);
+    });
+
+    it('a snapshot\'s ref exposes SUBCOLLECTIONS, as SupabaseDocumentReference does', async () => {
+        // SupabaseDocumentSnapshot.ref IS a SupabaseDocumentReference, and that
+        // class has `collection(name)` returning `${collection}/${id}/${name}`.
+        // The fake's ref did not, so an action written as
+        //
+        //     const snap = await db.collection(X).doc(id).get();
+        //     await snap.ref.collection('messages').get()
+        //
+        // threw "ref.collection is not a function" against correct code —
+        // getMessages was untestable until this was closed. Same shape as the
+        // missing collection().add() and the missing audit-log exports.
+        store.seed('conversations', 'c1', { participants: ['u1'] });
+        store.seed('conversations/c1/messages', 'm1', { text: 'hello' });
+
+        const snap = await db.collection('conversations').doc('c1').get();
+        const messages = await snap.ref.collection('messages').get();
+
+        expect(messages.docs.map((d: any) => d.data().text)).toEqual(['hello']);
+        // The same path a doc-ref chain produces, so the two agree.
+        const viaChain = await db.collection('conversations').doc('c1').collection('messages').get();
+        expect(viaChain.docs).toHaveLength(1);
+    });
+
+    it('and it still takes NO LOCK — which must never be simulated', () => {
+        // Structural, because a single-threaded fake cannot demonstrate the
+        // absence of locking by racing anything. Every money guarantee in this
+        // platform is a Postgres CAS function BECAUSE this is true; a fake that
+        // acquired a lock would make an unguarded check-then-write look safe.
+        const raw = readFileSync(
+            join(process.cwd(), 'src/lib/testing/firestore-mock-db.js'), 'utf8');
+        // Comments stripped first — the block above this one SAYS "NO LOCK",
+        // and a scan that reads its own documentation as an implementation is
+        // the mistake finding #75 was about.
+        const code = stripComments(raw);
+        expect(code).not.toMatch(/\block\b|mutex|semaphore|acquire/i);
+        expect(raw).toContain('NO LOCK');
     });
 });

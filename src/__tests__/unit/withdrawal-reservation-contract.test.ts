@@ -38,6 +38,7 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { COOPERATIVE_MINIMUM_BALANCE, formatMinimumBalance } from '@/lib/cooperative-limits';
 
 const mockDebit = jest.fn() as jest.Mock<any>;
 const mockDebitWithFloor = jest.fn() as jest.Mock<any>;
@@ -215,25 +216,40 @@ describe('api/cooperative/withdraw — eligibility is the spendable balance', ()
     });
 });
 
+/**
+ * AND THE MINIMUM BALANCE APPLIED TO TWO OF THE FOUR.
+ *
+ * These two doors used debitJsonbBalance, which enforces "not negative" and
+ * nothing else, while /api/cooperative/withdraw above and
+ * repayLoanFromSavingsAction — the other two paths that reduce this same
+ * balance — both refuse below COOPERATIVE_MINIMUM_BALANCE through
+ * debitJsonbBalanceWithFloor.
+ *
+ * So a member could empty their savings to zero through one screen and be
+ * refused at ₦4,999 through another, for the same request. Both go through the
+ * floor primitive now, which is why these assertions moved from mockDebit to
+ * mockDebitWithFloor.
+ */
 describe('cooperative/_actions — _submitWithdrawalAction locks what it debits', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         setSession('member-1');
         setMember(drainedMember({ savingsBalance: 80_000 }));
-        mockDebit.mockResolvedValue({ ok: true, balance: 55_000, reason: null });
+        mockDebitWithFloor.mockResolvedValue({ ok: true, balance: 55_000, reason: null });
     });
 
     it('increments lockedBalance after the debit', async () => {
-        // This action was already converted to debitJsonbBalance, and that half
+        // This action was already converted to a locked debit, and that half
         // was right. It never incremented lockedBalance, so every request
         // through it left the field one withdrawal further negative once an
         // admin approved or rejected.
         const { submitWithdrawalAction } = await import('@/app/actions/cooperative/_coop_money');
         await submitWithdrawalAction({} as any, withdrawalForm(25_000));
 
-        expect(mockDebit).toHaveBeenCalledWith(expect.objectContaining({
+        expect(mockDebitWithFloor).toHaveBeenCalledWith(expect.objectContaining({
             field: 'savingsBalance',
             amount: 25_000,
+            floor: COOPERATIVE_MINIMUM_BALANCE,
         }));
 
         const locked = updateFor('lockedBalance');
@@ -244,13 +260,26 @@ describe('cooperative/_actions — _submitWithdrawalAction locks what it debits'
     });
 
     it('locks nothing when the debit is refused', async () => {
-        mockDebit.mockResolvedValue({ ok: false, balance: 100, reason: 'insufficient_funds' });
+        mockDebitWithFloor.mockResolvedValue({ ok: false, balance: 100, reason: 'insufficient_funds' });
 
         const { submitWithdrawalAction } = await import('@/app/actions/cooperative/_coop_money');
         const result: any = await submitWithdrawalAction({} as any, withdrawalForm(25_000));
 
         expect(result.success).toBe(false);
         expect(updateFor('lockedBalance')).toBeUndefined();
+    });
+
+    it('and refusing at the floor says so, rather than "insufficient funds"', async () => {
+        // The member HAS the money and may not take all of it. Telling somebody
+        // with ₦6,000 that their funds are insufficient is simply false.
+        mockDebitWithFloor.mockResolvedValue({ ok: false, balance: 6_000, reason: 'below_floor' });
+
+        const { submitWithdrawalAction } = await import('@/app/actions/cooperative/_coop_money');
+        const result: any = await submitWithdrawalAction({} as any, withdrawalForm(25_000));
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain(formatMinimumBalance());
+        expect(result.error).not.toContain('Insufficient');
     });
 });
 
@@ -259,7 +288,7 @@ describe('cooperative/_withdrawal — the third door onto savingsBalance', () =>
         jest.clearAllMocks();
         setSession('member-1');
         setMember(drainedMember({ savingsBalance: 80_000, cooperativeId: 'coop-1' }));
-        mockDebit.mockResolvedValue({ ok: true, balance: 55_000, reason: null });
+        mockDebitWithFloor.mockResolvedValue({ ok: true, balance: 55_000, reason: null });
     });
 
     it('takes the debit through the locked primitive, not a read-check-write', async () => {
@@ -275,10 +304,11 @@ describe('cooperative/_withdrawal — the third door onto savingsBalance', () =>
             reason: 'School fees',
         });
 
-        expect(mockDebit).toHaveBeenCalledWith(expect.objectContaining({
+        expect(mockDebitWithFloor).toHaveBeenCalledWith(expect.objectContaining({
             table: 'cooperative_members',
             field: 'savingsBalance',
             amount: 25_000,
+            floor: COOPERATIVE_MINIMUM_BALANCE,
         }));
         // The old in-transaction decrement must be gone, not left alongside —
         // keeping both would take the money twice.
@@ -287,7 +317,7 @@ describe('cooperative/_withdrawal — the third door onto savingsBalance', () =>
     });
 
     it('refuses on insufficient funds without locking anything', async () => {
-        mockDebit.mockResolvedValue({ ok: false, balance: 200, reason: 'insufficient_funds' });
+        mockDebitWithFloor.mockResolvedValue({ ok: false, balance: 200, reason: 'insufficient_funds' });
 
         const { submitWithdrawalRequestAction } = await import('@/app/actions/cooperative/_withdrawal');
         const result: any = await submitWithdrawalRequestAction({
@@ -299,5 +329,138 @@ describe('cooperative/_withdrawal — the third door onto savingsBalance', () =>
 
         expect(result.success).toBe(false);
         expect(updateFor('lockedBalance')).toBeUndefined();
+    });
+
+    it('and refusing at the floor says so, rather than "insufficient funds"', async () => {
+        mockDebitWithFloor.mockResolvedValue({ ok: false, balance: 6_000, reason: 'below_floor' });
+
+        const { submitWithdrawalRequestAction } = await import('@/app/actions/cooperative/_withdrawal');
+        const result: any = await submitWithdrawalRequestAction({
+            amount: 25_000,
+            bankName: 'GTBank',
+            accountNumber: '0123456789',
+            accountName: 'Ada Obi',
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain(formatMinimumBalance());
+        expect(result.error).not.toContain('Insufficient');
+    });
+});
+
+describe('every path that reduces a member\'s savings applies the floor', () => {
+    // A structural sweep, so a fifth door added later cannot skip it. Fixed
+    // savings is deliberately excluded and says why.
+    const { readFileSync } = require('fs');
+    const { join } = require('path');
+
+    const REDUCERS = [
+        'src/app/api/cooperative/withdraw/route.ts',
+        'src/app/actions/platform.ts',
+        'src/app/actions/cooperative/_withdrawal.ts',
+        'src/app/actions/cooperative/_coop_money.ts',
+        'src/app/actions/cooperative/_loans_repayments.ts',
+    ];
+
+    it.each(REDUCERS)('%s imports the shared floor', (rel: string) => {
+        const src = readFileSync(join(process.cwd(), rel), 'utf-8');
+
+        expect(src).toContain('COOPERATIVE_MINIMUM_BALANCE');
+        expect(src).toContain('debitJsonbBalanceWithFloor');
+    });
+
+    it('and the floor is one number, defined once', () => {
+        // Vacuity guard: five files agreeing on a locally-declared 5000 is the
+        // defect, not the fix.
+        for (const rel of REDUCERS) {
+            const src = readFileSync(join(process.cwd(), rel), 'utf-8');
+            expect(src).toMatch(/from ["']@\/lib\/cooperative-limits["']/);
+        }
+        expect(COOPERATIVE_MINIMUM_BALANCE).toBe(5000);
+    });
+
+    it('while a fixed-savings plan does not, because the money stays in', () => {
+        // Locking savings into a fixed plan does not take them out of the
+        // cooperative, so the "leave ₦5,000 behind" rule does not apply. Both
+        // fixed-savings doors agree on that, which is the point.
+        const action = readFileSync(join(process.cwd(), 'src/app/actions/cooperative/_coop_money.ts'), 'utf-8');
+        const route = readFileSync(join(process.cwd(), 'src/app/api/cooperative/create-fixed-savings/route.ts'), 'utf-8');
+
+        expect(action).toContain('Insufficient savings balance to create this fixed savings plan');
+        expect(route).toContain('debitJsonbBalance(');
+        expect(route).not.toContain('debitJsonbBalanceWithFloor');
+    });
+});
+
+describe('and one minimum withdrawal, not three answers', () => {
+    // /api/cooperative/withdraw refused anything under ₦1,000. withdrawalSchema
+    // asks only for `positive()`, and submitWithdrawalAction only for `> 0` — so
+    // a ₦1 request was refused by the route and ACCEPTED by both actions, each
+    // one creating a pending request an admin has to action and locking the
+    // amount out of the member's savings until they do.
+    const { readFileSync } = require('fs');
+    const { join } = require('path');
+    const {
+        COOPERATIVE_MINIMUM_WITHDRAWAL,
+        formatMinimumWithdrawal,
+    } = require('@/lib/cooperative-limits');
+
+    const DOORS = [
+        'src/app/api/cooperative/withdraw/route.ts',
+        'src/app/actions/cooperative/_withdrawal.ts',
+        'src/app/actions/cooperative/_coop_money.ts',
+    ];
+
+    it('is 1,000 — the route\'s own figure, not one invented here', () => {
+        expect(COOPERATIVE_MINIMUM_WITHDRAWAL).toBe(1000);
+        expect(formatMinimumWithdrawal()).toBe('₦1,000');
+    });
+
+    // The COMPARISON, not merely the import. Replacing each guard's condition
+    // with `false` left the import and the message in place, so an
+    // import-level assertion passed against a door that enforced nothing.
+    const GUARDS: Array<[string, string]> = [
+        ['src/app/api/cooperative/withdraw/route.ts', 'if (!amount || amount < COOPERATIVE_MINIMUM_WITHDRAWAL) {'],
+        ['src/app/actions/cooperative/_withdrawal.ts', 'if (validatedData.amount < COOPERATIVE_MINIMUM_WITHDRAWAL) {'],
+        ['src/app/actions/cooperative/_coop_money.ts', 'if (amount < COOPERATIVE_MINIMUM_WITHDRAWAL) {'],
+    ];
+
+    it.each(GUARDS)('%s enforces it from the shared constant', (rel: string, guard: string) => {
+        const src = readFileSync(join(process.cwd(), rel), 'utf-8');
+
+        expect(src).toContain(guard);
+        expect(src).toContain('formatMinimumWithdrawal()');
+    });
+
+    it.each(DOORS)('%s no longer writes the figure out by hand', (rel: string) => {
+        const src = readFileSync(join(process.cwd(), rel), 'utf-8')
+            .replace(/\/\*[\s\S]*?\*\//g, '')
+            .split('\n')
+            .filter((l: string) => !l.trim().startsWith('//'))
+            .join('\n');
+
+        expect(src).not.toContain('amount < 1000');
+        expect(src).not.toContain('₦1,000');
+    });
+
+    it('and the withdraw page validates against the same number', () => {
+        // Vacuity guard: the client figure is not a control, but it must agree
+        // with the one that is, or a member is refused after filling the form.
+        const page = readFileSync(
+            join(process.cwd(), 'src/app/cooperatives/(member)/withdraw/page.tsx'),
+            'utf-8',
+        );
+
+        expect(page).toContain(`amountNum < ${COOPERATIVE_MINIMUM_WITHDRAWAL}`);
+    });
+
+    it('and the floor refusal reads the same everywhere too', () => {
+        // The route spelled its own floor message out longhand while the two
+        // actions used formatMinimumBalance/availableAboveFloor.
+        for (const rel of DOORS) {
+            const src = readFileSync(join(process.cwd(), rel), 'utf-8');
+            expect(src).toContain('formatMinimumBalance()');
+            expect(src).toContain('availableAboveFloor(');
+        }
     });
 });

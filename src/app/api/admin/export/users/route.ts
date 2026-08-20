@@ -5,7 +5,7 @@ import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { csvDocument } from "@/lib/csv-safe";
 
 export async function GET(request: NextRequest) {
@@ -15,13 +15,29 @@ export async function GET(request: NextRequest) {
             return new NextResponse("Unauthorized", { status: 401 });
         }
 
-        if (!isAdmin(session.user.roles)) {
+        // A CSV of every user on the platform — name, email, phone, state.
+        //
+        // isAdmin() is true for EVERY admin role, so support, moderator
+        // and every module admin could download this — an academy admin
+        // could take the contact details of every member on the platform.
+        // canAccessAdminRoute already silos these people by module at the
+        // route layer; this aligns the data layer with that.
+        if (!hasAdminPermission(session.user.roles, "users:export")) {
             return new NextResponse("Admin access required", { status: 403 });
         }
 
         // Fetch ALL users (Warning: Will pull up to Vercel memory limits, but avoids 500 pagination cap)
         // Usually, 34,000 JSON records fit safely in 40-50MB RAM.
-        const snapshot = await db.collection(COLLECTIONS.USERS).get();
+        //
+        // .all(), which is what the comment above always intended. A bare .get()
+        // on an unbounded query stops at DEFAULT_QUERY_LIMIT (5,000) and returns
+        // a snapshot indistinguishable from a complete one — so on a platform of
+        // ~34,000 users this exported the first 5,000 and called itself a full
+        // export. The intent was right; the mechanism silently defeated it.
+        const snapshot = await db.collection(COLLECTIONS.USERS).all().get();
+        if (snapshot.truncated) {
+            logger.error("[export/users] user sweep hit the unbounded ceiling — the CSV below is incomplete.");
+        }
         
         const headers = [
             "ID", "Name", "Email", "Phone", "Gender", "Roles", "Verified",
@@ -115,6 +131,9 @@ export async function GET(request: NextRequest) {
             status: 200,
             headers: {
                 "Content-Type": "text/csv; charset=utf-8",
+                // A truncated export looks exactly like a complete one to
+                // whoever opens the file, so say so out of band.
+                "X-Export-Truncated": String(snapshot.truncated),
                 "Content-Disposition": `attachment; filename="users_${new Date().toISOString().slice(0, 10)}.csv"`,
             },
         });

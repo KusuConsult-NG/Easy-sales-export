@@ -15,10 +15,13 @@ import {
     processCooperativeRegistration,
     processAcademyRegistration,
     processFarmNationRegistration,
-    processWaveRegistration
+    processWaveRegistration,
+    exportWindowIdFromMetadata
 } from "@/infrastructure/payments/service";
+import { recordAdminAction } from "@/lib/audit-log";
+import { paystackBaseUrl } from "@/lib/paystack-host";
 
-const PAYSTACK_BASE_URL = "https://api.paystack.co";
+const PAYSTACK_BASE_URL = paystackBaseUrl();
 
 interface PaystackTx {
     reference: string;
@@ -171,7 +174,8 @@ async function paystackSyncHandler(_req: NextRequest) {
                             if (type === "marketplace_order") {
                                 await processMarketplaceOrder(reference, amountNGN, userId, paidAtDate);
                             } else if (type === "export_investment") {
-                                await processExportInvestment(reference, amountNGN, userId, metadata.exportId, paidAtDate);
+                                // Either name — see exportWindowIdFromMetadata.
+                                await processExportInvestment(reference, amountNGN, userId, exportWindowIdFromMetadata(metadata) as string, paidAtDate);
                             } else if (type === "cooperative_membership_registration") {
                                 const tier = metadata.membershipTier || metadata.plan || "Member";
                                 // Legacy payments from old portal may not have membershipId — fall back to userId
@@ -258,6 +262,12 @@ async function paystackSyncHandler(_req: NextRequest) {
             logger.error("[PaystackSync] Cache invalidation error:", cacheErr);
         }
 
+        await recordAdminAction({
+            action: 'paystack_sync_run',
+            userId: session.user.id,
+            targetType: 'paystack_reconciliation',
+            metadata: { total: allTxs.length },
+        });
         return NextResponse.json({
             success: true,
             total: allTxs.length,

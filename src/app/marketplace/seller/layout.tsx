@@ -13,6 +13,7 @@ import { checkModuleAccess } from "@/lib/module-access-check";
 import { requireHubRegistration } from "@/lib/hub-guard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { toMillis } from "@/lib/firestore-serialize";
 
 export default async function SellerLayout({ children }: { children: React.ReactNode }) {
     // 1. Authenticate and ensure fully registered
@@ -72,8 +73,8 @@ export default async function SellerLayout({ children }: { children: React.React
 
                         if (!verSnap.empty) {
                             const sortedDocs = verSnap.docs.map(d => d.data()).sort((a: any, b: any) => {
-                                const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
-                                const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
+                                const aTime = toMillis(a.createdAt);
+                                const bTime = toMillis(b.createdAt);
                                 return bTime - aTime;
                             });
                             const verData = sortedDocs[0];

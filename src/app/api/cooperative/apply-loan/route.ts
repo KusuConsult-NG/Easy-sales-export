@@ -5,6 +5,8 @@ import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { canTransactAsMember, NOT_A_TRANSACTING_MEMBER_MESSAGE } from "@/lib/cooperative-membership-status";
+
 import { calculateRepaymentTerms } from "@/lib/loan-terms";
 import { isEligibleForLoan } from "@/lib/cooperative-tiers";
 import { FieldValue } from "@/lib/firestore-compat";
@@ -81,10 +83,15 @@ async function applyLoanHandler(request: NextRequest) {
 
         const membershipData = membershipDoc.data()!;
 
-        // Check membership status - must be active (not just approved)
-        if (membershipData.membershipStatus !== "active") {
+        // "approved" is the LEGACY spelling of "active", not a lesser status —
+        // the member directory and the admin list both query for either, under
+        // the comment "both are fully approved members". Refusing it here left a
+        // legacy member holding the role, listed in the directory and carrying
+        // an ID card, unable to do this. One rule now, in
+        // lib/cooperative-membership-status.ts.
+        if (!canTransactAsMember(membershipData)) {
             return NextResponse.json(
-                { success: false, message: "Your membership must be active before applying for loans. Please complete registration payment." },
+                { success: false, message: NOT_A_TRANSACTING_MEMBER_MESSAGE },
                 { status: 403 }
             );
         }
@@ -225,6 +232,10 @@ async function applyLoanHandler(request: NextRequest) {
         const applicationRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc();
         const applicationData = {
             userId,
+            // Which product this is — see lib/loan-product.ts. Existing rows
+            // are inferred from productId and the guarantor, so this stamp is
+            // for clarity on new ones rather than a migration requirement.
+            loanProduct: "cooperative" as const,
             productId,
             productName: product.name,
             amount,

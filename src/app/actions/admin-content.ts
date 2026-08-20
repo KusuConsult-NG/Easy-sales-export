@@ -5,9 +5,16 @@ import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { isAdmin } from "@/lib/admin-permissions";
+import { isAdmin, hasAdminPermission, permissionForContentType } from "@/lib/admin-permissions";
 import { FieldValue } from "@/lib/firestore-compat";
 import { serializeValue } from "@/lib/firestore-serialize";
+import {
+    AWAITING_REVIEW_STATUSES,
+    PURCHASABLE_STATUSES,
+    APPROVABLE_FROM_STATUSES,
+    REJECTABLE_FROM_STATUSES,
+} from "@/lib/land-listing-status";
+import { recordAdminAction } from "@/lib/audit-log";
 
 export type ContentType = "products" | "land" | "certificates" | "resources" | "courses" | "export";
 export type ApprovalStatus = "pending" | "approved" | "rejected";
@@ -61,7 +68,18 @@ export async function getContentApprovalItemsAction(
         // products
         const productStatus = status === "pending" ? "pending" : status === "approved" ? "active" : "rejected";
         // land listings
-        const landStatus = status === "pending" ? "pending_verification" : status === "approved" ? "verified" : "rejected";
+        //
+        // Sets, not single values. "pending" meant `pending_verification` alone,
+        // omitting `inspection_scheduled` — a listing with an inspector
+        // dispatched and no decision yet — and "approved" meant `verified`
+        // alone, omitting the `available` that farm-nation's own creation path
+        // writes and the `approved` that land-visibility.ts honours. So this
+        // console's approved tab and its counts showed a subset of the approved
+        // inventory, and its pending tab a subset of the queue.
+        const landStatuses: readonly string[] =
+            status === "pending" ? [...AWAITING_REVIEW_STATUSES]
+            : status === "approved" ? [...PURCHASABLE_STATUSES]
+            : ["rejected"];
         // export catalog
         const exportStatus = status === "pending" ? "pending" : status === "approved" ? "live" : "rejected";
 
@@ -87,7 +105,7 @@ export async function getContentApprovalItemsAction(
 
         // 2. Land Listings
         const landQuery = db.collection(COLLECTIONS.LAND_LISTINGS)
-            .where("status", "==", landStatus)
+            .where("status", "in", [...landStatuses])
             .limit(500);
         const landSnap = await landQuery.get();
         landSnap.forEach((doc) => {
@@ -141,8 +159,9 @@ export async function getContentApprovalItemsAction(
             db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "pending").count().get(),
             db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active").count().get(),
             db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "rejected").count().get(),
-            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "pending_verification").count().get(),
-            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "verified").count().get(),
+            // The same sets as the list above, so the tab and its badge agree.
+            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "in", [...AWAITING_REVIEW_STATUSES]).count().get(),
+            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "in", [...PURCHASABLE_STATUSES]).count().get(),
             db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "rejected").count().get(),
             db.collection(COLLECTIONS.EXPORT_CATALOG).where("status", "==", "pending").count().get(),
             db.collection(COLLECTIONS.EXPORT_CATALOG).where("status", "==", "live").count().get(),
@@ -220,7 +239,19 @@ export async function approveContentAction(
         // an admin performs by hand. Recorded that way rather than overstated.
         const callerDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const callerRoles: string[] = callerDoc.data()?.roles ?? [];
-        if (!callerDoc.exists || !isAdmin(callerRoles)) {
+        // The permission for THIS content type, not merely "is some kind of
+        // admin".
+        //
+        // isAdmin() is true for every admin role, so one gate covered six
+        // collections belonging to four different modules: an academy_admin
+        // could mark a land listing VERIFIED and a wave_admin could publish an
+        // export listing. All six module-admin roles are grantable, so this was
+        // reachable. See lib/admin-permissions.ts for the full scope.
+        const requiredPermission = permissionForContentType(type);
+        if (!requiredPermission) {
+            return { success: false as const, error: "Invalid content type", data: null };
+        }
+        if (!callerDoc.exists || !hasAdminPermission(callerRoles, requiredPermission)) {
             return { success: false as const, error: "Unauthorized" , data: null };
         }
 
@@ -248,12 +279,32 @@ export async function approveContentAction(
                     if (!docSnap.exists) {
                         return { success: false as const, error: "Land listing not found" };
                     }
+
+                    // The state check the other land decision paths do, done here
+                    // too. This is a transaction, so the read above and the write
+                    // below cannot be raced — what was missing is any check on
+                    // WHICH state it read. Approving a listing in pending_escrow
+                    // put the parcel back on the public market with a buyer's
+                    // money held against it; approving one already `sold`
+                    // reopened it outright.
+                    const landStatusNow = String(docSnap.data()?.status ?? "");
+                    if (!APPROVABLE_FROM_STATUSES.includes(landStatusNow)) {
+                        return {
+                            success: false as const,
+                            error: `This land listing is '${landStatusNow}' and cannot be approved ` +
+                                `from that state. A listing with a purchase in progress must be ` +
+                                `resolved first.`,
+                        };
+                    }
+
                     transaction.update(docRef, {
                         status: "verified",
                         verificationStatus: "approved",
                         verified: true,
                         verifiedAt: timestamp,
                         verifiedBy: adminId,
+                        rejectionReason: null,
+                        statusBeforeVerification: landStatusNow,
                     });
                     break;
                 }
@@ -291,6 +342,12 @@ export async function approveContentAction(
             }
         }
 
+        await recordAdminAction({
+            action: 'content:approve',
+            userId: session.user.id,
+            targetId: id,
+            metadata: { contentType: type },
+        });
         return { error: null, success: true as const , data: null };
 
     } catch (error: any) {
@@ -329,7 +386,19 @@ export async function rejectContentAction(
         // an admin performs by hand. Recorded that way rather than overstated.
         const callerDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const callerRoles: string[] = callerDoc.data()?.roles ?? [];
-        if (!callerDoc.exists || !isAdmin(callerRoles)) {
+        // The permission for THIS content type, not merely "is some kind of
+        // admin".
+        //
+        // isAdmin() is true for every admin role, so one gate covered six
+        // collections belonging to four different modules: an academy_admin
+        // could mark a land listing VERIFIED and a wave_admin could publish an
+        // export listing. All six module-admin roles are grantable, so this was
+        // reachable. See lib/admin-permissions.ts for the full scope.
+        const requiredPermission = permissionForContentType(type);
+        if (!requiredPermission) {
+            return { success: false as const, error: "Invalid content type", data: null };
+        }
+        if (!callerDoc.exists || !hasAdminPermission(callerRoles, requiredPermission)) {
             return { success: false as const, error: "Unauthorized" , data: null };
         }
 
@@ -366,6 +435,20 @@ export async function rejectContentAction(
                     if (!docSnap.exists) {
                         return { success: false as const, error: "Land listing not found" };
                     }
+
+                    // See the approval case above. Rejecting from pending_escrow
+                    // took the parcel off the market while the buyer's money
+                    // stayed held, with nothing in the flow to release it.
+                    const landStatusNow = String(docSnap.data()?.status ?? "");
+                    if (!REJECTABLE_FROM_STATUSES.includes(landStatusNow)) {
+                        return {
+                            success: false as const,
+                            error: `This land listing is '${landStatusNow}' and cannot be rejected ` +
+                                `from that state. A listing with a purchase in progress must be ` +
+                                `resolved first.`,
+                        };
+                    }
+
                     transaction.update(docRef, {
                         status: "rejected",
                         verificationStatus: "rejected",
@@ -373,6 +456,8 @@ export async function rejectContentAction(
                         rejectionReason: reason,
                         rejectedAt: timestamp,
                         rejectedBy: adminId,
+                        verified: false,
+                        statusBeforeRejection: landStatusNow,
                     });
                     break;
                 }
@@ -401,6 +486,12 @@ export async function rejectContentAction(
             return { success: false as const, error: result.error || "Rejection failed", data: null };
         }
 
+        await recordAdminAction({
+            action: 'content:reject',
+            userId: session.user.id,
+            targetId: id,
+            metadata: { contentType: type, reason },
+        });
         return { error: null,  success: true as const , data: null };
     } catch (error: any) {
         logger.error("Reject content error:", error);

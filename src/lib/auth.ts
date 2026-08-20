@@ -133,20 +133,61 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                                 await db.collection(COLLECTIONS.USERS).doc(newUid).set(defaultProfile, { merge: true });
                                 uid = newUid;
                             } else {
-                                let matchedDoc = userSnap.docs[0];
-                                const supabaseMatch = userSnap.docs.find(doc => doc.id === sbData.user.id);
-                                if (supabaseMatch) {
-                                    matchedDoc = supabaseMatch;
-                                } else {
-                                    const migratedMatch = userSnap.docs.find(doc => doc.data()?.email?.toLowerCase() === email.toLowerCase() && doc.data()?._migratedTo === sbData.user.id);
-                                    if (migratedMatch) {
-                                        matchedDoc = migratedMatch;
-                                    } else {
-                                        const anyMigratedMatch = userSnap.docs.find(doc => !!doc.data()?._migratedTo);
-                                        if (anyMigratedMatch) {
-                                            matchedDoc = anyMigratedMatch;
-                                        }
-                                    }
+                                /**
+                                 * WHICH profile belongs to the account that
+                                 * just authenticated.
+                                 *
+                                 * Supabase has proven who the caller is. This
+                                 * only decides which USERS document is theirs,
+                                 * and the query it works from matches on email
+                                 * alone — which is not unique here. Duplicate
+                                 * and legacy rows exist; broadcast.ts dedupes
+                                 * its recipient list by email for that reason.
+                                 *
+                                 * TWO THINGS WERE WRONG.
+                                 *
+                                 * `supabaseAuthId` was not consulted at all. It
+                                 * is the field the JIT migration writes to link
+                                 * a legacy profile to its new Supabase account
+                                 * — preValidateLoginAction writes it,
+                                 * password-reset resolves by it, and
+                                 * payments/service.ts uses exactly this order,
+                                 * `_migratedTo` then `supabaseAuthId`. The one
+                                 * place that decides who you are signed in as
+                                 * skipped the second half of it.
+                                 *
+                                 * And the last resort preferred ANY document
+                                 * carrying a `_migratedTo`, whatever it pointed
+                                 * at, over the first one. Since the code below
+                                 * then adopts that pointer as the session id, a
+                                 * caller could be signed in as an account they
+                                 * had not authenticated as — chosen because
+                                 * some unrelated row happened to carry a
+                                 * migration marker. That branch is gone: it
+                                 * preferred one arbitrary answer over another
+                                 * and dressed it as a match.
+                                 *
+                                 * What remains is three real identity matches,
+                                 * then the first row, and a loud log when it
+                                 * comes to that — an arbitrary pick should be
+                                 * visible rather than silent.
+                                 */
+                                const authedId = sbData.user.id;
+                                const matchedDoc =
+                                    userSnap.docs.find(doc => doc.id === authedId)
+                                    ?? userSnap.docs.find(doc => doc.data()?._migratedTo === authedId)
+                                    ?? userSnap.docs.find(doc => doc.data()?.supabaseAuthId === authedId)
+                                    ?? userSnap.docs[0];
+
+                                if (!userSnap.docs.some(doc =>
+                                    doc.id === authedId
+                                    || doc.data()?._migratedTo === authedId
+                                    || doc.data()?.supabaseAuthId === authedId
+                                )) {
+                                    logger.error(
+                                        `${authCtx} No profile identifies itself with the authenticated account. `
+                                        + `Falling back to the first of ${userSnap.docs.length} row(s) matching this email.`,
+                                    );
                                 }
                                 const matchedData = matchedDoc.data()!;
                                 if (matchedData._migratedTo) {
@@ -400,6 +441,34 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         }
 
                         if (cachedProfile) {
+                            /**
+                             * Sessions opened before the password was reset are
+                             * no longer this account's sessions.
+                             *
+                             * resetPasswordAction stamps `sessionsValidFrom` on
+                             * the profile. Anything minted before that point was
+                             * authenticated with a credential that no longer
+                             * exists — including, in the case this protects
+                             * against, whoever prompted the reset.
+                             *
+                             * FAILS OPEN, deliberately. A token with no issue
+                             * time recorded, or a profile with no revocation
+                             * point, is left alone: the cost of a false positive
+                             * here is signing out every user on the platform,
+                             * and the cost of a false negative is one stale
+                             * session that still expires within maxAge.
+                             *
+                             * Revocation lands within SYNC_INTERVAL rather than
+                             * instantly — the same latency the ban check has,
+                             * and for the same reason: this is the only place
+                             * the profile is re-read.
+                             */
+                            const revokedBefore = Number((cachedProfile as any).sessionsValidFrom) || 0;
+                            const issuedAtMs = typeof token.authAt === "number"
+                                ? token.authAt
+                                : (typeof token.iat === "number" ? token.iat * 1000 : 0);
+                            token.sessionRevoked = revokedBefore > 0 && issuedAtMs > 0 && issuedAtMs < revokedBefore;
+
                             token.roles = cachedProfile.roles || [];
                             token.verified = cachedProfile.displayName ? (cachedProfile as any).verified ?? true : true; // default to true if legacy profile structure
                             token.onboardingCompleted = (cachedProfile as any).onboardingCompleted;
@@ -437,8 +506,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
             // 2. Node-specific Firebase logic
             if (session.user) {
-                // Instantly block session and clear Firebase custom token if user is banned (M-10)
-                if (token.isBanned) {
+                // Instantly block session and clear Firebase custom token if user is banned (M-10),
+                // or if this session predates a password reset — see the sync
+                // block above. Same mechanism, because the answer is the same:
+                // this token no longer represents anyone who may act.
+                if (token.isBanned || token.sessionRevoked) {
                     session.firebaseToken = undefined;
                     token.firebaseToken = undefined;
                     session.user = null as any;
@@ -540,6 +612,16 @@ declare module "next-auth" {
             currentModuleId?: string;
             gender?: "male" | "female";
             createdAt?: string;
+            /**
+             * When THIS session was authenticated, in epoch ms.
+             *
+             * Surfaced so changePasswordAction can revoke every OTHER session
+             * without revoking the one the user is standing in — it writes this
+             * value as the profile's sessionsValidFrom, and the predicate in the
+             * jwt callback is strictly-before. Falls back to the JWT's own `iat`
+             * for sessions minted before `authAt` existed.
+             */
+            authAt?: number;
         };
         firebaseToken?: string;
     }

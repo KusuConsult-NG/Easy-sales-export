@@ -18,6 +18,12 @@ import { z } from "zod";
 import { ActionResponse } from "@/lib/safe-action";
 import { escapeHtml } from "@/lib/utils";
 import { toDateOrNull } from "@/lib/date-utils";
+import {
+    recalculateProductRating,
+    reviewerIdentityFields,
+    hasExistingReview,
+    isReviewableOrderStatus,
+} from "@/lib/product-rating";
 
 const reviewSchema = z.object({ rating: z.number().min(1, "Rating must be at least 1").max(5, "Rating cannot exceed 5"),
     comment: z.string().trim().min(20, "Review must be at least 20 characters").max(500, "Review must not exceed 500 characters") });
@@ -81,8 +87,14 @@ export async function createReviewAction(params: {
         if (order.buyerId !== userId) { return { success: false as const, error: "Not authorized", data: null };
         }
 
-        // Verify order is completed
-        if (order.status !== "completed") { return { success: false as const, error: "Can only review completed orders", data: null };
+        // Reviewable statuses, shared with the other review module.
+        //
+        // This required "completed" while submitProductReviewAction — reached from
+        // /marketplace/buyer/orders/[id]/review, against the same collection —
+        // accepted "delivered" or "completed". So whether a delivered order could
+        // be reviewed depended on which page the buyer was on.
+        if (!isReviewableOrderStatus(order.status)) {
+            return { success: false as const, error: "You can only review orders that have been delivered", data: null };
         }
 
         // Verify product is in order
@@ -90,14 +102,15 @@ export async function createReviewAction(params: {
         if (!orderItem) { return { success: false as const, error: "Product not found in order", data: null };
         }
 
-        // Check if already reviewed this product from this order
-        const existingReviews = await db.collection(COLLECTIONS.PRODUCT_REVIEWS)
-            .where("userId", "==", userId)
-            .where("productId", "==", productId)
-            .where("orderId", "==", orderId)
-            .get();
-
-        if (!existingReviews.empty) { return { success: false as const, error: "You have already reviewed this product from this order", data: null };
+        // Already reviewed? — checked against BOTH identity spellings.
+        //
+        // This queried `userId`, and the other module's guard queried `buyerId`,
+        // because each writes a different field for the same person. Each guard
+        // was therefore blind to the other's reviews, and a buyer could leave one
+        // review per product per order through EACH page — the exact thing both
+        // guards exist to stop.
+        if (await hasExistingReview(db as any, { userId, productId, orderId })) {
+            return { success: false as const, error: "You have already reviewed this product from this order", data: null };
         }
 
         // Get the specific product to ensure we attribute the review to the ACTUAL seller
@@ -130,7 +143,10 @@ export async function createReviewAction(params: {
         // Create review
         const reviewData: Partial<ProductReview> = { productId,
             sellerId: productActualSellerId, // Fetched explicitly from the product DB
-            userId,
+            // Both spellings, so the duplicate guard on either path finds this
+            // row. See reviewerIdentityFields in lib/product-rating.ts for why
+            // this is two fields rather than one.
+            ...reviewerIdentityFields(userId),
             orderId,
             rating: validation.data.rating,
             comment: escapeHtml(validation.data.comment),
@@ -250,22 +266,46 @@ export async function getUserReviewsAction(): Promise<ActionResponse<{ reviews: 
         const { session } = sessionResult;
         const userId = session.user.id;
 
-        const baseQuery = db.collection(COLLECTIONS.PRODUCT_REVIEWS).where("userId", "==", userId);
-        
-        let snapshot;
-        let needsMemorySort = false;
-        try {
-            snapshot = await baseQuery.orderBy("createdAt", "desc").get();
-        } catch (e: any) {
-            const errMsg = e.message ? e.message.toLowerCase() : "";
-            if (errMsg.includes("index") || errMsg.includes("failed_precondition") || String(e.code) === "9" || errMsg.includes("precondition")) {
-                logger.warn("getUserReviewsAction failed due to missing index. Falling back to in-memory sorting.");
-                snapshot = await baseQuery.get();
-                needsMemorySort = true;
-            } else {
+        // Both identity spellings, or a buyer cannot see their own reviews.
+        //
+        // This queried `userId` alone. A review left through
+        // /marketplace/buyer/orders/[id]/review carries `buyerId`, so "Get user's
+        // own reviews" returned none of them: the author's own page was blind to
+        // half of what they had written, depending which form they used.
+        //
+        // Two queries and a merge by document id. New reviews carry both fields,
+        // so they appear in both and the dedupe is what stops them being listed
+        // twice.
+        const runQuery = async (field: string) => {
+            const baseQuery = db.collection(COLLECTIONS.PRODUCT_REVIEWS).where(field, "==", userId);
+            try {
+                return { snap: await baseQuery.orderBy("createdAt", "desc").get(), sorted: true };
+            } catch (e: any) {
+                const errMsg = e.message ? e.message.toLowerCase() : "";
+                if (errMsg.includes("index") || errMsg.includes("failed_precondition") || String(e.code) === "9" || errMsg.includes("precondition")) {
+                    logger.warn("getUserReviewsAction failed due to missing index. Falling back to in-memory sorting.", { field });
+                    return { snap: await baseQuery.get(), sorted: false };
+                }
                 throw e;
             }
+        };
+
+        const results = await Promise.all([runQuery("userId"), runQuery("buyerId")]);
+
+        // The in-memory sort below always runs now. Two separately-ordered result
+        // sets concatenated are not ordered, so the database's ordering is no
+        // longer sufficient even when both queries used their index — which is
+        // why this is unconditional rather than the old index-fallback flag.
+        const needsMemorySort = true;
+
+        const byId = new Map<string, any>();
+        for (const { snap } of results) {
+            for (const doc of snap.docs) {
+                if (!byId.has(doc.id)) byId.set(doc.id, doc);
+            }
         }
+
+        const snapshot = { docs: Array.from(byId.values()) };
 
         const reviews = serializeDocs(snapshot.docs) as unknown as ProductReview[];
 
@@ -343,8 +383,16 @@ export async function updateReviewAction(
 
         const review = reviewDoc.data() as ProductReview;
 
-        // Verify ownership
-        if (review.userId !== userId) { return { success: false as const, error: "Not authorized", data: null };
+        // Verify ownership, under either identity spelling.
+        //
+        // This tested `userId` alone. A review submitted through
+        // /marketplace/buyer/orders/[id]/review carries `buyerId` and no `userId`,
+        // so `review.userId` was undefined and its own author could not edit it —
+        // the check refused the owner rather than an impostor. New rows carry
+        // both fields; existing ones carry whichever their path wrote.
+        const reviewAuthorId = (review as any).userId ?? (review as any).buyerId;
+        if (!reviewAuthorId || reviewAuthorId !== userId) {
+            return { success: false as const, error: "Not authorized", data: null };
         }
 
         // Check 30-day limit
@@ -380,6 +428,12 @@ export async function updateReviewAction(
             comment: escapeHtml(validation.data.comment),
             status: "pending", // Re-trigger moderation
             updatedAt: FieldValue.serverTimestamp() });
+
+        // An edit sends the review back to "pending", so it leaves the approved
+        // set and the average has to be recomputed without it. Otherwise editing
+        // a five-star review to one star kept the five in the product's average
+        // until a moderator happened to approve the new text.
+        await recalculateProductRating(db as any, String(review.productId ?? ""));
 
         return { success: true as const, data: null, error: null };
     } catch (error) { 
@@ -436,6 +490,22 @@ export async function moderateReviewAction(
         }
 
         await reviewRef.update(updateData);
+
+        // The product's average, recomputed — on BOTH decisions.
+        //
+        // This is the moderator the admin reviews page actually calls, and it
+        // updated the review's status and nothing else. `_recalculateProductRating`
+        // lived in the OTHER review module and was called from ITS moderator,
+        // which no page calls. So nothing in the running application ever wrote
+        // `products.rating` or `products.reviewCount`: every real product sat at
+        // 0/0 however many approved reviews it had, and the card renders a rating
+        // only when `rating > 0`, so none of them ever showed one.
+        //
+        // On rejection as well as approval. Rejecting a review that had already
+        // been approved used to leave its contribution in the average, so a
+        // moderator removing a fake five-star changed nothing a buyer could see —
+        // which is the one thing the queue is for.
+        await recalculateProductRating(db as any, String(reviewDoc.data()?.productId ?? ""));
 
         return { success: true as const, data: null, error: null };
     } catch (error) { 

@@ -90,10 +90,43 @@ export default function GetStartedPage() {
         }
     }, [status, router]);
 
-    if (status === "loading") {
+    // Covers "unauthenticated" as well as "loading".
+    //
+    // It used to return only for "loading", so an unauthenticated visitor fell
+    // straight through to the body below with `session` null. Every block down
+    // there is driven by session data, so nothing rendered: a signed-out
+    // visitor to /auth/get-started got a COMPLETELY BLANK PAGE until the
+    // redirect in the effect above landed — and if that redirect is slow or
+    // does not fire, a blank page is all they ever get.
+    //
+    // Found by the page smoke suite, which asserts each route puts something
+    // on screen. This was the only route in the application that did not.
+    // The spinner needed WORDS, not just a spinning border.
+    //
+    // The fix above stopped the page being empty in React terms, but what it
+    // rendered was a bare animated div: no text, no accessible name, nothing in
+    // the accessibility tree. The page smoke suite still called it an empty
+    // page, and it was right to — the rendered text was "". A sighted visitor
+    // saw an unexplained spinner and a screen-reader user was told nothing at
+    // all, which for a signed-out visitor being bounced to sign-in is the
+    // moment they most need telling.
+    //
+    // role="status" makes it a live region, aria-live announces it, and the
+    // visible sentence says which of the two states this is.
+    if (status !== "authenticated") {
+        const message = status === "loading"
+            ? "Loading your account…"
+            : "Redirecting you to sign in…";
+
         return (
             <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-slate-900 via-blue-900 to-slate-900">
-                <div className="inline-block animate-spin rounded-full h-16 w-16 border-b-4 border-white"></div>
+                <div className="flex flex-col items-center gap-6" role="status" aria-live="polite">
+                    <div
+                        className="inline-block animate-spin rounded-full h-16 w-16 border-b-4 border-white"
+                        aria-hidden="true"
+                    />
+                    <p className="text-lg font-medium text-white">{message}</p>
+                </div>
             </div>
         );
     }

@@ -1,0 +1,889 @@
+/**
+ * A stateful in-memory stand-in for the Firestore-compat adapter.
+ *
+ * WHY THIS EXISTS
+ * ---------------
+ * jest.setup.js mocks `@/lib/supabase-db` globally with a CALL RECORDER: every
+ * method is a jest.fn() that records its arguments and returns whatever the test
+ * told it to. That harness is what makes 3,935 unit tests possible without a
+ * database, and it is also the ceiling on what they can prove:
+ *
+ *   - `where()`, `orderBy()`, `limit()` are no-ops. A test cannot tell a query
+ *     that filters correctly from one that filters on the wrong field, because
+ *     neither filter runs.
+ *   - Nothing a test writes can be read back. `set()` records and returns; the
+ *     next `get()` returns whatever was stubbed, not what was just written. So
+ *     "the action wrote X" is assertable and "the document now says X" is not.
+ *   - A read-modify-write cycle cannot be exercised end to end at all, which is
+ *     most of what these actions do.
+ *
+ * That is why 147 of the unit suites read source text instead: with a recorder,
+ * structural assertions are the only ones that mean anything. It is also why
+ * statement coverage sat at 31% with 3,935 tests passing.
+ *
+ * This module closes that gap. `installFakeDb()` reprograms the same global
+ * recorders that jest.setup.js already routes every call through, backing them
+ * with a real store. Existing suites are untouched — they never call it, and the
+ * recorders still record, so `expect(global.mockFirestoreSet).toHaveBeenCalled()`
+ * keeps working alongside `store.get(...)`.
+ *
+ * IT REPRODUCES THE ADAPTER'S WEAKNESSES ON PURPOSE
+ * -------------------------------------------------
+ * A fake that is BETTER than production is worse than no fake: it makes tests
+ * pass on code that cannot work. So this one copies the behaviour that has
+ * actually caused outages here, rather than the behaviour one would want:
+ *
+ *   - `runTransaction` takes NO LOCK. supabaseDb.runTransaction just calls the
+ *     callback (see lib/supabase-db.ts), which is why every money path needs a
+ *     CAS Postgres function. A fake with real transactions would make the
+ *     unguarded check-then-write look safe.
+ *   - `==` compares as TEXT, `<`/`>`/`<=`/`>=` compare as NUMBERS. That is
+ *     applyJsonbFilter + numericAware: `raw_data->>'amount'` is text, so
+ *     `where("amount", "==", 900)` stringifies, while the ordering comparisons
+ *     cast to numeric. `"90000" > "900"` is false as text and true as numbers,
+ *     and the adapter's own comment records finding that the hard way.
+ *   - A DESCENDING order puts documents MISSING the key FIRST, because
+ *     `ORDER BY raw_data->>'k' DESC` is NULLS FIRST in Postgres. This is
+ *     finding #49 — 34 "most recent" sorts whose key was absent from the shape
+ *     the app writes — and a fake that sorted missing-last would hide it.
+ *   - A query with no `.limit()` returns at most 5,000 rows.
+ *
+ * src/__tests__/pg/fake-db-matches-postgres.test.ts runs the same operations
+ * against a real PostgreSQL and asserts the answers match, so these claims are
+ * measured rather than asserted. Anything the contract test does not cover is
+ * listed in KNOWN_DIVERGENCES at the bottom of this file.
+ */
+
+// ─── the store ───────────────────────────────────────────────────────────────
+
+type Doc = Record<string, any>;
+
+/**
+ * Rows a query with no explicit .limit() returns — the fake's copy of the
+ * adapter's DEFAULT_QUERY_LIMIT.
+ *
+ * Read from SUPABASE_DEFAULT_QUERY_LIMIT, as the adapter does, and read PER
+ * QUERY rather than frozen at import. It was a hardcoded 5000 under a comment
+ * claiming it matched the adapter, which it did only at the default: a suite
+ * setting the env var to exercise truncation got the real cap on one side and
+ * 5000 on the other. Truncation is the behaviour hardest to test and easiest to
+ * ship broken — see #193 — so it must be reachable without seeding 5,001 rows.
+ */
+export function fakeDefaultLimit(): number {
+    return Math.max(1, Number(process.env.SUPABASE_DEFAULT_QUERY_LIMIT) || 5000);
+}
+
+/** @deprecated Use fakeDefaultLimit(); kept for existing imports. */
+export const FAKE_DEFAULT_LIMIT = 5000;
+
+export interface FakeDbHandle {
+    /** Put a document in place, replacing any existing one. */
+    seed(collection: string, id: string, data: Doc): void;
+    /** Put many documents in place. Keys are ids. */
+    seedAll(collection: string, docs: Record<string, Doc>): void;
+    /** The stored document, or undefined. A deep copy — mutating it changes nothing. */
+    get(collection: string, id: string): Doc | undefined;
+    /** Every stored document in a collection, as [id, data] pairs. */
+    all(collection: string): Array<[string, Doc]>;
+    /** How many documents a collection holds. */
+    size(collection: string): number;
+    /** Every collection that has at least one document. */
+    collections(): string[];
+    /** Empty the store. Does not un-install. */
+    clear(): void;
+    /** Ids generated by add()/create(), in order, so a test can find what it made. */
+    generatedIds: string[];
+}
+
+const clone = <T>(v: T): T => (v === undefined ? v : JSON.parse(JSON.stringify(v)));
+
+function getPath(doc: Doc | undefined, path: string): any {
+    if (!doc) return undefined;
+    if (!path.includes('.')) return doc[path];
+    let cur: any = doc;
+    for (const part of path.split('.')) {
+        if (cur === null || cur === undefined || typeof cur !== 'object') return undefined;
+        cur = cur[part];
+    }
+    return cur;
+}
+
+function setPath(doc: Doc, path: string, value: any): void {
+    if (!path.includes('.')) { doc[path] = value; return; }
+    const parts = path.split('.');
+    let cur: any = doc;
+    for (const part of parts.slice(0, -1)) {
+        if (cur[part] === null || typeof cur[part] !== 'object') cur[part] = {};
+        cur = cur[part];
+    }
+    cur[parts[parts.length - 1]] = value;
+}
+
+function deletePath(doc: Doc, path: string): void {
+    if (!path.includes('.')) { delete doc[path]; return; }
+    const parts = path.split('.');
+    let cur: any = doc;
+    for (const part of parts.slice(0, -1)) {
+        if (cur === null || typeof cur !== 'object') return;
+        cur = cur[part];
+    }
+    if (cur && typeof cur === 'object') delete cur[parts[parts.length - 1]];
+}
+
+// ─── Timestamps, on the way out and on the way back in ───────────────────────
+//
+// The adapter does NOT hand back what it stored. It writes ISO strings into
+// JSONB (convertTimestampsToStrings) and revives them into Timestamp objects on
+// every read (convertStringsToTimestamps). So a caller who stores
+// `new Date().toISOString()` reads back something with `.toDate()`.
+//
+// This fake used to hand back the raw string, which is a divergence in the
+// dangerous direction: production code is FULL of
+// `value?.toDate ? value.toDate() : new Date(value)`, and with plain strings
+// every one of those took its fallback arm. A test could assert the fallback's
+// answer and prove nothing about the arm that actually runs — and the
+// cooperative ID card, which computes the card's issue and expiry dates through
+// exactly that shape, is the reason this was noticed.
+//
+// Both directions are reproduced, because only reproducing one would round-trip
+// a Timestamp object into the store and corrupt it.
+
+/** The same ISO detection the adapter uses. */
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
+
+const isTimestampLike = (v: any): boolean =>
+    !!v && typeof v === 'object' && typeof v.toDate === 'function';
+
+/** ISO strings → Timestamp, recursively. Mirrors convertStringsToTimestamps. */
+function hydrateTimestamps(value: any): any {
+    if (value === null || value === undefined) return value;
+
+    if (typeof value === 'string') {
+        if (!ISO_DATE.test(value)) return value;
+        const d = new Date(value);
+        if (Number.isNaN(d.getTime())) return value;
+        // Required lazily: firestore-compat is mocked in some suites, and a
+        // top-level import would bind whichever version loaded first.
+        const { Timestamp } = require('@/lib/firestore-compat');
+        try { return Timestamp.fromDate(d); } catch { return value; }
+    }
+
+    if (Array.isArray(value)) return value.map(hydrateTimestamps);
+
+    if (typeof value === 'object') {
+        if (isTimestampLike(value)) return value;
+        const out: Doc = {};
+        for (const [k, v] of Object.entries(value)) out[k] = hydrateTimestamps(v);
+        return out;
+    }
+
+    return value;
+}
+
+/** Timestamp/Date → ISO string, recursively. Mirrors convertTimestampsToStrings. */
+function flattenTimestamps(value: any): any {
+    if (value === null || value === undefined) return value;
+    if (value instanceof Date) return value.toISOString();
+    if (isTimestampLike(value)) return value.toDate().toISOString();
+    if (value && typeof value === 'object' && typeof value._seconds === 'number') {
+        return new Date(value._seconds * 1000).toISOString();
+    }
+    if (Array.isArray(value)) return value.map(flattenTimestamps);
+    if (typeof value === 'object') {
+        // Sentinels pass through untouched — applyPatch resolves them.
+        if (typeof (value as any)._methodName === 'string') return value;
+        const out: Doc = {};
+        for (const [k, v] of Object.entries(value)) out[k] = flattenTimestamps(v);
+        return out;
+    }
+    return value;
+}
+
+// ─── FieldValue sentinels ────────────────────────────────────────────────────
+//
+// The same detection the adapter uses: a `_methodName` property. Both the
+// firebase-admin sentinels and jest.setup.js's stand-ins carry it.
+
+function sentinelType(v: any): string | null {
+    if (!v || typeof v !== 'object') return null;
+    return typeof v._methodName === 'string' ? v._methodName : null;
+}
+
+/** Resolve one sentinel against the value already stored. */
+function resolveSentinel(type: string, s: any, existing: any, now: string): any {
+    switch (type) {
+        case 'FieldValue.serverTimestamp':
+            return now;
+        case 'FieldValue.increment': {
+            const base = Number(existing ?? 0);
+            return (Number.isFinite(base) ? base : 0) + Number(s._operand ?? 0);
+        }
+        case 'FieldValue.arrayUnion': {
+            const arr = Array.isArray(existing) ? [...existing] : [];
+            for (const el of s._elements ?? []) {
+                if (!arr.some((a) => JSON.stringify(a) === JSON.stringify(el))) arr.push(el);
+            }
+            return arr;
+        }
+        case 'FieldValue.arrayRemove': {
+            const arr = Array.isArray(existing) ? [...existing] : [];
+            const drop = (s._elements ?? []).map((e: any) => JSON.stringify(e));
+            return arr.filter((a) => !drop.includes(JSON.stringify(a)));
+        }
+        default:
+            return existing;
+    }
+}
+
+/**
+ * Apply a patch the way the adapter's update() does: shallow at the top level,
+ * dotted keys as deep paths, FieldValue.delete() removing the key.
+ *
+ * `update({ a: { b: 1 } })` REPLACES `a`. `set({ a: { b: 1 } }, { merge: true })`
+ * merges into it — see flattenForMerge in lib/supabase-db.ts. The two are
+ * deliberately different and the difference has caused real data loss here, so
+ * `deep` selects between them rather than one being used for both.
+ */
+function applyPatch(target: Doc, patch: Doc, now: string, deep: boolean): void {
+    for (const [key, raw] of Object.entries(patch)) {
+        const type = sentinelType(raw);
+        if (type === 'FieldValue.delete') { deletePath(target, key); continue; }
+        if (type) { setPath(target, key, resolveSentinel(type, raw, getPath(target, key), now)); continue; }
+
+        const isPlainObject = raw !== null && typeof raw === 'object' && !Array.isArray(raw)
+            && !(raw instanceof Date) && typeof (raw as any).toDate !== 'function';
+
+        if (deep && isPlainObject && !key.includes('.')) {
+            const existing = getPath(target, key);
+            const base = (existing && typeof existing === 'object' && !Array.isArray(existing))
+                ? existing : {};
+            setPath(target, key, base);
+            applyPatch(getPath(target, key), raw as Doc, now, true);
+            continue;
+        }
+
+        // Timestamps and Dates go into the store as ISO strings, the way the
+        // adapter writes them, so the next read hydrates them back rather than
+        // JSON-cloning a Timestamp's internals into the document.
+        setPath(target, key, clone(flattenTimestamps(raw)));
+    }
+}
+
+// ─── query evaluation ────────────────────────────────────────────────────────
+
+type Op = '==' | '!=' | '<' | '<=' | '>' | '>=' | 'in' | 'not-in'
+    | 'array-contains' | 'array-contains-any';
+
+interface Filter { field: string; op: Op; value: any }
+interface Order { field: string; dir: 'asc' | 'desc' }
+
+interface QueryState {
+    collection: string;
+    filters: Filter[];
+    orders: Order[];
+    limit?: number;
+    offset?: number;
+    startAfterValues?: any[];
+    /** The snapshot passed to startAfter(), resolved here rather than there. */
+    startAfterDoc?: { data(): any } | undefined;
+    unbounded?: boolean;
+}
+
+/**
+ * `==` and `in` compare as TEXT; the ordering operators compare as NUMBERS when
+ * the operand is a number. Both halves are the adapter's, not a simplification:
+ * applyJsonbFilter emits `raw_data->>'f' = 'x'` for equality and numericAware
+ * rewrites `>` to `raw_data->'f'::numeric`. Getting this wrong in the fake would
+ * make `where("amount", ">", 900)` match "90000" in a test and not in
+ * production, or the reverse.
+ */
+/**
+ * The field a filter reads, as a dotted path.
+ *
+ * `FieldPath.documentId()` arrives as a SENTINEL OBJECT, not a string — every
+ * batched hydration in this codebase uses it, in the shape
+ * `.where(FieldPath.documentId(), "in", chunk)`. The adapter maps it to the
+ * primary key; here the id is on the document as `id`, because both
+ * buildGenericRow and buildDedicatedRow put it there.
+ *
+ * Left unmapped it reached getPath as an object, `path.includes` threw, and the
+ * ACTION's own try/catch turned that into its generic failure message — which
+ * reads exactly like a defect in the code under test. Same shape as the three
+ * incomplete mocks this audit has already tripped over.
+ */
+function filterField(field: unknown): string {
+    if (typeof field === 'string') {
+        return field === '__name__' || field === '__id__' ? 'id' : field;
+    }
+    const sentinel = (field as { _methodName?: string })?._methodName;
+    if (sentinel === 'FieldPath.documentId') return 'id';
+    return String(field);
+}
+
+function matches(doc: Doc, filter: Filter): boolean {
+    const actual = getPath(doc, filterField(filter.field));
+
+    // The comparison value is FLATTENED first — a Date or a Timestamp becomes
+    // its ISO string, and an array of them is mapped element by element. That is
+    // applyJsonbFilter's own normalisation (`value instanceof Date ->
+    // toISOString()`), and without it a date-range filter compares
+    // "Wed May 18 2026 00:00:00 GMT+0000" against "2026-05-18T00:00:00.000Z"
+    // and answers nonsense — silently, in the direction of matching nothing.
+    const f: Filter = { ...filter, value: flattenTimestamps(filter.value) };
+
+    switch (f.op) {
+        case '==':
+            if (f.value === null) return actual === null || actual === undefined;
+            return actual !== undefined && actual !== null && String(actual) === String(f.value);
+        case '!=':
+            if (f.value === null) return actual !== null && actual !== undefined;
+            // Postgres: `raw_data->>'f' <> 'x'` is NULL — not true — for a
+            // missing key, so a document without the field does NOT match.
+            if (actual === undefined || actual === null) return false;
+            return String(actual) !== String(f.value);
+        case '<': case '<=': case '>': case '>=': {
+            if (actual === undefined || actual === null) return false;
+            const numeric = typeof f.value === 'number' && Number.isFinite(f.value);
+            const a = numeric ? Number(actual) : String(actual);
+            const b = numeric ? Number(f.value) : String(f.value);
+            if (numeric && !Number.isFinite(a as number)) return false;
+            if (f.op === '<') return a < b;
+            if (f.op === '<=') return a <= b;
+            if (f.op === '>') return a > b;
+            return a >= b;
+        }
+        case 'in': {
+            const values = (Array.isArray(f.value) ? f.value : [f.value]).map(String);
+            return actual !== undefined && actual !== null && values.includes(String(actual));
+        }
+        case 'not-in': {
+            const values = (Array.isArray(f.value) ? f.value : [f.value]).map(String);
+            if (actual === undefined || actual === null) return false;
+            return !values.includes(String(actual));
+        }
+        case 'array-contains':
+            return Array.isArray(actual)
+                && actual.some((el) => JSON.stringify(el) === JSON.stringify(f.value));
+        case 'array-contains-any': {
+            if (!Array.isArray(actual)) return false;
+            const wanted = (Array.isArray(f.value) ? f.value : [f.value]).map((v) => JSON.stringify(v));
+            return actual.some((el) => wanted.includes(JSON.stringify(el)));
+        }
+        default:
+            return false;
+    }
+}
+
+/**
+ * Compare two documents on one order key, with Postgres's NULL placement.
+ *
+ * `ORDER BY expr ASC` is NULLS LAST and `DESC` is NULLS FIRST — the default, and
+ * the reason finding #49 bit: 34 "most recent" sorts ordered DESC on a key the
+ * writers never set, so the documents missing it came FIRST and the newest
+ * document was nowhere near the top.
+ *
+ * Comparison is textual, because `raw_data->>'k'` is text and none of the
+ * orderBy paths cast. That is its own trap — "10" sorts before "9" — and it is
+ * production's trap, so it is reproduced rather than fixed.
+ */
+function compareOn(a: Doc, b: Doc, o: Order): number {
+    const av = getPath(a, filterField(o.field));
+    const bv = getPath(b, filterField(o.field));
+    const aNull = av === undefined || av === null;
+    const bNull = bv === undefined || bv === null;
+
+    if (aNull && bNull) return 0;
+    if (aNull) return o.dir === 'desc' ? -1 : 1;
+    if (bNull) return o.dir === 'desc' ? 1 : -1;
+
+    const as = String(av);
+    const bs = String(bv);
+    if (as === bs) return 0;
+    const cmp = as < bs ? -1 : 1;
+    return o.dir === 'desc' ? -cmp : cmp;
+}
+
+function runQuery(store: Map<string, Map<string, Doc>>, q: QueryState): Array<[string, Doc]> {
+    const col = store.get(q.collection);
+    let rows: Array<[string, Doc]> = col ? [...col.entries()] : [];
+
+    for (const f of q.filters) rows = rows.filter(([, d]) => matches(d, f));
+
+    if (q.orders.length > 0) {
+        rows = [...rows].sort((x, y) => {
+            for (const o of q.orders) {
+                const c = compareOn(x[1], y[1], o);
+                if (c !== 0) return c;
+            }
+            return 0;
+        });
+    } else {
+        // BY ID, which is what an unordered query actually returns:
+        //
+        //     if (this._orderBy.length === 0) query = query.order('id');
+        //
+        // in SupabaseQuery._buildQuery. This used to be insertion order, and
+        // insertion order is a property of the test's seeding, not of the
+        // database — so a query whose result depends on ordering looked
+        // deterministic here and was not in production. It matters most where
+        // the default row cap truncates: which rows survive is decided by this
+        // order, and #193 is a list that lost its newest registrants to it.
+        rows = [...rows].sort((x, y) => (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : 0));
+    }
+
+    // startAfter is positional on the order key, matching the adapter's cursor:
+    // it keeps everything strictly after the first document whose order values
+    // equal the cursor.
+    // The cursor. Resolved HERE, against the final order keys, because
+    // SupabaseQuery stores the snapshot and reads it in buildCursorFilter — so
+    // `.startAfter(doc)` before `.orderBy(...)` works in production, and several
+    // actions are written that way.
+    if (q.startAfterDoc && q.orders.length > 0) {
+        const d = q.startAfterDoc.data() || {};
+        const cursor = q.orders.map((o) => flattenTimestamps(getPath(d, filterField(o.field))));
+        const idx = rows.findIndex(([, row]) =>
+            q.orders.every((o, i) =>
+                String(getPath(row, filterField(o.field)) ?? '') === String(cursor[i] ?? '')));
+        rows = idx >= 0 ? rows.slice(idx + 1) : rows;
+    } else if (q.startAfterValues && q.startAfterValues.length > 0 && q.orders.length > 0) {
+        // The VALUE form — `startAfter(someDate)`. Reachable at last: the query
+        // builders only ever set startAfterDoc, so this branch was dead code
+        // guarding a cursor the adapter silently threw away. Both accept it now.
+        //
+        // Flattened, because a Date or a hydrated Timestamp stringifies to
+        // something that compares against nothing while the store holds ISO
+        // strings — the same conversion the adapter does before handing the
+        // value to PostgREST.
+        //
+        // Compared BY VALUE, not by finding the cursor row. The adapter emits
+        // `.lt(col, value)` / `.gt(col, value)`, which needs no row to exist at
+        // the cursor; an equality search would return page one again whenever
+        // the last row of the previous page had since been deleted or edited.
+        // Only the first order key participates, which is the adapter's own
+        // limitation.
+        const o = q.orders[0];
+        const cursor = String(flattenTimestamps(q.startAfterValues[0]) ?? '');
+        rows = rows.filter(([, d]) => {
+            const v = getPath(d, filterField(o.field));
+            if (v === undefined || v === null) return false;
+            return o.dir === 'desc' ? String(v) < cursor : String(v) > cursor;
+        });
+    }
+
+    if (q.offset) rows = rows.slice(q.offset);
+
+    const cap = q.limit ?? (q.unbounded ? undefined : fakeDefaultLimit());
+    if (cap !== undefined) rows = rows.slice(0, cap);
+
+    return rows;
+}
+
+// ─── snapshots ───────────────────────────────────────────────────────────────
+
+/**
+ * A live document handle attached to a snapshot.
+ *
+ * `snapshot.ref.update(...)` is not decoration: this codebase's self-healing
+ * paths write through it — module-access-check heals a membership found by query,
+ * several admin sweeps repair the row they just read. A snapshot whose ref could
+ * not write would make every one of those paths look like it did nothing, and a
+ * test asserting the heal would fail against correct code.
+ */
+interface LiveRef {
+    id: string;
+    __collection: string;
+    path: string;
+    update(patch: Doc): Promise<void>;
+    set(data: Doc, options?: { merge?: boolean }): Promise<void>;
+    delete(): Promise<void>;
+    get(): Promise<ReturnType<typeof docSnapshot>>;
+    /** A subcollection, as SupabaseDocumentReference.collection() gives. */
+    collection(sub: string): unknown;
+}
+
+/** Supplied by installFakeDb so a ref can reach the store it came from. */
+interface StoreOps {
+    doUpdate(collection: string, id: string, patch: Doc): void;
+    doSet(collection: string, id: string, data: Doc, merge?: boolean): void;
+    doDelete(collection: string, id: string): void;
+    read(collection: string, id: string): Doc | undefined;
+}
+
+let ops: StoreOps | null = null;
+
+function liveRef(collection: string, id: string): LiveRef {
+    return {
+        id,
+        __collection: collection,
+        path: `${collection}/${id}`,
+        update: async (patch: Doc) => { ops?.doUpdate(collection, id, patch); },
+        set: async (data: Doc, options?: { merge?: boolean }) => {
+            ops?.doSet(collection, id, data, options?.merge);
+        },
+        delete: async () => { ops?.doDelete(collection, id); },
+        get: async () => docSnapshot(id, ops?.read(collection, id), collection),
+        /**
+         * A subcollection off this document.
+         *
+         * SupabaseDocumentReference has this — `collection(name)` returns a
+         * reference to `${collection}/${id}/${name}` — and a snapshot's `.ref`
+         * IS a SupabaseDocumentReference. This ref did not, so any action
+         * written as
+         *
+         *     const snap = await db.collection(X).doc(id).get();
+         *     await snap.ref.collection('messages').get()
+         *
+         * threw "conversationDoc.ref.collection is not a function" here against
+         * perfectly correct code — the same shape as the missing
+         * collection().add() and the missing audit-log exports, and it hid
+         * getMessages entirely until a test executed it.
+         *
+         * Delegates to the mock db's own builder so a subcollection behaves
+         * exactly like the flattened path a `db.collection(...).doc(...)
+         * .collection(...)` chain already produces.
+         */
+        collection: (sub: string) => {
+            // Lazily, because firestore-mock-db is CommonJS and importing it at
+            // module scope would create a cycle through the globals it installs.
+            const path = `${collection}/${id}/${sub}`;
+            const g = globalThis as unknown as { __fakeDbMockDb?: { collection(p: string): unknown } };
+            if (!g.__fakeDbMockDb) throw new Error('[fake-db] no mock db installed');
+            return g.__fakeDbMockDb.collection(path);
+        },
+    };
+}
+
+function docSnapshot(id: string, data: Doc | undefined, collection = '') {
+    const exists = data !== undefined;
+    const stored = exists ? hydrateTimestamps(clone(data)) : undefined;
+    return {
+        id,
+        exists,
+        // The adapter guarantees `id` inside data() — buildGenericRow and
+        // buildDedicatedRow both put it there — and callers read doc.data().id.
+        data: () => (exists ? { id, ...stored } : undefined),
+        get: (field: string) => (exists ? getPath(stored!, field) : undefined),
+        ref: liveRef(collection, id),
+    };
+}
+
+function querySnapshot(rows: Array<[string, Doc]>, collection = '') {
+    const docs = rows.map(([id, d]) => docSnapshot(id, d, collection));
+    return {
+        docs,
+        empty: docs.length === 0,
+        size: docs.length,
+        forEach: (fn: (d: ReturnType<typeof docSnapshot>) => void) => docs.forEach(fn),
+    };
+}
+
+// ─── installation ────────────────────────────────────────────────────────────
+
+interface Globals {
+    mockFirestoreGet: any;
+    mockFirestoreSet: any;
+    mockFirestoreUpdate: any;
+    mockFirestoreDelete: any;
+    mockFirestoreAdd: any;
+    mockFirestoreTxGet: any;
+    mockFirestoreTxSet: any;
+    mockFirestoreTxUpdate: any;
+    mockFirestoreBatchUpdate: any;
+    mockFirestoreBatchDelete: any;
+    mockFirestoreBatchCommit: any;
+    __firestoreAccess: AccessDescriptor | undefined;
+}
+
+/**
+ * What lib/testing/firestore-mock-db.js publishes on `global.__firestoreAccess`
+ * immediately before it calls a recorder.
+ *
+ * A side channel rather than an extra argument, because several suites read a
+ * write payload as `call[call.length - 1]` — see that module's header for the 31
+ * tests the argument version broke.
+ */
+export interface AccessDescriptor {
+    kind: 'doc' | 'query' | 'count' | 'aggregate' | 'add';
+    collection?: string;
+    id?: string;
+    merge?: boolean;
+    /** batch.set(): queued until commit(), not applied now. */
+    batched?: boolean;
+    ref?: { id?: string; __collection?: string };
+    query?: {
+        filters: Filter[];
+        orders: Order[];
+        limit?: number;
+        offset?: number;
+        startAfterValues?: any[];
+        startAfterDoc?: { data(): any };
+        unbounded?: boolean;
+    };
+    aggregate?: Record<string, { field?: string; kind: 'sum' | 'average' | 'count' }>;
+}
+
+let idCounter = 0;
+
+/**
+ * Back the global Firestore recorders with a real store.
+ *
+ * Call it in `beforeEach`, AFTER any `jest.resetAllMocks()` — a reset removes
+ * mock implementations, and this works by installing them.
+ *
+ *     let store: FakeDbHandle;
+ *     beforeEach(() => { store = installFakeDb({ users: { u1: { email: 'a@b.c' } } }); });
+ *
+ * The recorders keep recording, so `expect(global.mockFirestoreSet).toHaveBeenCalled()`
+ * and `store.get('users', 'u1')` both work in the same test.
+ */
+export function installFakeDb(seed: Record<string, Record<string, Doc>> = {}): FakeDbHandle {
+    const g = globalThis as unknown as Globals;
+    const store = new Map<string, Map<string, Doc>>();
+    const generatedIds: string[] = [];
+
+    const collectionOf = (name: string): Map<string, Doc> => {
+        let c = store.get(name);
+        if (!c) { c = new Map(); store.set(name, c); }
+        return c;
+    };
+
+    const now = () => new Date().toISOString();
+    const access = (): AccessDescriptor | undefined => g.__firestoreAccess;
+
+    for (const [collection, docs] of Object.entries(seed)) {
+        for (const [id, data] of Object.entries(docs)) {
+            collectionOf(collection).set(id, clone(flattenTimestamps({ id, ...data })));
+        }
+    }
+
+    // ── reads ────────────────────────────────────────────────────────────────
+    g.mockFirestoreGet.mockImplementation(() => {
+        const d = access();
+        // No descriptor means the call did not come through the mock db — an
+        // older suite calling the recorder directly, say. An empty snapshot is
+        // the honest answer: this fake cannot know what was meant, and it must
+        // never invent a document that exists.
+        if (!d) return Promise.resolve(querySnapshot([]));
+
+        if (d.kind === 'doc') {
+            return Promise.resolve(
+                docSnapshot(d.id!, collectionOf(d.collection!).get(d.id!), d.collection!));
+        }
+
+        const rows = runQuery(store, {
+            collection: d.collection!,
+            filters: d.query?.filters ?? [],
+            orders: d.query?.orders ?? [],
+            limit: d.query?.limit,
+            offset: d.query?.offset,
+            startAfterValues: d.query?.startAfterValues,
+            startAfterDoc: d.query?.startAfterDoc,
+            unbounded: d.query?.unbounded,
+        });
+
+        if (d.kind === 'count') return Promise.resolve({ data: () => ({ count: rows.length }) });
+
+        if (d.kind === 'aggregate') {
+            const out: Record<string, number> = {};
+            for (const [alias, spec] of Object.entries(d.aggregate ?? {})) {
+                if (spec.kind === 'count') { out[alias] = rows.length; continue; }
+                const values = rows
+                    .map(([, doc]) => Number(getPath(doc, spec.field ?? '')))
+                    .filter((n) => Number.isFinite(n));
+                const total = values.reduce((a, b) => a + b, 0);
+                out[alias] = spec.kind === 'sum' ? total : (values.length ? total / values.length : 0);
+            }
+            return Promise.resolve({ data: () => out });
+        }
+
+        return Promise.resolve(querySnapshot(rows, d.collection!));
+    });
+
+    // ── writes ───────────────────────────────────────────────────────────────
+    const doSet = (collection: string, id: string, data: Doc, merge?: boolean) => {
+        const col = collectionOf(collection);
+        if (merge) {
+            const base = col.get(id) ?? { id };
+            applyPatch(base, data ?? {}, now(), true);
+            col.set(id, base);
+        } else {
+            const fresh: Doc = { id };
+            applyPatch(fresh, data ?? {}, now(), false);
+            col.set(id, fresh);
+        }
+    };
+
+    const doUpdate = (collection: string, id: string, patch: Doc) => {
+        const col = collectionOf(collection);
+        const existing = col.get(id);
+        // The real adapter's UPDATE matches on the id and affects zero rows when
+        // the document is absent — silently. Firestore throws instead. What
+        // production has is what is reproduced: nothing is created, nothing is
+        // raised.
+        if (!existing) return;
+        applyPatch(existing, patch ?? {}, now(), false);
+        col.set(id, existing);
+    };
+
+    // Published so a snapshot's `ref` can write back into THIS store. Reassigned
+    // on every install, so the most recent store is the one a ref reaches — which
+    // is correct, because a ref never outlives the test that made it.
+    ops = {
+        doUpdate,
+        doSet,
+        doDelete: (collection, id) => { collectionOf(collection).delete(id); },
+        read: (collection, id) => collectionOf(collection).get(id),
+    };
+
+    // ── batches: queued, applied on commit ───────────────────────────────────
+    //
+    // A batch that is never committed must write NOTHING. Applying eagerly would
+    // make an action that forgets `.commit()` — a real and easy mistake — pass
+    // its tests.
+    type Pending = { kind: 'set' | 'update' | 'delete'; collection?: string; id?: string; data?: Doc; merge?: boolean };
+    let pending: Pending[] = [];
+
+    // The recorders are called as (idOrRef, data) — unchanged — so the payload is
+    // the second argument and WHERE it goes comes from the descriptor.
+    g.mockFirestoreSet.mockImplementation((_idOrRef: unknown, data: Doc) => {
+        const d = access();
+        if (!d?.collection || !d.id) return Promise.resolve();
+        if (d.batched) {
+            pending.push({ kind: 'set', collection: d.collection, id: d.id, data, merge: d.merge });
+            return Promise.resolve();
+        }
+        doSet(d.collection, d.id, data, d.merge);
+        return Promise.resolve();
+    });
+
+    g.mockFirestoreUpdate.mockImplementation((_idOrRef: unknown, patch: Doc) => {
+        const d = access();
+        if (d?.collection && d.id) doUpdate(d.collection, d.id, patch);
+        return Promise.resolve();
+    });
+
+    g.mockFirestoreDelete.mockImplementation(() => {
+        const d = access();
+        if (d?.collection && d.id) collectionOf(d.collection).delete(d.id);
+        return Promise.resolve();
+    });
+
+    g.mockFirestoreAdd.mockImplementation((collection: string, data: Doc) => {
+        const id = `fake-${++idCounter}`;
+        generatedIds.push(id);
+        doSet(collection, id, data ?? {});
+        return Promise.resolve({ id });
+    });
+
+    // ── transactions: NO LOCK, deliberately ──────────────────────────────────
+    g.mockFirestoreTxGet.mockImplementation((ref: any) => {
+        const collection = ref?.__collection;
+        const id = ref?.id;
+        if (!collection || !id) return Promise.resolve(docSnapshot(id ?? 'unknown', undefined));
+        return Promise.resolve(docSnapshot(id, collectionOf(collection).get(id), collection));
+    });
+    g.mockFirestoreTxSet.mockImplementation((ref: any, data: Doc) => {
+        // merge comes from the descriptor, not a third argument — see
+        // firestore-mock-db.js on why the recorders keep their original arity.
+        if (ref?.__collection && ref?.id) doSet(ref.__collection, ref.id, data ?? {}, access()?.merge);
+        return Promise.resolve();
+    });
+    g.mockFirestoreTxUpdate.mockImplementation((ref: any, patch: Doc) => {
+        if (ref?.__collection && ref?.id) doUpdate(ref.__collection, ref.id, patch ?? {});
+        return Promise.resolve();
+    });
+
+    g.mockFirestoreBatchUpdate.mockImplementation((ref: any, patch: Doc) => {
+        pending.push({ kind: 'update', collection: ref?.__collection, id: ref?.id, data: patch });
+    });
+    g.mockFirestoreBatchDelete.mockImplementation((ref: any) => {
+        pending.push({ kind: 'delete', collection: ref?.__collection, id: ref?.id });
+    });
+    g.mockFirestoreBatchCommit.mockImplementation(() => {
+        for (const op of pending) {
+            if (!op.collection || !op.id) continue;
+            if (op.kind === 'set') doSet(op.collection, op.id, op.data ?? {}, op.merge);
+            else if (op.kind === 'update') doUpdate(op.collection, op.id, op.data ?? {});
+            else collectionOf(op.collection).delete(op.id);
+        }
+        pending = [];
+        return Promise.resolve();
+    });
+
+    return {
+        // Seeds go through the same flattening a write does, so a test seeding
+        // `new Date()` stores what the adapter would have stored.
+        seed: (collection, id, data) => {
+            collectionOf(collection).set(id, clone(flattenTimestamps({ id, ...data })));
+        },
+        seedAll: (collection, docs) => {
+            for (const [id, data] of Object.entries(docs)) {
+                collectionOf(collection).set(id, clone(flattenTimestamps({ id, ...data })));
+            }
+        },
+        get: (collection, id) => clone(store.get(collection)?.get(id)),
+        all: (collection) => [...(store.get(collection)?.entries() ?? [])]
+            .map(([id, d]) => [id, clone(d)] as [string, Doc]),
+        size: (collection) => store.get(collection)?.size ?? 0,
+        collections: () => [...store.keys()].filter((k) => (store.get(k)?.size ?? 0) > 0),
+        clear: () => store.clear(),
+        generatedIds,
+    };
+}
+
+/**
+ * Behaviour this fake does NOT reproduce, so a test resting on it is a test
+ * resting on nothing.
+ *
+ * Kept as data rather than prose so
+ * src/__tests__/unit/fake-db-divergences-are-declared.test.ts can assert the
+ * list is non-empty and that each entry names the reason. A fake's honest
+ * boundary is part of its contract.
+ */
+export const KNOWN_DIVERGENCES: ReadonlyArray<{ area: string; why: string }> = [
+    {
+        area: 'The native typed columns on dedicated tables',
+        why: 'Dedicated tables store mapped values twice, and .where() reads the '
+            + 'COLUMN while doc.data() reads raw_data — the divergence migration 026 '
+            + 'closed. This fake holds one copy, so it cannot show a query and a '
+            + 'document disagreeing. src/__tests__/pg/native-column-mirror.test.ts '
+            + 'covers that against a real database.',
+    },
+    {
+        area: 'The CAS Postgres functions',
+        why: 'claim_status_transition, debit_wallet_locked, credit_wallet_once and '
+            + 'the rest are SQL. Actions reach them through supabaseAdmin.rpc, not '
+            + 'through this adapter, so a test using this fake must mock them and '
+            + 'cannot prove they serialise. src/__tests__/pg/money-functions.test.ts '
+            + 'proves that with two real connections.',
+    },
+    {
+        area: 'A numeric comparison against a JSON string VALUE',
+        why: 'numericAware casts `raw_data->\'f\'` to numeric, and Postgres raises '
+            + '"cannot cast jsonb string to type numeric" for any row whose value is a '
+            + 'JSON string — so one bad row fails the WHOLE query rather than not '
+            + 'matching. This fake compares in JavaScript, where Number("500") is 500, '
+            + 'so it returns an answer where production returns an error. Measured in '
+            + 'src/__tests__/pg/fake-db-matches-postgres.test.ts; the call sites are '
+            + 'kept safe by numeric-filter-fields-are-coerced.test.ts instead.',
+    },
+    {
+        area: 'PostgREST error shapes and limits',
+        why: 'URL length caps on large .in() lists, statement timeouts, and the '
+            + 'error objects the adapter branches on are properties of the HTTP layer. '
+            + 'This fake never fails a call, so no error branch is exercised through it.',
+    },
+    {
+        area: 'Concurrency',
+        why: 'Everything here is synchronous and single-threaded. It reproduces the '
+            + 'ABSENCE of transaction locking, which is what makes an unguarded '
+            + 'check-then-write testable, but it cannot interleave two callers.',
+    },
+    {
+        area: 'Ordering on mixed types within one key',
+        why: 'Comparison is textual, matching raw_data->>\'k\'. Where Postgres '
+            + 'collation differs from JavaScript string comparison — punctuation and '
+            + 'case, mainly — the order can differ. Contract-tested for the shapes '
+            + 'this app stores (ISO dates, numeric strings, statuses), not in general.',
+    },
+];

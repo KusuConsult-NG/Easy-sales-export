@@ -15,6 +15,8 @@ import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { getLogisticsProvider } from "@/lib/logistics";
 import { runQueryWithRetry } from "@/lib/firestore-utils";
+import { ESCROW_RELEASABLE_FROM, pickOrderEscrow, escrowIdFor } from "@/lib/escrow-status";
+import { hasReservedStock } from "@/lib/order-status";
 
 /**
  * Get all orders for a seller
@@ -172,7 +174,20 @@ async function _updateOrderStatusAction(
                             : `Order cannot be cancelled from status '${cancelClaim.status}'`);
                 }
 
-                const items = currentOrder.items || [];
+                // ONLY IF STOCK WAS EVER TAKEN.
+                //
+                // This claims from "pending_payment" among others, and an order
+                // in that state has reserved nothing — the Paystack creator
+                // writes it without touching availableQuantity and the
+                // reservation happens at verification. Restocking it invented
+                // inventory, and the `orders` counter is incremented at that
+                // same verification, so decrementing it here drove the count
+                // negative for an order that had never been counted.
+                //
+                // `currentOrder.status` is the status BEFORE the claim above;
+                // TransitionResult.status is the status after it. See
+                // hasReservedStock in lib/order-status.ts.
+                const items = hasReservedStock(currentOrder.status) ? (currentOrder.items || []) : [];
                 for (const item of items) {
                     const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(item.productId);
                     await productRef.update({
@@ -329,7 +344,7 @@ async function _confirmDeliveryAction(orderId: string) { let sessionResult;
             const sellerId = currentOrder.sellerId || (Array.isArray(currentOrder.sellerIds) ? currentOrder.sellerIds[0] : undefined);
             if (!sellerId) throw new Error("Seller ID not found on order");
 
-            const escrowId = `ESC-${orderId}-${sellerId.substring(0, 5)}`;
+            const escrowId = escrowIdFor(orderId, sellerId, Array.isArray(currentOrder.sellerIds) ? currentOrder.sellerIds : [sellerId]);
             const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId);
             const escrowDoc = await escrowRef.get();
 
@@ -356,7 +371,7 @@ async function _confirmDeliveryAction(orderId: string) { let sessionResult;
                 const escrowClaim = await claimStatusTransitionFromAny({
                     collection: COLLECTIONS.ESCROW_TRANSACTIONS,
                     id: escrowId,
-                    fromAny: ["delivered", "disputed", "funded"],
+                    fromAny: [...ESCROW_RELEASABLE_FROM],
                     to: "released",
                     patch: { releasedBy: userId, releasedAt: new Date().toISOString() },
                 });
@@ -499,7 +514,9 @@ async function _getOrderDetailsAction(orderId: string) { let sessionResult;
         }
 
         if (!escrowQuery.empty) {
-            order.escrowTransactionId = escrowQuery.docs[0].id;
+            // The active escrow, not whichever row came back first — see
+            // pickOrderEscrow in lib/escrow-status.ts.
+            order.escrowTransactionId = (pickOrderEscrow(escrowQuery.docs) ?? escrowQuery.docs[0]).id;
             order.escrowReleased = escrowQuery.docs.every(doc => doc.data().status === "released");
         } else {
             order.escrowTransactionId = null;

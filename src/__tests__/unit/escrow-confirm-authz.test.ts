@@ -89,7 +89,17 @@ describe('_confirmEscrowPaymentAction', () => {
         jest.clearAllMocks();
         setSession(BUYER);
         setEscrow();
-        mockVerify.mockResolvedValue({ data: { status: 'success', amount: 500000, channel: 'card' } });
+        // The payment identifies the buyer. It carried no identity at all until
+        // #111 — which is the finding: nothing compared the reference's payer to
+        // the caller, so a stranger's reference of the same amount funded this
+        // escrow. escrow-lifecycle-behaviour.test.ts owns that case; here the
+        // fixture simply has to be a payment the buyer actually made.
+        mockVerify.mockResolvedValue({
+            data: {
+                status: 'success', amount: 500000, channel: 'card',
+                metadata: { userId: BUYER }, customer: { email: `${BUYER}@e.com` },
+            },
+        });
         mockClaimPayment.mockResolvedValue({ claimed: true, status: 'escrow_funding' });
         mockClaimStatus.mockResolvedValue({ claimed: true, status: 'funded' });
     });

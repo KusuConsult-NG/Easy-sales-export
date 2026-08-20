@@ -6,13 +6,48 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Product, Order, ProductCategory } from "@/lib/types/marketplace";
 import { withSafeAction } from "@/lib/safe-action";
 import { FieldValue } from "@/lib/firestore-compat";
-import { claimStatusTransition } from "@/lib/status-transition";
+import { claimStatusTransition, claimStatusTransitionFromAny } from "@/lib/status-transition";
+import { isActiveEscrowStatus } from "@/lib/escrow-status";
+import { ORDER_CONFIRMABLE_FROM, hasReservedStock } from "@/lib/order-status";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import type { ActionResponse } from "@/lib/safe-action";
 import { ProductSchema } from "@/lib/validations/marketplace";
 import { notifyOrderCancelled } from "@/lib/marketplace-notifications";
 
 import { runQueryWithRetry } from "@/lib/firestore-utils";
+import { hydrateSellerTrust } from "@/lib/seller-trust";
+import { categorySpellings } from "@/lib/product-search";
+
+/**
+ * Reads a seller's user document, for hydrateSellerTrust.
+ *
+ * THIS FILE WAS MISSED THE FIRST TIME
+ * -----------------------------------
+ * The seller-badge fix covered _mp_catalog.ts, village-market.ts and the public
+ * products API — and not this file, which is where getProductsAction lives. That
+ * is the action /marketplace/buyer/products calls, and that page is the one
+ * rendering the verified shield. So the three readers that were fixed are not
+ * the reader that feeds the page the defect was reported against, and the badge
+ * there was still the create-time snapshot for every non-flash product.
+ *
+ * Fixing readers by hand from a list is what allowed that. The test now
+ * enumerates every action in this directory that returns products and requires
+ * each one to hydrate, rather than naming three.
+ */
+async function readSeller(sellerId: string): Promise<Record<string, any> | null> {
+    const snap = await db.collection(COLLECTIONS.USERS).doc(sellerId).get();
+    return snap.exists ? (snap.data() ?? null) : null;
+}
+
+/**
+ * The most a single unpaginated product query may return.
+ *
+ * _getProductsAction's primary query had NO limit — only its index-error
+ * fallback did, at 300. So the healthy path was unbounded and the degraded path
+ * was capped, which is backwards: every active product was loaded and then
+ * filtered in memory for price, search term and LGA.
+ */
+const PRODUCT_QUERY_CAP = 300;
 
 // ============================================================================
 // PRODUCT BROWSING
@@ -29,21 +64,6 @@ export interface ProductFilters {
     searchTerm?: string; 
 }
 
-const categoryMapping: Record<string, string[]> = {
-    grains: ["grains", "cereal", "cereals"],
-    roots: ["roots", "roots_tubers", "roots & tubers", "tuber", "tubers", "yam", "yams", "cassava"],
-    vegetables: ["vegetables", "vegetable", "horticultural"],
-    fruits: ["fruits", "fruit"],
-    nuts: ["nuts", "nut", "seed", "seeds", "sesame", "sesame seeds", "sesame_seeds"],
-    spices: ["spices", "spices_herbs_seasonings", "spices & herbs", "spices_herbs", "hibiscus", "zobo"],
-    livestock: ["livestock"],
-    poultry: ["poultry"],
-    dairy: ["dairy", "dairy & eggs", "dairy_eggs"],
-    processed: ["processed", "processed foods", "processed_foods", "natural_oils", "beverages"],
-    organic: ["organic", "organics"],
-    sea_foods: ["sea_foods", "fishery"],
-    fishery: ["fishery", "sea_foods"],
-};
 
 /**
  * Get products with filtering
@@ -54,7 +74,7 @@ async function _getProductsAction(filters?: ProductFilters): Promise<ActionRespo
 
         // Apply Firestore-supported filters
         if (filters?.category && filters.category !== "all") { 
-            const mapped = categoryMapping[filters.category.toLowerCase()] || [filters.category];
+            const mapped = categorySpellings(filters.category);
             if (mapped.length > 1) {
                 query = query.where("category", "in", mapped);
             } else {
@@ -77,7 +97,7 @@ async function _getProductsAction(filters?: ProductFilters): Promise<ActionRespo
         let snapshot;
         let indexError = false;
         try {
-            snapshot = await runQueryWithRetry(() => query.get());
+            snapshot = await runQueryWithRetry(() => query.limit(PRODUCT_QUERY_CAP).get());
         } catch (e: any) {
             const errMsg = e.message ? e.message.toLowerCase() : "";
             if (errMsg.includes("index") || errMsg.includes("failed_precondition") || String(e.code) === "9" || String(e.code) === "failed_precondition" || errMsg.includes("precondition")) {
@@ -87,14 +107,14 @@ async function _getProductsAction(filters?: ProductFilters): Promise<ActionRespo
                 // Fallback: only filter by status and category at DB level
                 let fallbackQuery = db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active");
                 if (filters?.category && filters.category !== "all") {
-                    const mapped = categoryMapping[filters.category.toLowerCase()] || [filters.category];
+                    const mapped = categorySpellings(filters.category);
                     if (mapped.length > 1) {
                         fallbackQuery = fallbackQuery.where("category", "in", mapped);
                     } else {
                         fallbackQuery = fallbackQuery.where("category", "==", mapped[0]);
                     }
                 }
-                snapshot = await runQueryWithRetry(() => fallbackQuery.limit(300).get());
+                snapshot = await runQueryWithRetry(() => fallbackQuery.limit(PRODUCT_QUERY_CAP).get());
             } else {
                 throw e;
             }
@@ -122,9 +142,25 @@ async function _getProductsAction(filters?: ProductFilters): Promise<ActionRespo
         }
 
         // Client-side filters (for complex/non-indexed queries)
-        if (filters?.minPrice !== undefined || filters?.maxPrice !== undefined) { 
+        /**
+         * One malformed row must not take down the whole catalogue.
+         *
+         * `product.pricingTiers[0]?.price` guards the ELEMENT and not the ARRAY,
+         * so a product stored without `pricingTiers` throws a TypeError here —
+         * inside the try, so the catch turns it into "Failed to fetch products"
+         * and the buyer sees an empty page rather than the other 299 products.
+         * `product.location.lga` below had no guard at all. It is the same
+         * mistake as `createdAt?.toMillis()` in the sort-key finding: optional
+         * chaining on the property, then an unconditional use of the result.
+         *
+         * Nothing this file writes omits either field. Neither does anything
+         * guarantee it — these rows are written by two product creators, an
+         * update route with an allow-list, and whatever imported the catalogue
+         * before them — and the cost of being wrong is the entire page.
+         */
+        if (filters?.minPrice !== undefined || filters?.maxPrice !== undefined) {
             products = products.filter(product => {
-                const price = product.pricingTiers[0]?.price || 0;
+                const price = product.pricingTiers?.[0]?.price || 0;
                 const meetsMin = filters.minPrice === undefined || price >= filters.minPrice;
                 const meetsMax = filters.maxPrice === undefined || price <= filters.maxPrice;
                 return meetsMin && meetsMax;
@@ -139,11 +175,16 @@ async function _getProductsAction(filters?: ProductFilters): Promise<ActionRespo
             );
         }
 
-        if (filters?.lga) { 
-            products = products.filter(product => product.location.lga === filters.lga);
+        if (filters?.lga) {
+            products = products.filter(product => product.location?.lga === filters.lga);
         }
 
-        return { error: null, success: true as const, data: { products } };
+        // Seller name and badge, live — see readSeller above for why this file
+        // in particular needed it. Applied after every filter, so the reads are
+        // only spent on rows actually being returned.
+        const withTrust = await hydrateSellerTrust(products as any[], readSeller);
+
+        return { error: null, success: true as const, data: { products: withTrust as Product[] } };
     } catch (error) { 
         logger.error("Get products error:", { filters, error: error instanceof Error ? error.message : String(error) });
         return { success: false as const, error: "Failed to fetch products", data: null };
@@ -191,8 +232,10 @@ async function _getFeaturedProductsAction(): Promise<ActionResponse<{ products: 
             products = products.slice(0, 8);
         }
         
-        return { error: null, success: true as const, data: { products: serializeValue(products) } };
-    } catch (error) { 
+        const withTrust = await hydrateSellerTrust(products as any[], readSeller);
+
+        return { error: null, success: true as const, data: { products: serializeValue(withTrust) } };
+    } catch (error) {
         logger.error("Get featured products error:", error);
         return { success: false as const, error: "Failed to fetch featured products", data: null };
     }
@@ -204,12 +247,22 @@ export const getFeaturedProductsAction = withSafeAction("getFeaturedProductsActi
  */
 async function _getProductsByCategoryAction(category: string): Promise<ActionResponse<{ products: Product[] }>> { 
     try {
+        // The shared alias table, like every other category filter. This one
+        // matched the raw string, so it returned a different set of products
+        // from getProductsAction for the same category name.
+        const mapped = categorySpellings(category);
         const snapshot = await db.collection(COLLECTIONS.PRODUCTS)
             .where("status", "==", "active")
-            .where("category", "==", category)
+            .where("category", mapped.length > 1 ? "in" : "==", mapped.length > 1 ? mapped : mapped[0])
+            .limit(PRODUCT_QUERY_CAP)
             .get();
 
-        return { error: null, success: true as const, data: { products: serializeDocs<Product>(snapshot.docs) } };
+        const withTrust = await hydrateSellerTrust(
+            serializeDocs<Product>(snapshot.docs) as any[],
+            readSeller,
+        );
+
+        return { error: null, success: true as const, data: { products: withTrust as Product[] } };
     } catch (error) { 
         logger.error("Get products by category error:", { category, error: error instanceof Error ? error.message : String(error) });
         return { success: false as const, error: "Failed to fetch products by category", data: null };
@@ -246,30 +299,60 @@ async function _confirmOrderReceiptAction(orderId: string): Promise<ActionRespon
             return { success: false as const, error: "Unauthorized", data: null };
         }
 
-        const allowedStatuses = ["in_transit", "processing", "shipped"];
-        if (!allowedStatuses.includes(orderData?.status)) { 
-            return { success: false as const, error: "Order is not in a confirmable state", data: null };
+        // Claimed, not checked-then-written.
+        //
+        // The status check was an ordinary read followed by an update inside
+        // runTransaction — which takes NO lock in this adapter (see the note at
+        // the top of lib/types/marketplace-escrow.ts). Two clicks both passed the
+        // check and both wrote, incrementing _version twice and confirming
+        // receipt twice.
+        // The shared set. This was `["in_transit", "processing", "shipped"]`, and
+        // "in_transit" is an ESCROW status — no order ever holds it, so the list
+        // read as though a fourth state were supported when it was a dead entry.
+        const orderClaim = await claimStatusTransitionFromAny({
+            collection: COLLECTIONS.MARKETPLACE_ORDERS,
+            id: orderId,
+            fromAny: [...ORDER_CONFIRMABLE_FROM],
+            to: "delivered",
+            patch: {
+                buyerConfirmed: true,
+                buyerConfirmedAt: new Date().toISOString(),
+            },
+        });
+
+        if (!orderClaim.claimed) {
+            return {
+                success: false as const,
+                error: orderClaim.status
+                    ? `This order is '${orderClaim.status}' and receipt cannot be confirmed from that state`
+                    : "Order is not in a confirmable state",
+                data: null,
+            };
         }
 
+        // Only the escrow that is still live for this order.
+        //
+        // This updated EVERY escrow row matching the orderId, including ones
+        // already released or refunded — writing "delivered" over a settled
+        // status and making a finished transaction look unfinished.
         const escrowQuery = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("orderId", "==", orderId).get();
 
-        await db.runTransaction(async (transaction) => { 
-            transaction.update(orderRef, {
-                status: "delivered",
-                buyerConfirmed: true,
-                buyerConfirmedAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
-                _version: FieldValue.increment(1) 
-            });
+        for (const doc of escrowQuery.docs) {
+            if (!isActiveEscrowStatus(doc.data()?.status)) continue;
 
-            escrowQuery.docs.forEach(doc => { 
-                transaction.update(doc.ref, {
-                    status: "delivered",
-                    updatedAt: FieldValue.serverTimestamp(),
-                    _version: FieldValue.increment(1) 
-                });
+            // "delivered" is a real escrow status — see lib/escrow-status.ts —
+            // and every release path accepts it. It did NOT accept it before:
+            // the admin release claimed from "funded" alone, so confirming
+            // receipt used to make the escrow unreleasable by an admin, and a
+            // dispute raised afterwards did not freeze it.
+            await claimStatusTransitionFromAny({
+                collection: COLLECTIONS.ESCROW_TRANSACTIONS,
+                id: doc.id,
+                fromAny: ["funded", "in_transit"],
+                to: "delivered",
+                patch: { deliveredAt: new Date().toISOString() },
             });
-        });
+        }
 
         return { error: null, success: true as const, data: { success: true } };
     } catch (error) { 
@@ -346,15 +429,32 @@ async function _cancelOrderAction(orderId: string): Promise<ActionResponse<{ suc
         }
 
         await (async () => {
-            // 1. Revert product quantities
-            for (const item of items) {
-                if (item.productId && item.quantity) {
-                    const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(item.productId);
-                    await productRef.update({
-                        availableQuantity: FieldValue.increment(item.quantity),
-                        _version: FieldValue.increment(1),
-                        updatedAt: FieldValue.serverTimestamp()
-                    });
+            // 1. Revert product quantities — ONLY IF ANY WERE TAKEN.
+            //
+            // This restocked unconditionally, and the only status it can cancel
+            // from is "pending_payment" — the state in which no stock has been
+            // reserved at all. _initializeOrderPaymentAction writes the order
+            // without touching availableQuantity; the reservation happens later
+            // in _payment_verify, which moves the order off "pending_payment".
+            //
+            // So placing a Paystack order, not paying, and cancelling INCREASED
+            // the seller's stock by the order quantity — repeatable, cumulative,
+            // and it oversells afterwards, because decrementManyOrFail succeeds
+            // against the inflated figure and the seller cannot ship.
+            //
+            // Written as the general rule rather than "never restock", so it
+            // stays correct if the claimable set ever widens. See
+            // hasReservedStock in lib/order-status.ts.
+            if (hasReservedStock(orderData?.status)) {
+                for (const item of items) {
+                    if (item.productId && item.quantity) {
+                        const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(item.productId);
+                        await productRef.update({
+                            availableQuantity: FieldValue.increment(item.quantity),
+                            _version: FieldValue.increment(1),
+                            updatedAt: FieldValue.serverTimestamp()
+                        });
+                    }
                 }
             }
 

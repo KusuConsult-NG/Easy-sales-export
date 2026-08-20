@@ -10,6 +10,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { FieldPath } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { filterByLoanProduct } from "@/lib/loan-product";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { needsDualControl } from "@/lib/loan-approval-policy";
 import { createAdminAuditLog } from "@/lib/audit-log";
@@ -43,8 +44,15 @@ async function _getPendingLoanApplications(limit = 50, lastDocId?: string): Prom
         }
 
         const snapshot = await loanQuery.get();
-        const pageDocs = snapshot.docs.slice(0, limit);
-        const hasMore = snapshot.docs.length > limit;
+
+        // The cooperative door. Same split as /loans/approve, opposite side:
+        // this queue is reached from the cooperative loan notification and its
+        // approval applies the membership, savings-cap and guarantor rules, so
+        // a business application listed here would be judged by rules it was
+        // never written against. Filtered in memory — see lib/loan-product.ts.
+        const cooperativeDocs = filterByLoanProduct(snapshot.docs, 'cooperative');
+        const pageDocs = cooperativeDocs.slice(0, limit);
+        const hasMore = cooperativeDocs.length > limit;
         const nextCursor = hasMore ? pageDocs[pageDocs.length - 1]?.id ?? null : null;
 
         const applications = serializeDocs(pageDocs);

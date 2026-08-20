@@ -23,7 +23,7 @@ test.describe('Marketplace Flow', () => {
         await page.goto('/marketplace/products');
 
         // Page should load
-        await expect(page.locator('h1')).toContainText(/Marketplace|Products|Easy Market/i);
+        await expect(page.getByRole('heading', { level: 1 })).toContainText(/Marketplace|Products|Easy Market/i);
 
         // Products grid or list should be visible, or empty state heading h3
         const containerOrEmpty = page.locator('[data-testid="products-grid"], .grid, .product-list, h3').first();
@@ -100,7 +100,7 @@ test.describe('WAVE Application Flow', () => {
     test('should access WAVE application page', async ({ page }) => {
         await page.goto('/wave');
 
-        const titleText = await page.locator('h1').innerText();
+        const titleText = await page.getByRole('heading', { level: 1 }).innerText();
         if (titleText.includes('Application Under Review')) {
             console.log('⚠️ Skipping WAVE apply button check: User application is already under review.');
             return;

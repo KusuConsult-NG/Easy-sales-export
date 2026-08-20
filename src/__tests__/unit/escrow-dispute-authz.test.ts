@@ -41,9 +41,27 @@ const SELLER = 'seller-1';
 const STRANGER = 'stranger-1';
 const ESCROW_ID = 'esc-1';
 
+/**
+ * The claim primitive, HONOURING ITS FROM-SET.
+ *
+ * The escrow dispute creators freeze through this now (#108) rather than
+ * writing inside runTransaction, so it is what refuses a dispute on an escrow
+ * that is not disputeable.
+ *
+ * It is not a stub returning `claimed: true`. A stub that always succeeds
+ * cannot tell a working guard from a missing one — which is the lesson this
+ * codebase keeps relearning — so it reads the status the test seeded and
+ * applies `fromAny` exactly as the SQL does.
+ */
+let seededEscrowStatus = 'funded';
 jest.mock('@/lib/status-transition', () => ({
     claimStatusTransition: jest.fn(async () => ({ claimed: true, status: 'x' })),
-    claimStatusTransitionFromAny: jest.fn(),
+    claimStatusTransitionFromAny: jest.fn(async (p: any) => {
+        const allowed: string[] = p?.fromAny ?? [];
+        return allowed.includes(seededEscrowStatus)
+            ? { claimed: true, status: p.to }
+            : { claimed: false, status: seededEscrowStatus };
+    }),
 }));
 jest.mock('@/lib/wallet-ledger', () => ({
     claimPaymentOnce: jest.fn(async () => ({ claimed: true, status: 'x' })),
@@ -73,6 +91,7 @@ function setSession(id: string) {
 
 /** A funded escrow between BUYER and SELLER, and no existing dispute. */
 function setDocs(escrowStatus = 'funded') {
+    seededEscrowStatus = escrowStatus;
     const escrow = {
         buyerId: BUYER, sellerId: SELLER, amount: 5000,
         status: escrowStatus, productName: 'Yams',

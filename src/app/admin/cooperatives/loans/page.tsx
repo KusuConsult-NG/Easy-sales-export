@@ -14,6 +14,7 @@ import { Loader2 } from "lucide-react";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 import RecordRepaymentModal from "@/components/admin/RecordRepaymentModal";
 import { formatLocalDate } from "@/lib/date-utils";
+import { guarantorBlocksApproval } from "@/lib/loan-approval-policy";
 
 type LoanApplication = {
     id: string;
@@ -541,13 +542,30 @@ export default function AdminLoansPage() {
                         <div className="p-6 border-t border-slate-200 flex gap-4">
                             {selectedApplication.status === "pending" && (
                                 <>
-                                    {!selectedApplication.guarantorVerified && (
+                                    {/*
+                                      * The gate is the guarantor, not the flag.
+                                      *
+                                      * This offered "Verify Guarantor" and disabled
+                                      * Approve whenever guarantorVerified was falsy —
+                                      * including on every application filed through the
+                                      * member loan page, which collects no guarantor at
+                                      * all. Those rows have no guarantor fields, so the
+                                      * modal permanently offered a button that 404s and
+                                      * refused an approval the server would have allowed.
+                                      * The inline ✓ in the table had no such gate, so the
+                                      * same loan was approvable from one place and not
+                                      * the other.
+                                      *
+                                      * Same rule as both server doors now — see
+                                      * lib/loan-approval-policy.ts.
+                                      */}
+                                    {guarantorBlocksApproval(selectedApplication) && (
                                         <button onClick={() => handleVerifyGuarantor(selectedApplication.id)} disabled={isProcessing}
                                             className="flex-1 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all disabled:opacity-50 flex items-center justify-center">
                                             <CheckCircle className="w-5 h-5 mr-2" />Verify Guarantor
                                         </button>
                                     )}
-                                    {selectedApplication.guarantorVerified ? (
+                                    {!guarantorBlocksApproval(selectedApplication) ? (
                                         <button onClick={() => handleApprove(selectedApplication.id)} disabled={isProcessing}
                                             className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition-all disabled:opacity-50 flex items-center justify-center">
                                             <CheckCircle className="w-5 h-5 mr-2" />Approve Loan

@@ -173,6 +173,19 @@ export type CommodityType = "Yam Tubers" | "Sesame Seeds" | "Dried Hibiscus" | "
 
 export interface ExportWindow {
     id: string;
+    /**
+     * Which of the two entities export_windows holds.
+     *
+     * "shipment" is a private export request (orderId, quantity, userId,
+     * pending → in_transit → delivered → completed). "aggregation" is a
+     * crowdfunded opportunity (targetVolume, slotPrice, currentVolume, open).
+     * Optional because rows written before this existed carry no value —
+     * exportWindowKind() infers those from the fields that always told them
+     * apart. See lib/export-window-status.ts.
+     */
+    windowKind?: "shipment" | "aggregation";
+    /** What an aggregation window is raising: targetVolume x slotPrice. */
+    fundingGoal?: number;
     title?: string;
     commodity: CommodityType;
     phase?: string;
@@ -333,6 +346,24 @@ export interface Dispute {
 
     // Financials
     amount?: number;
+
+    /**
+     * Whether the escrow behind this dispute was frozen when it was filed.
+     *
+     * Filing a dispute has to take the escrow off `funded`, or the auto-release
+     * cron pays the seller while the dispute is open — which is what happened to
+     * every dispute raised from /dashboard/disputes/new, because that path
+     * claimed only the ORDER. Recorded on the dispute so an admin can see, before
+     * choosing a resolution, whether there is money left to move.
+     */
+    escrowFrozen?: boolean;
+
+    /**
+     * Set when the escrow had already been released or refunded before the
+     * dispute was filed. A refund resolution cannot be executed against it, and
+     * the admin should not discover that only when the refund fails.
+     */
+    escrowAlreadySettled?: string | null;
 
     status: "open" | "awaiting_evidence" | "under_review" | "investigating" | "resolved" | "closed";
     priority?: "low" | "medium" | "high" | "urgent";

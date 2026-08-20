@@ -224,13 +224,25 @@ describe('a land listing its owner can see', () => {
     });
 
     it('enters the queue the admin screen actually reads', async () => {
-        // The review queue counts by this exact value, so the listing has to
-        // carry it to ever be verified.
+        // The review queue selects on this value, so the listing has to carry it
+        // to ever be verified.
+        //
+        // The assertion moved from the literal to the shared set. The queue used
+        // to query `status == "pending_verification"` and now queries
+        // `status in AWAITING_REVIEW_STATUSES` — because it was ALSO showing
+        // inspection_scheduled listings under its pending tab while the
+        // dashboards counted pending_verification alone. Pinning the literal here
+        // pinned half of that disagreement.
+        //
+        // The property that matters is unchanged and is now checked directly:
+        // whatever status this route writes must be in the set the queue reads.
         const { readFileSync } = await import('fs');
         const { join } = await import('path');
         const admin = readFileSync(join(process.cwd(), 'src/app/actions/farm-nation-admin/_fna_verifications.ts'), 'utf-8');
+        const { AWAITING_REVIEW_STATUSES } = await import('@/lib/land-listing-status');
 
-        expect(admin).toContain('where("status", "==", "pending_verification")');
+        expect(admin).toContain('"status", "in", [...AWAITING_REVIEW_STATUSES]');
         expect(await routeSource()).toContain('status: "pending_verification"');
+        expect(AWAITING_REVIEW_STATUSES).toContain('pending_verification');
     });
 });

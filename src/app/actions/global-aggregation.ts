@@ -91,7 +91,13 @@ export async function getGlobalPendingApprovalsAction() { try {
             // admin-content.ts, which query `pending_verification`, showed the
             // real queue. Three screens, two answers, and this is the one on the
             // global dashboard.
-            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", AWAITING_REVIEW_STATUSES[0]).count().get(),
+            //
+            // `in` over the whole set, not `AWAITING_REVIEW_STATUSES[0]`.
+            // Indexing element zero was correct while the set had one element and
+            // became a silent undercount the moment `inspection_scheduled` was
+            // added to it — a listing with an inspector dispatched is awaiting a
+            // decision, and the admin queue has always counted it.
+            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "in", [...AWAITING_REVIEW_STATUSES]).count().get(),
             db.collection(COLLECTIONS.LOAN_APPLICATIONS).where("status", "==", "pending").count().get(),
             db.collection(COLLECTIONS.WAVE_WITHDRAWALS).where("status", "==", "pending").count().get(),
             db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).where("status", "==", "pending").count().get()

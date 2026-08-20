@@ -10,7 +10,7 @@ import { logger } from '@/lib/logger';
 import { initializePaystackPayment } from '@/lib/paystack-server';
 import { rateLimit } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
-import { claimPaymentOnce } from '@/lib/wallet-ledger';
+import { claimPaymentOnce, CLAIM_TYPE , markFulfilmentFailed } from '@/lib/wallet-ledger';
 import { FieldValue } from '@/lib/firestore-compat';
 
 const paymentLimiter = rateLimit(rateLimitConfig.payment);
@@ -140,7 +140,10 @@ export async function verifyContributionPaymentAction(
             reference,
             userId,
             amount: amountInNaira,
-            type: "cooperative_contribution",
+            // Was the literal "cooperative_contribution" — the only claim type in
+            // the codebase with two spellings, the webhook path using
+            // "contribution" for the same event. See CLAIM_TYPE.
+            type: CLAIM_TYPE.COOPERATIVE_CONTRIBUTION,
             source: "client_verify",
             metadata: { module: "cooperative" },
         });
@@ -270,13 +273,26 @@ export async function verifyContributionPaymentAction(
                 previousTotal: result.currentTotal,
                 newTotal,
                 previousTier: result.previousTier,
-                newTier: result.newTier,
+                // `result.newTier` — the transaction returns { currentTotal,
+                // previousTier } and nothing else, so every contribution audit
+                // entry recorded newTier: undefined while the computed value sat
+                // in scope one line above. A tier change is the one thing this
+                // entry exists to evidence.
+                newTier,
                 paymentReference: reference },
             details: `Contribution of ₦${amountInNaira.toLocaleString()} processed successfully` });
 
         return { error: null, success: true as const, message: `Payment successful! Your contribution of ₦${amountInNaira.toLocaleString() } has been recorded.`, data: undefined
         };
     } catch (error: any) { // 🔒 SECURITY FIX #2: Sanitized error logging
+        // Past the claim, necessarily: the function returns early when the claim
+        // is lost. claim_payment_once wrote status 'completed' at claim time, so
+        // a failure here leaves a payment that looks settled with no contribution
+        // credited, invisible to reconcilePendingFulfillments.
+        //
+        // Two things throw in that window: membership not found, and membership
+        // data missing.
+        await markFulfilmentFailed(reference, error?.message ?? String(error));
         logger.error('[Payment Verification Error]', {
             timestamp: new Date().toISOString(),
             action: 'verifyContribution',

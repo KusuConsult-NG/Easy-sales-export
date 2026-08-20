@@ -38,8 +38,55 @@ export async function GET(request: NextRequest) {
         //
         // src/middleware.ts has enforced exactly this for /wave PAGES since it
         // was written. The rule now lives in @/lib/wave-access and both read it.
-        const waveRegStatus = (session.user as any)?.serviceRegistrations?.wave?.status ?? null;
-        if (!canReadWaveProgramme({ roles: session.user.roles, waveRegStatus })) {
+        /**
+         * Two layers, because the session value goes stale.
+         *
+         * THE DEFECT
+         * ----------
+         * This read `serviceRegistrations.wave.status` off the SESSION alone. That
+         * value is minted at login and refreshed hourly — which is the entire
+         * reason module-access-check.ts exists and carries a database fallback for
+         * it, in its own words: "the user's JWT is still stale and doesn't carry the
+         * new role, so hasAppAccess returns false and the layout bounces them back".
+         *
+         * The /wave/(member) layout uses that fallback, so a member approved five
+         * minutes ago is admitted to the member area. This route had no fallback, so
+         * her training list answered 403 for up to an hour. She was inside the
+         * programme looking at a screen that told her she had no access to it.
+         *
+         * The RULE is unchanged — canReadWaveProgramme, which is deliberately
+         * generous and admits someone still mid-application. Only where the status
+         * is read from changes, and only when the session's copy does not already
+         * grant access, so the ordinary request still costs no query.
+         */
+        let waveRegStatus = (session.user as any)?.serviceRegistrations?.wave?.status ?? null;
+        let allowed = canReadWaveProgramme({ roles: session.user.roles, waveRegStatus });
+
+        if (!allowed) {
+            try {
+                const freshDoc = await getAdminDb()
+                    .collection(COLLECTIONS.USERS)
+                    .doc(session.user.id)
+                    .get();
+                const fresh = freshDoc.data();
+                if (fresh) {
+                    waveRegStatus = fresh.serviceRegistrations?.wave?.status ?? null;
+                    allowed = canReadWaveProgramme({
+                        // The stored roles too: an admin whose role was granted after
+                        // login is in the same position.
+                        roles: Array.isArray(fresh.roles) ? fresh.roles : session.user.roles,
+                        waveRegStatus,
+                    });
+                }
+            } catch (e) {
+                // The session's answer stands, which is the refusal. Logged rather
+                // than swallowed: a failing fallback looks exactly like a legitimate
+                // 403 from the caller's side.
+                logger.error("[WAVE training-sessions] Access fallback lookup failed", e);
+            }
+        }
+
+        if (!allowed) {
             return NextResponse.json(
                 { success: false, data: null, error: "WAVE programme access required", meta: { cursor: null, hasMore: false } },
                 { status: 403 }

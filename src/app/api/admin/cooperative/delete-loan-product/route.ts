@@ -3,9 +3,10 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
+import { recordAdminAction } from "@/lib/audit-log";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 
 /**
  * API Route: Delete Loan Product (Admin Only)
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Check if user is admin
-        if (!isAdmin(session.user.roles)) {
+        if (!hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }
@@ -50,6 +51,16 @@ export async function POST(request: NextRequest) {
 
         // Delete product
         await productRef.delete();
+
+        // Irreversible, and the deleted product's terms are gone with it — so
+        // the record keeps them.
+        await recordAdminAction({
+            action: "loan_product_deleted",
+            userId: session.user.id,
+            targetId: productId,
+            targetType: "loan_product",
+            metadata: { deleted: productDoc.data() ?? null },
+        });
 
         return NextResponse.json({
             success: true,

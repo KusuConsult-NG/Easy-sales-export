@@ -14,7 +14,7 @@ test.describe('Course Enrollment Flow', () => {
         await expect(page.locator('text=Loading...').first()).not.toBeVisible({ timeout: 20000 });
 
         // 2. Verify courses are listed
-        await expect(page.locator('h1')).toContainText(/Academy|Courses|Learn How to Position|Master/i);
+        await expect(page.getByRole('heading', { level: 1 })).toContainText(/Academy|Courses|Learn How to Position|Master/i);
 
         const courseCards = page.locator('[data-testid="course-card"]');
         await expect(courseCards.first()).toBeVisible({ timeout: 10000 });

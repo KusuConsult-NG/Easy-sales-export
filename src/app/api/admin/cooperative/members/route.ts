@@ -6,6 +6,7 @@ import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isAdmin } from "@/lib/admin-permissions";
+import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
 
 /**
  * API Route: Get All Cooperative Membership Applications (Admin)
@@ -58,13 +59,13 @@ export async function GET(request: NextRequest) {
 
         // Date range filters — only when both from/to provided (required for orderBy inequality combo)
         const hasDateFilter = !!(fromDate || toDate);
+        // See the export route: `from` was UTC midnight and `to` was local end of
+        // day, so one range had its two ends in different timezones.
         if (fromDate) {
-            query = query.where("createdAt", ">=", new Date(fromDate));
+            query = query.where("createdAt", ">=", dateRangeStart(fromDate));
         }
         if (toDate) {
-            const end = new Date(toDate);
-            end.setHours(23, 59, 59, 999);
-            query = query.where("createdAt", "<=", end);
+            query = query.where("createdAt", "<=", dateRangeEnd(toDate));
         }
 
         // IMPORTANT: Only apply orderBy('createdAt') when a date inequality filter is active.

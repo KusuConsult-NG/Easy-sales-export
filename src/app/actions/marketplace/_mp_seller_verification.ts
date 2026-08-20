@@ -10,10 +10,38 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { SellerVerification } from "@/lib/types/marketplace";
-import { serializeDoc } from "@/lib/firestore-serialize";
+import { serializeDoc, toMillis } from "@/lib/firestore-serialize";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { SellerVerificationSchema } from "@/lib/validations/marketplace";
 import { withSafeAction, ActionResponse } from "@/lib/safe-action";
+import { claimStatusTransition } from "@/lib/status-transition";
+import { hasAdminPermission } from "@/lib/admin-permissions";
+import { createAdminAuditLog } from "@/lib/audit-log";
+
+/**
+ * The seller categories, as a value rather than a type.
+ *
+ * `category: "wholesale" | "retail"` is TypeScript on a server action, and a
+ * server action's parameter types are erased at the wire — see the runtime
+ * validation in _escrow_lifecycle.ts for the same reasoning.
+ */
+const SELLER_CATEGORIES = ["wholesale", "retail"] as const;
+
+/**
+ * Live roles, not the session's copy.
+ *
+ * Two of the three admin gates in this file read `session.user.roles` — the JWT
+ * — so a demoted admin kept their powers until the token expired. The third,
+ * in _updateSellerCategoryAction, already re-read the user document. One
+ * behaviour now, and it is the safe one.
+ */
+async function callerHasPermission(
+    userId: string,
+    permission: Parameters<typeof hasAdminPermission>[1],
+): Promise<boolean> {
+    const doc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+    return hasAdminPermission(doc.data()?.roles ?? [], permission);
+}
 
 // ============================================================================
 // SELLER VERIFICATION
@@ -237,8 +265,8 @@ async function _getSellerVerificationAction(): Promise<ActionResponse<{ verifica
 
             if (!snapshot.empty) {
                 const sortedDocs = snapshot.docs.sort((a, b) => { 
-                    const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
-                    const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+                    const aTime = toMillis(a.data().createdAt);
+                    const bTime = toMillis(b.data().createdAt);
                     return bTime - aTime;
                 });
                 verDoc = sortedDocs[0];
@@ -340,8 +368,8 @@ async function _resubmitSellerVerificationAction(data: unknown): Promise<ActionR
 
             if (!snapshot.empty) {
                 const sortedDocs = snapshot.docs.sort((a, b) => {
-                    const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
-                    const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+                    const aTime = toMillis(a.data().createdAt);
+                    const bTime = toMillis(b.data().createdAt);
                     return bTime - aTime;
                 });
                 docRef = sortedDocs[0].ref;
@@ -353,19 +381,75 @@ async function _resubmitSellerVerificationAction(data: unknown): Promise<ActionR
         if (!docRef) {
             return { success: false as const, error: "No verification record found to resubmit.", data: null };
         }
-        
-        if (existing?.status !== "rejected") {
-            return { success: false as const, error: `Can only resubmit rejected verifications (Current: ${existing?.status})`, data: null };
+
+        /**
+         * The record must be the caller's.
+         *
+         * The query branch below filters on userId, but the branch above it does
+         * not: it takes `verificationId` from the CALLER'S OWN user document and
+         * loads whatever it points at. The update that follows then writes
+         * `userId` onto that record — adopting it — along with this caller's
+         * bank details and address, and the claim moves its status.
+         *
+         * A user cannot set that pointer directly, so this needs the link to be
+         * wrong to begin with; getSellerVerificationAction's self-healing branch
+         * and the legacy onboarding importer both write it. It costs one read to
+         * refuse instead of adopt.
+         */
+        if (existing?.userId && existing.userId !== userId) {
+            logger.warn(
+                `[resubmitSellerVerification] ${userId} is linked to verification ${docRef.id}, ` +
+                `which belongs to ${existing.userId}. Refusing.`
+            );
+            return { success: false as const, error: "No verification record found to resubmit.", data: null };
+        }
+
+        // Claimed, not checked then written.
+        //
+        // `existing.status !== "rejected"` was read outside the transaction, and
+        // runTransaction takes no lock in this adapter — so two resubmissions
+        // both passed and both wrote, and a resubmission racing an admin's
+        // approval could move an APPROVED verification back to "pending".
+        const resubmitClaim = await claimStatusTransition({
+            collection: COLLECTIONS.SELLER_VERIFICATIONS,
+            id: docRef.id,
+            from: "rejected",
+            to: "pending",
+            patch: { resubmittedAt: new Date().toISOString() },
+        });
+
+        if (!resubmitClaim.claimed) {
+            return {
+                success: false as const,
+                error: `Can only resubmit rejected verifications (Current: ${resubmitClaim.status ?? "unknown"})`,
+                data: null,
+            };
         }
 
         await db.runTransaction(async (transaction) => {
-            transaction.update(docRef, { 
+            transaction.update(docRef, {
                 ...validatedData,
                 userId, // Ensure userId is populated
-                status: "pending",
+                // The rejection, kept rather than erased.
+                //
+                // This wrote `rejectionReason: null` and overwrote the submitted
+                // fields in place, so the record of WHY the application was
+                // rejected — and what it said when it was — was destroyed by the
+                // resubmission. An admin reviewing the new version had nothing to
+                // compare it against and no note of their own earlier decision.
+                //
+                // `status` is not written here: claimStatusTransition above
+                // already moved it, and writing it again would let this update
+                // undo a decision made in between.
+                rejectionReason: null,
+                previousRejection: {
+                    reason: existing?.rejectionReason ?? null,
+                    rejectedAt: existing?.reviewedAt ?? existing?.updatedAt ?? null,
+                    rejectedBy: existing?.reviewedBy ?? null,
+                },
+                resubmissionCount: (Number(existing?.resubmissionCount) || 0) + 1,
                 submittedAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
-                rejectionReason: null
             });
 
             // Update user record
@@ -441,28 +525,96 @@ export const resubmitSellerVerificationAction = withSafeAction("resubmitSellerVe
 // ============================================================================
 
 /**
+ * Grant or revoke the verified badge for a seller.
+ *
+ * THE FIELD THE APPLICATION ACTUALLY READS
+ * ----------------------------------------
+ * These two actions wrote `isSellerVerified` and `sellerBadge`. Nothing in the
+ * codebase reads either one — a grep for both names returns only the two writes
+ * below. The badge the storefront, the seller profile page, the admin table and
+ * every product card display is `isVerifiedBadge`, written by
+ * admin/_marketplace.ts's toggleVerifiedBadgeAction onto BOTH the seller's
+ * verification record and their user document, and read from the user document
+ * by lib/seller-trust.ts.
+ *
+ * So granting through this path changed nothing a buyer could see, and — the
+ * half that matters — REVOKING THROUGH THIS PATH DID NOT REVOKE: `isVerifiedBadge`
+ * stayed true and the seller kept the trust mark an admin had just taken away.
+ * Two badge subsystems, one of them inert. Same shape as the seller badge
+ * finding in lib/seller-trust.ts, which these two escaped because nothing calls
+ * them.
+ *
+ * They now write the real field, on both records, exactly as the live path does.
+ *
+ * NOTHING CALLS EITHER OF THESE. No page and no route; the admin seller screen
+ * uses toggleVerifiedBadgeAction. `index.ts` re-exports this module, so they are
+ * registered server actions rather than dead code — which is why they are
+ * corrected here rather than deleted. Removing a "use server" export is the
+ * owner's call, not a side effect of a bug fix.
+ */
+async function setSellerBadge(
+    userId: string,
+    granted: boolean,
+): Promise<ActionResponse<{ success: boolean }>> {
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
+    const actorId = sessionResult.session.user.id;
+
+    // The permission the live badge path requires, from the shared matrix —
+    // not a fourth hand-written list of role strings.
+    if (!(await callerHasPermission(actorId, "marketplace:approve_sellers"))) {
+        return { success: false as const, error: "Unauthorized: Permission required - marketplace:approve_sellers", data: null };
+    }
+
+    const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+    const userSnap = await userRef.get();
+    if (!userSnap.exists) {
+        return { success: false as const, error: "Seller not found", data: null };
+    }
+
+    await userRef.update({
+        isVerifiedBadge: granted,
+        updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    // Keep the verification record in step, as toggleVerifiedBadgeAction does.
+    // The admin seller table reads the badge from THAT document, so updating
+    // only the user left the two disagreeing.
+    const verifications = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
+        .where("userId", "==", userId)
+        .get();
+
+    if (!verifications.empty) {
+        const newest = verifications.docs.sort(
+            (a, b) => toMillis(b.data().createdAt) - toMillis(a.data().createdAt),
+        )[0];
+        await newest.ref.update({
+            isVerifiedBadge: granted,
+            badgeGrantedBy: actorId,
+            badgeGrantedAt: granted ? FieldValue.serverTimestamp() : null,
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+    }
+
+    // Neither action recorded anything. Granting and revoking a trust mark is
+    // exactly what the audit log is for, and the live path already logs it.
+    await createAdminAuditLog({
+        action: granted ? "seller_badge_grant" : "seller_badge_revoke",
+        userId: actorId,
+        targetId: userId,
+        targetType: "user",
+    });
+
+    return { error: null, success: true as const, data: { success: true } };
+}
+
+/**
  * Admin action to grant verified badge
  */
-async function _grantSellerVerifiedBadgeAction(userId: string): Promise<ActionResponse<{ success: boolean }>> { 
+async function _grantSellerVerifiedBadgeAction(userId: string): Promise<ActionResponse<{ success: boolean }>> {
     try {
-        const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
-        
-        const roles = sessionResult.session.user.roles || [];
-        const isAdmin = roles.some(r => r === "admin" || r === "super_admin" || r === "marketplace_admin");
-        
-        if (!isAdmin) {
-            return { success: false as const, error: "Unauthorized: Admin only", data: null };
-        }
-
-        await db.collection(COLLECTIONS.USERS).doc(userId).update({ 
-            isSellerVerified: true,
-            sellerBadge: "verified",
-            updatedAt: FieldValue.serverTimestamp()
-        });
-
-        return { error: null, success: true as const, data: { success: true } };
-    } catch (error: any) { 
+        return await setSellerBadge(userId, true);
+    } catch (error: any) {
         logger.error("Grant badge error:", error);
         return { success: false as const, error: error instanceof Error ? error.message : "Failed to grant badge", data: null };
     }
@@ -474,26 +626,10 @@ export const grantSellerVerifiedBadgeAction = withSafeAction("grantSellerVerifie
 /**
  * Admin action to revoke verified badge
  */
-async function _revokeSellerVerifiedBadgeAction(userId: string): Promise<ActionResponse<{ success: boolean }>> { 
+async function _revokeSellerVerifiedBadgeAction(userId: string): Promise<ActionResponse<{ success: boolean }>> {
     try {
-        const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
-
-        const roles = sessionResult.session.user.roles || [];
-        const isAdmin = roles.some(r => r === "admin" || r === "super_admin" || r === "marketplace_admin");
-
-        if (!isAdmin) {
-            return { success: false as const, error: "Unauthorized: Admin only", data: null };
-        }
-
-        await db.collection(COLLECTIONS.USERS).doc(userId).update({ 
-            isSellerVerified: false,
-            sellerBadge: null,
-            updatedAt: FieldValue.serverTimestamp()
-        });
-
-        return { error: null, success: true as const, data: { success: true } };
-    } catch (error: any) { 
+        return await setSellerBadge(userId, false);
+    } catch (error: any) {
         logger.error("Revoke badge error:", error);
         return { success: false as const, error: error instanceof Error ? error.message : "Failed to revoke badge", data: null };
     }
@@ -520,12 +656,30 @@ async function _updateSellerCategoryAction(
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
         const actorId = sessionResult.session.user.id;
 
-        // Allow: the seller themselves, or an admin
-        if (actorId !== sellerId) { 
-            const actorDoc = await db.collection(COLLECTIONS.USERS).doc(actorId).get();
-            const roles: string[] = actorDoc.data()?.roles || [];
-            const hasMarketplaceAdminAccess = roles.some(r => r === "admin" || r === "super_admin" || r === "marketplace_admin");
-            if (!hasMarketplaceAdminAccess) {
+        /**
+         * The category is checked at RUNTIME.
+         *
+         * The union in the signature is TypeScript and is gone at the wire, and
+         * this value is written to three places: the seller's user document, their
+         * verification record, and EVERY ONE of their products. _mp_products.ts
+         * reads it back as the product's sellerCategory and the buyer catalogue
+         * filters on it, so an unrecognised string removes the seller's whole
+         * catalogue from both the wholesale and the retail view at once — and
+         * nothing here would have refused it.
+         */
+        if (!(SELLER_CATEGORIES as readonly string[]).includes(String(category))) {
+            return {
+                success: false as const,
+                error: `Invalid seller category. Expected one of: ${SELLER_CATEGORIES.join(", ")}`,
+                data: null,
+            };
+        }
+
+        // Allow: the seller themselves, or an admin with the marketplace
+        // seller permission — from the shared matrix, not a role list written
+        // out by hand for the third time in this file.
+        if (actorId !== sellerId) {
+            if (!(await callerHasPermission(actorId, "marketplace:approve_sellers"))) {
                 return { success: false as const, error: "Unauthorized", data: null };
             }
         }
@@ -549,8 +703,8 @@ async function _updateSellerCategoryAction(
                 const sortedDocs = verSnap.docs.sort((a, b) => {
                     const aData = a.data();
                     const bData = b.data();
-                    const aTime = aData.createdAt?.toMillis?.() || aData.createdAt?.seconds * 1000 || 0;
-                    const bTime = bData.createdAt?.toMillis?.() || bData.createdAt?.seconds * 1000 || 0;
+                    const aTime = toMillis(aData.createdAt);
+                    const bTime = toMillis(bData.createdAt);
                     return bTime - aTime;
                 });
                 transaction.update(sortedDocs[0].ref, { 

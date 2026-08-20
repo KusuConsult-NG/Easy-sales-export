@@ -63,6 +63,7 @@ const PRODUCT = 'prod-1';
 
 jest.mock('@/lib/audit-log', () => ({
     createAdminAuditLog: jest.fn(async () => ({})),
+    recordAdminAction: jest.fn(async () => undefined),
     logAdminAction: jest.fn(async () => ({})),
     logAdminFinancialAction: jest.fn(async () => ({})),
 }));

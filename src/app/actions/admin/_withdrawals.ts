@@ -15,7 +15,25 @@ import { serializeDoc } from "@/lib/firestore-serialize";
 import { createNotificationAction } from "@/app/actions/notifications";
 import { WithdrawalProcessingSchema } from "@/lib/schemas";
 import { hasAdminPermission } from "@/lib/admin-permissions";
+import { stripPii } from "@/lib/admin-pii";
+import { extractCanonicalUser } from "@/lib/canonical/normalizer";
 import { requireAdmin } from "@/lib/require-admin";
+
+/**
+ * The first bank block that actually carries an account number.
+ *
+ * Every hydrator on this screen produces an object whether or not it found
+ * anything, so a plain `a || b || c` chain always stops at the first one and
+ * never reaches a populated fallback.
+ */
+function firstWithAccount(
+    ...candidates: Array<Record<string, any> | null | undefined>
+): Record<string, unknown> {
+    for (const c of candidates) {
+        if (c && String(c.accountNumber ?? "").trim() !== "") return c;
+    }
+    return candidates[candidates.length - 1] ?? {};
+}
 
 // ============================================
 // Process Withdrawal Request
@@ -64,6 +82,58 @@ async function _processWithdrawalAction(
 
         if (!withdrawalDoc.exists) {
             return { error: "Withdrawal request not found", success: false as const };
+        }
+
+        // ONE WITHDRAWAL, TWO ADMIN SCREENS, TWO DIFFERENT OUTCOMES.
+        //
+        // This action pays through Paystack and writes a row to the global
+        // TRANSACTIONS ledger. That is correct for a wallet withdrawal and
+        // wrong for the other two collections it was reaching into, because
+        // each of those has a dedicated action that does strictly more:
+        //
+        //   COOPERATIVE_WITHDRAWALS
+        //     cooperative/_coop_admin_money.ts approveWithdrawalAction applies a
+        //     24-hour pending hold, checks the admin's cooperative scope against
+        //     the request (an IDOR guard this action has no equivalent of),
+        //     decrements the member's lockedBalance, and writes the
+        //     `withdrawal` row to COOPERATIVE_TRANSACTIONS that forensics.ts,
+        //     getCooperativeStats and the member's own history all read.
+        //
+        //     Processed HERE instead, a cooperative withdrawal paid out and
+        //     lockedBalance was never released — the amount stayed locked out
+        //     of the member's savings permanently, with forensics still
+        //     counting it as held and the ledger never recording that the money
+        //     had left. The 24-hour hold and the scope check were skipped too.
+        //
+        //     It also pays the WRONG WAY. mark-withdrawal-completed's own
+        //     comment records the cooperative flow as "pending → approved, with
+        //     the payout made by hand", then marked completed once the bank
+        //     transfer is done. Firing a Paystack transfer at a withdrawal whose
+        //     settlement process is manual is how the same money goes out twice.
+        //
+        //   WAVE_WITHDRAWALS
+        //     wave/_wv_admin_withdrawals.ts processWaveWithdrawalAction pays
+        //     through Paystack too, but returns the request to `pending` when
+        //     the transfer fails — the rollback an earlier pass added after a
+        //     failed payout could be retried into a double payout. This action
+        //     has no such rollback: a failed transfer here parks the row at
+        //     approved_pending_payout instead.
+        //
+        // Both claim `from: "pending"`, so the two paths race on the same field
+        // and which behaviour a member got depended on which screen an admin
+        // happened to open. This action now owns WITHDRAWALS alone and refuses
+        // the other two rather than half-completing them. It is the narrower
+        // path being withdrawn, not a new one being invented: nothing in the UI
+        // calls this action, and each module's own screen already does the whole
+        // job.
+        if (withdrawalCollection !== COLLECTIONS.WITHDRAWALS) {
+            const owner = withdrawalCollection === COLLECTIONS.COOPERATIVE_WITHDRAWALS
+                ? "the Cooperative admin screen, which releases the member's locked balance and records the ledger entry"
+                : "the WAVE admin screen, which rolls the request back if the transfer fails";
+            return {
+                error: `This is not a wallet withdrawal. Process it from ${owner}.`,
+                success: false as const,
+            };
         }
 
         const withdrawalData = withdrawalDoc.data()!;
@@ -232,6 +302,22 @@ async function _getPendingWithdrawalsAction(
             return { error: "Unauthorized: Permission required - finance:read", success: false as const, data: null };
         }
 
+        /**
+         * "finance:read" is held by super_admin, admin, support,
+         * cooperative_admin and marketplace_admin — five of the ten roles, and
+         * this action returns the bank account of every withdrawer across the
+         * standard, cooperative AND wave queues at once. Paying any of them
+         * requires "finance:process_withdrawals": super_admin and admin.
+         *
+         * The counterpart list in wave/_wv_admin_withdrawals.ts was closed on
+         * the same permission (#149) and the wallet queue before it (#92); this
+         * one reads all three collections, so it was the widest of the three.
+         * The rows stay visible to everyone with finance:read — amounts, status
+         * and who requested — because reconciling a total does not need an
+         * account number.
+         */
+        const maySeeBankDetails = hasAdminPermission(session.user.roles, "finance:process_withdrawals");
+
         // Helper to build a query per collection
         const buildQuery = (collectionName: string) => {
             return statusFilter === "all"
@@ -280,31 +366,61 @@ async function _getPendingWithdrawalsAction(
             userSnapshots.forEach(snap => {
                 snap.forEach(doc => {
                     const data = doc.data();
+                    /**
+                     * THE DESTINATION ACCOUNT WAS BLANK FOR HALF THE PLATFORM.
+                     *
+                     * This hydration was hand-written and read
+                     * `bankAccountNumber` and `bankAccount.accountNumber` — and
+                     * never `bankDetails`, the canonical block that
+                     * marketplace/_mp_onboarding.ts and export/_ex_onboarding.ts
+                     * are the sole writers of. So a marketplace seller or an
+                     * export member requesting a withdrawal appeared in this
+                     * queue with an empty account number, and the admin
+                     * approving it had nothing to pay into.
+                     *
+                     * Worse, the empty object it produced is TRUTHY, so the
+                     * `userMap[...] || w.bankDetails` fallback below never ran:
+                     * the account the member typed onto their own withdrawal
+                     * request was shadowed by the blank hydrated one.
+                     *
+                     * extractCanonicalUser is what wave/_wv_admin_withdrawals.ts
+                     * and cooperative/_coop_admin_money.ts already use for the
+                     * same field. This action was the last hand-written copy.
+                     */
+                    const canonical = extractCanonicalUser(data);
                     userMap[doc.id] = {
-                        name: data.name || data.fullName || "Unknown",
-                        email: data.email || "",
-                        phone: data.phone || "",
-                        bankDetails: {
-                            bankName: data.bankName || data.bankAccount?.bankName || "",
-                            accountNumber: data.bankAccountNumber || data.bankAccount?.accountNumber || "",
-                            accountName: data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : ""),
-                            bankCode: data.bankCode || data.bankAccount?.bankCode || ""
-                        }
+                        name: canonical.name,
+                        email: canonical.email,
+                        phone: canonical.phone,
+                        ...(maySeeBankDetails ? { bankDetails: canonical.bankDetails } : {}),
                     };
                 });
             });
         }
 
         const enrichedData = withdrawals.map((w: any) => ({
-            ...w,
+            // The withdrawal row itself carries bankAccountNumber, accountName
+            // and bankCode at its root for the cooperative and WAVE queues, so
+            // gating only the hydrated `bankDetails` block below would have left
+            // the same values in the spread beside it.
+            ...(maySeeBankDetails ? w : stripPii(w)),
             user: userMap[w.userId] || null,
-            // Standardize bankDetails at root for UI components
-            bankDetails: userMap[w.userId]?.bankDetails || w.bankDetails || {
-                bankName: w.bankName || "",
-                accountNumber: w.bankAccountNumber || w.accountNumber || "",
-                accountName: w.bankAccountName || w.accountName || (userMap[w.userId]?.name || ""),
-                bankCode: w.bankCode || ""
-            }
+            // Chosen on whether an account number is actually PRESENT, not on
+            // whether an object is non-null: the hydrated block is always an
+            // object, so `a || b` silently preferred a blank one over the
+            // account the member typed onto the request itself.
+            ...(maySeeBankDetails ? {
+                bankDetails: firstWithAccount(
+                    userMap[w.userId]?.bankDetails,
+                    w.bankDetails,
+                    {
+                        bankName: w.bankName || "",
+                        accountNumber: w.bankAccountNumber || w.accountNumber || "",
+                        accountName: w.bankAccountName || w.accountName || (userMap[w.userId]?.name || ""),
+                        bankCode: w.bankCode || ""
+                    },
+                ),
+            } : {}),
         }));
 
         return {

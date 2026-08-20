@@ -102,9 +102,13 @@ const MARKETPLACE_NAV: NavItem[] = [
     { name: "Browse Products",   href: "/marketplace/buyer/products", icon: Search },
     { name: "Shopping Cart",     href: "/marketplace/checkout",       icon: ShoppingCart },
     { name: "My Orders",         href: "/marketplace/buyer/orders",   icon: Package },
+    // Both quote lists were unreachable: nothing linked to either, and the
+    // seller's RFQ notification pointed at a route that did not exist.
+    { name: "My Quotes",         href: "/marketplace/buyer/quotes",   icon: FileText },
     { name: "Village Market",    href: "/marketplace/village-market", icon: Zap },
     { name: "Escrow",            href: "/escrow",                     icon: Lock },
     { name: "Seller Dashboard",  href: "/marketplace/seller",         icon: Store,    sellerOnly: true },
+    { name: "Quote Requests",    href: "/marketplace/seller/quotes",  icon: FileText, sellerOnly: true },
 
     { name: "My Products",       href: "/marketplace/products",       icon: Package,  sellerOnly: true },
 ];

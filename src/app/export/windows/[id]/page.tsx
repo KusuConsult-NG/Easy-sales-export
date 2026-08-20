@@ -8,6 +8,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { getExportOpportunityById, type ExportOpportunity } from "@/app/actions/export-investments";
 import { initializeInvestmentPaymentAction } from "@/app/actions/export-payment";
+import { exportWindowRoiPercent } from "@/lib/export-window-status";
 
 export default function ExportWindowDetailPage() {
     const params = useParams();
@@ -55,7 +56,10 @@ export default function ExportWindowDetailPage() {
                 windowData.commodity,
                 investmentAmount,
                 windowData.commodity,
-                parseFloat(windowData.projectedROI.replace("%", ""))
+                // `.replace` on an undefined projectedROI threw a TypeError
+                // here, before the action was ever called — nothing writes an
+                // roi onto an export window. See lib/export-window-status.ts.
+                exportWindowRoiPercent(windowData.projectedROI)
             );
 
             if (result.success) {

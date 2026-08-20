@@ -10,6 +10,8 @@ import { revalidatePath } from "next/cache";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import type { Course, EnrolledCourseWithDetails, UserProgress } from "@/lib/types/academy-actions";
+import { normaliseAcademyPlan, checkCourseAccess } from "@/lib/academy-plan";
+import { isDecidedAgainst } from "@/lib/registration-progress";
 
 /**
  * Check Academy application status for current user
@@ -114,23 +116,6 @@ async function _checkAcademyStatusAction(): Promise<ActionResponse<string | null
 export const checkAcademyStatusAction = withFlexibleSafeAction("checkAcademyStatusAction", _checkAcademyStatusAction);
 
 
-function checkCourseAccess(userPlan: string, courseTier: string): boolean {
-    // Treat undefined or 'free' tier as open to all
-    if (!courseTier || courseTier === "free") return true;
-    // Elite plan has access to everything
-    if (userPlan === "elite") return true;
-    // Standard/Legacy-Advanced plan has access to foundation and standard
-    if (userPlan === "standard" || userPlan === "advanced") {
-        return courseTier === "foundation" || courseTier === "standard";
-    }
-    // Foundation plan only has access to foundation
-    if (userPlan === "foundation") {
-        return courseTier === "foundation";
-    }
-    // Default deny for unrecognized plans or free users trying to access paid tiers
-    return false;
-}
-
 
 /**
  * Enroll in course (Gated by Academy Tier)
@@ -151,7 +136,36 @@ async function _enrollInCourseAction(
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         if (!userDoc.exists) return { success: false as const, error: "User not found", data: null };
         const userData = userDoc.data();
-        const userPlan = userData?.serviceRegistrations?.academy?.plan || "free";
+        const academyReg = userData?.serviceRegistrations?.academy;
+        const userPlan = academyReg?.plan || "free";
+
+        /**
+         * A REJECTED APPLICANT COULD ENROL THEIR WAY BACK IN.
+         *
+         * This consulted the PLAN and never the registration STATUS. A free-tier
+         * course opens to everybody — checkCourseAccess returns true for a
+         * missing or "free" tier regardless of plan — so an applicant whose
+         * Academy application an admin had rejected could enrol in one, and step
+         * 4 below then granted them `academy_participant` for having done so.
+         * checkModuleAccess grants the module on that role alone (Layer 1), so
+         * the rejection was undone by a click.
+         *
+         * That is a hole straight through #210, which had just taught the
+         * rejection paths to revoke the role: revoking it means nothing if an
+         * unrelated action hands it back without asking why it was taken.
+         *
+         * isDecidedAgainst is the vocabulary added in #207 for exactly this —
+         * rejected, suspended, revoked and the rest all score zero on the
+         * progress scale, so "not approved" cannot distinguish them from "not
+         * started".
+         */
+        if (isDecidedAgainst(academyReg?.status)) {
+            return {
+                success: false as const,
+                error: "Your Academy application was not approved, so you cannot enrol in courses. Please contact support.",
+                data: null,
+            };
+        }
 
         const progressRef = db.doc(`user_progress/${userId}/courses/${courseId}`);
 
@@ -172,7 +186,21 @@ async function _enrollInCourseAction(
             const hasAccess = checkCourseAccess(userPlan, courseTier);
 
             if (!hasAccess) {
-                throw new Error(`Your current package (${userPlan}) does not grant access to this course. Please upgrade your package to the ${courseTier.charAt(0).toUpperCase() + courseTier.slice(1)} tier or higher.`);
+                // Two different refusals, said differently.
+                //
+                // This read `Your current package (free) does not grant access`
+                // for a learner who had never chosen a package at all — an admin
+                // can approve an application without one, and registration
+                // itself is free — so the message named a package they had not
+                // bought and told them to upgrade from it. Neither they nor
+                // support could tell which of the two situations they were in.
+                const tierName = courseTier.charAt(0).toUpperCase() + courseTier.slice(1);
+                const held = normaliseAcademyPlan(userPlan);
+                throw new Error(
+                    held
+                        ? `Your ${held} package does not grant access to this course. Please upgrade to the ${tierName} tier or higher.`
+                        : `Your Academy registration does not include a course package yet. Please choose the ${tierName} tier or higher to enrol.`
+                );
             }
 
             const progress: UserProgress = {
@@ -204,15 +232,26 @@ async function _enrollInCourseAction(
         });
 
         await createAdminAuditLog({
-            action: "user_update",
+            // Was "user_update", the catch-all for an unclassified write, so the
+            // one question this row exists to answer — who enrolled in which
+            // course — could not be asked of it. Same correction as #200's
+            // training_registered.
+            action: "course_enrolled",
             userId,
             targetId: courseId,
             targetType: "course_enrollment",
         });
 
         revalidatePath("/academy");
-        revalidatePath("/dashboard/academy");
-        revalidatePath(`/academy/courses/${courseId}`);
+        // /dashboard/academy is not a route — the academy dashboard is at
+        // /academy/dashboard. revalidatePath on a path with no route behind it
+        // is a silent no-op, so this invalidated nothing and a learner who had
+        // just enrolled could keep seeing the cached dashboard without the new
+        // course on it.
+        revalidatePath("/academy/dashboard");
+        // Likewise /academy/courses/{id} — the course page is /academy/{id}.
+        // The only route under /academy/courses is .../quiz.
+        revalidatePath(`/academy/${courseId}`);
 
         return { success: true, error: null, data: null };
     } catch (error) {
@@ -258,6 +297,15 @@ export async function autoEnrollPaidUser(userId: string, userPlan: string) {
     const resolvedPlan = sessionUser?.serviceRegistrations?.academy?.plan || "free";
 
     if (!resolvedUserId || !resolvedPlan) return;
+
+    // A decided-against registration enrols in nothing, for the same reason
+    // enrollInCourseAction now refuses one: a plan is what somebody bought and a
+    // status is what an admin decided, and the decision wins. This function runs
+    // on every academy dashboard load, so without the guard a rejected applicant
+    // who had paid for a tier kept accruing enrolment and progress rows for
+    // courses the module gate will not let them open.
+    if (isDecidedAgainst(sessionUser?.serviceRegistrations?.academy?.status)) return;
+
     const plan = String(resolvedPlan).toLowerCase();
     const isPaid = ["elite", "standard", "foundation", "advanced", "member", "student", "academy_student", "scholarship", "active", "enrolled", "approved"].includes(plan);
     if (!isPaid) return;

@@ -156,6 +156,133 @@ export interface ClaimResult {
 }
 
 /**
+ * Record that fulfilment FAILED after the payment was already claimed.
+ *
+ * THE PROBLEM THIS SOLVES
+ * -----------------------
+ * claim_payment_once writes `status` at claim time, and its default is
+ * 'completed' (migration 009, `p_status TEXT DEFAULT 'completed'`). Claiming
+ * before fulfilling is deliberate — for money, a stuck payment somebody has to
+ * look at beats one that silently fulfils twice — but it means the row says
+ * "completed" from the instant of the claim, BEFORE any work has happened.
+ *
+ * So when the work then throws, the outcome is the worst of both worlds:
+ *
+ *   - the money was collected
+ *   - nothing was delivered
+ *   - processed_payments says `completed`
+ *   - reconcilePendingFulfillments only looks for `pending_fulfilment`, so it
+ *     never finds these
+ *
+ * A defect that leaves no trace is the one nobody fixes. This is the same
+ * category the savings-balance repair had to label STRANDED and refuse to
+ * touch, because a claim with no fulfilment cannot be safely guessed at.
+ *
+ * Measured across the codebase: of nineteen claim sites, fifteen take the
+ * default status, and six of those have throw paths after the claim — eleven in
+ * total, spanning Farm Nation escrow, cooperative contributions (both paths),
+ * loan repayments, export investments and WAVE registration.
+ *
+ * WHAT THIS DOES, AND WHAT IT DELIBERATELY DOES NOT
+ * ------------------------------------------------
+ * It marks the row `fulfilment_failed` and records the reason and the time. It
+ * does NOT release the claim: releasing it would let a webhook retry fulfil a
+ * payment whose failure might be non-deterministic, and double-fulfilment is
+ * the thing claiming exists to prevent. It does NOT refund, and it does NOT
+ * retry. It makes the payment FINDABLE:
+ *
+ *     SELECT id, raw_data->>'type', raw_data->>'fulfilmentError'
+ *     FROM processed_payments
+ *     WHERE raw_data->>'status' = 'fulfilment_failed';
+ *
+ * Never throws. It is called from a catch block on the way to re-raising the
+ * original error, and an error while recording an error must not replace it —
+ * that would lose the reason the payment failed in the first place.
+ */
+export async function markFulfilmentFailed(reference: string, reason: string): Promise<void> {
+    try {
+        const { error } = await supabaseAdmin.rpc("apply_document_patch", {
+            p_table: "processed_payments",
+            p_id: reference,
+            p_collection: null,
+            p_patch: {
+                status: "fulfilment_failed",
+                fulfilmentError: String(reason).slice(0, 500),
+                fulfilmentFailedAt: new Date().toISOString(),
+            },
+            p_paths: {},
+            p_deletes: [],
+        });
+
+        if (error) {
+            logger.error(
+                `[wallet-ledger] Payment ${reference} was claimed, fulfilment FAILED, and the ` +
+                `failure could not be recorded: ${error.message}. This payment is now invisible ` +
+                `to reconciliation — money was taken and nothing was delivered.`
+            );
+            return;
+        }
+
+        logger.error(
+            `[wallet-ledger] Payment ${reference} claimed but fulfilment FAILED: ${reason}. ` +
+            `Marked fulfilment_failed. Money was collected and nothing was delivered — this ` +
+            `needs a person.`
+        );
+    } catch (err: any) {
+        // Swallowed on purpose. See the note above: the caller is mid-catch and
+        // about to rethrow the real error.
+        logger.error(
+            `[wallet-ledger] Could not mark ${reference} fulfilment_failed: ${err?.message ?? err}`
+        );
+    }
+}
+
+/**
+ * The `type` written onto a claimed payment, for events with more than one
+ * confirmation path.
+ *
+ * WHY THIS EXISTS
+ * ---------------
+ * A cooperative contribution can be confirmed two ways, and each passed its own
+ * literal:
+ *
+ *   infrastructure/payments/service.ts   the Paystack webhook   "contribution"
+ *   actions/cooperative/_payment.ts      the browser redirect   "cooperative_contribution"
+ *
+ * One business event, two names, decided by which of the two won a race. Every
+ * other claim type in this codebase has exactly one spelling; this was the only
+ * one that did not.
+ *
+ * Found by querying production: processed_payments holds rows of
+ * type='contribution' and NOT ONE of 'cooperative_contribution', which is how
+ * the second spelling stayed invisible — the browser path has never won a claim
+ * race in production, so nothing has yet been filed under a name the rest of the
+ * system does not use.
+ *
+ * "contribution" is the surviving spelling because it is the one already in the
+ * database, the one both writers use for the cooperative LEDGER row
+ * (_payment.ts, `type: "contribution"`), and the one every consumer matches on.
+ *
+ * Only the divergent type is defined here. The rest are unambiguous and adding
+ * them would be churn without a defect behind it.
+ */
+export const CLAIM_TYPE = {
+    /** A cooperative savings contribution, whichever path confirms it. */
+    COOPERATIVE_CONTRIBUTION: "contribution",
+} as const;
+
+/**
+ * The spelling the browser-redirect path used before CLAIM_TYPE existed.
+ *
+ * Kept ONLY so repairs can still find historical rows. Nothing may write it —
+ * src/__tests__/unit/claim-type-single-spelling.test.ts enforces that. A repair
+ * script that stopped recognising the old name would silently report "nothing to
+ * do" for exactly the rows it was written to fix, which is the worst possible
+ * failure mode for a money repair.
+ */
+export const LEGACY_COOPERATIVE_CONTRIBUTION_CLAIM_TYPE = "cooperative_contribution";
+
+/**
  * Claim a payment reference without moving any money.
  *
  * For fulfilment that marks an order paid, creates escrow rows or writes a
@@ -302,6 +429,97 @@ export async function debitJsonbBalance(params: {
         balance: Number(row.balance ?? 0),
         reason: (row.reason ?? null) as DebitFailure | null,
     };
+}
+
+/**
+ * Puts a debited amount back when the work that followed it failed.
+ *
+ * THE WINDOW THIS EXISTS FOR
+ * --------------------------
+ * debitJsonbBalance takes the money under a row lock, and that part is sound.
+ * What follows it is not one operation but several separate round trips — move
+ * the amount into lockedBalance, write the request row, write the audit entry —
+ * and the Firestore-compat adapter flushes them one at a time. The comment in
+ * cooperative/_coop_money.ts says so outright: "the adapter flushes them one by
+ * one regardless".
+ *
+ * So a timeout or a dropped connection after the debit leaves the member's
+ * savings reduced with nothing to show for it: no locked balance, no pending
+ * request, nothing for an admin to approve or reject, and no error the member
+ * can act on beyond "Failed to submit withdrawal request". The money is simply
+ * gone from their balance.
+ *
+ * Every one of the nine debit sites had a bare `catch` that logged and
+ * returned. None put the money back.
+ *
+ * WHY A CREDIT AND NOT A TRANSACTION
+ * ----------------------------------
+ * The writes span the RPC and the adapter, which do not share a transaction, so
+ * there is nothing to roll back. A compensating credit is what is available.
+ *
+ * It is safe here in a way it was NOT for the WAVE payout: there the rollback
+ * followed a completed external transfer, and undoing it locally allowed a
+ * second payout. Everything between a debit and its record is internal database
+ * writes with no external side effect, so putting the money back is exactly
+ * correct.
+ *
+ * WHEN THE COMPENSATION ITSELF FAILS
+ * ----------------------------------
+ * That is the irreducible case, and it is logged at error level with every
+ * identifier needed to settle it by hand. It does not throw: the caller is
+ * already handling a failure, and masking that with a second one helps nobody.
+ * forensics.ts reconciles maintained balances against the ledger and will
+ * surface the discrepancy.
+ */
+export async function compensateJsonbDebit(params: {
+    table: string;
+    id: string;
+    field: string;
+    amount: number;
+    /** What this was reversing, for the log. */
+    reason: string;
+    /**
+     * Other counters to move in the same write — typically
+     * `{ lockedBalance: -amount }` when the debit had already been reserved.
+     * Omit any the failing work never got as far as changing.
+     */
+    also?: Record<string, number>;
+    collection?: string;
+}): Promise<void> {
+    const { table, id, field, amount, reason, also, collection } = params;
+
+    try {
+        // Through the compat adapter, so the credit uses the very mechanism the
+        // reject path already uses to restore a balance —
+        // `FieldValue.increment`, which migration 010 applies in SQL via
+        // apply_increments. Writing a second, parallel way to move the same
+        // number is how two paths come to disagree.
+        //
+        // Imported lazily: wallet-ledger is imported by much of the money layer,
+        // and this keeps the dependency off the module-initialisation path.
+        const { supabaseDb } = await import("./supabase-db");
+        const { FieldValue } = await import("./firestore-compat");
+
+        const patch: Record<string, unknown> = {
+            [field]: FieldValue.increment(amount),
+            updatedAt: FieldValue.serverTimestamp(),
+        };
+        for (const [otherField, delta] of Object.entries(also ?? {})) {
+            patch[otherField] = FieldValue.increment(delta);
+        }
+
+        await supabaseDb.collection(collection ?? table).doc(id).update(patch);
+
+        logger.warn("[wallet-ledger] debit compensated", { table, id, field, amount, reason });
+    } catch (err) {
+        // The one case that cannot be resolved in code. Everything needed to
+        // settle it by hand is here.
+        logger.error(
+            "[wallet-ledger] COMPENSATION FAILED — balance debited and not restored. "
+            + "Needs manual reconciliation.",
+            { table, id, field, amount, reason, also, error: err instanceof Error ? err.message : String(err) }
+        );
+    }
 }
 
 export interface BoundedCounterResult {

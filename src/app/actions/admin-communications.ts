@@ -7,6 +7,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
 import { serializeDocs } from '@/lib/firestore-serialize';
 import { communicationsService } from '@/services';
+import { recordAdminAction } from '@/lib/audit-log';
 
 import { ActionResponse } from '@/lib/safe-action';
 
@@ -27,7 +28,7 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
  * Send bulk email to users
  * Accepts recipients segment, subject, and HTML body
  */
-export async function sendBulkEmailAction(prevState: ActionResponse<unknown>, formData: FormData): Promise<ActionResponse<{ recipientCount: number }>> { const adminCheck = await requireAdmin();
+export async function sendBulkEmailAction(prevState: ActionResponse<unknown>, formData: FormData): Promise<ActionResponse<{ recipientCount: number; attemptedCount: number }>> { const adminCheck = await requireAdmin();
     if ("error" in adminCheck) return { success: false as const, error: "Unauthorized: admin role required", data: null };
     try {
         const recipients = (formData.get('recipients') as string | null)?.trim() ?? "";
@@ -51,6 +52,21 @@ export async function sendBulkEmailAction(prevState: ActionResponse<unknown>, fo
         const resend = new Resend(process.env.RESEND_API_KEY);
 
         // Batch sending to avoid hitting limits
+        /**
+         * THE FROM HEADER WAS BUILT TWICE, AND BULK EMAIL COULD NOT SEND.
+         *
+         * The value was used as `from: `Easy Sales Export <${fromAddress}>``
+         * while fromAddress ALREADY holds a complete "Name <address>" string —
+         * its own default is 'Easy Sales Export <info@easysalesexport.com>'. So
+         * the header came out as
+         *
+         *     Easy Sales Export <Easy Sales Export <info@easysalesexport.com>>
+         *
+         * which is not a valid address. Every other EMAIL_FROM call site in this
+         * codebase — ten of them, in admin/_land, _legacy, _academy, _exports,
+         * _marketplace, _loans and the rest — passes the variable straight
+         * through as `from`. This file alone wrapped it.
+         */
         const fromAddress = process.env.EMAIL_FROM || process.env.RESEND_FROM_EMAIL || 'Easy Sales Export <info@easysalesexport.com>';
 
         const CHUNK_SIZE = 100;
@@ -61,7 +77,7 @@ export async function sendBulkEmailAction(prevState: ActionResponse<unknown>, fo
         for (let i = 0; i < emails.length; i += CHUNK_SIZE) {
             const chunk = emails.slice(i, i + CHUNK_SIZE);
             const batchPayload = chunk.map(email => ({
-                from: `Easy Sales Export <${fromAddress}>`,
+                from: fromAddress,
                 to: email,
                 subject: subject,
                 html: body
@@ -93,7 +109,28 @@ export async function sendBulkEmailAction(prevState: ActionResponse<unknown>, fo
             error: hasError ? lastError : null
         });
 
-        return { success: true as const, data: { recipientCount: emails.length }, error: null };
+        /**
+         * The count that was actually DELIVERED, not the count attempted.
+         *
+         * This returned `emails.length` while the database row beside it
+         * recorded `successfulSends` — so on a partial failure the screen told
+         * the admin every recipient had been reached and the history said
+         * otherwise. attemptedCount is returned alongside so the difference is
+         * visible rather than hidden.
+         */
+        await recordAdminAction({
+            action: 'broadcast_sent',
+            userId: adminCheck.userId,
+            targetType: 'email_broadcast',
+            targetId: recipients,
+            metadata: { subject, attempted: emails.length, delivered: successfulSends, partial: hasError },
+        });
+
+        return {
+            success: true as const,
+            data: { recipientCount: successfulSends, attemptedCount: emails.length },
+            error: null,
+        };
     } catch (error) { 
         const message = error instanceof Error ? error.message : "Failed to send email. Please try again.";
         logger.error('Failed to send bulk email:', error);
@@ -142,6 +179,14 @@ export async function createAnnouncementAction(prevState: ActionResponse<unknown
             createdBy: adminCheck.userId,
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp()
+        });
+
+        await recordAdminAction({
+            action: 'announcement_created',
+            userId: adminCheck.userId,
+            targetType: 'announcement',
+            targetId: announcementRef.id,
+            metadata: { title, priority },
         });
 
         return { error: null, success: true as const, data: { id: announcementRef.id } };

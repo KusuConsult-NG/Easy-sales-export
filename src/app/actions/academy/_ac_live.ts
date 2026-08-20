@@ -13,6 +13,24 @@ import type { Course, LiveSession } from "@/lib/types/academy-actions";
  */
 async function _getLiveSessionsAction(courseId?: string): Promise<ActionResponse<any>> {
     try {
+        // A meeting link is a bearer credential, so this needs a session.
+        //
+        // The rows returned below carry `meetingLink` and `customMeetingLink` —
+        // the Zoom/Meet URL an admin sets when starting a live class. Anyone
+        // holding that URL can join. This function had no session check, and
+        // `courseId` is optional, so calling it with NO arguments returned every
+        // live session in the collection together with its join link: the whole
+        // paid live-class schedule, joinable, to an unauthenticated caller.
+        //
+        // All four call sites — /academy/live, /academy/live/[courseId],
+        // /academy/dashboard and /admin/academy/live/[courseId] — already
+        // redirect an unauthenticated visitor. That is a client-side redirect
+        // and not authorisation: the action is reachable whatever the page does.
+        const sessionResult = await requireSession();
+        if (!sessionResult.session?.user?.id) {
+            return { success: false as const, error: 'Unauthorized', data: null };
+        }
+
         const ref = db.collection(COLLECTIONS.ACADEMY_LIVE_SESSIONS);
         const query = courseId ? ref.where("courseId", "==", courseId) : ref;
         const snapshot = await query.get();
@@ -150,8 +168,27 @@ async function _endAcademyLiveSessionAction(
         const ref = db.collection(COLLECTIONS.ACADEMY_LIVE_SESSIONS);
         let snapshot = await ref.where("courseId", "==", courseId).where("status", "==", "live").get();
 
+        // Attaching a recording after the fact touches ONE session.
+        //
+        // The fallback below fetched every session of the course that had
+        // already ended, and the loop then stamped `recordingUrl` onto all of
+        // them. A course with a weekly live class had one recording overwrite
+        // the recording link of every previous week — /academy/live lists
+        // recordings as `status === "ended" && s.recordingUrl`, so every past
+        // week pointed at the newest video.
+        //
+        // The most recently ended session is the one an admin uploading a
+        // recording means. Ordering by scheduledAt rather than taking whatever
+        // the database returned first, for the reason set out in
+        // lib/escrow-status.ts: `docs[0]` is not a choice.
         if (snapshot.empty && recordingUrl) {
-            snapshot = await ref.where("courseId", "==", courseId).where("status", "==", "ended").get();
+            const ended = await ref
+                .where("courseId", "==", courseId)
+                .where("status", "==", "ended")
+                .orderBy("scheduledAt", "desc")
+                .limit(1)
+                .get();
+            snapshot = ended;
         }
 
         for (const doc of snapshot.docs) {

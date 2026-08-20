@@ -205,7 +205,11 @@ describe('the answer key does not leave the server for a learner', () => {
     it('the course loader strips for learners and not for admins', () => {
         const actions = source('src/app/actions/academy/_ac_catalog.ts');
 
-        expect(actions).toContain('viewerIsAdmin ? formattedCourse : stripAnswerKey(formattedCourse)');
+        // The admin keeps the key; everyone else is stripped. The value passed
+        // to stripAnswerKey became `visible` when paid lesson material was gated
+        // as well — see academy-content-gating.test.ts — so the rule is asserted
+        // rather than the exact expression it was written as.
+        expect(actions).toContain('viewerIsAdmin ? visible : stripAnswerKey(visible)');
         expect(actions).toContain('isAdmin(sessionResult.session?.user?.roles)');
     });
 });

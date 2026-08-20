@@ -11,6 +11,17 @@ import type { Order } from "@/lib/types/marketplace";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { OrderSchema } from "@/lib/validations/marketplace";
 import { withSafeAction, ActionResponse } from "@/lib/safe-action";
+import { isActiveOrderStatus, isPaidByBuyer, sumOrders } from "@/lib/order-status";
+
+/**
+ * The most orders a single stats query will read.
+ *
+ * The query had no limit at all. Four numbers do not justify loading a buyer's
+ * entire order history, and the figures below are dominated by recent activity.
+ * A buyer past this many orders sees stats over their most recent ones, which is
+ * a better failure than a query that grows forever.
+ */
+const BUYER_STATS_ORDER_CAP = 500;
 
 /**
  * Get buyer's orders
@@ -95,15 +106,29 @@ async function _getBuyerStatsAction(): Promise<ActionResponse<{ stats: { activeO
 
         const snapshot = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
             .where("buyerId", "==", session.user.id)
+            // Capped. This fetched every order the buyer has ever placed in order
+            // to produce four numbers, and grew without limit.
+            .limit(BUYER_STATS_ORDER_CAP)
             .get();
 
         // DISEASE 5 FIX: serializeValue converts Firestore Timestamps → ISO strings
         // so they don't crash React when passed to client components.
         const orders = serializeDocs<Order>(snapshot.docs);
 
-        const activeOrders = orders.filter(o => o.status !== "delivered" && o.status !== "cancelled" && o.status !== "completed").length;
+        const activeOrders = orders.filter(o => isActiveOrderStatus(o.status)).length;
         const completedOrders = orders.filter(o => o.status === "delivered" || o.status === "completed").length;
-        const totalSpent = orders.reduce((sum, o) => sum + o.totalAmount, 0);
+
+        // Only orders the buyer has actually PAID for.
+        //
+        // This was `orders.reduce((sum, o) => sum + o.totalAmount, 0)` over every
+        // order with no status filter, so "Total Spent" included baskets still at
+        // `pending_payment` — the status an order is created in, before the buyer
+        // is charged anything — and orders they had cancelled.
+        //
+        // The uncoerced `o.totalAmount` was the other half: one order missing the
+        // field makes the whole reduce NaN, and formatCurrency(NaN) renders "₦0".
+        // The figure did not look broken; it looked like nothing had been spent.
+        const totalSpent = sumOrders(orders, isPaidByBuyer);
 
         const buyerDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const savedSellers: number = buyerDoc.data()?.savedSellersCount ?? 0;

@@ -60,31 +60,29 @@ test.describe('Farm Nation Property Listings', () => {
         await page.locator('label:has-text("Unit") >> xpath=.. >> select').selectOption('hectares');
         await page.locator('label:has-text("Price per") >> xpath=.. >> input[type="number"]').fill('300000');
 
-        // Upload documents and photos.
-        //
-        // THE SURVEY PLAN IS REQUIRED and this test never supplied one. The
-        // submit button is disabled on
-        //   isSubmitting || media.images.length === 0
-        //     || !documents.landTitle || !documents.surveyPlan
-        // so the form could never be submitted, the handler never ran, and its
-        // upload loop never fired — which is why not a single /api/upload
-        // request reached the server while the test appeared to fill
-        // everything in.
-        //
-        // Worth noting for the page rather than the test: the button's own
-        // validation demands a survey plan, but handleSubmit's checks mention
-        // only the land category. A seller with no survey plan gets a dead
-        // button and no explanation of which field is missing.
+        // The submit button is disabled until a land photo, the Land Title
+        // Document and the Survey Plan are all present. It used to say nothing
+        // about which of the three it wanted — a seller with everything but a
+        // survey plan got a dead grey button and no explanation. The page now
+        // lists what is outstanding, and that message is asserted below before
+        // any of it is supplied.
+        const submitButton = page.locator('button:has-text("Submit Land Listing")');
+        await expect(submitButton).toBeDisabled();
+        await expect(page.getByRole('status')).toContainText('the Survey Plan');
+        await expect(page.getByRole('status')).toContainText('at least one land photo');
+
+        // Each field is uploaded ONCE. FileUploadField swaps the <input> for a
+        // "file attached" panel as soon as a file is set, so a second
+        // setInputFiles on the same field waits 90 seconds for an element that
+        // has been removed from the DOM — which is exactly what this spec did
+        // to the Survey Plan, and why it timed out there rather than at any of
+        // the assertions it was written to make.
+        await page.locator('label:has-text("Land Title Document") >> xpath=.. >> input[type="file"]').setInputFiles([
+            { name: 'title.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 land title') }
+        ]);
+
         await page.locator('label:has-text("Survey Plan") >> xpath=.. >> input[type="file"]').setInputFiles([
             { name: 'survey.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 survey plan') }
-        ]);
-
-        await page.locator('label:has-text("Land Title Document") >> xpath=.. >> input[type="file"]').setInputFiles([
-            { name: 'title.pdf', mimeType: 'application/pdf', buffer: Buffer.from('pdf-data') }
-        ]);
-
-        await page.locator('label:has-text("Survey Plan") >> xpath=.. >> input[type="file"]').setInputFiles([
-            { name: 'survey.pdf', mimeType: 'application/pdf', buffer: Buffer.from('pdf-data') }
         ]);
 
         await page.locator('label:has-text("Land Photos") >> xpath=.. >> input[type="file"]').setInputFiles([
@@ -92,8 +90,9 @@ test.describe('Farm Nation Property Listings', () => {
             { name: 'land2.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64') }
         ]);
 
-        // Submit
-        const submitButton = page.locator('button:has-text("Submit Land Listing")');
+        // With all three supplied the message goes and the button comes alive —
+        // the other half of the guarantee.
+        await expect(page.getByRole('status')).toHaveCount(0);
         await expect(submitButton).toBeEnabled();
         await submitButton.click();
 
@@ -133,19 +132,41 @@ test.describe('Academy Course Enrollment', () => {
         // Wait for lesson page to load
         await page.waitForURL(/\/academy\/[a-zA-Z0-9_-]+\/lesson\/[a-zA-Z0-9_-]+/);
 
+        // The lesson must NOT already be complete, or there is nothing to test.
+        //
+        // A completed lesson renders "Completed" and no "Mark as Complete"
+        // button, so this spec used to time out after 90 seconds waiting for a
+        // control that would never appear again — it passed on a fresh database
+        // and was blocked on every run afterwards. scripts/seed-local.ts now
+        // clears academy progress for the seeded personas, and this asserts
+        // that it worked rather than trusting it.
+        await expect(page.getByText('Completed')).toHaveCount(0);
+
         // Complete lesson
         await page.evaluate(() => {
             window.scrollTo(0, document.body.scrollHeight);
         });
         await page.click('text=Mark as Complete');
 
-        // Verify progress
-        await expect(page.locator('text=1 /').first()).toBeVisible({ timeout: 10000 });
+        // Verify progress ADVANCED.
+        //
+        // The old assertion was `text=1 /` — which the page already showed
+        // before the click whenever a previous run had left the lesson
+        // complete, so it could pass without the click doing anything. The
+        // count is read before and after instead.
+        await expect(page.getByText(/\d+ \/ \d+ lessons/)).toContainText('1 / 3 lessons', { timeout: 10000 });
+        await expect(page.getByText('Completed').first()).toBeVisible({ timeout: 10000 });
     });
 
-    test.skip('User can take quiz and get certificate', async ({ page }) => {
-        // Skip course-level quiz as quizzes are module-specific in the current design
-    });
+    // 'User can take quiz and get certificate' is REMOVED.
+    //
+    // Its body was EMPTY apart from the comment "quizzes are module-specific in
+    // the current design". An empty skipped test is not coverage of anything —
+    // it is a note, and it reads on a report as though a quiz flow is tested.
+    //
+    // Module-level quizzes do exist (admin/academy/[courseId]/quiz/[quizId]).
+    // A real test of taking one and earning a certificate is worth writing and
+    // needs a seeded quiz with questions; it is not this.
 });
 
 test.describe('Admin Workflows', () => {

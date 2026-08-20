@@ -116,11 +116,15 @@ export default function ExportCartPage() {
                     timestamp: new Date().toISOString(),
                 }));
 
-                // Clear cart before redirect
-                clearCart();
-
-                // Redirect to Paystack
+                // The cart is cleared only once there is somewhere to go.
+                //
+                // clearCart() ran BEFORE this check, so any failure to obtain an
+                // authorization URL emptied the buyer's basket and then told
+                // them the payment could not be started. The action was
+                // returning data: null on every success, so that was not a rare
+                // path — it was the only path.
                 if (result.data?.authorizationUrl) {
+                    clearCart();
                     window.location.href = result.data.authorizationUrl;
                 } else {
                     setError("Failed to initialize payment: No authorization URL");

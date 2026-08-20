@@ -4,7 +4,7 @@ import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
-import { isAdmin } from "@/lib/admin-permissions";
+import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { FieldValue } from "@/lib/firestore-compat";
 import { FieldPath } from "@/lib/firestore-compat";
 import { logAuditAction } from "@/lib/audit-log";
@@ -16,6 +16,7 @@ import {
 } from "@/lib/email-notifications";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { getAdminScope } from "@/lib/cooperative-admin-scope";
+import { balanceFieldOf } from "@/lib/cooperative-member-balance";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { extractCanonicalUser } from "@/lib/canonical/normalizer";
 
@@ -49,6 +50,15 @@ async function _getAllTransactionsAction(options?: {
             }
         }
 
+        /**
+         * Bank details go only to the callers who can act on these records.
+         * `roles` above is the LIVE set this action already resolves, so the
+         * check below inherits that. Seventh and eighth instances of a list
+         * gated more loosely than the action it feeds; see the WAVE withdrawal
+         * queue for the six before them.
+         */
+        const maySeeBankDetails = hasAdminPermission(roles, "finance:process_withdrawals");
+
         // Audit logging
         await createAdminAuditLog({
             userId: session.user.id,
@@ -69,7 +79,11 @@ async function _getAllTransactionsAction(options?: {
         if (options?.type && options.type !== "all") {
             q = q.where("type", "==", options.type);
         } else {
-            q = q.where("type", "in", ["contribution", "withdrawal", "loan", "fixed_savings"]);
+            // "fixed_savings" is not a type anything writes — the ledger row is
+            // `fixed_savings_lock`, which is also what forensics.ts reconciles
+            // against. So every fixed savings plan was excluded from the admin
+            // transactions list by a filter that looked like it included them.
+            q = q.where("type", "in", ["contribution", "withdrawal", "loan", "fixed_savings_lock"]);
         }
 
         if (options?.status && options.status !== "all") {
@@ -155,12 +169,14 @@ async function _getAllTransactionsAction(options?: {
                 userId: raw.userId || "",
                 userName: canonical?.name || raw.userId || "Unknown",
                 user: canonical,
-                bankDetails: canonical?.bankDetails || {
-                    bankName: raw.bankName || "",
-                    accountNumber: raw.accountNumber || "",
-                    accountName: raw.accountName || "",
-                    bankCode: raw.bankCode || ""
-                },
+                ...(maySeeBankDetails ? {
+                    bankDetails: canonical?.bankDetails || {
+                        bankName: raw.bankName || "",
+                        accountNumber: raw.accountNumber || "",
+                        accountName: raw.accountName || "",
+                        bankCode: raw.bankCode || ""
+                    }
+                } : {}),
                 type: raw.type || "unknown",
                 amount: Number(raw.amount) || 0,
                 status: raw.status || "unknown",
@@ -240,10 +256,13 @@ export async function approveWithdrawalAction(
         }
 
         let roles = session.user.roles;
-        if (!isAdmin(roles)) {
+        if (!hasAdminPermission(roles, "finance:process_withdrawals")) {
             const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
             const liveRoles = liveUserDoc.data()?.roles;
-            if (isAdmin(liveRoles)) {
+            // The SAME question as the gate above. This asked isAdmin(), so a
+            // caller the gate refused could be admitted by the stale-session
+            // retry — a fallback that is wider than what it falls back from.
+            if (hasAdminPermission(liveRoles, "finance:process_withdrawals")) {
                 roles = liveRoles;
             } else {
                 return { success: false as const, error: "Unauthorized", data: null };
@@ -363,6 +382,58 @@ export async function approveWithdrawalAction(
                 }
             }
 
+            // THE MONEY LEFT AND THE LEDGER NEVER RECORDED IT.
+            //
+            // NOTHING in this codebase writes a `withdrawal` row to
+            // cooperative_transactions. Every writer of that collection produces
+            // contribution, membership_registration, fixed_savings_lock or
+            // deposit — and three separate readers depend on a withdrawal row
+            // that was never there:
+            //
+            //   forensics.ts        DEBIT_TYPES = ["withdrawal",
+            //                       "fixed_savings_lock"]. It reconciles
+            //                       savingsBalance + lockedBalance against the
+            //                       ledger. At request time the debit moves
+            //                       savings into lockedBalance so the sum is
+            //                       unchanged and reconciliation holds — but
+            //                       HERE, on approval, lockedBalance drops with
+            //                       nothing accounting for it. Every member who
+            //                       has completed a withdrawal reported a
+            //                       permanent balance mismatch, correctly,
+            //                       because the ledger genuinely did not account
+            //                       for the money. That is the same defect the
+            //                       fixed-savings pass fixed for its own rows:
+            //                       "a reconciliation check that always fails
+            //                       for a whole class of member is a check
+            //                       nobody reads".
+            //
+            //   getCooperativeStats `else if (t.type === "withdrawal")
+            //                       totalSavings -= amount` — a branch that
+            //                       never fired, so the admin dashboard reported
+            //                       the cooperative still holding money it had
+            //                       paid out.
+            //
+            //   the member history  its "Withdrawals" filter returned nothing.
+            //
+            // Written here rather than at request time because this is the point
+            // the money actually leaves: a rejection puts it back, and a pending
+            // request is still the member's. Keyed on the withdrawal id so a
+            // retry overwrites rather than duplicates, as the fixed-savings row
+            // is keyed on its plan id.
+            const ledgerReference = `coopwd_${withdrawalId}`;
+            await db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc(ledgerReference).set({
+                id: ledgerReference,
+                userId,
+                cooperativeId: withdrawalData.cooperativeId || "default",
+                type: "withdrawal",
+                amount,
+                currency: "NGN",
+                reference: ledgerReference,
+                description: "Cooperative savings withdrawal",
+                status: "completed",
+                date: FieldValue.serverTimestamp(),
+            });
+
             return { email, name, amount, userId };
         })();
 
@@ -415,10 +486,13 @@ export async function rejectWithdrawalAction(
         }
 
         let roles = session.user.roles;
-        if (!isAdmin(roles)) {
+        if (!hasAdminPermission(roles, "finance:process_withdrawals")) {
             const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
             const liveRoles = liveUserDoc.data()?.roles;
-            if (isAdmin(liveRoles)) {
+            // The SAME question as the gate above. This asked isAdmin(), so a
+            // caller the gate refused could be admitted by the stale-session
+            // retry — a fallback that is wider than what it falls back from.
+            if (hasAdminPermission(liveRoles, "finance:process_withdrawals")) {
                 roles = liveRoles;
             } else {
                 return { success: false as const, error: "Unauthorized", data: null };
@@ -521,8 +595,15 @@ export async function rejectWithdrawalAction(
 
                     const nestedDoc = await nestedMemberRef.get();
                     if (nestedDoc.exists) {
+                        // Refunded `balance` while the branch above refunds
+                        // `savingsBalance`, and cron/release-escrow credits
+                        // `savingsBalance` on this very same document. One
+                        // member's savings under two names, with the writers
+                        // split between them — the refund goes to whichever
+                        // field the document actually carries. See
+                        // lib/cooperative-member-balance.ts.
                         await nestedMemberRef.update({
-                            balance: FieldValue.increment(amount),
+                            [balanceFieldOf(nestedDoc.data())]: FieldValue.increment(amount),
                             lockedBalance: FieldValue.increment(-amount),
                             updatedAt: FieldValue.serverTimestamp(),
                         });

@@ -4,9 +4,10 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from '@/lib/types/firestore';
 import { logger } from '@/lib/logger';
 import { requireSession } from '@/lib/session-guard';
-import { isAdmin } from '@/lib/admin-permissions';
+import { isAdmin, hasAdminPermission } from '@/lib/admin-permissions';
 
 import { getCleanBroadcastList, type BroadcastAudience, type BroadcastFilters } from '@/lib/broadcast-logic';
+import { recordAdminAction } from "@/lib/audit-log";
 
 export interface BroadcastLog { id: string;
     subject: string;
@@ -55,11 +56,17 @@ export async function getCleanBroadcastListAction(filters?: BroadcastFilters) { 
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
-        if (!isAdmin(session.user.roles)) {
+        if (!hasAdminPermission(session.user.roles, "announcements:manage")) {
             return { success: false as const, error: "Unauthorized. Admin access required.", data: null };
         }
         logger.info(`[Broadcast] Generating clean list for admin: ${session.user.id}`);
 
+        await recordAdminAction({
+            action: 'data_access',
+            userId: session.user.id,
+            targetType: 'broadcast_recipient_list',
+            metadata: { filters },
+        });
         return await getCleanBroadcastList(filters);
 
     } catch (error: any) { 

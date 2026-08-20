@@ -17,7 +17,7 @@ test.describe('Authentication', () => {
 
     test('should display login page correctly', async ({ page }) => {
         await expect(page).toHaveTitle(/Easy Sales Export/);
-        await expect(page.locator('h1')).toContainText('Welcome Back');
+        await expect(page.getByRole('heading', { level: 1 })).toContainText('Welcome Back');
         await expect(page.locator('input[name="email"]')).toBeVisible();
         await expect(page.locator('input[name="password"]')).toBeVisible();
     });

@@ -4,7 +4,30 @@
  * Defines rate limits for different endpoints
  */
 
-export const rateLimitConfig = {
+/**
+ * The limits themselves. `rateLimitConfig` below stamps each one with its own
+ * key as a `name`, which is what namespaces it in Redis.
+ *
+ * WHY A NAME IS NOT OPTIONAL
+ * --------------------------
+ * lib/rate-limiter.ts built every limiter with the same fixed Upstash prefix and
+ * called limiter.limit(identifier) with the identifier alone. Eight of these
+ * entries are passed to it across eighteen call sites, and twelve of those sites
+ * key on session.user.id — six payment paths, cooperative/withdraw, three admin
+ * routes, submit-verification and hub/telemetry. So for one member, all of them
+ * read and wrote ONE counter while applying different windows and different
+ * maximums to it.
+ *
+ * `withdrawal` is five per minute. Five requests of any of those kinds in a
+ * minute — including hub/telemetry, which the app emits as a matter of course —
+ * left the withdrawal limiter reading a spent counter and refusing a member
+ * access to their own money. It runs the other way too: a payment burst
+ * consumed the admin and contact budgets.
+ *
+ * The name is derived from the object key rather than written out beside it, so
+ * the two cannot drift and a new entry cannot be added without one.
+ */
+const LIMITS = {
     /**
      * Public contact form — unauthenticated and it SENDS EMAIL through Resend,
      * so an unthrottled endpoint is a spam relay, a quota drain and a bill.
@@ -123,3 +146,14 @@ export const rateLimitConfig = {
         maxRequests: 100, // 100 admin actions per minute
     },
 };
+
+/**
+ * Every limit, each carrying its own key as `name`.
+ *
+ * Endpoints that deliberately share a config share a bucket — the seven payment
+ * paths should throttle together — and endpoints with different limits no longer
+ * collide. See lib/rate-limiter.ts for where the name is applied.
+ */
+export const rateLimitConfig = Object.fromEntries(
+    Object.entries(LIMITS).map(([name, limit]) => [name, { ...limit, name }]),
+) as { [K in keyof typeof LIMITS]: (typeof LIMITS)[K] & { name: K } };
