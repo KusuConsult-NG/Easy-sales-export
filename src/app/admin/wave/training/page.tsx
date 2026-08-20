@@ -636,9 +636,20 @@ export default function AdminWaveTrainingPage() {
                                                 className="p-4 bg-gray-50 rounded-xl flex items-center justify-between"
                                             >
                                                 <div>
+                                                    {/*
+                                                      * The name, now that the action hydrates it.
+                                                      * This read "User ID: {participant.userId}" —
+                                                      * an opaque id per row, which is not a register
+                                                      * an instructor can take. The id stays as the
+                                                      * fallback for a registration whose user record
+                                                      * has since been erased.
+                                                      */}
                                                     <p className="font-semibold text-gray-900">
-                                                        User ID: {participant.userId}
+                                                        {participant.user?.name || `User ID: ${participant.userId}`}
                                                     </p>
+                                                    {participant.user?.email && (
+                                                        <p className="text-sm text-gray-600">{participant.user.email}</p>
+                                                    )}
                                                     <p className="text-sm text-gray-500">
                                                         Registered:{" "}
                                                         {toSafeDate(participant.registeredAt).toLocaleDateString()}

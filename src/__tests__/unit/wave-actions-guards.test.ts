@@ -308,7 +308,13 @@ describe('the admin-only endpoints refuse a member', () => {
             const r = await mod[name](...args).catch((e: any) => ({ success: false, error: String(e) }));
 
             expect(r.success).toBe(false);
-            expect(String(r.error)).toMatch(/admin/i);
+            // The assertion was /admin/i, which pinned the WORDING of the
+            // refusal rather than the refusal. generateCertificateAction now
+            // says "Permission required - wave:manage_training" (#158) — it
+            // still refuses this member, and refuses more roles than before,
+            // but the word "admin" is gone from the message. Matching either
+            // vocabulary keeps the test about whether the member is turned away.
+            expect(String(r.error)).toMatch(/admin|permission required|unauthorized/i);
         });
     }
 

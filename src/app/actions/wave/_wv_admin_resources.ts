@@ -4,9 +4,10 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { serializeDocs } from "@/lib/firestore-serialize";
-import { FieldValue } from "@/lib/firestore-compat";
+import { FieldValue, FieldPath } from "@/lib/firestore-compat";
+import { extractCanonicalUser } from "@/lib/canonical/normalizer";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { RESOURCE_LIVE_FIELDS, RESOURCE_WITHDRAWN_FIELDS } from "@/lib/wave-resource-visibility";
@@ -268,6 +269,30 @@ async function _updateTrainingEventAction(
             return { success: false as const, error: "Unauthorized" , data: null };
         }
 
+        /**
+         * The edit form cannot declare an event LIVE.
+         *
+         * `status` is part of the Partial this action spreads straight into the
+         * document, and the admin screen offers all four values in a dropdown.
+         * Setting "ongoing" here writes the status and nothing else — no
+         * meetingLink, and no row in WAVE_TRAINING_SESSIONS. But
+         * getTrainingEventsAction serves members `status in ["upcoming",
+         * "ongoing"]`, so the event appears as live on the member's screen with
+         * nowhere to go, and endWaveLiveSessionAction's claim then accepts it and
+         * marks a session completed that never had a room.
+         *
+         * Going live is startWaveLiveSessionAction's job, which creates the room
+         * and the link together. The other three values are ordinary edits and
+         * pass through.
+         */
+        if (data.status === "ongoing") {
+            return {
+                success: false as const,
+                data: null,
+                error: 'Use "Go Live" to start a session — it creates the classroom and the meeting link. Saving the status alone would show members a live event with no room to join.',
+            };
+        }
+
         await db.collection(COLLECTIONS.WAVE_TRAINING_EVENTS).doc(eventId).update({
             ...data,
             updatedAt: FieldValue.serverTimestamp(),
@@ -327,6 +352,34 @@ async function _deleteTrainingEventAction(
             await deleteBatch.commit();
         }
 
+        /**
+         * The REGISTRATIONS were left behind.
+         *
+         * Deleting an event cleaned up its live-session documents and nothing
+         * else, so every member who had signed up kept a row in
+         * WAVE_TRAINING_REGISTRATIONS pointing at an event that no longer
+         * exists. Two readers walk those rows — _member.ts builds the member's
+         * training history and their dashboard counts from them — so a deleted
+         * event went on being counted as training the member is registered for,
+         * with nothing left to render but the id.
+         *
+         * Deleted rather than marked, matching how the event itself is removed:
+         * a registration for an event that does not exist is not a record of
+         * anything.
+         */
+        const registrationQuery = await db.collection(COLLECTIONS.WAVE_TRAINING_REGISTRATIONS)
+            .where("eventId", "==", eventId)
+            .get();
+        if (!registrationQuery.empty) {
+            const regBatch = db.batch();
+            registrationQuery.docs.forEach(doc => regBatch.delete(doc.ref));
+            await regBatch.commit();
+            logger.info(
+                `[WAVE Training] Deleted event ${eventId} and released ` +
+                `${registrationQuery.docs.length} registration(s) that pointed at it.`
+            );
+        }
+
         await createAdminAuditLog({
             action: "wave_training_deleted",
             userId: session.user.id,
@@ -360,7 +413,10 @@ async function _getEventParticipantsAction(eventId: string): Promise<
             return { success: false as const, error: "Not authenticated" , data: null };
         }
 
-        if (!isAdmin(session.user.roles)) {
+        // Every sibling in this file requires "wave:manage_training"; this one
+        // took isAdmin(), true for all ten admin roles, and the rows below now
+        // carry each registrant's name and email.
+        if (!hasAdminPermission(session.user.roles, "wave:manage_training")) {
             return { success: false as const, error: "Unauthorized" , data: null };
         }
 
@@ -370,7 +426,52 @@ async function _getEventParticipantsAction(eventId: string): Promise<
 
         const participants = serializeDocs(snap.docs);
 
-        return { error: null, success: true as const, data: null };
+        /**
+         * The registration row is `{ userId, eventId, registeredAt, attended }`
+         * and nothing else, so a participant list built from it alone is a column
+         * of opaque ids — which is exactly what the admin screen rendered
+         * ("User ID: {participant.userId}"). An instructor taking a register
+         * needs the name.
+         *
+         * Chunked at 30 because that is the `in` limit the other hydrations in
+         * this codebase use.
+         */
+        const userIds = [...new Set(participants.map((p: any) => p.userId).filter(Boolean))] as string[];
+        const userMap = new Map<string, { name: string; email: string; phone: string }>();
+
+        for (let i = 0; i < userIds.length; i += 30) {
+            const chunk = userIds.slice(i, i + 30);
+            if (!chunk.length) continue;
+            const userSnap = await db.collection(COLLECTIONS.USERS)
+                .where(FieldPath.documentId(), "in", chunk)
+                .get();
+            userSnap.docs.forEach((doc) => {
+                const canonical = extractCanonicalUser(doc.data() ?? {});
+                userMap.set(doc.id, {
+                    name: canonical.name || "",
+                    email: canonical.email || "",
+                    phone: canonical.phone || "",
+                });
+            });
+        }
+
+        const hydrated = participants.map((p: any) => ({
+            ...p,
+            user: userMap.get(p.userId) ?? null,
+        }));
+
+        /**
+         * RETURNED, rather than computed and thrown away.
+         *
+         * This action queried the registrations, built `participants`, and then
+         * returned `data: null`. The variable was never used. The admin screen
+         * reads `result.data?.participants` and shows "Failed to load
+         * participants" when it is absent — so View Participants on the WAVE
+         * training screen has never once succeeded, for any event, for anybody.
+         *
+         * Keyed under `participants` because that is what the caller reads.
+         */
+        return { error: null, success: true as const, data: { participants: hydrated } };
     } catch (error) {
         logger.error("Get participants error:", {
             userId: sessionResult?.session?.user?.id,
