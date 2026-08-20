@@ -6,7 +6,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { createAdminAuditLog } from "@/lib/audit-log";
-import { isEligibleForLoan, getTierInterestRate } from "@/lib/cooperative-tiers";
+import { isEligibleForLoan, getTierInterestRate, DEFAULT_MONTHLY_INTEREST_RATE } from "@/lib/cooperative-tiers";
 import { requireSession } from "@/lib/session-guard";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
@@ -548,7 +548,20 @@ export async function getAdminLoanApplicationsAction(options: {
             return {
                 ...app,
                 productName: app.productName || (app.purpose ? `General Loan (${app.purpose.charAt(0).toUpperCase() + app.purpose.slice(1).toLowerCase().replace('_', ' ')})` : "General Loan"),
-                interestRate: app.interestRate || 5,
+                /**
+                 * THE FALLBACK SHOWED HALF THE REAL RATE.
+                 *
+                 * This was a hardcoded `|| 5`. DEFAULT_MONTHLY_INTEREST_RATE is
+                 * 10 — so any application row that does not carry its own rate
+                 * was displayed to the reviewing admin at 5% while 10% is what
+                 * getTierInterestRate actually applies. Not a duplicate of the
+                 * canonical number: a stale copy that disagrees with it.
+                 *
+                 * Found by widening lib/testing/policy-constant-scan.ts, which
+                 * exists for exactly this and could not previously see a literal
+                 * used as a `||` fallback.
+                 */
+                interestRate: app.interestRate || DEFAULT_MONTHLY_INTEREST_RATE,
                 appliedAt: appAppliedAt,
                 userName: app.fullName || (user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.fullName || "Unknown"),
                 userEmail: app.userEmail || user.email || "",
