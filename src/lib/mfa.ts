@@ -1,10 +1,62 @@
 import { Resend } from 'resend';
 import { supabaseDb as db } from './supabase-db';
 import { generateOTP, isOTPExpired, encryptData, decryptData } from './security';
+import { claimIdempotencyKey } from './wallet-ledger';
+import { toMillis } from './firestore-serialize';
 
 // Lazy Resend factory — env var only available at request time, not build time
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
 const MFA_COLLECTION = 'mfa_codes';
+
+/**
+ * THREE OF THE FOUR FUNCTIONS IN THIS FILE FELL BACK TO A PUBLIC STRING.
+ *
+ * sendMFACode does the right thing:
+ *
+ *     const secretKey = process.env.MFA_SECRET_KEY;
+ *     if (!secretKey) throw new Error("MFA_SECRET_KEY is not configured");
+ *
+ * verifyMFACode, storeBackupCodes and verifyBackupCode each did this instead:
+ *
+ *     process.env.MFA_SECRET_KEY || <a default string hardcoded right here>
+ *
+ * That literal is committed to this repository. Encrypting a backup code with it
+ * is not encryption — anyone who can read the mfa_backup_codes rows can decrypt
+ * every recovery code on the platform, and a recovery code is by design the
+ * thing that gets you past MFA without the authenticator.
+ *
+ * All four MFA routes already refuse to run without the key ("FATAL:
+ * MFA_SECRET_KEY is not set") and env-validator.ts lists it as required, so in a
+ * correctly configured deploy the fallback never fires. That is exactly what
+ * makes it dangerous: a missing variable turns silently into worthless
+ * encryption instead of a loud failure, and nobody finds out until the codes are
+ * needed. Same reasoning as the silent no-op shims closed earlier in this audit.
+ *
+ * One resolver now, and it throws — matching sendMFACode and the routes.
+ */
+function requireMfaSecret(): string {
+    const secretKey = process.env.MFA_SECRET_KEY;
+    if (!secretKey) throw new Error('MFA_SECRET_KEY is not configured');
+    return secretKey;
+}
+
+/**
+ * Newest `createdAt` first.
+ *
+ * Through toMillis, NOT through String(). The first version of this sort
+ * compared `String(doc.data().createdAt)` — and the adapter hands `createdAt`
+ * back as a Timestamp object, not the ISO string that was written. Both sides
+ * stringified to "[object Object]", localeCompare returned 0, and the sort was a
+ * no-op that left the arbitrary order it was written to replace. The test for it
+ * failed, which is the only reason it was caught.
+ *
+ * toMillis is the shared normaliser for exactly this: it handles Date, number,
+ * ISO string and Timestamp, and returns 0 for anything it cannot read — so a row
+ * with no usable createdAt sorts last rather than winning by accident.
+ */
+function newestFirst<T extends { data: () => any }>(docs: T[]): T[] {
+    return [...docs].sort((a, b) => toMillis(b.data()?.createdAt) - toMillis(a.data()?.createdAt));
+}
 
 export interface MFACode {
     id?: string;
@@ -26,9 +78,7 @@ export async function sendMFACode(email: string, userId: string): Promise<{ succ
         const otp = generateOTP(6);
 
         // Encrypt OTP before storing
-        const secretKey = process.env.MFA_SECRET_KEY;
-        if (!secretKey) throw new Error("MFA_SECRET_KEY is not configured");
-        const encryptedOTP = encryptData(otp, secretKey);
+        const encryptedOTP = encryptData(otp, requireMfaSecret());
 
         // Delete any existing unverified codes for this user
         const existingCodes = await db.collection(MFA_COLLECTION)
@@ -103,16 +153,43 @@ export async function verifyMFACode(
             return { success: false, error: 'No verification code found. Please request a new one.' };
         }
 
-        const codeDoc = codesSnapshot.docs[0];
+        /**
+         * The NEWEST unverified code, not an arbitrary one.
+         *
+         * This took docs[0] from an unordered query. sendMFACode deletes the
+         * user's unverified codes before adding a new one, so normally there is
+         * exactly one — but two sends that overlap leave two rows, and then
+         * docs[0] is whichever PostgREST happened to return first. The user
+         * reads the code from the newest email and the check runs against the
+         * older row.
+         */
+        const codeDoc = newestFirst(codesSnapshot.docs)[0];
         const codeDocRef = codeDoc.ref;
-        const secretKey = process.env.MFA_SECRET_KEY || 'default-secret-key-change-in-production';
+        const secretKey = requireMfaSecret();
 
         const mfaCode = codeDoc.data();
 
-        // Check if code is expired
+        /**
+         * EXPIRY IS THE ONE THE CODE WAS ISSUED WITH.
+         *
+         * sendMFACode computes `expiresAt` and stores it on the row — and
+         * nothing read it. This recomputed the deadline from `createdAt` using
+         * whatever MFA_OTP_EXPIRY_MINUTES says AT VERIFY TIME, so the stored
+         * field was decoration and the real deadline moved with the environment:
+         * lower the variable and codes already in people's inboxes expire early;
+         * raise it and codes that were issued as ten-minute codes stay live
+         * longer than the email promised.
+         *
+         * The stored value wins now, with the old recomputation kept as the
+         * fallback for rows written before it existed.
+         */
         const expiryMinutes = parseInt(process.env.MFA_OTP_EXPIRY_MINUTES || '10', 10);
-        const createdAtDate = new Date(mfaCode.createdAt);
-        if (isOTPExpired(createdAtDate, expiryMinutes)) {
+        const storedExpiry = mfaCode.expiresAt ? new Date(mfaCode.expiresAt) : null;
+        const expired = storedExpiry && !Number.isNaN(storedExpiry.getTime())
+            ? Date.now() > storedExpiry.getTime()
+            : isOTPExpired(new Date(mfaCode.createdAt), expiryMinutes);
+
+        if (expired) {
             await codeDocRef.delete();
             return { success: false, error: 'Verification code has expired. Please request a new one.' };
         }
@@ -160,7 +237,7 @@ export function generateBackupCodes(count: number = 10): string[] {
  * Store backup codes in database (encrypted)
  */
 export async function storeBackupCodes(userId: string, codes: string[]): Promise<void> {
-    const secretKey = process.env.MFA_SECRET_KEY || 'default-secret-key-change-in-production';
+    const secretKey = requireMfaSecret();
     const encryptedCodes = codes.map(code => encryptData(code, secretKey));
 
     await db.collection('mfa_backup_codes').add({
@@ -184,22 +261,63 @@ export async function verifyBackupCode(userId: string, code: string): Promise<{ 
             return { success: false, error: 'No backup codes found' };
         }
 
-        const backupCodeDoc = backupCodesSnapshot.docs[0];
+        /**
+         * The NEWEST set. storeBackupCodes uses .add(), so regenerating codes
+         * leaves the old row in place beside the new one — and docs[0] on an
+         * unordered query could hand back the set the user no longer holds.
+         */
+        const backupCodeDoc = newestFirst(backupCodesSnapshot.docs)[0];
         const backupCodesData = backupCodeDoc.data();
-        const secretKey = process.env.MFA_SECRET_KEY || 'default-secret-key-change-in-production';
+        const secretKey = requireMfaSecret();
 
         // Decrypt all codes and check
         const decryptedCodes = backupCodesData.codes.map((encCode: string) => decryptData(encCode, secretKey));
         const codeIndex = decryptedCodes.indexOf(code);
+        const alreadyUsed: number[] = Array.isArray(backupCodesData.used) ? backupCodesData.used : [];
 
-        if (codeIndex === -1 || backupCodesData.used.includes(codeIndex)) {
+        if (codeIndex === -1 || alreadyUsed.includes(codeIndex)) {
             return { success: false, error: 'Invalid or already used backup code' };
         }
 
-        // Mark code as used
-        await backupCodeDoc.ref.update({
-            used: [...backupCodesData.used, codeIndex],
+        /**
+         * "EACH CAN ONLY BE USED ONCE" — CLAIMED, NOT ASSUMED.
+         *
+         * This read `used`, checked the index was absent, and then wrote
+         * `[...used, codeIndex]`. A read-modify-write with nothing between the
+         * read and the write, on the one credential that gets you past MFA
+         * without the authenticator.
+         *
+         * Two requests presenting the SAME backup code together both read a
+         * `used` array without the index, both passed the check above, and both
+         * returned success — and the second write clobbers the first, so the
+         * array records ONE use for two admissions. Single-use is the whole
+         * guarantee the setup screen makes about these codes.
+         *
+         * claimIdempotencyKey settles it in SQL: the first caller claims, every
+         * other caller is told the key is held. Keyed on the backup-code
+         * DOCUMENT id rather than the user, so regenerating codes — which adds a
+         * new row — starts a fresh set of keys instead of inheriting the spent
+         * ones from the old set.
+         */
+        const claim = await claimIdempotencyKey({
+            key: `MFA-BACKUP-${backupCodeDoc.id}-${codeIndex}`,
+            userId,
+            action: 'mfa_backup_code_redeem',
         });
+
+        if (!claim.claimed) {
+            return { success: false, error: 'Invalid or already used backup code' };
+        }
+
+        // The claim above is the authority; this keeps `used` readable for the
+        // screen that tells a member how many codes they have left. Best-effort
+        // on purpose — a failure here must not un-spend a code that has already
+        // been redeemed.
+        try {
+            await backupCodeDoc.ref.update({ used: [...alreadyUsed, codeIndex] });
+        } catch (recordErr) {
+            console.error('Backup code spent but the used-list write failed:', recordErr);
+        }
 
         return { success: true };
     } catch (error) {
@@ -312,14 +430,30 @@ export async function generateTOTPQRCode(email: string, secret: string): Promise
  */
 export function verifyTOTPToken(token: string, secret: string): boolean {
     try {
-        // Check current window and ±1 for clock skew tolerance
+        /**
+         * Compared with timingSafeEqual, like the cookie MAC at the foot of this
+         * file and for the same reason given there: the value comes from the
+         * caller, and `===` on strings returns as soon as two characters differ.
+         *
+         * Lower stakes than the cookie — six digits, a thirty-second window, and
+         * every route that reaches here is behind withRateLimit — so this is
+         * consistency rather than a hole being closed. But the file already
+         * establishes the standard eighty lines down, and there is no reason for
+         * the two comparisons to disagree.
+         *
+         * EVERY window is evaluated, with no early return, so the answer does
+         * not leak which window matched either.
+         */
+        let matched = false;
         for (let window = -1; window <= 1; window++) {
             const expected = generateTOTP(secret, window);
-            if (token === expected) {
-                return true;
+            const a = Buffer.from(token);
+            const b = Buffer.from(expected);
+            if (a.length === b.length && timingSafeEqual(a, b)) {
+                matched = true;
             }
         }
-        return false;
+        return matched;
     } catch (error) {
         return false;
     }
