@@ -221,17 +221,43 @@ describe('#190 — the ratchet can see requireAdmin, and knows every audit helpe
         'utf8',
     );
 
-    it('treats requireAdmin() as an admin gate', () => {
-        expect(ratchetSource()).toContain('requireAdmin');
+    /**
+     * The PATTERNS, evaluated — not the words.
+     *
+     * The first version of these two asserted that the ratchet's source
+     * CONTAINED "requireAdmin" and "logAdminFinancialAction". Both strings also
+     * appear in the comment that explains why they were added, so narrowing the
+     * regex back to `hasAdminPermission(` alone broke neither assertion — the
+     * mutation passed. Lifting the actual patterns out and running them is what
+     * makes this a test of behaviour.
+     */
+    const patternFor = (name: string): RegExp => {
+        const line = ratchetSource()
+            .split('\n')
+            .find((l: string) => l.startsWith(`const ${name} = /`));
+        expect(line).toBeDefined();
+        const body = line!.slice(line!.indexOf('/') + 1, line!.lastIndexOf('/'));
+        return new RegExp(body);
+    };
+
+    it('MATCHES a requireAdmin() gate, not only hasAdminPermission()', () => {
+        const gate = patternFor('PERMISSION_GATED');
+
+        expect(gate.test('const c = await requireAdmin();')).toBe(true);
+        expect(gate.test('if (!hasAdminPermission(roles, "users:update")) return;')).toBe(true);
+        expect(gate.test('const s = await requireSession();')).toBe(false);
     });
 
-    it('counts logAdminAction and logAdminFinancialAction as audit writes', () => {
+    it('COUNTS logAdminAction and logAdminFinancialAction as audit writes', () => {
         // Without these the ratchet reports _releaseEscrowAction — a money path
         // that records through logAdminFinancialAction, exactly as it should —
         // as unrecorded.
-        const src = ratchetSource();
-        expect(src).toContain('logAdminFinancialAction');
-        expect(src).toContain('logAdminAction');
+        const audits = patternFor('AUDITS');
+
+        expect(audits.test('await logAdminFinancialAction("loan_disbursed", id, 1);')).toBe(true);
+        expect(audits.test('await logAdminAction("seller_approved", id);')).toBe(true);
+        expect(audits.test('await recordAdminAction({ action: "x" });')).toBe(true);
+        expect(audits.test('await somethingElse();')).toBe(false);
     });
 
     it('the four files it could not see now record something', () => {
