@@ -26,6 +26,35 @@ export interface QRVerificationResult {
 }
 
 /**
+ * Both functions below used to fall back to the literal string
+ * 'default-qr-secret-change-in-production' whenever QR_ENCRYPTION_KEY was
+ * unset. That fallback is public — it is this file, in a public repository —
+ * so a QR code signed or checked against it carries no security value: anyone
+ * can compute the same signature offline.
+ *
+ * It also could not have been fixed by setting the env var everywhere it
+ * matters, because verifyDigitalIDQR was called directly from a Client
+ * Component (src/app/verify-id/page.tsx). Next.js does not expose
+ * non-NEXT_PUBLIC_ variables to client bundles, so `process.env.QR_ENCRYPTION_KEY`
+ * was `undefined` there unconditionally — every build shipped the fallback
+ * string itself into the browser bundle (confirmed by grepping
+ * .next/static/chunks/app/verify-id/page-*.js for it). That page now calls the
+ * server-side /api/qr/verify route instead, as its sibling
+ * verify-id/scan/page.tsx already did.
+ *
+ * Failing closed here, the way MFA_SECRET_KEY already does in
+ * api/auth/mfa/verify/route.ts, means a future direct import cannot silently
+ * regress to the same public secret.
+ */
+function requireQrSecretKey(): string {
+    const key = process.env.QR_ENCRYPTION_KEY;
+    if (!key) {
+        throw new Error('QR_ENCRYPTION_KEY is not set.');
+    }
+    return key;
+}
+
+/**
  * Generate QR code data URL for user
  */
 export async function generateDigitalIDQR(
@@ -35,7 +64,7 @@ export async function generateDigitalIDQR(
     email: string,
     role: string
 ): Promise<string> {
-    const secretKey = process.env.QR_ENCRYPTION_KEY || 'default-qr-secret-change-in-production';
+    const secretKey = requireQrSecretKey();
     const expiryDays = parseInt(process.env.QR_CODE_EXPIRY_DAYS || '365', 10);
 
     const timestamp = Date.now();
@@ -80,7 +109,7 @@ export async function generateDigitalIDQR(
  */
 export function verifyDigitalIDQR(encryptedData: string): QRVerificationResult {
     try {
-        const secretKey = process.env.QR_ENCRYPTION_KEY || 'default-qr-secret-change-in-production';
+        const secretKey = requireQrSecretKey();
 
         // Decrypt payload
         const decryptedData = decryptData(encryptedData, secretKey);
@@ -113,7 +142,9 @@ export function verifyDigitalIDQR(encryptedData: string): QRVerificationResult {
         console.error('QR verification error:', error);
         return {
             valid: false,
-            error: 'Invalid QR code format',
+            error: error instanceof Error && error.message === 'QR_ENCRYPTION_KEY is not set.'
+                ? 'Service configuration error'
+                : 'Invalid QR code format',
         };
     }
 }
