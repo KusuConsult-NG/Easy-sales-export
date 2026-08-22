@@ -15,7 +15,7 @@
     "start": "NODE_OPTIONS='--dns-result-order=ipv4first' next start",
     "lint": "eslint",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "jest",
+    "test": "TZ=UTC jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:tz": "TZ=Africa/Lagos jest --testPathIgnorePatterns=/node_modules/ --testPathPatterns=src/__tests__/tz",
