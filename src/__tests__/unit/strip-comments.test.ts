@@ -281,7 +281,15 @@ describe('it agrees with the naive version everywhere the naive version is right
         // relaxed, for the same reason as last time — nothing strips that file,
         // so no assertion in it is affected, and the list is about which files
         // the naive stripper mangles rather than which are read.
-        expect(AFFECTED.length).toBeLessThanOrEqual(11);
+        //
+        // ELEVEN became TWELVE when export-window-expiry.test.ts was added
+        // (#275). Same mechanism in its fourth form: that file's own codeOnly
+        // helper carries the literal '/*' inside a regex, and its header quotes
+        // `new Date() > new Date(undefined)` and several '//'-bearing strings,
+        // so the naive regex opens a block comment it should not. Raised rather
+        // than relaxed, for the same reason every time — nothing strips that
+        // file, so no assertion in it is affected.
+        expect(AFFECTED.length).toBeLessThanOrEqual(12);
         expect(AFFECTED).toContain('src/lib/csp.ts');
         expect(AFFECTED).toContain('src/__tests__/unit/harness-covers-adapter.test.ts');
     });

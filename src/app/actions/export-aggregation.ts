@@ -2,6 +2,7 @@
 
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { exportWindowAcceptsInvestment } from "@/lib/export-window-status";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
@@ -187,10 +188,13 @@ export async function bookExportSlotAction(data: { windowId: string;
 
         const windowData = windowDoc.data() as ExportWindow;
 
-        if (windowData.status !== "open") { return { success: false as const, data: null, error: "Export window is closed", meta: null };
-        }
-
-        if (new Date() > new Date(windowData.endDate)) { return { success: false as const, data: null, error: "Export window has expired", meta: null };
+        // #275 The rule this path already had, now shared — the other two
+        // investment doors checked the status and not the deadline, and nothing
+        // ever moves a window off "open", so the deadline was the only thing
+        // that could refuse an ended window. It only ever refused here.
+        const investable = exportWindowAcceptsInvestment(windowData);
+        if (!investable.ok) {
+            return { success: false as const, data: null, error: investable.message, meta: null };
         }
 
         // Reserve the volume under a row lock, BEFORE the slot is written.

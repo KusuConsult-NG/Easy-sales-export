@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { exportWindowAcceptsInvestment } from "@/lib/export-window-status";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { claimPaymentOnce, incrementWithinCeiling, markFulfilmentFailed } from "@/lib/wallet-ledger";
@@ -202,7 +203,12 @@ export async function investInExportAction(
         }
 
         const exportData = exportDoc.data();
-        if (exportData?.status !== "open" && exportData?.status !== "active") { return { success: false as const, error: "This export window is not open for investment"};
+        // #275 Was a status check with no deadline. An export window whose
+        // period ended is still "open" — nothing writes "closed" — so this
+        // accepted money for a window that closed months ago.
+        const investable = exportWindowAcceptsInvestment(exportData);
+        if (!investable.ok) {
+            return { success: false as const, error: investable.message };
         }
 
         // Validate Minimum Investment (assuming 'amount' in window is unit price or min investment)

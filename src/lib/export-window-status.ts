@@ -347,3 +347,96 @@ export function exportWindowFundingGoal(
 
     return targetVolume * slotPrice;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * May this window still take an investment?
+ *
+ *   #275 AN EXPIRED WINDOW STAYED OPEN FOR EVER, AND TWO OF THE THREE PATHS
+ *        TOOK MONEY FOR IT.
+ *
+ *        Three doors onto investing in an export window:
+ *
+ *          export-aggregation.ts   status === "open" AND now > endDate
+ *          export/_ex_investments  status only
+ *          export-payment.ts       status only
+ *
+ *        One checked the deadline. The other two checked that the window said
+ *        "open" — and NOTHING EVER MAKES IT SAY ANYTHING ELSE. A scan for a
+ *        writer of "closed" on export_windows finds none: the string appears in
+ *        type unions and in the two status lists above, and in no assignment
+ *        anywhere. No scheduled job, no admin action, no code path closes a
+ *        window when its endDate passes.
+ *
+ *        So a window whose period ended months ago is still "open".
+ *        getExportOpportunities lists it as a live opportunity, with its own
+ *        closeDate in the past printed on the card, and two of the three paths
+ *        charge whoever clicks it.
+ *
+ *        The same "defined more than once, one of them hardened" shape this
+ *        file already opens with about updateExportStatusAction — a third time,
+ *        on the door where money enters.
+ *
+ * WHY THE UNION AND NOT THE STRICTER RULE
+ * ---------------------------------------
+ * "open" OR "active", which is what the two unhardened paths accept, rather
+ * than the "open" the hardened one takes. No window that can be invested in
+ * today stops being investable; two paths simply gain the deadline check.
+ *
+ * "active" is a status NO WRITER PRODUCES — export-aggregation.ts creates an
+ * investable window "open" and its own type excludes "active", as does
+ * EXPORT_WINDOW_ALL_STATUSES. It is kept anyway: narrowing a money path on the
+ * strength of a static scan would refuse a single hand-edited production row.
+ * Recorded in export-window-expiry.test.ts, not acted on.
+ *
+ * AN ABSENT OR UNREADABLE endDate IS NOT A DEADLINE. That is exactly what
+ * export-aggregation.ts already did — `new Date() > new Date(undefined)` is
+ * false — and copying the hardened path rather than inventing a stricter rule
+ * keeps this a fix. #272's reasoning, not #245's: a deadline nobody set is not
+ * a control that failed.
+ */
+export type ExportInvestmentVerdict =
+    | { ok: true }
+    | { ok: false; reason: "not_open" | "expired"; message: string };
+
+function endDateOf(value: unknown): Date | null {
+    if (!value) return null;
+    // export_windows rows carry both a Firestore Timestamp and an ISO string;
+    // getExportOpportunities branches on .toDate?.() for the same reason.
+    const raw = typeof (value as { toDate?: () => Date }).toDate === "function"
+        ? (value as { toDate: () => Date }).toDate()
+        : value as string | number | Date;
+
+    const d = new Date(raw as string);
+    return Number.isNaN(d.getTime()) ? null : d;
+}
+
+export function exportWindowAcceptsInvestment(
+    windowData: { status?: unknown; endDate?: unknown } | null | undefined,
+    now: Date = new Date(),
+): ExportInvestmentVerdict {
+    const status = String(windowData?.status ?? "");
+
+    // EXPORT_WINDOW_INVESTABLE_STATUSES, not a second copy of it — the
+    // vocabulary test above caught me declaring one, which is the exact
+    // duplication this file exists to prevent.
+    if (!(EXPORT_WINDOW_INVESTABLE_STATUSES as readonly string[]).includes(status)) {
+        return {
+            ok: false,
+            reason: "not_open",
+            message: "This export window is no longer accepting investments",
+        };
+    }
+
+    const endDate = endDateOf(windowData?.endDate);
+    if (endDate && now > endDate) {
+        return {
+            ok: false,
+            reason: "expired",
+            message: "This export window has expired and is no longer accepting investments",
+        };
+    }
+
+    return { ok: true };
+}

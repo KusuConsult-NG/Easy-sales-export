@@ -133,7 +133,15 @@ describe('the investment cap breach check', () => {
         // defect. The investability check honours "active", which is why the
         // constant keeps it — but no writer produces it.
         expect([...EXPORT_WINDOW_INVESTABLE_STATUSES]).toContain('active');
-        expect(code(INVESTMENTS)).toContain('!== "active"');
+
+        // Was `expect(code(INVESTMENTS)).toContain('!== "active"')`, pinning the
+        // hand-written comparison. #275 moved that check into
+        // exportWindowAcceptsInvestment — which reads this very constant — so
+        // the literal is gone and the property is stronger: the investment path
+        // consults the shared vocabulary rather than repeating it.
+        expect(code(INVESTMENTS)).toContain('exportWindowAcceptsInvestment(');
+        expect(code('src/lib/export-window-status.ts'))
+            .toContain('EXPORT_WINDOW_INVESTABLE_STATUSES as readonly string[]).includes(status)');
 
         // The three "active" writes in the export module all land elsewhere.
         for (const rel of [INVESTMENTS, 'src/app/actions/export-payment.ts', 'src/infrastructure/payments/service.ts']) {

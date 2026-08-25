@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { initializePaystackPayment, verifyPaystackPayment } from "@/lib/paystack-server";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { exportWindowAcceptsInvestment } from "@/lib/export-window-status";
 import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { getBaseUrl } from "@/lib/server-utils";
@@ -377,7 +378,10 @@ export async function initializeInvestmentPaymentAction(
         if (!windowData) { return { error: "Export window data is corrupted", success: false as const, data: undefined, meta: null };
         }
 
-        if (windowData.status !== "open" && windowData.status !== "active") { return { error: "This export window is no longer accepting investments", success: false as const, data: undefined, meta: null };
+        // #275 Was a status check with no deadline, like _ex_investments.ts.
+        const investable = exportWindowAcceptsInvestment(windowData);
+        if (!investable.ok) {
+            return { error: investable.message, success: false as const, data: undefined, meta: null };
         }
 
         // Check if funding goal exceeded — WHEN there is one.
