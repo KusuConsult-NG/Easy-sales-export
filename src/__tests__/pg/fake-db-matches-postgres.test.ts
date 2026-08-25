@@ -147,9 +147,16 @@ async function fromPostgres(
         }
     }
 
+    // An unordered query is NOT sent unordered by the adapter: _buildQuery falls
+    // back to `.order('id')` so pagination has a stable cursor (#192's family),
+    // and the fake mirrors that. This harness models what the adapter SENDS, so
+    // it must apply the same fallback — without it the row order here is
+    // whatever the plan produces, and the boolean-spelling case below failed on
+    // exactly that: pg returned insertion order ["t","s"], the fake id order
+    // ["s","t"], and both were "right" about different queries.
     const orderBy = order
         ? ` order by raw_data->>${literal(order[0])} ${order[1] === 'desc' ? 'desc' : 'asc'}`
-        : '';
+        : ' order by id';
     const cap = limit !== undefined ? ` limit ${Number(limit)}` : '';
 
     return (await q<{ id: string }>(
