@@ -93,9 +93,42 @@ function determinePostRegistrationRedirect(platforms: string[], roles: UserRole[
 export async function getPostLoginRedirect(email: string) { try {
         let userData: FirestoreUser | null = null;
 
-        // Direct query by email - robust, fast, avoids NextAuth auth() session deadlock.
+        // WHO IS ASKING decides whose account is described.
+        //
+        // #239: this is a "use server" export, so it is a public endpoint — and
+        // it answered for ANY email a caller typed, no session required. The
+        // redirect it returns is a description of the account: "/admin" says
+        // the address belongs to an admin, "/wave/dashboard" names their
+        // module, "/auth/reset-legacy-password" says a forced reset is pending.
+        // An unauthenticated caller could walk an address list through it and
+        // map who is who on the platform.
+        //
+        // Both real callers (LoginForm.tsx) invoke it AFTER signIn() succeeds,
+        // so a session cookie exists by then. The session's email is used and
+        // the parameter is ignored for lookup; without a session the answer is
+        // the generic dashboard, which describes nobody. Fail closed on an
+        // auth() error for the same reason — the earlier comment here worried
+        // about auth() deadlocks in server actions, and a generic redirect is
+        // the safe outcome of one.
+        let sessionEmail: string | null = null;
+        try {
+            const session = await auth();
+            sessionEmail = session?.user?.email ?? null;
+        } catch {
+            sessionEmail = null;
+        }
+        if (!sessionEmail) {
+            return { error: null, success: true as const, data: { redirectUrl: '/dashboard' } };
+        }
+        if (email && email.toLowerCase() !== sessionEmail.toLowerCase()) {
+            logger.warn('[getPostLoginRedirect] asked about a different email than the session holds — answering for the session', {
+                sessionEmail,
+            });
+        }
+
+        // Direct query by email - robust, fast.
         const userSnapshot = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS)
-            .where('email', '==', email.toLowerCase())
+            .where('email', '==', sessionEmail.toLowerCase())
             .limit(1)
             .get());
         if (!userSnapshot.empty) {
@@ -122,7 +155,7 @@ export async function getPostLoginRedirect(email: string) { try {
             // If the user was onboarded by an admin (legacy flow), 
             // they MUST change their password on first login.
             if ((userData as any).requiresPasswordChange) {
-                logger.info(`[getPostLoginRedirect] User ${email} requires password change, redirecting to security setup`);
+                logger.info(`[getPostLoginRedirect] User ${sessionEmail} requires password change, redirecting to security setup`);
                 return { error: null, success: true as const, data: { redirectUrl: '/auth/reset-legacy-password' } };
             }
 

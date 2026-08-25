@@ -100,6 +100,13 @@ function seedUser(extra: Record<string, unknown>): void {
 }
 
 async function redirectFor(email = EMAIL): Promise<string | undefined> {
+    // #239: the action answers for the SESSION, not for the parameter — an
+    // unauthenticated caller used to be able to map any address to its
+    // account's shape. The harness therefore logs the caller in as the address
+    // it is asking about, which is exactly what LoginForm's post-signIn call
+    // looks like.
+    const { auth } = await import('@/lib/auth');
+    (auth as unknown as jest.Mock<any>).mockResolvedValue({ user: { id: 'user-1', email } });
     const { getPostLoginRedirect } = await actions();
     const result = await getPostLoginRedirect(email);
     return (result as { data?: { redirectUrl?: string } }).data?.redirectUrl
@@ -107,6 +114,64 @@ async function redirectFor(email = EMAIL): Promise<string | undefined> {
 }
 
 // ─── the precedence ──────────────────────────────────────────────────────────
+
+describe('#239 — the redirect describes the SESSION, not any email a caller types', () => {
+    /**
+     * getPostLoginRedirect is a "use server" export — a public endpoint — and
+     * it answered for ANY email, no session required. The redirect it returns
+     * is a description of the account: "/admin" says the address belongs to an
+     * admin, "/wave/dashboard" names their module,
+     * "/auth/reset-legacy-password" says a forced reset is pending. An
+     * unauthenticated caller could walk an address list through it and map who
+     * is who on the platform.
+     */
+    it('AN UNAUTHENTICATED CALLER LEARNS NOTHING ABOUT AN ADMIN', async () => {
+        seedUser({ roles: ['super_admin'] });
+        const { auth } = await import('@/lib/auth');
+        (auth as unknown as jest.Mock<any>).mockResolvedValue(null);
+
+        const { getPostLoginRedirect } = await actions();
+        const result = await getPostLoginRedirect(EMAIL) as any;
+
+        // Was: /admin — the account's shape, handed to anyone.
+        expect(result.data?.redirectUrl ?? result.redirectUrl).toBe('/dashboard');
+    });
+
+    it('NOR ABOUT A PENDING FORCED PASSWORD RESET', async () => {
+        seedUser({ requiresPasswordChange: true });
+        const { auth } = await import('@/lib/auth');
+        (auth as unknown as jest.Mock<any>).mockResolvedValue(null);
+
+        const { getPostLoginRedirect } = await actions();
+        const result = await getPostLoginRedirect(EMAIL) as any;
+
+        expect(result.data?.redirectUrl ?? result.redirectUrl).toBe('/dashboard');
+    });
+
+    it("and a logged-in caller asking about SOMEBODY ELSE gets their own answer", async () => {
+        seedUser({ roles: ['super_admin'] });
+        store.seed(COLLECTIONS.USERS, 'user-2', { email: 'me@example.com', roles: ['general_user'] });
+        const { auth } = await import('@/lib/auth');
+        (auth as unknown as jest.Mock<any>).mockResolvedValue({ user: { id: 'user-2', email: 'me@example.com' } });
+
+        const { getPostLoginRedirect } = await actions();
+        const result = await getPostLoginRedirect(EMAIL) as any;
+
+        // The parameter names the admin; the answer is the caller's own.
+        expect(result.data?.redirectUrl ?? result.redirectUrl).not.toBe('/admin');
+    });
+
+    it('and an auth() failure fails closed to the generic dashboard', async () => {
+        seedUser({ roles: ['super_admin'] });
+        const { auth } = await import('@/lib/auth');
+        (auth as unknown as jest.Mock<any>).mockRejectedValue(new Error('deadlock'));
+
+        const { getPostLoginRedirect } = await actions();
+        const result = await getPostLoginRedirect(EMAIL) as any;
+
+        expect(result.data?.redirectUrl ?? result.redirectUrl).toBe('/dashboard');
+    });
+});
 
 describe('a forced password change comes first', () => {
     it('before the admin console', async () => {
