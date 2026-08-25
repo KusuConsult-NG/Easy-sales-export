@@ -9,7 +9,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { rateLimit, createRateLimitResponse } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 import { normalizeUserDoc } from "@/lib/schema-normalizer";
-import { claimPaymentOnce } from "@/lib/wallet-ledger";
+import { claimPaymentOnce, markFulfilmentFailed } from "@/lib/wallet-ledger";
 import { paystackBaseUrl } from "@/lib/paystack-host";
 import { isDecidedAgainst } from "@/lib/registration-progress";
 
@@ -86,6 +86,8 @@ async function syncAlreadyProcessed(userId: string, reference: string, amount: n
  * docs/audit/integrity-sweep-2026-08-10.md (F3).
  */
 export async function POST(request: NextRequest) {
+    // Set once THIS request owns the fulfilment — see the catch at the end (#259).
+    let claimedReference: string | null = null;
 
     try {
         const session = (await requireSession()).session;
@@ -279,6 +281,9 @@ export async function POST(request: NextRequest) {
             });
         }
 
+        // This request claimed it, so this request owes the fulfilment (#259).
+        claimedReference = reference;
+
         // Fulfilment. The payment is claimed above, so this runs exactly once.
         //
         // The runTransaction wrapper that used to be here bought nothing: the
@@ -397,6 +402,17 @@ export async function POST(request: NextRequest) {
         });
 
     } catch (error) {
+        // Money collected, nothing delivered — reconciliation has to see it,
+        // not only the log (#259). Guarded on having claimed: a failure before
+        // the claim collected nothing in our name, and on a duplicate the
+        // earlier delivery owns the reference.
+        if (claimedReference) {
+            await markFulfilmentFailed(
+                claimedReference,
+                error instanceof Error ? error.message : String(error),
+            );
+        }
+
         logger.error("[Cooperative verify-payment] Error:", error);
         return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 });
     }

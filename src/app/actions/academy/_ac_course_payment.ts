@@ -8,7 +8,7 @@ import { requireSession } from "@/lib/session-guard";
 import { initializePaystackPayment, verifyPaystackPayment } from "@/lib/paystack-server";
 import { revalidatePath } from "next/cache";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { claimPaymentOnce } from "@/lib/wallet-ledger";
+import { claimPaymentOnce, markFulfilmentFailed } from "@/lib/wallet-ledger";
 import { checkOrderPaymentAmount } from "@/lib/order-payment-amount";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { getBaseUrl } from "@/lib/server-utils";
@@ -86,6 +86,9 @@ export const initializeCoursePaymentAction = withFlexibleSafeAction("initializeC
  * Verify Course Payment and Enroll
  */
 async function _verifyCoursePaymentAction(reference: string): Promise<ActionResponse<null>> {
+    // Set once THIS call owns the fulfilment — see the catch at the end (#259).
+    let claimedReference: string | null = null;
+
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: 'Unauthorized', data: null };
@@ -198,6 +201,9 @@ async function _verifyCoursePaymentAction(reference: string): Promise<ActionResp
             logger.info(
                 `[verifyCoursePaymentAction] Payment ${reference} already claimed — ` +
                 `confirming the enrolment exists before reporting success.`);
+        } else {
+            // This call claimed it, so this call owes the fulfilment.
+            claimedReference = reference;
         }
 
         let enrolledNow = false;
@@ -256,6 +262,17 @@ async function _verifyCoursePaymentAction(reference: string): Promise<ActionResp
 
         return { success: true, error: null, data: null };
     } catch (error) {
+        // Money collected, nothing delivered — that has to reach reconciliation
+        // rather than only the log (#259). Guarded on having claimed: a failure
+        // before the claim collected nothing in our name, and on a DUPLICATE the
+        // earlier attempt owns the reference.
+        if (claimedReference) {
+            await markFulfilmentFailed(
+                claimedReference,
+                error instanceof Error ? error.message : String(error),
+            );
+        }
+
         logger.error("Course payment verification error:", {
             reference,
             error: error instanceof Error ? error.message : String(error)
