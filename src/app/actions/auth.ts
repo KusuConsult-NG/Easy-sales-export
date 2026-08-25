@@ -589,13 +589,59 @@ export async function registerAction(prevState: any, formData: FormData) { const
 
             if (sbErr) {
                 if (sbErr.message.includes('already been registered') || sbErr.message.includes('already registered') || sbErr.message.includes('already exists')) {
-                    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
-                    const match = existingUsers?.users?.find(u => u.email?.toLowerCase() === validatedData.email.toLowerCase());
-                    if (match) {
-                        canonicalUid = match.id;
-                    } else {
-                        return { success: false as const, error: "A user with this email address has already been registered", redirectUrl: "" };
+                    // REGISTERING WITH SOMEBODY ELSE'S EMAIL REWROTE THEIR ACCOUNT.
+                    //
+                    // This branch looked the existing account up by email and
+                    // ADOPTED its id — no password check, nothing. The profile
+                    // write below then ran against users/{that id} with
+                    // set(merge), where an array is a value: the victim's
+                    // fullName, phone and gender were overwritten with whatever
+                    // the form said, `roles` was REPLACED with ["general_user"],
+                    // and the caller was told registration succeeded. Submitting
+                    // the register form with an admin's email and any password at
+                    // all demoted that admin, from an unauthenticated page.
+                    //
+                    // The branch exists for one legitimate case: the user whose
+                    // first attempt crashed between the auth-store write and the
+                    // profile write, retrying. The proof that this is that user
+                    // and not an impostor is the password — so it is verified
+                    // against the existing account before anything is adopted,
+                    // which is the same standard the JIT migration in
+                    // preValidateLoginAction applies.
+                    //
+                    // (The lookup itself was also broken at scale: listUsers()
+                    // returns one page, so past ~50 accounts the match failed
+                    // and this path quietly stopped resuming registrations.
+                    // signInWithPassword returns the account id directly.)
+                    const alreadyRegistered = { success: false as const, error: "A user with this email address has already been registered", redirectUrl: "" };
+
+                    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+                    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+                    if (!supabaseUrl || !supabaseAnonKey) {
+                        return alreadyRegistered;
                     }
+
+                    const { createClient } = await import('@supabase/supabase-js');
+                    const anonClient = createClient(supabaseUrl, supabaseAnonKey);
+                    const { data: owned, error: ownErr } = await anonClient.auth.signInWithPassword({
+                        email: validatedData.email.toLowerCase(),
+                        password: validatedData.password,
+                    });
+
+                    if (ownErr || !owned?.user?.id) {
+                        return alreadyRegistered;
+                    }
+
+                    // Their account. Resume ONLY if the profile is genuinely
+                    // missing — a complete account re-registering must log in,
+                    // not have its profile rewritten to day-one defaults.
+                    const existingProfile = await runQueryWithRetry(() =>
+                        db.collection(COLLECTIONS.USERS).doc(owned.user.id).get());
+                    if (existingProfile.exists) {
+                        return { success: false as const, error: "An account with this email already exists. Please log in instead.", redirectUrl: "" };
+                    }
+
+                    canonicalUid = owned.user.id;
                 } else {
                     return { success: false as const, error: sbErr.message || "Registration failed", redirectUrl: "" };
                 }

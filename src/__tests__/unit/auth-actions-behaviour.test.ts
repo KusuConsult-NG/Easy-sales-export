@@ -39,6 +39,16 @@ const createUser = jest.fn(async (_args: Record<string, unknown>) => ({
 }));
 const listUsers = jest.fn(async () => ({ data: { users: [] as Array<{ id: string; email: string }> } }));
 
+/** The ownership proof for #238: the anon client's password check. */
+const signInWithPassword = jest.fn(async (_c: { email: string; password: string }) => ({
+    data: { user: null as { id: string } | null }, error: { message: 'Invalid login credentials' } as { message: string } | null,
+}));
+jest.mock('@supabase/supabase-js', () => ({
+    createClient: () => ({
+        auth: { signInWithPassword: (c: { email: string; password: string }) => signInWithPassword(c) },
+    }),
+}));
+
 jest.mock('@/lib/supabase', () => ({
     supabaseAdmin: {
         auth: { admin: { createUser: (a: Record<string, unknown>) => createUser(a), listUsers: () => listUsers() } },
@@ -71,6 +81,11 @@ beforeEach(() => {
     store = installFakeDb();
     createUser.mockImplementation(async () => ({ data: { user: { id: 'supabase-uid-1' } }, error: null }));
     listUsers.mockImplementation(async () => ({ data: { users: [] } }));
+    signInWithPassword.mockImplementation(async () => ({
+        data: { user: null }, error: { message: 'Invalid login credentials' },
+    }));
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'http://127.0.0.1:54321';
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-test-key';
     check.mockImplementation(async () => ({ success: true, remaining: 4 }));
 });
 
@@ -326,35 +341,87 @@ describe('registration', () => {
             expect.objectContaining({ email: 'ada@example.com' }));
     });
 
-    it('and adopting the existing auth account when the address is already registered', async () => {
-        // A half-finished registration leaves an auth account with no profile.
-        // Refusing outright would lock that address out for ever; adopting the id
-        // lets the profile be completed.
+    /**
+     *   #238 REGISTERING WITH SOMEBODY ELSE'S EMAIL REWROTE THEIR ACCOUNT.
+     *
+     *        When Supabase said the address was taken, this branch looked the
+     *        existing account up by email and ADOPTED its id — no password
+     *        check. The profile write then ran against users/{that id} with
+     *        set(merge), where an array is a value: the victim's fullName,
+     *        phone and gender were overwritten with whatever the form said and
+     *        their `roles` were REPLACED with ["general_user"]. Submitting the
+     *        register form with an admin's email and any password at all
+     *        demoted that admin, from an unauthenticated page.
+     *
+     *        The branch exists for one legitimate case — the user whose first
+     *        attempt crashed between the auth write and the profile write,
+     *        retrying — and the proof of being that user is the password. It is
+     *        verified against the existing account now, and even then the
+     *        profile is only created when it is genuinely missing.
+     *
+     *        The test above this block used to PIN the defect: it asserted that
+     *        listUsers-based adoption succeeded. (listUsers was its own fault —
+     *        one page, so past ~50 accounts the recovery path silently died.)
+     */
+    it('#238: adopts the existing auth account ONLY when the password proves ownership', async () => {
         createUser.mockImplementation(async () => ({
             data: { user: null as never }, error: { message: 'User already been registered' },
         }));
-        listUsers.mockImplementation(async () => ({
-            data: { users: [{ id: 'existing-uid', email: 'new@example.com' }] },
+        signInWithPassword.mockImplementation(async () => ({
+            data: { user: { id: 'existing-uid' } }, error: null,
+        }));
+        // The crash-recovery state: auth account exists, no profile document.
+
+        const { registerAction } = await actions();
+        const result = await registerAction(null, form());
+
+        expect(result.success).toBe(true);
+        expect(signInWithPassword).toHaveBeenCalledWith(
+            expect.objectContaining({ email: 'new@example.com' }));
+        expect(store.get(COLLECTIONS.USERS, 'existing-uid')?.fullName).toBe('Ada Obi');
+    });
+
+    it('#238: A WRONG PASSWORD ADOPTS NOTHING AND WRITES NOTHING', async () => {
+        createUser.mockImplementation(async () => ({
+            data: { user: null as never }, error: { message: 'User already been registered' },
+        }));
+        signInWithPassword.mockImplementation(async () => ({
+            data: { user: null }, error: { message: 'Invalid login credentials' },
         }));
 
         const { registerAction } = await actions();
         const result = await registerAction(null, form());
 
-        expect(listUsers).toHaveBeenCalled();
-        expect(result.success).not.toBe(false);
+        // Was: the account adopted anyway, the victim's profile rewritten and
+        // their roles reset, success reported to the impostor.
+        expect(result.success).toBe(false);
+        expect(result.error).toMatch(/already been registered/i);
+        expect(store.size(COLLECTIONS.USERS)).toBe(0);
     });
 
-    it('but refusing when the address is registered and the account cannot be found', async () => {
+    it("#238: AND A COMPLETE ACCOUNT IS NEVER REWRITTEN, EVEN BY ITS OWNER", async () => {
+        // Re-registering with the RIGHT password must not reset a real profile
+        // to day-one defaults — roles included.
         createUser.mockImplementation(async () => ({
             data: { user: null as never }, error: { message: 'User already been registered' },
         }));
-        listUsers.mockImplementation(async () => ({ data: { users: [] } }));
+        signInWithPassword.mockImplementation(async () => ({
+            data: { user: { id: 'existing-uid' } }, error: null,
+        }));
+        store.seed(COLLECTIONS.USERS, 'existing-uid', {
+            email: 'new@example.com', fullName: 'The Real Ada',
+            phone: '08099999999', roles: ['general_user', 'admin'],
+        });
 
         const { registerAction } = await actions();
         const result = await registerAction(null, form());
 
         expect(result.success).toBe(false);
-        expect(result.error).toMatch(/already been registered/i);
+        expect(result.error).toMatch(/log in/i);
+        const victim = store.get(COLLECTIONS.USERS, 'existing-uid')!;
+        expect(victim.fullName).toBe('The Real Ada');
+        expect(victim.phone).toBe('08099999999');
+        expect(victim.roles).toEqual(['general_user', 'admin']);
     });
 
     it('and surfacing any other auth failure rather than swallowing it', async () => {
