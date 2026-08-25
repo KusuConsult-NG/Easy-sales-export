@@ -217,10 +217,14 @@ async function _approveAcademyApplicationAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
-        const roles = session.user.roles || [];
-        const hasAcademyAccess = roles.some(r => r === "admin" || r === "super_admin" || r === "academy_admin");
-        if (!session?.user || !hasAcademyAccess) {
-            return { error: "Unauthorized", success: false as const };
+        // #277 This was a hand-written `admin | super_admin | academy_admin`
+        // list. The permission matrix grants "academy:approve_applications" to
+        // exactly those three roles, so this is the same answer today — stated
+        // once, where a role change will be seen, instead of copied into each
+        // write. getAcademyApplicationsAction at the top of this file had
+        // already been converted; the three writes under it had not.
+        if (!session?.user || !hasAdminPermission(session.user.roles, "academy:approve_applications")) {
+            return { error: "Unauthorized: academy:approve_applications required", success: false as const };
         }
 
         // Get application first
@@ -248,13 +252,51 @@ async function _approveAcademyApplicationAction(
         });
 
         // 2. Update User Service Registration & Role
-        await db.collection(COLLECTIONS.USERS).doc(userId).update({
+        //
+        // #277 This was `.update()`, and `update()` on a MISSING document is a
+        // documented silent no-op in this adapter — see supabase-db.ts, which
+        // logs a warning and affects no rows. So approving a learner with no
+        // profile row flipped the application to "approved", granted no role,
+        // wrote no serviceRegistrations, and returned "Academy application
+        // approved successfully". The learner had no access and nothing said so.
+        //
+        // The orphan is not hypothetical: lib/orphaned-user-repair.ts exists for
+        // it and names the cause — "users in Firebase Auth but missing Firestore
+        // profile ... if registration fails between Auth creation and Firestore
+        // write". Such an account can sign in and apply.
+        //
+        // Both sibling implementations already handled this and this one did
+        // not: academy/_ac_admin_review.ts CREATES the row inside its
+        // transaction, and manualAcademyEnrollmentAction below — in this very
+        // file — refuses outright with "User not found". This door alone
+        // reported success and did nothing.
+        const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+        const userDoc = await userRef.get();
+
+        if (!userDoc.exists) {
+            // Same fields the canonical path seeds, from the application the
+            // admin is approving. Without them the grant below would create a
+            // profile carrying a role and no identity.
+            const pi = appData.personalInfo || {};
+            await userRef.set({
+                uid: userId,
+                email: pi.email || appData.email || "",
+                fullName: pi.fullName
+                    || (pi.firstName ? `${pi.firstName} ${pi.lastName || ""}`.trim() : "Learner"),
+                createdAt: FieldValue.serverTimestamp(),
+            }, { merge: true });
+        }
+
+        // set(merge) rather than update(): the write must land whether or not
+        // the row existed a moment ago. The adapter flattens these to dotted
+        // paths, so a sibling module's serviceRegistrations are not replaced.
+        await userRef.set({
             "serviceRegistrations.academy.status": "approved",
             "serviceRegistrations.academy.paymentStatus": "completed",
             "serviceRegistrations.academy.approvedAt": FieldValue.serverTimestamp(),
             roles: FieldValue.arrayUnion("academy_participant"),
             updatedAt: FieldValue.serverTimestamp(),
-        });
+        }, { merge: true });
 
         // 3. Clear Cache
         try {
@@ -334,10 +376,14 @@ async function _rejectAcademyApplicationAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
-        const roles = session.user.roles || [];
-        const hasAcademyAccess = roles.some(r => r === "admin" || r === "super_admin" || r === "academy_admin");
-        if (!session?.user || !hasAcademyAccess) {
-            return { error: "Unauthorized", success: false as const };
+        // #277 This was a hand-written `admin | super_admin | academy_admin`
+        // list. The permission matrix grants "academy:approve_applications" to
+        // exactly those three roles, so this is the same answer today — stated
+        // once, where a role change will be seen, instead of copied into each
+        // write. getAcademyApplicationsAction at the top of this file had
+        // already been converted; the three writes under it had not.
+        if (!session?.user || !hasAdminPermission(session.user.roles, "academy:approve_applications")) {
+            return { error: "Unauthorized: academy:approve_applications required", success: false as const };
         }
 
         let userId: string | undefined;
@@ -420,10 +466,14 @@ async function _markAcademyApplicationUnderReviewAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
-        const roles = session.user.roles || [];
-        const hasAcademyAccess = roles.some(r => r === "admin" || r === "super_admin" || r === "academy_admin");
-        if (!session?.user || !hasAcademyAccess) {
-            return { error: "Unauthorized", success: false as const };
+        // #277 This was a hand-written `admin | super_admin | academy_admin`
+        // list. The permission matrix grants "academy:approve_applications" to
+        // exactly those three roles, so this is the same answer today — stated
+        // once, where a role change will be seen, instead of copied into each
+        // write. getAcademyApplicationsAction at the top of this file had
+        // already been converted; the three writes under it had not.
+        if (!session?.user || !hasAdminPermission(session.user.roles, "academy:approve_applications")) {
+            return { error: "Unauthorized: academy:approve_applications required", success: false as const };
         }
 
         await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId).update({
