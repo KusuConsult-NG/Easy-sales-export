@@ -26,7 +26,11 @@ export async function updateLessonProgress(
     try {
         const validated = courseProgressSchema.parse(data);
 
-        // Use a composite ID for uniqueness: userId_courseId_lessonId
+        // Composite id: userId_lessonId. The courseId is NOT part of the key —
+        // lesson ids are minted as `l-${Date.now()}` in the course builder, so
+        // they are unique across courses and the shorter key is what
+        // getLessonProgress(lessonId) can reconstruct. (This comment used to
+        // claim the key was userId_courseId_lessonId, which the code never was.)
         const progressId = `${session.user.id}_${validated.lessonId}`;
         const lessonProgressRef = db.collection(COLLECTIONS.LESSON_VIDEO_PROGRESS).doc(progressId);
 
@@ -202,8 +206,11 @@ export async function getUserEnrolledCourses() { const sessionResult = await req
 
         const enrollments = serializeDocs(snapshot.docs);
 
-        return { error: null, success: true as const, data: null };
-    } catch (error) { return { success: false as const, error: "Failed to fetch enrolled courses", courses: []};
+        // The list was computed on the line above and then this returned
+        // `data: null` — success, with the answer thrown away. Every caller of
+        // "get my enrolled courses" got nothing, always.
+        return { error: null, success: true as const, data: { enrollments } };
+    } catch (error) { return { success: false as const, error: "Failed to fetch enrolled courses", data: null };
     }
 }
 
