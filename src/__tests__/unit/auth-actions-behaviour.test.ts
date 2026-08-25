@@ -588,3 +588,83 @@ describe('the duplicate-phone guard sees every spelling that is stored', () => {
         expect(phoneLookupVariants(null)).toEqual([]);
     });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('preValidateLoginAction — the login gate, executed for the first time', () => {
+    /**
+     * The largest never-run block in the auth actions (lines ~257–560): the
+     * Supabase sign-in, the profile fetch, the auto-repair for a missing
+     * profile, and the ban check. No new defects asserted here — the
+     * enumeration oracle at the end of the failure path is an owner decision
+     * already on record — but a login gate that has never executed is how the
+     * five-logins lockout (documented inside it) survived to production.
+     */
+    const call = async (email = 'ada@example.com', password = 'Str0ng!Passw0rd') =>
+        (await (await actions()).preValidateLoginAction({ email, password })) as any;
+
+    const supabaseAccepts = (uid = 'sb-uid-1') =>
+        signInWithPassword.mockImplementation(async () => ({
+            data: { user: { id: uid } }, error: null,
+        }));
+
+    it('accepts a valid login and leaves the profile alone', async () => {
+        supabaseAccepts('sb-uid-1');
+        store.seed(COLLECTIONS.USERS, 'sb-uid-1', {
+            email: 'ada@example.com', roles: ['general_user'], _migratedAt: '2026-01-01',
+        });
+
+        expect(await call()).toMatchObject({ success: true });
+    });
+
+    it('refuses a banned account even with the right password', async () => {
+        supabaseAccepts('sb-uid-1');
+        store.seed(COLLECTIONS.USERS, 'sb-uid-1', {
+            email: 'ada@example.com', roles: ['general_user'], _migratedAt: '2026-01-01',
+            isBanned: true,
+        });
+
+        const res = await call();
+        expect(res.success).toBe(false);
+        expect(res.error).toMatch(/suspended/i);
+    });
+
+    it('and a suspended flag the same way', async () => {
+        supabaseAccepts('sb-uid-1');
+        store.seed(COLLECTIONS.USERS, 'sb-uid-1', {
+            email: 'ada@example.com', roles: ['general_user'], _migratedAt: '2026-01-01',
+            suspended: true,
+        });
+
+        expect(await call()).toMatchObject({ success: false });
+    });
+
+    it('auto-repairs a missing profile rather than locking the account out', async () => {
+        supabaseAccepts('sb-uid-1');
+        // Auth account exists, no profile row at all — the lockout state.
+
+        const res = await call();
+
+        expect(res.success).toBe(true);
+        const repaired = store.get(COLLECTIONS.USERS, 'sb-uid-1');
+        expect(repaired).toBeDefined();
+        expect(repaired!.roles).toEqual(['general_user']);
+        expect(repaired!.profileComplete).toBe(false);
+    });
+
+    it('rejects malformed input before touching any store', async () => {
+        const res = await call('not-an-email', 'x');
+        expect(res.success).toBe(false);
+        expect(signInWithPassword).not.toHaveBeenCalled();
+    });
+
+    it('reports a wrong password without a stack trace', async () => {
+        signInWithPassword.mockImplementation(async () => ({
+            data: { user: null }, error: { message: 'Invalid login credentials' },
+        }));
+        store.seed(COLLECTIONS.USERS, 'u1', { email: 'ada@example.com' });
+
+        const res = await call();
+        expect(res.success).toBe(false);
+        expect(typeof res.error).toBe('string');
+    });
+});
