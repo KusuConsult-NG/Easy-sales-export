@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { rateLimitConfig } from './security';
 import { checkFallbackLimit, resetFallbackLimit } from './rate-limiter-fallback';
 import { auth } from '@/lib/auth';
+import { clientIpFromHeaders } from './client-ip';
 
 /**
  * Distributed Rate Limiter (Redis-backed for 100k+ users)
@@ -29,13 +30,20 @@ export async function rateLimit(
         userId = session?.user?.id;
     } catch {}
 
-    // Get identifier from parameter, or fallback to authenticated userId,
-    // or platform-verified X-Real-IP, or client-controlled X-Forwarded-For
+    // Identifier from the parameter, else the authenticated userId, else the
+    // address our own proxy observed (#260).
+    //
+    // This preferred x-real-ip and fell back to the LEFTMOST x-forwarded-for
+    // entry, under a comment that called that one "client-controlled" — and
+    // then keyed on it anyway. Rotating the header gave every request its own
+    // bucket, which is no limit at all.
+    //
+    // 'anonymous' groups everyone we cannot identify into ONE bucket. That
+    // over-limits, which is the safe direction; a caller-named key does not.
     const key =
         identifier ||
         userId ||
-        request.headers.get('x-real-ip') ||
-        request.headers.get('x-forwarded-for')?.split(',')[0] ||
+        clientIpFromHeaders(request.headers) ||
         'anonymous';
 
     // See the note in consumeLoginAttempt: with no Upstash configured, the

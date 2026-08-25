@@ -335,7 +335,18 @@ describe('the helpers the money paths use', () => {
         expect(logAdminFinancialAction).toBe(logFinancialAction);
     });
 
-    it('getSecurityContextFromHeaders reads the proxy chain', async () => {
+    it('getSecurityContextFromHeaders records what our proxy saw, not what the caller sent', async () => {
+        /**
+         * This asserted `ipAddress: '203.0.113.5'` — the LEFTMOST entry, which
+         * is the value the CALLER wrote (#260). X-Forwarded-For is append-only:
+         * each proxy appends the address it received from, so the leftmost
+         * entry is not evidence of anything, and an audit trail recording it is
+         * writing down whatever the caller chose. Pinning it here is part of
+         * what made that look deliberate.
+         *
+         * With one proxy in front (the default), the trustworthy entry is the
+         * rightmost — the only one our own infrastructure wrote.
+         */
         const { getSecurityContextFromHeaders } = await auditLog();
 
         const headers = new Headers({
@@ -344,9 +355,18 @@ describe('the helpers the money paths use', () => {
         });
 
         expect(getSecurityContextFromHeaders(headers)).toEqual({
-            ipAddress: '203.0.113.5', userAgent: 'Chrome',
+            ipAddress: '10.0.0.1', userAgent: 'Chrome',
         });
         expect(getSecurityContextFromHeaders()).toEqual({});
+    });
+
+    it('and leaves the field empty rather than recording a value it cannot vouch for', async () => {
+        // Undefined is honest; a caller-supplied string in an audit record is
+        // not, and reads as evidence.
+        const { getSecurityContextFromHeaders } = await auditLog();
+
+        expect(getSecurityContextFromHeaders(new Headers({ 'x-forwarded-for': 'not-an-ip' })))
+            .toEqual({ ipAddress: undefined, userAgent: undefined });
     });
 });
 

@@ -2,6 +2,7 @@ import { getAdminDb } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { logger } from './logger';
+import { clientIpFromHeaders } from './client-ip';
 
 /**
  * Audit Log Types
@@ -503,8 +504,17 @@ export function getSecurityContextFromHeaders(headers?: Headers): {
 } {
     if (!headers) return {};
 
+    // The address our own proxy observed, not the one the caller wrote (#260).
+    //
+    // This took the LEFTMOST x-forwarded-for entry, which is caller-supplied.
+    // An audit trail recording whatever IP the caller chose is worse than one
+    // with no IP field: it reads as evidence. Same shape as #129, where the
+    // dispute audit row named whichever admin the caller passed.
+    //
+    // Undefined rather than a placeholder when it cannot be established —
+    // leaving the field empty is honest; writing something false is not.
     return {
-        ipAddress: headers.get('x-forwarded-for')?.split(',')[0] || headers.get('x-real-ip') || undefined,
+        ipAddress: clientIpFromHeaders(headers) ?? undefined,
         userAgent: headers.get('user-agent') || undefined,
     };
 }
