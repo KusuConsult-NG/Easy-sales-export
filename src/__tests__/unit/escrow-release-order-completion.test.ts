@@ -73,6 +73,7 @@ jest.mock('@/lib/africastalking', () => ({ smsEscrowReleased: jest.fn(), smsDisp
 jest.mock('@/lib/fcm', () => ({ pushEscrowReleased: jest.fn(), pushDisputeResolved: jest.fn() }));
 jest.mock('@/app/actions/notifications', () => ({ createNotificationAction: jest.fn(async () => ({})) }));
 jest.mock('@/lib/audit-log', () => ({
+    recordAdminAction: (p: any) => (global as any).mockRecordAdminAction(p),
     createAdminAuditLog: jest.fn(async () => ({})),
     logAdminFinancialAction: jest.fn(async () => ({})),
 }));

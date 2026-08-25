@@ -5,6 +5,8 @@ import { hashData } from "@/lib/security";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
+import { hasAdminPermission } from "@/lib/admin-permissions";
+import { recordAdminAction } from "@/lib/audit-log";
 import { checkModuleAccess } from "@/lib/module-access-check";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { serializeValue, toMillis } from "@/lib/firestore-serialize";
@@ -405,7 +407,10 @@ export async function requestExportRevisionAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired"};
         const { session } = sessionResult;
-        if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) { return { success: false as const, error: 'Admin access required'};
+        // #265 export_admin holds export:approve_applications; a
+        // hand-written pair refused the role the module exists for.
+        if (!hasAdminPermission(session?.user?.roles, "export:approve_applications")) {
+            return { success: false as const, error: 'Unauthorized: export:approve_applications required' };
         }
 
         const appRef = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).doc(applicationId);
@@ -427,6 +432,16 @@ export async function requestExportRevisionAction(
                 updatedAt: FieldValue.serverTimestamp() });
         }
         await batch.commit();
+
+        // #265 As with the academy path: a status change on somebody's
+        // application that recorded nothing.
+        await recordAdminAction({
+            action: 'export_revision_request',
+            userId: session.user.id,
+            targetId: applicationId,
+            targetType: 'export_application',
+            details: reason,
+        });
 
         // Send revision email (non-blocking)
         try { const { Resend } = await import('resend');

@@ -284,10 +284,12 @@ async function _requestExportApplicationRevisionAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
-            if (!session?.user?.roles?.includes("super_admin") && !session?.user?.roles?.includes("admin")) {
-                return { error: "Unauthorized: admin or users:update role required", success: false as const };
-            }
+        // #265 export_admin holds export:approve_applications and was refused
+        // here, while _approveExportOnboardingAction above already accepts it.
+        // Approving and asking for a revision are the same job.
+        if (!hasAdminPermission(session?.user?.roles, "users:update")
+            && !hasAdminPermission(session?.user?.roles, "export:approve_applications")) {
+            return { error: "Unauthorized: export:approve_applications required", success: false as const };
         }
 
         if (!revisionNote?.trim()) {
@@ -767,10 +769,11 @@ async function _rejectExportApplicationAction(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         // Use general user update permission or create a new one. Using users:update for now.
-        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
-            if (!session?.user?.roles?.includes("super_admin") && !session?.user?.roles?.includes("admin")) {
-                return { error: "Unauthorized: Permission required - users:update", success: false as const };
-            }
+        // #265 As above: the export admin could approve an application and
+        // could not reject one.
+        if (!hasAdminPermission(session?.user?.roles, "users:update")
+            && !hasAdminPermission(session?.user?.roles, "export:approve_applications")) {
+            return { error: "Unauthorized: export:approve_applications required", success: false as const };
         }
 
         const valid = ExportOnboardingReviewSchema.safeParse({ applicationId, status: "rejected", reason });

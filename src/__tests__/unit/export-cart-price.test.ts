@@ -70,7 +70,8 @@ jest.mock('@/lib/system-settings', () => ({
     getPlatformFees: jest.fn(async () => ({ minOrderAmount: 0 })),
 }));
 jest.mock('@/lib/server-utils', () => ({ getBaseUrl: jest.fn(async () => 'https://test.local') }));
-jest.mock('@/lib/audit-log', () => ({ createAdminAuditLog: jest.fn(async () => ({})) }));
+jest.mock('@/lib/audit-log', () => ({
+    recordAdminAction: (p: any) => (global as any).mockRecordAdminAction(p), createAdminAuditLog: jest.fn(async () => ({})) }));
 
 function setSession(id: string) {
     (global as any).mockRequireSession.mockImplementation(() => Promise.resolve({

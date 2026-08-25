@@ -13,6 +13,7 @@ import {
 import { type LandListing } from "@/types/strict";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { isAdmin } from "@/lib/admin-permissions";
 import { PUBLIC_LAND_STATUSES, stripInternalLandFields } from "@/lib/land-visibility";
 import { isOwnerMutable } from "@/lib/land-listing-status";
@@ -386,14 +387,20 @@ async function _verifyLandListing(
     if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
     
-    // `.includes('admin')` alone refused a super_admin who did not also hold the
-    // literal 'admin' role — the one account that should never be locked out of
-    // a verification queue. isSuperAdmin is checked explicitly rather than
-    // switching to isAdmin(), which would WIDEN this to moderator, support and
-    // every module admin; verifying land is not their job.
-    const canVerifyLand = session?.user.roles?.includes('admin') || session?.user.roles?.includes('super_admin');
-    if (!session || !canVerifyLand) { 
-        return { success: false, error: "Unauthorized - Admin only", data: null };
+    //   #265 AND "VERIFYING LAND IS NOT THEIR JOB" WAS WRONG ABOUT ONE ROLE.
+    //
+    //        The note above rejects isAdmin() because it "would WIDEN this to
+    //        moderator, support and every module admin" — true, and that is not
+    //        the choice. land:verify_listings is held by super_admin, admin and
+    //        farm_nation_admin, and by no other module admin. The matrix says
+    //        verifying land IS the farm-nation admin's job; this guard said it
+    //        was not, and the matrix is the definition.
+    //
+    //        Naming the permission also keeps the fix the note was written for:
+    //        a super_admin without the literal 'admin' role still passes.
+    const canVerifyLand = hasAdminPermission(session?.user?.roles, "land:verify_listings");
+    if (!session || !canVerifyLand) {
+        return { success: false, error: "Unauthorized: land:verify_listings required", data: null };
     }
 
     try { 
@@ -506,8 +513,10 @@ async function _getLandStatistics(): Promise<ActionResponse<any>> {
     if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
     
-    if (!session || !(session.user.roles?.includes('admin') || session.user.roles?.includes('super_admin'))) { 
-        return { success: false, error: "Unauthorized - Admin only", data: null };
+    // #265 Same permission as the verification queue above: an admin running
+    // that queue needs the numbers that describe it.
+    if (!session || !hasAdminPermission(session.user.roles, "land:verify_listings")) {
+        return { success: false, error: "Unauthorized: land:verify_listings required", data: null };
     }
 
     try {

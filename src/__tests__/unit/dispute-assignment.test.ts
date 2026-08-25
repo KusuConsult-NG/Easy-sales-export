@@ -54,6 +54,7 @@ jest.mock('@/lib/require-admin', () => ({
     requireAdmin: (...a: any[]) => mockRequireAdmin(...a),
 }));
 jest.mock('@/lib/audit-log', () => ({
+    recordAdminAction: (p: any) => (global as any).mockRecordAdminAction(p),
     createAdminAuditLog: (...a: any[]) => mockAuditLog(...a),
     logAdminAction: jest.fn(async () => ({})),
 }));

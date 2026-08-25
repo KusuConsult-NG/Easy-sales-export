@@ -6,6 +6,8 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
+import { hasAdminPermission } from "@/lib/admin-permissions";
+import { recordAdminAction } from "@/lib/audit-log";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { serializeValue, toMillis } from "@/lib/firestore-serialize";
@@ -389,8 +391,13 @@ async function _requestAcademyRevisionAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: 'Unauthorized', data: null };
         const { session } = sessionResult;
-        if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
-            return { success: false as const, error: 'Admin access required', data: null };
+        // #265 THE SHARPEST INSTANCE. _ac_admin_applications.ts admits
+        // academy_admin to READ this very collection's pending queue; this
+        // refused the same role every write against it. The academy admin
+        // opened the screen, saw the applications, and every button returned
+        // "Admin access required".
+        if (!hasAdminPermission(session?.user?.roles, "academy:approve_applications")) {
+            return { success: false as const, error: 'Unauthorized: academy:approve_applications required', data: null };
         }
 
         const appRef = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId);
@@ -414,6 +421,18 @@ async function _requestAcademyRevisionAction(
                 updatedAt: FieldValue.serverTimestamp(),
             });
         }
+
+        // #265 Recorded, like every other permission-gated admin write. The
+        // audit ratchet surfaced this the moment the guard became a named
+        // permission: sending an application back for revision changed a
+        // member's module status and left no trace of who did it or why.
+        await recordAdminAction({
+            action: 'academy_revision_request',
+            userId: session.user.id,
+            targetId: applicationId,
+            targetType: 'academy_application',
+            details: reason,
+        });
 
         if (userId) {
             try {

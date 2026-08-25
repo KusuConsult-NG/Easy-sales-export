@@ -84,8 +84,24 @@ const BUYER = 'buyer-1';
 const ADMIN = 'admin-1';
 const SUPER = 'super-1';
 
+/**
+ * A LOCAL OVERRIDE OF THE GLOBAL audit-log MOCK, AND IT WAS INCOMPLETE.
+ *
+ * recordAdminAction was missing. moderateReviewAction calls it (#265), so the
+ * call threw a TypeError, the action's outer catch turned that into
+ * { success: false }, and "a super_admin can moderate reviews" failed against
+ * code that works — the NINTH time an incomplete mock has made a working path
+ * look broken in this audit.
+ *
+ * audit-log-mock-is-complete.test.ts gates the global mock in jest.setup.js
+ * against the module's real exports. It did not see this one, because a local
+ * jest.mock REPLACES the global entirely. That gate now scans local overrides
+ * too — a check something can walk past is weaker than it looks (#256, #262).
+ */
 jest.mock('@/lib/audit-log', () => ({
     createAdminAuditLog: jest.fn(async () => ({})),
+    createAuditLog: jest.fn(async () => ({})),
+    recordAdminAction: jest.fn(async () => undefined),
     logAdminAction: jest.fn(async () => ({})),
 }));
 
@@ -147,9 +163,11 @@ describe('a super_admin can moderate reviews', () => {
     });
 
     it('still refuses everyone else', async () => {
-        // Vacuity guard, and the reason this was not switched to isAdmin():
-        // that would admit moderator, support and every module admin.
-        for (const roles of [[], ['seller'], ['moderator'], ['support'], ['marketplace_admin']]) {
+        // Vacuity guard. moderator and marketplace_admin left this list under
+        // #265 — they hold marketplace:moderate_reviews, which is the
+        // permission this guard now names. support does NOT hold it and stays,
+        // which is what shows the fix was not a widening to isAdmin().
+        for (const roles of [[], ['seller'], ['support'], ['wave_admin'], ['academy_admin']]) {
             jest.clearAllMocks();
             setSession(BUYER);
             setWorld({ roles });

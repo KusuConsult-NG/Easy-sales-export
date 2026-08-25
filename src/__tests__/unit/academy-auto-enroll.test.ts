@@ -47,6 +47,7 @@ const CALLER = 'caller-1';
 const VICTIM = 'victim-1';
 
 jest.mock('@/lib/audit-log', () => ({
+    recordAdminAction: (p: any) => (global as any).mockRecordAdminAction(p),
     createAdminAuditLog: jest.fn(async () => ({})),
     logAdminFinancialAction: jest.fn(async () => ({})),
 }));

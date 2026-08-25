@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/session-guard";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { canReadWaveProgramme } from "@/lib/wave-access";
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -175,7 +176,9 @@ export async function POST(req: Request) {
                 { status: 401 }
             );
         }
-        const isAdmin = session.user.roles?.includes("admin") || session.user.roles?.includes("super_admin");
+        // #265 wave_admin holds wave:manage_training — the permission that
+        // names this exact operation — and a hand-written pair refused it.
+        const isAdmin = hasAdminPermission(session.user.roles, "wave:manage_training");
         if (!isAdmin) {
             return NextResponse.json(
                 { success: false, data: null, error: "Unauthorized — admin access required", meta: { cursor: null, hasMore: false } },

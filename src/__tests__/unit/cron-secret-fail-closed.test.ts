@@ -44,6 +44,7 @@ jest.mock('@/lib/firestore-compat', () => ({
     Timestamp: { now: () => ({ toDate: () => new Date() }), fromDate: (d: Date) => ({ toDate: () => d }) },
 }));
 jest.mock('@/lib/audit-log', () => ({
+    recordAdminAction: (p: any) => (global as any).mockRecordAdminAction(p),
     createAdminAuditLog: jest.fn(async () => ({})),
     logAdminFinancialAction: jest.fn(async () => ({})),
 }));

@@ -66,6 +66,7 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { calculateRepaymentTerms } from '@/lib/loan-terms';
 
 jest.mock('@/lib/audit-log', () => ({
+    recordAdminAction: (p: any) => (global as any).mockRecordAdminAction(p),
     createAdminAuditLog: jest.fn(async () => ({})),
 }));
 

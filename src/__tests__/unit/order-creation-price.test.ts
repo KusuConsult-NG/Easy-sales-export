@@ -70,7 +70,8 @@ jest.mock('@/lib/marketplace-notifications', () => ({
 jest.mock('@/app/actions/notifications', () => ({
     createNotificationAction: jest.fn(async () => ({})),
 }));
-jest.mock('@/lib/audit-log', () => ({ createAdminAuditLog: jest.fn(async () => ({})) }));
+jest.mock('@/lib/audit-log', () => ({
+    recordAdminAction: (p: any) => (global as any).mockRecordAdminAction(p), createAdminAuditLog: jest.fn(async () => ({})) }));
 jest.mock('next/cache', () => ({ revalidatePath: jest.fn() }));
 
 function setSession(id: string) {

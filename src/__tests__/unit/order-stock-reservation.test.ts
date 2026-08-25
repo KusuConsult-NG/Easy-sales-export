@@ -46,6 +46,7 @@ jest.mock('@/lib/wallet-ledger', () => ({
     incrementWithinCeiling: jest.fn(), claimSingleOpenLoanApplication: jest.fn(),
 }));
 jest.mock('@/lib/audit-log', () => ({
+    recordAdminAction: (p: any) => (global as any).mockRecordAdminAction(p),
     createAdminAuditLog: jest.fn(async () => ({})),
     logAdminFinancialAction: jest.fn(async () => ({})),
 }));

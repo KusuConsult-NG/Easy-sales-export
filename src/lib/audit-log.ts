@@ -178,6 +178,11 @@ export type AuditAction =
     | 'broadcast_sent'
     | 'cooperative_member_status_update'
     | 'cooperative_revision_request'
+    // The other two modules ask for revisions too, and neither recorded it
+    // — surfaced by the audit ratchet when #265 moved both guards onto a
+    // named permission.
+    | 'academy_revision_request'
+    | 'export_revision_request'
     | 'data_recovery_run'
     | 'escrow_status_update'
     | 'export_catalog_delete'

@@ -30,7 +30,7 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { readFileSync } from 'fs';
+import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { stripComments } from '@/lib/testing/strip-comments';
 
@@ -118,6 +118,64 @@ describe('the audit-log mock', () => {
         const real = realExports();
         expect(real).toContain('logAdminFinancialAction');
         expect(real).toContain('createAdminAuditLog');
+    });
+
+    it('AND EVERY LOCAL OVERRIDE COVERS THE EXPORTS ITS OWN SUITE CALLS', () => {
+        /**
+         * THE HOLE THIS GATE HAD.
+         *
+         * A local `jest.mock('@/lib/audit-log', ...)` REPLACES the global one
+         * outright — it does not merge with it. So a suite could carry a
+         * two-key factory and this gate, which reads jest.setup.js, saw
+         * nothing wrong.
+         *
+         * It happened. review-moderation-and-window.test.ts mocked
+         * createAdminAuditLog and logAdminAction only; moderateReviewAction
+         * gained a recordAdminAction call (#265), that call threw a TypeError,
+         * the action's catch turned it into { success: false }, and "a
+         * super_admin can moderate reviews" failed against working code. The
+         * NINTH time an incomplete mock has done that in this audit.
+         *
+         * The rule here is narrower than the global one deliberately: a local
+         * override is allowed to be partial, as long as it covers the two
+         * functions that are actually reached from an action under test and
+         * that swallow their own failures. Demanding the full surface of every
+         * local mock would be noise.
+         */
+        const REACHED_FROM_ACTIONS = ['recordAdminAction', 'createAdminAuditLog'];
+
+        const files = readdirSync(join(ROOT, 'src/__tests__/unit'))
+            // This file itself mentions the mock path in a string, which is
+            // not an override — a scan that reads source has to exclude the
+            // scanner.
+            .filter((f) => f.endsWith('.test.ts') || f.endsWith('.test.tsx'))
+            .filter((f) => f !== 'audit-log-mock-is-complete.test.ts')
+            .map((f) => ({ file: f, text: readFileSync(join(ROOT, 'src/__tests__/unit', f), 'utf-8') }))
+            .filter(({ text }) => text.includes("jest.mock('@/lib/audit-log'")
+                || text.includes('jest.mock("@/lib/audit-log"'));
+
+        // Vacuity guard: if the scan stopped finding overrides it would report
+        // clean forever.
+        expect(files.length).toBeGreaterThanOrEqual(1);
+
+        const offenders = files
+            .map(({ file, text }) => {
+                const start = text.search(/jest\.mock\(['"]@\/lib\/audit-log['"]/);
+                const open = text.indexOf('{', text.indexOf('=>', start));
+                let depth = 0, end = open;
+                for (let i = open; i < text.length; i++) {
+                    if (text[i] === '{') depth++;
+                    else if (text[i] === '}') { depth--; if (depth === 0) { end = i; break; } }
+                }
+                const body = text.slice(open, end);
+                const missing = REACHED_FROM_ACTIONS.filter((n) => !body.includes(`${n}:`));
+                return { file, missing };
+            })
+            .filter((o) => o.missing.length > 0)
+            .map((o) => `${o.file} — missing ${o.missing.join(', ')}`);
+
+        // Was: review-moderation-and-window.test.ts, missing recordAdminAction.
+        expect(offenders).toEqual([]);
     });
 
     it('and every mocked name really exists, so the mock is not inventing a surface', () => {

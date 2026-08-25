@@ -47,7 +47,8 @@ const ADMIN = 'admin-1';
 const EXPORT_ID = 'window-1';
 
 jest.mock('next/cache', () => ({ revalidatePath: jest.fn() }));
-jest.mock('@/lib/audit-log', () => ({ createAdminAuditLog: jest.fn(async () => ({})) }));
+jest.mock('@/lib/audit-log', () => ({
+    recordAdminAction: (p: any) => (global as any).mockRecordAdminAction(p), createAdminAuditLog: jest.fn(async () => ({})) }));
 
 function setCaller(id: string, dbRoles: string[] = []) {
     (global as any).mockRequireSession.mockImplementation(() => Promise.resolve({

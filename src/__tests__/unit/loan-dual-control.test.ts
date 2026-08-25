@@ -50,6 +50,7 @@ jest.mock('@/lib/paystack-transfer', () => ({
 }));
 
 jest.mock('@/lib/audit-log', () => ({
+    recordAdminAction: (p: any) => (global as any).mockRecordAdminAction(p),
     createAdminAuditLog: (...args: any[]) => mockAuditLog(...args),
     logAdminAction: jest.fn(),
 }));
