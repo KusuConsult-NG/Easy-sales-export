@@ -42,7 +42,13 @@ test.describe('E2E: Auto-Approval and Communications Hub Filters', () => {
         await expect(statusSelect).toHaveValue('unpaid');
 
         // 6. Select Cooperative Members audience radio
-        const coopRadio = page.locator('input[value="cooperative_members"]');
+        //
+        // By role, for the reason the Academy radio above was migrated: the
+        // attribute selector intermittently resolves to 2 elements during
+        // hydration. This one was left on the old selector when step 3 was
+        // fixed, and it failed the full-suite run with exactly the strict-mode
+        // violation that comment predicts.
+        const coopRadio = page.getByRole('radio', { name: /^Cooperative Members/i });
         await expect(coopRadio).toBeVisible();
         await coopRadio.click();
 
