@@ -52,6 +52,22 @@ export function sanitiseForGSM7(text: string): string {
         .replace(/\u00a0/g, ' ')
         // Soft hyphen → empty (invisible character)
         .replace(/\u00ad/g, '')
+        //   #266 NAIRA SIGN -> "NGN". THIS IS THE ONE THAT MATTERED.
+        //
+        //        U+20A6 is not GSM-7, so it fell through to the '?' rule below
+        //        and every money SMS the platform sent read "?25,000". Measured:
+        //
+        //          IN : EasySales: Escrow funds of ₦25,000 for order #1234
+        //          OUT: EasySales: Escrow funds of ?25,000 for order #1234
+        //
+        //        A member told their withdrawal of "?25,000" was approved, on a
+        //        message about their own money.
+        //
+        //        Here rather than only in the templates, because it is also the
+        //        most likely character for an admin to type into an SMS
+        //        broadcast about money — the composer warned them about it,
+        //        nothing made it survive.
+        .replace(/\u20a6/g, 'NGN')
         // Trademark, registered, copyright → text equivalents
         .replace(/\u2122/g, '(TM)')
         .replace(/\u00ae/g, '(R)')
@@ -117,6 +133,9 @@ export function findNonGSM7Chars(text: string): { char: string; name: string; in
         '\u00a0': 'non-breaking space',
         '\u2122': 'trademark ( \u2122 )',
         '\u00ae': 'registered ( \u00ae )',
+        // #266 Fell through to a bare "U+20A6", which tells an admin nothing
+        // about what will happen to it.
+        '\u20a6': 'naira sign ( \u20a6 ) - will be sent as "NGN"',
     };
 
     const results: { char: string; name: string; index: number }[] = [];
@@ -134,4 +153,23 @@ export function findNonGSM7Chars(text: string): { char: string; name: string; in
         }
     }
     return results;
+}
+
+/**
+ * An amount, formatted for an SMS body.
+ *
+ *   #266 Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN" })
+ *        returns "\u20a625,000", and the naira sign is not GSM-7. Correct
+ *        everywhere else in this codebase — emails, the UI, PDFs — and wrong
+ *        in the one place the text passes through a 7-bit gate.
+ *
+ *        "NGN 25,000" reads as a person would write it and needs no rescue.
+ *        The sanitiser still maps a stray naira sign, so a template written
+ *        without this helper degrades to "NGN25,000" rather than "?25,000" —
+ *        but the helper is what makes the common path right rather than
+ *        recovered.
+ */
+export function formatNairaForSMS(amount: number): string {
+    const safe = Number.isFinite(amount) ? amount : 0;
+    return `NGN ${new Intl.NumberFormat("en-NG", { maximumFractionDigits: 0 }).format(safe)}`;
 }

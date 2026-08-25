@@ -14,7 +14,7 @@
 
 import { logger } from "@/lib/logger";
 import { normalisePhone } from "@/lib/phone";
-import { sanitiseForGSM7, getSMSInfo } from "@/lib/sms-utils";
+import { sanitiseForGSM7, getSMSInfo, formatNairaForSMS } from "@/lib/sms-utils";
 
 interface ATSendResult {
     success: boolean;
@@ -144,19 +144,21 @@ export async function sendSMS(to: string, message: string): Promise<ATSendResult
 
 /** Notify a user that their escrow funds have been released. */
 export async function smsEscrowReleased(phone: string, orderNumber: string, amount: number) {
-    const formatted = new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(amount);
+    // #266 Was Intl currency formatting, which emits the naira sign — a
+    // character sendSMS then replaced with "?" on its way out.
+    const formatted = formatNairaForSMS(amount);
     return sendSMS(phone, `EasySales: Escrow funds of ${formatted} for order #${orderNumber} have been released to your account. Log in to view your wallet.`);
 }
 
 /** Notify a user that their withdrawal request has been approved. */
 export async function smsWithdrawalApproved(phone: string, amount: number) {
-    const formatted = new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(amount);
+    const formatted = formatNairaForSMS(amount);
     return sendSMS(phone, `EasySales: Your withdrawal request of ${formatted} has been approved and is being processed. You will receive your funds within 1-2 business days.`);
 }
 
 /** Notify a user that their withdrawal request has been rejected. */
 export async function smsWithdrawalRejected(phone: string, amount: number, reason?: string) {
-    const formatted = new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(amount);
+    const formatted = formatNairaForSMS(amount);
     const reasonNote = reason ? ` Reason: ${reason}.` : "";
     return sendSMS(phone, `EasySales: Your withdrawal request of ${formatted} was declined.${reasonNote} Contact support for assistance.`);
 }
