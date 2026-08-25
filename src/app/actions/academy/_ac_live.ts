@@ -6,7 +6,19 @@ import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { serializeValue } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
+import { checkCourseAccess } from "@/lib/academy-plan";
+import { isAdmin } from "@/lib/admin-permissions";
 import type { Course, LiveSession } from "@/lib/types/academy-actions";
+
+/**
+ * The tier a session gets when its course cannot be read.
+ *
+ * checkCourseAccess treats an absent or "free" tier as open to everybody, which
+ * is right for a course that really is free and wrong for one that has been
+ * deleted or failed to load. A name no plan grants means such a session fails
+ * CLOSED (#267).
+ */
+const LOCKED_TIER = "__unresolved__";
 
 /**
  * Get live sessions
@@ -35,15 +47,71 @@ async function _getLiveSessionsAction(courseId?: string): Promise<ActionResponse
         const query = courseId ? ref.where("courseId", "==", courseId) : ref;
         const snapshot = await query.get();
 
+        /**
+         *   #267 AND A SESSION IS NOT ENTITLEMENT.
+         *
+         *        The comment above got the reasoning right — a meeting link is
+         *        a bearer credential — and then stopped one step short of the
+         *        property it needed. Closing "unauthenticated" left
+         *        "authenticated but has not bought this tier", and academy
+         *        registration is FREE: anyone can join that population in about
+         *        thirty seconds, then call this with no courseId and receive the
+         *        join link to every paid live class in the platform.
+         *
+         *        The rule already existed, with this exact argument written out.
+         *        _ac_catalog.ts's getCourseByIdAction gates paid material on
+         *        checkCourseAccess and explains why: "The tier gate is consulted
+         *        by the enrolment action, by the course page's redirect and by
+         *        the catalogue's padlock — but not here, and this is where the
+         *        content is served." This reader is also where content is
+         *        served, and it was not fixed with it.
+         *
+         *        The ROW stays and the credential goes. A learner seeing that a
+         *        live class exists is what the schedule page is for — that is
+         *        the padlock, not the content — which is the same choice
+         *        stripLockedContent makes in the catalogue.
+         */
+        const viewerIsAdmin = isAdmin(sessionResult.session.user.roles);
+        const viewerPlan = (sessionResult.session.user as any)
+            ?.serviceRegistrations?.academy?.plan;
+
+        // One read per distinct course rather than one per session: the
+        // whole-platform call returns every session, and most courses carry
+        // several.
+        const courseIds = [...new Set(snapshot.docs
+            .map((doc) => doc.data()?.courseId)
+            .filter((id): id is string => typeof id === "string" && id.length > 0))];
+
+        const tierByCourse = new Map<string, unknown>();
+        await Promise.all(courseIds.map(async (id) => {
+            const courseDoc = await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(id).get();
+            // A session whose course is gone is left with NO tier, and
+            // checkCourseAccess treats an absent tier as free — so it is
+            // recorded as a sentinel instead and refused below. Failing open on
+            // a missing record is #245.
+            tierByCourse.set(id, courseDoc.exists ? courseDoc.data()?.tier : LOCKED_TIER);
+        }));
+
         const data = snapshot.docs.map((doc) => {
             const d = doc.data();
-            return {
+            const row: Record<string, unknown> = {
                 id: doc.id,
                 ...d,
                 // Serialize Timestamps → ISO strings
                 createdAt: d.createdAt?.toDate?.()?.toISOString() ?? null,
                 scheduledAt: d.scheduledAt?.toDate?.() ?? d.scheduledAt ?? null,
             };
+
+            const opensThisTier = checkCourseAccess(viewerPlan, tierByCourse.get(d?.courseId));
+            if (!viewerIsAdmin && !opensThisTier) {
+                delete row.meetingLink;
+                delete row.customMeetingLink;
+                // The recording is the same paid artefact by another route:
+                // /academy/live lists it as `status === "ended" && recordingUrl`.
+                delete row.recordingUrl;
+            }
+
+            return row;
         }) as unknown as LiveSession[];
         return { success: true, error: null, data: serializeValue(data) };
     } catch (error) {
