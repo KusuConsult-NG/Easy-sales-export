@@ -111,3 +111,70 @@ export function checkOrderPaymentAmount(
 
     return { ok: true, overpaidBy: 0 };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Is this order total within the configured bounds?
+ *
+ *   #272 THE CEILING WAS REMOVED ON A RATIONALE THAT ONLY HELD FOR THE FLOOR.
+ *
+ *        _payment_verify.ts dropped a pair of bounds from the PAYMENT path and
+ *        explained why: "minOrderAmount is already enforced in three places in
+ *        _payment_orders.ts when the order is created, so re-checking here
+ *        prevents nothing — and an admin changing the fee configuration between
+ *        placement and payment turned a charged buyer's valid order into
+ *        'Invalid payment amount'."
+ *
+ *        Correct, and an argument about ONE bound. The sentence names
+ *        minOrderAmount and the deletion took two. The floor kept its three
+ *        placement-time checks; the ceiling had none to fall back on, so
+ *        removing the re-check removed the only enforcement it had. A scan of
+ *        every non-comment line in src found zero live readers of
+ *        maxOrderAmount afterwards.
+ *
+ *        So the ceiling belongs where that comment says bounds belong — at
+ *        PLACEMENT, beside the floor, at the same three sites — and NOT back in
+ *        the payment path, where it would reintroduce the charged-buyer failure
+ *        the removal was right to eliminate.
+ *
+ * An unconfigured maximum means NO maximum rather than zero. Failing closed is
+ * right for a permission and wrong for a limit nobody set — the opposite
+ * direction from #245, and for the opposite reason.
+ */
+export type OrderBoundsVerdict =
+    | { ok: true }
+    | { ok: false; reason: "below_minimum" | "above_maximum" | "unreadable"; message: string };
+
+export function checkOrderAmountBounds(
+    totalAmount: unknown,
+    fees: { minOrderAmount?: number; maxOrderAmount?: number },
+): OrderBoundsVerdict {
+    const total = Number(totalAmount);
+
+    // #112: the escrow amount check failed OPEN when the amount could not be
+    // read. A bound that cannot evaluate is not a bound.
+    if (!Number.isFinite(total) || total < 0) {
+        return { ok: false, reason: "unreadable", message: "Invalid order amount" };
+    }
+
+    const min = Number(fees?.minOrderAmount);
+    if (Number.isFinite(min) && total < min) {
+        return {
+            ok: false,
+            reason: "below_minimum",
+            message: `Minimum order amount is NGN ${min.toLocaleString()}`,
+        };
+    }
+
+    const max = Number(fees?.maxOrderAmount);
+    if (Number.isFinite(max) && max > 0 && total > max) {
+        return {
+            ok: false,
+            reason: "above_maximum",
+            message: `Maximum order amount is NGN ${max.toLocaleString()}. Please contact support for a larger order.`,
+        };
+    }
+
+    return { ok: true };
+}

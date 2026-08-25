@@ -17,6 +17,7 @@ import type { CartItem } from "@/lib/types/marketplace";
 import type { ActionResponse } from "@/lib/safe-action";
 import { createNotification } from "@/infrastructure/notifications/service";
 import { validateCartItems, calculateDeliveryFee, estimateCartWeight, nairaToKobo } from "@/lib/marketplace-cart";
+import { checkOrderAmountBounds } from "@/lib/order-payment-amount";
 import { escrowIdFor } from "@/lib/escrow-status";
 
 /**
@@ -58,8 +59,12 @@ async function _initializeOrderPaymentAction(
         const calculatedDeliveryFee = calculateDeliveryFee(cartItems, location || {}, fees);
         const totalAmount = subtotal + calculatedDeliveryFee;
 
-        if (totalAmount < fees.minOrderAmount) {
-            return { error: `Minimum order amount is ₦${fees.minOrderAmount}`, success: false as const, data: null };
+        // #272 Both bounds, not just the floor. maxOrderAmount was configured,
+        // was enforced in the payment path, and was lost when that pair was
+        // removed on an argument that named minOrderAmount alone.
+        const bounds = checkOrderAmountBounds(totalAmount, fees);
+        if (!bounds.ok) {
+            return { error: bounds.message, success: false as const, data: null };
         }
 
         const baseUrl = await getBaseUrl();
@@ -244,8 +249,12 @@ async function _createBankTransferOrderAction(
         const calculatedDeliveryFee = calculateDeliveryFee(cartItems, {}, fees);
         const totalAmount = subtotal + calculatedDeliveryFee;
 
-        if (totalAmount < fees.minOrderAmount) {
-            return { error: `Minimum order amount is ₦${fees.minOrderAmount}`, success: false as const, data: null };
+        // #272 Both bounds, not just the floor. maxOrderAmount was configured,
+        // was enforced in the payment path, and was lost when that pair was
+        // removed on an argument that named minOrderAmount alone.
+        const bounds = checkOrderAmountBounds(totalAmount, fees);
+        if (!bounds.ok) {
+            return { error: bounds.message, success: false as const, data: null };
         }
 
         const sellerIds = Array.from(new Set(validatedItems.map(item => item.sellerId)));
@@ -421,8 +430,10 @@ async function _createPaymentOnDeliveryOrderAction(
         const deliveryFee = calculateDeliveryFee(cartItems, deliveryAddress, fees);
         const totalAmount = subtotal + deliveryFee;
 
-        if (totalAmount < fees.minOrderAmount) { 
-            return { success: false as const, error: `Minimum order amount is ₦${fees.minOrderAmount}`, data: null };
+        // #272 Both bounds, not just the floor.
+        const bounds = checkOrderAmountBounds(totalAmount, fees);
+        if (!bounds.ok) {
+            return { success: false as const, error: bounds.message, data: null };
         }
 
         const sellerIds = Array.from(new Set(validatedItems.map((i) => i.sellerId))) as string[];
