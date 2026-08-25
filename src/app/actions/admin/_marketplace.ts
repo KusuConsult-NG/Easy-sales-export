@@ -2,7 +2,7 @@
 
 import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
 import { withFlexibleSafeAction, ActionResponse, type ActionState } from "@/lib/safe-action";
-import { revalidatePath, revalidateTag } from 'next/cache';
+import { revalidatePath, updateTag } from 'next/cache';
 import { invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from '@/lib/logger';
@@ -197,7 +197,7 @@ async function _approveSellerVerificationAction(
         try {
             revalidatePath("/marketplace", "page");
             revalidatePath("/dashboard", "page");
-            revalidateTag(`user-status-${userId}`, "page");
+            updateTag(`user-status-${userId}`);
         } catch (revalError) {
             logger.warn("Revalidation failed (expected in test/script environments):", revalError);
         }

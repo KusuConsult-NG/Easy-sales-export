@@ -52,6 +52,9 @@ jest.mock('@/lib/cache-invalidation', () => ({
 jest.mock('next/cache', () => ({
     revalidatePath: () => undefined,
     revalidateTag: () => undefined,
+    // updateTag too — a missing export is undefined at the call site, the
+    // call throws, and the action's catch reports a generic failure (#252).
+    updateTag: () => undefined,
 }));
 
 const mockRequireSession = jest.fn() as jest.Mock<any>;

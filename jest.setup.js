@@ -278,10 +278,25 @@ jest.mock('@/lib/session-guard', () => ({
     isSessionExpired: () => false,
 }));
 
-// Mock next/cache globally to prevent unstable_cache invariant issues in Jest
+// Mock next/cache globally to prevent unstable_cache invariant issues in Jest.
+//
+// updateTag is here because the module's exports must match the real module's,
+// not two thirds of them: a missing export is `undefined` at the call site, the
+// call throws, and the action's own catch turns it into a generic failure. That
+// is the same incomplete-mock shape as the supabase-db and audit-log mocks
+// above, and it is now the fifth time it has made a working path look broken.
+//
+// A NOTE ON WHAT THIS MOCK CANNOT DO (#252). Every revalidateTag call in this
+// codebase passed a second argument of "page", which is not a cacheLife profile
+// Next ships — the real function throws `Invalid profile provided "page"` when
+// the revalidation executes. This mock accepts any arguments and reports
+// nothing, so no test could ever have noticed. That is why the check lives in
+// src/__tests__/unit/revalidate-tag-profile-is-real.test.ts, which reads the
+// call sites from source and the valid profile names from Next itself.
 jest.mock('next/cache', () => ({
     unstable_cache: (fn) => fn,
     revalidateTag: jest.fn(),
+    updateTag: jest.fn(),
     revalidatePath: jest.fn(),
 }));
 

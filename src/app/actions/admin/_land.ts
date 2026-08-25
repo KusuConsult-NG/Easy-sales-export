@@ -2,7 +2,7 @@
 
 import { ZodError } from "zod";
 import { withFlexibleSafeAction, ActionResponse, type ActionState } from "@/lib/safe-action";
-import { revalidateTag } from 'next/cache';
+import { updateTag } from 'next/cache';
 import { invalidateAdminGlobalStats, invalidateServiceCache } from "@/lib/cache-invalidation";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from '@/lib/logger';
@@ -277,7 +277,7 @@ async function _verifyLandListing(
         // Clear cache
         try {
             await invalidateAdminGlobalStats();
-            revalidateTag("land-listings", "page");
+            updateTag("land-listings");
         } catch (cacheError) {
             logger.error('[Land Verification Stats] Cache clear error:', cacheError);
         }

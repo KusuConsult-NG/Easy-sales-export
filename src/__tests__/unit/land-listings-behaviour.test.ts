@@ -48,6 +48,9 @@ jest.mock('@/lib/redis', () => ({
 
 jest.mock('next/cache', () => ({
     revalidateTag: jest.fn(),
+    // updateTag too — a missing export is undefined at the call site, the
+    // call throws, and the action's catch reports a generic failure (#252).
+    updateTag: jest.fn(),
     revalidatePath: jest.fn(),
     unstable_cache: (fn: unknown) => fn,
 }));

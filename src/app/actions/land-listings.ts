@@ -11,7 +11,7 @@ import { createAdminAuditLog, logAdminAction } from "@/lib/audit-log";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { createNotificationAction } from "@/app/actions/notifications";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
-import { revalidateTag } from "next/cache";
+import { updateTag } from "next/cache";
 import { invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
@@ -299,8 +299,41 @@ async function _verifyLandListingAction(
             "land_listing"
         );
 
-        revalidateTag("land-listings", "page");
-        revalidateTag(`property-${listingId}`, "page");
+        /**
+         *   #252 revalidateTag(tag, "page") THREW, AT ALL FIFTEEN CALL SITES.
+         *
+         *        The second argument is a cacheLife PROFILE NAME. This version
+         *        of Next ships seven — default, seconds, minutes, hours, days,
+         *        weeks, max — and next.config.ts defines no custom ones. "page"
+         *        is not among them and is not a Next concept at all.
+         *
+         *        An unknown name is not ignored. revalidation-utils.js:
+         *
+         *            cacheLife = workStore?.cacheLifeProfiles[profile];
+         *            if (!cacheLife) throw new Error(
+         *                `Invalid profile provided "${profile}" ...`);
+         *
+         *        and that runs in executeRevalidates — the `finally` of the
+         *        Server Action wrapper, AFTER this function's work has
+         *        completed. So the listing really was verified, and then the
+         *        response threw. The admin saw a failure for an operation that
+         *        had succeeded, and clicked again.
+         *
+         *        updateTag is the documented replacement for immediate expiry
+         *        inside a Server Action. Immediate rather than
+         *        stale-while-revalidate on purpose: this cache exists so a
+         *        decision an admin just made is visible, and serving the old
+         *        value to the next reader one more time is the thing being
+         *        fixed. The three farm-nation ROUTE HANDLERS cannot use it —
+         *        updateTag throws outside a Server Action — so they pass an
+         *        inline `{ expire: 0 }` profile, which is validated by shape
+         *        rather than looked up by name.
+         *
+         *        revalidate-tag-profile-is-real.test.ts reads the valid names
+         *        from Next itself and fails on any new site that invents one.
+         */
+        updateTag("land-listings");
+        updateTag(`property-${listingId}`);
         await invalidateAdminGlobalStats();
 
         // A verified listing is what a buyer trusts. Who verified it, and when,
@@ -387,8 +420,8 @@ async function _rejectLandListingAction(
             reason
         );
 
-        revalidateTag("land-listings", "page");
-        revalidateTag(`property-${listingId}`, "page");
+        updateTag("land-listings");
+        updateTag(`property-${listingId}`);
         await invalidateAdminGlobalStats();
 
         await recordAdminAction({
@@ -945,8 +978,8 @@ async function _deleteLandListingAction(
             "Listing was permanently deleted"
         );
 
-        revalidateTag("land-listings", "page");
-        revalidateTag(`property-${listingId}`, "page");
+        updateTag("land-listings");
+        updateTag(`property-${listingId}`);
         await invalidateAdminGlobalStats();
 
         // Irreversible, and nothing else records that the listing ever existed.

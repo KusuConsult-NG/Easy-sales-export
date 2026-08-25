@@ -252,7 +252,7 @@ describe('it agrees with the naive version everywhere the naive version is right
         if (naiveLines < goodLines * 0.9) AFFECTED.push(rel);
     }
 
-    it('and the files where it does not is a KNOWN list — ten, not one', () => {
+    it('and the files where it does not is a KNOWN list — eleven, not one', () => {
         // I wrote this expecting csp.ts alone. It is ten files. Recording the
         // measured number rather than the assumed one is the whole point of
         // measuring.
@@ -273,7 +273,15 @@ describe('it agrees with the naive version everywhere the naive version is right
         // files, using its own filter, and asserts on its own source nowhere), so
         // no assertion is affected. It is on the list because the list is about
         // which files the naive stripper mangles, not about which are read.
-        expect(AFFECTED.length).toBeLessThanOrEqual(10);
+        // TEN became ELEVEN when revalidate-tag-profile-is-real.test.ts was
+        // added (#252). Same mechanism in its third form: that file carries a
+        // regex containing the literal '/*'-alike sequences and quotes URLs
+        // with '//' inside strings, so the naive regex opens a comment it
+        // should not and eats to the next real close. Raised rather than
+        // relaxed, for the same reason as last time — nothing strips that file,
+        // so no assertion in it is affected, and the list is about which files
+        // the naive stripper mangles rather than which are read.
+        expect(AFFECTED.length).toBeLessThanOrEqual(11);
         expect(AFFECTED).toContain('src/lib/csp.ts');
         expect(AFFECTED).toContain('src/__tests__/unit/harness-covers-adapter.test.ts');
     });
