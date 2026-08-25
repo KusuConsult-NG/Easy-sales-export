@@ -55,6 +55,21 @@ const EXTENSION_FOR_TYPE: Record<string, string> = {
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
 };
 
+/**
+ * The largest upload this platform accepts, in bytes.
+ *
+ * 50MB by default — the same figure api/upload/route.ts already enforces, so
+ * the two agree rather than being two numbers that have to be kept in step.
+ * MAX_UPLOAD_SIZE_MB overrides it. Callers with a tighter rule (certificates
+ * use MAX_CERTIFICATE_SIZE_MB, 10MB) still apply theirs; this is the ceiling
+ * none of them can exceed.
+ */
+export function uploadSizeLimitBytes(): number {
+    const configured = Number.parseInt(process.env.MAX_UPLOAD_SIZE_MB ?? "", 10);
+    const mb = Number.isFinite(configured) && configured > 0 ? configured : 50;
+    return mb * 1024 * 1024;
+}
+
 export function extensionForType(detectedMime: string | undefined): string {
     return (detectedMime && EXTENSION_FOR_TYPE[detectedMime]) || '';
 }
@@ -159,6 +174,27 @@ export async function uploadFileToStorage(
     if (!useLocalDisk && (!cloudName || !apiKey || !apiSecret)) {
         logger.error('[storage-admin] Cloudinary credentials are not configured');
         throw new Error('Upload service is not configured. Please contact support.');
+    }
+
+    //   #273 THE SIZE IS CHECKED BEFORE ANYTHING IS ALLOCATED.
+    //
+    //        `Buffer.from(await file.arrayBuffer())` on the next line pulls the
+    //        whole upload into the process heap. Six of this function's seven
+    //        callers bounded the size themselves and the seventh —
+    //        api/certificates/upload, the live path behind
+    //        /dashboard/certificates — did not, so any signed-in member could
+    //        POST a multi-gigabyte body and take the process down.
+    //
+    //        The ceiling lives HERE as well as at that route, because a
+    //        per-caller rule is a rule the eighth caller will be written
+    //        without. That is exactly how the seventh happened.
+    //
+    //        `file.size` needs no buffer, so this runs first. A guard placed
+    //        after arrayBuffer() would allocate the very thing it refuses.
+    const maxUploadBytes = uploadSizeLimitBytes();
+    if (!Number.isFinite(file.size) || file.size > maxUploadBytes) {
+        logger.warn('[storage-admin] Blocked oversized upload', { fileName: file.name, size: file.size });
+        throw new Error(`File is too large. Maximum allowed size is ${Math.round(maxUploadBytes / (1024 * 1024))}MB.`);
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());

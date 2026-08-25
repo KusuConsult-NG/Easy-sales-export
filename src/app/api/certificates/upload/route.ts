@@ -3,6 +3,8 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
+import { rateLimit } from "@/lib/rate-limiter";
+import { rateLimitConfig } from "@/lib/rate-limits.config";
 import { uploadFileToStorage, detectFileType } from "@/lib/storage-admin";
 
 /**
@@ -13,6 +15,24 @@ import { uploadFileToStorage, detectFileType } from "@/lib/storage-admin";
  * more permissive than the check.
  */
 const ALLOWED_CERTIFICATE_TYPES = ["application/pdf", "image/jpeg", "image/png"];
+
+/**
+ *   #273 The same limit actions/certificates.ts already applied. That action
+ *        reads MAX_CERTIFICATE_SIZE_MB and refuses anything larger; this route
+ *        — the live path, as its own comment about #144 says — read nothing.
+ *        Twice now on the same pair of files, for two different rules.
+ */
+function certificateSizeLimitBytes(): number {
+    return parseInt(process.env.MAX_CERTIFICATE_SIZE_MB || "10", 10) * 1024 * 1024;
+}
+
+/**
+ *   #274 rateLimitConfig.fileUpload — 20 per hour — was declared and read by
+ *        nothing. The third configured control this audit found switched off by
+ *        never being wired up. An unmetered upload endpoint is how one account
+ *        turns a size limit into a throughput problem instead.
+ */
+const uploadLimiter = rateLimit(rateLimitConfig.fileUpload);
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
@@ -28,6 +48,16 @@ export async function POST(request: NextRequest) {
             return NextResponse.json(
                 { success: false, error: "Unauthorized" },
                 { status: 401 }
+            );
+        }
+
+        // #274 Keyed on the account, not the address: the caller is
+        // authenticated here, so the account is what is being spent.
+        const limit = await uploadLimiter.check(`certificate-upload:${session.user.id}`);
+        if (!limit.success) {
+            return NextResponse.json(
+                { success: false, error: "Too many uploads. Please try again later." },
+                { status: 429 }
             );
         }
 
@@ -108,6 +138,16 @@ export async function POST(request: NextRequest) {
                 return NextResponse.json(
                     { success: false, error: "No file provided" },
                     { status: 400 }
+                );
+            }
+
+            // #273 Before arrayBuffer() below, which materialises the whole
+            // upload in the process heap.
+            const maxBytes = certificateSizeLimitBytes();
+            if (!Number.isFinite(file.size) || file.size > maxBytes) {
+                return NextResponse.json(
+                    { success: false, error: `File is too large. Maximum allowed size is ${Math.round(maxBytes / (1024 * 1024))}MB.` },
+                    { status: 413 }
                 );
             }
 
