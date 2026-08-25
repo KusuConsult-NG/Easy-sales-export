@@ -148,6 +148,52 @@ describe('#252 — revalidateTag profiles Next actually knows', () => {
         expect(bare.map(c => `${c.file}:${c.line}`)).toEqual([]);
     });
 
+    it('AND NONE IS CALLED THROUGH A CAST THAT HIDES THE MISSING ARGUMENT', () => {
+        /**
+         *   #256 A CAST HID ONE FROM THIS VERY RATCHET.
+         *
+         *        lib/cache-invalidation.ts wrapped it:
+         *
+         *            function safeRevalidateTag(tag: string, type?: string) {
+         *                try { (revalidateTag as any)(tag); } catch {}
+         *            }
+         *
+         *        The wrapper TAKES a `type` and never passes it, and the
+         *        `as any` is there to silence the type error that omitting the
+         *        second argument causes. Four callers pass "page" believing it
+         *        does something. It is the #252 defect with the compiler's
+         *        objection cast away — and the scan above never saw it, because
+         *        the source reads `revalidateTag as any)(tag)` rather than
+         *        `revalidateTag(`.
+         *
+         *        A ratchet a cast can walk past is weaker than it looks, which
+         *        is the point of this test: no cast on this function, anywhere.
+         */
+        const offenders: string[] = [];
+        for (const file of sourceFiles(join(process.cwd(), 'src'))) {
+            const text = readFileSync(file, 'utf-8');
+            if (!text.includes('revalidateTag')) continue;
+
+            text.split('\n').forEach((raw, i) => {
+                const line = raw.trim();
+                if (line.startsWith('//') || line.startsWith('*')) return;
+                // `revalidateTag as any`, `revalidateTag as never`, `<any>revalidateTag`
+                if (/revalidateTag\s+as\s+\w+|<\s*any\s*>\s*revalidateTag/.test(raw)) {
+                    offenders.push(`${file.replace(process.cwd() + '/', '')}:${i + 1}`);
+                }
+            });
+        }
+
+        expect(offenders).toEqual([]);
+    });
+
+    it('and the wrapper that had the cast passes a real profile through', () => {
+        // Pinned at the site, because a wrapper is exactly where this can come
+        // back: the caller looks correct and the argument dies one level down.
+        const text = readFileSync(join(process.cwd(), 'src/lib/cache-invalidation.ts'), 'utf-8');
+        expect(text).toContain('revalidateTag(tag, { expire: 0 })');
+    });
+
     it('updateTag is used only where it is legal — never in a route handler', () => {
         // updateTag throws if workStore.page endsWith '/route'. A route handler
         // has to use revalidateTag with an object profile instead.
