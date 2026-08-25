@@ -13,6 +13,7 @@ import { paystackPayout, payoutReference } from "@/lib/paystack-transfer";
 import { claimStatusTransition, claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
+import { waveCommission } from "@/lib/wave-commission";
 import { getLogisticsProvider } from "@/lib/logistics";
 import { runQueryWithRetry } from "@/lib/firestore-utils";
 import { ESCROW_RELEASABLE_FROM, pickOrderEscrow, escrowIdFor } from "@/lib/escrow-status";
@@ -454,9 +455,22 @@ async function _confirmDeliveryAction(orderId: string) { let sessionResult;
                 // admitting it was a copy — while wave/_wv_earnings.ts carried
                 // its own literal for the figure it SHOWS the member. Two live
                 // numbers that had to agree, kept in step by nobody.
+                //   #270 AND ONE ROUNDING RULE TOO.
+                //
+                //        This was `Math.floor(totalAmount * waveCommissionRate)`
+                //        — whole naira, rounded DOWN — while _wv_earnings.ts,
+                //        the file that SHOWS her the figure, multiplied raw and
+                //        unrounded. Both numbers appear on the same page, and
+                //        they disagreed in the direction that matters: she was
+                //        shown more than she could withdraw. Up to NGN 1 per
+                //        sale, permanently, growing with every order.
+                //
+                //        #253 unified the rate across these two files and left
+                //        the rounding in both, so they went on disagreeing
+                //        about the same money by a different route.
                 const { getWaveSettings } = await import("@/lib/system-settings");
                 const { commissionRate: waveCommissionRate } = await getWaveSettings();
-                const earningsAmount = Math.floor(currentOrder.totalAmount * waveCommissionRate);
+                const earningsAmount = waveCommission(currentOrder.totalAmount, waveCommissionRate);
 
                 // Increment persistent balance on user doc
                 await sellerRef.update({
