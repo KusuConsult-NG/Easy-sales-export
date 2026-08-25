@@ -167,13 +167,40 @@ async function _verifyCoursePaymentAction(reference: string): Promise<ActionResp
         });
 
         if (!claim.claimed) {
-            // A duplicate is a SUCCESS. The learner paid and is enrolled; saying
-            // "Payment already processed" as an error tells someone who has been
-            // charged that verification failed.
-            logger.info(`[verifyCoursePaymentAction] Payment ${reference} already claimed — reporting success.`);
-            return { success: true, error: null, data: null };
+            /**
+             *   #258 A CLAIMED PAYMENT WITH A FAILED ENROLMENT WAS PERMANENT.
+             *
+             *        This returned success on the spot, with the comment "the
+             *        learner paid and is enrolled". The first half is certain;
+             *        the second is an assumption, and it is the one that fails.
+             *
+             *        The claim is taken BEFORE the enrolment — deliberately, so
+             *        a duplicate webhook delivery cannot enrol twice. But if the
+             *        enrolment write then fails (a transient database error;
+             *        Paystack retries webhooks by design), the payment is
+             *        already claimed. The catch reports "Failed to verify
+             *        payment", the retry arrives, `claim.claimed` is false, and
+             *        this branch told the learner it had worked. They paid, and
+             *        were enrolled in nothing — permanently, because no later
+             *        call will ever claim that reference again.
+             *
+             *        Verifying beats asserting, and it is nearly free: the
+             *        enrolment below is already idempotent (`if
+             *        (!tProgressDoc.exists)`), so running it for a duplicate
+             *        costs one read when the learner really is enrolled and
+             *        repairs them when they are not.
+             *
+             *        Falling through rather than returning early is what makes
+             *        that happen — the buyer check and the price check above
+             *        have already run, so the repair cannot be used to enrol on
+             *        somebody else's reference.
+             */
+            logger.info(
+                `[verifyCoursePaymentAction] Payment ${reference} already claimed — ` +
+                `confirming the enrolment exists before reporting success.`);
         }
 
+        let enrolledNow = false;
         await db.runTransaction(async (t) => {
             // 1. Enroll User
             const progressRef = db.doc(`user_progress/${userId}/courses/${courseId}`);
@@ -191,6 +218,7 @@ async function _verifyCoursePaymentAction(reference: string): Promise<ActionResp
                     lastAccessedAt: FieldValue.serverTimestamp(),
                 };
                 t.set(progressRef, progress);
+                enrolledNow = true;
             }
 
             // 2. (The processed_payments row is written by claimPaymentOnce
@@ -198,14 +226,22 @@ async function _verifyCoursePaymentAction(reference: string): Promise<ActionResp
             //     the enrolment, so a duplicate delivery could enrol twice.)
         });
 
-        // Audit
-        await createAdminAuditLog({
-            action: "course_enrolled",
-            userId,
-            targetId: courseId,
-            targetType: "course",
-            details: `Enrolled via Paystack Ref: ${reference}`,
-        });
+        // Audit only a real enrolment.
+        //
+        // Now that a duplicate delivery falls through to the block above
+        // (#258), auditing unconditionally would write a second
+        // "course_enrolled" row for every webhook retry — an audit trail that
+        // reports work it did not do, which is the shape #129 fixed for
+        // disputes.
+        if (enrolledNow) {
+            await createAdminAuditLog({
+                action: "course_enrolled",
+                userId,
+                targetId: courseId,
+                targetType: "course",
+                details: `Enrolled via Paystack Ref: ${reference}`,
+            });
+        }
 
         revalidatePath("/academy");
         // /dashboard/academy is not a route — the academy dashboard is at
