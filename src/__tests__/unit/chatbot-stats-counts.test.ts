@@ -104,9 +104,21 @@ describe('resolvedToday means resolved, today', () => {
         // Vacuity guard: filtering on a field nothing writes is the defect this
         // audit has met repeatedly (#151), and would make the count zero rather
         // than wrong.
-        const resolve = dbLayer.slice(dbLayer.indexOf('export async function resolveSession'));
+        //
+        // This read the first 500 characters of the function and looked for the
+        // literal `resolvedAt: Timestamp.now()`. It broke the moment #247 added
+        // a not-found guard ahead of the write — the write was still there, 500
+        // characters further down. A substring window is not a fact about
+        // behaviour; the executed version of this claim lives in
+        // chatbot-admin-behaviour.test.ts ("still resolves a session that does
+        // exist, and records who did it"), which seeds a session, resolves it
+        // and asserts resolvedAt is on the stored row.
+        const resolve = dbLayer.slice(
+            dbLayer.indexOf('export async function resolveSession'),
+            dbLayer.indexOf('function inSpokenOrder'),
+        );
 
-        expect(resolve.slice(0, 500)).toContain('resolvedAt: Timestamp.now()');
+        expect(resolve).toContain('resolvedAt: Timestamp.now()');
     });
 
     it('no longer filters on lastMessageAt', () => {

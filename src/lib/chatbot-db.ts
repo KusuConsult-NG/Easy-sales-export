@@ -97,13 +97,41 @@ export function saveMessageAsync(
     role: "user" | "assistant",
     content: string,
     module: ChatbotModule,
-    isEscalation: boolean
+    isEscalation: boolean,
+    /**
+     * When this message was said, in epoch ms.
+     *
+     *   #248 THE ASSISTANT'S REPLY COULD SORT ABOVE THE QUESTION IT ANSWERED.
+     *
+     *        Both halves of a turn are saved by two calls made one line apart,
+     *        and each used to stamp its own Timestamp.now(). That has
+     *        MILLISECOND precision (firestore-compat), and the second closure
+     *        runs as soon as the first awaits — microseconds later. The two rows
+     *        therefore carried the SAME timestamp, essentially always, and the
+     *        readers order on `timestamp` alone. The tie was broken by whatever
+     *        the database returned first: an admin reading an escalated
+     *        complaint could be shown the answer above the question, and
+     *        getRecentSessionTurns replays that same order to the model as
+     *        conversation history.
+     *
+     *        The caller already knew the order — the message ids are built from
+     *        `Date.now()` and `Date.now() + 1`. Nothing used it. Passing the
+     *        value the ids were derived from makes the two rows distinct.
+     *
+     * Optional so the fallback stays Timestamp.now() for any caller that has no
+     * particular moment in mind.
+     */
+    timestampMs?: number,
+    /** Recorded only when the session row has to be reconstituted — see below. */
+    userEmail?: string,
 ): void {
     // Intentionally not awaited — fire-and-forget
     (async () => {
         try {
             const db = getAdminDb();
-            const now = Timestamp.now();
+            const now = timestampMs === undefined
+                ? Timestamp.now()
+                : Timestamp.fromMillis(timestampMs);
 
             // Write message
             await db.collection(COLLECTIONS.CHATBOT_MESSAGES).doc(messageId).set({
@@ -131,7 +159,57 @@ export function saveMessageAsync(
             if (tags.length > 0) {
                 updatePayload.tags = FieldValue.arrayUnion(...tags);
             }
-            await sessionRef.update(updatePayload);
+
+            /**
+             *   #246 A FAILED SESSION CREATE ORPHANED EVERY MESSAGE IN THAT
+             *        CONVERSATION.
+             *
+             *        This was `sessionRef.update(updatePayload)`. An update
+             *        against a missing row is a documented SILENT NO-OP in this
+             *        adapter — zero rows matched, no error raised — and
+             *        createChatbotSession swallows its own failure by design
+             *        (see the file header: a database error never surfaces in
+             *        the user's chat). So one transient error at create time
+             *        produced a conversation that:
+             *
+             *          - never appeared in the admin panel, which lists SESSIONS;
+             *          - never counted as escalated, however plainly the user
+             *            asked for a human, because `escalated: true` went to
+             *            the row that was not there;
+             *          - was never deleted by the 90-day GDPR purge, which finds
+             *            messages THROUGH their session. No session row means
+             *            nothing looks for those messages again — unreachable,
+             *            undeletable, retained past the retention period.
+             *
+             *        That last one is #191 arriving by a different road.
+             *
+             *        The row is rebuilt instead. The read is what makes it safe
+             *        to distinguish "increment the existing session" from
+             *        "this session is missing its document": a bare set(merge)
+             *        would reset `startedAt` on every single message.
+             */
+            const existing = await sessionRef.get();
+            if (existing.exists) {
+                await sessionRef.update(updatePayload);
+            } else {
+                logger.warn("[chatbot-db] session document missing — rebuilding it", { sessionId });
+                await sessionRef.set({
+                    id: sessionId,
+                    userId,
+                    userEmail: userEmail ?? null,
+                    module,
+                    startedAt: now,
+                    resolved: false,
+                    resolvedBy: null,
+                    resolvedAt: null,
+                    escalated: false,
+                    tags: [],
+                    // lastMessageAt, the count and any escalation/tags from this
+                    // message go on top. merge, so a session that raced into
+                    // existence between the read and here keeps its own fields.
+                    ...updatePayload,
+                }, { merge: true });
+            }
         } catch (err) {
             logger.error("[chatbot-db] Failed to save message:", err);
         }
@@ -140,14 +218,42 @@ export function saveMessageAsync(
 
 /**
  * Mark a session as resolved by an admin.
+ *
+ *   #247 RESOLVING A SESSION THAT DOES NOT EXIST REPORTED SUCCESS.
+ *
+ *        This was a bare `.update()`, and an update against a missing row is a
+ *        SILENT NO-OP in this adapter. So it returned { success: true } for any
+ *        id at all: the admin page showed the resolve as having worked, and the
+ *        caller wrote "Admin resolved chatbot session <id>" into the permanent
+ *        audit record for a session nobody had resolved.
+ *
+ *        The realistic way in is not a typo. It is an escalated session the
+ *        90-day purge has already deleted, still open in a stale admin tab —
+ *        the click succeeds, and the escalation is neither resolved nor still
+ *        listed as needing attention.
+ *
+ *        `alreadyResolved` exists so the caller can skip the audit row for a
+ *        second click. Overwriting resolvedBy would name the wrong admin in the
+ *        record, which is the defect this audit already fixed once for disputes.
  */
 export async function resolveSession(
     sessionId: string,
     adminId: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; alreadyResolved?: boolean }> {
     try {
         const db = getAdminDb();
-        await db.collection(COLLECTIONS.CHATBOT_SESSIONS).doc(sessionId).update({
+        const ref = db.collection(COLLECTIONS.CHATBOT_SESSIONS).doc(sessionId);
+
+        const snap = await ref.get();
+        if (!snap.exists) {
+            return { success: false, error: "Chat session not found" };
+        }
+        if (snap.data()?.resolved === true) {
+            // The first resolver stands.
+            return { success: true, alreadyResolved: true };
+        }
+
+        await ref.update({
             resolved: true,
             resolvedBy: adminId,
             resolvedAt: Timestamp.now(),
@@ -157,6 +263,27 @@ export async function resolveSession(
         logger.error("[chatbot-db] Failed to resolve session:", err);
         return { success: false, error: err.message };
     }
+}
+
+/**
+ * Put one turn's two rows in the order they were said.
+ *
+ * Ordering by `timestamp` alone is not enough for rows written BEFORE #248: the
+ * question and its answer share a millisecond, so the tie is broken by whatever
+ * the database returns first. Within a single millisecond the user's message
+ * always precedes the assistant's — the reply is generated in response to it —
+ * so that is the tiebreak, applied after the query rather than in it, because
+ * it exists to correct data already stored.
+ */
+function inSpokenOrder<T extends { role?: string; timestamp?: any }>(rows: T[]): T[] {
+    const ms = (t: any): number => {
+        if (!t) return 0;
+        if (typeof t?.toDate === "function") return t.toDate().getTime();
+        const d = new Date(t);
+        return Number.isNaN(d.getTime()) ? 0 : d.getTime();
+    };
+    const rank = (r?: string) => (r === "user" ? 0 : 1);
+    return [...rows].sort((a, b) => ms(a.timestamp) - ms(b.timestamp) || rank(a.role) - rank(b.role));
 }
 
 // ─── Admin Queries ────────────────────────────────────────────────────────
@@ -268,9 +395,12 @@ export async function getRecentSessionTurns(
             .limit(limit)
             .get();
 
-        return snapshot.docs
-            .map((d: any) => d.data())
-            .reverse()
+        // inSpokenOrder rather than .reverse(): the query takes the most recent
+        // N descending, so it has to be flipped, and a tie in `timestamp` — the
+        // shape of every turn written before #248 — has to be broken the same
+        // way the admin transcript breaks it. This context is replayed to the
+        // model, so an inverted pair tells it the user answered its question.
+        return inSpokenOrder(snapshot.docs.map((d: any) => d.data()))
             .filter((m: any) => m.role === "user" || m.role === "assistant")
             .map((m: any) => ({ role: m.role, content: String(m.content ?? "") }));
     } catch (err) {
@@ -327,16 +457,21 @@ export async function getChatThread(
             };
         }
 
-        const messages: ChatbotMessageRow[] = messagesSnapshot.docs.map(doc => {
-            const d = doc.data();
-            return {
-                id: doc.id,
-                role: d.role,
-                content: d.content,
-                timestamp: d.timestamp?.toDate() ?? new Date(),
-                isEscalation: d.isEscalation ?? false,
-            };
-        });
+        // inSpokenOrder over the query's own ascending order: within a single
+        // millisecond — which is how every turn written before #248 is stored —
+        // `orderBy("timestamp")` leaves the tie to the database, and an admin
+        // reading an escalated complaint can be shown the answer above the
+        // question.
+        const rows = messagesSnapshot.docs.map(
+            doc => ({ ...doc.data(), id: doc.id }) as Record<string, any>);
+
+        const messages: ChatbotMessageRow[] = inSpokenOrder(rows).map(d => ({
+            id: d.id,
+            role: d.role,
+            content: d.content,
+            timestamp: d.timestamp?.toDate?.() ?? new Date(d.timestamp ?? Date.now()),
+            isEscalation: d.isEscalation ?? false,
+        }));
 
         return { messages, session };
     } catch (err) {
@@ -362,8 +497,6 @@ export async function purgeChatbotDataOlderThan(days: number): Promise<number> {
             .where("lastMessageAt", "<=", threshold)
             .limit(400)
             .get();
-
-        if (oldSessions.empty) return 0;
 
         /**
          * THE MESSAGES OUTLIVED THE PURGE THAT WAS SUPPOSED TO DELETE THEM.
@@ -437,6 +570,44 @@ export async function purgeChatbotDataOlderThan(days: number): Promise<number> {
             pendingOps++;
             count++;
             await flushIfFull();
+        }
+
+        if (pendingOps > 0) {
+            await pending.commit();
+            pending = db.batch();
+            pendingOps = 0;
+        }
+
+        /**
+         * And the messages no session can reach (#246).
+         *
+         * The loop above finds messages THROUGH their session. A message whose
+         * session document is missing — which is what a failed
+         * createChatbotSession used to produce, and what a run interrupted
+         * between deleting a session and draining its messages produces — is
+         * unreachable by that route, so it was retained past the retention
+         * period, permanently.
+         *
+         * A message carries its own `timestamp`, so it can be selected on its
+         * own terms. Doing that unconditionally makes the sweep independent of
+         * whether any session row survived, which is the property that was
+         * missing. Bounded to one page per run: this is a backstop for a
+         * population that should be empty, not the main path.
+         */
+        const strandedMessages = await db
+            .collection(COLLECTIONS.CHATBOT_MESSAGES)
+            .where("timestamp", "<=", threshold)
+            .limit(CHUNK)
+            .get();
+
+        if (!strandedMessages.empty) {
+            logger.warn(
+                `[chatbot-db] purging ${strandedMessages.docs.length} message(s) past retention with no reachable session`);
+            for (const msgDoc of strandedMessages.docs) {
+                pending.delete(msgDoc.ref);
+                pendingOps++;
+                await flushIfFull();
+            }
         }
 
         if (pendingOps > 0) await pending.commit();
