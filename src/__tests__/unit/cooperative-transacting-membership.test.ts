@@ -115,12 +115,21 @@ describe('the transacting rule', () => {
     });
 
     it('and reading `status` for the rows that carry it instead', () => {
-        // joinCooperativeAction writes `status: "active"` and no
-        // membershipStatus. A member is not refused over which field their row
-        // happens to use.
+        // Some member rows carry `status` rather than `membershipStatus` — the
+        // legacy imports, and joinCooperativeAction, which writes both. A member
+        // is not refused over which field their row happens to use.
         expect(canTransactAsMember({ status: 'active' })).toBe(true);
+
+        // Asserted as "the writer still uses the field" rather than by pinning
+        // the literal `status: "active"`. That pin named a defect: #233 found
+        // joinCooperativeAction writing an ACTIVE membership with no fee, no
+        // onboarding and no admin, which checkModuleAccess Layer 2.6 and this
+        // very function both honoured. The row is written "pending" now. The
+        // premise this test rests on — that rows exist carrying `status` — is
+        // unchanged, and pinning the old value would have made the fix look
+        // like a regression.
         expect(code('src/app/actions/cooperative/_coop_registration.ts'))
-            .toContain('status: "active"');
+            .toMatch(/\bstatus: "pending"/);
     });
 
     it('tolerating casing and whitespace, which a JSONB row can carry', () => {
