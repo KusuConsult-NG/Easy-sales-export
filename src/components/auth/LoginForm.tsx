@@ -9,6 +9,7 @@ import { Mail, Lock, AlertCircle, Eye, EyeOff, CheckCircle, ArrowRight, Loader2,
 import { getPostLoginRedirect, preValidateLoginAction } from "@/app/actions/auth";
 import { useToast } from "@/contexts/ToastContext";
 import LoadingButton from "@/components/ui/LoadingButton";
+import { isSafeInternalPath, safeInternalPath } from '@/lib/safe-redirect';
 
 /**
  * Universal Login Form
@@ -28,8 +29,11 @@ export default function LoginForm({ defaultCallbackUrl = "/dashboard" }: { defau
     // A stale cookie from the production domain (https://easysalesexport.com) can
     // bleed into localhost sessions and cause NextAuth to redirect externally,
     // which the browser rejects and shows as "Invalid email or password".
+    // isSafeInternalPath, not startsWith("/") — see lib/safe-redirect.ts (#262).
+    // "//evil.example" starts with a slash and is ABSOLUTE to a browser, and
+    // this value reaches window.location.assign below.
     const rawCallback = searchParams.get("callbackUrl") || defaultCallbackUrl;
-    const callbackUrl = rawCallback.startsWith("/") ? rawCallback : defaultCallbackUrl;
+    const callbackUrl = safeInternalPath(rawCallback, defaultCallbackUrl);
     const errorParam = searchParams.get("error");
 
     const { showToast } = useToast();
@@ -80,7 +84,7 @@ export default function LoginForm({ defaultCallbackUrl = "/dashboard" }: { defau
                 redirect: false,
                 // Explicit relative callbackUrl prevents NextAuth from reading the
                 // stale `authjs.callback-url` cookie which may point to the production domain.
-                callbackUrl: callbackUrl.startsWith("/") ? callbackUrl : "/",
+                callbackUrl: safeInternalPath(callbackUrl, "/"),
             });
 
             if (result?.error) {
@@ -136,8 +140,10 @@ export default function LoginForm({ defaultCallbackUrl = "/dashboard" }: { defau
             const rawCallback = currentParams.get('callbackUrl');
 
             // Only honour callback if it's an internal path with no error param
-            const isValidCallback = rawCallback &&
-                rawCallback.startsWith('/') &&
+            // The exposed one: rawCallback comes from the query string an
+            // attacker writes, and the branches below hand it straight to
+            // window.location.assign (#262).
+            const isValidCallback = isSafeInternalPath(rawCallback) &&
                 !rawCallback.includes('error=');
 
             if (isValidCallback) {

@@ -19,6 +19,7 @@ import { revalidatePath } from "next/cache";
 import { rateLimit, getActionClientIp } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 import { normalisePhone, phoneLookupVariants } from '@/lib/phone';
+import { isSafeInternalPath } from '@/lib/safe-redirect';
 
 const loginLimiter = rateLimit(rateLimitConfig.login);
 
@@ -763,7 +764,9 @@ export async function registerAction(prevState: any, formData: FormData) { const
         const callbackUrl = formData.get("callbackUrl") as string;
         let redirectUrl = "/auth/get-started";
         
-        if (callbackUrl && callbackUrl !== "/dashboard" && callbackUrl.startsWith("/")) {
+        // isSafeInternalPath, not startsWith("/") — "//evil.example" passes the
+        // latter and is absolute to a browser (#262).
+        if (callbackUrl !== "/dashboard" && isSafeInternalPath(callbackUrl)) {
             redirectUrl = callbackUrl;
         } else {
             try { const { headers } = await import("next/headers");

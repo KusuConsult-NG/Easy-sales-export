@@ -24,6 +24,7 @@ import {
     hasExistingReview,
     isReviewableOrderStatus,
 } from "@/lib/product-rating";
+import { isSafeInternalPath } from "@/lib/safe-redirect";
 
 const reviewSchema = z.object({ rating: z.number().min(1, "Rating must be at least 1").max(5, "Rating cannot exceed 5"),
     comment: z.string().trim().min(20, "Review must be at least 20 characters").max(500, "Review must not exceed 500 characters") });
@@ -43,8 +44,10 @@ function isSafeImageReference(value: string): boolean {
     const trimmed = value.trim();
     if (!trimmed) return false;
 
-    if (trimmed.startsWith("//")) return false;
-    if (trimmed.startsWith("/")) return true;
+    // The shared rule for the on-site case (#262) — it also refuses the
+    // backslash authority and the leading control characters a browser strips,
+    // which this copy did not.
+    if (trimmed.startsWith("/")) return isSafeInternalPath(trimmed);
 
     try {
         return new URL(trimmed).protocol === "https:";
