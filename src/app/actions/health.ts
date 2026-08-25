@@ -182,8 +182,20 @@ export async function getFeatureTogglesAction(): Promise<ActionResponse<Record<s
 
         return { success: true as const, data: featureToggles, error: null };
     } catch (e: any) {
-        logger.error("Failed to fetch feature toggles:", e);
-        // Fallback to defaults on error
-        return { success: true as const, data: DEFAULT_TOGGLES, error: null };
+        // A READ FAILURE IS NOT A SET OF TOGGLES (#245).
+        //
+        // This returned `success: true` with DEFAULT_TOGGLES, so the caller
+        // could not tell "these are the real toggles" from "the database is
+        // down". Seven of those defaults are true, so a transient error
+        // presented features an admin had DISABLED as enabled — and said it
+        // had succeeded.
+        //
+        // Both consumers (the wallet page and the seller dashboard) already
+        // guard with `if (res.success && res.data)` and start from `{}`, so an
+        // honest failure leaves every toggle falsy — closed, which is the safe
+        // direction for a kill switch. See resolveToggle in
+        // lib/feature-toggles.ts for the rule the single-toggle readers share.
+        logger.error("Failed to fetch feature toggles — reporting failure rather than defaults:", e);
+        return { success: false as const, error: e?.message || "Failed to fetch feature toggles", data: null };
     }
 }

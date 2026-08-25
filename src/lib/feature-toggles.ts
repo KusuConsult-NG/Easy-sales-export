@@ -54,6 +54,49 @@ export const DEFAULT_TOGGLES: Record<string, boolean> = {
 };
 
 /**
+ * What a toggle is worth, given what the database said.
+ *
+ *   #245 A KILL SWITCH FAILED OPEN ON A DATABASE ERROR.
+ *
+ *        Both readers — getFeatureToggle and hasFeatureAccess in
+ *        actions/feature-toggles.ts, plus getFeatureTogglesAction in
+ *        actions/health.ts — caught any read failure and returned
+ *        DEFAULT_TOGGLES. Seven of the defaults above are `true`, so an admin
+ *        who had DISABLED one of them — farm_nation_purchases, escrow_messaging,
+ *        cooperative_loans, land_verification, academy_courses, wave_program,
+ *        digital_id_system — had that decision silently reversed by any
+ *        transient database error.
+ *
+ *        A kill switch exists for the moment something is going wrong. A
+ *        database error is that moment. Turning the feature back ON then is
+ *        precisely backwards, and it is invisible: the catch logs and returns a
+ *        plausible boolean, so nothing downstream can tell the difference
+ *        between "the admin left it on" and "we could not ask".
+ *
+ *        The money toggles were safe only by luck of their defaults being
+ *        false (wallet_deposits, wallet_withdrawals, wave_withdrawals). Safety
+ *        that depends on which way a default happens to point is not a control.
+ *
+ * The three cases, and only the third changes:
+ *
+ *   a stored value        → that value, always. The admin's decision.
+ *   no document           → DEFAULT_TOGGLES. Legitimate: never configured.
+ *   THE READ FAILED       → false. We do not know, so we do not enable.
+ *
+ * One rule, one place, because there are three readers — the duplication
+ * pattern this audit keeps finding (see lib/storage-backend.ts,
+ * lib/latest-application.ts, lib/registration-progress.ts).
+ */
+export function resolveToggle(
+    featureName: string,
+    outcome: { stored?: boolean | undefined; readFailed?: boolean },
+): boolean {
+    if (outcome.readFailed) return false;
+    if (typeof outcome.stored === "boolean") return outcome.stored;
+    return DEFAULT_TOGGLES[featureName] ?? false;
+}
+
+/**
  * Feature categories for organization
  */
 export const FEATURE_CATEGORIES = {
