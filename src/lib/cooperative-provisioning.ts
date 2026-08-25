@@ -49,6 +49,7 @@ export async function autoProvisionZereCooperative(userId: string, email: string
         
         if (needsWrite) {
             logger.info(`[autoProvisionZereCooperative] Auto-provisioning cooperative membership for ${email}`);
+            const existingCreatedAt = memberDoc.exists ? memberDoc.data()?.createdAt : undefined;
             await memberRef.set({
                 userId,
                 firstName: "Zere",
@@ -63,7 +64,7 @@ export async function autoProvisionZereCooperative(userId: string, email: string
                 onboardingCompleted: true,
                 onboardingCompletedAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
-                createdAt: memberDoc.exists ? memberDoc.data()?.createdAt : FieldValue.serverTimestamp()
+                createdAt: existingCreatedAt ?? FieldValue.serverTimestamp()
             }, { merge: true });
         }
         
@@ -134,6 +135,34 @@ export async function autoProvisionLegacyCooperative(userId: string, userData: a
             const nameParts = resolvedName.split(/\s+/);
             const firstName = userData.firstName || nameParts[0] || "Cooperative";
             const lastName = userData.lastName || (nameParts.length > 1 ? nameParts[nameParts.length - 1] : "Member");
+
+            /**
+             *   #257 RE-PROVISIONING WROTE `createdAt: undefined` OVER AN
+             *        EXISTING ROW.
+             *
+             *        Both functions in this file carried:
+             *
+             *            createdAt: memberDoc.exists
+             *                ? memberDoc.data()?.createdAt
+             *                : FieldValue.serverTimestamp()
+             *
+             *        The ternary exists to PRESERVE the original creation date
+             *        on a re-run, which is right. But `?.createdAt` is
+             *        `undefined` for a row that exists WITHOUT one — and legacy
+             *        rows are exactly that, because the import script and the
+             *        older provisioning paths did not all write it. So a re-run
+             *        sent `createdAt: undefined` and the membership ended up
+             *        with no creation date rather than acquiring one.
+             *
+             *        `createdAt` is a sort key. This audit has already found 34
+             *        "most recent" sorts whose key is 0 for the shape the app
+             *        writes (#49); a member row with no createdAt sorts to the
+             *        bottom of the admin member list permanently, which is
+             *        where a member nobody can find lives.
+             *
+             *        Preserve what is there, supply what is missing.
+             */
+            const existingCreatedAt = memberDoc.exists ? memberDoc.data()?.createdAt : undefined;
             
             await memberRef.set({
                 userId,
@@ -148,7 +177,7 @@ export async function autoProvisionLegacyCooperative(userId: string, userData: a
                 paymentStatus: "completed",
                 onboardingCompleted: false,
                 updatedAt: FieldValue.serverTimestamp(),
-                createdAt: memberDoc.exists ? memberDoc.data()?.createdAt : FieldValue.serverTimestamp()
+                createdAt: existingCreatedAt ?? FieldValue.serverTimestamp()
             }, { merge: true });
         }
     } catch (error) {
