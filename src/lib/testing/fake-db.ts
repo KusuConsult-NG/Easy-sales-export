@@ -772,7 +772,46 @@ export function installFakeDb(seed: Record<string, Record<string, Doc>> = {}): F
         const id = `fake-${++idCounter}`;
         generatedIds.push(id);
         doSet(collection, id, data ?? {});
-        return Promise.resolve({ id });
+
+        /**
+         * A USABLE DocumentReference, not `{ id }`.
+         *
+         * supabase-db.ts's add() is `const ref = this.doc(id); await ref.set(data);
+         * return ref` — a full reference. This returned an object with an id and
+         * nothing else, so the extremely ordinary
+         *
+         *     const docRef = await col.add({...});
+         *     await docRef.update({ confirmationSent: true });
+         *
+         * threw "ref.update is not a function", the caller's try/catch swallowed
+         * it, and everything AFTER that line silently did not happen. In
+         * briefing.ts that is the WhatsApp invite, so a passing-looking test
+         * reported an invite was never sent by code that sends it (#268).
+         *
+         * The TENTH time an incomplete harness has made working code look
+         * broken in this audit, and the third in THIS file — the comment above
+         * on subcollections names the missing collection().add() and the
+         * missing audit-log exports as the first two. Returning a real
+         * reference rather than a shape that happens to satisfy the next line
+         * anyone wrote is what stops there being an eleventh.
+         */
+        return Promise.resolve({
+            id,
+            __collection: collection,
+            update: (patch: Doc) => {
+                doSet(collection, id, patch ?? {}, true);
+                return Promise.resolve();
+            },
+            set: (next: Doc, opts?: { merge?: boolean }) => {
+                doSet(collection, id, next ?? {}, opts?.merge);
+                return Promise.resolve();
+            },
+            get: () => Promise.resolve(docSnapshot(id, collectionOf(collection).get(id), collection)),
+            delete: () => {
+                collectionOf(collection).delete(id);
+                return Promise.resolve();
+            },
+        });
     });
 
     // ── transactions: NO LOCK, deliberately ──────────────────────────────────
