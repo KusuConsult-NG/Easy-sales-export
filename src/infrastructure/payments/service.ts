@@ -737,14 +737,41 @@ export async function processCooperativeRegistration(reference: string, amount: 
 
         // Check if onboarding was already submitted
         const memberDoc = await memberRef.get();
-        const onboardingCompleted = memberDoc.exists && memberDoc.data()?.onboardingCompleted === true;
+        const memberData = memberDoc.exists ? memberDoc.data() : null;
+        const onboardingCompleted = memberDoc.exists && memberData?.onboardingCompleted === true;
+
+        // PAYING THE FEE AGAIN DID NOT UNDO A SUSPENSION.
+        //
+        // A suspended member satisfies `onboardingCompleted` — they paid to
+        // join and finished the form — so this fulfilment wrote
+        // `membershipStatus: "active"` back over the suspension and re-granted
+        // `cooperative_member` below. The academy webhook had the identical
+        // fault (#231) and this is its cooperative twin: the registration API
+        // route's duplicate guard read `cooperativeMembershipId`, a field
+        // NOTHING writes, so an existing member could reach Paystack and pay
+        // the fee a second time — and an admin's Suspend was reversible for
+        // ₦10,000.
+        //
+        // The money is still claimed, still ledgered, still recorded on the
+        // member row so support can see and refund it. Only the ACTIVATION and
+        // the role do not happen while a decision stands.
+        const decidedAgainst = isDecidedAgainst(memberData?.membershipStatus)
+            || isDecidedAgainst(memberData?.status);
+
+        if (decidedAgainst) {
+            logger.warn(
+                "[Paystack Webhook] Cooperative registration fee received for a membership decided against — "
+                + "recording the payment, NOT re-activating. Refund or manual review required.",
+                { reference, userId, membershipStatus: memberData?.membershipStatus, amount },
+            );
+        }
 
         await memberRef.set({
             userId,
             paymentStatus: "completed",
             paymentReference: reference,
             membershipTier: normalisedTier,
-            membershipStatus: onboardingCompleted ? "active" : "pending",
+            ...(decidedAgainst ? {} : { membershipStatus: onboardingCompleted ? "active" : "pending" }),
             paymentVerifiedAt: paymentTimestamp,
             createdAt: paymentTimestamp,
             updatedAt: FieldValue.serverTimestamp(),
@@ -757,14 +784,18 @@ export async function processCooperativeRegistration(reference: string, amount: 
                     paymentReference: reference,
                     paymentAmount: amount,
                     membershipTier: normalisedTier,
-                    status: onboardingCompleted ? "active" : "legacy_pending_onboarding",
+                    // Omitted entirely when a decision stands — writing any
+                    // status here would clear the suspension from the user
+                    // document, which is what Layer 2 of checkModuleAccess
+                    // reads first.
+                    ...(decidedAgainst ? {} : { status: onboardingCompleted ? "active" : "legacy_pending_onboarding" }),
                     paidAt: paymentTimestamp,
                 }
             },
             updatedAt: FieldValue.serverTimestamp(),
         };
 
-        if (onboardingCompleted) {
+        if (onboardingCompleted && !decidedAgainst) {
             userUpdatePayload.roles = FieldValue.arrayUnion("cooperative_member");
             userUpdatePayload.isVerified = true;
             userUpdatePayload.serviceRegistrations.cooperatives.activatedAt = paymentTimestamp;
