@@ -268,3 +268,110 @@ describe('#240 — the register API route refuses before any money moves', () =>
         expect(String(body.error ?? '')).not.toMatch(/already have|not currently active/i);
     });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#240 — the client-verify route does not re-activate either', () => {
+    /**
+     * The race partner of the webhook above: whichever arrives first fulfils,
+     * so both need the same rule or the RACE decides whether a suspension
+     * survives. Its lost-claim sync had a quieter copy of the fault too —
+     * syncAlreadyProcessed wrote `status: "legacy_pending_onboarding"` over
+     * "suspended" on the user document.
+     */
+    const paystackOk = () => {
+        (global as any).fetch = jest.fn(async () => ({
+            ok: true,
+            json: async () => ({
+                status: true,
+                data: {
+                    status: 'success',
+                    amount: FEE * 100,
+                    metadata: { userId: MEMBER, membershipId: MEMBER },
+                },
+            }),
+        }));
+    };
+
+    const post = async (reference = 'PSK-COOP-9') => {
+        const { POST } = await import('@/app/api/cooperative/verify-payment/route');
+        const req = new Request('http://localhost/api/cooperative/verify-payment', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ reference }),
+        });
+        const res = await POST(req as never);
+        return { status: res.status, body: await res.json() as any };
+    };
+
+    /** Suspended, and the FEE NOT yet recorded — so the fast path does not swallow the request. */
+    const seedSuspendedUnpaid = () => {
+        store.seed(USERS, MEMBER, {
+            email: 'ada@example.com', roles: ['general_user'],
+            serviceRegistrations: { cooperatives: { status: 'suspended' } },
+        });
+        store.seed(MEMBERS, MEMBER, {
+            userId: MEMBER, membershipStatus: 'suspended',
+            paymentStatus: 'pending', onboardingCompleted: true,
+            createdAt: '2026-01-01T00:00:00.000Z',
+        });
+    };
+
+    beforeEach(() => {
+        process.env.PAYSTACK_SECRET_KEY = 'sk_test_key';
+        paystackOk();
+    });
+
+    it('RECORDS THE PAYMENT BUT LEAVES THE SUSPENSION STANDING', async () => {
+        seedSuspendedUnpaid();
+
+        const { status } = await post();
+
+        expect(status).toBe(200);
+        expect(readMember().membershipStatus).toBe('suspended');
+        expect(readMember().paymentStatus).toBe('completed');
+        expect(readUser().serviceRegistrations.cooperatives.status).toBe('suspended');
+        expect(readUser().roles).not.toContain('cooperative_member');
+    });
+
+    it('AND THE LOST-CLAIM SYNC DOES NOT SOFTEN IT TO legacy_pending_onboarding', async () => {
+        seedSuspendedUnpaid();
+        claimPaymentOnce.mockImplementation(async () => ({ claimed: false }));
+
+        const { status } = await post();
+
+        expect(status).toBe(200);
+        // Was: the sync wrote "legacy_pending_onboarding" over "suspended".
+        expect(readUser().serviceRegistrations.cooperatives.status).toBe('suspended');
+        expect(readUser().roles).not.toContain('cooperative_member');
+    });
+
+    it('still activates an onboarded member whose fee just cleared', async () => {
+        store.seed(USERS, MEMBER, { email: 'ada@example.com', roles: ['general_user'] });
+        store.seed(MEMBERS, MEMBER, {
+            userId: MEMBER, membershipStatus: 'pending',
+            paymentStatus: 'pending', onboardingCompleted: true,
+        });
+
+        const { status } = await post();
+
+        expect(status).toBe(200);
+        expect(readMember().membershipStatus).toBe('active');
+        expect(readUser().roles).toContain('cooperative_member');
+    });
+
+    it("still refuses a reference that is somebody else's payment", async () => {
+        store.seed(USERS, MEMBER, { email: 'ada@example.com', roles: ['general_user'] });
+        (global as any).fetch = jest.fn(async () => ({
+            ok: true,
+            json: async () => ({
+                status: true,
+                data: { status: 'success', amount: FEE * 100, metadata: { userId: 'someone-else' } },
+            }),
+        }));
+
+        const { status } = await post();
+
+        expect(status).not.toBe(200);
+        expect(store.get(MEMBERS, MEMBER)?.paymentStatus).not.toBe('completed');
+    });
+});

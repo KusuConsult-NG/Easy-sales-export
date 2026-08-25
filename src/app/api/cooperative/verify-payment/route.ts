@@ -11,6 +11,7 @@ import { rateLimitConfig } from '@/lib/rate-limits.config';
 import { normalizeUserDoc } from "@/lib/schema-normalizer";
 import { claimPaymentOnce } from "@/lib/wallet-ledger";
 import { paystackBaseUrl } from "@/lib/paystack-host";
+import { isDecidedAgainst } from "@/lib/registration-progress";
 
 // Rate limiter for payment verification (prevent fraud/double-verification)
 const paymentVerifyLimiter = rateLimit(rateLimitConfig.payment);
@@ -27,6 +28,17 @@ const paymentVerifyLimiter = rateLimit(rateLimitConfig.payment);
  */
 async function syncAlreadyProcessed(userId: string, reference: string, amount: number | null) {
     const membershipRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
+
+    // The lost-claim sync must not soften a decision either: writing
+    // "legacy_pending_onboarding" over "suspended" on the user document clears
+    // the suspension from the copy Layer 2 of checkModuleAccess reads first,
+    // and shows the member as provisional on every admin screen. Same rule as
+    // the fulfilment below (#240).
+    const memberSnap = await membershipRef.get();
+    const memberData = memberSnap.exists ? (memberSnap.data() ?? {}) : {};
+    const decidedAgainst = isDecidedAgainst(memberData.membershipStatus)
+        || isDecidedAgainst(memberData.status);
+
     await Promise.all([
         membershipRef.set({
             userId,
@@ -41,7 +53,7 @@ async function syncAlreadyProcessed(userId: string, reference: string, amount: n
                     paymentStatus: "completed",
                     paymentReference: reference,
                     paymentAmount: amount,
-                    status: "legacy_pending_onboarding",
+                    ...(decidedAgainst ? {} : { status: "legacy_pending_onboarding" }),
                 }
             },
             updatedAt: FieldValue.serverTimestamp(),
@@ -281,11 +293,27 @@ export async function POST(request: NextRequest) {
             const existing = tMembershipDoc.exists ? (tMembershipDoc.data() ?? {}) : {};
             onboardingCompleted = existing.onboardingCompleted === true;
 
+            // The client-verify half of #240. This races the webhook by design
+            // — whichever arrives first fulfils — so it needs the same rule or
+            // the race decides whether a suspension survives: a suspended
+            // member satisfies onboardingCompleted, and this wrote their
+            // membership back to "active" with the role below. The payment is
+            // still recorded; the ACTIVATION is not, while a decision stands.
+            const decidedAgainst = isDecidedAgainst(existing.membershipStatus)
+                || isDecidedAgainst(existing.status);
+            if (decidedAgainst) {
+                logger.warn(
+                    "[Cooperative verify-payment] Fee received for a membership decided against — "
+                    + "recording the payment, NOT re-activating.",
+                    { reference, userId, membershipStatus: existing.membershipStatus },
+                );
+            }
+
             // Upsert the membership doc (create if missing, merge if exists)
             await membershipRef.set({
                 userId,
                 membershipTier:    existing.membershipTier    || "Member",
-                membershipStatus:  onboardingCompleted ? "active" : "pending",
+                ...(decidedAgainst ? {} : { membershipStatus: onboardingCompleted ? "active" : "pending" }),
                 paymentStatus:     "completed",
                 paymentReference:  reference,
                 paymentVerifiedAt: FieldValue.serverTimestamp(),
@@ -310,14 +338,17 @@ export async function POST(request: NextRequest) {
                         paymentStatus:    "completed",
                         paymentReference: reference,
                         paymentAmount:    paidAmount,
-                        status:           onboardingCompleted ? "active" : "legacy_pending_onboarding",
+                        // Omitted while a decision stands — writing any status
+                        // clears the suspension from the copy Layer 2 of
+                        // checkModuleAccess reads first.
+                        ...(decidedAgainst ? {} : { status: onboardingCompleted ? "active" : "legacy_pending_onboarding" }),
                         paidAt:           FieldValue.serverTimestamp(),
                     }
                 },
                 updatedAt: FieldValue.serverTimestamp(),
             };
 
-            if (onboardingCompleted) {
+            if (onboardingCompleted && !decidedAgainst) {
                 userUpdatePayload.roles = FieldValue.arrayUnion("cooperative_member");
                 userUpdatePayload.isVerified = true;
                 userUpdatePayload.serviceRegistrations.cooperatives.activatedAt = FieldValue.serverTimestamp();
