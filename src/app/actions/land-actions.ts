@@ -15,6 +15,7 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
 import { isAdmin } from "@/lib/admin-permissions";
 import { PUBLIC_LAND_STATUSES, stripInternalLandFields } from "@/lib/land-visibility";
+import { isOwnerMutable } from "@/lib/land-listing-status";
 
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { logger } from "@/lib/logger";
@@ -311,8 +312,28 @@ async function _updateLandListing(
         }
 
         const listingData = listingDoc.data()!;
-        if (listingData.ownerId !== session.user.id && !(session.user.roles?.includes('admin') || session.user.roles?.includes('super_admin'))) { 
+        if (listingData.ownerId !== session.user.id && !(session.user.roles?.includes('admin') || session.user.roles?.includes('super_admin'))) {
             return { success: false, error: "Unauthorized to edit this listing", data: null };
+        }
+
+        // AN OWNER EDIT ERASED A BUYER'S RESERVATION.
+        //
+        // The write below sets `status: "pending_verification"` unconditionally.
+        // A buyer reserving this parcel claims it to "pending"
+        // (_fn_purchases.ts) and then pays at Paystack; the fulfilment and the
+        // cancel path both advance it FROM "pending" via claimStatusTransition.
+        // An owner edit landing in that window rewrote the status, so the claim
+        // could never fire: the buyer's money was taken for a listing that had
+        // been re-priced and pulled back into review under them. Same fault the
+        // admin decision paths were taught about (DECISION_LOCKED_STATUSES);
+        // this is the owner's copy of it, and `sold` was editable too.
+        if (!isOwnerMutable(listingData.status)) {
+            return {
+                success: false,
+                error: `This listing cannot be edited right now (status: ${listingData.status}). `
+                    + `A purchase is in progress or completed.`,
+                data: null,
+            };
         }
 
         const { listingId, ...updateData } = validated;
@@ -432,9 +453,23 @@ async function _deleteLandListing(listingId: string): Promise<ActionResponse<nul
         }
 
         const listingData = listingDoc.data()!;
-        if (listingData.ownerId !== session.user.id && !(session.user.roles?.includes('admin') || session.user.roles?.includes('super_admin'))) { 
+        if (listingData.ownerId !== session.user.id && !(session.user.roles?.includes('admin') || session.user.roles?.includes('super_admin'))) {
             return { success: false, error: "Unauthorized to delete this listing", data: null };
         }
+
+        // Deleting mid-purchase is the edit fault with a tombstone: the buyer's
+        // "pending" reservation (or a completed sale) was overwritten with
+        // "deleted", and the claim that fulfils or cancels the purchase can
+        // never move a deleted row. Same rule as the edit above.
+        if (!isOwnerMutable(listingData.status)) {
+            return {
+                success: false,
+                error: `This listing cannot be deleted right now (status: ${listingData.status}). `
+                    + `A purchase is in progress or completed.`,
+                data: null,
+            };
+        }
+
 
         // Soft delete by updating status
         await db.collection(COLLECTIONS.LAND_LISTINGS).doc(listingId).update({ 
