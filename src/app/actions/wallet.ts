@@ -788,7 +788,7 @@ async function _processWalletWithdrawalAction(
         }
 
         // 2. Execute payout
-        const { paystackPayout } = await import("@/lib/paystack-transfer");
+        const { paystackPayout, payoutReference } = await import("@/lib/paystack-transfer");
         const bankDetails = txnData.bankDetails || {};
         const payoutAmount = Math.abs(txnData.amount);
 
@@ -799,11 +799,59 @@ async function _processWalletWithdrawalAction(
                 accountName: bankDetails.accountName || "Recipient",
             },
             payoutAmount,
-            `Wallet withdrawal: ${transactionId}`
+            `Wallet withdrawal: ${transactionId}`,
+            // The same reference on every attempt at THIS withdrawal (#249), so
+            // Paystack itself refuses a second transfer rather than honouring it.
+            payoutReference("WALLET", transactionId),
         );
 
         if (!payoutRes.success) {
-            // Revert lock to pending with error message
+            /**
+             * REOPENING THIS AFTER AN AMBIGUOUS FAILURE PAID PEOPLE TWICE (#250).
+             *
+             * Every failure used to revert the record to `pending` — the state
+             * an admin approves from. But `success: false` also covers a
+             * connection reset or a 5xx, where the transfer may have reached
+             * Paystack and been honoured. Transfer accepted, response lost,
+             * record reopened, admin clicks Approve again, second transfer with
+             * a fresh random reference (#249), member paid twice, and both
+             * ledger rows look correct.
+             *
+             * So only a DEFINITE refusal reopens it. Anything we cannot vouch
+             * for stays out of the approvable pool and is logged for
+             * reconciliation against Paystack's own record of the reference.
+             */
+            if (payoutRes.duplicate) {
+                // Proof the first attempt went through: the member has been paid.
+                logger.error(
+                    `[Wallet] Withdrawal ${transactionId} was ALREADY transferred under reference ` +
+                    `${payoutRes.reference}. Leaving it payout_initiated for reconciliation.`
+                );
+                await txnRef.update({
+                    needsReconciliation: true,
+                    adminNote: "Paystack reports this reference as already used — the original transfer stands.",
+                    payoutReference: payoutRes.reference || null,
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+                return { success: false as const, error: "This withdrawal has already been transferred", data: null };
+            }
+
+            if (payoutRes.indeterminate) {
+                logger.error(
+                    `[Wallet] Payout for ${transactionId} FAILED INDETERMINATELY (${payoutRes.error}). ` +
+                    `Reference ${payoutRes.reference}. The money may have moved; NOT returning it to pending.`
+                );
+                await txnRef.update({
+                    needsReconciliation: true,
+                    adminNote: `Payout outcome unknown: ${payoutRes.error || "no response from Paystack"}. `
+                        + "Check the reference against Paystack before retrying.",
+                    payoutReference: payoutRes.reference || null,
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+                return { success: false as const, error: "Payout outcome unknown — needs reconciliation", data: null };
+            }
+
+            // A definite refusal: nothing was sent, so this is safe to reopen.
             await txnRef.update({
                 status: "pending",
                 adminNote: `Payout attempt failed: ${payoutRes.error || "Unknown error"}`,

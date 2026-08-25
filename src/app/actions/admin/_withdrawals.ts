@@ -175,7 +175,7 @@ async function _processWithdrawalAction(
             let transferCode: string | undefined;
 
             try {
-                const { paystackPayout } = await import("@/lib/paystack-transfer");
+                const { paystackPayout, payoutReference } = await import("@/lib/paystack-transfer");
 
                 // Get user bank details
                 const userDoc = await db.collection(COLLECTIONS.USERS).doc(withdrawalData.userId).get();
@@ -189,11 +189,25 @@ async function _processWithdrawalAction(
                             accountName: userData.bankAccountName || userData.name,
                         },
                         withdrawalData.amount,
-                        `Withdrawal payout - ${withdrawalId}`
+                        `Withdrawal payout - ${withdrawalId}`,
+                        // Stable across retries of THIS withdrawal (#249), so a
+                        // manual re-run cannot become a second transfer.
+                        payoutReference("WITHDRAW", withdrawalId),
                     );
                     payoutSuccess = payoutResult.success;
                     payoutError = payoutResult.error;
                     transferCode = payoutResult.transferCode;
+
+                    // A duplicate reference is proof the first attempt went
+                    // through — the payee HAS been paid. Recording it as an
+                    // ordinary payout failure is what sends an admin back to
+                    // pay them again (#249).
+                    if (payoutResult.duplicate) {
+                        payoutError = "Already transferred under this reference — verify with Paystack before retrying";
+                    } else if (payoutResult.indeterminate) {
+                        payoutError = `Payout outcome UNKNOWN (${payoutResult.error || "no response"}). `
+                            + "The money may have moved — reconcile the reference with Paystack before retrying.";
+                    }
                 } else {
                     payoutError = "User bank details not configured";
                 }

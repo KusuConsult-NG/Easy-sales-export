@@ -9,7 +9,7 @@ import type { Order, OrderStatus } from "@/lib/types/marketplace";
 import { hasRole } from "@/lib/role-utils";
 import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
-import { paystackPayout } from "@/lib/paystack-transfer";
+import { paystackPayout, payoutReference } from "@/lib/paystack-transfer";
 import { claimStatusTransition, claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
@@ -457,7 +457,11 @@ async function _confirmDeliveryAction(orderId: string) { let sessionResult;
                         accountName: bankDetails.bankAccountName || (bankDetails as any).name || bankDetails.fullName || "" 
                     },
                     result.sellerAmount,
-                    `Escrow release for order ${orderId}`
+                    `Escrow release for order ${orderId}`,
+                    // Stable across retries of THIS release (#249). An escrow is
+                    // released once; the reference is what makes Paystack refuse
+                    // a second transfer rather than honouring it.
+                    payoutReference("ESCROW", orderId),
                 );
 
                 await orderRef.update({ escrowReleased: res.success,
@@ -466,6 +470,11 @@ async function _confirmDeliveryAction(orderId: string) { let sessionResult;
                     sellerAmountPaid: result.sellerAmount,
                     escrowReleaseError: res.success ? null : res.error,
                     escrowPendingManualRelease: !res.success,
+                    // A duplicate reference means the seller was already paid; an
+                    // indeterminate failure means we cannot say. Either way a
+                    // human has to check Paystack before anyone releases again,
+                    // and "pending manual release" alone reads as "just do it".
+                    escrowNeedsReconciliation: !!(res.duplicate || res.indeterminate),
                     _version: FieldValue.increment(1) });
             } catch (err) { logger.error("Payout side effect failed:", { userId, error: err });
                 await orderRef.update({ escrowPendingManualRelease: true, _version: FieldValue.increment(1) });

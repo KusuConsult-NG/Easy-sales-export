@@ -55,6 +55,12 @@ jest.mock('@/lib/status-transition', () => ({
 }));
 jest.mock('@/lib/paystack-transfer', () => ({
     paystackPayout: (...a: any[]) => mockPayout(...a),
+    // The REAL payoutReference. A mock that stubs only paystackPayout leaves
+    // this undefined, the caller throws on the call, and the action's own catch
+    // turns it into a generic failure — the fourth time an incomplete mock has
+    // made a working path look broken in this codebase. Taken from the real
+    // module so the reference asserted here is the reference sent (#249).
+    payoutReference: (jest.requireActual('@/lib/paystack-transfer') as typeof import('@/lib/paystack-transfer')).payoutReference,
 }));
 jest.mock('@/lib/logistics', () => ({ getLogisticsProvider: jest.fn() }));
 
@@ -197,8 +203,11 @@ describe('_confirmDeliveryAction — releasing an escrow the admin already relea
         await confirm();
 
         expect(mockPayout).toHaveBeenCalledTimes(1);
-        // 100,000 less the 2.5% platform commission.
-        expect(mockPayout).toHaveBeenCalledWith(expect.anything(), 97_500, expect.anything());
+        // 100,000 less the 2.5% platform commission, and a reference derived
+        // from the order rather than a random one, so a retry cannot become a
+        // second transfer (#249).
+        expect(mockPayout).toHaveBeenCalledWith(
+            expect.anything(), 97_500, expect.anything(), 'ESCROW-ord-1');
     });
 
     it('refuses a caller who is not the buyer, before consuming any claim', async () => {

@@ -11,7 +11,7 @@ import { FieldValue, FieldPath } from "@/lib/firestore-compat";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { claimStatusTransition, claimStatusTransitionFromAny } from "@/lib/status-transition";
-import { paystackPayout } from "@/lib/paystack-transfer";
+import { paystackPayout, payoutReference } from "@/lib/paystack-transfer";
 import { extractCanonicalUser } from "@/lib/canonical/normalizer";
 
 async function _getStandardWaveWithdrawalsAction(options: {
@@ -503,12 +503,49 @@ async function _processWaveWithdrawalAction(data: {
                      accountName,
                  },
                  withdrawalData.amount,
-                 `WAVE Withdrawal payout - ${withdrawalId}`
+                 `WAVE Withdrawal payout - ${withdrawalId}`,
+                 // Stable across retries of THIS withdrawal (#249). The
+                 // compare-and-swap above stops a double payout from OUR side;
+                 // the reference is what stops one from Paystack's.
+                 payoutReference("WAVE", withdrawalId),
             );
 
             if (!payoutResult.success) {
-                // Paystack answered, and the answer was no. Nothing left the
-                // account, so returning it to pending is correct here.
+                /**
+                 * "Paystack answered, and the answer was no" is only true of a
+                 * definite refusal (#250).
+                 *
+                 * This branch used to treat every failure that way and return
+                 * the withdrawal to pending. But a connection reset or a 5xx
+                 * means the transfer MAY have been accepted, and a duplicate
+                 * reference means an earlier attempt certainly was. Returning
+                 * either to the payable queue is the double payout this whole
+                 * block exists to prevent, arriving through the error path
+                 * instead of the success path.
+                 */
+                if (payoutResult.duplicate || payoutResult.indeterminate) {
+                    // payoutDispatched stays TRUE: never payable again without a human.
+                    logger.error(
+                        `[WAVE] Withdrawal ${withdrawalId} payout ${payoutResult.duplicate ? "was ALREADY made" : "outcome UNKNOWN"} ` +
+                        `(${payoutResult.error}). Reference ${payoutResult.reference}. Needs reconciliation with Paystack.`
+                    );
+                    await ref.update({
+                        needsReconciliation: true,
+                        payoutReference: payoutResult.reference ?? null,
+                        adminNotes: payoutResult.duplicate
+                            ? "Paystack reports this reference as already used — the original transfer stands."
+                            : `Payout outcome unknown: ${payoutResult.error || "no response from Paystack"}.`,
+                    });
+                    return {
+                        success: false as const,
+                        error: payoutResult.duplicate
+                            ? "This withdrawal has already been transferred"
+                            : "Payout outcome unknown — needs reconciliation before any retry",
+                    };
+                }
+
+                // A definite refusal. Nothing left the account, so returning it
+                // to pending is correct here.
                 payoutDispatched = false;
                 await returnWithdrawalToPending(ref, payoutResult.error ?? "unknown error", adminNotes);
                 return { success: false as const, error: `Paystack payout failed: ${payoutResult.error}` };
