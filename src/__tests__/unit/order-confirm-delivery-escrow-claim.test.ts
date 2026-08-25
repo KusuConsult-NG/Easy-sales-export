@@ -75,7 +75,13 @@ function setSession(id: string) {
  * The order is delivered and owned by BUYER; the seller is a WAVE member with
  * bank details on file, so both money movements are in play.
  */
-function setDocs({ escrowExists = true }: { escrowExists?: boolean } = {}) {
+function setDocs({
+    escrowExists = true,
+    // What the escrow row records as owed to THIS seller. 100,000 gross less
+    // the 5% the escrow creators actually write (#254). `undefined` models a
+    // row written before netAmount existed.
+    escrowNetAmount = 95_000 as number | undefined,
+}: { escrowExists?: boolean; escrowNetAmount?: number | undefined } = {}) {
     (global as any).mockFirestoreGet.mockImplementation(function (this: any) {
         const path = String((this as any)?.__path ?? '');
         // The order read, the escrow read and the seller read all come through
@@ -93,6 +99,10 @@ function setDocs({ escrowExists = true }: { escrowExists?: boolean } = {}) {
                 bankAccountNumber: '0123456789',
                 bankCode: '058',
                 bankAccountName: 'A Seller',
+                // Escrow-shaped fields. Only the escrow read uses them.
+                ...(escrowNetAmount === undefined
+                    ? {}
+                    : { netAmount: escrowNetAmount, grossAmount: 100_000, platformFee: 100_000 - escrowNetAmount }),
             }),
         });
     });
@@ -203,11 +213,84 @@ describe('_confirmDeliveryAction — releasing an escrow the admin already relea
         await confirm();
 
         expect(mockPayout).toHaveBeenCalledTimes(1);
-        // 100,000 less the 2.5% platform commission, and a reference derived
-        // from the order rather than a random one, so a retry cannot become a
-        // second transfer (#249).
+        // The escrow's own netAmount — 95,000, seeded above — and a reference
+        // derived from the order rather than a random one (#249).
         expect(mockPayout).toHaveBeenCalledWith(
-            expect.anything(), 97_500, expect.anything(), 'ESCROW-ord-1');
+            expect.anything(), 95_000, expect.anything(), 'ESCROW-ord-1');
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#254 — the payout figure comes from the escrow, not a literal', () => {
+    /**
+     *   #254 THE PAYOUT WITHHELD 2.5%. THE ESCROW RECORDED 5%.
+     *
+     *        Two lines apart from #253's commission literal:
+     *
+     *            const platformCommissionRate = 0.025;
+     *            sellerAmount = Math.floor(
+     *                currentOrder.totalAmount * (1 - platformCommissionRate));
+     *
+     *        Both escrow creators — _payment_orders.ts and _payment_verify.ts —
+     *        write `platformFee = grossAmount * fees.platformFeePercentage` and
+     *        `netAmount = grossAmount - platformFee`, and that percentage is
+     *        0.05. So for a 100,000 order the escrow row says the platform took
+     *        5,000 and the seller is owed 95,000 — and this paid them 97,500.
+     *        The platform collected half what its own books recorded, on every
+     *        release through this path.
+     *
+     *        AND IT USED THE WRONG BASE. `currentOrder.totalAmount` is the
+     *        WHOLE order. The seller is `sellerIds[0]` and the escrow is
+     *        per-seller, so on a two-seller order the first seller was paid
+     *        97.5% of both sellers' items and the second was paid nothing.
+     *
+     *        Both go away by paying the figure the escrow already holds:
+     *        netAmount is that seller's gross less the fee actually recorded
+     *        against them. The rate stops being a number this file owns —
+     *        which is what let it drift to 0.025 in the first place.
+     */
+    beforeEach(() => {
+        jest.clearAllMocks();
+        setSession(BUYER);
+        setDocs();
+        mockClaimStatus.mockResolvedValue({ claimed: true, status: 'completed' });
+        mockClaimFromAny.mockResolvedValue({ claimed: true, status: 'released' });
+        mockPayout.mockResolvedValue({ success: true, transferCode: 'TRF-1' });
+    });
+
+    it('PAYS THE ESCROW\'S RECORDED netAmount, NOT total × 0.975', async () => {
+        // Seeded deliberately as neither 97,500 (the old literal) nor a round
+        // percentage of the total, so only a reader of the record can produce it.
+        setDocs({ escrowNetAmount: 88_123 });
+
+        await confirm();
+
+        expect(mockPayout).toHaveBeenCalledWith(
+            expect.anything(), 88_123, expect.anything(), 'ESCROW-ord-1');
+    });
+
+    it('AND ON A MULTI-SELLER ORDER PAYS ONLY THIS SELLER\'S SHARE', async () => {
+        // The escrow row for seller one holds their own gross and net. The
+        // order total is 100,000 across two sellers; this seller is owed 38,000.
+        // Was: 97,500 — the whole order, less 2.5%.
+        setDocs({ escrowNetAmount: 38_000 });
+
+        await confirm();
+
+        const [, amount] = mockPayout.mock.calls[0] as unknown as [unknown, number];
+        expect(amount).toBe(38_000);
+        expect(amount).not.toBe(97_500);
+    });
+
+    it('falls back to the configured fee when the escrow row has no netAmount', async () => {
+        // Rows written before netAmount existed. The fallback is the CONFIGURED
+        // percentage (5%), not a literal — so the two agree even here.
+        setDocs({ escrowNetAmount: undefined });
+
+        await confirm();
+
+        const [, amount] = mockPayout.mock.calls[0] as unknown as [unknown, number];
+        expect(amount).toBe(95_000);
     });
 
     it('refuses a caller who is not the buyer, before consuming any claim', async () => {

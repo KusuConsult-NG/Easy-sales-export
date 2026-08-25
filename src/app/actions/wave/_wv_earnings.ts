@@ -106,7 +106,16 @@ async function _calculateEarningsAction(userId: string): Promise<ActionResponse<
             );
         }
 
-        const commissionRate = 0.05;
+        // One commission rate for the whole platform (#253).
+        //
+        // This was `const commissionRate = 0.05;`, and order-management.ts —
+        // which CREDITS the balance a member withdraws against — carried its
+        // own `const waveCommissionRate = 0.05`. Two live copies of one number
+        // that had to agree, kept in step by nothing but luck. Change one and
+        // this screen becomes a lie about money: it would report earnings the
+        // balance does not contain.
+        const { getWaveSettings } = await import("@/lib/system-settings");
+        const { commissionRate } = await getWaveSettings();
         let totalSales = 0;
         let totalEarnings = 0;
         let pendingAmount = 0;

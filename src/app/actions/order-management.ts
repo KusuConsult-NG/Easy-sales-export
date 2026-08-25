@@ -403,13 +403,59 @@ async function _confirmDeliveryAction(orderId: string) { let sessionResult;
             // sellerAmount at 0 is what stops the Paystack transfer, since the
             // caller guards on `sellerAmount > 0`.
             if (!escrowAlreadyReleased && sellerData?.bankAccountNumber && sellerData?.bankCode) {
-                const platformCommissionRate = 0.025;
-                sellerAmount = Math.floor(currentOrder.totalAmount * (1 - platformCommissionRate));
+                /**
+                 *   #254 THE PAYOUT WITHHELD 2.5%. THE ESCROW RECORDED 5%.
+                 *
+                 *        This was:
+                 *
+                 *            const platformCommissionRate = 0.025;
+                 *            sellerAmount = Math.floor(
+                 *                currentOrder.totalAmount * (1 - platformCommissionRate));
+                 *
+                 *        Both escrow creators — marketplace/_payment_orders.ts
+                 *        and _payment_verify.ts — write
+                 *        `platformFee = grossAmount * fees.platformFeePercentage`
+                 *        and `netAmount = grossAmount - platformFee`, with that
+                 *        percentage at 0.05. So for a 100,000 order the escrow
+                 *        row says the platform took 5,000 and the seller is owed
+                 *        95,000, and this paid 97,500. The platform collected
+                 *        half what its own books recorded, every time.
+                 *
+                 *        AND THE BASE WAS WRONG. `totalAmount` is the WHOLE
+                 *        order; the seller here is `sellerIds[0]` and the escrow
+                 *        is per-seller. On a two-seller order the first seller
+                 *        was paid for both sellers' items.
+                 *
+                 *        Paying the figure the escrow already holds fixes both,
+                 *        and takes the rate out of this file's hands — a local
+                 *        literal is what let it drift to 0.025.
+                 *
+                 * The fallback covers rows written before netAmount existed. It
+                 * uses the CONFIGURED percentage rather than a literal, so the
+                 * two paths still agree.
+                 */
+                const escrowData = escrowDoc.exists ? escrowDoc.data() : undefined;
+                const recordedNet = Number(escrowData?.netAmount);
+
+                if (Number.isFinite(recordedNet) && recordedNet > 0) {
+                    sellerAmount = Math.floor(recordedNet);
+                } else {
+                    const { getPlatformFees } = await import("@/lib/system-settings");
+                    const fees = await getPlatformFees();
+                    const gross = Number(escrowData?.grossAmount ?? currentOrder.totalAmount);
+                    sellerAmount = Math.floor(gross * (1 - fees.platformFeePercentage));
+                }
             }
 
             // PHASE 2: WAVE LEDGER SYNC (IF APPLICABLE)
             if (isWaveMember && !escrowAlreadyReleased) {
-                const waveCommissionRate = 0.05; // 5% as per wave.ts
+                // One commission rate for the whole platform (#253). This was a
+                // local `0.05` with the comment "5% as per wave.ts" — a copy
+                // admitting it was a copy — while wave/_wv_earnings.ts carried
+                // its own literal for the figure it SHOWS the member. Two live
+                // numbers that had to agree, kept in step by nobody.
+                const { getWaveSettings } = await import("@/lib/system-settings");
+                const { commissionRate: waveCommissionRate } = await getWaveSettings();
                 const earningsAmount = Math.floor(currentOrder.totalAmount * waveCommissionRate);
 
                 // Increment persistent balance on user doc
