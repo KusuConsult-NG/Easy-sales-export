@@ -99,6 +99,22 @@ const LIMITS = {
         interval: 60 * 60 * 1000, // 1 hour
         maxRequests: 3, // 3 lookups per hour per user
     },
+    /**
+     * Paystack bank-account resolution (actions/paystack.ts).
+     *
+     * verifyBankAccount turns any 10-digit NUBAN into the account holder's
+     * real name, using the platform's Paystack key — a name-lookup oracle for
+     * whoever is signed in. It had NO limit at all. The feature is legitimate
+     * (a member verifying their own account before a withdrawal) and ownership
+     * cannot be checked before resolving, so the limit is the control: ten an
+     * hour absorbs mistyped digits and a wrong bank picked twice, and is
+     * useless for enumeration. Its own bucket, not `payment`'s — #76 is why a
+     * shared name must never be reused for a different operation.
+     */
+    bankVerification: {
+        interval: 60 * 60 * 1000, // 1 hour
+        maxRequests: 10,
+    },
 
     /**
      * AI assistant messages — every call is a GPT-4 completion, billed per token.

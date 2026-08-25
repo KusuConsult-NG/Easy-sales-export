@@ -4,6 +4,15 @@ import { logger } from '@/lib/logger';
 import { requireSession } from '@/lib/session-guard';
 import { ActionResponse } from '@/lib/safe-action';
 import { paystackBaseUrl } from "@/lib/paystack-host";
+import { rateLimit } from '@/lib/rate-limiter';
+import { rateLimitConfig } from '@/lib/rate-limits.config';
+
+const bankVerifyLimiter = rateLimit(rateLimitConfig.bankVerification);
+
+/** Last four digits only — a full NUBAN in an application log is a leak. */
+function maskAccount(accountNumber: string): string {
+    return `******${String(accountNumber).slice(-4)}`;
+}
 
 /**
  * Paystack Integration Server Actions
@@ -76,13 +85,29 @@ export async function verifyBankAccount(
         const sessionResult = await requireSession();
         if (sessionResult.error) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
 
+        // THE ORACLE HAD NO METER (#243).
+        //
+        // This resolves ANY 10-digit account number to its holder's real name
+        // through the platform's Paystack key, and nothing limited how often a
+        // signed-in caller could ask. Ownership cannot be checked before
+        // resolving — verifying your own account is the feature — so the rate
+        // limit is the control. Keyed on the account, not the IP, for the
+        // reason rate-limits.config.ts records: Nigerian carriers NAT heavily.
+        const sessionUserId = sessionResult.session?.user?.id;
+        if (sessionUserId) {
+            const rl = await bankVerifyLimiter.check(sessionUserId);
+            if (!rl.success) {
+                return { success: false, error: 'Too many account verification attempts. Please try again later.', data: null };
+            }
+        }
+
         // Validation
         if (!accountNumber || !bankCode) { logger.warn('verifyBankAccount: Missing required parameters', { accountNumber: !!accountNumber, bankCode: !!bankCode });
             return { success: false, error: 'Account number and bank code are required', data: null };
         }
 
         // Validate account number format
-        if (!/^\d{10}$/.test(accountNumber)) { logger.warn('verifyBankAccount: Invalid account number format', { accountNumber });
+        if (!/^\d{10}$/.test(accountNumber)) { logger.warn('verifyBankAccount: Invalid account number format');
             return { success: false, error: 'Account number must be exactly 10 digits', data: null };
         }
 
@@ -100,7 +125,7 @@ export async function verifyBankAccount(
         // Call Paystack Resolve Account Number API
         const url = `${paystackBaseUrl()}/bank/resolve?account_number=${accountNumber}&bank_code=${bankCode}`;
 
-        logger.info('verifyBankAccount: Calling Paystack API', { accountNumber, bankCode });
+        logger.info('verifyBankAccount: Calling Paystack API', { accountNumber: maskAccount(accountNumber), bankCode });
 
         const response = await fetch(url, {
             method: 'GET',
@@ -118,7 +143,7 @@ export async function verifyBankAccount(
         // Handle API response
         if (!response.ok || !data.status) { // Common error: "Could not resolve account name"
             if (data.message?.toLowerCase().includes('could not resolve')) {
-                logger.warn('verifyBankAccount: Account not found', { accountNumber, bankCode });
+                logger.warn('verifyBankAccount: Account not found', { accountNumber: maskAccount(accountNumber), bankCode });
                 return { success: false as const, error: 'Account not found. Please verify your account number and selected bank are correct.', data: null };
             }
 
@@ -144,13 +169,14 @@ export async function verifyBankAccount(
             return { success: false as const, error: data.message || 'Failed to verify account. Please try again.', data: null };
         }
 
-        if (!data.data?.account_name) { logger.error('verifyBankAccount: No account name in response', { data });
+        if (!data.data?.account_name) { logger.error('verifyBankAccount: No account name in response', { message: data.message });
             return { success: false as const, error: 'Account verification incomplete. Please try again.', data: null };
         }
 
-        logger.info('verifyBankAccount: Success', { accountNumber,
-            accountName: data.data.account_name
-        });
+        // The masked number and NOT the resolved name: the pair is exactly the
+        // PII the #151 sweep took out of admin lists, and a log aggregator is a
+        // wider audience than any admin screen.
+        logger.info('verifyBankAccount: Success', { accountNumber: maskAccount(accountNumber) });
 
         return { success: true, error: null, data: { accountName: data.data.account_name } };
     } catch (error) { logger.error('verifyBankAccount: Unexpected error', error);
