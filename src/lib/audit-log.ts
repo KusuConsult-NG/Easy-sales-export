@@ -127,6 +127,9 @@ export type AuditAction =
     | 'course_completed'
     | 'certificate_issued'
     | 'quiz_created'
+    // The editor at /admin/academy/[courseId]/quiz/[quizId] upserts, so it
+    // both creates and edits; 'quiz_created' alone could not say which (#264).
+    | 'quiz_updated'
     // Security Actions
     | 'mfa_enabled'
     | 'mfa_disabled'

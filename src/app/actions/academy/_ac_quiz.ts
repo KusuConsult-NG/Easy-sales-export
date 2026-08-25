@@ -4,6 +4,8 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
+import { hasAdminPermission } from "@/lib/admin-permissions";
+import { recordAdminAction } from "@/lib/audit-log";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { editorQuestionsToModuleQuiz } from "@/lib/academy-grading";
@@ -23,8 +25,28 @@ export async function saveQuizAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: 'Unauthorized', data: null };
         const { session } = sessionResult;
-        if (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin")) {
-            return { success: false as const, error: "Unauthorized: Admin access required", data: null };
+        /**
+         *   #264 THE ACADEMY ADMIN COULD NOT AUTHOR AN ACADEMY QUIZ.
+         *
+         *        This was a hand-written `admin || super_admin` pair, and
+         *        `academy_admin` is in neither — while /admin is a protected
+         *        area that role reaches. So the academy admin opened the quiz
+         *        editor, the load failed with "Unauthorized: Admin access
+         *        required", and Save failed the same way.
+         *
+         *        `academy:manage_quizzes` already existed for exactly this job
+         *        and is already granted to super_admin, admin AND academy_admin.
+         *        One place asked for it — api/admin/academy/quiz/create — which
+         *        is not the editor. So that role could create a quiz through the
+         *        API route and not save one through the only quiz-authoring
+         *        screen the admin UI links to.
+         *
+         *        _ac_catalog.ts, two files away, carries the same correction for
+         *        the same reason ("The ACADEMY admin could not edit an Academy
+         *        course"). Same correction as #115, #122, #158, #195 and #242.
+         */
+        if (!hasAdminPermission(session?.user?.roles, "academy:manage_quizzes")) {
+            return { success: false as const, error: "Unauthorized: academy:manage_quizzes required", data: null };
         }
 
         if (!courseId || !quizId) {
@@ -43,13 +65,24 @@ export async function saveQuizAction(
             }
         }
 
-        await db.collection(COLLECTIONS.ACADEMY_QUIZZES).doc(quizId).set({
+        // createdAt only when there is nothing to preserve.
+        //
+        // This was an unconditional `createdAt: serverTimestamp()` inside a
+        // merge that runs on EVERY save, so the field meant "last saved" and
+        // the quiz's real creation date was gone after the first edit — #257's
+        // shape, in this file. Nothing reads it today, which is the reason to
+        // correct it now rather than after something does.
+        const quizRef = db.collection(COLLECTIONS.ACADEMY_QUIZZES).doc(quizId);
+        const existingQuiz = await quizRef.get();
+        const existingCreatedAt = existingQuiz.exists ? existingQuiz.data()?.createdAt : undefined;
+
+        await quizRef.set({
             courseId,
             title,
             questions,
             updatedBy: session.user.id,
             updatedAt: FieldValue.serverTimestamp(),
-            createdAt: FieldValue.serverTimestamp(),
+            createdAt: existingCreatedAt ?? FieldValue.serverTimestamp(),
         }, { merge: true });
 
         // And into the course document, which is where learners are graded.
@@ -124,6 +157,22 @@ export async function saveQuizAction(
             logger.error(`[saveQuizAction] Failed to sync quiz ${quizId} into course ${courseId}:`, syncErr);
         }
 
+        // Recorded, like every other permission-gated admin write.
+        //
+        // Surfaced by admin-action-audit-trail.test.ts the moment this action
+        // moved onto a named permission (#264): it was gated all along and
+        // recorded nothing. Worth recording on its own merits — this document
+        // is the answer key that decides who passes a course and earns a
+        // certificate, and 'quiz_created' vs 'quiz_updated' is the difference
+        // between authoring one and rewriting the answers to a live one.
+        await recordAdminAction({
+            action: existingQuiz.exists ? 'quiz_updated' : 'quiz_created',
+            userId: session.user.id,
+            targetId: quizId,
+            targetType: 'academy_quiz',
+            details: `course ${courseId} · "${title}" · ${questions.length} question(s)`,
+        });
+
         return { success: true, error: null, data: null };
     } catch (error) {
         logger.error("saveQuizAction error:", {
@@ -161,8 +210,12 @@ async function _getQuizAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: 'Unauthorized', data: null };
         const { session } = sessionResult;
-        if (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin")) {
-            return { success: false as const, error: "Unauthorized: Admin access required", data: null };
+        // The same permission as the write above (#264). The read and the write
+        // are two halves of one screen, so they cannot disagree about who may
+        // use it — and this one hands out the answer key, so it is the half
+        // where disagreeing in the other direction would be worse.
+        if (!hasAdminPermission(session?.user?.roles, "academy:manage_quizzes")) {
+            return { success: false as const, error: "Unauthorized: academy:manage_quizzes required", data: null };
         }
 
         const doc = await db.collection(COLLECTIONS.ACADEMY_QUIZZES).doc(quizId).get();

@@ -196,19 +196,28 @@ describe('the two ends this connects', () => {
 });
 
 describe('the answer key in that collection', () => {
-    it('getQuizAction requires admin, as its writing sibling already did', () => {
+    it('getQuizAction requires the same permission as its writing sibling', () => {
+        // BOTH halves were a hand-written `admin || super_admin` pair, and the
+        // ACADEMY admin — the role the module exists for — was in neither
+        // (#264). These two assertions pinned that literal, so they broke on
+        // the fix rather than on a regression. They ask for the property now:
+        // the guard is the named permission, and the read and the write agree.
+        //
+        // academy-quiz-editor-permission.test.ts executes both actions against
+        // every admin role, which is the check that has teeth; this one keeps
+        // the ORDER, which only source can show.
         const src = code(QUIZ);
         const read = src.slice(src.indexOf('async function _getQuizAction'));
+        const write = src.slice(src.indexOf('export async function saveQuizAction'), src.indexOf('async function _getQuizAction'));
 
-        expect(read).toContain('roles?.includes("admin")');
-        expect(read).toContain('roles?.includes("super_admin")');
-        expect(read).toContain('Admin access required');
+        expect(read).toContain('academy:manage_quizzes');
+        expect(write).toContain('academy:manage_quizzes');
     });
 
     it('and refuses before it reads the document', () => {
         const src = code(QUIZ);
         const read = src.slice(src.indexOf('async function _getQuizAction'));
-        const guard = read.indexOf('Admin access required');
+        const guard = read.indexOf('academy:manage_quizzes');
         const fetch = read.indexOf('ACADEMY_QUIZZES');
 
         expect(guard).toBeGreaterThan(-1);
