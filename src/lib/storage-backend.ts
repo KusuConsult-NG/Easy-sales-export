@@ -91,7 +91,19 @@ export async function writeToLocalDisk(publicId: string, buffer: Buffer): Promis
     const path = await import("path");
 
     const relative = path.posix.join("uploads", "local", publicId);
+    const baseDir = path.join(process.cwd(), "public", "uploads", "local");
     const absolute = path.join(process.cwd(), "public", relative);
+
+    // Defence in depth: the docstring above asks callers to sanitise every
+    // segment, and one (uploadDocumentAction) did not — it appended an
+    // unsanitised file extension that could carry `../`, which path.join
+    // collapses out of this directory (#244). A claim in a comment is not a
+    // control, so the escape is refused here regardless of what the caller
+    // passed.
+    const resolved = path.resolve(absolute);
+    if (resolved !== baseDir && !resolved.startsWith(baseDir + path.sep)) {
+        throw new Error(`[storage] refused a publicId that escapes the uploads directory: ${publicId}`);
+    }
 
     await mkdir(path.dirname(absolute), { recursive: true });
     await writeFile(absolute, buffer);

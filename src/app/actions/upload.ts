@@ -94,16 +94,28 @@ export async function uploadDocumentAction(
 
         // ── Build signed Cloudinary upload ───────────────────────────────────
         const timestamp = Math.floor(Date.now() / 1000);
-        const originalName = fileName || file.name || "document";
-        const extensionIdx = originalName.lastIndexOf(".");
-        const extension = extensionIdx !== -1 ? originalName.slice(extensionIdx) : "";
-        
-        let baseDocType = documentType;
-        if (extension && baseDocType.endsWith(extension)) {
-            baseDocType = baseDocType.slice(0, -extension.length);
-        }
-        
-        const safeName = baseDocType.replace(/[^a-zA-Z0-9-]/g, "-");
+
+        // THE EXTENSION COMES FROM THE VALIDATED TYPE, NOT THE FILENAME.
+        //
+        // This used to be `originalName.slice(lastIndexOf("."))` — everything
+        // after the last dot of the caller's fileName, appended to publicId
+        // raw. The mime-type gate above does not constrain it, so a fileName
+        // like "doc.x/../../../evil" produced an "extension" of
+        // ".x/../../../evil" carrying path separators and `..`. On the
+        // local-disk branch that reaches path.join, which collapses the `..`
+        // and writes OUTSIDE public/uploads/local; on Cloudinary it forges the
+        // stored public_id. The comment two blocks down claimed publicId was
+        // "already sanitised per segment, so it cannot escape" — true of
+        // safeName, never true of this appended extension.
+        //
+        // /api/upload was fixed for exactly this (its own comment names the
+        // "doc.pdf/../x" case) by taking the extension from the detected type.
+        // This action is the copy that was missed — the same two-upload-paths
+        // drift this audit keeps finding. ALLOWED_TYPES already maps the mime
+        // to its extension, and mimeType has been validated against it above.
+        const extension = `.${ext}`;
+
+        const safeName = documentType.replace(/[^a-zA-Z0-9-]/g, "-");
         const publicId = `documents/${userId}/${safeName}-${timestamp}${extension}`;
 
         // Local disk backend — the shared implementation, not a copy of it.
