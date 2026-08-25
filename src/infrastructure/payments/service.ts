@@ -2,6 +2,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { platformFeeFor, sellerNetFor } from "@/lib/platform-fee";
 import { logger } from "@/lib/logger";
 import { generateAndSendWhatsAppInvite } from "@/lib/whatsapp-invites";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
@@ -224,8 +225,11 @@ export async function processMarketplaceOrder(reference: string, amount: number,
             const escrowId = escrowIdFor(orderData.orderId, sellerId, Object.keys(sellerTotals));
             const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId);
 
-            const platformFee = Math.round(totalAmount * fees.platformFeePercentage);
-            const netAmount = totalAmount - platformFee;
+            // #271 One split, computed once. The payout fallback in
+            // order-management.ts used a different EXPRESSION for the same
+            // figure and disagreed with this row on 45% of gross values.
+            const platformFee = platformFeeFor(totalAmount, fees.platformFeePercentage);
+            const netAmount = sellerNetFor(totalAmount, fees.platformFeePercentage);
 
             const pNames = items
                 .filter((item: any) => item.sellerId === sellerId)

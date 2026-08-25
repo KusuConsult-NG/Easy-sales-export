@@ -9,6 +9,7 @@ import { revalidatePath } from "next/cache";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { decrementManyOrFail } from "@/lib/wallet-ledger";
 import { getPlatformFees } from "@/lib/system-settings";
+import { platformFeeFor, sellerNetFor } from "@/lib/platform-fee";
 import { notifyOrderPlaced } from "@/lib/marketplace-notifications";
 import { withSafeAction } from "@/lib/safe-action";
 import { getBaseUrl } from "@/lib/server-utils";
@@ -160,8 +161,9 @@ async function _initializeOrderPaymentAction(
             const escrowId = escrowIdFor(orderId, sellerId, Object.keys(sellerTotals));
             const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId);
 
-            const platformFee = Math.round(grossAmount * fees.platformFeePercentage);
-            const netAmount = grossAmount - platformFee;
+            // #271 One split, computed once.
+            const platformFee = platformFeeFor(grossAmount, fees.platformFeePercentage);
+            const netAmount = sellerNetFor(grossAmount, fees.platformFeePercentage);
 
             const pNames = validatedItems
                 .filter(item => item.sellerId === sellerId)

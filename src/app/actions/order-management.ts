@@ -2,6 +2,7 @@
 
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
+import { sellerNetFor } from "@/lib/platform-fee";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -439,12 +440,40 @@ async function _confirmDeliveryAction(orderId: string) { let sessionResult;
                 const recordedNet = Number(escrowData?.netAmount);
 
                 if (Number.isFinite(recordedNet) && recordedNet > 0) {
-                    sellerAmount = Math.floor(recordedNet);
+                    //   #271 NOT Math.floor(recordedNet).
+                    //
+                    //        The escrow row is the authority on what the seller
+                    //        is owed, and flooring it discards any kobo it
+                    //        records. Harmless while every gross is a whole
+                    //        naira and wrong the moment one is not —
+                    //        initiateTransfer already converts to integer kobo,
+                    //        so nothing downstream ever needed the floor.
+                    sellerAmount = recordedNet;
                 } else {
+                    //   #271 THE COMMENT ABOVE CLAIMED THESE TWO PATHS AGREED.
+                    //        THEY DID NOT.
+                    //
+                    //        This was `Math.floor(gross * (1 - pct))` while the
+                    //        three escrow creators write
+                    //        `gross - Math.round(gross * pct)`. Sharing the
+                    //        PERCENTAGE was the fix that note describes, and it
+                    //        was not enough: the two EXPRESSIONS are not the
+                    //        same function.
+                    //
+                    //        Across every whole-naira gross from 500 to 20,000
+                    //        at 5% they disagree on 8,775 of 19,501 values —
+                    //        45% — always by exactly NGN 1 and always against
+                    //        the seller. gross 1,002: the escrow row says 952,
+                    //        this paid 951.
+                    //
+                    //        With f = frac(gross x rate) and 0 < f < 0.5,
+                    //        Math.round rounds the fee down while Math.floor on
+                    //        the complement rounds the net down too, so the
+                    //        same naira is deducted twice.
                     const { getPlatformFees } = await import("@/lib/system-settings");
                     const fees = await getPlatformFees();
                     const gross = Number(escrowData?.grossAmount ?? currentOrder.totalAmount);
-                    sellerAmount = Math.floor(gross * (1 - fees.platformFeePercentage));
+                    sellerAmount = sellerNetFor(gross, fees.platformFeePercentage);
                 }
             }
 
