@@ -6,7 +6,6 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { waveApplicationSchema,
-    academyEnrollmentSchema,
     withdrawalSchema } from "@/lib/schemas";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { claimIdempotencyKey, debitJsonbBalanceWithFloor, compensateJsonbDebit } from "@/lib/wallet-ledger";
@@ -34,18 +33,12 @@ type WaveSuccessState = { error: null;
     message: string;
     applicationId: string; };
 
-type EnrollmentSuccessState = { error: null;
-    success: true;
-    message: string;
-    enrollmentId: string; };
-
 type WithdrawalSuccessState = { error: null;
     success: true;
     message: string;
     withdrawalId: string; };
 
 export type WaveApplicationState = ActionErrorState | WaveSuccessState;
-export type EnrollmentActionState = ActionErrorState | EnrollmentSuccessState;
 export type WithdrawalActionState = ActionErrorState | WithdrawalSuccessState;
 
 
@@ -104,64 +97,41 @@ export async function submitWaveApplicationAction(
 }
 
 // ============================================
-// Academy Enrollment Actions
+// Academy Enrollment — REMOVED, see academy/_ac_enrollment.ts
 // ============================================
+//
+//   #279 A SECOND enrollInCourseAction LIVED HERE AND GRANTED PAID COURSES FOR
+//        FREE.
+//
+//        Two exports of that name existed. The academy barrel exports the one
+//        in academy/_ac_enrollment.ts, and that is what both learner pages
+//        import. This one had no importer at all — but it was exported from
+//        "@/app/actions/platform", a module the UI already imports for
+//        submitWithdrawalAction, under a name that SHADOWS the correct action.
+//        An autocomplete pick from the wrong module was all it took.
+//
+//        WHAT THE WIRED ONE CHECKS, AND THIS ONE DID NOT:
+//
+//          1. the caller is enrolling THEMSELVES
+//          2. the registration was not DECIDED AGAINST    (#207/#210)
+//          3. checkCourseAccess(userPlan, courseTier)       the plan gate
+//
+//        It asked for none of them: any signed-in account, any courseId.
+//
+//        AND IT WROTE THE DOCUMENT THE PAID FLOW OWNS. academy/_payment.ts
+//        writes enrollments/{userId}_{courseId} as `status: "pending_payment"`
+//        with a Paystack reference and a 1,000 naira minimum, and only the
+//        verified callback promotes it to "active". This wrote THE SAME DOC ID
+//        straight to `status: "active"` with no amount and no reference — two
+//        writers of one document disagreeing about what "active" means, and one
+//        of them able to mint it for nothing.
+//
+//        Removed rather than hardened: hardening it would mean reimplementing
+//        the action that already exists and is wired. Nothing imported it, so
+//        nothing breaks — a tombstone rather than a silent deletion, so the
+//        next person looking for it is sent to the right one. Same treatment as
+//        api/kyc/verify-id.
 
-export async function enrollInCourseAction(
-    prevState: EnrollmentActionState,
-    formData: FormData
-): Promise<EnrollmentActionState> { try {
-        // Get authenticated user
-        const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
-        const { session } = sessionResult;
-
-        // Extract and validate form data
-        const enrollmentData = { fullName: (formData.get("fullName") as string | null)?.trim() ?? "",
-            email: (formData.get("email") as string | null)?.trim() ?? "",
-            phone: (formData.get("phone") as string | null)?.trim() ?? "",
-            courseId: (formData.get("courseId") as string | null)?.trim() ?? "" };
-
-        // Validate with Zod
-        const validatedData = academyEnrollmentSchema.parse(enrollmentData);
-
-        // Check if user already enrolled in this course
-        const enrollmentId = `${session.user.id}_${validatedData.courseId}`;
-        const enrollmentRef = db.collection(COLLECTIONS.ENROLLMENTS).doc(enrollmentId);
-        const existingEnrollment = await enrollmentRef.get();
-
-        if (existingEnrollment.exists) { return { error: "You are already enrolled in this course", success: false as const };
-        }
-
-        // Save enrollment to Firestore
-        await enrollmentRef.set({ userId: session.user.id,
-            courseId: validatedData.courseId,
-            fullName: validatedData.fullName,
-            email: validatedData.email,
-            phone: validatedData.phone,
-            enrollmentDate: FieldValue.serverTimestamp(),
-            status: "active", // active | completed | dropped
-            progress: 0,
-            createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp() });
-
-        // Increment course student count (if course document exists)
-        const courseRef = db.collection(COLLECTIONS.COURSES).doc(validatedData.courseId);
-        const courseDoc = await courseRef.get();
-        if (courseDoc.exists) { await courseRef.update({
-                students: FieldValue.increment(1) });
-        }
-
-        return { error: null, success: true as const, message: "Enrollment successful! Check your email for course access details.", enrollmentId  };
-    } catch (error: any) { logger.error("Enrollment error:", error);
-
-        if (error.name === "ZodError") {
-            return { error: "Please fill in all required fields correctly", success: false as const };
-        }
-
-        return { error: "Failed to enroll. Please try again.", success: false as const };
-    }
-}
 
 // ============================================
 // Cooperative Withdrawal Actions
