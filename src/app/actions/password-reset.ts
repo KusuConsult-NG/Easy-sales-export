@@ -10,6 +10,7 @@ import { Resend } from 'resend';
 import { claimIdempotencyKey } from '@/lib/wallet-ledger';
 import { rateLimit } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
+import { getBaseUrl } from '@/lib/email-notifications';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -91,27 +92,43 @@ export async function sendResetEmailAction(
             createdAt: FieldValue.serverTimestamp()
         });
 
-        // Determine the base URL — in production use the canonical domain
-        let baseUrl = process.env.NEXT_PUBLIC_URL
-            || process.env.NEXTAUTH_URL
-            || 'https://www.easysalesexport.com';
-
-        try {
-            const { headers } = await import("next/headers");
-            const headersList = await headers();
-            const host = headersList.get("x-forwarded-host") || headersList.get("host") || "";
-            const protocol = headersList.get("x-forwarded-proto") || "https";
-            if (host) {
-                baseUrl = `${protocol}://${host}`;
-            }
-        } catch (e) {
-            // Ignore headers error in environments where next/headers is not available
-        }
-
-        // If the baseUrl is the apex domain, make sure to normalize it to www.
-        if (baseUrl.includes("://easysalesexport.com")) {
-            baseUrl = baseUrl.replace("://easysalesexport.com", "://www.easysalesexport.com");
-        }
+        /**
+         *   #261 THIS LINK POINTED WHEREVER THE REQUESTER SAID.
+         *
+         *        The base URL was picked from configuration — under the comment
+         *        "in production use the canonical domain" — and then overridden
+         *        with the REQUEST HEADERS:
+         *
+         *            const host = headersList.get("x-forwarded-host")
+         *                || headersList.get("host") || "";
+         *            if (host) baseUrl = `${protocol}://${host}`;
+         *
+         *        A Host header is not a fact about a request. It is a string
+         *        the client writes, and the platform routes on TLS/SNI rather
+         *        than on it, so a request for our certificate can carry any
+         *        Host at all.
+         *
+         *        THE ATTACK IS ACCOUNT TAKEOVER AND NEEDS NOTHING ELSE. POST
+         *        the forgot-password form for somebody else's address with
+         *        `Host: attacker.example`, and the VICTIM receives a genuine
+         *        email — real sender, real template — containing
+         *
+         *            https://attacker.example/auth/reset-password?token=<VALID>
+         *
+         *        They click it, the token reaches the attacker, and the
+         *        attacker resets their password. The victim did nothing wrong.
+         *
+         *        The fix is the function that already existed:
+         *        email-notifications.ts owns getBaseUrl(), which reads
+         *        configuration only, never a header, and normalises module
+         *        domains and the apex back to the canonical www host — so a
+         *        member resetting from easysalescooperative.com still gets a
+         *        link that works. Every other email on the platform uses it.
+         *        This one rolled its own and read the header: two copies of one
+         *        rule with the wrong one deciding, and here that costs an
+         *        account.
+         */
+        const baseUrl = getBaseUrl();
 
         const resetUrl = `${baseUrl}/auth/reset-password?token=${token}`;
 
