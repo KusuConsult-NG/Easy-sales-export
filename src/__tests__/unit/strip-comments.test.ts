@@ -289,7 +289,14 @@ describe('it agrees with the naive version everywhere the naive version is right
         // so the naive regex opens a block comment it should not. Raised rather
         // than relaxed, for the same reason every time — nothing strips that
         // file, so no assertion in it is affected.
-        expect(AFFECTED.length).toBeLessThanOrEqual(12);
+        //
+        // TWELVE became THIRTEEN when cooperative-withdrawal-doors.test.ts was
+        // added (#276). Same mechanism in its fifth form: that file's own
+        // codeOnly helper carries the literal '/*' inside a regex, and its
+        // header quotes source lines containing '//'. Raised rather than
+        // relaxed, for the same reason every time — nothing strips that file,
+        // so no assertion in it is affected.
+        expect(AFFECTED.length).toBeLessThanOrEqual(13);
         expect(AFFECTED).toContain('src/lib/csp.ts');
         expect(AFFECTED).toContain('src/__tests__/unit/harness-covers-adapter.test.ts');
     });

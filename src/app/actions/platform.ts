@@ -13,7 +13,8 @@ import { claimIdempotencyKey, debitJsonbBalanceWithFloor, compensateJsonbDebit }
 import { ZodError } from "zod";
 import { revalidatePath } from "next/cache";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
-import { COOPERATIVE_MINIMUM_BALANCE, formatMinimumBalance } from "@/lib/cooperative-limits";
+import { COOPERATIVE_MINIMUM_BALANCE, formatMinimumBalance, COOPERATIVE_MINIMUM_WITHDRAWAL, formatMinimumWithdrawal } from "@/lib/cooperative-limits";
+import { canTransactAsMember, NOT_A_TRANSACTING_MEMBER_MESSAGE } from "@/lib/cooperative-membership-status";
 
 /**
  * Server Actions for Platform Forms
@@ -185,6 +186,20 @@ export async function submitWithdrawalAction(
         if (isNaN(parsedAmount) || parsedAmount <= 0) {
             return { error: "Invalid amount", success: false as const };
         }
+
+        //   #276 THE FOURTH DOOR, AND THE ONLY ONE A MEMBER CAN REACH.
+        //
+        //        Three other paths take a cooperative withdrawal and every one
+        //        of them enforces COOPERATIVE_MINIMUM_WITHDRAWAL. This one asked
+        //        only that the amount be positive — and it is what
+        //        WithdrawalModal.tsx calls, so through the product a NGN 1
+        //        withdrawal went through.
+        if (parsedAmount < COOPERATIVE_MINIMUM_WITHDRAWAL) {
+            return {
+                error: `Minimum withdrawal amount is ${formatMinimumWithdrawal()}`,
+                success: false as const,
+            };
+        }
         const withdrawalData = { cooperativeId: (formData.get("cooperativeId") as string | null)?.trim() ?? "",
             amount: parsedAmount,
             accountNumber: (formData.get("accountNumber") as string | null)?.trim() ?? "",
@@ -231,6 +246,29 @@ export async function submitWithdrawalAction(
         }
 
         const memberData = memberDoc.data();
+
+        //   #276 EXISTING IS NOT THE SAME AS MAY TRANSACT.
+        //
+        //        This checked that a membership row EXISTS and that its
+        //        cooperativeId matches, and nothing else. A member at "pending"
+        //        — registered, onboarding incomplete, nothing approved —
+        //        satisfies both and could withdraw savings.
+        //
+        //        cooperative-membership-status.ts was written for exactly this
+        //        question and opens with "FIVE DOORS, THREE ANSWERS", listing
+        //        the doors it corrected. This one is not on that list, and it is
+        //        the only door the product reaches. Its own note about the two
+        //        it did fix applies here with money leaving instead of being
+        //        locked: "A member still at 'pending' ... could file a loan
+        //        application and lock savings into a fixed plan through them,
+        //        while the routes doing the same work refused."
+        //
+        //        The shared predicate, not a literal: "approved" is the LEGACY
+        //        spelling of "active", and a hand-written `=== "active"` here
+        //        would refuse every legacy member their own savings.
+        if (!canTransactAsMember(memberData)) {
+            return { error: NOT_A_TRANSACTING_MEMBER_MESSAGE, success: false as const };
+        }
 
         // Validate that the user belongs to the target cooperative
         if (memberData?.cooperativeId !== validatedData.cooperativeId) { throw new Error("Membership mismatch: You do not belong to this cooperative");

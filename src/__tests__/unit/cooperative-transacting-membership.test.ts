@@ -49,7 +49,7 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { readFileSync } from 'fs';
+import { readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 import {
     canTransactAsMember,
@@ -64,11 +64,57 @@ const ADMIN_MEMBERS = 'src/app/actions/cooperative/_coop_admin_members.ts';
 const VERIFY_ROUTE = 'src/app/api/cooperative/verify-payment/route.ts';
 const CONTRIB_ACTION = 'src/app/actions/cooperative/_payment.ts';
 
-const TRANSACTING_DOORS: Array<[string, string]> = [
+/**
+ *   #276 THIS LIST WAS THE HOLE.
+ *
+ *        It named four doors, and two more existed: actions/platform.ts —
+ *        which is what WithdrawalModal.tsx calls, so the only one a member can
+ *        reach through the product — and cooperative/_withdrawal.ts. Both
+ *        checked that a membership row EXISTED and nothing else, so a member at
+ *        "pending" could withdraw their savings through the UI.
+ *
+ *        A hand-maintained list of the doors a rule applies to is a rule that
+ *        stops at the edge of somebody's memory. The same shape as #265's
+ *        per-file exemption and #262's first ratchet, and as #273, where six of
+ *        seven upload callers bounded the file size and the live route did not.
+ *
+ *        The list is DERIVED now: anything that debits a cooperative savings
+ *        balance is a transacting door, whether or not anyone remembered it.
+ *        DERIVED_EXTRA below is asserted to be non-empty, so a scan that
+ *        silently stopped matching cannot report a clean result.
+ */
+const SAVINGS_DEBIT = /debitJsonbBalance(WithFloor)?\s*\(/;
+
+function derivedTransactingDoors(): string[] {
+    const roots = ['src/app/actions', 'src/app/api'];
+    const found: string[] = [];
+
+    const walk = (dir: string) => {
+        for (const entry of readdirSync(join(process.cwd(), dir))) {
+            const rel = `${dir}/${entry}`;
+            if (statSync(join(process.cwd(), rel)).isDirectory()) { walk(rel); continue; }
+            if (!/\.tsx?$/.test(entry)) continue;
+            const src = code(rel);
+            if (SAVINGS_DEBIT.test(src) && src.includes('COOPERATIVE_MEMBERS')) found.push(rel);
+        }
+    };
+    roots.forEach(walk);
+    return found.sort();
+}
+
+const EXPLICIT_DOORS: Array<[string, string]> = [
     ['apply-loan route', 'src/app/api/cooperative/apply-loan/route.ts'],
     ['withdraw route', 'src/app/api/cooperative/withdraw/route.ts'],
     ['create-fixed-savings route', 'src/app/api/cooperative/create-fixed-savings/route.ts'],
     ['the money actions', MONEY],
+];
+
+const DERIVED_EXTRA = derivedTransactingDoors()
+    .filter((rel) => !EXPLICIT_DOORS.some(([, known]) => known === rel));
+
+const TRANSACTING_DOORS: Array<[string, string]> = [
+    ...EXPLICIT_DOORS,
+    ...DERIVED_EXTRA.map((rel) => [`derived: ${rel}`, rel] as [string, string]),
 ];
 
 function code(rel: string): string {
@@ -155,6 +201,18 @@ describe('"approved" really is the legacy spelling, not a lesser state', () => {
     it('and the admin action grants the role for either', () => {
         expect(code(ADMIN_MEMBERS)).toContain('if (status === "active" || status === "approved") {');
         expect(code(ADMIN_MEMBERS)).toContain('roles: FieldValue.arrayUnion("cooperative_member")');
+    });
+});
+
+describe('#276 — the door list is derived, not remembered', () => {
+    it('FINDS DOORS NOBODY LISTED', () => {
+        // Was empty because the list was hand-written; platform.ts and
+        // _withdrawal.ts both debit a cooperative savings balance and were on
+        // nobody's list. If this ever returns nothing, the scan has stopped
+        // matching and every assertion below is vacuous.
+        expect(DERIVED_EXTRA.length).toBeGreaterThan(0);
+        expect(DERIVED_EXTRA).toContain('src/app/actions/platform.ts');
+        expect(DERIVED_EXTRA).toContain('src/app/actions/cooperative/_withdrawal.ts');
     });
 });
 

@@ -19,6 +19,7 @@ import {
     formatMinimumWithdrawal,
     availableAboveFloor,
 } from "@/lib/cooperative-limits";
+import { canTransactAsMember, NOT_A_TRANSACTING_MEMBER_MESSAGE } from "@/lib/cooperative-membership-status";
 import { revalidatePath } from 'next/cache';
 
 interface WithdrawalRequestData { amount: number;
@@ -72,6 +73,13 @@ async function _submitWithdrawalRequestAction(
         }
 
         const membership = membershipDoc.data()!;
+
+        // #276 This checked only that the row EXISTED, like platform.ts. Same
+        // omission, same shared predicate — and "approved" must still pass,
+        // because it is the legacy spelling of "active".
+        if (!canTransactAsMember(membership)) {
+            return { success: false as const, error: NOT_A_TRANSACTING_MEMBER_MESSAGE, data: null };
+        }
 
         // Reserve the funds under a row lock.
         //

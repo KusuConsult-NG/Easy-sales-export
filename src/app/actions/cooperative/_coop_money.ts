@@ -91,7 +91,14 @@ async function _initiateCooperativePaymentAction(
         // Check if already active or paid
         const memberDoc = await runQueryWithRetry(() => memberRef.get());
         if (memberDoc.exists) { const data = memberDoc.data();
-            if (data?.membershipStatus === "active") {
+            // canTransactAsMember, not `=== "active"`: "approved" is the legacy
+            // spelling of the same state. A legacy member falling past this
+            // branch is not merely told the wrong thing — the merge below
+            // rewrites their membershipStatus to "pending" and Paystack charges
+            // them the registration fee a second time. See
+            // lib/cooperative-membership-status.ts, which this file already
+            // uses for the withdrawal door below.
+            if (canTransactAsMember(data)) {
                 return {
                     error: null,
                     success: true as const,

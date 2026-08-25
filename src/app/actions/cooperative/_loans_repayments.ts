@@ -13,6 +13,7 @@ import {
 import { Timestamp } from "@/lib/firestore-compat";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
+import { canTransactAsMember, NOT_A_TRANSACTING_MEMBER_MESSAGE } from "@/lib/cooperative-membership-status";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { withSafeAction, type ActionResponse } from "@/lib/safe-action";
 import { isAdmin } from "@/lib/admin-permissions";
@@ -528,6 +529,14 @@ export async function repayLoanFromSavingsAction(data: {
 
         if (!memberDoc.exists) {
             return { success: false as const, error: "You must be a cooperative member", data: null };
+        }
+
+        // #276 Existing is not the same as may transact, and this moves savings.
+        // Found by the DERIVED door list rather than by anyone remembering it —
+        // the hand-written list in cooperative-transacting-membership.test.ts
+        // named four doors and there were seven.
+        if (!canTransactAsMember(memberDoc.data())) {
+            return { success: false as const, error: NOT_A_TRANSACTING_MEMBER_MESSAGE, data: null };
         }
 
         const currentBalance = Number(memberDoc.data()?.savingsBalance || 0);
