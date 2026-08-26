@@ -270,9 +270,15 @@ async function _submitMarketplaceOnboardingAction(
             const fileName = `${timestamp}_${Math.random().toString(36).substring(7)}.${extension}`;
             const destination = `${path}/${userId}/${fileName}`;
 
-            // Use signed URLs (private/secure) for verification docs
+            // #280 This said "Use signed URLs (private/secure) for verification
+            // docs". There are no signed URLs and there never were on this
+            // path: uploadFileToStorage sends no authenticated type, so a
+            // seller's business registration document is a public Cloudinary
+            // URL. The comment is corrected rather than deleted because it
+            // records what this call was MEANT to do, which is what the owner
+            // has to decide about.
             const { uploadFileToStorage } = await import("@/lib/storage-admin");
-            return await uploadFileToStorage(file, destination, false);
+            return await uploadFileToStorage(file, destination);
         };
 
         let businessRegistrationUrl = "";

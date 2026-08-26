@@ -104,7 +104,7 @@ function fileOfSize(bytes: number, name = 'cert.pdf'): File {
 
 const upload = async (file: File) => {
     const { uploadFileToStorage } = await import('@/lib/storage-admin');
-    return uploadFileToStorage(file, 'certificates/u1/cert.pdf', true);
+    return uploadFileToStorage(file, 'certificates/u1/cert.pdf');
 };
 
 function codeOnly(rel: string): string {

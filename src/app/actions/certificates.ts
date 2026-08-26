@@ -87,12 +87,18 @@ export async function uploadCertificateAction(
             }
         }
 
-        // Upload to Firebase Storage (Admin SDK)
+        // Not Firebase Storage — Cloudinary. The comment named a backend this
+        // codebase left behind; storage-backend.ts is the one place that says
+        // which is in use.
         const fileName = `${Date.now()}-${file.name}`;
         const destination = `certificates/${userId}/${fileName}`;
 
-        // Upload and get URL (Signed URL, effectively private/secure)
-        const fileUrl = await uploadFileToStorage(file, destination, false);
+        // #280 This said "Signed URL, effectively private/secure". It is a
+        // plain public Cloudinary URL — the uploader sends no authenticated
+        // type — so a certificate is readable by anyone holding the link. The
+        // second of two files asserting a privacy control that does not exist;
+        // the ratchet in upload-privacy-is-not-claimed.test.ts found this one.
+        const fileUrl = await uploadFileToStorage(file, destination);
 
         const certificate: Omit<Certificate, "id"> = {
             // Marks this as a document the user attached, not a credential the

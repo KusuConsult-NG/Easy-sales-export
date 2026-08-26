@@ -180,7 +180,7 @@ export async function POST(request: NextRequest) {
             // Upload via the shared server-side uploader (Cloudinary).
             // The firebase-admin/storage shim used here before stored nothing
             // and had no makePublic(), so certificate uploads always threw.
-            fileUrl = await uploadFileToStorage(file, storagePath, true);
+            fileUrl = await uploadFileToStorage(file, storagePath);
         }
 
         // Save metadata to Firestore (Admin SDK)

@@ -147,7 +147,7 @@ async function _createProductAction(prevState: unknown, formData: FormData): Pro
             const destination = `products/${userId}/${productId}/${fileName}`;
             const { uploadFileToStorage } = await import("@/lib/storage-admin");
             // isPublic=true so buyers can view images in the marketplace
-            return await uploadFileToStorage(file, destination, true);
+            return await uploadFileToStorage(file, destination);
         };
 
         const imageUrls: string[] = [];
@@ -383,7 +383,7 @@ async function _updateProductAction(prevState: unknown, formData: FormData): Pro
             const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${extension}`;
             const destination = `products/${userId}/${productId}/${fileName}`;
             const { uploadFileToStorage } = await import("@/lib/storage-admin");
-            return await uploadFileToStorage(file, destination, true);
+            return await uploadFileToStorage(file, destination);
         };
 
         const imageUrls: string[] = [];

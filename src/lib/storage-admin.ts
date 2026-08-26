@@ -142,18 +142,49 @@ export async function assertAllowedFileType(buffer: Buffer, fileName: string): P
 /**
  * Upload a file to Cloudinary and return its delivery URL.
  *
+ *   #280 EVERY UPLOAD IS PUBLICLY READABLE, INCLUDING THE IDENTITY DOCUMENTS
+ *        FOUR CALLERS BELIEVED THEY WERE STORING PRIVATELY.
+ *
+ *        This took a third argument, `_isPublic`, and its own doc comment said
+ *        the quiet part: "Retained for call-site compatibility ... the parameter
+ *        no longer changes the returned URL." So the removal WAS recorded —
+ *        here, on the function. It never reached the callers that depended on
+ *        it, and they still pass it:
+ *
+ *          export/_ex_onboarding.ts   id-document, proof-of-address  (default)
+ *          marketplace/_mp_onboarding business verification documents (false)
+ *          actions/certificates.ts    certificates                    (false)
+ *
+ *        _mp_onboarding.ts carried this line, forty files away, directly above
+ *        the call:
+ *
+ *            // Use signed URLs (private/secure) for verification docs
+ *            return await uploadFileToStorage(file, destination, false);
+ *
+ *        There are no signed URLs. The upload below signs only `public_id` and
+ *        `timestamp` and sends neither `type=authenticated` nor `access_mode`,
+ *        so every asset lands as an ordinary public Cloudinary delivery URL:
+ *        anyone holding the link can fetch a member's ID document or proof of
+ *        address, with no session and no expiry.
+ *
+ *        THE PARAMETER IS GONE rather than honoured, because honouring it is
+ *        not this audit's call to make blind. Authenticated delivery changes
+ *        the URL shape and every consumer — the onboarding screens, the admin
+ *        verification review, the legacy import — has to sign on read. That
+ *        needs a Cloudinary account to verify against, and getting the
+ *        signature wrong would 401 every KYC document in production. What is
+ *        safe and correct to do now is stop the codebase asserting a privacy
+ *        control it does not have, so the exposure is visible rather than
+ *        believed handled. See docs/audit/ and the report to the owner.
+ *
  * @param file            The File object (from FormData) to upload
  * @param destinationPath Logical storage path, e.g. 'products/123/image.jpg'.
  *                        Used to derive the Cloudinary public_id.
- * @param _isPublic       Retained for call-site compatibility. Cloudinary
- *                        delivery URLs are used for both cases; the parameter
- *                        no longer changes the returned URL.
- * @returns               The secure delivery URL of the uploaded file
+ * @returns               The PUBLIC delivery URL of the uploaded file
  */
 export async function uploadFileToStorage(
     file: File,
     destinationPath: string,
-    _isPublic: boolean = false
 ): Promise<string> {
     const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
     const apiKey = process.env.CLOUDINARY_API_KEY;

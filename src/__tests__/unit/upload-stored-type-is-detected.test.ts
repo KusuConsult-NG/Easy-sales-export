@@ -149,7 +149,7 @@ async function upload(opts: {
         type: opts.declaredType,
     });
 
-    return uploadFileToStorage(file, opts.destination ?? 'products/p1/image', true);
+    return uploadFileToStorage(file, opts.destination ?? 'products/p1/image');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
