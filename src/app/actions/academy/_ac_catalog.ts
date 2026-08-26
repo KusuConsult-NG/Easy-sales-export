@@ -13,6 +13,7 @@ import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import type { Course, CourseModule } from "@/lib/types/academy-actions";
+import { retirementPatch, isRetired } from "@/lib/record-retirement";
 
 /**
  * Get all courses
@@ -71,7 +72,16 @@ async function _getCoursesAction(
         const hasMore = snapshot.docs.length > limit;
         const pageDocs = hasMore ? snapshot.docs.slice(0, limit) : snapshot.docs;
 
-        const raw = serializeDocs<Course>(pageDocs);
+        // #302 A retired course leaves the catalogue here. It is still readable
+        // by id, which is what the enrolments, progress records and issued
+        // certificates that key on courseId depend on.
+        //
+        // Filtered after the page is cut rather than in the query: `retired` is
+        // absent on every existing row, and a .where() on a field no row has yet
+        // is the shape that has emptied lists in this codebase before. The
+        // cursor still advances by raw rows, so pagination stays correct — a
+        // page may simply be shorter.
+        const raw = serializeDocs<Course>(pageDocs.filter((d: any) => !isRetired(d.data())));
         const courses = viewerIsAdmin
             ? raw
             : raw.map((c) => {
@@ -406,7 +416,31 @@ async function _deleteCourseAction(courseId: string): Promise<ActionResponse<nul
             return { success: false as const, error: "Unauthorized: academy:manage_courses required", data: null };
         }
 
-        await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId).delete();
+        /**
+         *   #302 DELETING A COURSE ORPHANED EVERY ENROLMENT AND CERTIFICATE.
+         *
+         *        `.delete()` on the course row, while enrolments, progress
+         *        records and issued certificates all key on courseId.
+         *        _ac_progress.ts reads ACADEMY_COURSES.doc(p.courseId) for each
+         *        of a learner's enrolments, and the certificate routes read it
+         *        to render the certificate — so a learner who had FINISHED the
+         *        course lost the record of what they had finished.
+         *
+         *        Owner decision, as #300 and #301: nothing is deleted. The row
+         *        is archived and the list filters it out; every read by id
+         *        keeps working, which is what those enrolments depend on.
+         */
+        const courseRef = db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId);
+        const courseSnap = await courseRef.get();
+        if (!courseSnap.exists) {
+            return { success: false as const, error: "Course not found", data: null };
+        }
+
+        await courseRef.update({
+            status: "archived",
+            ...retirementPatch(session.user.id, courseSnap.data()?.status),
+            updatedAt: new Date().toISOString(),
+        });
 
         await createAdminAuditLog({
             action: "course_deleted",

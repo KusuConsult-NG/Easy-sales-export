@@ -7,6 +7,7 @@ import { recordAdminAction } from "@/lib/audit-log";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { hasAdminPermission } from "@/lib/admin-permissions";
+import { retirementPatch } from "@/lib/record-retirement";
 
 /**
  * API Route: Delete Loan Product (Admin Only)
@@ -49,11 +50,26 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Delete product
-        await productRef.delete();
+        /**
+         *   #302 THE SECOND DOOR ONTO THE SAME DESTRUCTION.
+         *
+         *        deleteAdminLoanProductAction in actions/loan-products.ts is the
+         *        other. Both called .delete() on a row that holds the interest
+         *        rate and duration every loan written against it was granted on.
+         *
+         *        The comment that used to sit here said it plainly —
+         *        "Irreversible, and the deleted product's terms are gone with it
+         *        — so the record keeps them" — and copied the product into the
+         *        audit entry to soften the loss. That copy is kept, because a
+         *        record of who retired what is worth having; it is no longer the
+         *        only surviving copy of the terms.
+         */
+        await productRef.update({
+            isActive: false,
+            ...retirementPatch(session.user.id, productDoc.data()?.status),
+            updatedAt: new Date().toISOString(),
+        });
 
-        // Irreversible, and the deleted product's terms are gone with it — so
-        // the record keeps them.
         await recordAdminAction({
             action: "loan_product_deleted",
             userId: session.user.id,

@@ -37,6 +37,7 @@ import {
     fixedSavingsMaturityDate,
 } from "@/lib/cooperative-savings";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
+import { isRetired } from "@/lib/record-retirement";
 
 /**
  * Server Actions for Cooperative Management
@@ -620,6 +621,17 @@ async function _applyForLoanAction(
         }
 
         const prod = productDoc.data()!;
+
+        // #302 A retired product is refused here rather than by absence.
+        //
+        // Deleting a product used to remove the row, so this existence check
+        // was what stopped a borrower applying to a withdrawn product. The row
+        // survives now — the terms of loans already written against it are on
+        // it — so the refusal has to be explicit, with the same message, or the
+        // guard would quietly stop guarding.
+        if (isRetired(prod) || prod.isActive === false) {
+            throw new Error("That loan product is no longer available.");
+        }
         const interestRate = Number(prod.interestRate);
         const durationMonths = Number(prod.durationMonths);
 

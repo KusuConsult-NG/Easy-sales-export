@@ -103,6 +103,20 @@ export async function getWaveMemberStatsAction(): Promise<ActionResponse<{ stats
             .where("userId", "==", session.user.id)
             .get();
 
+        /**
+         * #302 The counts exclude registrations whose event was cancelled.
+         *
+         * That is the whole reason the previous fix reached for deletion: a
+         * registration against a withdrawn event kept inflating
+         * trainingsRegistered. Excluding it here fixes the count without
+         * destroying the member's record of having signed up — and attendance
+         * still counts, because a training somebody actually attended happened,
+         * whatever became of the event afterwards.
+         */
+        const liveRegistrations = trainingSnap.docs.filter(
+            (doc) => doc.data().eventCancelled !== true
+        );
+
         const trainingsCompleted = trainingSnap.docs.filter(
             (doc) => doc.data().attended === true
         ).length;
@@ -120,7 +134,7 @@ export async function getWaveMemberStatsAction(): Promise<ActionResponse<{ stats
             data: { 
                 stats: {
                     resourcesAccessed: resourceAccessSnap.size,
-                    trainingsRegistered: trainingSnap.size,
+                    trainingsRegistered: liveRegistrations.length,
                     trainingsCompleted,
                     daysActive: Math.max(0, daysActive)
                 }

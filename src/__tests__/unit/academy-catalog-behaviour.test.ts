@@ -251,7 +251,13 @@ describe('#213/#214 — who may write a course', () => {
 
         expect(await updateCourseModulesAction('c1', [] as never)).toMatchObject({ success: true });
         expect(await deleteCourseAction('c1')).toMatchObject({ success: true });
-        expect(store.get(COURSES, 'c1')).toBeUndefined();
+        // #302 The row is ARCHIVED, not destroyed — enrolments, progress rows
+        // and issued certificates all read the course by id, and a learner who
+        // finished the course would otherwise lose the record of what they
+        // finished. This asserted toBeUndefined().
+        expect(store.get(COURSES, 'c1')?.status).toBe('archived');
+        expect(store.get(COURSES, 'c1')?.retired).toBe(true);
+        expect(store.get(COURSES, 'c1')?.title).toBe('A course');
     });
 
     it.each([['support'], ['user']])('still refuses %s on update and delete', async (role) => {

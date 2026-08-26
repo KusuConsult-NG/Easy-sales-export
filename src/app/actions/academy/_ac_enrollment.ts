@@ -12,6 +12,7 @@ import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import type { Course, EnrolledCourseWithDetails, UserProgress } from "@/lib/types/academy-actions";
 import { normaliseAcademyPlan, checkCourseAccess } from "@/lib/academy-plan";
 import { isDecidedAgainst } from "@/lib/registration-progress";
+import { isRetired } from "@/lib/record-retirement";
 
 /**
  * Check Academy application status for current user
@@ -318,6 +319,10 @@ export async function autoEnrollPaidUser(userId: string, userPlan: string) {
         // 2. Filter courses user has access to
         const eligibleCourses = coursesSnap.docs.filter(doc => {
             const courseData = doc.data();
+            // #302 A retired course must not be auto-enrolled into. It stays
+            // readable by id for the learners already holding an enrolment or a
+            // certificate, but it is no longer on offer.
+            if (isRetired(courseData)) return false;
             return checkCourseAccess(plan, courseData.tier || "free");
         });
 

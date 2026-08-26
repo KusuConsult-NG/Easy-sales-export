@@ -11,6 +11,7 @@ import { calculateRepaymentTerms } from "@/lib/loan-terms";
 import { isEligibleForLoan } from "@/lib/cooperative-tiers";
 import { FieldValue } from "@/lib/firestore-compat";
 import { withRateLimit } from "@/lib/rate-limit";
+import { isRetired } from "@/lib/record-retirement";
 
 /**
  * API Route: Submit Loan Application
@@ -108,6 +109,16 @@ async function applyLoanHandler(request: NextRequest) {
         }
 
         const product = productDoc.data()!;
+
+        // #302 Same refusal as _coop_money.ts, for the same reason: retiring a
+        // product keeps the row (loans reference it), so "no longer available"
+        // has to be stated rather than inferred from the row being gone.
+        if (isRetired(product) || product.isActive === false) {
+            return NextResponse.json(
+                { success: false, message: "That loan product is no longer available." },
+                { status: 404 }
+            );
+        }
 
         // Validate amount range.
         //
