@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { Upload, X, FileText, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
+import { postUploadWithRetry } from "@/lib/upload-request";
 
 interface MasterUploaderProps {
     label: string;
@@ -120,53 +121,14 @@ export default function MasterUploader({
         try {
             setProgress(30);
 
-            const uploadWithRetry = async (attempt = 1): Promise<any> => {
-                try {
-                    const res = await fetch("/api/upload", {
-                        method: "POST",
-                        body: formData,
-                        signal: abortRef.current?.signal,
-                    });
+            // #297. One implementation, three callers — this loop existed
+            // three times and #291 fixed only this copy. See
+            // lib/upload-request.ts.
+            const result = await postUploadWithRetry(formData, {
+                signal: abortRef.current?.signal,
+                onRetry: (attempt) => setProgress(30 + attempt * 10),
+            });
 
-                    // #291. A body that is not JSON is a fault, not a refusal —
-                    // it goes down the retryable path with the network errors.
-                    const resData = await res.json().catch(() => ({}));
-
-                    if (!res.ok || !resData.success || !resData.url) {
-                        const failure: any = new Error(resData.error || "Upload failed");
-                        // The server ANSWERED. 400 wrong type, 400 too large,
-                        // 401 signed out, 429 rate limited — asking again
-                        // cannot change any of them, and for the 429 it is
-                        // actively harmful.
-                        failure.finalRefusal = res.status >= 400 && res.status < 500;
-                        throw failure;
-                    }
-                    return resData;
-                } catch (err: any) {
-                    // The trailing comment on the next line deliberately
-                    // contains no apostrophe. With one, a double quote earlier
-                    // in the line and the apostrophe later bracket the comment
-                    // marker, which is the pattern the naive comment stripper
-                    // in several suites mistakes for a block comment — see
-                    // strip-comments.test.ts. The line had that shape already;
-                    // adding the header above pushed the damage past the 10%
-                    // threshold and put this APPLICATION file onto a list meant
-                    // to hold two. Writing the explanation with the pattern in
-                    // it put it straight back, which is how this note ended up
-                    // phrased around the thing instead of quoting it.
-                    if (err.name === "AbortError") throw err; // cancel is not a fault
-                    if (err?.finalRefusal) throw err;         // #291: the answer will not change
-                    if (attempt < 3) {
-                        setProgress(30 + attempt * 10);
-                        await new Promise(r => setTimeout(r, Math.pow(2, attempt - 1) * 1000));
-                        return uploadWithRetry(attempt + 1);
-                    }
-                    throw err;
-                }
-            };
-
-            setProgress(50);
-            const result = await uploadWithRetry();
             setProgress(100);
 
             /**
