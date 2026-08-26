@@ -4,6 +4,7 @@ import { logger } from "@/lib/logger";
 import { normalizeUserDoc } from "@/lib/schema-normalizer";
 import { includesPrivilegedRole } from "@/lib/admin-permissions";
 import { registrationProgressScore } from "@/lib/registration-progress";
+import { retirementPatch } from "@/lib/record-retirement";
 
 /**
  * Migration utility for moving legacy user data (linked under legacy Firebase UID)
@@ -204,10 +205,35 @@ export async function migrateLegacyUserData(
 
             logger.info(`[UserMigration] Migrated cooperative member document successfully.`);
 
-            // Safely delete old member document if it is keyed by firebaseUid
+            /**
+             *   #303 THE MIGRATION DESTROYED ITS OWN SOURCE ROW.
+             *
+             *        `memberSourceRef.delete()`, immediately after copying the
+             *        member into the new key — and the copy is a `set(..., {
+             *        merge: true })` whose success this code does not verify.
+             *        If the copy went to the wrong key, or merged onto an
+             *        existing row and lost a field, the original was already
+             *        gone. This runs on LOGIN, per user, unattended.
+             *
+             *        The comment called it "Safely delete". Nothing about it
+             *        was safe: the delete was fire-and-forget with a .catch()
+             *        that logged a warning, so a failure was invisible and a
+             *        success was irreversible.
+             *
+             *        The legacy row is marked migrated instead — pointing at
+             *        the new key, so the two are linked in both directions and
+             *        a bad migration can be reconstructed. The `else` branch
+             *        below was ALREADY doing exactly this for query-matched
+             *        rows; the two branches simply disagreed about whether the
+             *        source was worth keeping.
+             */
             if (memberSourceRef && memberSourceRef.id === firebaseUid) {
-                await memberSourceRef.delete()
-                    .catch((e: unknown) => logger.warn(`[UserMigration] Non-fatal: failed to delete old member doc:`, e));
+                await memberSourceRef.update({
+                    _migratedTo: supabaseUid,
+                    _migratedAt: new Date().toISOString(),
+                    _legacyFirebaseUid: firebaseUid,
+                    ...retirementPatch("system:user-migration", null),
+                }).catch((e: unknown) => logger.warn(`[UserMigration] Non-fatal: failed to mark old member doc migrated:`, e));
             } else if (memberSourceRef) {
                 // If it was query-based (generated ID), just update its userId field to supabaseUid
                 await memberSourceRef.update({

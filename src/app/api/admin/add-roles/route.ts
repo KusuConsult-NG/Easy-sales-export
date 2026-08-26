@@ -7,6 +7,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { includesPrivilegedRole } from "@/lib/admin-permissions";
 import { ALL_USER_ROLES, type UserRole } from "@/lib/types/roles";
+import { retirementPatch } from "@/lib/record-retirement";
 
 /**
  * Assignable roles.
@@ -172,10 +173,29 @@ export async function DELETE(req: NextRequest) {
             updatedAt: new Date().toISOString(),
         });
 
-        // Remove from admin_users if all privileged roles revoked
+        /**
+         *   #303 REVOKING ADMIN DESTROYED THE RECORD THAT THEY HAD BEEN ONE.
+         *
+         *        `ADMIN_USERS.doc(userId).delete()`. The privileges had already
+         *        been removed from the user row two statements above, which is
+         *        what actually revokes access — this row is the register of who
+         *        held admin, and destroying it means an audit of past admin
+         *        activity has no roster to check the actor against.
+         *
+         *        Retired instead: the row stays, marked, and carries what it
+         *        used to hold so a reader can see who revoked it and when.
+         */
         const stillPrivileged = includesPrivilegedRole(updatedRoles);
         if (!stillPrivileged) {
-            await db.collection(COLLECTIONS.ADMIN_USERS).doc(userId).delete();
+            const adminRef = db.collection(COLLECTIONS.ADMIN_USERS).doc(userId);
+            const adminSnap = await adminRef.get();
+            if (adminSnap.exists) {
+                await adminRef.update({
+                    active: false,
+                    revokedRoles: roles,
+                    ...retirementPatch(session?.user?.id ?? "system", adminSnap.data()?.status),
+                });
+            }
         }
 
         logger.info(`[add-roles] Roles [${roles.join(", ")}] revoked from ${userId} by ${session?.user?.email}`);

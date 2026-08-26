@@ -74,10 +74,31 @@ export async function GET(request: Request) {
                     throw new Error(result.error.message);
                 }
 
-                // Success: Delete or Mark Complete
-                // We'll delete to keep collection clean, or move to 'sent_log' if audit needed.
-                // For resilience, let's just delete the queue item.
-                await db.collection(COLLECTIONS.EMAIL_QUEUE).doc(doc.id).delete();
+                /**
+                 *   #303 THE QUEUE KEPT ITS FAILURES AND DESTROYED ITS
+                 *        SUCCESSES — exactly backwards.
+                 *
+                 *        A permanent failure is marked `status: "failed"` with
+                 *        the error and a timestamp, and stays. A SUCCESS was
+                 *        deleted. So the only question this collection could
+                 *        answer was "what never went out"; "was the member's
+                 *        loan approval ever emailed, and when" had no record at
+                 *        all.
+                 *
+                 *        The code was undecided about it in writing: "We'll
+                 *        delete to keep collection clean, or move to 'sent_log'
+                 *        if audit needed. For resilience, let's just delete the
+                 *        queue item." Deleting is not what makes it resilient —
+                 *        leaving the pending query alone is, and `status` does
+                 *        that. The processor selects status == "pending", so a
+                 *        sent row drops out of the loop without being destroyed.
+                 */
+                await db.collection(COLLECTIONS.EMAIL_QUEUE).doc(doc.id).update({
+                    status: "sent",
+                    sentAt: FieldValue.serverTimestamp(),
+                    providerMessageId: result.data?.id ?? null,
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
                 logger.info(`[CRON] Successfully sent email to ${data.to} (ID: ${doc.id})`);
                 successCount++;
 

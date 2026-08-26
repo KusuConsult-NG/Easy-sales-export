@@ -10,6 +10,7 @@ import { serializeDocs } from "@/lib/firestore-serialize";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { uploadFileToStorage, detectFileType } from "@/lib/storage-admin";
 import { USER_UPLOADED_DOCUMENT, isIssuedCertificate } from "@/lib/certificate-kind";
+import { retirementPatch, isRetired } from "@/lib/record-retirement";
 
 /**
  * Certificate Management Actions
@@ -155,7 +156,13 @@ export async function getUserCertificatesAction(userId: string): Promise<Certifi
         const q = db.collection(COLLECTIONS.CERTIFICATES).where("userId", "==", userId);
         const snapshot = await q.get();
 
-        return serializeDocs(snapshot.docs) as unknown as Certificate[];
+        // #303 A certificate the owner removed leaves this list. Note that this
+        // file reads COLLECTIONS.CERTIFICATES while api/certificates reads
+        // COLLECTIONS.USER_CERTIFICATES — two collections behind one feature —
+        // so both listings need the filter and neither covers the other.
+        return serializeDocs(
+            snapshot.docs.filter((d: any) => !isRetired(d.data())),
+        ) as unknown as Certificate[];
     } catch (error) { logger.error("Failed to fetch certificates:", error);
         return [];
     }
@@ -197,27 +204,25 @@ export async function deleteCertificateAction(
             return { success: false as const, error: "Issued certificates cannot be deleted here", data: null };
         }
 
-        // Delete from Cloud Storage
-        if (cert.fileUrl) { try {
-                const { getStorage } = await import("firebase-admin/storage");
-                const bucket = getStorage().bucket();
-                // Extract object path: strip the signed URL prefix / query string
-                // fileUrl is in the format: https://storage.googleapis.com/<bucket>/<path>?...
-                const urlObj = new URL(cert.fileUrl);
-                // Path is everything after the bucket name segment
-                const pathParts = urlObj.pathname.split("/");
-                // pathname = /<bucket>/certificates/<userId>/<filename>
-                // We drop index 0 (empty) and index 1 (bucket name)
-                const objectPath = pathParts.slice(2).join("/");
-                if (objectPath) { await bucket.file(objectPath).delete({ ignoreNotFound: true });
-                }
-            } catch (storageError) { // Log but don't fail — Firestore doc is still deleted
-                logger.warn("Failed to delete certificate file from storage:", { error: storageError instanceof Error ? storageError.message : String(storageError) });
-            }
-        }
-
-        // Delete from Firestore
-        await certRef.delete();
+        /**
+         *   #303 THE SECOND DOOR, AND IT DESTROYED THE FILE TOO.
+         *
+         *        This parsed the object path out of the stored URL and called
+         *        `bucket.file(objectPath).delete({ ignoreNotFound: true })`,
+         *        then deleted the row. Its own catch block said the quiet part:
+         *        "Log but don't fail — Firestore doc is still deleted". So a
+         *        storage failure removed the record and kept the file, and a
+         *        storage success removed the member's proof of a qualification
+         *        with no way back.
+         *
+         *        Neither happens now. The file is untouched and the row is
+         *        marked; the listing filters it and the download route refuses
+         *        it, so the member sees what they saw before.
+         */
+        await certRef.update({
+            ...retirementPatch(userId, (cert as unknown as Record<string, any>).status),
+            removedByOwner: true,
+        });
 
         await createAdminAuditLog({ action: "user_update",
             userId,
