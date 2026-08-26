@@ -23,6 +23,43 @@ interface MasterUploaderProps {
  *
  * NOTE: Firebase Storage bucket is NOT provisioned on this project.
  * All uploads are routed through Cloudinary (same pattern as useStorage hook).
+ *
+ *   #291 IT RETRIED REFUSALS, INCLUDING THE RATE LIMITER'S.
+ *
+ *        The retry wrapper caught EVERY failure and tried twice more:
+ *
+ *            if (!res.ok || !resData.success || !resData.url) throw ...
+ *            catch { if (attempt < 3) { backoff; retry } }
+ *
+ *        /api/upload refuses with a 400 for a disallowed type and for a file
+ *        over 50MB, a 401 when the session is gone, and — through
+ *        withRateLimit — a 429. None of those change if you ask again. So a
+ *        rejected 50MB video was uploaded three times, 150MB, before the person
+ *        was told the type was wrong; and a 429 was answered by hitting the
+ *        limiter twice more, which is the one response guaranteed to keep them
+ *        limited. #76 is about a shared rate-limit namespace; this is the
+ *        client spending that budget on answers it already had.
+ *
+ *        Retries now cover what a retry can fix: a network fault, and a 5xx.
+ *
+ *   #292 IT MANUFACTURED THE STORAGE PATH AND THREW AWAY THE REAL ONE.
+ *
+ *        /api/upload returns `path: publicId` — the Cloudinary public_id, the
+ *        handle needed to transform, restrict or DELETE the asset. This
+ *        component ignored it and built its own:
+ *
+ *            const uploadId = crypto.randomUUID();
+ *            const storagePath = `${uploadFolder}/${uploadId}_${file.name}`;
+ *            onComplete({ url: result.url, path: storagePath, id: uploadId });
+ *
+ *        That string names nothing. It is a random UUID and the name of a file
+ *        on the uploader's own machine, and it was handed to every caller
+ *        labelled `path` — #284's shape, a manufactured value in the position
+ *        of a real one.
+ *
+ *        No caller stores it today (all five read `url` only), so nothing in
+ *        the database is wrong. What it cost is the ability to add one: see the
+ *        note on erasure in upload-identifiers.test.ts.
  */
 export default function MasterUploader({
     label,
@@ -90,13 +127,35 @@ export default function MasterUploader({
                         body: formData,
                         signal: abortRef.current?.signal,
                     });
-                    const resData = await res.json();
+
+                    // #291. A body that is not JSON is a fault, not a refusal —
+                    // it goes down the retryable path with the network errors.
+                    const resData = await res.json().catch(() => ({}));
+
                     if (!res.ok || !resData.success || !resData.url) {
-                        throw new Error(resData.error || "Upload failed");
+                        const failure: any = new Error(resData.error || "Upload failed");
+                        // The server ANSWERED. 400 wrong type, 400 too large,
+                        // 401 signed out, 429 rate limited — asking again
+                        // cannot change any of them, and for the 429 it is
+                        // actively harmful.
+                        failure.finalRefusal = res.status >= 400 && res.status < 500;
+                        throw failure;
                     }
                     return resData;
                 } catch (err: any) {
-                    if (err.name === "AbortError") throw err; // Don't retry on cancel
+                    // The trailing comment on the next line deliberately
+                    // contains no apostrophe. With one, a double quote earlier
+                    // in the line and the apostrophe later bracket the comment
+                    // marker, which is the pattern the naive comment stripper
+                    // in several suites mistakes for a block comment — see
+                    // strip-comments.test.ts. The line had that shape already;
+                    // adding the header above pushed the damage past the 10%
+                    // threshold and put this APPLICATION file onto a list meant
+                    // to hold two. Writing the explanation with the pattern in
+                    // it put it straight back, which is how this note ended up
+                    // phrased around the thing instead of quoting it.
+                    if (err.name === "AbortError") throw err; // cancel is not a fault
+                    if (err?.finalRefusal) throw err;         // #291: the answer will not change
                     if (attempt < 3) {
                         setProgress(30 + attempt * 10);
                         await new Promise(r => setTimeout(r, Math.pow(2, attempt - 1) * 1000));
@@ -110,14 +169,26 @@ export default function MasterUploader({
             const result = await uploadWithRetry();
             setProgress(100);
 
-            // Generate a stable ID for this upload
-            const uploadId = crypto.randomUUID();
-            const storagePath = `${uploadFolder}/${uploadId}_${selectedFile.name.replace(/\s+/g, '_')}`;
+            /**
+             * #292. The route's own answer, not a reconstruction of it.
+             *
+             * `path` is the Cloudinary public_id the asset was actually stored
+             * under, and `id` is the same handle — there is one identifier
+             * here, and inventing a second one that looked like a path is what
+             * made a fabricated string indistinguishable from a real one at
+             * every call site.
+             *
+             * Falls back to the URL rather than to a random UUID: an identifier
+             * that at least locates the asset beats one that locates nothing.
+             */
+            const storagePath: string = typeof result.path === "string" && result.path
+                ? result.path
+                : result.url;
 
             setUploading(false);
             setCompleted(true);
             showToast("Upload completed successfully", "success");
-            onComplete({ url: result.url, path: storagePath, id: uploadId });
+            onComplete({ url: result.url, path: storagePath, id: storagePath });
         } catch (err: any) {
             if (err.name === "AbortError") {
                 // User cancelled — reset silently

@@ -86,6 +86,30 @@ export const ERASED_FIELDS = [
 
     // Identity document URLs. #280: these links are public and unexpiring, so
     // leaving them on the row leaves the documents reachable.
+    //
+    //   #292 REMOVING THE LINK DOES NOT REMOVE THE FILE, AND THIS IS WHERE
+    //        THAT STOPS BEING A DETAIL.
+    //
+    //        Nothing in this codebase deletes a Cloudinary asset. Every
+    //        reference to api.cloudinary.com — actions/upload.ts,
+    //        api/upload/route.ts, lib/storage-admin.ts — is an /upload call.
+    //        There is no destroy, no admin API call, no lifecycle rule.
+    //
+    //        So the ID scan, passport photo and proof of address survive this
+    //        patch untouched and, per #280, publicly readable with no expiry.
+    //        Worse: this field was the platform's only record of WHICH assets
+    //        belonged to the person. A Cloudinary public_id is derivable from
+    //        its URL, so BEFORE erasure a purge is possible by parsing the
+    //        stored URLs; AFTER it, the file is still public and nothing here
+    //        can say whose it was.
+    //
+    //        A right-to-erasure request therefore removes the evidence rather
+    //        than the data. Not fixed in this module on purpose: destroying
+    //        production assets is irreversible, untestable without a live
+    //        Cloudinary, and has to happen BEFORE the links are dropped — which
+    //        makes it a change to the erasure FLOW rather than to this list.
+    //        Pinned with the #280 decision the owner already has open, and in
+    //        upload-identifiers.render.test.tsx.
     "documents",
 
     // Credentials and second factors.
