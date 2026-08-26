@@ -63,7 +63,24 @@ jest.mock('@/lib/audit-log', () => ({
     logAdminAction: jest.fn(async () => ({})),
 }));
 
+/**
+ * The caller as the LIVE RECORD sees them.
+ *
+ * #281 moved cms.ts's admin check off the JWT and onto the users document, so
+ * requireAdmin now issues a `.get()` of its own. This suite drives every read
+ * through one shared mockFirestoreGet, which returned an announcement-shaped
+ * snapshot whose `data()` was `{}` — so the admin read saw a user with no roles
+ * and the three write tests below started failing against working code.
+ *
+ * Recording the session's roles here and serving them from that same stub keeps
+ * the fixture honest: the record agrees with the token, which is the ordinary
+ * case. The case where they DISAGREE is the point of #281 and is covered in
+ * cms-admin-is-live.test.ts.
+ */
+let currentUser: { id: string | null; roles: string[] } = { id: null, roles: [] };
+
 function setSession(id: string | null, roles: string[] = []) {
+    currentUser = { id, roles };
     (global as any).mockRequireSession.mockImplementation(() => Promise.resolve(
         id === null
             ? { session: null, error: { error: 'Authentication required' } }
@@ -84,7 +101,10 @@ function setAnnouncements(rows: any[] = ROWS) {
         empty: rows.length === 0,
         size: rows.length,
         docs: rows.map((r, i) => ({ id: `a-${i}`, data: () => r })),
-        data: () => ({}),
+        // The document-level shape. One stub serves both the announcements
+        // query and the users read #281 added, so it has to carry the caller's
+        // roles or the admin guard refuses. See the note on setSession.
+        data: () => ({ uid: currentUser.id, roles: currentUser.roles }),
     }));
 }
 

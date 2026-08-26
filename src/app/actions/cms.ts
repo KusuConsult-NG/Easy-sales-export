@@ -9,12 +9,78 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { createAdminAuditLog, logAdminAction } from "@/lib/audit-log";
 import { isAdmin } from "@/lib/admin-permissions";
 
-/** Helper: verify admin session */
-async function requireAdmin(): Promise<{ id: string } | null> { const sessionResult = await requireSession();
+/**
+ * Helper: verify admin session.
+ *
+ *   #281 A DEMOTED OR SUSPENDED ADMIN COULD STILL POST A PLATFORM-WIDE
+ *        ANNOUNCEMENT OR BANNER, AND TAKE DOWN A REAL ONE.
+ *
+ *        This read `isAdmin(session.user.roles)` — the roles carried in the
+ *        JWT — and nothing else. So it decided on a snapshot taken when the
+ *        token was minted:
+ *
+ *          revoke somebody's admin role   they keep CMS write access until
+ *                                         their token refreshes
+ *          suspend or ban the account     the guard never looks, so the ban
+ *                                         changes nothing here at all
+ *
+ *        Measured, not inferred. With a JWT saying "admin" over a live record
+ *        saying "general_user", createAnnouncementAction returned
+ *        `{"success":true,"announcementId":"..."}` and wrote the row. With
+ *        `isBanned: true` on the live record, the same.
+ *
+ *        THERE ARE TWO createAnnouncementActions AND THE OTHER ONE WAS RIGHT.
+ *        admin-communications.ts uses lib/require-admin.ts, which exists for
+ *        precisely this and says so in its own comments — "Re-fetch roles live
+ *        from Firestore (bypasses the stale JWT)" and a banned/suspended check
+ *        while it has the document. The admin CMS page imports from THIS file.
+ *        Same shape as #276 and #277: the hardened implementation is not the
+ *        wired one.
+ *
+ *        It is also #242 from the other side. That finding was "suspending a
+ *        seller suspended nothing"; this is the same sentence about an admin.
+ *
+ * WHY NOT JUST CALL lib/require-admin.ts
+ * --------------------------------------
+ * Its role test is `admin | super_admin | *_admin`. isAdmin() ALSO accepts
+ * `moderator` and `support`, and this file is what the CMS screen calls — so
+ * swapping wholesale would silently take the announcements screen away from
+ * two roles that have it today. That is #265's lockout, which this audit
+ * caused once already.
+ *
+ * So the PREDICATE is unchanged and only the SOURCE of the roles moves: live
+ * document instead of JWT, plus the banned check. Nobody who can post today
+ * stops being able to; people who should have stopped, stop.
+ *
+ * Whether moderator and support ought to reach a platform-wide announcement at
+ * all is a real question — the two doors disagree about it — but it is a policy
+ * decision and belongs to the owner, not to a security fix. Recorded rather
+ * than taken.
+ */
+async function requireAdmin(): Promise<{ id: string } | null> {
+    const sessionResult = await requireSession();
     if (!sessionResult.session) return null;
     const { session } = sessionResult;
-    if (!session?.user?.id || !isAdmin(session.user.roles)) { return null;
+    if (!session?.user?.id) return null;
+
+    // The live record decides, not the token.
+    let liveRoles: string[] | undefined;
+    let banned = false;
+    try {
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        if (!userDoc.exists) return null;
+        const data = userDoc.data();
+        liveRoles = data?.roles;
+        banned = data?.isBanned === true || data?.status === "banned" || data?.suspended === true;
+    } catch (error) {
+        // #245's rule: a guard that cannot evaluate refuses. Failing open here
+        // would make a database blip an authorisation bypass.
+        logger.error("[cms] admin check failed to read the live user record", { error });
+        return null;
     }
+
+    if (banned || !isAdmin(liveRoles)) return null;
+
     return { id: session.user.id };
 }
 
