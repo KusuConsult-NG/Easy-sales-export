@@ -2,6 +2,7 @@
 import { requireSession } from "@/lib/session-guard";
 
 import { supabaseDb as db } from "@/lib/supabase-db";
+import { userErasurePatch, erasedEmailFor } from "@/lib/user-erasure";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
 import { revokeAuthAccess } from "@/lib/auth-revocation";
@@ -121,17 +122,20 @@ async function _deleteUserAccountAction(): Promise<ActionResponse<null>> { try {
 
         // Scrub all PII. We retain the UID so that database foreign keys (like
         // 'sellerId' on an order or 'buyerId' on a farm purchase) do not break.
+        //
+        // #283 The list this comment describes used to live here, and it was
+        // TEN fields. It missed bvn, nin, nextOfKin, the identity-document URLs
+        // and the date of birth — and on the fields this codebase stores twice
+        // it removed one copy and left the other: `address` deleted while
+        // `residentialAddress` stayed, `bankDetails` deleted while
+        // `bankAccountNumber`/`bankAccountName`/`bankCode` stayed, `fullName`
+        // redacted while `firstName`/`lastName`/`otherName` kept the real name.
+        //
+        // It is a shared definition now, checked against the User type, so a
+        // new PII field cannot be added without erasure learning about it. See
+        // lib/user-erasure.ts.
         batch.update(userRef, {
-            fullName: "Redacted User",
-            email: "deleted_" + userId + "@redacted.local",
-            phone: FieldValue.delete(),
-            gender: FieldValue.delete(),
-            address: FieldValue.delete(),
-            bankDetails: FieldValue.delete(),
-            serviceRegistrations: FieldValue.delete(),
-            mfaEnabled: false,
-            totpSecret: FieldValue.delete(),
-            mfaRecoveryCodes: FieldValue.delete(),
+            ...userErasurePatch(userId),
 
             // Track deletion status and timestamp
             deleted: true,
@@ -155,7 +159,7 @@ async function _deleteUserAccountAction(): Promise<ActionResponse<null>> { try {
         // Reported as a failure if the primary store cannot be revoked: telling
         // someone their account is gone while their credentials still work is
         // the outcome this whole function exists to avoid.
-        const revocation = await revokeAuthAccess(userId, "deleted_" + userId + "@redacted.local");
+        const revocation = await revokeAuthAccess(userId, erasedEmailFor(userId));
         if (!revocation.primaryRevoked) {
             logger.error("[NDPR Compliance] auth revocation failed after scrubbing", { userId });
             return {
