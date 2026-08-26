@@ -232,6 +232,26 @@ async function _verifyLandListingAction(
             return { success: false, error: "Unauthorized: Admin access required", data: null };
         }
 
+        // #282 THE ACTOR IS THE SESSION, NOT THE ARGUMENT.
+        //
+        // `adminId` is a caller parameter and it was written as `verifiedBy`
+        // and passed to logAdminAction as the acting admin, while the guard
+        // above had already established who the caller actually is. So one land
+        // admin could record a decision against another's name, and the audit
+        // entry would corroborate it.
+        //
+        // Three of the five land decision paths already did this correctly:
+        // api/admin/farm-nation/approve-land, admin/_land.ts, and
+        // _deleteLandListingAction further down THIS FILE, which takes the same
+        // unused adminId parameter and logs session.user.id.
+        //
+        // Nothing calls these two today, so this is latent rather than live —
+        // but they are exported and the next caller would have inherited it.
+        // The parameter is kept so the signature does not change and is
+        // deliberately ignored, the same treatment farm-nation-payment.ts gives
+        // its `amount` and _submitForVerificationAction gives its `ownerId`.
+        const actingAdminId = session.user.id;
+
         const listingRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(listingId);
         const listingDoc = await listingRef.get();
 
@@ -269,7 +289,7 @@ async function _verifyLandListingAction(
                 // top-level fields, which every other writer already sets.
                 verificationStatus: "approved",
                 verified: true,
-                verifiedBy: adminId,
+                verifiedBy: actingAdminId,
                 verifiedAt: FieldValue.serverTimestamp(),
                 // The prior rejection reason is cleared on the record but kept in
                 // the audit log below, which is where a reversed decision belongs.
@@ -294,7 +314,7 @@ async function _verifyLandListingAction(
 
         await logAdminAction(
             "land_verified",
-            adminId,
+            actingAdminId,
             listingId,
             "land_listing"
         );
@@ -373,6 +393,26 @@ async function _rejectLandListingAction(
             return { success: false, error: "Unauthorized: Admin access required", data: null };
         }
 
+        // #282 THE ACTOR IS THE SESSION, NOT THE ARGUMENT.
+        //
+        // `adminId` is a caller parameter and it was written as `verifiedBy`
+        // and passed to logAdminAction as the acting admin, while the guard
+        // above had already established who the caller actually is. So one land
+        // admin could record a decision against another's name, and the audit
+        // entry would corroborate it.
+        //
+        // Three of the five land decision paths already did this correctly:
+        // api/admin/farm-nation/approve-land, admin/_land.ts, and
+        // _deleteLandListingAction further down THIS FILE, which takes the same
+        // unused adminId parameter and logs session.user.id.
+        //
+        // Nothing calls these two today, so this is latent rather than live —
+        // but they are exported and the next caller would have inherited it.
+        // The parameter is kept so the signature does not change and is
+        // deliberately ignored, the same treatment farm-nation-payment.ts gives
+        // its `amount` and _submitForVerificationAction gives its `ownerId`.
+        const actingAdminId = session.user.id;
+
         const listingRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(listingId);
         const listingDoc = await listingRef.get();
 
@@ -391,7 +431,7 @@ async function _rejectLandListingAction(
             patch: {
                 verificationStatus: "rejected",
                 verified: false,
-                verifiedBy: adminId,
+                verifiedBy: actingAdminId,
                 verifiedAt: FieldValue.serverTimestamp(),
                 rejectionReason: reason,
                 updatedAt: FieldValue.serverTimestamp()
@@ -414,7 +454,7 @@ async function _rejectLandListingAction(
 
         await logAdminAction(
             "land_rejected",
-            adminId,
+            actingAdminId,
             listingId,
             "land_listing",
             reason
