@@ -29,6 +29,20 @@ export default function MessagesPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [searchResults, setSearchResults] = useState<UserSearchResult[]>([]);
     const [searching, setSearching] = useState(false);
+    /**
+     * Why the conversation list needs an error of its own — #310.
+     *
+     * getConversationsAction returns { error, conversations: [] } when it
+     * fails, and the poll below guarded on `if (result.conversations)`, which
+     * is TRUE for an empty array. So a failed load replaced whatever the user
+     * had with nothing and the screen said "No conversations yet" — the same
+     * "a failed list looked like an empty one" shape as #307, on the screen
+     * where an unread message from an admin is the thing being hidden.
+     *
+     * A toast is wrong here: this polls every eight seconds and would stack up
+     * one per tick. The list keeps what it has and says why it is stale.
+     */
+    const [listError, setListError] = useState<string | null>(null);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -46,11 +60,17 @@ export default function MessagesPage() {
         async function fetchConversations() {
             try {
                 const result = await getConversationsAction();
-                if (isMounted && result.conversations) {
-                    setConversations(result.conversations);
+                if (!isMounted) return;
+                if (result.error) {
+                    // Keep the list. See listError above.
+                    setListError(result.error);
+                    return;
                 }
+                setListError(null);
+                setConversations(result.conversations ?? []);
             } catch (err) {
                 console.error("Messages page conversations poll failed:", err);
+                if (isMounted) setListError("Could not reach the server.");
             } finally {
                 if (isMounted) setLoading(false);
             }
@@ -100,8 +120,13 @@ export default function MessagesPage() {
                     });
                 }
 
-                // Mark as read
-                await markAsReadAction(selectedConv!);
+                // Mark as read. The result was discarded entirely; a refusal
+                // left the badge showing unread with nothing anywhere saying
+                // why. Not a toast — this runs every three seconds.
+                const readResult = await markAsReadAction(selectedConv!);
+                if (readResult?.error) {
+                    console.error("[messages] the conversation was not marked read:", readResult.error);
+                }
             } catch (err) {
                 console.error("Messages page messages poll failed:", err);
             } finally {
@@ -143,8 +168,18 @@ export default function MessagesPage() {
         setSearchQuery(query);
         setSearching(true);
         const result = await searchUsersAction(query);
-        if (!isSessionExpired(result) && result.users) {
-            setSearchResults(result.users);
+        if (isSessionExpired(result)) {
+            setSearching(false);
+            return;
+        }
+        if (result.error) {
+            // Was: `result.users` guarded the write, and a failed search
+            // returns users: [], so the panel showed "no matches" for a search
+            // that never ran.
+            setSearchResults([]);
+            showToast(result.error, "error");
+        } else {
+            setSearchResults(result.users ?? []);
         }
         setSearching(false);
     }
@@ -161,17 +196,25 @@ export default function MessagesPage() {
     // Start new conversation
     async function handleStartConversation(userUid: string) {
         const result = await startConversationAction(userUid);
-        if (!isSessionExpired(result) && result.conversationId) {
-            setSelectedConv(result.conversationId);
-            setShowNewChat(false);
-            setSearchQuery("");
-            setSearchResults([]);
+        if (isSessionExpired(result)) return;
+        if (!result.conversationId) {
+            // The reason existed and was thrown away. cooperatives/directory
+            // shows it on this same action; this screen did not.
+            showToast(result.error || "Failed to start conversation", "error");
+            return;
+        }
 
-            // Reload conversations
-            const convResult = await getConversationsAction();
-            if (!isSessionExpired(convResult) && convResult.conversations) {
-                setConversations(convResult.conversations);
-            }
+        setSelectedConv(result.conversationId);
+        setShowNewChat(false);
+        setSearchQuery("");
+        setSearchResults([]);
+
+        // Reload conversations. A failure here is not worth a toast — the
+        // conversation was created and the eight-second poll will bring it in
+        // — but it must not blank the list either.
+        const convResult = await getConversationsAction();
+        if (!isSessionExpired(convResult) && !convResult.error) {
+            setConversations(convResult.conversations ?? []);
         }
     };
 
@@ -179,19 +222,27 @@ export default function MessagesPage() {
     async function handleStartSupportConversation() {
         setSearching(true);
         const result = await startSupportConversationAction();
-        if (!isSessionExpired(result) && result.conversationId) {
-            setSelectedConv(result.conversationId);
-            setShowNewChat(false);
-            setSearchQuery("");
-            setSearchResults([]);
-
-            // Reload conversations
-            const convResult = await getConversationsAction();
-            if (!isSessionExpired(convResult) && convResult.conversations) {
-                setConversations(convResult.conversations);
-            }
-        }
         setSearching(false);
+        if (isSessionExpired(result)) return;
+        if (!result.conversationId) {
+            // THE one that matters most. startSupportConversationAction
+            // returns "No admin available currently" and "You are the primary
+            // admin" — real, specific, actionable answers — and "Contact Admin
+            // Support" discarded all of them, so the button did nothing at all
+            // and the member clicked it again.
+            showToast(result.error || "Failed to contact support", "error");
+            return;
+        }
+
+        setSelectedConv(result.conversationId);
+        setShowNewChat(false);
+        setSearchQuery("");
+        setSearchResults([]);
+
+        const convResult = await getConversationsAction();
+        if (!isSessionExpired(convResult) && !convResult.error) {
+            setConversations(convResult.conversations ?? []);
+        }
     };
 
     // Get other participant
@@ -264,7 +315,12 @@ export default function MessagesPage() {
                 </div>
 
                 <div className="flex-1 overflow-y-auto">
-                    {conversations.length === 0 ? (
+                    {listError && (
+                        <div className="m-3 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+                            This list may be out of date — {listError}
+                        </div>
+                    )}
+                    {conversations.length === 0 && !listError ? (
                         <div className="p-8 text-center text-slate-500 text-sm">
                             No conversations yet. Click + to start chatting.
                         </div>
@@ -282,7 +338,14 @@ export default function MessagesPage() {
                                 >
                                     <div className="flex items-start gap-3">
                                         <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-medium">
-                                            {other?.name.charAt(0).toUpperCase() || "U"}
+                                            {/* `other?.name.charAt(0) || "U"` — the optional chain
+                                                covered `other` and not `name`, so a participant
+                                                entry without a name THREW rather than falling back,
+                                                and the whole list went with it. The "U" was
+                                                unreachable: `.charAt` on undefined raises before
+                                                `||` is ever evaluated. The line below has the
+                                                guarded form already. */}
+                                            {other?.name?.charAt(0).toUpperCase() || "U"}
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <div className="font-medium text-slate-900 truncate">
@@ -292,12 +355,25 @@ export default function MessagesPage() {
                                                 {conv.lastMessage?.text || "No messages yet"}
                                             </div>
                                         </div>
-                                        {conv.lastMessage && (
+                                        {/* ONE UNREADABLE TIMESTAMP TOOK THE WHOLE LIST DOWN.
+                                            This was a hand-rolled two-branch shape test whose
+                                            else-branch did `format(new Date(timestamp), ...)`.
+                                            date-fns `format` THROWS RangeError on an Invalid
+                                            Date, so a single conversation with a missing or
+                                            unparseable lastMessage.timestamp crashed the render
+                                            of every conversation — #130's shape, on a field
+                                            #18 and #49 already established this codebase stores
+                                            in more than one shape.
+
+                                            toMillis is the canonical normaliser, imported at the
+                                            top of this file and used by the message sort at line
+                                            107 — it handles Date, number, string, .toDate() and
+                                            _seconds/_nanoseconds, and returns 0 for anything it
+                                            cannot read. 0 hides the time rather than printing a
+                                            confident 01:00 from the epoch. */}
+                                        {toMillis(conv.lastMessage?.timestamp) > 0 && (
                                             <div className="text-xs text-slate-400">
-                                                {typeof (conv.lastMessage.timestamp as any)?.toDate === 'function' ?
-                                                    format((conv.lastMessage.timestamp as any).toDate(), "HH:mm") :
-                                                    format(new Date(conv.lastMessage.timestamp as unknown as (string | number)), "HH:mm")
-                                                }
+                                                {format(new Date(toMillis(conv.lastMessage?.timestamp)), "HH:mm")}
                                             </div>
                                         )}
                                     </div>
