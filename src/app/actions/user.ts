@@ -2,7 +2,7 @@
 import { requireSession } from "@/lib/session-guard";
 
 import { supabaseDb as db } from "@/lib/supabase-db";
-import { userErasurePatch, erasedEmailFor } from "@/lib/user-erasure";
+import { userErasurePatch, erasedEmailFor, erasureRetentionRecord, erasedOwnerMarker } from "@/lib/user-erasure";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
 import { revokeAuthAccess } from "@/lib/auth-revocation";
@@ -34,11 +34,17 @@ async function _deleteUserAccountAction(): Promise<ActionResponse<null>> { try {
         // WHAT WAS MISSING HERE
         // ---------------------
         // Nothing checked whether the account still held money or owed any.
-        // The batch below calls `delete()` on the WALLET document outright, so
-        // deleting an account with a balance destroyed it silently, leaving no
-        // record of what was owed to whom. An outstanding cooperative loan
-        // survived while the borrower's name and contact details were scrubbed,
-        // which is worse than either outcome alone.
+        // The batch below used to call `delete()` on the WALLET document
+        // outright, so deleting an account with a balance destroyed it
+        // silently, leaving no record of what was owed to whom. An outstanding
+        // cooperative loan survived while the borrower's name and contact
+        // details were scrubbed, which is worse than either outcome alone.
+        //
+        // #300 has since removed that delete entirely — the wallet is marked,
+        // never dropped — so this guard is now the FIRST of two defences rather
+        // than the only one. It stays because refusing early, with the figures
+        // named, is a better answer than retiring an account that still owes or
+        // is owed.
         //
         // Erasure is a right, not an escape hatch: NDPR does not require a
         // controller to forget a debt or forfeit a balance. It requires the
@@ -111,14 +117,47 @@ async function _deleteUserAccountAction(): Promise<ActionResponse<null>> { try {
             };
         }
 
-        // Delete related KYC verifications
-        const kycSnap = await db.collection(COLLECTIONS.KYC_VERIFICATIONS).where("userId", "==", userId).get();
+        /**
+         *   #300 THIS RETIRES RELATED RECORDS. IT USED TO DESTROY THEM.
+         *
+         *        Three `batch.delete` calls stood here — every KYC verification
+         *        row for the user, the seller verification row, and THE WALLET.
+         *
+         *        The wallet one contradicted the comment fifteen lines below,
+         *        which keeps the uid "so that database foreign keys do not
+         *        break": a wallet is the other end of exactly those keys, and
+         *        every wallet_transactions row points at it. The blocker check
+         *        above already refuses to erase an account holding a balance, so
+         *        no naira was lost — what was lost was the record that the
+         *        account had existed.
+         *
+         *        Owner decision, which also settles #280 and #292: nothing is
+         *        deleted. The rows are marked so a reader knows they are inert
+         *        and why, and the identity-document references are copied into a
+         *        server-only retention record BEFORE the user row is scrubbed —
+         *        because that row was the only place recording which Cloudinary
+         *        assets belonged to this person, and nothing in this codebase
+         *        ever removes an asset.
+         */
         const batch = db.batch();
-        kycSnap.docs.forEach(doc => batch.delete(doc.ref));
 
-        // Delete seller verification & wallet
-        batch.delete(db.collection(COLLECTIONS.SELLER_VERIFICATIONS).doc(userId));
-        batch.delete(db.collection(COLLECTIONS.WALLETS).doc(userId));
+        const kycSnap = await db.collection(COLLECTIONS.KYC_VERIFICATIONS).where("userId", "==", userId).get();
+        kycSnap.docs.forEach(doc => batch.update(doc.ref, erasedOwnerMarker(userId)));
+
+        batch.set(
+            db.collection(COLLECTIONS.SELLER_VERIFICATIONS).doc(userId),
+            erasedOwnerMarker(userId),
+            { merge: true },
+        );
+        batch.set(
+            db.collection(COLLECTIONS.WALLETS).doc(userId),
+            erasedOwnerMarker(userId),
+            { merge: true },
+        );
+
+        // The index of this person's uploaded documents, kept before the user
+        // row loses it. Server-only: document_collections has RLS on and no
+        // policies (migration 004), so nothing in a browser can read it.
 
         // Scrub all PII. We retain the UID so that database foreign keys (like
         // 'sellerId' on an order or 'buyerId' on a farm purchase) do not break.
@@ -134,6 +173,13 @@ async function _deleteUserAccountAction(): Promise<ActionResponse<null>> { try {
         // It is a shared definition now, checked against the User type, so a
         // new PII field cannot be added without erasure learning about it. See
         // lib/user-erasure.ts.
+
+        batch.set(
+            db.collection(COLLECTIONS.ERASURE_RETENTION).doc(userId),
+            erasureRetentionRecord(userId, userSnap.data()),
+            { merge: true },
+        );
+
         batch.update(userRef, {
             ...userErasurePatch(userId),
 

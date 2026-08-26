@@ -103,13 +103,15 @@ export const ERASED_FIELDS = [
     //        stored URLs; AFTER it, the file is still public and nothing here
     //        can say whose it was.
     //
-    //        A right-to-erasure request therefore removes the evidence rather
-    //        than the data. Not fixed in this module on purpose: destroying
-    //        production assets is irreversible, untestable without a live
-    //        Cloudinary, and has to happen BEFORE the links are dropped — which
-    //        makes it a change to the erasure FLOW rather than to this list.
-    //        Pinned with the #280 decision the owner already has open, and in
-    //        upload-identifiers.render.test.tsx.
+    //        A right-to-erasure request therefore removed the evidence rather
+    //        than the data.
+    //
+    //        SETTLED BY THE OWNER, and settled the other way round from the way
+    //        this note anticipated: nothing is to be deleted, on Cloudinary or
+    //        anywhere else. So the asset is not purged — the REFERENCE is kept,
+    //        copied into a server-only retention record before this patch runs.
+    //        See erasureRetentionRecord below and #300. The field still goes
+    //        from the user row; what changed is that it no longer goes nowhere.
     "documents",
 
     // Credentials and second factors.
@@ -143,4 +145,81 @@ export function userErasurePatch(userId: string): Record<string, unknown> {
 /** The placeholder address, in one place — auth revocation is handed the same. */
 export function erasedEmailFor(userId: string): string {
     return `deleted_${userId}@redacted.local`;
+}
+
+/**
+ * What the erasure MOVES rather than destroys.
+ *
+ *   #300 ERASURE DESTROYED RECORDS INSTEAD OF RETIRING THEM.
+ *
+ *        Owner decision, and it settles #280/#292: nothing is to be deleted —
+ *        not a Cloudinary asset, and not a row that was wrongly programmed. The
+ *        code gets fixed and the data stays recoverable.
+ *
+ *        Three things in deleteAccountAction were outright destruction:
+ *
+ *          batch.delete on every KYC_VERIFICATIONS row for the user
+ *          batch.delete on the SELLER_VERIFICATIONS row
+ *          batch.delete on the WALLET
+ *
+ *        The wallet one contradicts the function's own comment two lines below
+ *        it, which says the uid is kept "so that database foreign keys do not
+ *        break". A wallet is the other end of exactly those keys: every
+ *        wallet_transactions row points at it. The blocker check above refuses
+ *        to erase an account holding a balance, so nothing was lost in NAIRA —
+ *        what was lost is the record that the account existed at all.
+ *
+ *        And `documents` was deleted from the user row, which is the only place
+ *        that recorded WHICH Cloudinary assets were that person's. The assets
+ *        are never removed (nothing in this codebase deletes one), so erasure
+ *        was destroying the index and leaving the files — the worst of both.
+ *
+ *        Now: the references are copied here first, and the three rows are
+ *        MARKED rather than deleted.
+ *
+ * WHERE THIS SITS, AND WHY THAT IS SAFE
+ * -------------------------------------
+ * COLLECTIONS.ERASURE_RETENTION is inside document_collections, which
+ * migration 004 put under RLS with no policies at all. Only the service key
+ * reaches it; no browser session, no member, no admin screen. It is a record
+ * for the controller, not a second copy on a page.
+ *
+ * THE TENSION, STATED RATHER THAN HIDDEN
+ * --------------------------------------
+ * Retaining identity-document links after a right-to-erasure request is a
+ * position, not a neutral default. It is the owner's decision and it is applied
+ * here as given; the mitigation is that the retained record is server-only and
+ * carries links rather than the documents themselves. If the position changes
+ * later, this is the one place that has to change.
+ */
+export function erasureRetentionRecord(
+    userId: string,
+    user: Record<string, any> | undefined | null,
+): Record<string, unknown> {
+    return {
+        userId,
+        // The Cloudinary references. Without these, the assets outlive the only
+        // record of whose they were.
+        documents: user?.documents ?? null,
+        // Enough to identify the person to a regulator or to themselves if they
+        // come back — deliberately NOT the full profile.
+        emailAtErasure: user?.email ?? null,
+        retainedAt: new Date().toISOString(),
+        reason: "right_to_erasure",
+    };
+}
+
+/**
+ * The patch that RETIRES a related record instead of deleting it — #300.
+ *
+ * Used for the KYC verification rows, the seller verification row and the
+ * wallet. Everything already on the row stays; what is added is the fact that
+ * the owner exercised erasure, so a reader knows why the row is inert.
+ */
+export function erasedOwnerMarker(userId: string): Record<string, unknown> {
+    return {
+        ownerErased: true,
+        ownerErasedAt: new Date().toISOString(),
+        ownerErasedUserId: userId,
+    };
 }
