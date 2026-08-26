@@ -12,6 +12,7 @@ import { ProductSchema, OrderSchema, SellerAnalyticsSchema } from "@/lib/validat
 import { withSafeAction, ActionResponse } from "@/lib/safe-action";
 import { toMillis } from "@/lib/firestore-serialize";
 import { countsAsSellerRevenue, orderAmount } from "@/lib/order-status";
+import { isRetired } from "@/lib/record-retirement";
 
 /**
  * The most rows the analytics summary will read from each collection.
@@ -111,7 +112,30 @@ async function _getSellerProductsAction(options: {
             }
         });
 
-        if (search) { 
+        /**
+         *   #301 THE ONE LIST THAT WOULD HAVE KEPT SHOWING A DELETED PRODUCT.
+         *
+         *        Deleting a product now retires the row instead of destroying
+         *        it, and every buyer-facing query filters status == "active" so
+         *        the listing leaves the catalogue on that alone. This list does
+         *        not: it queries by sellerId, and by an OPTIONAL status, so with
+         *        the default "all" tab a retired product would sit on the
+         *        seller's own screen with no way left to remove it.
+         *
+         *        Filtered here rather than in the query because both query paths
+         *        (ordered and the missing-index fallback) converge on this
+         *        array, and because `retired` is absent on every existing row —
+         *        a .where() on a field that does not exist yet is exactly the
+         *        shape that has emptied lists in this codebase before.
+         *
+         *        Asking for the archived tab explicitly still shows them, so
+         *        nothing is hidden from the person who owns it.
+         */
+        if (status !== "archived") {
+            products = products.filter((p: any) => !isRetired(p));
+        }
+
+        if (search) {
             const searchLower = search.toLowerCase();
             products = products.filter((p: any) =>
                 p.title?.toLowerCase()?.includes(searchLower) ||

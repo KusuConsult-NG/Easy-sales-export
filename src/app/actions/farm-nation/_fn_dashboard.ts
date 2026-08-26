@@ -49,7 +49,14 @@ async function _getFarmNationDashboardStatsAction(): Promise<ActionResponse<Farm
             }
         }
 
-        const properties = serializeDocs<any>(listingsSnap.docs).map(d => ({ 
+        // #301 An admin-deleted listing is retired now rather than destroyed, so
+        // it would otherwise reappear on its owner's dashboard — this query is
+        // by ownerId with no status filter at all. The buyer-facing screens need
+        // no change: "deleted" is in neither PURCHASABLE_STATUSES nor
+        // BROWSABLE_STATUSES.
+        const properties = serializeDocs<any>(listingsSnap.docs)
+            .filter((d: any) => d.status !== 'deleted' && d.retired !== true)
+            .map(d => ({
             id: d.id,
             size: Number(d.size) || 0,
             price: Number(d.price) || 0,

@@ -12,6 +12,7 @@ import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { createNotificationAction } from "@/app/actions/notifications";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { updateTag } from "next/cache";
+import { retirementPatch } from "@/lib/record-retirement";
 import { invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
@@ -1008,14 +1009,35 @@ async function _deleteLandListingAction(
             return { success: false, error: "Listing not found", data: null };
         }
 
-        await listingRef.delete();
+        /**
+         *   #301 THE STATUS FOR THIS ALREADY EXISTED AND THE CODE IGNORED IT.
+         *
+         *        land-listing-status.ts declares "deleted" in LandListingStatus
+         *        and its own header describes the behaviour as "delete sets
+         *        `deleted`". No reader admits that status — it is in neither
+         *        PURCHASABLE_STATUSES nor BROWSABLE_STATUSES — so setting it is
+         *        sufficient to remove a listing from every buyer-facing screen.
+         *
+         *        The code called .delete() instead, destroying a row that land
+         *        purchases and farm-nation transactions reference by id
+         *        (_fna_finance.ts reads LAND_LISTINGS.doc(preTxData.propertyId)
+         *        while settling a transaction).
+         *
+         *        So the vocabulary described a soft delete the code had stopped
+         *        performing. It performs it again.
+         */
+        await listingRef.update({
+            status: "deleted",
+            ...retirementPatch(session.user.id, listingDoc.data()?.status),
+            updatedAt: new Date().toISOString(),
+        });
 
         await logAdminAction(
             "land_deleted",
             session.user.id,
             listingId,
             "land_listing",
-            "Listing was permanently deleted"
+            "Listing was retired (status: deleted) — the row is retained so purchases and transactions that reference it stay readable"
         );
 
         updateTag("land-listings");

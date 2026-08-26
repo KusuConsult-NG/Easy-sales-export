@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { retirementPatch } from "@/lib/record-retirement";
 
 /**
  * API Route: Delete Product
@@ -46,7 +47,23 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        await productRef.delete();
+        /**
+         *   #301 THE SECOND DOOR, DESTROYING THE SAME ROW.
+         *
+         *        deleteProductAction in actions/marketplace/_mp_products.ts is
+         *        the other one. Both called .delete(); fixing one and leaving
+         *        the other is this codebase's most repeated mistake, so both
+         *        change together and one test covers the pair.
+         *
+         *        Retired rather than destroyed: orders point at productIds, and
+         *        order-management.ts returns stock with an update() that this
+         *        adapter treats as a silent no-op when the row is gone.
+         */
+        await productRef.update({
+            status: "archived",
+            ...retirementPatch(userId, productDoc.data()?.status),
+            updatedAt: new Date().toISOString(),
+        });
 
         return NextResponse.json({
             success: true,

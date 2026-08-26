@@ -8,6 +8,7 @@ import { hasAdminPermission } from "@/lib/admin-permissions";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { serializeValue } from "@/lib/firestore-serialize";
 import { recordAdminAction } from "@/lib/audit-log";
+import { retirementPatch, isRetired } from "@/lib/record-retirement";
 
 export async function submitExportProductAction(productData: any) { try {
         const sessionResult = await requireSession();
@@ -89,13 +90,19 @@ export async function getUserExportProductsAction() { try {
             }
         }
 
-        const products = snapshot.docs.map(doc => { 
-            const data = doc.data();
-            return serializeValue({
-                id: doc.id,
-                ...data,
+        // #301 A retired product must leave its owner's list too. This queries
+        // by userId and nothing else, so without this the seller would delete a
+        // product and watch it stay. The public catalogue and the stats already
+        // filter isActive == true and need no change.
+        const products = snapshot.docs
+            .filter(doc => !isRetired(doc.data()))
+            .map(doc => {
+                const data = doc.data();
+                return serializeValue({
+                    id: doc.id,
+                    ...data,
+                });
             });
-        });
 
         if (indexError) {
             products.sort((a: any, b: any) => {
@@ -136,7 +143,28 @@ export async function deleteExportProductAction(productId: string) {
             }
         }
 
-        await productRef.delete();
+        /**
+         *   #301 THE SELLER'S DOOR DESTROYED WHAT THE ADMIN'S DOOR RETIRES.
+         *
+         *        deleteExportCatalogAction in export-admin.ts — same collection,
+         *        same intent — writes { isActive: false, deletedAt, deletedBy }
+         *        and leaves the row in place. The public catalogue route and the
+         *        catalogue stats both query isActive == true, so that is all
+         *        hiding an export product has ever required.
+         *
+         *        This door called .delete() instead, on rows that export orders
+         *        reference by id (export-payment.ts reads
+         *        EXPORT_CATALOG.doc(item.productId) when a payment lands).
+         *
+         *        Same convention as the admin door now, plus the shared
+         *        retirement bookkeeping so both record who and when.
+         */
+        await productRef.update({
+            isActive: false,
+            deletedAt: new Date(),
+            deletedBy: userId,
+            ...retirementPatch(userId, productData?.status),
+        });
 
         await recordAdminAction({
             action: 'export_product_delete',

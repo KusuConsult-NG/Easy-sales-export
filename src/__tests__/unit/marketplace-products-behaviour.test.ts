@@ -352,24 +352,58 @@ describe('updateProductAction', () => {
 describe('deleteProductAction', () => {
     const EXISTING = 'product-1';
 
+    /**
+     * These asserted `toBeUndefined()` on success and `toBeDefined()` on
+     * refusal, which was right when the action destroyed the row.
+     *
+     * #301 retires it instead — orders store productIds, and order-management.ts
+     * returns stock with an update() that this adapter treats as a silent no-op
+     * once the row is gone, so a cancellation after a delete refunded the buyer
+     * and restored nothing.
+     *
+     * That inverts the success cases AND makes every refusal case vacuous:
+     * `toBeDefined()` now passes whether the guard held or not. So the refusals
+     * assert the STATUS is untouched, which is the thing a broken guard would
+     * change.
+     */
     beforeEach(() => {
         seedSeller();
-        store.seed(PRODUCTS, EXISTING, { id: EXISTING, sellerId: SELLER, title: 'Cocoa' });
+        store.seed(PRODUCTS, EXISTING, {
+            id: EXISTING, sellerId: SELLER, title: 'Cocoa', status: 'active',
+        });
     });
+
+    const stillLive = () => {
+        const row = store.get(PRODUCTS, EXISTING);
+        expect(row).toBeDefined();
+        expect(row?.status).toBe('active');
+        expect(row?.retired).toBeUndefined();
+    };
+
+    const retiredBy = (actor: string) => {
+        const row = store.get(PRODUCTS, EXISTING);
+        // The row SURVIVES. That is the guarantee every order depends on.
+        expect(row).toBeDefined();
+        expect(row?.title).toBe('Cocoa');
+        expect(row?.status).toBe('archived');
+        expect(row?.retired).toBe(true);
+        expect(row?.retiredBy).toBe(actor);
+        expect(row?.statusBeforeRetirement).toBe('active');
+    };
 
     it('refuses a caller with no session', async () => {
         actAs(null);
         expect(await remove(EXISTING)).toMatchObject({ success: false });
-        expect(store.get(PRODUCTS, EXISTING)).toBeDefined();
+        stillLive();
     });
 
     it('refuses a product that does not exist', async () => {
         expect(await remove('nope')).toMatchObject({ success: false, error: 'Product not found' });
     });
 
-    it('lets the owner delete', async () => {
+    it('lets the owner take a listing down, and KEEPS THE ROW', async () => {
         expect(await remove(EXISTING)).toMatchObject({ success: true });
-        expect(store.get(PRODUCTS, EXISTING)).toBeUndefined();
+        retiredBy(SELLER);
     });
 
     it('refuses another seller', async () => {
@@ -379,7 +413,7 @@ describe('deleteProductAction', () => {
         expect(await remove(EXISTING)).toMatchObject({
             success: false, error: 'Unauthorized: You do not own this product',
         });
-        expect(store.get(PRODUCTS, EXISTING)).toBeDefined();
+        stillLive();
     });
 
     it.each([['admin'], ['super_admin'], ['marketplace_admin']])(
@@ -388,7 +422,7 @@ describe('deleteProductAction', () => {
             store.seed(COLLECTIONS.USERS, 'admin-1', { roles: [role] });
 
             expect(await remove(EXISTING)).toMatchObject({ success: true });
-            expect(store.get(PRODUCTS, EXISTING)).toBeUndefined();
+            retiredBy('admin-1');
         });
 
     it('refuses an admin of another module', async () => {
@@ -396,7 +430,7 @@ describe('deleteProductAction', () => {
         store.seed(COLLECTIONS.USERS, 'ac-admin', { roles: ['academy_admin'] });
 
         expect(await remove(EXISTING)).toMatchObject({ success: false });
-        expect(store.get(PRODUCTS, EXISTING)).toBeDefined();
+        stillLive();
     });
 });
 

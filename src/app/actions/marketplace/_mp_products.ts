@@ -15,6 +15,7 @@ import { withSafeAction, ActionResponse } from "@/lib/safe-action";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
 import { newestVerification, SELLER_NAME_FALLBACK } from "@/lib/seller-trust";
 import { PRODUCT_INITIAL_STATUS } from "@/lib/product-status";
+import { retirementPatch } from "@/lib/record-retirement";
 
 // ============================================================================
 // PRODUCT MANAGEMENT
@@ -510,7 +511,28 @@ async function _deleteProductAction(productId: string): Promise<ActionResponse<{
             }
         }
 
-        await productRef.delete();
+        /**
+         *   #301 THIS DESTROYED THE ROW THAT EVERY ORDER POINTS AT.
+         *
+         *        `await productRef.delete()`. Orders store productIds, and this
+         *        adapter does not raise on a dangling reference — `update()` on
+         *        a missing document is a documented silent no-op.
+         *
+         *        The sharp end is order-management.ts, which returns stock to
+         *        PRODUCTS.doc(item.productId) when an order is cancelled or
+         *        refunded. Delete the product first and that write does nothing,
+         *        raises nothing, and the cancellation reports success.
+         *
+         *        Retired instead. Every buyer-facing query already filters
+         *        status == "active", so the listing leaves the catalogue on the
+         *        status change alone; the seller's own list filters on
+         *        `retired` because it queries by sellerId and nothing else.
+         */
+        await productRef.update({
+            status: "archived",
+            ...retirementPatch(userId, productData?.status),
+            updatedAt: new Date().toISOString(),
+        });
         return { error: null, success: true as const, data: { success: true, message: "Product deleted successfully" } };
     } catch (error) { 
         logger.error("Delete product error:", {

@@ -485,14 +485,35 @@ describe('getPendingLandListingsAction and deleteLandListingAction', () => {
             .toMatchObject({ success: false, error: 'Listing not found' });
     });
 
-    it('delete is PERMANENT — the row is gone, not soft-flagged', async () => {
+    /**
+     * This test used to read "delete is PERMANENT — the row is gone, not
+     * soft-flagged", and asserted store.size(LISTINGS) === 0.
+     *
+     * That was a faithful description of what the code did, and the code was
+     * wrong. #301: land-listing-status.ts declares "deleted" in the vocabulary
+     * and its own header says "delete sets `deleted`", while the action called
+     * .delete() — and farm-nation settlement reads LAND_LISTINGS.doc(propertyId)
+     * while settling a transaction, so destroying the row leaves that read
+     * dangling. The owner's decision is that nothing is deleted.
+     *
+     * The assertion is inverted rather than removed, because "the row survives"
+     * needs pinning at least as firmly as "the row is gone" did.
+     */
+    it('delete RETIRES the listing — the row survives, invisible to buyers', async () => {
         actAs(ADMIN, ['super_admin']);
         seedListing('l1');
 
         expect(await (await actions()).deleteLandListingAction('l1', ADMIN))
             .toMatchObject({ success: true });
-        expect(store.get(LISTINGS, 'l1')).toBeUndefined();
-        expect(store.size(LISTINGS)).toBe(0);
+
+        const row = store.get(LISTINGS, 'l1');
+        expect(row).toBeDefined();
+        expect(row?.status).toBe('deleted');
+        expect(row?.retired).toBe(true);
+        expect(row?.retiredBy).toBe(ADMIN);
+        // "deleted" is in neither PURCHASABLE_STATUSES nor BROWSABLE_STATUSES,
+        // so no buyer-facing screen shows it.
+        expect(store.size(LISTINGS)).toBe(1);
     });
 });
 
