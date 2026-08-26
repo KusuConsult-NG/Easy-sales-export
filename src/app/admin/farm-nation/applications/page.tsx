@@ -12,6 +12,7 @@ import Modal from "@/components/ui/Modal";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 import DynamicDetailModal from "@/components/admin/DynamicDetailModal";
 import ImportLegacyModal from "@/components/admin/ImportLegacyModal";
+import { recordExport } from "@/lib/record-export";
 
 interface SellerProfile {
     id: string;
@@ -162,6 +163,10 @@ export default function FarmNationApplicationsPage() {
             a.download = `farm_nation_applications_${config.status}_${new Date().toISOString().slice(0, 10)}.csv`;
             a.click();
             URL.revokeObjectURL(url);
+            // #309 The download is recorded. Fourteen admin screens built a CSV
+            // and two of them left a trace; several of these carry BVN, NIN and
+            // bank details. recordExport never throws and never blocks.
+            recordExport("farm_nation_applications");
             showToast("Export downloaded successfully", "success");
         } catch (error: any) {
             console.error("Export error:", error);

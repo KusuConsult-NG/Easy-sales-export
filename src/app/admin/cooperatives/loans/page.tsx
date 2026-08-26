@@ -15,6 +15,7 @@ import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFil
 import RecordRepaymentModal from "@/components/admin/RecordRepaymentModal";
 import { formatLocalDate } from "@/lib/date-utils";
 import { guarantorBlocksApproval } from "@/lib/loan-approval-policy";
+import { recordExport } from "@/lib/record-export";
 
 type LoanApplication = {
     id: string;
@@ -245,6 +246,7 @@ export default function AdminLoansPage() {
             a.download = `loan_applications_${new Date().toISOString().slice(0, 10)}.csv`;
             document.body.appendChild(a); a.click();
             document.body.removeChild(a); URL.revokeObjectURL(url);
+            recordExport("cooperative_loans", { count: rows.length, filters: { status: filterStatus } });
             showToast("Export downloaded successfully", "success");
         } catch (error: any) {
             console.error("Export error:", error);

@@ -39,6 +39,7 @@ import { useAdminData } from "@/hooks/useAdminData";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 import DynamicDetailModal from "@/components/admin/DynamicDetailModal";
 import ImportLegacyModal from "@/components/admin/ImportLegacyModal";
+import { recordExport } from "@/lib/record-export";
 
 type AppStatus = "pending_review" | "approved" | "rejected" | "revision_required" | "pending";
 
@@ -268,6 +269,10 @@ export default function AdminExportApplicationsPage() {
             a.download = `export_applications_${statusFilter}_${new Date().toISOString().slice(0, 10)}.csv`;
             a.click();
             URL.revokeObjectURL(url);
+            // #309 The download is recorded. Fourteen admin screens built a CSV
+            // and two of them left a trace; several of these carry BVN, NIN and
+            // bank details. recordExport never throws and never blocks.
+            recordExport("export_applications");
             showToast("Export downloaded successfully", "success");
         } catch (error: any) {
             console.error("Export error:", error);

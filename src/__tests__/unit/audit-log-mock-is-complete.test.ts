@@ -150,7 +150,17 @@ describe('the audit-log mock', () => {
             // scanner.
             .filter((f) => f.endsWith('.test.ts') || f.endsWith('.test.tsx'))
             .filter((f) => f !== 'audit-log-mock-is-complete.test.ts')
-            .map((f) => ({ file: f, text: readFileSync(join(ROOT, 'src/__tests__/unit', f), 'utf-8') }))
+            // COMMENTS ARE NOT OVERRIDES. This read raw text and reported
+            // every-csv-export-is-recorded.test.ts, whose comment explains that
+            // it deliberately does NOT keep the local jest.mock('@/lib/audit-log')
+            // it started with — it quotes the call while saying it removed it.
+            // A scan that cannot tell code from prose reports the one file that
+            // took the advice, which is the needle-in-a-comment trap the shared
+            // stripper exists for. The exclusion above is now the only one.
+            .map((f) => ({
+                file: f,
+                text: stripComments(readFileSync(join(ROOT, 'src/__tests__/unit', f), 'utf-8'), { label: f }),
+            }))
             .filter(({ text }) => text.includes("jest.mock('@/lib/audit-log'")
                 || text.includes('jest.mock("@/lib/audit-log"'));
 

@@ -22,6 +22,7 @@ import { getAllTransactionsAction, getCooperativeStatsAction } from "@/app/actio
 import { toast } from "sonner";
 import { useAdminData } from "@/hooks/useAdminData";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
+import { recordExport } from "@/lib/record-export";
 
 type TransactionType = "all" | "contribution" | "withdrawal" | "loan" | "fixed_savings" | "membership_registration";
 type TransactionStatus = "all" | "pending" | "completed" | "failed";
@@ -188,6 +189,10 @@ export default function AdminTransactionsPage() {
         a.download = `transactions-export-${new Date().toISOString().slice(0, 10)}.csv`;
         a.click();
         URL.revokeObjectURL(url);
+        // #309 The download is recorded. Fourteen admin screens built a CSV
+        // and two of them left a trace; several of these carry BVN, NIN and
+        // bank details. recordExport never throws and never blocks.
+        recordExport("cooperative_transactions");
     }
 
     // transactions already server-side filtered when searchTerm is set

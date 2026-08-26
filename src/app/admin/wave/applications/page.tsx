@@ -11,6 +11,7 @@ import { useAdminData } from "@/hooks/useAdminData";
 import { formatDate } from "@/lib/utils";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 import DynamicDetailModal from "@/components/admin/DynamicDetailModal";
+import { recordExport } from "@/lib/record-export";
 
 type ApplicationStatus = "pending" | "under_review" | "approved" | "rejected";
 
@@ -222,6 +223,10 @@ export default function AdminWaveApplicationsPage() {
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
+            // #309 The download is recorded. Fourteen admin screens built a CSV
+            // and two of them left a trace; several of these carry BVN, NIN and
+            // bank details. recordExport never throws and never blocks.
+            recordExport("wave_applications");
             showToast("Export downloaded successfully", "success");
         } catch (error: any) {
             console.error("Export error:", error);

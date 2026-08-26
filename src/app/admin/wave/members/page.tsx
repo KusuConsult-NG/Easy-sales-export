@@ -12,6 +12,7 @@ import { getStandardWaveApplicationsAction } from "@/app/actions/wave";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import ImportLegacyModal from "@/components/admin/ImportLegacyModal";
+import { recordExport } from "@/lib/record-export";
 
 interface WaveMember {
     id: string; // userId
@@ -188,6 +189,10 @@ export default function AdminWaveMembersPage() {
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
+            // #309 The download is recorded. This screen had TWO exports and
+            // neither left a trace — the bulk list here, and one member's card
+            // below. recordExport never throws and never blocks.
+            recordExport("wave_members", { count: exportData.length });
 
             showToast(`Exported ${exportData.length} members to CSV`, "success");
         } catch (err) {
@@ -431,6 +436,9 @@ export default function AdminWaveMembersPage() {
                                     a.download = `wave_member_${selectedMember.id}.csv`;
                                     a.click();
                                     URL.revokeObjectURL(url);
+                                    // #309 One member is still a person's record
+                                    // leaving the platform, so it is recorded too.
+                                    recordExport("wave_members", { count: 1, filters: { memberId: selectedMember.id } });
                                 }}
                                 className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-semibold transition-all text-sm"
                             >

@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
 import { getBriefingRegistrationsAction } from "@/app/actions/briefing-admin";
+import { recordExport } from "@/lib/record-export";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -155,6 +156,10 @@ export default function BriefingRegistrationsPage() {
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
+            // #309 The download is recorded. Fourteen admin screens built a CSV
+            // and two of them left a trace; several of these carry BVN, NIN and
+            // bank details. recordExport never throws and never blocks.
+            recordExport("wave_registrations");
 
             showToast(`Exported ${exportData.length} registrations to CSV`, "success");
         } catch (err) {

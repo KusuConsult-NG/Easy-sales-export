@@ -8,6 +8,7 @@ import { useAdminData } from "@/hooks/useAdminData";
 import { getMarketplaceUsersAction, approveMarketplaceUserAction, rejectMarketplaceUserAction } from "@/app/actions/admin";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 import { formatLocalDate } from "@/lib/date-utils";
+import { recordExport } from "@/lib/record-export";
 
 type BuyerRole = "buyer_only" | "seller_only" | "both";
 
@@ -143,6 +144,10 @@ export default function MarketplaceBuyersPage() {
         a.href = url; a.download = `marketplace_users_${new Date().toISOString().slice(0, 10)}.csv`;
         document.body.appendChild(a); a.click();
         document.body.removeChild(a); URL.revokeObjectURL(url);
+        // #309 The download is recorded. Fourteen admin screens built a CSV
+        // and two of them left a trace; several of these carry BVN, NIN and
+        // bank details. recordExport never throws and never blocks.
+        recordExport("marketplace_buyers");
     };
 
     const roleBadge = (role: BuyerRole) => {

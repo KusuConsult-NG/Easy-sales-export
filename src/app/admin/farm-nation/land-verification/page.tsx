@@ -7,6 +7,7 @@ import { MapPin, FileText, Check, X, Eye, Loader2, Download, Filter, ClipboardLi
 import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
 import { getAdminLandVerificationsAction, getFarmNationVerificationStatsAction, updateAdminLandListingAction } from "@/app/actions/farm-nation-admin";
+import { recordExport } from "@/lib/record-export";
 
 type LandVerification = {
     id: string;
@@ -337,6 +338,10 @@ export default function AdminLandVerificationPage() {
             a.download = `land_verifications_${filterStatus}_${new Date().toISOString().slice(0, 10)}.csv`;
             document.body.appendChild(a); a.click();
             document.body.removeChild(a); URL.revokeObjectURL(url);
+            // #309 The download is recorded. Fourteen admin screens built a CSV
+            // and two of them left a trace; several of these carry BVN, NIN and
+            // bank details. recordExport never throws and never blocks.
+            recordExport("farm_nation_land_verification");
             showToast("Export downloaded successfully", "success");
         } catch (error: any) {
             console.error("Export error:", error);

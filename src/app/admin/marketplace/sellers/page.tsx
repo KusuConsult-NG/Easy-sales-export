@@ -16,6 +16,7 @@ import { formatLocalDate } from "@/lib/date-utils";
 
 import { StandardPendingForm } from "@/lib/types/admin";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
+import { recordExport } from "@/lib/record-export";
 
 type SellerVerification = {
     id: string;
@@ -169,6 +170,10 @@ export default function AdminSellersPage() {
             a.download = `seller_verifications_${new Date().toISOString().slice(0, 10)}.csv`;
             document.body.appendChild(a); a.click();
             document.body.removeChild(a); URL.revokeObjectURL(url);
+            // #309 The download is recorded. Fourteen admin screens built a CSV
+            // and two of them left a trace; several of these carry BVN, NIN and
+            // bank details. recordExport never throws and never blocks.
+            recordExport("marketplace_sellers");
             showToast("Export successful", "success");
         } catch (error) {
             logger.error("Export CSV error:", error);
