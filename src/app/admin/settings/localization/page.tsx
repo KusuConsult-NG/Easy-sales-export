@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/contexts/ToastContext";
+import { loadSettings, SETTINGS_LOAD_FAILED_MESSAGE } from "@/lib/settings-load";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Language {
@@ -86,19 +87,23 @@ export default function LocalizationSettingsPage() {
     const [isSaving, setIsSaving] = useState(false);
     const [isDirty, setIsDirty] = useState(false);
 
+    /**
+     * #295. "Fall back to defaults silently" is what this used to do, and Save
+     * posts the whole object — so a blip on load followed by one edit rewrote
+     * every language and currency setting with defaults nobody chose.
+     */
+    const [loadError, setLoadError] = useState<string | null>(null);
+
     // ── Load from API ──────────────────────────────────────────────────────
     const load = useCallback(async () => {
-        try {
-            const res = await fetch("/api/admin/settings/localization");
-            const data = await res.json();
-            if (data.success && data.settings) {
-                setSettings(data.settings);
-            }
-        } catch {
-            // Fall back to defaults silently
-        } finally {
-            setIsLoading(false);
+        const result = await loadSettings<LocalizationSettings>("/api/admin/settings/localization");
+        if (result.ok) {
+            setSettings(result.settings);
+            setLoadError(null);
+        } else {
+            setLoadError(result.reason);
         }
+        setIsLoading(false);
     }, []);
 
     useEffect(() => { load(); }, [load]);
@@ -166,6 +171,11 @@ export default function LocalizationSettingsPage() {
 
     // ── Save ──────────────────────────────────────────────────────────────
     async function handleSave() {
+        // #295. Refuse rather than persist defaults that were never read.
+        if (loadError) {
+            showToast(SETTINGS_LOAD_FAILED_MESSAGE, "error");
+            return;
+        }
         setIsSaving(true);
         try {
             const res = await fetch("/api/admin/settings/localization", {
@@ -221,7 +231,7 @@ export default function LocalizationSettingsPage() {
 
                 <button
                     onClick={handleSave}
-                    disabled={isSaving || !isDirty}
+                    disabled={isSaving || !isDirty || !!loadError}
                     className="inline-flex items-center gap-2 px-5 py-2.5 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     {isSaving
@@ -230,6 +240,15 @@ export default function LocalizationSettingsPage() {
                     }
                 </button>
             </div>
+
+
+            {/* #295. A failed load must not look like a successful one. */}
+            {loadError && (
+                <div role="alert" className="mb-6 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+                    <p className="font-bold">{SETTINGS_LOAD_FAILED_MESSAGE}</p>
+                    <p className="mt-1 text-rose-700">{loadError}</p>
+                </div>
+            )}
 
             {/* Unsaved changes banner */}
             {isDirty && (
@@ -495,7 +514,7 @@ export default function LocalizationSettingsPage() {
             <div className="mt-8 flex justify-end">
                 <button
                     onClick={handleSave}
-                    disabled={isSaving || !isDirty}
+                    disabled={isSaving || !isDirty || !!loadError}
                     className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     {isSaving

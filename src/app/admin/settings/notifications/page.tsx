@@ -4,6 +4,7 @@ import { Bell, Loader2, Save } from "lucide-react";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useToast } from "@/contexts/ToastContext";
+import { loadSettings, SETTINGS_LOAD_FAILED_MESSAGE } from "@/lib/settings-load";
 
 interface NotificationSettings {
     newUserEmail: boolean;
@@ -25,27 +26,33 @@ export default function NotificationSettingsPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
+    /**
+     * #295. "Use defaults on error" left the five toggles showing hardcoded
+     * defaults, indistinguishable from what is stored — and saveSettings posts
+     * all five, so one edit after a failed load rewrote the other four.
+     *
+     * The local helper was itself called loadSettings; renamed to `load` so the
+     * shared reader keeps its name and the two cannot be confused.
+     */
+    const [loadError, setLoadError] = useState<string | null>(null);
+
     useEffect(() => {
-        loadSettings();
+        load();
     }, []);
 
-    async function loadSettings() {
-        try {
-            const res = await fetch("/api/admin/settings/notifications");
-            if (res.ok) {
-                const data = await res.json();
-                if (data.settings) {
-                    setNotifications(data.settings);
-                }
-            }
-        } catch {
-            // Use defaults on error
-        } finally {
-            setLoading(false);
-        }
+    async function load() {
+        const result = await loadSettings<NotificationSettings>("/api/admin/settings/notifications");
+        if (result.ok) setNotifications(result.settings);
+        else setLoadError(result.reason);
+        setLoading(false);
     }
 
     async function saveSettings() {
+        // #295. Refuse rather than persist defaults that were never read.
+        if (loadError) {
+            showToast(SETTINGS_LOAD_FAILED_MESSAGE, "error");
+            return;
+        }
         setSaving(true);
         try {
             const res = await fetch("/api/admin/settings/notifications", {
@@ -94,13 +101,21 @@ export default function NotificationSettingsPage() {
                 <h1 className="text-3xl font-bold text-slate-900">Notification Settings</h1>
                 <button
                     onClick={saveSettings}
-                    disabled={saving}
+                    disabled={saving || !!loadError}
                     className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition disabled:opacity-50"
                 >
                     {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                     Save
                 </button>
             </div>
+
+            {/* #295. A failed load must not look like a successful one. */}
+            {loadError && (
+                <div role="alert" className="mb-6 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+                    <p className="font-bold">{SETTINGS_LOAD_FAILED_MESSAGE}</p>
+                    <p className="mt-1 text-rose-700">{loadError}</p>
+                </div>
+            )}
             {/*
               * This said "Configure which events trigger admin email
               * notifications". It configures nothing, and the notifications do
@@ -154,7 +169,7 @@ export default function NotificationSettingsPage() {
             <div className="mt-6 flex justify-end">
                 <button
                     onClick={saveSettings}
-                    disabled={saving}
+                    disabled={saving || !!loadError}
                     className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition disabled:opacity-50"
                 >
                     {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}
