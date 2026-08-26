@@ -155,7 +155,18 @@ export default function BookingWizard({ isOpen, onClose, exportWindow }: Booking
                             <CheckCircle className="w-12 h-12 text-green-600" />
                         </div>
                         <h3 className="text-2xl font-bold text-slate-900 mb-2">Slot Booked!</h3>
-                        <p className="text-slate-500 text-sm">Your export slot is pending confirmation. You will receive an email with payment details.</p>
+                        {/* Was: "You will receive an email with payment details." — #311.
+                            createBookingAction contains no email and no notification
+                            code of any kind: it reserves the volume, writes the row and
+                            returns. So the member was told to wait for a message that
+                            nothing on the platform sends, which is #290's shape. The
+                            copy now says only what is true, and points at the support
+                            route that does work. */}
+                        <p className="text-slate-500 text-sm">
+                            Your export slot is reserved and pending confirmation. Bookings are
+                            not confirmed automatically &mdash; message the export team from
+                            Messages to arrange payment.
+                        </p>
                     </div>
                 ) : (
                     <>
