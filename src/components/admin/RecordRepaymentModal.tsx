@@ -16,12 +16,29 @@
  * must be the actual bank reference: two different transfers need two different
  * references, and re-entering one transfer must reuse its own. A made-up value
  * per attempt would defeat the guard entirely.
+ *
+ *   #286 THE SCREEN KNEW THE NUMBER IT WAS NOT ENFORCING.
+ *
+ *        This modal computed `Math.max(0, totalAmount - paidAmount)` and
+ *        DISPLAYED it beside the input — "₦50,000 outstanding on this
+ *        instalment" — and then validated only `value > 0`. Typing 500,000
+ *        against it was accepted, and the server had no upper bound either, so
+ *        the instalment went to `paid` with paidAmount far above what was owed
+ *        and the excess simply disappeared.
+ *
+ *        The bound now comes from lib/loan-repayment-amount.ts, which is the
+ *        same expression submitRepaymentAction checks. Two spellings of one
+ *        quantity is how the displayed figure and the enforced figure drift
+ *        apart, and the penalty term makes that easy — which is why the owed
+ *        figure shown here also includes the penalty the server settles
+ *        against, rather than the subtraction this file used to do inline.
  */
 
 import { useEffect, useState } from "react";
 import { X, Loader2, AlertCircle } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { formatLocalDate } from "@/lib/date-utils";
+import { amountOwedOn, checkRepaymentAmount } from "@/lib/loan-repayment-amount";
 import { getRepaymentScheduleAction, submitRepaymentAction } from "@/app/actions/cooperative";
 import { useToast } from "@/contexts/ToastContext";
 
@@ -71,7 +88,7 @@ export default function RecordRepaymentModal({
                 const next = rows.find((i) => i.status !== "paid");
                 if (next?.id) {
                     setInstallmentId(next.id);
-                    const owed = Math.max(0, (next.totalAmount || 0) - (next.paidAmount || 0));
+                    const owed = amountOwedOn(next);
                     if (owed > 0) setAmount(String(owed));
                 }
             } catch {
@@ -86,16 +103,23 @@ export default function RecordRepaymentModal({
     }, [loanId, showToast]);
 
     const selected = schedule.find((i) => i.id === installmentId);
-    const outstanding = selected
-        ? Math.max(0, (selected.totalAmount || 0) - (selected.paidAmount || 0))
-        : 0;
+    const outstanding = selected ? amountOwedOn(selected) : 0;
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
-        const value = Number(amount);
 
         if (!installmentId) return showToast("Choose an instalment", "error");
-        if (!Number.isFinite(value) || value <= 0) return showToast("Enter a valid amount", "error");
+        if (!selected) return showToast("Choose an instalment", "error");
+
+        // #286. The same rule the action applies, so what the screen refuses and
+        // what the server refuses cannot disagree. Refuses rather than capping:
+        // quietly reducing what somebody typed is its own surprise, and an admin
+        // reconciling a transfer needs to know the figure does not match.
+        const bound = checkRepaymentAmount(amount, selected);
+        if (!bound.ok) return showToast(bound.message, "error");
+
+        const value = Number(amount);
+
         if (!reference.trim()) return showToast("Enter the bank reference", "error");
 
         setSaving(true);
@@ -163,7 +187,7 @@ export default function RecordRepaymentModal({
                                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                             >
                                 {schedule.map((i) => {
-                                    const owed = Math.max(0, (i.totalAmount || 0) - (i.paidAmount || 0));
+                                    const owed = amountOwedOn(i);
                                     return (
                                         <option key={i.id} value={i.id} disabled={i.status === "paid"}>
                                             #{i.installmentNumber} · due {formatLocalDate(i.dueDate)} ·{" "}
@@ -182,6 +206,7 @@ export default function RecordRepaymentModal({
                                 id="amount"
                                 type="number"
                                 min="1"
+                                max={outstanding || undefined}
                                 step="any"
                                 value={amount}
                                 onChange={(e) => setAmount(e.target.value)}
@@ -189,8 +214,10 @@ export default function RecordRepaymentModal({
                             />
                             {selected && (
                                 <p className="mt-1 text-xs text-slate-500">
-                                    {formatCurrency(outstanding)} outstanding on this instalment. A
-                                    smaller amount is recorded as a partial payment.
+                                    {formatCurrency(outstanding)} outstanding on this instalment,
+                                    including any penalty. A smaller amount is recorded as a partial
+                                    payment; a larger one is refused, because nothing carries an
+                                    overpayment to the next instalment.
                                 </p>
                             )}
                         </div>

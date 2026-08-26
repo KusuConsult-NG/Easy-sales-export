@@ -20,6 +20,23 @@
  * The button is NOT disabled on the client's arithmetic alone — the balance
  * here was read when the page loaded and may be stale. It submits, and the
  * server's answer is the one that counts.
+ *
+ * WHY THERE IS NO UPPER BOUND ON THE AMOUNT HERE, UNLIKE RecordRepaymentModal
+ * --------------------------------------------------------------------------
+ * #286 gave both repayment paths a ceiling: a repayment may not exceed what the
+ * instalment owes, because nothing carries an overpayment forward and the excess
+ * was simply destroyed. repayLoanFromSavingsAction now applies that BEFORE it
+ * debits savings, so an over-large amount typed here is refused with no money
+ * moved, and the refusal names the outstanding figure.
+ *
+ * It is not ALSO checked on this screen, because this screen does not have the
+ * instalment. `amountDue` is a prop, and my-loans passes `loan.nextPaymentAmount`
+ * — the scheduled figure, not `totalAmount + penalty - paidAmount`. Capping at
+ * it would REFUSE the payment that settles an overdue instalment, since the
+ * penalty makes the real owed figure larger. RecordRepaymentModal can enforce
+ * the bound because it loads the whole schedule and computes the same expression
+ * the server does; this one would be guessing, and a guess that refuses valid
+ * money is worse than a server round-trip.
  */
 
 import { useState } from "react";
