@@ -332,7 +332,20 @@ export async function processMarketplaceOrder(reference: string, amount: number,
         });
 
         return { success: true };
-    })();
+    })().catch(async (fulfilmentError: any) => {
+        /**
+         * #299. The payment is CLAIMED and the fulfilment threw, so nothing
+         * will retry it and nothing pointed at it. processCooperativeContribution
+         * has marked these since #258/#259; the other five only logged, so the
+         * failed-fulfilment report — the one place a stuck payment is meant to
+         * be findable — never learned about them.
+         */
+        await markFulfilmentFailed(
+            reference,
+            fulfilmentError?.message ?? String(fulfilmentError)
+        );
+        throw fulfilmentError;
+    });
 
     if (!result?.success) {
         // The reference is already claimed, so this will not be retried
@@ -840,7 +853,20 @@ export async function processCooperativeRegistration(reference: string, amount: 
         });
 
         return { success: true };
-    })();
+    })().catch(async (fulfilmentError: any) => {
+        /**
+         * #299. The payment is CLAIMED and the fulfilment threw, so nothing
+         * will retry it and nothing pointed at it. processCooperativeContribution
+         * has marked these since #258/#259; the other five only logged, so the
+         * failed-fulfilment report — the one place a stuck payment is meant to
+         * be findable — never learned about them.
+         */
+        await markFulfilmentFailed(
+            reference,
+            fulfilmentError?.message ?? String(fulfilmentError)
+        );
+        throw fulfilmentError;
+    });
 
     if (!result?.success) {
         // The reference is already claimed, so this will not be retried
@@ -1029,7 +1055,20 @@ export async function processAcademyRegistration(reference: string, amount: numb
         });
 
         return { success: true };
-    })();
+    })().catch(async (fulfilmentError: any) => {
+        /**
+         * #299. The payment is CLAIMED and the fulfilment threw, so nothing
+         * will retry it and nothing pointed at it. processCooperativeContribution
+         * has marked these since #258/#259; the other five only logged, so the
+         * failed-fulfilment report — the one place a stuck payment is meant to
+         * be findable — never learned about them.
+         */
+        await markFulfilmentFailed(
+            reference,
+            fulfilmentError?.message ?? String(fulfilmentError)
+        );
+        throw fulfilmentError;
+    });
 
     if (!result?.success) {
         // The reference is already claimed, so this will not be retried
@@ -1123,7 +1162,20 @@ export async function processFarmNationRegistration(reference: string, amount: n
         });
 
         return { success: true };
-    })();
+    })().catch(async (fulfilmentError: any) => {
+        /**
+         * #299. The payment is CLAIMED and the fulfilment threw, so nothing
+         * will retry it and nothing pointed at it. processCooperativeContribution
+         * has marked these since #258/#259; the other five only logged, so the
+         * failed-fulfilment report — the one place a stuck payment is meant to
+         * be findable — never learned about them.
+         */
+        await markFulfilmentFailed(
+            reference,
+            fulfilmentError?.message ?? String(fulfilmentError)
+        );
+        throw fulfilmentError;
+    });
 
     if (!result?.success) {
         // The reference is already claimed, so this will not be retried
@@ -1199,7 +1251,20 @@ export async function processWaveRegistration(reference: string, amount: number,
         });
 
         return { success: true };
-    })();
+    })().catch(async (fulfilmentError: any) => {
+        /**
+         * #299. The payment is CLAIMED and the fulfilment threw, so nothing
+         * will retry it and nothing pointed at it. processCooperativeContribution
+         * has marked these since #258/#259; the other five only logged, so the
+         * failed-fulfilment report — the one place a stuck payment is meant to
+         * be findable — never learned about them.
+         */
+        await markFulfilmentFailed(
+            reference,
+            fulfilmentError?.message ?? String(fulfilmentError)
+        );
+        throw fulfilmentError;
+    });
 
     if (!result?.success) {
         // The reference is already claimed, so this will not be retried
@@ -1352,3 +1417,60 @@ export async function processCooperativeContribution(reference: string, amount: 
     logger.info(`[Paystack Webhook] Processed Cooperative Contribution of ${amount} for ${userId}`);
 }
 
+
+/**
+ * Wallet funding, as a PROCESSOR — one that throws when it did not happen.
+ *
+ *   #298 THE RECONCILIATION JOBS COUNTED A FAILED WALLET CREDIT AS HEALED.
+ *
+ *        Both jobs that back-fill payments Paystack took but this platform
+ *        never recorded — api/cron/reconcile-paystack and
+ *        api/admin/finance/paystack-sync — dispatch on the payment type:
+ *
+ *            if (type === "marketplace_order")      await processMarketplaceOrder(...)
+ *            else if (type === "export_investment") await processExportInvestment(...)
+ *            ... five more ...
+ *            else if (type === "wallet_funding") {
+ *                const { confirmWalletFundingAction } = await import("@/app/actions/wallet");
+ *                await confirmWalletFundingAction(reference, paidAt);
+ *            }
+ *
+ *            // Successfully processed — increment local counter and add to
+ *            // set to bypass discrepancy marking
+ *            results.firebaseTotal++;
+ *            firebaseRefs.add(tx.reference);
+ *
+ *        EVERY PROCESSOR IN THIS FILE THROWS when it cannot fulfil, so the
+ *        surrounding catch drops the payment into missingInFirebase and the
+ *        health dashboard reports a discrepancy. That is the design, and for
+ *        six of the seven branches it works.
+ *
+ *        confirmWalletFundingAction is not a processor. It is a server action
+ *        wrapped in withSafeAction, and a business refusal is RETURNED as
+ *        `{ success: false, error }` — it does not throw. So the one branch
+ *        that credits a wallet was the one branch whose failure was invisible:
+ *        the counter incremented, the reference was added to the set that
+ *        BYPASSES discrepancy marking, and the job reported "ok".
+ *
+ *        A member's funding that Paystack collected and this platform failed to
+ *        credit was therefore removed from the only report built to find it.
+ *        The job's entire purpose, inverted, for exactly one payment type.
+ *
+ *        Wrapping it here rather than adding two `if (!result.success) throw`
+ *        blocks: there were two call sites and a third would have been written
+ *        the same way — which is #297, one finding ago.
+ */
+export async function processWalletFunding(reference: string, paidAt?: Date) {
+    const { confirmWalletFundingAction } = await import("@/app/actions/wallet");
+    const result = await confirmWalletFundingAction(reference, paidAt);
+
+    if (!result?.success) {
+        const reason = (result as { error?: string } | undefined)?.error || "Wallet funding was not applied";
+        logger.error(`[Payments] Wallet funding ${reference} was NOT credited: ${reason}`);
+        // Thrown so the caller's catch treats it exactly like every other
+        // processor's failure — as a payment that still needs healing.
+        throw new Error(reason);
+    }
+
+    logger.info(`[Payments] Wallet funding ${reference} credited`);
+}

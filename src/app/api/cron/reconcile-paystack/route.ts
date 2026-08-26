@@ -129,7 +129,8 @@ export async function GET(request: NextRequest) {
 
         // ── 3. Find and Auto-Heal transactions in Paystack but not in Firebase ──────────────────
         const { 
-            processMarketplaceOrder, 
+            processMarketplaceOrder,
+    processWalletFunding, 
             processExportInvestment, 
             processCooperativeRegistration, 
             processAcademyRegistration, 
@@ -193,8 +194,11 @@ export async function GET(request: NextRequest) {
                             } else if (type === "contribution") {
                                 await processCooperativeContribution(tx.reference, amountPaidv, userId, paidAtDate);
                             } else if (type === "wallet_funding") {
-                                const { confirmWalletFundingAction } = await import("@/app/actions/wallet");
-                                await confirmWalletFundingAction(tx.reference, paidAtDate);
+                                // #298. A processor that THROWS on refusal, like the
+                                // other six branches — so a wallet credit that did not
+                                // happen falls through to missingInFirebase instead of
+                                // being counted as healed.
+                                await processWalletFunding(tx.reference, paidAtDate);
                             }
 
                             // Successfully processed — increment local counter and add to set to bypass discrepancy marking
