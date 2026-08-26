@@ -36,6 +36,8 @@ export default function CourseDetailPage(props: CourseDetailPageProps) {
     const [progress, setProgress] = useState<UserProgress | null>(null);
     const [loading, setLoading] = useState(true);
     const [enrolling, setEnrolling] = useState(false);
+    /** #315 — the course could not be READ, which is not the same as absent. */
+    const [loadFailed, setLoadFailed] = useState(false);
 
     useEffect(() => {
         if (status === "unauthenticated") {
@@ -77,17 +79,40 @@ export default function CourseDetailPage(props: CourseDetailPageProps) {
                                 const newProgressReq = await getUserProgressAction(session.user.id, courseId);
                                 setProgress(newProgressReq.data || null);
                             } else {
+                                // The refusal was thrown away — #315.
+                                //
+                                // enrollInCourseAction returns two carefully
+                                // distinguished messages here, written that way
+                                // by an earlier fix precisely so a learner can
+                                // tell "your package does not cover this course"
+                                // from "you have not chosen a package at all".
+                                // handleEnroll below shows them. This path,
+                                // which is the one that runs on page load,
+                                // discarded both and left the learner looking at
+                                // a course they appear not to be enrolled on
+                                // with no reason given.
+                                //
+                                // Reachable despite the access check above: that
+                                // check reads the plan cached on the session,
+                                // and the server reads the live one.
                                 setProgress(null);
+                                showToast(enrollResult.error || "Could not enrol you on this course", "error");
                             }
                         } else {
                             setProgress(progressReq.data || null);
                         }
                     } else {
-                        // Handle not found
+                        // Was an empty `else { // Handle not found }`. A course
+                        // that could not be read left `course` null, and the
+                        // render below says "Course Not Found" — so a failed
+                        // request told the learner the course does not exist.
+                        // #307's shape.
+                        setLoadFailed(!!courseReq.error);
                     }
                 }
             } catch (error) {
                 logger.error("Error:", error);
+                if (mounted) setLoadFailed(true);
             } finally {
                 if (mounted) setLoading(false);
             }
@@ -113,8 +138,13 @@ export default function CourseDetailPage(props: CourseDetailPageProps) {
         if (courseReq.data) {
             setCourse(courseReq.data);
             setProgress(progressReq.data || null);
+        } else {
+            // #315 — this refreshed the page after a successful enrolment and
+            // said nothing when the refresh itself failed, leaving the learner
+            // on stale state with a success toast beside it.
+            showToast(courseReq.error || "Could not reload this course", "error");
         }
-    }, [courseId, session]);
+    }, [courseId, session, showToast]);
 
 
 
@@ -158,9 +188,18 @@ export default function CourseDetailPage(props: CourseDetailPageProps) {
         return (
             <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 flex items-center justify-center">
                 <div className="text-center">
+                    {/* #315 — a failed request used to render as "Course Not
+                        Found", which tells the learner the course does not
+                        exist when what happened is that we could not read it. */}
                     <h2 className="text-2xl font-bold text-slate-900 mb-2">
-                        Course Not Found
+                        {loadFailed ? "We could not load this course" : "Course Not Found"}
                     </h2>
+                    {loadFailed && (
+                        <p className="text-slate-600 mb-4 max-w-sm mx-auto text-sm">
+                            This is a problem reaching the server, not a missing course.
+                            Try again in a moment.
+                        </p>
+                    )}
                     <button
                         onClick={() => router.push("/academy")}
                         className="text-blue-500 hover:text-blue-600 font-medium"
