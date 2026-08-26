@@ -124,7 +124,12 @@ export default function LoginForm({ defaultCallbackUrl = "/dashboard" }: { defau
             // 2. Success! Cookie is set. Now get redirect URL from server.
 
 
-            // Register session as active in this tab to satisfy SessionGuard
+            // Was: "Register session as active in this tab to satisfy
+            // SessionGuard" — #314. SessionGuard reads no flag and enforces
+            // nothing, so there was nothing here to satisfy. The write is kept
+            // because the key is the only trace of the intended
+            // volatile-session control, and SessionGuard sets it too; the
+            // claim that it is required is what was wrong.
             if (typeof window !== 'undefined') {
                 sessionStorage.setItem("ese_session_active", "true");
             }
