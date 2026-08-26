@@ -17,6 +17,8 @@ export default function MFASetupPage() {
     const [verificationCode, setVerificationCode] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [mfaEnabled, setMfaEnabled] = useState(false);
+    /** #313 — the status read failed, so neither "on" nor "off" is known. */
+    const [statusUnknown, setStatusUnknown] = useState(false);
 
     useEffect(() => {
         checkMFAStatus();
@@ -26,9 +28,21 @@ export default function MFASetupPage() {
         try {
             const response = await fetch("/api/auth/mfa/status");
             const data = await response.json();
-            setMfaEnabled(data.enabled || false);
+            // Was: `setMfaEnabled(data.enabled || false)` — #313.
+            //
+            // Neither response.ok nor data.success was read, so a 401 or a 500
+            // (whose body carries no `enabled` at all) set this to FALSE and
+            // the screen told a protected account it had no second factor,
+            // then offered to set one up. Unknown is now its own state.
+            if (!response.ok || !data.success) {
+                setStatusUnknown(true);
+                return;
+            }
+            setStatusUnknown(false);
+            setMfaEnabled(data.enabled === true);
         } catch (error) {
             logger.error("Failed to check MFA status:", error);
+            setStatusUnknown(true);
         }
     };
 
@@ -138,7 +152,27 @@ export default function MFASetupPage() {
                     </p>
                 </div>
 
-                {mfaEnabled && step === "setup" ? (
+                {/* #313 — an unreadable status is not "MFA is off". Offering
+                    setup here would send a protected member into a flow the
+                    server refuses with "MFA is already enabled". */}
+                {statusUnknown && step === "setup" ? (
+                    <div className="bg-white rounded-2xl p-6 md:p-8 shadow-xl">
+                        <div className="flex items-center gap-3 text-amber-600 mb-4">
+                            <Shield className="w-6 h-6" />
+                            <h2 className="text-xl font-bold">We could not check your MFA status</h2>
+                        </div>
+                        <p className="text-slate-600 mb-6">
+                            This is a problem reaching the server, not a change to your account &mdash;
+                            your existing settings are untouched. Reload the page to try again.
+                        </p>
+                        <button
+                            onClick={() => { setStatusUnknown(false); checkMFAStatus(); }}
+                            className="px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-xl transition"
+                        >
+                            Try again
+                        </button>
+                    </div>
+                ) : mfaEnabled && step === "setup" ? (
                     <div className="bg-white rounded-2xl p-6 md:p-8 shadow-xl">
                         <div className="flex items-center gap-3 text-green-600 mb-4">
                             <CheckCircle className="w-6 h-6" />

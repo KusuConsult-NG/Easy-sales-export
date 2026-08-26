@@ -34,6 +34,8 @@ export default function ProfilePage() {
 
     // MFA / Two-Factor Authentication states
     const [mfaEnabled, setMfaEnabled] = useState(false);
+    /** #313 — the status read failed, so neither "on" nor "off" is known. */
+    const [mfaStatusUnknown, setMfaStatusUnknown] = useState(false);
     const [isMfaModalOpen, setIsMfaModalOpen] = useState(false);
     const [mfaToken, setMfaToken] = useState("");
     const [mfaError, setMfaError] = useState("");
@@ -183,14 +185,26 @@ export default function ProfilePage() {
             }
             
             // Fetch MFA Status
+            //
+            // This screen already did the right thing — it checks
+            // mfaData.success before believing the answer. The endpoint
+            // defeated it: on a database error it returned success:true with
+            // enabled:false, a definitive "no second factor" that actually
+            // meant "could not read". Fixed at the route in #313; the unknown
+            // state is now surfaced here rather than rendered as a toggle in
+            // the off position.
             try {
                 const res = await fetch("/api/auth/mfa/status");
                 const mfaData = await res.json();
-                if (mfaData.success) {
-                    setMfaEnabled(mfaData.enabled || false);
+                if (res.ok && mfaData.success) {
+                    setMfaEnabled(mfaData.enabled === true);
+                    setMfaStatusUnknown(false);
+                } else {
+                    setMfaStatusUnknown(true);
                 }
             } catch (err) {
                 console.error("Error loading MFA status:", err);
+                setMfaStatusUnknown(true);
             }
 
             setIsFetching(false);
@@ -730,12 +744,19 @@ export default function ProfilePage() {
                                         <div className="flex items-center justify-between mb-4">
                                             <div>
                                                 <h4 className="font-medium text-slate-900">Two-Factor Authentication</h4>
-                                                <p className="text-sm text-slate-500">Add an extra layer of security to your account</p>
+                                                {/* #313 — an unreadable status used to render as a
+                                                    toggle in the OFF position, which is a statement
+                                                    about the account and not about the request. */}
+                                                <p className="text-sm text-slate-500">
+                                                    {mfaStatusUnknown
+                                                        ? "We could not check this setting just now — your account is unchanged."
+                                                        : "Add an extra layer of security to your account"}
+                                                </p>
                                             </div>
                                             <button
                                                 type="button"
                                                 onClick={handleMFAToggle}
-                                                disabled={isDisablingMfa}
+                                                disabled={isDisablingMfa || mfaStatusUnknown}
                                                 className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 ${
                                                     mfaEnabled ? "bg-emerald-600" : "bg-slate-200"
                                                 }`}
