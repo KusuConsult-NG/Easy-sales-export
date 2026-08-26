@@ -879,7 +879,7 @@ export async function changePasswordAction(
     currentPassword: string,
     newPassword: string
 ): Promise<
-    | { success: true; error: null }
+    | { success: true; error: null; sessionsRevoked: boolean }
     | { success: false; error: string; data?: null }
 > { try {
         const session = await auth();
@@ -1045,47 +1045,87 @@ export async function changePasswordAction(
         // an inline success — so stamping Date.now() would have signed the user
         // out of the flow they were standing in.
         //
-        // The predicate is strictly-before, which resolves that: stamping the
-        // CURRENT session's own issue time revokes everything minted before it
-        // and keeps this one. That is what "sign out my other sessions" means,
-        // and it needs no change to the flow.
-        //
-        // A stolen cookie is necessarily older than the session you are sitting
-        // in when you notice and react, so this covers the case the feature
-        // exists for. A session minted AFTER this one survives, deliberately: it
-        // could only have been created with a password, and after this call that
-        // is the new one.
-        //
-        // Fails OPEN when the issue time is unknown — the same asymmetry
-        // resetPasswordAction reasons about. A wrong value here signs out a user
-        // who did nothing wrong; a missing one leaves a stale session that still
-        // expires within maxAge.
-        const revokeBefore = session.user.authAt;
-        if (typeof revokeBefore !== "number" || !(revokeBefore > 0)) {
-            logger.error(
-                "[changePassword] password changed but other sessions were NOT revoked: "
-                + "this session records no issue time",
-                { userId: session.user.id },
-            );
-        }
+        /**
+         *   #306 THE REVOCATION LET THE INTRUDER'S SESSION THROUGH, AND THE
+         *        COMMENT EXPLAINING WHY WAS THE DEFECT.
+         *
+         *        This stamped `sessionsValidFrom = session.user.authAt` — the
+         *        issue time of the session doing the changing — and argued for
+         *        it in the two sentences above:
+         *
+         *          "A stolen cookie is necessarily older than the session you
+         *           are sitting in when you notice and react, so this covers the
+         *           case the feature exists for. A session minted AFTER this one
+         *           survives, deliberately: it could only have been created with
+         *           a password, and after this call that is the new one."
+         *
+         *        BOTH HALVES ARE FALSE.
+         *
+         *        The first holds only for a cookie copied out of the session you
+         *        are currently in. It does not hold for the case this actually
+         *        protects against — somebody who learned your PASSWORD and signed
+         *        in independently. Their session is minted whenever they sign in.
+         *        Sign in Monday; they sign in Tuesday; you notice Wednesday and
+         *        change your password from your Monday session. revokeBefore is
+         *        Monday, their session is Tuesday, Tuesday is not before Monday,
+         *        so THEY ARE NOT SIGNED OUT. That is the ordinary case, not a
+         *        corner one.
+         *
+         *        The second is a straight contradiction: a session minted after
+         *        yours but before this line could only have been created with the
+         *        OLD password, because the new one does not exist until this call
+         *        finishes.
+         *
+         *        So the revocation covered every session except the ones worth
+         *        revoking.
+         *
+         *        `Date.now()` now, matching resetPasswordAction. That revokes
+         *        EVERY session including the one making the call, which is the
+         *        price of correctness here: the predicate in lib/auth.ts is a
+         *        single scalar compared against each token's issue time, and
+         *        there is no mechanism to exempt one session — nothing re-stamps
+         *        `authAt` after a password change. Signing out everywhere is also
+         *        what people expect of a password change, and both callers only
+         *        read success/error, so neither breaks. They tell the user.
+         *
+         *        Fails OPEN is gone with it: there is no unknown issue time to
+         *        reason about any more, because the stamp no longer depends on
+         *        one.
+         */
+        const revokeBefore = Date.now();
 
+        /**
+         * Split from the flag-clearing write, because the two failures are not
+         * equally serious and one message covered both.
+         *
+         * The old catch logged "the forced-change flag was not cleared" — true,
+         * but the same write carried the session revocation, and a failure there
+         * leaves the intruder signed in. The log named the lesser consequence
+         * and the caller was told plainly that everything worked.
+         *
+         * Still best-effort: the password IS already changed in both stores by
+         * this line, so failing the whole operation would tell somebody their
+         * password had not changed when it had. What changes is that the caller
+         * is now told which of the two happened.
+         */
+        let sessionsRevoked = true;
         try {
             await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
                 requiresPasswordChange: FieldValue.delete(),
                 passwordChangedAt: FieldValue.serverTimestamp(),
-                ...(typeof revokeBefore === "number" && revokeBefore > 0
-                    ? { sessionsValidFrom: revokeBefore }
-                    : {}),
+                sessionsValidFrom: revokeBefore,
                 updatedAt: FieldValue.serverTimestamp(),
             });
-        } catch (flagErr: any) {
-            logger.error("[changePassword] Password changed but the forced-change flag was not cleared", {
-                userId: session.user.id,
-                error: flagErr?.message,
-            });
+        } catch (revokeErr: any) {
+            sessionsRevoked = false;
+            logger.error(
+                "[changePassword] password changed but OTHER SESSIONS WERE NOT REVOKED "
+                + "and the forced-change flag was not cleared",
+                { userId: session.user.id, error: revokeErr?.message },
+            );
         }
 
-        return { success: true as const, error: null };
+        return { success: true as const, error: null, sessionsRevoked };
     } catch (error: any) { logger.error("Error changing password:", error);
         return { success: false as const, error: error.message || "An unexpected error occurred. Please try again.", data: null };
     }

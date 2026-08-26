@@ -313,7 +313,15 @@ export default function ProfilePage() {
         setIsChangingPassword(false);
 
         if (res.success) {
-            setPasswordSuccess("Password updated successfully!");
+            // #306 Changing a password now signs out every session, this one
+            // included — the revocation stamp is a single point in time and
+            // there is no way to exempt the caller. Saying so beats the user
+            // being bounced to sign-in a minute later with no explanation.
+            setPasswordSuccess(
+                res.sessionsRevoked
+                    ? "Password updated. You have been signed out on all devices — please sign in again."
+                    : "Password updated, but we could not sign out your other devices. Please contact support.",
+            );
             setTimeout(() => {
                 setIsChangePasswordModalOpen(false);
                 setPasswordData({ current: "", new: "", confirm: "" });

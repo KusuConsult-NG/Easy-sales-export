@@ -153,10 +153,24 @@ describe('changePasswordAction clears it, after doing the work', () => {
     it('does not fail the password change if the flag write fails', () => {
         // The password is already changed in both stores by then. Reporting
         // failure would tell the user it had not been.
+        //
+        // #306 renamed the catch binding from `flagErr` to `revokeErr`: the same
+        // write now carries the session revocation, and a failure there leaves
+        // the intruder signed in — the serious half of the two, and the half the
+        // old log message did not mention. The behaviour asserted here is
+        // unchanged; only the name and the message are.
         const tail = changeFn.slice(changeFn.indexOf('requiresPasswordChange: FieldValue.delete()'));
 
-        expect(tail.slice(0, 700)).toContain('catch (flagErr');
-        expect(tail.slice(0, 700)).toContain('logger.error');
+        expect(tail.slice(0, 900)).toContain('catch (revokeErr');
+        expect(tail.slice(0, 900)).toContain('logger.error');
+    });
+
+    it('AND THE CALLER IS TOLD WHICH OF THE TWO FAILED', () => {
+        // #306 The old catch logged "the forced-change flag was not cleared" and
+        // returned an unqualified success, while every other session — the one
+        // the change was made because of — stayed alive.
+        expect(changeFn).toContain('sessionsRevoked = false;');
+        expect(changeFn).toContain('OTHER SESSIONS WERE NOT REVOKED');
     });
 });
 

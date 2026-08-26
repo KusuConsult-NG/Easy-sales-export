@@ -212,42 +212,69 @@ describe('the reset stamps the revocation point', () => {
 });
 
 describe('changePasswordAction revokes the OTHER sessions', () => {
-    // This used to say "still does not revoke", and recorded why: its two
-    // callers stay signed in and carry on, so stamping Date.now() would have
-    // signed the user out of the flow they were standing in.
-    //
-    // The predicate being strictly-before is what resolved it. Stamping the
-    // CURRENT session's own issue time revokes everything minted before it and
-    // keeps this one — which is what "sign out my other sessions" means, and
-    // needs no change to either flow.
+    /**
+     *   #306 THIS SUITE PINNED MY OWN WRONG REASONING, AND THE TEST BELOW WAS
+     *        NAMED AFTER IT.
+     *
+     *        It asserted `sessionsValidFrom = session.user.authAt`, and one of
+     *        its cases carried the argument in a comment:
+     *
+     *          "Deliberate: a session minted after this one could only have been
+     *           created with a password, and after this call that is the new one."
+     *
+     *        That is a contradiction. A session minted after yours but BEFORE
+     *        this call was created with the OLD password — the new one does not
+     *        exist until the call finishes. And the case it let through is the
+     *        ordinary one: you sign in Monday, somebody who learned your password
+     *        signs in Tuesday, you notice Wednesday and change it from your
+     *        Monday session. revokeBefore is Monday, theirs is Tuesday, and they
+     *        stay signed in.
+     *
+     *        The last test here was the tell — "and its two callers still stay
+     *        signed in, which is why Date.now() was wrong". Keeping the caller
+     *        signed in was treated as the requirement, and correctness bent
+     *        around it. It is the other way round: the caller being signed out
+     *        is the price, and both callers now say so.
+     *
+     *        Reversed rather than deleted, because "the intruder is revoked"
+     *        needs pinning at least as firmly as the old claim did.
+     */
     const change = code(CHANGE);
     const fn = change.slice(change.indexOf('export async function changePasswordAction'));
 
-    it('stamping this session\'s issue time rather than now — THE test', () => {
-        expect(fn).toContain('const revokeBefore = session.user.authAt;');
-        expect(fn).toContain('? { sessionsValidFrom: revokeBefore }');
-        // Date.now() would have revoked the caller's own session too.
-        expect(fn).not.toContain('sessionsValidFrom: Date.now()');
+    it('stamping NOW rather than this session\'s issue time — THE test', () => {
+        expect(fn).toContain('const revokeBefore = Date.now();');
+        expect(fn).toContain('sessionsValidFrom: revokeBefore,');
+        // The value that let a newer intruder session survive.
+        expect(fn).not.toContain('const revokeBefore = session.user.authAt;');
     });
 
-    it('which keeps the current session and drops every older one', () => {
+    it('WHICH DROPS A SESSION MINTED AFTER THIS ONE — the case that was missed', () => {
         // Exercised against the same predicate the callback runs.
-        const CURRENT = 1_700_000_500_000;
-        const older = CURRENT - 60_000;
-        const newer = CURRENT + 60_000;
+        const myLogin = 1_700_000_500_000;
+        const intruderLogin = myLogin + 60_000;   // signed in after me, before I noticed
+        const stampedNow = intruderLogin + 60_000;
 
-        expect(isRevoked({ authAt: CURRENT }, { sessionsValidFrom: CURRENT })).toBe(false);
-        expect(isRevoked({ authAt: older }, { sessionsValidFrom: CURRENT })).toBe(true);
-        // Deliberate: a session minted after this one could only have been
-        // created with a password, and after this call that is the new one.
-        expect(isRevoked({ authAt: newer }, { sessionsValidFrom: CURRENT })).toBe(false);
+        expect(isRevoked({ authAt: intruderLogin }, { sessionsValidFrom: stampedNow })).toBe(true);
+        expect(isRevoked({ authAt: myLogin }, { sessionsValidFrom: stampedNow })).toBe(true);
+
+        // And the old behaviour, kept as the contrast: stamping my own issue
+        // time left the intruder alone.
+        expect(isRevoked({ authAt: intruderLogin }, { sessionsValidFrom: myLogin })).toBe(false);
     });
 
-    it('failing open when this session records no issue time', () => {
-        // Same asymmetry the reset path reasons about: a wrong value signs out
-        // a user who did nothing wrong.
-        expect(fn).toContain('if (typeof revokeBefore !== "number" || !(revokeBefore > 0)) {');
-        expect(fn).toContain('other sessions were NOT revoked');
+    it('no longer depends on this session recording an issue time', () => {
+        // It used to skip the revocation entirely when authAt was absent —
+        // "fails open" — so a session with no issue time revoked nothing.
+        expect(fn).not.toContain('if (typeof revokeBefore !== "number" || !(revokeBefore > 0)) {');
+    });
+
+    it('and a failed revocation is reported to the caller, not just logged', () => {
+        // The old catch named only the lesser consequence — "the forced-change
+        // flag was not cleared" — while the caller was told plainly it worked.
+        expect(fn).toContain('sessionsRevoked = false;');
+        expect(fn).toContain('OTHER SESSIONS WERE NOT REVOKED');
+        expect(fn).toContain('return { success: true as const, error: null, sessionsRevoked };');
     });
 
     it('and still keeps the fields it already wrote', () => {
@@ -255,17 +282,27 @@ describe('changePasswordAction revokes the OTHER sessions', () => {
         expect(fn).toContain('passwordChangedAt: FieldValue.serverTimestamp(),');
     });
 
-    it('the issue time being surfaced on the session for it to read', () => {
-        // Vacuity guard: session.user.authAt has to exist, and has to be the
-        // same value the predicate compares against.
+    it('the issue time is still surfaced on the session, for the predicate to read', () => {
+        // Vacuity guard: the comparison the jwt callback makes needs authAt on
+        // each token even though the STAMP no longer comes from it.
         const cfg = code(AUTH_CONFIG);
         expect(cfg).toContain('session.user.authAt = typeof token.authAt === "number"');
         expect(cfg).toContain('(typeof token.iat === "number" ? token.iat * 1000 : undefined)');
     });
 
-    it('and its two callers still stay signed in, which is why Date.now() was wrong', () => {
-        expect(source('src/app/auth/reset-legacy-password/page.tsx')).toContain('router.push("/dashboard")');
-        expect(source('src/app/profile/page.tsx')).toContain('Password updated successfully!');
+    it('AND BOTH CALLERS TELL THE USER THEY ARE SIGNED OUT', () => {
+        // This asserted the opposite — that they stayed signed in — and used it
+        // as the reason the safe value was "wrong".
+        const legacy = source('src/app/auth/reset-legacy-password/page.tsx');
+        const profile = source('src/app/profile/page.tsx');
+
+        expect(legacy).toContain('sign in again');
+        expect(legacy).toContain('/auth/login');
+        expect(profile).toContain('signed out on all devices');
+
+        // And both read the new flag rather than assuming it happened.
+        expect(legacy).toContain('result.sessionsRevoked');
+        expect(profile).toContain('res.sessionsRevoked');
     });
 
     it('revocation lands within the sync interval, not instantly', () => {

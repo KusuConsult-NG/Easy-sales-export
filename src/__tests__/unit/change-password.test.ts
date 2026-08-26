@@ -208,6 +208,133 @@ describe('changePasswordAction — the primary store is the one that counts', ()
     });
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#306 — the revocation covers the session that matters', () => {
+    /**
+     *   #306 THE REVOCATION LET THE INTRUDER'S SESSION THROUGH, AND THE COMMENT
+     *        EXPLAINING WHY WAS THE DEFECT.
+     *
+     *        It stamped `sessionsValidFrom = session.user.authAt` — the issue
+     *        time of the session doing the changing — and the code argued for it:
+     *
+     *          "A stolen cookie is necessarily older than the session you are
+     *           sitting in when you notice and react ... A session minted AFTER
+     *           this one survives, deliberately: it could only have been created
+     *           with a password, and after this call that is the new one."
+     *
+     *        Both halves are false, and the second is a contradiction: a session
+     *        minted after yours but before this call was created with the OLD
+     *        password, because the new one does not exist yet.
+     *
+     *        The consequence is the ordinary case, not a corner one. You sign in
+     *        Monday. Somebody who learned your password signs in Tuesday. You
+     *        notice Wednesday and change it from your Monday session.
+     *        revokeBefore is Monday; their session is Tuesday; Tuesday is not
+     *        before Monday; they stay signed in.
+     *
+     *        `Date.now()` now, which revokes everything including the caller.
+     *        There is no way to exempt one session — the predicate in
+     *        lib/auth.ts is a single scalar compared against each token's issue
+     *        time, and nothing re-stamps `authAt` after a change.
+     */
+    /**
+     * The recorder is called as `update(id, fields)` — see
+     * lib/testing/firestore-mock-db.js — so the patch is argument ONE. Reading
+     * argument zero returns the document id, which is a string and satisfies
+     * neither `toHaveProperty` nor a field comparison; it fails loudly rather
+     * than passing vacuously, which is how this was caught.
+     */
+    const lastUpdate = () => {
+        const calls = ((global as any).mockFirestoreUpdate as jest.Mock).mock.calls;
+        return calls.length ? (calls[calls.length - 1] as any[])[1] : undefined;
+    };
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        setSession();
+        mockSignInWithPassword.mockResolvedValue({ data: { user: { id: SUPABASE_ID } }, error: null });
+        mockUpdateUserById.mockResolvedValue({ data: {}, error: null });
+        mockFirebaseUpdateUser.mockResolvedValue({});
+        (global as any).mockFirestoreGet.mockImplementation(() => Promise.resolve({
+            exists: true, empty: false, docs: [], data: () => ({ supabaseAuthId: SUPABASE_ID }),
+        }));
+        (global as any).mockFirestoreUpdate.mockResolvedValue(undefined);
+    });
+
+    it('THE REVOCATION POINT IS NOW, NOT WHEN THIS SESSION STARTED', async () => {
+        const before = Date.now();
+        // A session issued long ago — the shape that let a newer intruder
+        // session survive.
+        mockAuth.mockResolvedValue({
+            user: { id: USER, email: EMAIL, roles: [], authAt: before - 3 * 24 * 60 * 60 * 1000 },
+        });
+
+        await change(GOOD_OLD, GOOD_NEW);
+
+        const patch = lastUpdate();
+        expect(patch?.sessionsValidFrom).toEqual(expect.any(Number));
+        expect(patch.sessionsValidFrom).toBeGreaterThanOrEqual(before);
+    });
+
+    it('A SESSION MINTED AFTER THIS ONE IS REVOKED TOO — the case that was missed', async () => {
+        // The predicate in lib/auth.ts is `issuedAt < sessionsValidFrom`.
+        // Reproduced here against the value actually written, because that is
+        // the whole of what this action controls.
+        const myLogin = Date.now() - 3 * 24 * 60 * 60 * 1000;   // Monday
+        const intruderLogin = Date.now() - 1 * 24 * 60 * 60 * 1000; // Tuesday
+        mockAuth.mockResolvedValue({ user: { id: USER, email: EMAIL, roles: [], authAt: myLogin } });
+
+        await change(GOOD_OLD, GOOD_NEW);
+        const stamp = lastUpdate().sessionsValidFrom as number;
+
+        const revoked = (issuedAt: number) => issuedAt < stamp;
+
+        expect(revoked(intruderLogin)).toBe(true);
+        // And the old behaviour, stated so the difference is unmistakable: with
+        // the stamp set to the caller's own authAt, the intruder survived.
+        expect(intruderLogin < myLogin).toBe(false);
+    });
+
+    it('it no longer depends on the caller having a recorded issue time', async () => {
+        // The old code skipped the revocation entirely when authAt was absent —
+        // "fails OPEN" — so a session with no issue time revoked nothing.
+        mockAuth.mockResolvedValue({ user: { id: USER, email: EMAIL, roles: [] } });
+
+        const r: any = await change(GOOD_OLD, GOOD_NEW);
+
+        expect(r.success).toBe(true);
+        expect(lastUpdate()?.sessionsValidFrom).toEqual(expect.any(Number));
+    });
+
+    it('reports that the sessions were revoked', async () => {
+        const r: any = await change(GOOD_OLD, GOOD_NEW);
+
+        expect(r.success).toBe(true);
+        expect(r.sessionsRevoked).toBe(true);
+    });
+
+    it('AND SAYS SO WHEN THEY WERE NOT, instead of reporting a plain success', async () => {
+        // The old catch logged "the forced-change flag was not cleared" — the
+        // lesser of the two consequences — and returned an unqualified success
+        // while every other session, the intruder's included, stayed alive.
+        (global as any).mockFirestoreUpdate.mockRejectedValue(new Error('write failed'));
+
+        const r: any = await change(GOOD_OLD, GOOD_NEW);
+
+        // Still a success: the password IS changed in both stores by then, and
+        // saying otherwise would be the worse lie.
+        expect(r.success).toBe(true);
+        expect(r.sessionsRevoked).toBe(false);
+    });
+
+    it('and the forced-change flag is still cleared in the same write', async () => {
+        await change(GOOD_OLD, GOOD_NEW);
+
+        expect(lastUpdate()).toHaveProperty('requiresPasswordChange');
+        expect(lastUpdate()).toHaveProperty('passwordChangedAt');
+    });
+});
+
 describe('changePasswordAction — legacy accounts still work', () => {
     beforeEach(() => {
         jest.clearAllMocks();
