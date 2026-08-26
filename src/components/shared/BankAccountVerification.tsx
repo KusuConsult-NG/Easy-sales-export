@@ -40,6 +40,9 @@ export default function BankAccountVerification({
     const [banks, setBanks] = useState<Bank[]>([]);
     const [loadingBanks, setLoadingBanks] = useState(false);
     const [banksError, setBanksError] = useState("");
+    // #284 What the account holder is told when resolution fails. The old
+    // path could not fail, so it needed no message.
+    const [verifyError, setVerifyError] = useState("");
     const [isInitialized, setIsInitialized] = useState(false);
 
     useEffect(() => {
@@ -95,20 +98,73 @@ export default function BankAccountVerification({
 
         setIsVerifying(true);
         setVerificationStatus("idle");
+        setVerifyError("");
 
         try {
-            // SIMULATED VERIFICATION (Requested for demo/testing)
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate network lag
-            
-            const simulatedName = "SIMULATED ACCOUNT NAME";
-            setResolvedName(simulatedName);
+            /**
+             *   #284 THIS DID NOT VERIFY ANYTHING.
+             *
+             *        It slept for a second and then reported success with a
+             *        hardcoded name:
+             *
+             *            // SIMULATED VERIFICATION (Requested for demo/testing)
+             *            await new Promise(r => setTimeout(r, 1000));
+             *            const simulatedName = "SIMULATED ACCOUNT NAME";
+             *            setVerificationStatus("success");
+             *            onVerified?.({ ..., accountName: simulatedName });
+             *
+             *        Any ten digits and any bank passed, and the literal string
+             *        "SIMULATED ACCOUNT NAME" became the seller's recorded
+             *        account name — the value the payout queue then shows and
+             *        an admin approves against.
+             *
+             *        THE REAL ENDPOINT ALREADY EXISTED.
+             *        /api/kyc/verify-bank-account resolves through Paystack's
+             *        bank/resolve, is session-guarded and rate-limited, and was
+             *        hardened in #243/#244. The EXPORT onboarding's own bank
+             *        step calls a real KYC endpoint. Marketplace onboarding —
+             *        the path a seller who will be PAID goes through — was the
+             *        one running the stub.
+             */
+            const bankCode = banks.find((b) => b.name === bankName)?.code;
+
+            if (!bankCode) {
+                // The list is loaded from Paystack, so a name with no code
+                // means the list has not arrived. Refusing is the only honest
+                // answer: the alternative is what this function used to do.
+                setVerificationStatus("error");
+                setVerifyError("Bank list is still loading. Please try again in a moment.");
+                onVerify?.(false);
+                return;
+            }
+
+            const response = await fetch("/api/kyc/verify-bank-account", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ accountNumber, bankCode }),
+            });
+
+            const data = await response.json().catch(() => ({}));
+
+            if (!response.ok || !data?.success || !data?.accountName) {
+                setVerificationStatus("error");
+                setVerifyError(
+                    data?.error || "We could not confirm that account. Check the number and bank and try again.",
+                );
+                onVerify?.(false);
+                return;
+            }
+
+            const resolved: string = data.accountName;
+            setResolvedName(resolved);
             setVerificationStatus("success");
 
-            onVerify?.(true, simulatedName);
-            onVerified?.({ bankName, accountNumber, accountName: simulatedName });
+            onVerify?.(true, resolved);
+            onVerified?.({ bankName, accountNumber, accountName: resolved });
         } catch (error) {
             console.error('Bank verification error:', error);
             setVerificationStatus("error");
+            setVerifyError("Verification is unavailable right now. Please try again.");
             onVerify?.(false);
         } finally {
             setIsVerifying(false);
@@ -263,7 +319,11 @@ export default function BankAccountVerification({
                                         Verification Failed
                                     </p>
                                     <p className="text-xs text-slate-600">
-                                        Could not verify account. Please check your details and try again.
+                                        {/* #284 The specific reason, when the endpoint gave one.
+                                            The generic sentence stays as the fallback — it was the
+                                            only text here, because the old simulated path could
+                                            not fail and so had nothing to report. */}
+                                        {verifyError || "Could not verify account. Please check your details and try again."}
                                     </p>
                                 </div>
                             </div>

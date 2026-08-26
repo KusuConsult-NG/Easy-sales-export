@@ -112,10 +112,54 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
         setError("");
 
         try {
-            // SIMULATED VERIFICATION (Requested for demo/testing)
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            const newAccountName = accountName || "SIMULATED ACCOUNT NAME";
+            /**
+             *   #284 THE SECOND COPY OF THE SAME STUB.
+             *
+             *        This component verifies a BVN through /api/kyc/verify-bvn,
+             *        which made it LOOK like the verified one of the pair — and
+             *        the account-name resolution beside it was the same
+             *        simulation as components/shared/BankAccountVerification:
+             *
+             *            // SIMULATED VERIFICATION (Requested for demo/testing)
+             *            await new Promise(r => setTimeout(r, 1000));
+             *            const newAccountName = accountName || "SIMULATED ACCOUNT NAME";
+             *            setVerified(true);
+             *
+             *        Worse than the other one in a small way: `accountName ||`
+             *        means whatever the applicant TYPED was accepted as the
+             *        resolved name, so an export member could name the account
+             *        anything and the form recorded it as verified.
+             *
+             *        Found by the ratchet in bank-verification-is-real.test.ts
+             *        rather than by me — I had checked that this component
+             *        called a real KYC endpoint and concluded it was the sound
+             *        one, which was only half true.
+             */
+            const bankCode = banks.find((b) => b.name === bankName)?.code;
+
+            if (!bankCode) {
+                setError("Bank list is still loading. Please try again in a moment.");
+                setVerified(false);
+                return;
+            }
+
+            const response = await fetch("/api/kyc/verify-bank-account", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ accountNumber, bankCode }),
+            });
+
+            const data = await response.json().catch(() => ({}));
+
+            if (!response.ok || !data?.success || !data?.accountName) {
+                setError(
+                    data?.error || "We could not confirm that account. Check the number and bank and try again.",
+                );
+                setVerified(false);
+                return;
+            }
+
+            const newAccountName: string = data.accountName;
             setAccountName(newAccountName);
             setVerified(true);
             setError("");
