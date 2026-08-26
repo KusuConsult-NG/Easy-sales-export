@@ -81,8 +81,11 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
         if (initial.bvn) initial.bvnVerified = true;
         return initial;
     });
-    const [bvnState, setBvnState] = useState<VerifyState>(initialData?.bvn ? 'verified' : 'idle');
-    const [ninState, setNinState] = useState<VerifyState>(initialData?.nin ? 'verified' : 'idle');
+    // #285 These read `initialData?.bvn` / `?.nin` — the presence of a NUMBER —
+    // and so showed "Verified" for any saved value. The voters-card line below
+    // always read the verified FLAG; these two now match it.
+    const [bvnState, setBvnState] = useState<VerifyState>(initialData?.bvnVerified ? 'verified' : 'idle');
+    const [ninState, setNinState] = useState<VerifyState>(initialData?.ninVerified ? 'verified' : 'idle');
     const [votersCardState, setVotersCardState] = useState<VerifyState>(initialData?.votersCardVerified ? 'verified' : 'idle');
     const [bvnError, setBvnError] = useState<string>('');
     const [ninError, setNinError] = useState<string>('');
@@ -93,18 +96,48 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
 
     function handleChange(field: keyof KYCData, value: string | boolean) {
         const updated = { ...formData, [field]: value };
+        /**
+         *   #285 TYPING A BVN OR NIN MARKED IT VERIFIED.
+         *
+         *        The comment below says "Reset verify state when the field
+         *        changes", and the voters-card branch does exactly that. These
+         *        two did the opposite:
+         *
+         *            setBvnState(value ? 'verified' : 'idle');
+         *            setBvnConfirmed(!!value);
+         *            updated.bvnVerified = !!value;
+         *
+         *        So entering eleven digits showed the green "Verified" badge,
+         *        ticked the "I confirm my digits are correct" box on the
+         *        member's behalf, and set bvnVerified on the data the step
+         *        persists — with no call to verifyBVNAction at all.
+         *
+         *        AND IT DISARMED A REAL GATE. KYCVerificationStep refuses to
+         *        continue while `kycData.bvn` is set and `kycData.bvnVerified`
+         *        is not. That check was written correctly and could never fire,
+         *        because the form handed it a flag that was true by
+         *        construction — #274's shape, in the identity form.
+         *
+         *        The confirmation checkbox was defeated the same way: the
+         *        `if (!bvnConfirmed)` guard in handleVerifyBVN exists to make
+         *        the member confirm the digits, and auto-ticking it meant the
+         *        guard could never refuse either.
+         *
+         *        Only verifyBVNAction/verifyNINAction returning isMatch may set
+         *        these now, which is what the three handlers below already do.
+         */
         // Reset verify state when the field changes
         if (field === 'bvn') {
-            setBvnState(value ? 'verified' : 'idle');
+            setBvnState('idle');
             setBvnError('');
-            setBvnConfirmed(!!value);
-            updated.bvnVerified = !!value;
+            setBvnConfirmed(false);
+            updated.bvnVerified = false;
         }
         if (field === 'nin') {
-            setNinState(value ? 'verified' : 'idle');
+            setNinState('idle');
             setNinError('');
-            setNinConfirmed(!!value);
-            updated.ninVerified = !!value;
+            setNinConfirmed(false);
+            updated.ninVerified = false;
         }
         if (field === 'votersCard') {
             setVotersCardState('idle');
