@@ -296,7 +296,16 @@ describe('it agrees with the naive version everywhere the naive version is right
         // header quotes source lines containing '//'. Raised rather than
         // relaxed, for the same reason every time — nothing strips that file,
         // so no assertion in it is affected.
-        expect(AFFECTED.length).toBeLessThanOrEqual(13);
+        //
+        // THIRTEEN became FOURTEEN when loan-application-refusal-is-visible.test.ts
+        // was added (#287/#288). Same mechanism in its sixth form: that file's
+        // own codeOnly helper carries the literal '/*' inside a regex, and its
+        // sweep for a refusal message quotes `trimmed.startsWith('//')` — a
+        // '//' inside a string, which is the trap in its plainest form. Raised
+        // rather than relaxed, for the same reason every time: nothing strips
+        // that file, and the two assertions in it that DO read stripped source
+        // read other files.
+        expect(AFFECTED.length).toBeLessThanOrEqual(14);
         expect(AFFECTED).toContain('src/lib/csp.ts');
         expect(AFFECTED).toContain('src/__tests__/unit/harness-covers-adapter.test.ts');
     });

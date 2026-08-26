@@ -11,7 +11,7 @@ import { requireSession } from "@/lib/session-guard";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import type { LoanApplication } from "@/lib/types/cooperative-loans";
-import { normaliseLoanApplication, LOAN_APPLICATION_COLLECTIONS, resolveLoanApplication } from "@/lib/loan-application-location";
+import { normaliseLoanApplication, LOAN_APPLICATION_COLLECTIONS, resolveLoanApplication, ONE_OPEN_LOAN_APPLICATION_MESSAGE } from "@/lib/loan-application-location";
 
 /**
  * Submit loan application
@@ -149,7 +149,9 @@ export async function submitLoanApplicationAction(formData: {
             const coopLoansSnap = await coopLoansQuery.get();
 
             if (!generalLoansSnap.empty || !coopLoansSnap.empty) {
-                throw new Error("Active or pending loan application already exists platform-wide.");
+                // #288. Reaches the caller through `error?.message` in this
+                // file's catch, so it is UI copy. Shared with the other doors.
+                throw new Error(ONE_OPEN_LOAN_APPLICATION_MESSAGE);
             }
 
             // 2. Standard eligibility check (using active/disbursed only for balance calculation)

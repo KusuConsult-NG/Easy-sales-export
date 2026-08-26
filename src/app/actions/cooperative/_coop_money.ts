@@ -14,6 +14,7 @@ import { invalidateCooperativeCache, invalidateAdminGlobalStats } from "@/lib/ca
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { debitJsonbBalance, debitJsonbBalanceWithFloor, claimSingleOpenLoanApplication, compensateJsonbDebit } from "@/lib/wallet-ledger";
 import { canTransactAsMember, NOT_A_TRANSACTING_MEMBER_MESSAGE } from "@/lib/cooperative-membership-status";
+import { ONE_OPEN_LOAN_APPLICATION_MESSAGE } from "@/lib/loan-application-location";
 import {
     COOPERATIVE_MINIMUM_BALANCE,
     COOPERATIVE_MINIMUM_WITHDRAWAL,
@@ -672,7 +673,11 @@ async function _applyForLoanAction(
         });
 
         if (!claim.claimed) {
-            throw new Error("Active or pending loan application already exists platform-wide.");
+            // #288. This action's catch forwards `error.message` to the member
+            // loan page, which renders it verbatim — so this string is UI copy,
+            // not a log line, and it read "already exists platform-wide". The
+            // sentence is shared with the other doors onto the same rule.
+            throw new Error(ONE_OPEN_LOAN_APPLICATION_MESSAGE);
         }
 
         try {
