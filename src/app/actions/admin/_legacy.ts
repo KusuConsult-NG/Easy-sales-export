@@ -164,9 +164,39 @@ export const inviteLegacyMemberAction = withFlexibleSafeAction("inviteLegacyMemb
  * Allows admins to pre-register existing members and pre-fill their profile data.
  * Sends a welcome email with a temporary password.
  */
+/**
+ * What onboarding an existing member actually did — #290.
+ *
+ * ActionState's success arm is `{ error: null; success: true; message: string }`
+ * and is shared by every admin action, so it is not widened for this one. This
+ * action has three outcomes rather than one, and a caller that has to read
+ * English prose to tell them apart will not bother — ImportLegacyModal did not,
+ * for as long as the feature has existed.
+ *
+ *   isNewUser          false when the email already had an account. NO EMAIL IS
+ *                      SENT in that case, and the existing password stands.
+ *   emailSent          whether the welcome email with the temporary PIN
+ *                      actually left. False does NOT mean failure: the member
+ *                      exists either way, which is why success stays true.
+ *   temporaryPassword  present ONLY when isNewUser && !emailSent — the case
+ *                      where the admin has to hand the PIN over themselves. It
+ *                      is the same value `message` has always embedded in that
+ *                      case, in a field a screen can render.
+ */
+export type LegacyOnboardingState =
+    | { error: string; success: false }
+    | {
+        error: null;
+        success: true;
+        message: string;
+        isNewUser: boolean;
+        emailSent: boolean;
+        temporaryPassword: string | null;
+    };
+
 async function _onboardLegacyMemberAction(
     formData: any
-): Promise<ActionState> {
+): Promise<LegacyOnboardingState> {
     try {
         const adminCheck = await requireAdmin();
         if ("error" in adminCheck) return { error: adminCheck.error, success: false as const };
@@ -892,10 +922,40 @@ async function _onboardLegacyMemberAction(
             logger.warn(`[Legacy Onboarding] Failed to invalidate cache for ${userRecord.uid}:`, cacheErr);
         }
 
-        return { 
-            error: null, success: true as const, 
-            message: isNewUser 
-                ? (emailSent 
+        /**
+         *   #290 THE OUTCOME WAS SAID IN PROSE AND THE SCREEN DID NOT LISTEN.
+         *
+         *        This return has always distinguished three outcomes, and
+         *        ImportLegacyModal — the only caller, rendered by five admin
+         *        pages — read `result.success` and discarded `message`
+         *        entirely, then printed one hardcoded sentence:
+         *
+         *            "A welcome email with a secure password setup link has
+         *             been sent to {email}."
+         *
+         *        For the middle case that sentence is false AND it destroys
+         *        the only way into the account: the email did not send, and
+         *        the temporary PIN this message exists to hand over was never
+         *        shown to anybody. For an EXISTING member no email is sent at
+         *        all, and the admin was told one was.
+         *
+         *        The three outcomes are now also returned as FIELDS, because a
+         *        caller that has to parse prose to find out what happened will
+         *        go on not doing it. `message` is unchanged — four tests and
+         *        any other reader still see exactly what they saw.
+         *
+         *        temporaryPassword is present ONLY when the admin has to relay
+         *        it, which is the same condition under which the message
+         *        already contained it. It is not new exposure; it is the same
+         *        value in a field the screen can actually render.
+         */
+        return {
+            error: null, success: true as const,
+            isNewUser,
+            emailSent: isNewUser ? emailSent : false,
+            temporaryPassword: isNewUser && !emailSent ? tempPassword : null,
+            message: isNewUser
+                ? (emailSent
                     ? `Legacy member ${data.fullName} successfully onboarded. Default PIN sent to ${data.email}.`
                     : `Legacy member ${data.fullName} successfully onboarded, but the welcome email failed to send. Please share the temporary PIN (${tempPassword}) with the member manually.`)
                 : `Legacy member ${data.fullName} successfully updated.`
