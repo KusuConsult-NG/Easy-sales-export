@@ -55,6 +55,12 @@ export default function AcademyApplicationPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [isPaying, setIsPaying] = useState(false);
     const [paymentStatus, setPaymentStatus] = useState<"paid" | "unpaid">("unpaid");
+    /**
+     * #316 — the payment check itself failed, so neither "paid" nor "unpaid"
+     * is known. Distinct from paymentStatus, which may only hold an answer the
+     * server actually gave.
+     */
+    const [paymentCheckFailed, setPaymentCheckFailed] = useState(false);
     const [selectedPlan, setSelectedPlan] = useState<"foundation" | "standard" | "elite">("foundation");
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [acceptTerms, setAcceptTerms] = useState(false);
@@ -149,6 +155,23 @@ export default function AcademyApplicationPage() {
     }, [personalInfo, education, interests, currentStep, session?.user?.id, restored]);
 
     useEffect(() => {
+        /**
+         * Read the payment status, or null when the check itself failed — #316.
+         *
+         * All five call sites below did `payStatus.data || "unpaid"` or
+         * `payStatus.data === "unpaid"`, neither of which can tell a real
+         * "unpaid" from a failed read. Now that the action distinguishes them,
+         * reading `.data` directly would be worse than before rather than
+         * better: `null === "unpaid"` is false, so a failed check would fall
+         * into the else branch and be treated as PAID. One helper, so no site
+         * can get that wrong on its own.
+         */
+        const readPaymentStatus = async (): Promise<"paid" | "unpaid" | null> => {
+            const res = await checkAcademyPaymentStatusAction();
+            if (!res.success) return null;
+            return res.data === "paid" ? "paid" : "unpaid";
+        };
+
         const checkStatus = async () => {
             try {
                 const status = await checkAcademyStatusAction();
@@ -198,15 +221,24 @@ export default function AcademyApplicationPage() {
                             }
                         }
                         setIsEditMode(true);
-                        const payStatus = await checkAcademyPaymentStatusAction();
-                        setPaymentStatus(payStatus.data || "unpaid");
+                        const pay = await readPaymentStatus();
+                        setPaymentCheckFailed(pay === null);
+                        if (pay) setPaymentStatus(pay);
                         setIsLoading(false);
                     } else {
                         // Check payment status
-                        const payStatus = await checkAcademyPaymentStatusAction();
-                        setPaymentStatus(payStatus.data || "unpaid");
+                        const pay = await readPaymentStatus();
+                        if (pay === null) {
+                            // Do not push a learner who may have paid onto the
+                            // payment step. #316.
+                            setPaymentCheckFailed(true);
+                            setIsLoading(false);
+                            return;
+                        }
+                        setPaymentCheckFailed(false);
+                        setPaymentStatus(pay);
 
-                        if (payStatus.data === "unpaid") {
+                        if (pay === "unpaid") {
                             // Hasn't paid yet — show payment step
                             setCurrentStep(5);
                             setIsLoading(false);
@@ -231,8 +263,14 @@ export default function AcademyApplicationPage() {
                         }
                     }
                 } else if (status.data === "approved" || status.data === "active") {
-                    const payStatus = await checkAcademyPaymentStatusAction();
-                    if (payStatus.data === "unpaid") {
+                    const pay = await readPaymentStatus();
+                    if (pay === null) {
+                        // Neither branch is safe on an unknown answer: one asks
+                        // an approved learner to pay again, the other sends an
+                        // unpaid one into the dashboard. #316.
+                        setPaymentCheckFailed(true);
+                        setIsLoading(false);
+                    } else if (pay === "unpaid") {
                         setPaymentStatus("unpaid");
                         setCurrentStep(5);
                         setIsLoading(false);
@@ -283,12 +321,14 @@ export default function AcademyApplicationPage() {
                         if (d.revisionNote) setRevisionNote(d.revisionNote);
                     }
                     setIsRevisionMode(true);
-                    const payStatus = await checkAcademyPaymentStatusAction();
-                    setPaymentStatus(payStatus.data || "unpaid");
+                    const pay = await readPaymentStatus();
+                    setPaymentCheckFailed(pay === null);
+                    if (pay) setPaymentStatus(pay);
                     setIsLoading(false);
                 } else {
-                    const payStatus = await checkAcademyPaymentStatusAction();
-                    setPaymentStatus(payStatus.data || "unpaid");
+                    const pay = await readPaymentStatus();
+                    setPaymentCheckFailed(pay === null);
+                    if (pay) setPaymentStatus(pay);
                     setIsLoading(false);
                 }
             } catch (error) {
@@ -365,6 +405,33 @@ export default function AcademyApplicationPage() {
         return (
             <div className="min-h-screen flex items-center justify-center bg-slate-50">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+        );
+    }
+
+    // #316 — the payment check failed, so we do not know whether this learner
+    // has paid. Showing the form would present the payment step to somebody who
+    // may already have paid, which is what the old "unpaid on error" default
+    // did. Say so instead.
+    if (paymentCheckFailed) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+                <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
+                    <h2 className="text-xl font-bold text-slate-900 mb-2">
+                        We could not check your payment status
+                    </h2>
+                    <p className="text-slate-600 text-sm mb-6">
+                        This is a problem reaching the server, not a change to your
+                        registration &mdash; nothing has been charged and nothing has been
+                        lost. Please try again in a moment.
+                    </p>
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition"
+                    >
+                        Try again
+                    </button>
+                </div>
             </div>
         );
     }

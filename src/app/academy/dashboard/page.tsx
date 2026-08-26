@@ -74,6 +74,15 @@ export default function AcademyDashboardPage() {
                     if (payStatus.success && payStatus.data === "paid") {
                         // User has paid and application is pending approval, send them to the pending screen!
                         router.replace("/academy/application/pending");
+                    } else if (!payStatus.success) {
+                        // #316 — the check failed, which is not "has not paid".
+                        // The catch below never fired for this: the action used
+                        // to swallow its own error and answer "unpaid" with
+                        // success:true, so a database fault reached here
+                        // wearing a definite answer.
+                        logger.error("Payment status unreadable on dashboard", { error: payStatus.error });
+                        setIsUnpaid(true);
+                        setIsLoading(false);
                     } else {
                         // User is pending but has not paid yet (unpaid)
                         setIsUnpaid(true);

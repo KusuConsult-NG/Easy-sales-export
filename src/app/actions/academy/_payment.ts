@@ -732,7 +732,9 @@ async function _checkAcademyPaymentStatusAction(): Promise<ActionResponse<any>> 
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: 'Unauthorized', data: null };
         const { session } = sessionResult;
-        if (!session?.user?.id) return { error: null, success: true as const, data: "unpaid" };
+        // #316 — a session with no user id is a broken session, not a learner
+        // known not to have paid. It used to answer "unpaid" definitively.
+        if (!session?.user?.id) return { success: false as const, error: "Unauthorized", data: null };
 
         // Payment bypass — see src/lib/payment-bypass.ts for who and why.
         if (isPaymentBypassAccount(session.user.email)) {
@@ -781,10 +783,26 @@ async function _checkAcademyPaymentStatusAction(): Promise<ActionResponse<any>> 
 
         return { error: null, success: true as const, data: "unpaid" };
     } catch (error) {
+        // Was: { error: null, success: true, data: "unpaid" } — #316.
+        //
+        // A database failure asserted a DEFINITIVE "this learner has not paid".
+        // It is #313's shape on money: not knowing reported as a fact, in the
+        // direction that harms the person who DID pay.
+        //
+        // And it defeated the caller that was doing the right thing.
+        // academy/(learner)/layout.tsx guards its hard redirect with
+        // `payStatus.success && payStatus.data === "unpaid"` under the comment
+        // "Only hard-redirect if the payment check definitively confirms
+        // unpaid" — success:true made that guard meaningless, so a transient
+        // read error threw a paid learner out of the academy and into the
+        // payment flow, which offers to charge them again.
+        //
+        // Callers must now distinguish three answers, not two: paid, unpaid,
+        // and we-could-not-tell.
         logger.error("Check academy payment status error:", {
             error: error instanceof Error ? error.message : String(error)
         });
-        return { error: null, success: true as const, data: "unpaid" };
+        return { success: false as const, error: "Could not check payment status", data: null };
     }
 }
 export const checkAcademyPaymentStatusAction = withFlexibleSafeAction("checkAcademyPaymentStatusAction", _checkAcademyPaymentStatusAction);
