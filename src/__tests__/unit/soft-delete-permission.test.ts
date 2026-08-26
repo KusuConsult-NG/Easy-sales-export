@@ -209,8 +209,18 @@ describe('the deletion still does what #125 made it do', () => {
         await softDelete();
 
         const scrub = scrubWrite();
-        expect(scrub?.fullName).toBe('Deleted User');
+        // #305 "Deleted User" was this path's own hand-written placeholder.
+        // It uses the shared definition in lib/user-erasure.ts now — the one
+        // #283 created and checks against the User type — so the placeholder is
+        // that module's "Redacted User" and the scrub covers 24 fields rather
+        // than the three this file used to name.
+        expect(scrub?.fullName).toBe('Redacted User');
         expect(String(scrub?.email)).toMatch(/deleted_/);
+        // The four the hand-written list missed entirely.
+        for (const field of ['bvn', 'nin', 'nextOfKin', 'documents']) {
+            expect({ field, scrubbed: scrub?.[field] !== undefined })
+                .toEqual({ field, scrubbed: true });
+        }
         // The field lib/auth.ts refuses to log in — roles and isActive are read
         // by nothing in the sign-in path.
         expect(scrub?.suspended).toBe(true);
