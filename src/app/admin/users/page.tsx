@@ -243,19 +243,103 @@ export default function AdminUsersPage() {
         setProcessingId(null);
     };
 
+    /**
+     *   #294 "BULK VERIFY" UN-VERIFIED EVERY ALREADY-VERIFIED USER IN THE
+     *        SELECTION, AND THEN SHOWED THEM ALL AS VERIFIED.
+     *
+     *        The old body was:
+     *
+     *            for (const userId of selectedIds) {
+     *                await toggleUserVerificationAction(userId);
+     *            }
+     *            setData(prev => prev.map(u => selectedIds.has(u.id)
+     *                ? { ...u, isVerified: true, verifiedAt: new Date() } : u));
+     *            showToast("Bulk verification completed", "success");
+     *
+     *        THE ACTION IS A TOGGLE. Its own body is
+     *        `newVerificationStatus = !currentData.isVerified`. Select-all and
+     *        press "Bulk Verify" and every user who was ALREADY verified is
+     *        set back to unverified — kycStatus to "pending", verifiedAt to
+     *        null, an audit row saying "user_unverify" — while the table is
+     *        optimistically painted `isVerified: true` for all of them. The
+     *        screen and the database disagree, and they disagree in the
+     *        direction where a verified member has quietly lost their
+     *        verification.
+     *
+     *        AND EVERY RESULT WAS DISCARDED. The loop ignored what each call
+     *        returned, so a permission refusal, a missing user or a thrown
+     *        error left the row reading "verified" and the toast reading
+     *        "Bulk verification completed".
+     *
+     *        THE SINGLE-ROW HANDLER DIRECTLY ABOVE IS CORRECT. It reads
+     *        result.success, flips the local row to match what actually
+     *        happened, and shows result.message or result.error. Two doors onto
+     *        one operation, one of them hardened, and the bulk one was not —
+     *        #276, #277, #279, #281 again.
+     *
+     *        Now: users already verified are SKIPPED rather than toggled,
+     *        because "Verify" should mean verify and should be safe to press
+     *        twice; each result is read; only the rows that actually succeeded
+     *        are updated; and the toast reports the real tally.
+     *
+     *        Residual race, stated rather than hidden: `isVerified` here is
+     *        what the last load said. If somebody else verifies a user in that
+     *        window this still toggles them off. The single-row handler has the
+     *        same property, and closing it needs the action to take a target
+     *        state rather than flip — a change to the action's contract, worth
+     *        doing but not silently as part of this.
+     */
     async function handleBulkVerify() {
-        if (selectedIds.size === 0 || !confirm(`Verify ${selectedIds.size} user(s)?`)) return;
-        setBulkProcessing(true);
+        if (selectedIds.size === 0) return;
 
-        for (const userId of selectedIds) {
-            await toggleUserVerificationAction(userId);
+        const targets = users.filter((u) => selectedIds.has(u.id) && !u.isVerified);
+        const alreadyVerified = selectedIds.size - targets.length;
+
+        if (targets.length === 0) {
+            showToast(
+                alreadyVerified === 1
+                    ? "That user is already verified."
+                    : `All ${alreadyVerified} selected users are already verified.`,
+                "info",
+            );
+            return;
         }
 
-        // Optimistic update
-        setData(prev => prev.map(u => selectedIds.has(u.id) ? { ...u, isVerified: true, verifiedAt: new Date() } : u));
+        if (!confirm(`Verify ${targets.length} user(s)?`)) return;
+        setBulkProcessing(true);
+
+        const verified: string[] = [];
+        const failures: string[] = [];
+
+        for (const user of targets) {
+            try {
+                const result = await toggleUserVerificationAction(user.id);
+                if (result.success) verified.push(user.id);
+                else failures.push(result.error || user.id);
+            } catch {
+                failures.push(user.id);
+            }
+        }
+
+        // Only the ones that actually came back verified.
+        const done = new Set(verified);
+        setData(prev => prev.map(u => done.has(u.id)
+            ? { ...u, isVerified: true, kycStatus: 'verified', verifiedAt: new Date() }
+            : u));
         setSelectedIds(new Set());
         setBulkProcessing(false);
-        showToast("Bulk verification completed", "success");
+
+        if (failures.length === 0) {
+            showToast(
+                `${verified.length} user(s) verified.${alreadyVerified > 0 ? ` ${alreadyVerified} already were.` : ""}`,
+                "success",
+            );
+        } else {
+            showToast(
+                `${verified.length} verified, ${failures.length} failed. ${failures[0]}`,
+                verified.length > 0 ? "info" : "error",
+            );
+        }
     };
 
     function handleManageUser(user: User) {

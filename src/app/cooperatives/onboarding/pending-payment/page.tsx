@@ -6,18 +6,37 @@
 
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
-import { Clock, Building2, Upload, CheckCircle, ArrowLeft, Loader2 } from "lucide-react";
+import { Suspense } from "react";
+import { Clock, Upload, ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { COMPANY_INFO, COOPERATIVE_CONFIG, CURRENCY_CONFIG } from "@/lib/constants";
 
 function PendingPaymentContent() {
     const searchParams = useSearchParams();
-    const [paymentReference] = useState(() => {
-        // Use ref from URL params if available (set during checkout)
-        return searchParams.get("ref") || "COOP-PAY-" + Math.random().toString(36).substr(2, 9).toUpperCase();
-    });
+
+    /**
+     *   #293 THE REFERENCE WAS INVENTED IN THE BROWSER, AND THE PAGE TOLD THE
+     *        MEMBER TO PUT IT ON A BANK TRANSFER.
+     *
+     *            searchParams.get("ref") ||
+     *                "COOP-PAY-" + Math.random().toString(36)...
+     *
+     *        With no `?ref=` — which is how this page is reached, since nothing
+     *        in the application links to it — every visit produced a fresh
+     *        random string, displayed under "Reference (Use this as
+     *        narration)". It matches no payment, no membership and no row: the
+     *        server has never seen it and never will. Two visits produce two
+     *        different "references" for the same person.
+     *
+     *        wallet-ledger.ts states the rule this breaks in as many words: a
+     *        reference that varies per attempt is not an idempotency key. #286
+     *        is the same principle on the repayment path.
+     *
+     *        Now: null when there is no real reference, and the page says so
+     *        rather than inventing one.
+     */
+    const paymentReference = searchParams.get("ref");
     const amount = parseInt(searchParams.get("amount") || COOPERATIVE_CONFIG.registrationFee.toString(), 10);
     const tier = "Member";
 
@@ -60,7 +79,10 @@ function PendingPaymentContent() {
                     <div className="space-y-3 mb-6">
                         <div className="flex justify-between py-2 border-b border-slate-200">
                             <span className="text-slate-600">Payment Reference:</span>
-                            <span className="font-mono font-semibold text-slate-900">{paymentReference}</span>
+                            {/* #293. Absent rather than invented. */}
+                            <span className="font-mono font-semibold text-slate-900">
+                                {paymentReference || "—"}
+                            </span>
                         </div>
                         <div className="flex justify-between py-2 border-b border-slate-200">
                             <span className="text-slate-600">Membership Tier:</span>
@@ -72,33 +94,48 @@ function PendingPaymentContent() {
                         </div>
                     </div>
 
-                    {/* Bank Details */}
-                    <div className="bg-slate-50 rounded-xl p-6 mb-6">
-                        <div className="flex items-center gap-3 mb-4">
-                            <Building2 className="w-6 h-6 text-purple-600" />
-                            <h3 className="font-bold text-slate-900">
-                                Bank Transfer Details
-                            </h3>
-                        </div>
-                        <div className="space-y-3">
-                            <div>
-                                <p className="text-sm text-slate-600 mb-1">Bank Name:</p>
-                                <p className="font-semibold text-slate-900">First Bank of Nigeria</p>
-                            </div>
-                            <div>
-                                <p className="text-sm text-slate-600 mb-1">Account Number:</p>
-                                <p className="font-mono font-semibold text-slate-900 text-lg">2015678942</p>
-                            </div>
-                            <div>
-                                <p className="text-sm text-slate-600 mb-1">Account Name:</p>
-                                <p className="font-semibold text-slate-900">Easy Sales Export Cooperative</p>
-                            </div>
-                            <div className="pt-3 border-t border-slate-200">
-                                <p className="text-sm text-slate-600 mb-1">Reference (Use this as narration):</p>
-                                <p className="font-mono font-bold text-purple-600 text-lg">{paymentReference}</p>
-                            </div>
-                        </div>
-                    </div>
+                    {/*
+                      *   #293 THE PAGE CONTRADICTED ITSELF ABOUT HOW TO PAY,
+                      *        AND I BUILT THE CONTRADICTION.
+                      *
+                      *        This block used to give hardcoded bank transfer
+                      *        details —
+                      *
+                      *            First Bank of Nigeria
+                      *            2015678942
+                      *            Easy Sales Export Cooperative
+                      *            Reference (Use this as narration): <random>
+                      *
+                      *        — directly above the panel below, which says
+                      *        "Verification Is Automatic ... confirmed with
+                      *        Paystack directly — there is nothing you need to
+                      *        send us."
+                      *
+                      *        Both cannot be true, and the Paystack half is the
+                      *        one the product agrees with: the landing page,
+                      *        the loans page, the fixed-savings page and the ID
+                      *        card page all say the registration fee is paid
+                      *        via Paystack, and /cooperatives/payment is the
+                      *        screen that does it. Nothing anywhere else in
+                      *        this repository mentions that account number —
+                      *        it appears on this page and nowhere else, so it
+                      *        is either a placeholder or an account no other
+                      *        code can reconcile against.
+                      *
+                      *        MY OWN EARLIER FIX MADE IT WORSE. The Paystack
+                      *        panel below is the replacement I wrote for a dead
+                      *        "Upload Receipt" button. I corrected the half I
+                      *        was looking at and left this half standing, which
+                      *        is #283's shape — the copy somebody remembered
+                      *        and the copy added later — committed by me.
+                      *
+                      *        Removed rather than corrected: publishing bank
+                      *        details is a decision about where money goes, and
+                      *        guessing the right account is not an audit's call.
+                      *        If manual transfer is meant to exist, the account
+                      *        belongs in configuration with the rest of the
+                      *        payment settings, not in a component.
+                      */}
 
                     {/* Upload Proof */}
                     <div className="border-2 border-dashed border-purple-300 rounded-xl p-6 text-center bg-purple-50">
