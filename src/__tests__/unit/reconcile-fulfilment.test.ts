@@ -406,3 +406,144 @@ describe('reconcile-fulfilment', () => {
         expect(res.status).toBe(401);
     });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#318 — transfers parked for human reconciliation', () => {
+    /**
+     * Four money-out paths across three modules park a payout when Paystack
+     * reports the reference as a DUPLICATE (the first transfer stands) or
+     * returns nothing at all (the money may have moved). Each writes
+     * `needsReconciliation: true` and a note saying a human must check
+     * Paystack before any retry:
+     *
+     *   admin/_loans.ts                 cooperative loan disbursement
+     *   wave/_wv_admin_withdrawals.ts   WAVE withdrawal (two sites)
+     *   wallet.ts                       wallet payout (two sites)
+     *
+     * NOTHING READ THE FLAG. Not this job, not a screen, not a query, in any of
+     * the three modules — while the marketplace's equivalent,
+     * escrowPendingManualRelease, was scanned here all along. The same failure,
+     * monitored in one module out of four. #141's shape on the transfers that
+     * most need a person.
+     */
+    beforeEach(() => {
+        jest.resetModules();
+        process.env.CRON_SECRET = SECRET;
+        COLLECTION_DATA = {};
+        TRUNCATED = new Set();
+    });
+
+    it('FINDS A PARKED TRANSFER IN EVERY ONE OF THE THREE COLLECTIONS', async () => {
+        // THE test. Before this, each of these sat in its row alone.
+        COLLECTION_DATA['loan_applications'] = [
+            { id: 'loan-1', data: { needsReconciliation: true, userId: 'u1', amount: 50000, disbursementError: 'Disbursement outcome UNKNOWN' } },
+            { id: 'loan-ok', data: { disbursed: true, userId: 'u9' } },
+        ];
+        COLLECTION_DATA['wave_withdrawals'] = [
+            { id: 'wd-1', data: { needsReconciliation: true, userId: 'u2', amount: 12000, payoutReference: 'WAVE-abc', adminNotes: 'PAYOUT DISPATCHED, RESULT UNRECORDED' } },
+        ];
+        COLLECTION_DATA['wallet_transactions'] = [
+            { id: 'tx-1', data: { needsReconciliation: true, userId: 'u3', amount: 7500, payoutReference: 'W-xyz', adminNote: 'Payout outcome unknown' } },
+        ];
+
+        const { GET } = await import('@/app/api/cron/reconcile-fulfilment/route');
+        const body = await (await GET(req())).json();
+
+        expect(body.needsReconciliation.count).toBe(3);
+        expect(body.needsReconciliation.totalAmount).toBe(69500);
+        expect(body.needsReconciliation.transfers.map((t: any) => t.kind).sort()).toEqual([
+            'cooperative_loan_disbursement', 'wallet_payout', 'wave_withdrawal',
+        ]);
+    });
+
+    it('and a run that finds one CANNOT report ok', async () => {
+        // The flag existing but not counting would be the same defect wearing
+        // a report.
+        COLLECTION_DATA['loan_applications'] = [
+            { id: 'loan-1', data: { needsReconciliation: true, userId: 'u1', amount: 50000 } },
+        ];
+
+        const { GET } = await import('@/app/api/cron/reconcile-fulfilment/route');
+        const body = await (await GET(req())).json();
+
+        expect(body.status).toBe('unfulfilled_payments_found');
+        expect(body.totalUnfulfilled).toBeGreaterThanOrEqual(1);
+    });
+
+    it('carries the reference and the note, which is what a human needs', async () => {
+        // Reporting a count alone would send somebody to search three
+        // collections by hand for the row it meant.
+        COLLECTION_DATA['wave_withdrawals'] = [
+            { id: 'wd-1', data: { needsReconciliation: true, userId: 'u2', amount: 12000, payoutReference: 'WAVE-abc', adminNotes: 'verify on Paystack before any retry' } },
+        ];
+
+        const { GET } = await import('@/app/api/cron/reconcile-fulfilment/route');
+        const body = await (await GET(req())).json();
+
+        expect(body.needsReconciliation.transfers[0]).toMatchObject({
+            kind: 'wave_withdrawal',
+            id: 'wd-1',
+            reference: 'WAVE-abc',
+            note: 'verify on Paystack before any retry',
+        });
+        expect(body.needsReconciliation.meaning).toMatch(/BEFORE any retry/);
+    });
+
+    it('reports ok when nothing is parked, so the scan is not simply always-on', async () => {
+        // Vacuity guard.
+        COLLECTION_DATA['loan_applications'] = [
+            { id: 'loan-ok', data: { disbursed: true, userId: 'u9' } },
+        ];
+
+        const { GET } = await import('@/app/api/cron/reconcile-fulfilment/route');
+        const body = await (await GET(req())).json();
+
+        expect(body.needsReconciliation.count).toBe(0);
+        expect(body.status).toBe('ok');
+    });
+
+    it('AND THE FOUR WRITERS STILL SET THE FLAG, or this scan finds nothing', () => {
+        // Vacuity from the other side, and a real gap the mutation run found:
+        // every assertion above passes if a writer quietly stops setting
+        // `needsReconciliation`, because the job would then correctly report
+        // zero. The scan is only worth having while the flag is still raised.
+        //
+        // Source-level on purpose — these are four failure branches that only
+        // execute when Paystack returns a duplicate or nothing at all, which no
+        // unit harness can reach without mocking Paystack itself.
+        const { readFileSync } = require('fs');
+        const { join } = require('path');
+        const { stripComments } = require('@/lib/testing/strip-comments');
+        const src = (rel: string) =>
+            stripComments(readFileSync(join(process.cwd(), rel), 'utf-8'), { label: rel });
+
+        const WRITERS: Array<[string, number]> = [
+            ['src/app/actions/admin/_loans.ts', 1],
+            ['src/app/actions/wave/_wv_admin_withdrawals.ts', 2],
+            ['src/app/actions/wallet.ts', 2],
+        ];
+
+        for (const [rel, count] of WRITERS) {
+            const raised = (src(rel).match(/needsReconciliation:\s*(true|!!)/g) ?? []).length;
+            expect({ rel, raised }).toEqual({ rel, raised: count });
+        }
+    });
+
+    it('the in-loop re-check is defence the harness cannot exercise', () => {
+        // Recorded rather than tested. The scan filters with .where(), and this
+        // fake db's .where() filters too, so removing
+        // `if (data.needsReconciliation !== true) return;` changes nothing here
+        // — a mutation of that line survives.
+        //
+        // It is kept because this suite's own harness comment records that a
+        // where() which did NOT filter is exactly how a previous stub misled a
+        // reader. The line is belt-and-braces against that, and its presence is
+        // pinned so it is not removed as dead.
+        const { readFileSync } = require('fs');
+        const { join } = require('path');
+        const job = readFileSync(
+            join(process.cwd(), 'src/app/api/cron/reconcile-fulfilment/route.ts'), 'utf-8');
+
+        expect(job).toContain('if (data.needsReconciliation !== true) return;');
+    });
+});

@@ -372,6 +372,81 @@ export async function GET(request: NextRequest) {
             });
         }
 
+        /**
+         * Transfers whose outcome nobody knows — #318.
+         *
+         * Four money-out paths across three modules park a payout for human
+         * reconciliation when Paystack reports the reference as a DUPLICATE
+         * (the first transfer stands) or returns nothing at all (the money may
+         * have moved). Each writes `needsReconciliation: true` and a careful
+         * note. Their own comments say what is needed next:
+         *
+         *   "Needs reconciliation with Paystack."
+         *   "PAYOUT DISPATCHED, RESULT UNRECORDED — verify on Paystack before
+         *    any retry."
+         *   "Check the reference against Paystack before retrying."
+         *
+         * NOTHING READ THE FLAG. Not this job, not a screen, not a query — in
+         * any of the three modules. The only surface was a toast the admin who
+         * pressed Approve saw once. So a loan disbursement, a WAVE withdrawal
+         * or a wallet payout whose outcome is UNKNOWN sat in the row alone,
+         * and the human the code asks for was never told there was anything to
+         * check. #141's shape ("the payout queue is read by nothing") on the
+         * transfers that most need a person.
+         *
+         * The marketplace equivalent, escrowPendingManualRelease, IS scanned
+         * just above. Same failure, monitored in one module out of four.
+         *
+         * Reported and not repaired, for the reason the block above gives:
+         * retrying a transfer moves money, and this route alerts rather than
+         * auto-heals.
+         */
+        const needsReconciliation: Array<Record<string, any>> = [];
+
+        {
+            const sources: Array<{ collection: string; kind: string }> = [
+                { collection: COLLECTIONS.LOAN_APPLICATIONS, kind: "cooperative_loan_disbursement" },
+                { collection: COLLECTIONS.WAVE_WITHDRAWALS, kind: "wave_withdrawal" },
+                { collection: COLLECTIONS.WALLET_TRANSACTIONS, kind: "wallet_payout" },
+            ];
+
+            for (const { collection, kind } of sources) {
+                try {
+                    // .all(), like every scan here: the one past the 5,000th row
+                    // is exactly the one nobody would find by hand either.
+                    const snap = await db.collection(collection)
+                        .where("needsReconciliation", "==", true)
+                        .all()
+                        .get();
+                    snap.docs.forEach((d: any) => {
+                        const data = d.data() ?? {};
+                        if (data.needsReconciliation !== true) return;
+                        needsReconciliation.push({
+                            kind,
+                            id: d.id,
+                            userId: data.userId || data.memberId || "",
+                            amount: data.amount ?? data.netAmount ?? null,
+                            reference: data.payoutReference || data.disbursementTransferCode || null,
+                            note: data.adminNotes || data.adminNote || data.disbursementError
+                                || data.payoutError || "(no note recorded)",
+                        });
+                    });
+                } catch (e: any) {
+                    // A scan that could not run is not a clean one. Recorded the
+                    // same way the other incomplete scans are, so the job cannot
+                    // report "ok" over a query that never happened.
+                    incompleteScans.push(`${collection}:needsReconciliation`);
+                    logger.error(`[Reconcile] needsReconciliation scan failed for ${collection}`, {
+                        error: e?.message,
+                    });
+                }
+            }
+        }
+
+        const needsReconciliationTotal = needsReconciliation.reduce(
+            (sum, r) => sum + (Number(r.amount) || 0), 0
+        );
+
         const payoutsStuckTotal = payoutsStuck.reduce(
             (sum, r) => sum + (Number(r.amount) || 0), 0
         );
@@ -379,7 +454,11 @@ export async function GET(request: NextRequest) {
         // Both of these count toward the alarm as much as a missing artefact
         // does. Reporting either without counting it would let a run with
         // stranded payments, or with money owed to buyers, report "ok".
-        totalUnfulfilled += stranded.length + refundsOwed.length + payoutsStuck.length;
+        // #318 adds needsReconciliation to the same tally. A transfer whose
+        // outcome is unknown is exactly as unresolved as a stranded payment,
+        // and a run that found one must not report "ok".
+        totalUnfulfilled += stranded.length + refundsOwed.length
+            + payoutsStuck.length + needsReconciliation.length;
 
         const body = {
             // An incomplete scan cannot report "ok". Every "unfulfilled" result
@@ -412,6 +491,19 @@ export async function GET(request: NextRequest) {
                 orders: payoutsStuck.slice(0, MAX_LISTED),
                 ...(payoutsStuck.length > MAX_LISTED
                     ? { truncated: payoutsStuck.length - MAX_LISTED }
+                    : {}),
+            },
+            // #318 — loan disbursements, WAVE withdrawals and wallet payouts
+            // that parked themselves for human reconciliation. Until now the
+            // flag they set was read by nothing.
+            needsReconciliation: {
+                count: needsReconciliation.length,
+                totalAmount: needsReconciliationTotal,
+                meaning: "the transfer's outcome is UNKNOWN or was a duplicate — "
+                    + "check the reference against Paystack BEFORE any retry",
+                transfers: needsReconciliation.slice(0, MAX_LISTED),
+                ...(needsReconciliation.length > MAX_LISTED
+                    ? { truncated: needsReconciliation.length - MAX_LISTED }
                     : {}),
             },
             refundsOwed: {
