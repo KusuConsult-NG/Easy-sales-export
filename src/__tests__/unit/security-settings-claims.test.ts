@@ -54,6 +54,7 @@ import { describe, it, expect } from '@jest/globals';
 import { execSync } from 'child_process';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { stripComments } from '@/lib/testing/strip-comments';
 
 function source(rel: string): string {
     return readFileSync(join(process.cwd(), rel), 'utf-8');
@@ -128,7 +129,15 @@ describe('the rest of the panel, recorded', () => {
     it('nothing on the server reads the stored security settings', () => {
         // Not corrected here — "saved" is true of these, and rewording four
         // labels is a design decision. Recorded so the state is visible.
-        const readers = execSync('grep -rn "platform_settings" src || true', {
+        //
+        // COMMENTS ARE NOT READERS. This grepped raw text, so #317's
+        // explanation in admin/_settings.ts — which names the collection while
+        // describing what was written into it wrongly — counted as four new
+        // readers and failed this test. That is the comment-vs-code trap the
+        // shared stripper exists for, and the second gate this session to hit
+        // it after audit-log-mock-is-complete. Each candidate line is now
+        // re-checked against its file with comments removed.
+        const candidates = execSync('grep -rn "platform_settings" src || true', {
             encoding: 'utf-8',
             cwd: process.cwd(),
         })
@@ -138,6 +147,16 @@ describe('the rest of the panel, recorded', () => {
             .filter((l) => !l.includes('api/admin/settings'))
             .filter((l) => !l.includes('types/firestore.ts'))
             .filter((l) => !l.includes('targetType'));
+
+        const readers = candidates.filter((line) => {
+            const rel = line.split(':')[0];
+            const lineno = Number(line.split(':')[1]);
+            if (!rel || !Number.isFinite(lineno)) return true;
+            const stripped = stripComments(
+                readFileSync(join(process.cwd(), rel), 'utf-8'), { label: rel },
+            ).split('\n');
+            return (stripped[lineno - 1] ?? '').includes('platform_settings');
+        });
 
         expect(readers).toEqual([]);
     });
