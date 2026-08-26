@@ -23,6 +23,7 @@ import {
     PRODUCT_REJECTABLE_FROM,
     normaliseProductStatus,
 } from "@/lib/product-status";
+import { canSendEmail } from "@/lib/email-notifications";
 
 // ============================================
 // Seller Verification (Marketplace)
@@ -139,13 +140,16 @@ async function _approveSellerVerificationAction(
         }
 
         // 4. Send Approval Email
-        if (process.env.RESEND_API_KEY) {
-            // Get user email - fetch user doc to be safe
-            const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-            const userData = userDoc.data();
-            const userEmail = userData?.email;
+        //
+        // #308 The address is fetched BEFORE the guard now. It used to be read
+        // inside `if (process.env.RESEND_API_KEY)`, so with no key configured
+        // the code never even looked to see whether the seller had an email —
+        // the two reasons a message goes undelivered were one silent branch.
+        const approvalUserDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        const userEmail = approvalUserDoc.data()?.email;
 
-            if (userEmail) {
+        if (canSendEmail("seller approval email", userEmail)) {
+            {
                 try {
                     const { Resend } = await import("resend");
                     const resend = new Resend(process.env.RESEND_API_KEY);

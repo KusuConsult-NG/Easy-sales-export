@@ -5,6 +5,7 @@
  */
 
 import { escapeHtml } from "@/lib/utils";
+import { logger } from "@/lib/logger";
 
 /**
  * EVERY VALUE INTERPOLATED INTO A TEMPLATE BELOW IS ESCAPED.
@@ -25,6 +26,61 @@ import { escapeHtml } from "@/lib/utils";
  * too, not merely harmless: `&` inside an href must be `&amp;` in HTML, which
  * is what every client then decodes back to `&`.
  */
+
+/**
+ * Whether an email can actually be sent, and a loud reason when it cannot.
+ *
+ *   #308 #217's FIX REACHED THIS FILE AND NINE DECISION PATHS KEPT THEIR OWN
+ *        COPY.
+ *
+ *        #217 found that a missing RESEND_API_KEY was silent in production and
+ *        fixed sendEmailNotification below to say so and return a failure. Its
+ *        write-up listed what goes undelivered when that happens — "membership
+ *        approvals, rejections, password resets, briefing confirmations,
+ *        withdrawal notifications, the legacy welcome carrying a member's
+ *        temporary PIN".
+ *
+ *        Those are exactly the paths that never called it. Nine sites across
+ *        five files build their own Resend client behind
+ *
+ *            if (process.env.RESEND_API_KEY && appData.userEmail) { ... }
+ *
+ *        so with no key the whole block is skipped: no send, no log, no return
+ *        value, nothing. Every module's APPROVE and REJECT decision is in that
+ *        list — export, loans, academy, marketplace and land.
+
+ *        A tenth grep hit, admin/_legacy.ts, turned out to be inside a 120-line
+ *        block comment; its live path uses sendLegacyMemberWelcomeEmail, which
+ *        routes through the sender below. See the regression suite.
+ *
+ *        The second half of the condition is the same defect in miniature: a
+ *        member with no email on record is skipped just as quietly, and that is
+ *        a data problem somebody could fix if they knew about it.
+ *
+ *        And the rejection screens tell people to go and read the email:
+ *        /export/onboarding/rejected and /marketplace/onboarding/rejected both
+ *        say "Please check your inbox for detailed feedback". That is #290's
+ *        shape — the screen announcing an email nobody sent.
+ *
+ * WHY A GUARD RATHER THAN ROUTING ALL TEN THROUGH sendEmailNotification
+ * --------------------------------------------------------------------
+ * Because each of the ten carries its own hand-written HTML body, and moving
+ * them wholesale is a large edit whose failure mode is a broken template in a
+ * message somebody only receives once. The defect here is the SILENCE, and this
+ * closes it exactly, in one line per site, with the duplication left recorded
+ * rather than half-migrated.
+ */
+export function canSendEmail(context: string, to: unknown): to is string {
+    if (!process.env.RESEND_API_KEY) {
+        logger.error(`[EMAIL] ${context} was NOT sent: RESEND_API_KEY is not configured.`);
+        return false;
+    }
+    if (typeof to !== "string" || !to.trim()) {
+        logger.error(`[EMAIL] ${context} was NOT sent: no email address on the record.`);
+        return false;
+    }
+    return true;
+}
 
 interface EmailData {
     to: string;

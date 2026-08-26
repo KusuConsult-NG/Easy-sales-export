@@ -188,8 +188,16 @@ describe('#218 — user-supplied values do not reach the markup raw', () => {
         const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
 
         const bare = [...code.matchAll(/\$\{([a-zA-Z][a-zA-Z0-9_.?]*)\}/g)].map((m) => m[1]);
-        // The only survivors are counters inside log strings.
-        expect([...new Set(bare)].sort()).toEqual(['emails.length', 'sent']);
+        // The only survivors are values inside LOG strings, which never reach a
+        // mail client. `context` joined them with #308: canSendEmail names which
+        // message went undelivered, and that name is a literal chosen at each
+        // call site — "loan decision email", "export decision email" — not
+        // anything a user supplies.
+        //
+        // Kept as an explicit list rather than a rule about log lines, because a
+        // rule would have to recognise a logger call and that is the sort of
+        // inference this ratchet exists to avoid.
+        expect([...new Set(bare)].sort()).toEqual(['context', 'emails.length', 'sent']);
     });
 });
 

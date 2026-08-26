@@ -18,6 +18,7 @@ import { serializeDocs } from "@/lib/firestore-serialize";
 import { createNotificationAction } from "@/app/actions/notifications";
 import { LoanApplicationReviewSchema } from "@/lib/schemas";
 import { hasAdminPermission } from "@/lib/admin-permissions";
+import { canSendEmail } from "@/lib/email-notifications";
 
 // ============================================
 // Loan Application Management (Admin)
@@ -392,7 +393,7 @@ async function _approveLoanApplication(
             await invalidateCooperativeCache(loanData.userId);
         } catch (e) { logger.error('[admin] cache invalidation failed silently:', e); }
 
-        if (process.env.RESEND_API_KEY && loanData.userEmail) {
+        if (canSendEmail("loan decision email", loanData.userEmail)) {
             try {
                 const { Resend } = await import("resend");
                 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -505,7 +506,7 @@ async function _rejectLoanApplication(
         const { loanData } = txResult;
 
         // SIDE EFFECTS (Post-Commit)
-        if (process.env.RESEND_API_KEY && loanData.userEmail) {
+        if (canSendEmail("loan decision email", loanData.userEmail)) {
             try {
                 const { Resend } = await import("resend");
                 const resend = new Resend(process.env.RESEND_API_KEY);

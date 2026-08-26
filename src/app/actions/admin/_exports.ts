@@ -17,6 +17,7 @@ import { ExportOnboardingReviewSchema } from "@/lib/schemas";
 import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
 import { atomicUpdateUser } from "@/lib/services/userService";
 import { recordAdminAction } from "@/lib/audit-log";
+import { canSendEmail } from "@/lib/email-notifications";
 
 // ============================================
 // Export Window Management (Admin)
@@ -211,7 +212,7 @@ async function _approveExportOnboardingAction(
         }
 
         // 4. Send Approval Email
-        if (process.env.RESEND_API_KEY && appData.userEmail) {
+        if (canSendEmail("export decision email", appData.userEmail)) {
             try {
                 const { Resend } = await import("resend");
                 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -339,7 +340,7 @@ async function _requestExportApplicationRevisionAction(
         });
 
         // Send email notification to applicant
-        if (process.env.RESEND_API_KEY && appData.userEmail) {
+        if (canSendEmail("export decision email", appData.userEmail)) {
             try {
                 const { Resend } = await import("resend");
                 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -841,7 +842,7 @@ async function _rejectExportApplicationAction(
         }
 
         // 4. Send Rejection Email
-        if (process.env.RESEND_API_KEY && appData.userEmail) {
+        if (canSendEmail("export decision email", appData.userEmail)) {
             try {
                 const { Resend } = await import("resend");
                 const resend = new Resend(process.env.RESEND_API_KEY);

@@ -10,6 +10,7 @@ import { hasAdminPermission } from "@/lib/admin-permissions";
 import { ActionResponse, withFlexibleSafeAction } from "@/lib/safe-action";
 import { normaliseAcademyPlan } from "@/lib/academy-plan";
 import { moduleGrantRole } from "@/lib/module-grant-roles";
+import { canSendEmail } from "@/lib/email-notifications";
 
 /**
  * Academy Admin Actions - Application Approval/Rejection
@@ -102,7 +103,7 @@ async function _approveAcademyApplicationAction(
         }
 
         // 5. Send Approval Email (Post-Commit Side Effect)
-        if (process.env.RESEND_API_KEY && appData.personalInfo?.email) {
+        if (canSendEmail("academy decision email", appData.personalInfo?.email)) {
             try {
                 const { Resend } = await import("resend");
                 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -232,7 +233,7 @@ async function _rejectAcademyApplicationAction(
         }
 
         // 3. Send Rejection Email
-        if (process.env.RESEND_API_KEY && appData.personalInfo?.email) {
+        if (canSendEmail("academy decision email", appData.personalInfo?.email)) {
             try {
                 const { Resend } = await import("resend");
                 const resend = new Resend(process.env.RESEND_API_KEY);
