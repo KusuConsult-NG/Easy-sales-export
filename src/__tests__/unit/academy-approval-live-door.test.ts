@@ -39,10 +39,33 @@
  * serviceRegistrations. The admin sees success, the learner has no access, and
  * nothing anywhere says otherwise.
  *
- * THE ORPHAN IS NOT HYPOTHETICAL. lib/orphaned-user-repair.ts exists for it and
- * names the cause in its own header: "Users in Firebase Auth but missing
- * Firestore profile. This can happen if registration fails between Auth
- * creation and Firestore write." Such an account signs in and applies normally.
+ * HOW A PROFILE ROW GOES MISSING — CORRECTED AFTER A LATER CHECK.
+ *
+ * The first version of this note said: "lib/orphaned-user-repair.ts exists for
+ * it and names the cause — registration failing between Auth creation and the
+ * Firestore write. Such an account signs in and applies normally."
+ *
+ * The first half is right and the last sentence OVERSTATED IT. Signing in heals
+ * the orphan: lib/auth.ts looks the profile up by id, then by email, and when
+ * both miss it auto-provisions a default profile before the session is issued.
+ * So an account that reaches the application form has a row by then, and the
+ * window this defect needs is narrower than that sentence implied.
+ *
+ * What remains true, and is why the fix stands:
+ *
+ *   - the behaviour was MEASURED, not deduced. Against a missing row the action
+ *     returned success and wrote nothing.
+ *   - the canonical implementation in _ac_admin_review.ts creates the row
+ *     inside its transaction, so somebody looking at the same question judged
+ *     it reachable.
+ *   - approvals are not only reached from a fresh login. Applications carry a
+ *     userId that is written once and read much later, and this codebase
+ *     migrates profile ids (`_migratedTo` in lib/user-migration.ts), so the id
+ *     on the row and the id on the application need not agree for ever.
+ *
+ * Corrected here rather than quietly, because the audit's value depends on its
+ * claims being checkable, and "not hypothetical" was a stronger claim than the
+ * evidence supported.
  *
  * AND BOTH SIBLINGS ALREADY HANDLED IT
  * ------------------------------------
