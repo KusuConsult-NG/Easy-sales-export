@@ -48,6 +48,8 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 
 const ADMIN = 'admin-1';
 const USER = 'user-1';
@@ -244,8 +246,41 @@ describe('the paths that route through the list', () => {
         expect(r.success).toBe(false);
     });
 
-    it('collectRecipients yields nothing to a non-admin', async () => {
+    /**
+     *   #307 A FAILURE TO BUILD THE AUDIENCE LOOKED EXACTLY LIKE AN EMPTY ONE.
+     *
+     *        This test asserted `toEqual([])` for a non-admin, which was a true
+     *        description of the code and of the problem: collectRecipients
+     *        returned `[]` for EVERY non-success — refused, database error,
+     *        malformed filter — so "the list could not be built" and "nobody
+     *        matched" were one answer and the reason was dropped where it was
+     *        produced.
+     *
+     *        The authorisation guarantee is unchanged and is now stronger: a
+     *        non-admin still gets no recipients, and gets told why instead of
+     *        receiving the same value a successful empty query returns.
+     *
+     *        api/admin/broadcast/send already avoided this function for exactly
+     *        that reason — it calls getCleanBroadcastList directly and surfaces
+     *        `listResult.error`. The trap was the door named after the job.
+     */
+    it('collectRecipients REFUSES a non-admin rather than returning an empty list', async () => {
         setSession(USER, ['seller']);
+
+        const { collectRecipients } = await import('@/app/actions/broadcast');
+
+        await expect(collectRecipients()).rejects.toThrow();
+    });
+
+    it('and an empty result from a SUCCESSFUL call is still an empty list', async () => {
+        // The distinction the throw exists to preserve: nobody matched is a
+        // real answer, and must not be turned into an error.
+        setSession(ADMIN, ['admin']);
+        mockCleanList.mockResolvedValueOnce({
+            success: true as const,
+            error: null,
+            data: { count: 0, originalDocCount: 0, recipients: [], moduleStats: {} },
+        });
 
         const { collectRecipients } = await import('@/app/actions/broadcast');
 
@@ -260,5 +295,18 @@ describe('the paths that route through the list', () => {
 
         expect((await previewBroadcastAction({} as any) as any).success).toBe(true);
         expect((await collectRecipients()).length).toBe(2);
+    });
+
+    it('THE SEND ROUTE SURFACES THE REASON, which is why it never called this', () => {
+        // The evidence that the distinction matters to somebody. Pinned so the
+        // route cannot quietly regress to conflating them either.
+        const route = readFileSync(
+            join(process.cwd(), 'src/app/api/admin/broadcast/send/route.ts'),
+            'utf-8',
+        );
+
+        expect(route).toContain('error: listResult.error ||');
+        // And the dead import that pointed at the trap is gone.
+        expect(route).not.toContain('collectRecipients');
     });
 });

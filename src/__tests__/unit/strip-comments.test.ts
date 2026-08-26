@@ -305,7 +305,23 @@ describe('it agrees with the naive version everywhere the naive version is right
         // rather than relaxed, for the same reason every time: nothing strips
         // that file, and the two assertions in it that DO read stripped source
         // read other files.
-        expect(AFFECTED.length).toBeLessThanOrEqual(14);
+        //
+        // FOURTEEN became FIFTEEN when broadcast-access.test.ts grew the #307
+        // cases. Seventh form, and this one is worth being precise about
+        // because the file did not newly ACQUIRE the trap — it already had it,
+        // twice, in its ADMIN_OVERRIDE tests: `!t.startsWith('//')` and
+        // `!t.startsWith('/*')` on one line, and `!body.startsWith('//')` on
+        // another. The naive regex opens a block comment at that literal '/*'
+        // and eats to the next real close, and how much that costs depends on
+        // what sits between them. Adding prose moved the damage from under the
+        // 10% threshold to over it — exactly what happened to
+        // harness-covers-adapter.test.ts, and the reason this is a ratio rather
+        // than a flag.
+        //
+        // Raised rather than relaxed, on the same test as every time: the file
+        // strips actions/broadcast.ts with its own line-based filter and reads
+        // send/route.ts raw, so no assertion in it reads its own mangled text.
+        expect(AFFECTED.length).toBeLessThanOrEqual(15);
         expect(AFFECTED).toContain('src/lib/csp.ts');
         expect(AFFECTED).toContain('src/__tests__/unit/harness-covers-adapter.test.ts');
     });
