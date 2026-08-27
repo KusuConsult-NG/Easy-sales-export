@@ -408,6 +408,14 @@ export async function GET(request: NextRequest) {
                 { collection: COLLECTIONS.LOAN_APPLICATIONS, kind: "cooperative_loan_disbursement" },
                 { collection: COLLECTIONS.WAVE_WITHDRAWALS, kind: "wave_withdrawal" },
                 { collection: COLLECTIONS.WALLET_TRANSACTIONS, kind: "wallet_payout" },
+                // #319. Unlike the three above, this one is not "the outcome is
+                // unknown" — it is KNOWN, and it is that the member was not
+                // paid. cron/release-escrow closed the export window before
+                // discovering it had nowhere to credit, and the compare-and-swap
+                // that stops a double payout also stops a retry. Same flag, same
+                // report, because the remedy is the same: a person credits it
+                // once, by hand, after checking no deposit already exists.
+                { collection: COLLECTIONS.EXPORT_WINDOWS, kind: "export_return_uncredited" },
             ];
 
             for (const { collection, kind } of sources) {
@@ -425,7 +433,13 @@ export async function GET(request: NextRequest) {
                             kind,
                             id: d.id,
                             userId: data.userId || data.memberId || "",
-                            amount: data.amount ?? data.netAmount ?? null,
+                            // finalPayoutAmount FIRST, and only export windows
+                            // carry it — #319. An export window also has an
+                            // `amount`, but that is the PRINCIPAL the member
+                            // put in; what is owed is the principal plus ROI.
+                            // Reading `amount` first would report the smaller
+                            // of the two figures as the debt.
+                            amount: data.finalPayoutAmount ?? data.amount ?? data.netAmount ?? null,
                             reference: data.payoutReference || data.disbursementTransferCode || null,
                             note: data.adminNotes || data.adminNote || data.disbursementError
                                 || data.payoutError || "(no note recorded)",
@@ -495,12 +509,16 @@ export async function GET(request: NextRequest) {
             },
             // #318 — loan disbursements, WAVE withdrawals and wallet payouts
             // that parked themselves for human reconciliation. Until now the
-            // flag they set was read by nothing.
+            // flag they set was read by nothing. #319 adds export returns.
             needsReconciliation: {
                 count: needsReconciliation.length,
                 totalAmount: needsReconciliationTotal,
-                meaning: "the transfer's outcome is UNKNOWN or was a duplicate — "
-                    + "check the reference against Paystack BEFORE any retry",
+                meaning: "money owed that this platform did not move. For a transfer "
+                    + "the outcome is UNKNOWN or was a duplicate — check the reference "
+                    + "against Paystack BEFORE any retry. For export_return_uncredited "
+                    + "the outcome is known: the member was NOT credited and the window "
+                    + "is closed, so credit it by hand once no deposit exists for it. "
+                    + "In every case: verify first, pay once.",
                 transfers: needsReconciliation.slice(0, MAX_LISTED),
                 ...(needsReconciliation.length > MAX_LISTED
                     ? { truncated: needsReconciliation.length - MAX_LISTED }

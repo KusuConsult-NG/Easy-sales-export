@@ -92,9 +92,14 @@ async function processExportWindows(now: Timestamp) {
         .limit(MAX_BATCH_SIZE)
         .get();
 
-    if (snapshot.empty) return { processed: 0, succeeded: 0, skipped: 0, failed: 0, totalValueReleased: 0 };
+    // `unpaid` is counted separately from `skipped` on purpose: a skip is a
+    // window somebody else already claimed and is fine, an unpaid one is money
+    // owed to a member that this job closed the door on. Collapsing the two
+    // would put the thing needing a human back inside the number that means
+    // "nothing to do".
+    if (snapshot.empty) return { processed: 0, succeeded: 0, skipped: 0, unpaid: 0, failed: 0, totalValueReleased: 0 };
 
-    const stats = { processed: 0, succeeded: 0, skipped: 0, failed: 0, totalValueReleased: 0 };
+    const stats = { processed: 0, succeeded: 0, skipped: 0, unpaid: 0, failed: 0, totalValueReleased: 0 };
 
     const results = await Promise.allSettled(snapshot.docs.map(async (doc) => {
         const data = doc.data();
@@ -138,35 +143,125 @@ async function processExportWindows(now: Timestamp) {
             return;
         }
 
-        await db.runTransaction(async (tx) => {
-            const userDoc = await tx.get(db.collection(COLLECTIONS.USERS).doc(userId));
-            const cooperativeId = userDoc.data()?.cooperativeId;
+        // THE PAYOUT WAS GATED ON A FIELD NOTHING WRITES.
+        //
+        // This was:
+        //
+        //     const cooperativeId = userDoc.data()?.cooperativeId;
+        //     if (cooperativeId) { ...credit the nested member... }
+        //
+        // dashboard.ts already established — in a comment it still carries —
+        // that NOTHING on the server writes `cooperativeId` onto a USER
+        // document. It lives on the membership record and on withdrawal rows.
+        // The only writer anywhere is JoinCooperativeModal, a client-side
+        // Firebase-SDK file from before the Supabase migration. So for every
+        // member created by any current path, this gate was shut.
+        //
+        // The dashboard's version of that bug showed a member ₦0 savings.
+        // THIS one is worse in every direction:
+        //
+        //   - the window was ALREADY claimed "delivered" → "completed" above,
+        //     with finalPayoutAmount written, so it can never be picked up
+        //     again — the compare-and-swap that #249–#251 added to stop double
+        //     payouts also makes a missed payout permanent;
+        //   - an `escrow_released` audit row was written regardless;
+        //   - stats.totalValueReleased added the payout and stats.succeeded
+        //     counted it, so the cron reported money it had not moved.
+        //
+        // A member's export capital plus ROI silently went nowhere, the ledger
+        // said it had been released, and nothing anywhere could find it again.
+        //
+        // Two corrections. The lookup now runs in the order dashboard.ts was
+        // fixed to use — the CURRENT top-level membership first, keyed by user
+        // id, with the legacy nested subcollection only as a fallback behind a
+        // cooperativeId that a pre-migration member may still carry. And when
+        // neither record exists the payout is NOT reported as made: the window
+        // is flagged for reconciliation and counted as unpaid.
+        const credited = await db.runTransaction(async (tx) => {
+            const rootRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
+            const rootDoc = await tx.get(rootRef);
 
-            if (cooperativeId) {
-                const memberRef = db.collection(COLLECTIONS.COOPERATIVES).doc(cooperativeId)
-                    .collection("members").doc(userId);
-                const memberDoc = await tx.get(memberRef);
-                if (memberDoc.exists) {
-                    // A legacy nested member keys their savings `balance`, not
-                    // `savingsBalance`, and the dashboard reads that name — so
-                    // crediting the fixed name here paid an export return into
-                    // a field the member could never see. See
-                    // lib/cooperative-member-balance.ts.
-                    tx.update(memberRef, { [balanceFieldOf(memberDoc.data())]: FieldValue.increment(totalPayout), updatedAt: FieldValue.serverTimestamp() });
-                    const txRef = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc();
-                    tx.set(txRef, {
-                        type: "deposit",
-                        subType: "export_return",
-                        amount: totalPayout,
-                        userId,
-                        cooperativeId,
-                        status: "completed",
-                        description: `Export ROI: ${data.commodity} (${data.quantity})`,
-                        createdAt: FieldValue.serverTimestamp()
-                    });
+            let memberRef: any = null;
+            let memberData: Record<string, unknown> | null = null;
+            let cooperativeId: string | null = null;
+
+            if (rootDoc.exists) {
+                memberRef = rootRef;
+                memberData = rootDoc.data() ?? null;
+                cooperativeId = (rootDoc.data()?.cooperativeId as string) ?? null;
+            } else {
+                const userDoc = await tx.get(db.collection(COLLECTIONS.USERS).doc(userId));
+                const legacyCooperativeId = userDoc.data()?.cooperativeId;
+                if (legacyCooperativeId) {
+                    const nestedRef = db.collection(COLLECTIONS.COOPERATIVES).doc(legacyCooperativeId)
+                        .collection("members").doc(userId);
+                    const nestedDoc = await tx.get(nestedRef);
+                    if (nestedDoc.exists) {
+                        memberRef = nestedRef;
+                        memberData = nestedDoc.data() ?? null;
+                        cooperativeId = legacyCooperativeId;
+                    }
                 }
             }
+
+            if (!memberRef) return false;
+
+            // A legacy nested member keys their savings `balance`, not
+            // `savingsBalance`, and the dashboard reads that name — so
+            // crediting the fixed name here paid an export return into
+            // a field the member could never see. See
+            // lib/cooperative-member-balance.ts.
+            tx.update(memberRef, { [balanceFieldOf(memberData)]: FieldValue.increment(totalPayout), updatedAt: FieldValue.serverTimestamp() });
+            const txRef = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc();
+            tx.set(txRef, {
+                type: "deposit",
+                subType: "export_return",
+                amount: totalPayout,
+                userId,
+                cooperativeId,
+                status: "completed",
+                description: `Export ROI: ${data.commodity} (${data.quantity})`,
+                createdAt: FieldValue.serverTimestamp()
+            });
+            return true;
         });
+
+        if (!credited) {
+            // The window is already closed and cannot be reclaimed, so the only
+            // honest thing left is to say so loudly and to somebody who can act.
+            //
+            // #318's flag, on #318's reasoning: the money is not moved here and
+            // not retried here — a person credits it once, by hand, after
+            // checking it was not already credited. reconcile-fulfilment scans
+            // exportWindows for this flag, so it is on the daily report rather
+            // than in a log line nobody reads.
+            const note = `Export return of ₦${totalPayout.toLocaleString()} was NOT credited: `
+                + `user ${userId} has no cooperative membership record, in either `
+                + `${COLLECTIONS.COOPERATIVE_MEMBERS} or a legacy nested members subcollection. `
+                + `The export window is already CLOSED and cannot be reprocessed by this job. `
+                + `Credit the member by hand after confirming no deposit exists for this window.`;
+
+            await db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId).update({
+                needsReconciliation: true,
+                needsReconciliationAt: FieldValue.serverTimestamp(),
+                payoutError: note,
+            });
+
+            logger.error(`[Cron: ExportWindows] ${exportId} closed WITHOUT paying the member`, {
+                exportId, userId, amount, totalPayout,
+            });
+
+            await createAdminAuditLog({
+                action: "payment_failed",
+                userId,
+                targetId: exportId,
+                targetType: "export_window",
+                metadata: { amount, totalPayout, roiPercentage, reason: "no_cooperative_membership" },
+                details: note,
+            });
+
+            return "unpaid";
+        }
 
         await createAdminAuditLog({
             action: "escrow_released",
@@ -186,11 +281,12 @@ async function processExportWindows(now: Timestamp) {
     results.forEach(r => {
         if (r.status === "rejected") stats.failed++;
         else if (r.value === true) stats.succeeded++;
+        else if (r.value === "unpaid") stats.unpaid++;
         else stats.skipped++;
     });
     stats.processed = results.length;
 
-    logger.info(`[Cron: ExportWindows] Processed ${stats.processed}. Success: ${stats.succeeded}. Skipped: ${stats.skipped}. Value: ₦${stats.totalValueReleased.toLocaleString()}`);
+    logger.info(`[Cron: ExportWindows] Processed ${stats.processed}. Success: ${stats.succeeded}. Skipped: ${stats.skipped}. Unpaid: ${stats.unpaid}. Value: ₦${stats.totalValueReleased.toLocaleString()}`);
     return stats;
 }
 

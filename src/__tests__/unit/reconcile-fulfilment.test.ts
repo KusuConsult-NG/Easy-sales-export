@@ -456,6 +456,55 @@ describe('#318 — transfers parked for human reconciliation', () => {
         ]);
     });
 
+    it('finds an export return the release cron closed without paying — #319', async () => {
+        // The fourth source. cron/release-escrow closes a matured export window
+        // with a compare-and-swap BEFORE it discovers whether it has anywhere to
+        // credit, so a member with no cooperative membership record was paid
+        // nothing and the window could never be reclaimed. It parks itself here
+        // instead of reporting the payout as released.
+        COLLECTION_DATA['exportWindows'] = [
+            { id: 'win-1', data: {
+                needsReconciliation: true, userId: 'u4',
+                amount: 100000, finalPayoutAmount: 120000,
+                payoutError: 'Export return of ₦120,000 was NOT credited',
+            } },
+            { id: 'win-ok', data: { status: 'completed', userId: 'u9' } },
+        ];
+
+        const { GET } = await import('@/app/api/cron/reconcile-fulfilment/route');
+        const body = await (await GET(req())).json();
+
+        expect(body.needsReconciliation.count).toBe(1);
+        expect(body.needsReconciliation.transfers[0]).toMatchObject({
+            kind: 'export_return_uncredited',
+            id: 'win-1',
+            userId: 'u4',
+        });
+    });
+
+    it('reports the payout owed on an export window, not the smaller principal', async () => {
+        // An export window carries BOTH figures: `amount` is the principal the
+        // member put in, `finalPayoutAmount` is principal plus ROI — what they
+        // are actually owed. The three older sources want `amount` first, so
+        // reading in that order silently reports every export debt as smaller
+        // than it is. An index comparison in the source could not catch this:
+        // with finalPayoutAmount absent, indexOf returns -1 and -1 is less than
+        // everything, so the ordering assertion passed on the mutant. Executed
+        // here instead, against both figures.
+        COLLECTION_DATA['exportWindows'] = [
+            { id: 'win-1', data: {
+                needsReconciliation: true, userId: 'u4',
+                amount: 100000, finalPayoutAmount: 120000,
+            } },
+        ];
+
+        const { GET } = await import('@/app/api/cron/reconcile-fulfilment/route');
+        const body = await (await GET(req())).json();
+
+        expect(body.needsReconciliation.transfers[0].amount).toBe(120000);
+        expect(body.needsReconciliation.totalAmount).toBe(120000);
+    });
+
     it('and a run that finds one CANNOT report ok', async () => {
         // The flag existing but not counting would be the same defect wearing
         // a report.
