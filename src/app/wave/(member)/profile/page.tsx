@@ -22,6 +22,10 @@ import { toSafeDate } from "@/lib/utils";
 
 export default function WaveProfilePage() {
     const router = useRouter();
+    // useToast was imported and never used — this page had no way to tell the
+    // member anything had gone wrong, which is part of why #323's refusal had
+    // nowhere to go but a redirect.
+    const { showToast } = useToast();
     const [loading, setLoading] = useState(true);
     const [memberData, setMemberData] = useState<any>(null);
     const [stats, setStats] = useState({
@@ -41,6 +45,25 @@ export default function WaveProfilePage() {
         try {
             // Check membership
             const membership = await checkWaveMembershipAction();
+
+            // "Could not tell" is not "not a member" — #323.
+            //
+            // This was `if (!membership.data?.enrolled)`. On a refusal the
+            // action returns data: null, so `data?.enrolled` is undefined and
+            // the negation is true — a genuine WAVE member hitting a transient
+            // failure was ejected from the member area to the marketing page,
+            // which is the platform telling them they are not a member.
+            //
+            // The action distinguishes the three states deliberately: a real
+            // "not enrolled" comes back success:true with enrolled:false, while
+            // a failure comes back success:false with data:null. The server-side
+            // caller in actions/wave/_member.ts already reads it that way; these
+            // two browser pages were the ones that did not. Same mirror of #316,
+            // where "cannot tell" was read as "unpaid".
+            if (!membership.success) {
+                showToast(membership.error || "Could not check your WAVE membership", "error");
+                return;
+            }
             if (!membership.data?.enrolled) {
                 router.push("/wave");
                 return;
