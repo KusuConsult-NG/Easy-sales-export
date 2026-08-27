@@ -1215,6 +1215,13 @@ export default function AdminUsersPage() {
                                                     showToast("Gender updated to Male", "success");
                                                     setSelectedUserForModal({ ...selectedUserForModal, gender: "male" });
                                                     setData(prev => prev.map(u => u.id === selectedUserForModal.id ? { ...u, gender: "male" } : u));
+                                                } else {
+                                                    // #322. There was no else at all: on refusal the button
+                                                    // did nothing, said nothing, and left the old gender
+                                                    // selected — indistinguishable from not having pressed
+                                                    // it. The action refuses an admin without users:update,
+                                                    // which is the case this button exists for.
+                                                    showToast(res.error || "Could not update gender", "error");
                                                 }
                                             }}
                                             className={`px-3 py-2 rounded-lg border text-sm font-semibold transition ${selectedUserForModal.gender === "male" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"}`}
@@ -1229,6 +1236,9 @@ export default function AdminUsersPage() {
                                                     showToast("Gender updated to Female", "success");
                                                     setSelectedUserForModal({ ...selectedUserForModal, gender: "female" });
                                                     setData(prev => prev.map(u => u.id === selectedUserForModal.id ? { ...u, gender: "female" } : u));
+                                                } else {
+                                                    // #322, same as the Male button above. Both were silent.
+                                                    showToast(res.error || "Could not update gender", "error");
                                                 }
                                             }}
                                             className={`px-3 py-2 rounded-lg border text-sm font-semibold transition ${selectedUserForModal.gender === "female" ? "bg-purple-600 text-white border-purple-600" : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"}`}
