@@ -3,6 +3,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { platformFeeFor, sellerNetFor } from "@/lib/platform-fee";
+import { exportWindowReturnMultiplier } from "@/lib/export-window-status";
 import { logger } from "@/lib/logger";
 import { generateAndSendWhatsAppInvite } from "@/lib/whatsapp-invites";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
@@ -466,7 +467,8 @@ export async function processExportInvestment(reference: string, amount: number,
     }
 
     const roiLabel: string = exportData.roiPercentage || exportData.roi || "15-20%";
-    const returnMultiplier: number = exportData.returnMultiplier ?? exportData.expectedReturnMultiplier ?? 1.20;
+    // #324: the same rule the payout cron now uses, in one place.
+    const returnMultiplier: number = exportWindowReturnMultiplier(exportData);
 
     if (!exportData.roiPercentage && !exportData.roi) {
         logger.warn(`[Paystack Webhook] Export window ${exportId} has no ROI field — using default '15-20%'. Add 'roiPercentage' to the window doc.`);

@@ -60,7 +60,7 @@
 import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { exportWindowRoiPercent, DEFAULT_EXPORT_ROI_PERCENT } from '@/lib/export-window-status';
+import { exportWindowRoiPercent, exportWindowReturnMultiplier, DEFAULT_EXPORT_ROI_PERCENT } from '@/lib/export-window-status';
 
 const PAYMENT = 'src/app/actions/export-payment.ts';
 const WINDOWS = 'src/app/actions/export/_ex_windows.ts';
@@ -188,11 +188,20 @@ describe('the ROI the page reads', () => {
     });
 
     it('falling back to the return the platform actually pays', () => {
-        // Not an invented number: both fulfilment paths compute the expected
-        // return as amount * (returnMultiplier ?? 1.20).
+        // Not an invented number: it is what the fulfilment paths pay.
+        //
+        // That used to be asserted by finding `expectedReturnMultiplier ?? 1.20`
+        // spelled out in each path. #324 moved that expression into
+        // exportWindowReturnMultiplier so the PAYOUT cron could use it too —
+        // it had its own 15% copy and was underpaying every export return
+        // against this very default. The claim is unchanged and now stronger:
+        // each path uses the shared rule, and the shared rule's fallback IS
+        // this constant rather than a second copy of it.
         expect(DEFAULT_EXPORT_ROI_PERCENT).toBe(20);
-        expect(code(WEBHOOK)).toContain('expectedReturnMultiplier ?? 1.20');
-        expect(code(LOOSE)).toContain('expectedReturnMultiplier ?? 1.20');
+        expect(code(WEBHOOK)).toContain('exportWindowReturnMultiplier(');
+        expect(code(LOOSE)).toContain('exportWindowReturnMultiplier(');
+        expect(exportWindowReturnMultiplier({}))
+            .toBeCloseTo(1 + DEFAULT_EXPORT_ROI_PERCENT / 100, 10);
     });
 
     it('and reads a real one when the window has it', () => {

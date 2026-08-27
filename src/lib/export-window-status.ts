@@ -440,3 +440,68 @@ export function exportWindowAcceptsInvestment(
 
     return { ok: true };
 }
+
+/**
+ * What one naira invested in a window pays back — #324.
+ *
+ * THE PAYING PATH WAS THE ONE THAT NEVER ADOPTED THIS MODULE
+ * ----------------------------------------------------------
+ * Three places decide an export return, and until now the two that only TALK
+ * about it agreed while the one that MOVES MONEY did not.
+ *
+ * The two fulfilment paths — payments/service.ts and export/_ex_investments.ts
+ * — both compute it as:
+ *
+ *     exportData.returnMultiplier ?? exportData.expectedReturnMultiplier ?? 1.20
+ *
+ * and /export/windows/[id] quotes the investor exportWindowRoiPercent(...),
+ * which defaults to DEFAULT_EXPORT_ROI_PERCENT = 20 for exactly the reason
+ * written above it: 20% "is the return the platform already pays when a window
+ * records nothing", and using anything else "would have the page advertise one
+ * figure and the payout compute another."
+ *
+ * cron/release-escrow — the job that actually credits the member — did:
+ *
+ *     const roiString = data.roi || "15%";
+ *     let roiPercentage = 0.15;
+ *     const match = roiString.match(/(\d+)%/);
+ *     if (match) roiPercentage = parseInt(match[1]) / 100;
+ *     const totalPayout = amount * (1 + roiPercentage);
+ *
+ * Three separate problems in five lines:
+ *
+ *   1. It reads `data.roi`, and NOTHING WRITES AN ROI ONTO A WINDOW — the note
+ *      on exportWindowRoiPercent above establishes that, and it still holds.
+ *      So the branch that reads a configured rate never runs.
+ *   2. Its default is therefore always in force, and it is 15, not 20. Every
+ *      delivered window paid 1.15x while the platform quoted 1.20x at the
+ *      moment the member paid in. A five-point shortfall on every export
+ *      return, silently, forever.
+ *   3. It never looks at `roiPercentage` at all — the field
+ *      payments/service.ts's own warning tells the operator to add ("Add
+ *      'roiPercentage' to the window doc"). An operator who followed that
+ *      instruction was still paid the default.
+ *
+ * This is #38/#179/#183's shape — one rule in N copies that disagree — landing
+ * on the copy that pays.
+ *
+ * WHAT THIS DOES AND DOES NOT DECIDE
+ * ----------------------------------
+ * It is the two fulfilment paths' rule, extracted verbatim, so pointing them at
+ * it changes nothing and pointing the cron at it makes the payout match the
+ * quote. It deliberately does NOT consult the `roi` / `roiPercentage` STRINGS
+ * for money: no money path has ever done so, and making them authoritative
+ * would change what the two working paths pay. That the strings are display-only
+ * while the multiplier is the money is now one documented fact in one place,
+ * rather than a difference between three files.
+ */
+export function exportWindowReturnMultiplier(window: Record<string, unknown> | null | undefined): number {
+    const raw = (window?.returnMultiplier ?? window?.expectedReturnMultiplier) as unknown;
+    const parsed = Number(raw);
+
+    // Finite and positive, or the platform default. A window carrying a string,
+    // a zero or a negative must not silently pay nothing or take money back.
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+
+    return 1 + DEFAULT_EXPORT_ROI_PERCENT / 100;
+}

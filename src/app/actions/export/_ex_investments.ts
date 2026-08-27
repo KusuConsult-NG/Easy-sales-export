@@ -5,7 +5,7 @@ import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { exportWindowAcceptsInvestment } from "@/lib/export-window-status";
+import { exportWindowAcceptsInvestment, exportWindowReturnMultiplier } from "@/lib/export-window-status";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { claimPaymentOnce, incrementWithinCeiling, markFulfilmentFailed } from "@/lib/wallet-ledger";
@@ -443,7 +443,7 @@ export async function verifyExportInvestmentAction(reference: string): Promise<
                 purchaseDate: FieldValue.serverTimestamp(),
                 createdAt: FieldValue.serverTimestamp(),
                 roi: exportWindow.roiPercentage || exportWindow.roi || "15-20%",
-                expectedReturn: amount * (exportWindow.returnMultiplier ?? exportWindow.expectedReturnMultiplier ?? 1.20),
+                expectedReturn: amount * exportWindowReturnMultiplier(exportWindow),
                 source: "client_verify",
             });
 

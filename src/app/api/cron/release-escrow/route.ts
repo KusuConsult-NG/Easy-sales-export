@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { balanceFieldOf } from "@/lib/cooperative-member-balance";
+import { exportWindowReturnMultiplier } from "@/lib/export-window-status";
 import { Timestamp } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
@@ -106,17 +107,37 @@ async function processExportWindows(now: Timestamp) {
         const exportId = doc.id;
         const userId = data.userId;
         const amount = data.amount || 0;
-        const roiString = data.roi || "15%";
 
-        let roiPercentage = 0.15;
-        try {
-            const match = roiString.match(/(\d+)%/);
-            if (match) roiPercentage = parseInt(match[1]) / 100;
-        } catch {
-            logger.warn(`[Cron: ExportWindows] Failed to parse ROI for ${exportId}, using default 15%`);
-        }
+        // THE PAYOUT RATE DISAGREED WITH THE ADVERTISED ONE — #324.
+        //
+        // This was:
+        //
+        //     const roiString = data.roi || "15%";
+        //     let roiPercentage = 0.15;
+        //     const match = roiString.match(/(\d+)%/);
+        //     if (match) roiPercentage = parseInt(match[1]) / 100;
+        //     const totalPayout = amount * (1 + roiPercentage);
+        //
+        // Nothing writes an `roi` onto an export window — lib/export-window-status
+        // establishes that and it still holds — so the configured branch never
+        // ran and the hardcoded default was always in force. That default was
+        // 15, while /export/windows/[id] quotes the investor
+        // exportWindowRoiPercent(), which is 20 for a window recording nothing,
+        // and both fulfilment paths record expectedReturn as `amount * 1.20`.
+        //
+        // So every delivered window paid 1.15x against a 1.20x quote: a
+        // five-point shortfall on every export return, silently. The helper's
+        // own doc had already named this failure — "using anything else would
+        // have the page advertise one figure and the payout compute another" —
+        // and this was the one path in the module that had never adopted it.
+        //
+        // It also never read `roiPercentage`, the field payments/service.ts
+        // tells the operator to add, so a correctly configured window was paid
+        // the default too.
+        const returnMultiplier = exportWindowReturnMultiplier(data);
+        const roiPercentage = returnMultiplier - 1;
 
-        const totalPayout = amount * (1 + roiPercentage);
+        const totalPayout = amount * returnMultiplier;
 
         // Claim the payout before making it.
         //
