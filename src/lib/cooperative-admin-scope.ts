@@ -17,25 +17,84 @@
  * id and roles, as they always did.
  *
  * Same reasoning as @/lib/cooperative-provisioning (#204).
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * THIS FUNCTION CURRENTLY RETURNS null FOR EVERY CALLER — #320
+ * ─────────────────────────────────────────────────────────────────────────────
+ * The comment that used to sit on the read below said:
+ *
+ *     // We assume admins with a 'cooperativeId' in their profile are scoped.
+ *
+ * That assumption is not met by anything. NOTHING on the server writes
+ * `cooperativeId` onto a USER document — dashboard.ts established the same
+ * thing for its own read of the same field, and #319 for cron/release-escrow's.
+ * The only writer anywhere in the tree is JoinCooperativeModal, a client-side
+ * Firebase-SDK component from before the Supabase migration. A member's
+ * cooperative lives on their COOPERATIVE_MEMBERS record, not on their user row.
+ *
+ * So `data?.cooperativeId` is undefined, this returns null, and null means
+ * unrestricted at every call site. TEN of them, across three files:
+ *
+ *   _coop_admin_money.ts     3 — transactions list, withdrawal approve, reject
+ *   _coop_admin_reports.ts   3 — report queries
+ *   _coop_admin_members.ts   4 — member list, membership status, and two more
+ *
+ * Each is written `if (adminScope) { ...restrict... }`, so each is skipped.
+ * (The count is TEN, not nine: an eyeballed grep undercounted it, and the test
+ * that counts them caught it. Membership cannot tell one call site from ten —
+ * which is the same lesson three assertions in this audit have already had.)
+ * That includes the guard at _coop_admin_members.ts:253, which THIS AUDIT added
+ * after finding that a scoped admin could activate, approve or suspend a member
+ * of any other cooperative — it is correct code that cannot currently fire.
+ *
+ * WHY IT IS NOT REPOINTED AT THE MEMBERSHIP RECORD HERE
+ * -----------------------------------------------------
+ * That is the fix #319 and dashboard.ts both used — read the fact from where it
+ * actually lives. It does not transfer, for two reasons.
+ *
+ * First, it is the wrong fact. COOPERATIVE_MEMBERS says which cooperative
+ * somebody BELONGS to. Scope is about which one they ADMINISTER. Deriving one
+ * from the other assumes every cooperative admin is a member of the cooperative
+ * they run, and nothing in this codebase records or requires that.
+ *
+ * Second, this platform is live, and the change is not safe in the direction it
+ * would move. Today every cooperative_admin has platform-wide reach; making the
+ * lookup succeed would narrow that, and any admin whose membership record names
+ * a different cooperative — or names one at all, incidentally — would lose
+ * access to the estate they currently administer. Turning a fail-open into a
+ * fail-closed on a running system is not an audit's call to make silently.
+ *
+ * What is needed is a fact nobody has yet recorded: which cooperative each
+ * cooperative_admin administers, written by a screen that does not exist. That
+ * is an owner decision, raised as one. Same disposition as #167's MFA
+ * enforcement and #314's session control: the false claim is corrected, the
+ * inert state is pinned by a test, and the control is not invented.
+ *
+ * The pin is src/__tests__/unit/cooperative-admin-scope-is-inert.test.ts, and
+ * it fails in BOTH directions — if a writer for the scoping fact appears, it
+ * tells whoever added it to come back and re-check these ten guards.
  */
 
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
 export async function getAdminScope(userId: string, userRoles: string[]): Promise<string | null> {
-    // Super Admins and Platform Admins see everything
+    // Super Admins and Platform Admins see everything.
     if (userRoles.includes("super_admin") || userRoles.includes("admin")) return null;
 
-    // Check if admin is restricted to a cooperative
-    // We assume admins with a 'cooperativeId' in their profile are scoped.
+    // The scoping read. See the note above: this field is not written by any
+    // server path, so in practice this is undefined and every caller runs
+    // unrestricted. Kept — not deleted — because it is the shape the scoping
+    // mechanism will use once there is a writer for it, and because a legacy
+    // row imported from the Firebase era may still carry the field.
     const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
     const data = userDoc.data();
 
-    // If they have a cooperativeId, they are scoped
     if (data?.cooperativeId) {
         return data.cooperativeId;
     }
 
-    // Platform Admins (role 'admin' but no coopId) see everything
+    // No recorded scope. null is unrestricted at every call site — which is the
+    // status quo for every non-platform admin role, not a considered default.
     return null;
 }
