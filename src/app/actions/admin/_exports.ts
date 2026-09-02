@@ -15,6 +15,7 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { ExportOnboardingReviewSchema } from "@/lib/schemas";
 import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
+import { stripPii } from "@/lib/admin-pii";
 import { atomicUpdateUser } from "@/lib/services/userService";
 import { recordAdminAction } from "@/lib/audit-log";
 import { canSendEmail } from "@/lib/email-notifications";
@@ -411,6 +412,8 @@ async function _getExportApplicationsStatsAction(): Promise<ActionResponse<any>>
             return { success: false as const, error: "Unauthorized", data: null };
         }
 
+
+
         const { getCached, setCache } = await import("@/lib/redis");
         const cacheKey = "admin:export-stats:global";
 
@@ -477,7 +480,26 @@ async function _getStandardExportApplicationsAction(options: {
 
         if (!isAdmin(session.user.roles)) {
             return { success: false as const, error: "Unauthorized", data: null };
+
         }
+
+        /**
+         *   #338 THE STRIP WRITTEN FOR RAW-DOCUMENT SPREADS WAS NOT APPLIED
+         *        HERE EITHER.
+         *
+         *        Both branches below emit `data: { ...mergedData, bankDetails }`
+         *        — the whole EXPORT_APPLICATIONS document merged with the user
+         *        document — and it is rendered field by field by
+         *        DynamicDetailModal, whose exclude list covers bvnVerified and
+         *        bvnStatus but not `bvn` itself.
+         *
+         *        The gate above is isAdmin(), true for all TEN admin roles.
+         *        lib/admin-pii.ts exists for exactly this ("This is the strip
+         *        for those spreads") and was applied to three sites; this was
+         *        not one of them. Gated on the permission the screen exists to
+         *        exercise, as _withdrawals.ts and _marketplace.ts do.
+         */
+        const maySeeApplicantPii = hasAdminPermission(session.user.roles, "export:approve_applications");
 
         const useMemoryPagination = options.sortBy === "gender" || !!options.search || !!options.dateFrom || !!options.dateTo;
         const fetchLimit = useMemoryPagination ? 5000 : (options.limit || 50);
@@ -660,10 +682,9 @@ async function _getStandardExportApplicationsAction(options: {
                         bankDetails
                     },
                     status: status,
-                    data: {
-                        ...mergedData,
-                        bankDetails
-                    }
+                    data: maySeeApplicantPii
+                        ? { ...mergedData, bankDetails }
+                        : stripPii({ ...mergedData, bankDetails })
                 };
             });
 
@@ -735,10 +756,9 @@ async function _getStandardExportApplicationsAction(options: {
                         bankDetails
                     },
                     status: status,
-                    data: {
-                        ...mergedData,
-                        bankDetails
-                    }
+                    data: maySeeApplicantPii
+                        ? { ...mergedData, bankDetails }
+                        : stripPii({ ...mergedData, bankDetails })
                 };
             });
         }
