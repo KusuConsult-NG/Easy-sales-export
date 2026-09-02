@@ -567,7 +567,22 @@ export type WalletTransactionType =
     | "purchase"         // Order paid from wallet
     | "refund"           // Refund credited to wallet
     | "withdrawal"       // Withdrawal to bank account
-    | "bonus";            // Admin-issued bonus
+    | "bonus"            // Admin-issued bonus
+    /**
+     * WAVE earnings, which are NOT wallet money — #332.
+     *
+     * order-management.ts writes a row of this type into wallet_transactions
+     * when a WAVE seller earns commission, but the money goes to
+     * serviceRegistrations.wave.waveEarningsBalance — a separate pot with its
+     * own withdrawal flow. The union did not contain "credit", so the value
+     * was outside the type the rows are read back as; serializeDocs<
+     * WalletTransaction>() casts, so nothing complained.
+     *
+     * Listed rather than removed: the rows exist in production and are the
+     * seller's record of what they earned. `walletLedgerMovesBalance` below is
+     * what keeps them out of wallet-balance reasoning.
+     */
+    | "credit";
 
 export interface Wallet {
     id: string;          // Same as userId
@@ -584,14 +599,56 @@ export interface WalletTransaction {
     userId: string;
     type: WalletTransactionType;
     amount: number;          // Positive = credit, Negative = debit
-    balanceBefore: number;
-    balanceAfter: number;
+    /**
+     * OPTIONAL, because they genuinely are — #332.
+     *
+     * Declared required, and the WAVE earnings writer omits both: there is no
+     * wallet balance to snapshot, since that row credits a different pot. The
+     * wallet statement has always guarded `balanceBefore !== undefined` before
+     * rendering the pair — the UI knew the field could be absent while the type
+     * said it never could, and serializeDocs<WalletTransaction>() casts, so the
+     * compiler never saw the disagreement.
+     */
+    balanceBefore?: number;
+    balanceAfter?: number;
+    /**
+     * Which ledger this row belongs to. Absent on wallet movements; "wave" on
+     * the earnings credit. Written since the WAVE credit was added and typed
+     * nowhere until #332.
+     */
+    module?: string;
     reference?: string;      // Paystack reference for funding
     orderId?: string;        // Related order (for purchases)
     description: string;
     status: "pending" | "completed" | "failed";
     createdAt: FieldValue | Timestamp | Date;
     updatedAt?: FieldValue | Timestamp | Date;
+}
+
+/**
+ * Did this row move the user's WALLET balance?
+ *
+ * THE WALLET STATEMENT LISTED MONEY THAT IS NOT IN THE WALLET — #332.
+ *
+ * getWalletTransactionsAction selects on `userId` alone, with no module
+ * filter, so the WAVE earnings credit appears in /dashboard/wallet alongside
+ * fundings, purchases and refunds — as a green "+₦N" — while the balance card
+ * above it comes from the wallet, which never received it. A seller adding up
+ * their statement cannot reconcile it with the figure at the top of the page.
+ *
+ * Twelve of the thirteen writers of wallet_transactions do move the wallet
+ * balance. This predicate names the one that does not, so the statement can
+ * say so rather than implying otherwise.
+ *
+ * Kept as data next to the type both sides import, so the writer's marker and
+ * the reader's interpretation cannot drift.
+ */
+export const NON_WALLET_LEDGER_MODULES: readonly string[] = ["wave"];
+
+export function walletLedgerMovesBalance(
+    txn: Pick<WalletTransaction, "module">,
+): boolean {
+    return !NON_WALLET_LEDGER_MODULES.includes(txn.module ?? "");
 }
 
 // ============================================================================
