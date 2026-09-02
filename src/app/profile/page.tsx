@@ -17,6 +17,8 @@ import DeleteAccountSection from "@/components/profile/DeleteAccountSection";
 import { signOut } from "next-auth/react";
 import { useSessionExpiry } from "@/hooks/useSessionExpiry";
 import { useRouter, useSearchParams } from "next/navigation";
+import PasswordStrengthIndicator from "@/components/auth/PasswordStrengthIndicator";
+import { firstPasswordProblem } from "@/lib/password-policy";
 
 export default function ProfilePage() {
     const { data: session, update } = useSession();
@@ -317,8 +319,19 @@ export default function ProfilePage() {
             return;
         }
 
-        if (passwordData.new.length < 8) {
-            setPasswordError("Password must be at least 8 characters");
+        // THIS CHECKED ONE RULE OF FIVE — #330.
+        //
+        // `if (passwordData.new.length < 8)` let `password` straight through to
+        // changePasswordAction, which validates with passwordPolicySchema
+        // (auth.ts:896) and refuses it for missing an uppercase letter, a digit
+        // and a symbol — none of which this modal had mentioned.
+        //
+        // firstPasswordProblem returns the same message the server would, from
+        // the same array, so the local refusal and the remote one cannot
+        // disagree.
+        const passwordProblem = firstPasswordProblem(passwordData.new);
+        if (passwordProblem) {
+            setPasswordError(passwordProblem);
             return;
         }
 
@@ -882,6 +895,9 @@ export default function ProfilePage() {
                                     onChange={(e) => setPasswordData({...passwordData, new: e.target.value})}
                                     className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all outline-hidden"
                                 />
+                                {/* The requirements, as they are typed — #330. This modal
+                                  * stated none of them and refused on one. */}
+                                <PasswordStrengthIndicator password={passwordData.new} compact />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Confirm New Password</label>

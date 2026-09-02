@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PASSWORD_RULES } from "@/lib/password-policy";
 
 // ============================================
 // STRICT UNIFIED PII VALIDATORS (Anti-Abuse)
@@ -61,14 +62,27 @@ export type LoginFormData = z.infer<typeof loginSchema>;
  * which handed `newPassword` straight to the auth provider — enforced nothing
  * beyond the provider's own six-character floor. A user could register under
  * this policy and then immediately drop below it.
+ *
+ * BUILT FROM PASSWORD_RULES RATHER THAN RESTATING THEM — #330.
+ *
+ * "In one place" was true of the ENFORCEMENT and false of the STATEMENT: five
+ * more copies of this rule existed in the screens, three of them live and every
+ * one of them understating it. /auth/register showed a four-item checklist with
+ * no lowercase, so `PASSWORD1!` was reported "Strong" with every tick green and
+ * then refused here.
+ *
+ * The rules are data now (lib/password-policy.ts) and both sides read the same
+ * array, so a screen cannot promise something this schema will not accept.
+ * Same checks and the same messages as the chained .regex() calls this
+ * replaces — the order is the array's order, which is the order they were in.
  */
-export const passwordPolicySchema = z
-    .string()
-    .min(8, "Password must be at least 8 characters")
-    .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
-    .regex(/[a-z]/, "Password must contain at least one lowercase letter")
-    .regex(/[0-9]/, "Password must contain at least one number")
-    .regex(/[^A-Za-z0-9]/, "Password must contain at least one special character");
+export const passwordPolicySchema = z.string().superRefine((value, ctx) => {
+    for (const rule of PASSWORD_RULES) {
+        if (!rule.test(value)) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, message: rule.message });
+        }
+    }
+});
 
 export const registerSchema = z
     .object({

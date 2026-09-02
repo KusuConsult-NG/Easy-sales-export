@@ -8,6 +8,7 @@ import Image from "next/image";
 import { COMPANY_INFO } from "@/lib/constants";
 import { ArrowLeft, Lock, Eye, EyeOff, CheckCircle, Loader2 } from "lucide-react";
 import { resetPasswordAction, type ResetPasswordState } from "@/app/actions/password-reset";
+import PasswordStrengthIndicator from "@/components/auth/PasswordStrengthIndicator";
 
 const initialState: ResetPasswordState = {
     success: false,
@@ -126,7 +127,23 @@ function ResetPasswordContent() {
                                         {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                                     </button>
                                 </div>
-                                <p className="text-xs text-blue-200 mt-2">Must be at least 8 characters</p>
+                                {/*
+                                  * THIS SAID "Must be at least 8 characters" — #330.
+                                  *
+                                  * One requirement of the five that
+                                  * passwordPolicySchema enforces, which this
+                                  * page's own action checks
+                                  * (password-reset.ts:210). `password` satisfies
+                                  * the line and `minLength={8}`, so the browser
+                                  * submitted it and the server refused it for
+                                  * three separate missing rules the screen had
+                                  * never mentioned.
+                                  *
+                                  * The full list is shown as it is typed now,
+                                  * from the same array the action validates
+                                  * against.
+                                  */}
+                                <PasswordStrengthIndicator password={password} compact />
                             </div>
 
                             {/* Confirm Password Input */}
