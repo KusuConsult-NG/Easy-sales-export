@@ -14,7 +14,81 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import type { LoanApplication } from "@/lib/types/cooperative-loans";
-import { resolveLoanApplication } from "@/lib/loan-application-location";
+import { resolveLoanApplication, normaliseLoanApplication } from "@/lib/loan-application-location";
+
+/**
+ * The borrower, from a row in either collection.
+ *
+ * APPLICATIONS LIVE IN TWO COLLECTIONS AND THIS FILE READ ONE SHAPE.
+ *
+ * lib/loan-application-location.ts exists because of that split and ships two
+ * functions: `resolveLoanApplication` to find the row, and
+ * `normaliseLoanApplication` because — its words — "cooperative_loans keys the
+ * borrower as `memberId`; loan_applications uses `userId`".
+ *
+ * _loans_applications.ts calls both. _loans_repayments.ts calls both. The
+ * my-loan-applications route calls both. This file, the one that APPROVES,
+ * REJECTS and DISBURSES, imported only the first and then read
+ * `appData.userId` three times — and cooperative_loans is, in that module's own
+ * words, "the ONLY path the member loan page at /cooperatives/loans submits
+ * through". So for every loan a member filed through the UI it was `undefined`:
+ *
+ *   the double-lending queries   `.where("userId", "==", undefined)` and
+ *                                `.where("memberId", "==", undefined)`, so the
+ *                                check that stops one borrower holding two
+ *                                loans matched nothing and passed
+ *
+ *   the audit row                applicantId: undefined — the entry recording
+ *                                an approval could not say whose
+ *
+ *   the disbursement notice      userId: undefined, so the borrower was never
+ *                                told the money had gone
+ */
+function borrowerOf(appData: any, collection: string): string {
+    return normaliseLoanApplication(appData ?? {}, collection).userId;
+}
+
+/**
+ * What the maximum-loan ceiling is computed against.
+ *
+ * `getMaxLoanAmount(appData.contributionAmount)` was read straight off the row.
+ * cooperative_loans rows carry no `contributionAmount` — _coop_money.ts writes
+ * memberId, amount, purpose, the repayment terms and nothing else — so this was
+ * `undefined * 0.5` = NaN, and `appData.amount > NaN` is FALSE. The ceiling
+ * passed every loan filed through the member page, including the correction
+ * from a 3x multiplier to 0.5x that cooperative-tiers.ts had just made.
+ *
+ * `savingsBalance` on the membership is the figure the APPLY path checks
+ * against — `isEligibleForLoan(savingsBalance, amount, 0)` in _coop_money.ts —
+ * so approval and application now measure the same loan against the same
+ * number.
+ *
+ * `null` where it cannot be established, and the caller refuses on it. A money
+ * ceiling that cannot be computed must fail closed; NaN failed open.
+ */
+async function contributionFigureFor(appData: any, borrowerId: string): Promise<number | null> {
+    const onRow = Number(appData?.contributionAmount);
+    if (Number.isFinite(onRow) && onRow > 0) return onRow;
+    if (!borrowerId) return null;
+
+    // The membership is keyed by userId by one writer and queried by userId by
+    // another, so both are tried — the same pattern getCooperativeApplicationAction uses.
+    const byQuery = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+        .where("userId", "==", borrowerId)
+        .limit(1)
+        .get();
+
+    let data: any = null;
+    if (!byQuery.empty) {
+        data = byQuery.docs[0].data();
+    } else {
+        const byId = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(borrowerId).get();
+        if (byId.exists) data = byId.data();
+    }
+
+    const savings = Number(data?.savingsBalance);
+    return Number.isFinite(savings) ? savings : null;
+}
 
 /**
  * Admin: Approve loan
@@ -48,54 +122,85 @@ export async function approveLoanAction(
         // block already said they are advisory — the wrapper only made them
         // look protected. What prevents a double approval is the claim further
         // down, not this.
-        const txResult = await (async () => {
+        /**
+         * The pre-checks. Advisory — they take no lock, and the claim below is
+         * what actually prevents a double approval.
+         *
+         * THEY USED TO THROW, AND THE ADMIN NEVER SAW WHY. Four refusals are
+         * raised here — the guarantor rule, "not pending", the platform-wide
+         * double-lending check and the maximum-loan ceiling — and every one was
+         * `throw new Error(message)` caught by this function's outer catch,
+         * which returns the single string "Failed to approve loan". Four
+         * carefully worded messages, including one naming the exact ceiling in
+         * naira, none of which could reach the screen. They are returned now.
+         */
+        const txResult = await (async (): Promise<{ ok: true; appData: LoanApplication } | { ok: false; error: string }> => {
             const appDoc = await appRef.get();
 
             if (!appDoc.exists) {
-                throw new Error("Application not found");
+                return { ok: false, error: "Application not found" };
             }
 
             const appData = appDoc.data() as LoanApplication;
+            const borrowerId = borrowerOf(appData, appCollection);
 
             // Demanded unconditionally, which refused every application filed
             // through the member loan page — that path collects no guarantor, so
             // the field is absent and always will be. The route beside it had
             // the opposite fault. Shared rule: lib/loan-approval-policy.ts.
             if (guarantorBlocksApproval(appData)) {
-                throw new Error(GUARANTOR_UNVERIFIED_MESSAGE);
+                return { ok: false, error: GUARANTOR_UNVERIFIED_MESSAGE };
             }
 
             if (appData.status !== "pending" && appData.status !== "partially_approved") {
-                throw new Error("Application is not pending or partially approved");
+                return { ok: false, error: "Application is not pending or partially approved" };
             }
 
-            // Double-lending verification: Check for other active/pending loans platform-wide
+            // Double-lending verification: Check for other active/pending loans
+            // platform-wide. Asked of the borrower resolved from EITHER shape —
+            // see borrowerOf. Both queries used to run against `undefined` for a
+            // member-page application and therefore matched nothing.
+            const OPEN_STATUSES = ["pending", "reviewing", "approved", "partially_approved", "disbursed"];
             const otherGeneralLoansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
-                .where("userId", "==", appData.userId)
-                .where("status", "in", ["pending", "reviewing", "approved", "partially_approved", "disbursed"]);
+                .where("userId", "==", borrowerId)
+                .where("status", "in", OPEN_STATUSES);
             const otherGeneralLoansSnap = await otherGeneralLoansQuery.get();
 
             const otherCoopLoansQuery = db.collection(COLLECTIONS.COOPERATIVE_LOANS)
-                .where("memberId", "==", appData.userId)
-                .where("status", "in", ["pending", "reviewing", "approved", "partially_approved", "disbursed"]);
+                .where("memberId", "==", borrowerId)
+                .where("status", "in", OPEN_STATUSES);
             const otherCoopLoansSnap = await otherCoopLoansQuery.get();
 
             const otherGeneralLoansCount = otherGeneralLoansSnap.docs.filter(doc => doc.id !== applicationId).length;
             const otherCoopLoansCount = otherCoopLoansSnap.docs.filter(doc => doc.id !== applicationId).length;
 
             if (otherGeneralLoansCount > 0 || otherCoopLoansCount > 0) {
-                throw new Error("Active or pending loan application already exists platform-wide for this user.");
+                return { ok: false, error: "Active or pending loan application already exists platform-wide for this user." };
             }
 
             const { getMaxLoanAmount } = await import("@/lib/cooperative-tiers");
-            const maxLoan = getMaxLoanAmount(appData.contributionAmount);
+            const contribution = await contributionFigureFor(appData, borrowerId);
 
-            if (appData.amount > maxLoan) {
-                throw new Error(`This loan exceeds maximum limit of ₦${maxLoan.toLocaleString()}.`);
+            if (contribution === null) {
+                // Fail closed. This is the case that used to become NaN.
+                return {
+                    ok: false,
+                    error: "This borrower's contribution record could not be read, so the maximum loan cannot be established.",
+                };
             }
 
-            return { appData };
+            const maxLoan = getMaxLoanAmount(contribution);
+
+            if (appData.amount > maxLoan) {
+                return { ok: false, error: `This loan exceeds maximum limit of ₦${maxLoan.toLocaleString()}.` };
+            }
+
+            return { ok: true, appData };
         })();
+
+        if (!txResult.ok) {
+            return { success: false as const, error: txResult.error, data: null };
+        }
 
         // ── APPROVAL ─────────────────────────────────────────────────────────
         //
@@ -199,7 +304,7 @@ export async function approveLoanAction(
             targetId: applicationId,
             targetType: "loan_application",
             metadata: {
-                applicantId: appData.userId,
+                applicantId: borrowerOf(appData, appCollection),
                 amount: appData.amount,
             },
         });
@@ -281,7 +386,7 @@ export async function rejectLoanAction(
             targetId: applicationId,
             targetType: "loan_application",
             metadata: {
-                applicantId: appData.userId,
+                applicantId: borrowerOf(appData, appCollection),
                 amount: appData.amount,
                 reason,
             },
@@ -364,13 +469,15 @@ export async function disburseLoanAction(
         const appDoc = await appRef.get();
         const appData = appDoc.data() as LoanApplication;
 
+        const disburseBorrowerId = borrowerOf(appData, appCollection);
+
         await createAdminAuditLog({
             action: "loan_disbursed",
             userId: effectiveAdminId,
             targetId: applicationId,
             targetType: "loan_application",
             metadata: {
-                applicantId: appData.userId,
+                applicantId: disburseBorrowerId,
                 amount: appData.amount,
             },
         });
@@ -378,7 +485,7 @@ export async function disburseLoanAction(
         // Notification
         const { createNotificationAction } = await import('../notifications');
         await createNotificationAction({
-            userId: appData.userId,
+            userId: disburseBorrowerId,
             type: "success",
             title: "Funds Disbursed",
             message: `Your loan of ₦${appData.amount.toLocaleString()} has been disbursed.`,
