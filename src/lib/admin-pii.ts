@@ -31,7 +31,46 @@ export const PII_KEYS: readonly string[] = [
     "documents",
 ];
 
-const PII = new Set(PII_KEYS);
+/**
+ * Keys that are somebody's CREDENTIAL, not their information.
+ *
+ *   #341 A SPREAD OF THE RAW USER DOCUMENT CARRIES THE SECOND FACTOR.
+ *
+ *        The academy application list built its row as
+ *
+ *            const mergedData = { ...uData, ...app, ... };
+ *            ...
+ *            data: mergedData,
+ *
+ *        where `uData` is the whole USERS document. `...app` overrides the keys
+ *        the two share; every key only the user document has survives — and the
+ *        user document holds `totpSecret` and `mfaRecoveryCodes`.
+ *
+ *        These are categorically different from the keys above. A BVN is
+ *        information about a person that an admin approving their application
+ *        has a reason to see; a TOTP secret is the thing that PROVES they are
+ *        that person. No admin permission is a reason to hold it, so this list
+ *        is stripped unconditionally rather than gated — that is what
+ *        stripSecrets is for, and stripPii removes them too.
+ *
+ *        `password` and `passwordHash` are named here although nothing in this
+ *        codebase writes either: authentication is Supabase Auth's, and the
+ *        user row has never held a credential of that kind. They are on the
+ *        list because a denylist that names only what exists today is how
+ *        `documents` came to be missing from INTERNAL_LAND_FIELDS (#340) — the
+ *        cost of naming them is nothing, and the cost of not naming them is a
+ *        password hash in an admin JSON response.
+ */
+export const SECRET_KEYS: readonly string[] = [
+    "totpSecret",
+    "mfaRecoveryCodes",
+    "password",
+    "passwordHash",
+];
+
+const SECRETS = new Set(SECRET_KEYS);
+
+const PII = new Set([...PII_KEYS, ...SECRET_KEYS]);
 
 /**
  * A copy of `value` with every PII key removed, however deeply nested.
@@ -49,6 +88,27 @@ export function stripPii<T>(value: T): T {
     for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
         if (PII.has(key)) continue;
         out[key] = stripPii(v);
+    }
+    return out as unknown as T;
+}
+
+/**
+ * A copy of `value` with every CREDENTIAL key removed, however deeply nested,
+ * and nothing else touched.
+ *
+ * For the branch where the caller MAY see the record — the admin who approves
+ * the application, the finance role who processes the withdrawal. They see what
+ * they are deciding on; they do not see the second factor.
+ */
+export function stripSecrets<T>(value: T): T {
+    if (Array.isArray(value)) return value.map((v) => stripSecrets(v)) as unknown as T;
+    if (value === null || typeof value !== "object") return value;
+    if (value instanceof Date) return value;
+
+    const out: Record<string, unknown> = {};
+    for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
+        if (SECRETS.has(key)) continue;
+        out[key] = stripSecrets(v);
     }
     return out as unknown as T;
 }
