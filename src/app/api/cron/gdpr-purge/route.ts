@@ -5,10 +5,13 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { supabaseAdmin } from "@/lib/supabase";
 import { logger } from "@/lib/logger";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { Timestamp } from "@/lib/firestore-compat";
+import { Timestamp, FieldValue } from "@/lib/firestore-compat";
+import { userErasurePatch, erasureRetentionRecord, erasedOwnerMarker } from "@/lib/user-erasure";
 import { purgeChatbotDataOlderThan } from "@/lib/chatbot-db";
 
-// The maximum number of documents to delete in one invocation (Firestore limit is 500 per batch)
+// The maximum number of accounts scrubbed in one invocation. Each account
+// writes three documents (retention record, user row, membership row), so this
+// stays well inside a single batch.
 const BATCH_LIMIT = 400;
 
 /**
@@ -16,9 +19,11 @@ const BATCH_LIMIT = 400;
  * Triggered daily via Railway Cron.
  * 
  * Rules:
- * 1. Locates all users marked with \`deletedAt\` exactly 30+ days ago.
- * 2. Scrub their PII from Firestore.
- * 3. Destroy their Firebase Identity Authority account.
+ * 1. Locates users marked with \`deletedAt\` 30+ days ago that it has not
+ *    already swept.
+ * 2. Scrubs their PII in place, using the shared erasure definition. NOTHING IS
+ *    DELETED — see the note in the loop, and #327.
+ * 3. Optionally destroys the auth identity, behind GDPR_PURGE_DELETE_AUTH.
  */
 export async function GET(request: NextRequest) {
     try {
@@ -55,34 +60,107 @@ export async function GET(request: NextRequest) {
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
         const thresholdTimestamp = Timestamp.fromDate(thirtyDaysAgo);
 
-        // 1. Query users marked for deletion older than 30 days
+        // 1. Query users marked for deletion older than 30 days, not yet swept.
+        //
+        // `gdprPurgedAt == null` is what keeps a row from being re-selected
+        // every day now that the sweep scrubs instead of deleting. The adapter
+        // maps `== null` to an `is null` check on `raw_data->>'gdprPurgedAt'`,
+        // and a JSONB `->>` on a missing key yields SQL NULL, so a row that has
+        // never been swept matches and a swept one drops out.
         const usersRef = db.collection(COLLECTIONS.USERS);
         const expiredUsersSnapshot = await usersRef
             .where("deletedAt", "<=", thresholdTimestamp)
+            .where("gdprPurgedAt", "==", null)
             .limit(BATCH_LIMIT)
             .get();
 
         if (expiredUsersSnapshot.empty) {
             logger.info("GDPR Sweep Complete: No expired accounts found.");
-            return NextResponse.json({ status: "success", deletedCount: 0, message: "No expired accounts found." });
+            return NextResponse.json({ status: "success", erasedCount: 0, message: "No expired accounts found." });
         }
 
         const batch = db.batch();
         const deletedUids: string[] = [];
 
+        /**
+         * THE SWEEP DESTROYED ROWS THE PLATFORM'S OWN ERASURE MODULE RETIRES — #327.
+         *
+         * This was:
+         *
+         *     batch.delete(doc.ref);                                  // USERS
+         *     batch.delete(db.collection(COOPERATIVE_MEMBERS).doc(uid));
+         *
+         * with the note "we leave financial transactions and export windows
+         * intact for absolute legal ledger integrity, but they are now detached
+         * from PII as the user document holding names/banks is destroyed."
+         *
+         * The reference erasure path — actions/user.ts, built by #283/#300/#305
+         * — deletes nothing. It scrubs the user row with userErasurePatch, marks
+         * the related rows with erasedOwnerMarker, and writes an
+         * ERASURE_RETENTION record. Its own comment says why the row survives:
+         * "We retain the UID so that database foreign keys (like 'sellerId' on
+         * an order or 'buyerId' on a farm purchase) do not break."
+         *
+         * This cron then destroyed exactly that row thirty days later. So the
+         * thing the erasure path deliberately retained was removed by the job
+         * that runs after it, and the ledger it claims to keep "intact" was left
+         * pointing at nothing. `update()` on a missing document is a documented
+         * silent no-op on this adapter, which is the whole reason #300 moved
+         * erasure off deletion.
+         *
+         * The cooperative membership row is worse: it holds the member's savings
+         * and locked balances, and #319 established that the export payout looks
+         * that row up by user id. Destroying it turns a pending return into an
+         * unpayable one. The self-service path REFUSES erasure while those
+         * balances are non-zero; this job checked nothing and deleted anyway.
+         *
+         * Scrubbing is what makes this GDPR-compliant, not destruction — and it
+         * is the owner's standing instruction for this codebase: fix the errors,
+         * keep the data safe. Nothing here removes a row.
+         *
+         * userErasurePatch is idempotent, so a row already scrubbed by the
+         * self-service path is unharmed by being scrubbed again.
+         */
         for (const doc of expiredUsersSnapshot.docs) {
             const uid = doc.id;
 
-            // Queue Firestore PII Deletion
-            batch.delete(doc.ref);
+            // The index of this person's uploaded documents and their email at
+            // erasure — server-only, and the only record of whose the Cloudinary
+            // assets were. Written before the user row loses them. merge:true so
+            // a record the self-service path already wrote is not overwritten
+            // with nulls from an already-scrubbed row.
+            batch.set(
+                db.collection(COLLECTIONS.ERASURE_RETENTION).doc(uid),
+                erasureRetentionRecord(uid, doc.data()),
+                { merge: true },
+            );
 
-            // Queue Cooperative Memberships Deletion
+            batch.update(doc.ref, {
+                ...userErasurePatch(uid),
+                deleted: true,
+                // The field lib/auth.ts refuses to log in on.
+                suspended: true,
+                gdprPurgedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+
+            // Retired, not destroyed — the same marker actions/user.ts applies
+            // to the wallet and the seller verification. The balances stay
+            // readable so a payout owed to this member can still be found.
             const coopRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(uid);
-            batch.delete(coopRef);
+            batch.set(coopRef, {
+                ...erasedOwnerMarker(uid),
+                // The membership row carries a name, phone, email and next of
+                // kin whenever an admin has edited it — /admin/cooperatives/members
+                // writes exactly those fields onto it. The shared definition is
+                // applied here too rather than a second hand-written list, which
+                // is how #283's omission happened in the first place.
+                ...userErasurePatch(uid),
+            }, { merge: true });
 
-            // Note: We leave financial transactions and export windows intact 
-            // for absolute legal ledger integrity, but they are now detached from PII 
-            // as the user document holding names/banks is destroyed.
+            // Financial transactions and export windows are left intact for
+            // ledger integrity, and now genuinely are: the user row they point
+            // at still exists, scrubbed.
 
             deletedUids.push(uid);
         }
@@ -134,7 +212,7 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        logger.info(`GDPR Sweep Complete: Eradicated ${deletedUids.length} accounts (${failedAuthDeletions} Auth failures).`);
+        logger.info(`GDPR Sweep Complete: Scrubbed ${deletedUids.length} accounts, no rows removed (${failedAuthDeletions} Auth failures).`);
 
         // Phase 13: Purge chatbot sessions/messages older than 90 days (non-blocking)
         purgeChatbotDataOlderThan(90)
@@ -143,7 +221,10 @@ export async function GET(request: NextRequest) {
 
         return NextResponse.json({
             status: "success",
-            deletedCount: deletedUids.length,
+            // `deletedCount` was the name while this destroyed rows. It scrubs
+            // them now, and a field called "deleted" would have an operator
+            // believe records were removed when they were retained.
+            erasedCount: deletedUids.length,
             authDeletionEnabled,
             authFailures: failedAuthDeletions
         });
