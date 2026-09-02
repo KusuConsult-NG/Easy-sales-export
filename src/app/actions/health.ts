@@ -84,6 +84,31 @@ export async function runSystemHealthDiagnostic(limit: number = 2000): Promise<
             }
 
             // 3. Stale JWT Session Risk (Proxy check)
+            //
+            //   #335 RECORDED, NOT REPAIRED: THIS CHECK HAS NEVER RUN.
+            //
+            //        It is guarded on `untypedData.lastLoginAt`, and NOTHING IN
+            //        src/ WRITES lastLoginAt — not the login path, not the JIT
+            //        migration, not any profile write. So the condition below
+            //        is false for every user, and this branch has never
+            //        executed once. Same shape as #331: a check that cannot
+            //        find anything, contributing a clean result to a report.
+            //
+            //        It is left guarded rather than made to fire on a
+            //        substitute. The obvious substitute is `updatedAt`, which
+            //        IS written — but the comparison below is
+            //        `lastUpdated > lastLogin + 24h`, so feeding updatedAt in
+            //        as the login time compares a value against itself and the
+            //        branch still never fires. That would only move the defect
+            //        somewhere harder to see, which is the failure this audit
+            //        keeps finding.
+            //
+            //        Making it work needs a real last-login timestamp stamped
+            //        at sign-in. That is one extra write per login on the auth
+            //        path and a schema addition, so it is the owner's call, not
+            //        an audit's. Recorded alongside the two other consumers of
+            //        the same absent field.
+            //
             // If the user's document was updated recently, but no active login within the last 2 hours.
             const untypedData = data as any;
             if (untypedData.updatedAt && untypedData.lastLoginAt) { const lastLogin = (untypedData.lastLoginAt)?.toDate ? (untypedData.lastLoginAt).toDate().getTime() : new Date(untypedData.lastLoginAt).getTime();

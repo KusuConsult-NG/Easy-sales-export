@@ -383,7 +383,9 @@ async function _getStandardSellerVerificationsAction(
                 .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
                 .join(' ');
             const rawLowerQ = search.trim().toLowerCase();
-            const rawUpperQ = search.trim().toUpperCase();
+            // rawUpperQ is gone with the businessRegNumber facet below — it
+            // existed only to upper-case a registration number for that prefix
+            // range, and nothing else in this search is case-folded upward.
 
             const promises = [];
             
@@ -413,14 +415,30 @@ async function _getStandardSellerVerificationsAction(
                     .get()
             );
 
-            // businessRegNumber prefix
-            promises.push(
-                db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
-                    .where("businessRegNumber", ">=", rawUpperQ)
-                    .where("businessRegNumber", "<=", rawUpperQ + "\uf8ff")
-                    .limit(50)
-                    .get()
-            );
+            //   #335 A SEARCH FACET ON A FIELD THE PLATFORM NEVER COLLECTS.
+            //
+            //        A third query ran here on every admin seller search:
+            //
+            //            .where("businessRegNumber", ">=", rawUpperQ)
+            //            .where("businessRegNumber", "<=", rawUpperQ + "\uf8ff")
+            //
+            //        Nothing writes businessRegNumber. The one creator of
+            //        SELLER_VERIFICATIONS \u2014 api/marketplace/submit-verification
+            //        \u2014 stores businessName, businessType, businessDescription,
+            //        contact, address and bank details, and no registration
+            //        number at all; nor does the legacy import. The field name
+            //        appears nowhere else in src/ except the render below,
+            //        which has therefore always shown blank.
+            //
+            //        So this was a round-trip per search that could not
+            //        contribute a row, sitting beside two facets that work.
+            //        Removed rather than left costing a query to return
+            //        nothing. The businessName and email facets are untouched.
+            //
+            //        RECORDED: whether sellers SHOULD supply a CAC/registration
+            //        number is an onboarding question \u2014 the form does not ask
+            //        for one. If it is ever added, this facet is the shape to
+            //        restore, and the detail line below will fill in on its own.
 
             const snaps = await Promise.all(promises);
             const seenIds = new Set<string>();
