@@ -1125,6 +1125,39 @@ export async function changePasswordAction(
             );
         }
 
+        /**
+         *   #343 THE WRITE ABOVE IS READ THROUGH A FIVE-MINUTE CACHE.
+         *
+         *        Both values it sets are decided from lib/user-cache.ts's
+         *        `user:profile:{id}` entry, and nothing here invalidated it:
+         *
+         *          sessionsValidFrom       the jwt callback's revocation point —
+         *                                  so the intruder this exists to eject
+         *                                  kept their session for the TTL on top
+         *                                  of the 2-minute sync interval.
+         *          requiresPasswordChange  session-guard and hub-guard both
+         *                                  redirect to /auth/reset-legacy-password
+         *                                  on it. A legacy member who changed
+         *                                  their password was sent straight back
+         *                                  to the page they had just completed,
+         *                                  again and again, for five minutes.
+         *
+         *        Best-effort and deliberately last: the password IS changed by
+         *        this line, and failing the call because a cache key would not
+         *        clear would report a failure that did not happen. A miss here
+         *        costs the old latency, not correctness.
+         */
+        try {
+            const { invalidateUserCache } = await import("@/lib/cache-invalidation");
+            await invalidateUserCache(session.user.id);
+        } catch (cacheErr: any) {
+            logger.warn(
+                "[changePassword] password changed but the cached profile was not cleared; "
+                + "revocation and the forced-change flag lag by the cache TTL",
+                { userId: session.user.id, error: cacheErr?.message },
+            );
+        }
+
         return { success: true as const, error: null, sessionsRevoked };
     } catch (error: any) { logger.error("Error changing password:", error);
         return { success: false as const, error: error.message || "An unexpected error occurred. Please try again.", data: null };

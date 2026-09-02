@@ -377,6 +377,37 @@ export async function resetPasswordAction(
             // Ignore if field doesn't exist
         }
 
+        /**
+         *   #343 EVERYTHING THIS RESET DECIDED IS READ THROUGH A FIVE-MINUTE
+         *        CACHE, AND NOTHING CLEARED IT.
+         *
+         *          sessionsValidFrom       stamped above as the revocation point,
+         *                                  and read by the jwt callback from the
+         *                                  cached profile.
+         *          requiresPasswordChange  just deleted, and read by session-guard
+         *                                  and hub-guard to force a redirect to
+         *                                  /auth/reset-legacy-password.
+         *
+         *        So a legacy member completing this reset was bounced back onto
+         *        the reset page for the TTL, and the sessions this action exists
+         *        to end stayed alive across it.
+         *
+         *        Best-effort, like the two writes above and for the same reason:
+         *        the password is already changed.
+         */
+        if (profileDocId) {
+            try {
+                const { invalidateUserCache } = await import("@/lib/cache-invalidation");
+                await invalidateUserCache(profileDocId);
+            } catch (cacheErr: any) {
+                logger.warn('[reset] password changed but the cached profile was not cleared; '
+                    + 'revocation and the forced-change flag lag by the cache TTL', {
+                    profileDocId,
+                    error: cacheErr?.message,
+                });
+            }
+        }
+
         return { success: true as const, error: null
  };
     } catch (error) { logger.error('Password reset failed:', error);

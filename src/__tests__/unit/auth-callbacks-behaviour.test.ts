@@ -188,6 +188,27 @@ describe('the profile sync', () => {
 describe('session revocation after a password reset', () => {
     const RESET_AT = 1_700_000_000_000;
 
+    /**
+     *   #343 THESE MOCKS DESCRIBED A PROFILE NOBODY PRODUCED.
+     *
+     *        Every case below stubs getUserProfile as
+     *
+     *            async () => ({ sessionsValidFrom: RESET_AT, roles: [] })
+     *
+     *        and the predicate under test is correct given that shape. The real
+     *        getUserProfile builds its result from a CLOSED FIELD LIST that did
+     *        not contain sessionsValidFrom, so live it was always undefined,
+     *        `revokedBefore` was 0, and `token.sessionRevoked` was false for
+     *        every session that ever existed — #306's revocation never revoked
+     *        anything.
+     *
+     *        The write side was tested, the read side was tested against a
+     *        fabricated profile, and the projection joining them was tested by
+     *        nothing. The cases stay as they are — the predicate is worth
+     *        pinning — and the missing half is now in
+     *        cached-profile-carries-what-auth-decides-on.test.ts, which asserts
+     *        against the REAL builder.
+     */
     it('marks a token minted BEFORE the reset as revoked', async () => {
         getUserProfile.mockImplementation(async () => ({ sessionsValidFrom: RESET_AT, roles: [] }));
         const cb = await callbacks();
@@ -285,11 +306,30 @@ describe('the ban check', () => {
 // ─── the migration interceptor ───────────────────────────────────────────────
 
 describe('a migrated account', () => {
+    /**
+     *   #343 THESE THREE ALSO DESCRIBED A SHAPE NOBODY PRODUCES.
+     *
+     *        They stubbed getUserProfile as `{ _migratedTo: 'new-1', ... }` and
+     *        the callback read `(cachedProfile as any)._migratedTo`. The REAL
+     *        getUserProfile never returns that field: it follows the pointer
+     *        ITSELF —
+     *
+     *            if (userData._migratedTo && userData._migratedTo !== userId)
+     *                return getUserProfile(migratedId);
+     *
+     *        — and hands back the TARGET profile, whose `id` is the migrated id.
+     *        So the branch in the callback could never run, and `token.id` kept
+     *        the legacy id while roles, serviceRegistrations and every other
+     *        claim came from the migrated account.
+     *
+     *        Same cast, same file, same finding as sessionsValidFrom. Rewritten
+     *        against the real contract: what comes back is the target profile,
+     *        and the id it carries is the fact to act on.
+     */
     it('swaps the token id for the migration target', async () => {
-        getUserProfile.mockImplementation(async (id) =>
-            id === 'legacy-1'
-                ? { _migratedTo: 'new-1', roles: ['legacy'] }
-                : { roles: ['seller'] });
+        // What getUserProfile('legacy-1') actually returns after following the
+        // pointer: the NEW account's profile, carrying the new id.
+        getUserProfile.mockImplementation(async () => ({ id: 'new-1', roles: ['seller'] }));
 
         const cb = await callbacks();
         const token = await cb.jwt({ token: { id: 'legacy-1', lastSyncedAt: 0 } });
@@ -299,11 +339,10 @@ describe('a migrated account', () => {
     });
 
     it('and leaves the token alone when the target cannot be loaded', async () => {
-        // Half a migration is worse than none: swapping the id and failing to load
-        // the profile would leave the session pointing at an account it knows
-        // nothing about.
-        getUserProfile.mockImplementation(async (id) =>
-            id === 'legacy-1' ? { _migratedTo: 'gone', roles: ['legacy'] } : null);
+        // Half a migration is worse than none. getUserProfile returns null when
+        // the pointer names a row that is gone — its recursive call finds
+        // nothing — so there is no profile to adopt and the token is untouched.
+        getUserProfile.mockImplementation(async () => null);
 
         const cb = await callbacks();
         const token = await cb.jwt({ token: { id: 'legacy-1', lastSyncedAt: 0 } });
@@ -311,8 +350,11 @@ describe('a migrated account', () => {
         expect(token.id).toBe('legacy-1');
     });
 
-    it('and does not loop when the pointer names the account itself', async () => {
-        getUserProfile.mockImplementation(async () => ({ _migratedTo: 'user-1', roles: ['self'] }));
+    it('and does not move an id that is already the right one', async () => {
+        // An unmigrated account returns its own id, so the comparison is false
+        // and nothing is rewritten. getUserProfile's own guard
+        // (`_migratedTo !== userId`) is what stops a self-pointer looping.
+        getUserProfile.mockImplementation(async () => ({ id: 'user-1', roles: ['self'] }));
 
         const cb = await callbacks();
         const token = await cb.jwt({ token: staleToken() });

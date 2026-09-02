@@ -141,7 +141,15 @@ describe('the rule the callback actually runs', () => {
     it('is the one exercised above', () => {
         // Pins the copy to the original. If lib/auth.ts changes shape, this
         // fails and the harness above has to be brought back into step.
-        expect(auth).toContain('const revokedBefore = Number((cachedProfile as any).sessionsValidFrom) || 0;');
+        //
+        // #343 dropped the `as any`. The cast was not cosmetic: it was the
+        // reason nobody noticed that CachedUserProfile did not declare
+        // sessionsValidFrom and getUserProfile did not carry it, so
+        // `revokedBefore` was Number(undefined) || 0 = 0 and this predicate
+        // could never fire. Every case above was correct about a rule that had
+        // no input. Pinned without the cast now, so a reintroduced one fails
+        // here.
+        expect(auth).toContain('const revokedBefore = Number(cachedProfile.sessionsValidFrom) || 0;');
         expect(auth).toContain('typeof token.authAt === "number"');
         expect(auth).toContain('(typeof token.iat === "number" ? token.iat * 1000 : 0)');
         expect(auth).toContain('token.sessionRevoked = revokedBefore > 0 && issuedAtMs > 0 && issuedAtMs < revokedBefore;');

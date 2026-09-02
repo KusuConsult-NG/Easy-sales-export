@@ -15,6 +15,40 @@ export interface CachedUserProfile {
     profileComplete?: boolean;
     onboardingCompleted?: boolean;
     requiresPasswordChange?: boolean;
+    /**
+     * The revocation point: sessions authenticated before this are no longer
+     * this account's.
+     *
+     *   #343 THIS FIELD WAS READ AND NEVER CARRIED.
+     *
+     *        #306 made changePasswordAction and the password reset stamp
+     *        `sessionsValidFrom` on the user document, and the jwt callback in
+     *        lib/auth.ts decides revocation from it:
+     *
+     *            const revokedBefore = Number((cachedProfile as any).sessionsValidFrom) || 0;
+     *            token.sessionRevoked = revokedBefore > 0 && issuedAtMs > 0
+     *                                   && issuedAtMs < revokedBefore;
+     *
+     *        `cachedProfile` is what getUserProfile below returns, and that
+     *        function builds its result from a CLOSED FIELD LIST which did not
+     *        include this one. So `revokedBefore` was Number(undefined) || 0 =
+     *        0, the predicate short-circuited on `revokedBefore > 0`, and
+     *        `token.sessionRevoked` was false for every session that has ever
+     *        existed. Changing your password never signed the intruder out —
+     *        the whole point of #306.
+     *
+     *        The `as any` cast is what let it compile past review. It is gone.
+     *
+     *        The suite did not catch it because it mocked the join:
+     *
+     *            getUserProfile.mockImplementation(async () =>
+     *                ({ sessionsValidFrom: RESET_AT, roles: [] }));
+     *
+     *        — a shape no writer produces. The write side was tested, the read
+     *        side was tested against a fabricated profile, and the projection
+     *        between them was tested by nothing.
+     */
+    sessionsValidFrom?: number;
     isBanned?: boolean;
     suspended?: boolean;
     status?: string;
@@ -95,6 +129,8 @@ export async function getUserProfile(userId: string): Promise<CachedUserProfile 
             profileComplete: userData.profileComplete,
             onboardingCompleted: userData.onboardingCompleted,
             requiresPasswordChange: userData.requiresPasswordChange,
+            // #343. Read by the jwt callback and, until now, never carried here.
+            sessionsValidFrom: Number(userData.sessionsValidFrom) || undefined,
             isBanned: userData.isBanned,
             suspended: userData.suspended,
             status: userData.status,
