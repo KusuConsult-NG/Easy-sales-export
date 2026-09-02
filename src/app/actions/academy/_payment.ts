@@ -334,6 +334,28 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
             // in SQL (migration 010), and needs no read at all.
             const courseRef = db.collection(COLLECTIONS.ACADEMY_COURSES).doc(metadata.courseId);
             await courseRef.update({
+                /**
+                 *   #336 A PAID ENROLMENT COUNTED ON A DIFFERENT FIELD FROM A
+                 *        FREE ONE.
+                 *
+                 *        This incremented `students`. _ac_enrollment.ts — the
+                 *        free/auto path — increments `enrolledCount`, which is
+                 *        what lib/types/academy.ts declares (required) and what
+                 *        both course creators now initialise. So the two halves
+                 *        of "how many people are on this course" were kept in
+                 *        two different places, and neither was ever the whole
+                 *        number.
+                 *
+                 *        `enrolledCount` is incremented here so the paid half
+                 *        lands in the same tally as the free half. `students`
+                 *        is incremented alongside rather than dropped, because
+                 *        rows already carry it — the same treatment #183 gave
+                 *        `message`/`content`. Nothing reads either yet; if a
+                 *        screen is ever built it should read `enrolledCount`,
+                 *        and courses enrolled before this commit will need a
+                 *        one-off backfill from `students`.
+                 */
+                enrolledCount: FieldValue.increment(1),
                 students: FieldValue.increment(1) });
 
             // (The processed_payments row is written by claimPaymentOnce above.)

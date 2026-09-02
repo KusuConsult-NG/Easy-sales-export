@@ -240,6 +240,12 @@ async function _createCourseAction(data: any): Promise<ActionResponse<{ id: stri
             updatedAt: FieldValue.serverTimestamp(),
             modules: [],
             status: "draft",
+            // #336. This creator initialised NO enrolment counter, so a course
+            // made here had no tally to increment and lib/types/academy.ts's
+            // required `enrolledCount` was absent from birth. Its sibling in
+            // _ac_admin_catalog.ts initialises the same field, so the two
+            // creators now produce the same shape.
+            enrolledCount: 0,
         });
 
         await createAdminAuditLog({
