@@ -119,7 +119,28 @@ describe('the investment cap breach check', () => {
     it('asks for the statuses a window can actually have', () => {
         // THE test.
         expect(forensics).toContain('.where("status", "in", [...EXPORT_WINDOW_INVESTABLE_STATUSES])');
-        expect(forensics).not.toContain('.where("status", "==", "active")');
+
+        // SCOPED TO THE EXPORT WINDOW QUERY, not the whole file.
+        //
+        // This was `expect(forensics).not.toContain('.where("status", "==",
+        // "active")')` — a whole-file substring, which was unambiguous while
+        // the cap check was the only query in forensics.ts using that string.
+        // #331 rewrote the academy check to select active COURSE ENROLMENTS,
+        // where "active" is exactly the right status, and the assertion fired
+        // on correct code because it cannot tell which collection is being
+        // queried.
+        //
+        // The claim is unchanged: the EXPORT_WINDOWS query must go through the
+        // shared vocabulary. It is now checked against the statement that
+        // names that collection, so an unrelated query elsewhere in the file
+        // cannot trip it and — more importantly — cannot mask a regression
+        // here either.
+        const capQuery = forensics.slice(
+            forensics.indexOf('COLLECTIONS.EXPORT_WINDOWS'),
+            forensics.indexOf('COLLECTIONS.EXPORT_WINDOWS') + 400,
+        );
+        expect(capQuery).not.toContain('.where("status", "==", "active")');
+        expect(capQuery).toContain('EXPORT_WINDOW_INVESTABLE_STATUSES');
     });
 
     it('"open" being among them, which is what the browse query uses too', () => {

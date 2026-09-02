@@ -8,10 +8,49 @@ import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { EXPORT_WINDOW_INVESTABLE_STATUSES } from "@/lib/export-window-status";
+import { checkCourseAccess } from "@/lib/academy-plan";
+
+/**
+ * Forensic data-integrity scan.
+ *
+ * TWO OF ITS EIGHT CHECKS COULD NEVER FIND ANYTHING — #331.
+ *
+ * Both reported `status: "pass"` and a fabricated scan count of 50, for
+ * questions they were structurally incapable of asking:
+ *
+ *   Academy "Enrollment Audit (Paid vs Proof)"
+ *       queried course_enrollments on `paymentStatus == "paid"`. The
+ *       collection has exactly two writers and neither writes paymentStatus,
+ *       amountPaid or paymentReference. The query matched nothing, ever.
+ *
+ *   Farm Nation "Verification Fraud (Badge vs Doc)"
+ *       queried users on `farmNationProfile.isVerified` — a path that appears
+ *       in exactly one place in this repository, that query — and
+ *       cross-referenced `land_verifications`, a collection nothing writes to.
+ *       Both halves fictional.
+ *
+ * A fraud check that cannot fail is worse than no check: it produces a green
+ * line in a report that an operator reads as assurance.
+ *
+ * NOBODY CALLS THIS FILE
+ * ----------------------
+ * `runForensicScanAction` has no caller in application code — only tests
+ * import it. There is no admin screen that runs the scan, so the false passes
+ * above were not being read by anyone; that is why they survived. The checks
+ * are repaired here because they are wrong and would ship wrong the moment a
+ * screen is built. WHETHER to build that screen is an owner decision, recorded
+ * rather than taken — the same treatment as #314 and #320.
+ */
 
 interface ScanResult { module: string;
     check: string;
-    status: "pass" | "fail" | "warning";
+    /**
+     * "inconclusive" exists because two checks in this file reported "pass"
+     * for a question they could not ask — #331. A forensic tool that cannot
+     * tell "I looked and found nothing" from "I could not look" is worse than
+     * no tool, because the second reads as the first.
+     */
+    status: "pass" | "fail" | "warning" | "inconclusive";
     details: string;
     affectedIds: string[]; }
 
@@ -345,32 +384,62 @@ export async function runForensicScanAction(): Promise<
         // ============================================================================
 
         // CHECK: Verification Fraud (Badge without Document)
-        try { const verifiedFarmersQuery = await db.collection(COLLECTIONS.USERS)
-                .where("farmNationProfile.isVerified", "==", true)
+        /**
+         * BOTH HALVES OF THIS CHECK ASKED ABOUT THINGS THAT DO NOT EXIST — #331.
+         *
+         * It was:
+         *
+         *     db.collection(USERS).where("farmNationProfile.isVerified", "==", true)
+         *     ...
+         *     db.collection(LAND_VERIFICATIONS).where("userId","==",userId)
+         *                                      .where("status","==","verified")
+         *
+         * `farmNationProfile` appears in exactly ONE place in this repository —
+         * that query. No writer sets it and no other reader reads it, so the
+         * outer query matched nothing, ever.
+         *
+         * `land_verifications` is referenced in exactly TWO places: its name in
+         * COLLECTIONS, and that inner query. Nothing writes to the collection,
+         * so it is empty by construction.
+         *
+         * The loop therefore never ran, `fraudIds` was always [], and the check
+         * reported `status: "pass"` with "Scanned 50 verified farmers" — a
+         * count it had not performed, about a population it had not found, on
+         * evidence that does not exist. A fraud check that cannot fail.
+         *
+         * The badge this was written to police is `isVerified` on the user
+         * document, set by _approveFarmerAction (farm-nation/_fn_admin.ts:68)
+         * when a farmer is approved. That same transaction sets
+         * `serviceRegistrations.farmNation.status = "approved"`, so the two are
+         * written together and a badge WITHOUT that registration is exactly the
+         * anomaly the check wanted: a verified farmer nothing approved.
+         */
+        try {
+            const verifiedFarmersQuery = await db.collection(COLLECTIONS.USERS)
+                .where("isVerified", "==", true)
+                .where("roles", "array-contains", "farmer")
                 .limit(50)
                 .get();
 
             const fraudIds: string[] = [];
 
             for (const doc of verifiedFarmersQuery.docs) {
-                const userId = doc.id;
-                // Check if verification doc exists
-                const verifSnapshot = await db.collection(COLLECTIONS.LAND_VERIFICATIONS)
-                    .where("userId", "==", userId)
-                    .where("status", "==", "verified")
-                    .limit(1)
-                    .get();
-
-                if (verifSnapshot.empty) {
-                    fraudIds.push(userId);
+                const data = doc.data() as any;
+                const registration = data?.serviceRegistrations?.farmNation?.status;
+                if (registration !== "approved") {
+                    fraudIds.push(`${doc.id} (badge set, farmNation registration: ${registration ?? "none"})`);
                 }
             }
 
             results.push({
                 module: "Farm Nation",
-                check: "Verification Fraud (Badge vs Doc)",
+                check: "Verification Fraud (Badge vs Approval)",
                 status: fraudIds.length > 0 ? "fail" : "pass",
-                details: `Scanned 50 verified farmers. Found ${fraudIds.length} without proof.`,
+                // The number actually scanned, not a literal 50. An empty
+                // population is stated as such rather than dressed as a pass.
+                details: verifiedFarmersQuery.size === 0
+                    ? "No verified farmers found to check."
+                    : `Scanned ${verifiedFarmersQuery.size} verified farmers. Found ${fraudIds.length} whose Farm Nation registration is not approved.`,
                 affectedIds: fraudIds
             });
         } catch (e: any) { results.push({ module: "Farm Nation", check: "Verification Scan", status: "fail", details: e.message, affectedIds: [] });
@@ -427,30 +496,101 @@ export async function runForensicScanAction(): Promise<
         // 7. ACADEMY INTEGRITY
         // ============================================================================
 
-        // CHECK: Enrollment Integrity (Paid but no Transaction)
+        /**
+         * THIS QUERIED A FIELD NEITHER ENROLMENT WRITER SETS — #331.
+         *
+         * It was:
+         *
+         *     db.collection(COURSE_ENROLLMENTS).where("paymentStatus","==","paid").limit(50)
+         *     ...
+         *     if (enrollment.amountPaid > 0 && !enrollment.paymentReference) ...
+         *
+         * There are exactly two writers of course_enrollments —
+         * course-actions.ts (_enrollInCourseAction) and academy/_ac_enrollment.ts
+         * (autoEnrollPaidUser) — and both write the same six fields:
+         * userId, courseId, enrolledAt, status, createdAt, updatedAt. None of
+         * `paymentStatus`, `amountPaid` or `paymentReference` is ever written
+         * by anything.
+         *
+         * So the query matched nothing, the loop never ran, `freeRideIds` was
+         * always [], and the check reported `status: "pass"` with "Scanned 50
+         * paid enrollments" — a fabricated count of an empty result, presented
+         * as evidence that nobody is riding free.
+         *
+         * WHAT IT CAN ACTUALLY ASK
+         * ------------------------
+         * The enrolment row carries no payment data, so "paid but unproven" is
+         * not answerable from it and no amount of rewriting this query will
+         * make it so. The equivalent question that IS answerable: is anybody
+         * enrolled in a course their plan does not open? checkCourseAccess is
+         * the platform's single definition of that rule — the same one the
+         * enrolment gate and the course catalogue use — so a hit here is a
+         * genuine free ride, judged by the rule the app itself enforces.
+         */
         try {
             const enrollments = await db.collection(COLLECTIONS.COURSE_ENROLLMENTS)
-                .where("paymentStatus", "==", "paid")
+                .where("status", "==", "active")
                 .limit(50)
                 .get();
 
             const freeRideIds: string[] = [];
+            const unresolved: string[] = [];
+
+            // Course tiers and learner plans, fetched once each rather than per
+            // enrolment.
+            const courseIds = [...new Set(enrollments.docs.map((d: any) => d.data().courseId).filter(Boolean))] as string[];
+            const learnerIds = [...new Set(enrollments.docs.map((d: any) => d.data().userId).filter(Boolean))] as string[];
+
+            const chunk = <T,>(xs: T[], n: number) => {
+                const out: T[][] = [];
+                for (let i = 0; i < xs.length; i += n) out.push(xs.slice(i, i + n));
+                return out;
+            };
+
+            const courseTier = new Map<string, unknown>();
+            for (const snap of await Promise.all(chunk(courseIds, 30).map((ids) =>
+                db.collection(COLLECTIONS.ACADEMY_COURSES).where(FieldPath.documentId(), "in", ids).get()
+            ))) {
+                snap.docs.forEach((d: any) => courseTier.set(d.id, d.data()?.tier));
+            }
+
+            const learnerPlan = new Map<string, unknown>();
+            for (const snap of await Promise.all(chunk(learnerIds, 30).map((ids) =>
+                db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", ids).get()
+            ))) {
+                snap.docs.forEach((d: any) => learnerPlan.set(d.id, d.data()?.serviceRegistrations?.academy?.plan));
+            }
 
             for (const doc of enrollments.docs) {
-                const enrollment = doc.data();
-                // If it was "paid", there should be a paymentRef or we check transactions
-                // Note: Schema might allow manual entry, so this is a heuristic.
-                if (enrollment.amountPaid > 0 && !enrollment.paymentReference) {
-                    freeRideIds.push(`${doc.id} (No Payment Ref)`);
+                const { userId, courseId } = doc.data() as any;
+                const tier = courseTier.get(courseId);
+                const plan = learnerPlan.get(userId);
+
+                // A missing course or a missing learner is a gap in the
+                // records, not evidence about the learner. Reported separately,
+                // the way the WAVE age check reports an absent date of birth.
+                if (tier === undefined || plan === undefined) {
+                    unresolved.push(`${doc.id} (${tier === undefined ? "course not found" : "learner not found"})`);
+                    continue;
+                }
+
+                if (!checkCourseAccess(plan, tier)) {
+                    freeRideIds.push(`${doc.id} (plan: ${String(plan) || "none"}, course tier: ${String(tier)})`);
                 }
             }
 
             results.push({
                 module: "Academy",
-                check: "Enrollment Audit (Paid vs Proof)",
+                check: "Enrollment Audit (Access vs Plan)",
                 status: freeRideIds.length > 0 ? "warning" : "pass",
-                details: `Scanned 50 paid enrollments. Found ${freeRideIds.length} with missing refs.`,
-                affectedIds: freeRideIds
+                // The number actually scanned. The old line said 50 whatever
+                // happened, including when nothing was read at all.
+                details: enrollments.size === 0
+                    ? "No active enrolments found to check."
+                    : `Scanned ${enrollments.size} active enrolments against checkCourseAccess. ` +
+                      `Found ${freeRideIds.length} on a course their plan does not open` +
+                      (unresolved.length > 0 ? `, ${unresolved.length} could not be resolved.` : "."),
+                affectedIds: [...freeRideIds, ...unresolved]
             });
         } catch (e: any) { results.push({ module: "Academy", check: "Enrollment Scan", status: "fail", details: e.message, affectedIds: [] });
         }
