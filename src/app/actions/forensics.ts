@@ -306,11 +306,18 @@ export async function runForensicScanAction(): Promise<
             // zero", for every member, forever. That is how a broken check goes
             // on looking healthy.
             //
-            // The ledger side was wrong too. _makeContributionAction credits
-            // savingsBalance and writes its row with type "savings" — which was
-            // not in the counted list — while "withdrawal" was subtracted and is
-            // never written at all: a withdrawal moves savings into
-            // lockedBalance and records a cooperative_withdrawals document.
+            // The ledger side was wrong too. "savings" rows exist in the
+            // collection and were not in the counted list, while "withdrawal"
+            // was subtracted and is never written at all: a withdrawal moves
+            // savings into lockedBalance and records a cooperative_withdrawals
+            // document.
+            //
+            // The writer of those "savings" rows was _makeContributionAction,
+            // which credited savingsBalance with no payment behind it. It
+            // refuses now (#333) — but the rows it already wrote are still in
+            // the collection and still count toward a member's balance, so
+            // "savings" stays in the list below. Removing it would make every
+            // member who ever used that path report as a mismatch.
             //
             // Both sides are corrected here, and lockedBalance is included
             // because money reserved for a pending withdrawal is still the
