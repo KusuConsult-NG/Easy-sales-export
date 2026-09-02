@@ -22,8 +22,19 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
-    // One-off admin/maintenance scripts — not app code
-    "scripts/**",
+    // `scripts/**` USED TO BE IGNORED HERE — #328.
+    //
+    // The rationale was "One-off admin/maintenance scripts — not app code".
+    // They are not app code; they are something with a wider blast radius. Half
+    // of them import the same `db` the application does — which is the live
+    // Supabase project — and write to it, by hand, with no request, no session
+    // and no reviewer. tsconfig.json excluded the same directory, so these were
+    // the only files in the repository outside BOTH gates.
+    //
+    // What that hid is in scripts/firebase-schema-fix.ts: it crashes on its
+    // ninth line, and always has. Turning the typechecker on names the reason
+    // in one second. Un-ignoring costs nothing here — every file in scripts/
+    // passes lint as written.
   ]),
 ]);
 

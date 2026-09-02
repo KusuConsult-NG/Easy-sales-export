@@ -12,7 +12,9 @@ dotenv.config({ path: path.resolve(process.cwd(), envFile) });
 
 import { db } from "../src/lib/firebase-admin";
 import { COLLECTIONS } from "../src/lib/types/firestore";
-import * as fs from "fs";
+// `import * as fs from "fs"` appeared twice in this file — once above the
+// db import and once here — which is TS2300 twice over. Nobody ever saw it
+// because scripts/ was excluded from tsconfig and eslint alike (#328).
 
 async function runAudit() {
     console.log("🚀 Starting Optimized Data Integrity Audit...");
