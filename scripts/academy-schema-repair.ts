@@ -27,6 +27,7 @@ import { COLLECTIONS } from "../src/lib/types/firestore";
 import { FieldValue } from "../src/lib/firestore-compat";
 import { normaliseAcademyPlan, ACADEMY_PLANS } from "../src/lib/academy-plan";
 import { ACADEMY_CONFIG } from "../src/lib/constants";
+import { isApply } from "./_maintenance-guard";
 
 /** Supabase batches far more than this; 400 keeps each round trip small. */
 export const CHUNK = 400;
@@ -52,6 +53,7 @@ export interface PlanRepair {
  */
 export async function migrateLegacyAcademyPlans(
     log: (msg: string) => void = () => {},
+    apply: boolean = isApply(),
 ): Promise<PlanRepair[]> {
     // .all(), not a bare .get().
     //
@@ -81,6 +83,13 @@ export async function migrateLegacyAcademyPlans(
     }
 
     log(`   ${pending.length} users need their plan spelling repaired.`);
+
+    // Report-only until --apply, the convention every writing script in this
+    // repository now shares — see scripts/_maintenance-guard.ts and #329.
+    if (!apply) {
+        log("   report only — nothing written. Re-run with --apply.");
+        return pending;
+    }
 
     for (let i = 0; i < pending.length; i += CHUNK) {
         const chunk = pending.slice(i, i + CHUNK);
@@ -135,6 +144,7 @@ const LEVEL: Record<(typeof ACADEMY_PLANS)[number], string> = {
  */
 export async function initializeAcademyCourses(
     log: (msg: string) => void = () => {},
+    apply: boolean = isApply(),
 ): Promise<string[]> {
     const coursesRef = db.collection(COLLECTIONS.ACADEMY_COURSES);
     const created: string[] = [];
@@ -145,6 +155,12 @@ export async function initializeAcademyCourses(
 
         if (!existing.empty) {
             log(`   ✅ ${tier} course already exists.`);
+            continue;
+        }
+
+        if (!apply) {
+            log(`   WOULD CREATE ${tier} course at ₦${plan.fee.toLocaleString()}.`);
+            created.push(tier);
             continue;
         }
 

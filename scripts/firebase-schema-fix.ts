@@ -42,9 +42,13 @@ import * as dotenv from "dotenv";
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
 
 import { migrateLegacyAcademyPlans, initializeAcademyCourses } from "./academy-schema-repair";
+import { isApply, targetHost, modeBanner, runScript } from "./_maintenance-guard";
 
 async function main() {
-    console.log("🚀 Academy schema & data repair — target: Supabase\n");
+    // Report-only until --apply, and the target host is named rather than
+    // hidden — the convention scripts/_maintenance-guard.ts now holds for every
+    // writing script here (#329).
+    console.log(modeBanner("🚀 Academy schema & data repair", isApply(), targetHost()));
 
     // NOT wrapped in per-step try/catch. Each half of the original caught its
     // own errors, logged them and returned normally, after which main() printed
@@ -65,9 +69,6 @@ async function main() {
     console.log(`Courses created:        ${created.length}${created.length ? ` (${created.join(", ")})` : ""}`);
 }
 
-main()
-    .then(() => process.exit(0))
-    .catch((err) => {
-        console.error("❌ Academy repair FAILED:", err);
-        process.exit(1);
-    });
+if (require.main === module) {
+    runScript("Academy schema & data repair", main);
+}

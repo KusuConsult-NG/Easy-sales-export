@@ -267,7 +267,7 @@ describe('#328 — the academy plan repair, executed', () => {
     it('rewrites a legacy "advanced" plan onto "standard"', async () => {
         store = installFakeDb({ users: { u1: withPlan('advanced') } });
 
-        const done = await repair.migrateLegacyAcademyPlans();
+        const done = await repair.migrateLegacyAcademyPlans(undefined, true);
 
         expect(done).toEqual([{ id: 'u1', from: 'advanced', to: 'standard' }]);
         expect(store.get('users', 'u1')?.serviceRegistrations.academy.plan).toBe('standard');
@@ -282,7 +282,7 @@ describe('#328 — the academy plan repair, executed', () => {
             },
         });
 
-        const done = await repair.migrateLegacyAcademyPlans();
+        const done = await repair.migrateLegacyAcademyPlans(undefined, true);
 
         expect(done).toEqual([]);
         // Not rewritten with an identical value plus a fresh updatedAt.
@@ -296,7 +296,7 @@ describe('#328 — the academy plan repair, executed', () => {
         // choosing a tier here would grant a paid plan nobody bought.
         store = installFakeDb({ users: { u1: withPlan('registration') } });
 
-        const done = await repair.migrateLegacyAcademyPlans();
+        const done = await repair.migrateLegacyAcademyPlans(undefined, true);
 
         expect(done).toEqual([]);
         expect(store.get('users', 'u1')?.serviceRegistrations.academy.plan).toBe('registration');
@@ -304,12 +304,12 @@ describe('#328 — the academy plan repair, executed', () => {
 
     it('ignores a user with no academy registration', async () => {
         store = installFakeDb({ users: { u1: { email: 'a@b.c' }, u2: { serviceRegistrations: {} } } });
-        expect(await repair.migrateLegacyAcademyPlans()).toEqual([]);
+        expect(await repair.migrateLegacyAcademyPlans(undefined, true)).toEqual([]);
     });
 
     it('and ignores an empty-string plan rather than treating it as legacy', async () => {
         store = installFakeDb({ users: { u1: withPlan(''), u2: withPlan(null) } });
-        expect(await repair.migrateLegacyAcademyPlans()).toEqual([]);
+        expect(await repair.migrateLegacyAcademyPlans(undefined, true)).toEqual([]);
     });
 
     /**
@@ -330,7 +330,7 @@ describe('#328 — the academy plan repair, executed', () => {
         for (let i = 0; i < 5001; i++) users[`u${i}`] = withPlan('advanced');
         store = installFakeDb({ users });
 
-        const done = await repair.migrateLegacyAcademyPlans();
+        const done = await repair.migrateLegacyAcademyPlans(undefined, true);
 
         expect(done.length).toBe(5001);
     }, 120_000);
@@ -361,7 +361,7 @@ describe('#328 — the academy plan repair, executed', () => {
         for (let i = 0; i < 401; i++) users[`u${i}`] = withPlan('advanced');
         store = installFakeDb({ users });
 
-        const done = await repair.migrateLegacyAcademyPlans();
+        const done = await repair.migrateLegacyAcademyPlans(undefined, true);
 
         expect(done.length).toBe(401);
         // 400 + 1, so two commits.
@@ -378,7 +378,7 @@ describe('#328 — the academy plan repair, executed', () => {
         store = installFakeDb({ users: { u1: withPlan('advanced') } });
         (global.mockFirestoreBatchCommit as any).mockRejectedValueOnce(new Error('supabase down'));
 
-        await expect(repair.migrateLegacyAcademyPlans()).rejects.toThrow('supabase down');
+        await expect(repair.migrateLegacyAcademyPlans(undefined, true)).rejects.toThrow('supabase down');
     });
 });
 
@@ -393,7 +393,7 @@ describe('#328 — the course seeding, executed', () => {
 
     it('creates the three sold tiers when the catalogue is empty', async () => {
         installFakeDb({});
-        const created = await repair.initializeAcademyCourses();
+        const created = await repair.initializeAcademyCourses(undefined, true);
         expect(created).toEqual([...ACADEMY_PLANS]);
     });
 
@@ -407,7 +407,7 @@ describe('#328 — the course seeding, executed', () => {
      */
     it.each([...ACADEMY_PLANS])('prices the %s course at the fee checkout charges', async (tier) => {
         installFakeDb({});
-        await repair.initializeAcademyCourses();
+        await repair.initializeAcademyCourses(undefined, true);
 
         // mockFirestoreAdd is called as (collection, data) — the payload is the
         // second argument, not the first.
@@ -430,7 +430,7 @@ describe('#328 — the course seeding, executed', () => {
     it('skips a tier that already has a course, and creates only the rest', async () => {
         installFakeDb({ academy_courses: { existing: { tier: 'standard', price: 90000 } } });
 
-        const created = await repair.initializeAcademyCourses();
+        const created = await repair.initializeAcademyCourses(undefined, true);
 
         expect(created).toEqual(['foundation', 'elite']);
         expect(global.mockFirestoreAdd).toHaveBeenCalledTimes(2);
@@ -443,7 +443,7 @@ describe('#328 — the course seeding, executed', () => {
             ),
         });
 
-        expect(await repair.initializeAcademyCourses()).toEqual([]);
+        expect(await repair.initializeAcademyCourses(undefined, true)).toEqual([]);
         expect(global.mockFirestoreAdd).not.toHaveBeenCalled();
     });
 });
@@ -465,8 +465,13 @@ describe('#328 — the entrypoint no longer reports success it cannot deliver', 
     });
 
     it('and a failure exits NON-ZERO, so a wrapper can see it', () => {
-        expect(src).toMatch(/\.catch\(\s*\(\s*err\s*\)\s*=>\s*\{/);
-        expect(src).toMatch(/process\.exit\(1\)/);
+        // The inline `.catch(err => { ...; process.exit(1) })` this test
+        // originally pinned became the shared runner in #329, which is where
+        // the exit(1) lives now — one copy for every maintenance script rather
+        // than one per file. The claim is unchanged: a failed run must not
+        // report success.
+        expect(src).toMatch(/runScript\(/);
+        expect(stripComments(read('scripts/_maintenance-guard.ts'))).toMatch(/process\.exit\(1\)/);
     });
 
     it('the reported counts come from what was actually written', () => {
