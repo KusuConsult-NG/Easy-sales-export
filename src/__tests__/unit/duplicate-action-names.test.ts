@@ -133,17 +133,53 @@ const KNOWN_DUPLICATES: Record<string, number> = {
     updateResourceAction: 2,               // the wired one re-reads roles from the
                                            // database rather than trusting the JWT
 
-    // ── Not yet examined. Listed so the count is honest rather than implying
-    //    a clean sweep, and so a NEW duplicate is still caught by the check
-    //    below. ──────────────────────────────────────────────────────────────
-    createAnnouncementAction: 2,
-    createExportWindowAction: 2,
-    getAuditLogsAction: 2,
-    getBuyerOrdersAction: 2,
-    getDashboardStatsAction: 2,
-    getPropertyByIdAction: 2,
-    getRecentActivityAction: 2,
-    getSellerOrdersAction: 2,
+    // ── Examined. Each of these eight was carried here as "not yet examined"
+    //    for several passes; that note was itself the kind of stale statement
+    //    this audit removes, so the question has now been asked of all of them
+    //    and the answer written down. None is a defect. ────────────────────────
+    //
+    // The three WRITE pairs, which are where a wrong door costs something:
+    createAnnouncementAction: 2,           // cms.ts is the wired one (admin/cms
+                                           // page). admin-communications.ts's
+                                           // copy has no caller and its own
+                                           // header records that every row it
+                                           // ever wrote was unreadable by the
+                                           // only reader — already repaired.
+    createExportWindowAction: 2,           // NOT one action twice: two entities
+                                           // sharing a name. _ex_windows.ts
+                                           // creates a SHIPMENT ("pending"),
+                                           // export-aggregation.ts creates an
+                                           // AGGREGATION ("open"). The split is
+                                           // the subject of
+                                           // export-window-status-vocabulary,
+                                           // and merging them is a schema
+                                           // decision, not an audit's.
+
+    // The five READ pairs. For a reader the hazard is scope, not validation —
+    // #31 and #95 are both "read somebody else's row" — so that is what was
+    // checked, on BOTH sides of each pair, because both are exported server
+    // actions and therefore both are endpoints whatever the UI picks:
+    getAuditLogsAction: 2,                 // audit.ts is a legacy-format mapper
+                                           // that gates on admin AND delegates
+                                           // to audit-log-actions.ts, which
+                                           // gates again. Double-gated.
+    getBuyerOrdersAction: 2,               // both filter buyerId == session id
+    getSellerOrdersAction: 2,              // both filter sellerIds
+                                           // array-contains session id; the
+                                           // UNWIRED one additionally requires
+                                           // the seller role — stricter, not
+                                           // weaker
+    getDashboardStatsAction: 2,            // admin analytics vs the member
+                                           // dashboard: different figures for
+                                           // different audiences, each gated
+                                           // for its own
+    getPropertyByIdAction: 2,              // farm-nation Property vs
+                                           // land-listings LandListing, two
+                                           // shapes; the three farm-nation
+                                           // screens all use land-listings. A
+                                           // listing is public either way.
+    getRecentActivityAction: 2,            // cooperative admin report vs member
+                                           // dashboard feed
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
