@@ -8,6 +8,7 @@ import { Timestamp } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { claimStatusTransition } from "@/lib/status-transition";
+import { creditWalletOnce } from "@/lib/wallet-ledger";
 import { createAdminAuditLog } from "@/lib/audit-log";
 // The notification ACTION now requires a session, which a cron run does not
 // have. This route is already gated by CRON_SECRET, so it calls the service
@@ -365,54 +366,93 @@ async function processEscrowTransactions(now: Timestamp) {
             return;
         }
 
-        await db.runTransaction(async (tx) => {
-            // 2. Credit Seller's Wallet
-            const walletRef = db.collection(COLLECTIONS.WALLETS).doc(sellerId);
-            const walletSnap = await tx.get(walletRef);
-            let balanceBefore = 0;
-            
-            if (!walletSnap.exists) {
-                tx.set(walletRef, {
-                    userId: sellerId,
-                    balance: amount,
-                    currency: "NGN",
-                    createdAt: FieldValue.serverTimestamp(),
-                    updatedAt: FieldValue.serverTimestamp()
-                });
-            } else {
-                balanceBefore = walletSnap.data()?.balance || 0;
-                tx.update(walletRef, {
-                    balance: FieldValue.increment(amount),
-                    updatedAt: FieldValue.serverTimestamp()
-                });
-            }
+        // THE AUTO-RELEASE PAID THE GROSS, BY HAND — #325.
+        //
+        // Both sibling release paths were repaired and this third one was
+        // missed by both. _escrow_lifecycle.ts's own note even says so of ITS
+        // sibling: "was moved onto credit_wallet_once for exactly these
+        // reasons; this one was missed". Neither repair reached the cron.
+        //
+        // 1. THE FEE. Three escrow creators compute `platformFee` and store it
+        //    with `netAmount`. Both sibling paths pay `netAmount`, gross only as
+        //    a fallback. This loop credited `data.amount` — the gross — so the
+        //    platform's own commission was handed to the seller. The same
+        //    escrow paid a different amount depending on whether an admin
+        //    pressed Release or the 7-day timer fired. #113/#109's shape.
+        //
+        // 2. THE CREDIT. It read the wallet and wrote a computed balance:
+        //
+        //        if (!walletSnap.exists) tx.set(walletRef, { balance: amount })
+        //        else                    tx.update(walletRef, { balance: increment(...) })
+        //
+        //    The increment branch is safe; the set branch is not, and the claim
+        //    above does not cover it. The claim stops one escrow being released
+        //    twice — it does nothing when TWO DIFFERENT escrows for the same
+        //    seller are released in the same run before that seller has a wallet
+        //    row. Both take the set branch and the last write wins, so one
+        //    payout is simply gone. runTransaction takes no lock on this adapter
+        //    and cannot roll back. That is the verbatim reasoning from the
+        //    sibling's note, and it applies here unchanged.
+        //
+        // 3. NO IDEMPOTENCY REFERENCE, so a re-run credited again.
+        //
+        // The reference is deliberately the SAME string the admin path uses, so
+        // an admin release and a timer release of one escrow cannot both pay.
+        const netStored = Number((data as any).netAmount);
+        const sellerPayout = Number.isFinite(netStored) && netStored > 0 ? netStored : amount;
 
-            // 3. Record in Wallet Transactions
-            const walletTxRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc();
+        const credit = await creditWalletOnce({
+            reference: `escrow-release:${escrowId}`,
+            userId: sellerId,
+            amount: sellerPayout,
+            paymentType: "escrow_release",
+            source: "marketplace_escrow",
+            // NOT "completed": platform_revenue_totals() sums completed rows,
+            // and an escrow release is platform-held money going OUT.
+            status: "disbursement",
+            metadata: { escrowId, orderId: data.orderId ?? "", productName, trigger: "auto_release_after_7_days" },
+        });
+
+        // claimed:false means an earlier attempt already credited this escrow.
+        // That is success, not an error — the money is where it should be.
+        const balanceAfter = credit.balance;
+        const balanceBefore = credit.claimed ? balanceAfter - sellerPayout : balanceAfter;
+
+        await db.runTransaction(async (tx) => {
+            // The money moved above, through the ledger primitive. These rows
+            // are history, and their ids are derived from the escrow rather than
+            // random so a retry overwrites instead of showing the seller the
+            // same payout twice.
+            const walletTxRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS)
+                .doc(`escrow-release-${escrowId}`);
             tx.set(walletTxRef, {
                 id: walletTxRef.id,
                 walletId: sellerId,
                 userId: sellerId,
                 type: "funding",
-                amount: amount,
+                amount: sellerPayout,
                 balanceBefore,
-                balanceAfter: balanceBefore + amount,
+                balanceAfter,
                 reference: escrowId,
-                description: `Payout for order #${data.orderId || escrowId.substring(0, 8)} (Escrow auto-released after 7d)`,
+                description: `Payout for order #${data.orderId || escrowId} (Escrow auto-released after 7d)`,
                 status: "completed",
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp()
             });
 
-            // 3. Record in Global Ledger
-            const txId = `ESCROW-RELEASE-${escrowId.substring(0, 8)}`;
+            // The global ledger id was `ESCROW-RELEASE-${escrowId.substring(0, 8)}`.
+            // Truncating an id to make a key is #104 exactly — there it was five
+            // characters of a seller id and two sellers on one order collided.
+            // Eight characters of an escrow id is the same bet on a smaller
+            // scale, and the sibling path already keys on the whole id.
+            const txId = `ESCROW-RELEASE-${escrowId}`;
             const txRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(txId);
             tx.set(txRef, {
                 id: txId,
                 userId: sellerId,
                 type: "escrow_payout",
                 module: "escrow",
-                amount: amount,
+                amount: sellerPayout,
                 currency: "NGN",
                 status: "completed",
                 date: FieldValue.serverTimestamp(),
@@ -524,39 +564,36 @@ async function processDeliveredEscrowTransactions(now: Timestamp) {
             return;
         }
 
+        // #325, identical to the 7-day loop above. This one paid the gross and
+        // credited by hand too — the same escrow, the same seller, a third
+        // amount depending only on which timer fired.
+        const netStored = Number((data as any).netAmount);
+        const sellerPayout = Number.isFinite(netStored) && netStored > 0 ? netStored : amount;
+
+        const credit = await creditWalletOnce({
+            reference: `escrow-release:${escrowId}`,
+            userId: sellerId,
+            amount: sellerPayout,
+            paymentType: "escrow_release",
+            source: "marketplace_escrow",
+            status: "disbursement",
+            metadata: { escrowId, orderId: orderId ?? "", productName, trigger: "auto_release_after_24h_delivered" },
+        });
+
+        const balanceAfter = credit.balance;
+        const balanceBefore = credit.claimed ? balanceAfter - sellerPayout : balanceAfter;
+
         await db.runTransaction(async (tx) => {
-
-            // 2. Credit Seller's Wallet
-            const walletRef = db.collection(COLLECTIONS.WALLETS).doc(sellerId);
-            const walletSnap = await tx.get(walletRef);
-            let balanceBefore = 0;
-            
-            if (!walletSnap.exists) {
-                tx.set(walletRef, {
-                    userId: sellerId,
-                    balance: amount,
-                    currency: "NGN",
-                    createdAt: FieldValue.serverTimestamp(),
-                    updatedAt: FieldValue.serverTimestamp()
-                });
-            } else {
-                balanceBefore = walletSnap.data()?.balance || 0;
-                tx.update(walletRef, {
-                    balance: FieldValue.increment(amount),
-                    updatedAt: FieldValue.serverTimestamp()
-                });
-            }
-
-            // 3. Record in Wallet Transactions
-            const walletTxRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc();
+            const walletTxRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS)
+                .doc(`escrow-release-${escrowId}`);
             tx.set(walletTxRef, {
                 id: walletTxRef.id,
                 walletId: sellerId,
                 userId: sellerId,
                 type: "funding",
-                amount: amount,
+                amount: sellerPayout,
                 balanceBefore,
-                balanceAfter: balanceBefore + amount,
+                balanceAfter,
                 reference: escrowId,
                 description: orderId ? `Payout for order #${orderId} (Escrow auto-released after 24h)` : `Escrow Payout for "${productName}" (24h Auto-Release)`,
                 status: "completed",
@@ -564,15 +601,16 @@ async function processDeliveredEscrowTransactions(now: Timestamp) {
                 updatedAt: FieldValue.serverTimestamp()
             });
 
-            // 4. Record in Global Ledger
-            const txId = `ESCROW-RELEASE-${escrowId.substring(0, 8)}`;
+            // The whole escrow id, not eight characters of it — see the note in
+            // the 7-day loop.
+            const txId = `ESCROW-RELEASE-${escrowId}`;
             const txRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(txId);
             tx.set(txRef, {
                 id: txId,
                 userId: sellerId,
                 type: "escrow_payout",
                 module: "escrow",
-                amount: amount,
+                amount: sellerPayout,
                 currency: "NGN",
                 status: "completed",
                 date: FieldValue.serverTimestamp(),
