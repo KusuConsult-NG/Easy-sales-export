@@ -23,6 +23,7 @@ import {
     type LandListingStatus,
     type LandVerificationStatus,
 } from "@/lib/land-listing-status";
+import { stripInternalLandFields, isLandListingViewable } from "@/lib/land-visibility";
 
 /**
  * Farm Nation - Land Listings & Verification
@@ -644,7 +645,19 @@ async function _searchLandListingsAction(filters: {
 
         const lastDocId = snapshot.docs.length === limit ? snapshot.docs[snapshot.docs.length - 1].id : null;
 
-        return { success: true, error: null, data: { listings: results, lastDocId } };
+        /**
+         * #340. The review fields, the owner's contact details and the DEEDS do
+         * not go to a stranger.
+         *
+         * This action has no session check — search is public, which is right —
+         * and it returned the stored document. lib/land-visibility.ts exists for
+         * this exact payload and was written after the same defect was found in
+         * /api/farm-nation/listings; its header names the reason. It reached one
+         * reader out of four.
+         */
+        const listings = results.map((l) => stripInternalLandFields(l as any)) as unknown as LandListing[];
+
+        return { success: true, error: null, data: { listings, lastDocId } };
     } catch (error: any) { 
         logger.error("Land search error:", error);
         throw error;
@@ -798,7 +811,7 @@ export async function submitLandListingAction(...args: Parameters<typeof _submit
 /**
  * Get single land listing by ID
  */
-async function _getPropertyByIdAction(id: string): Promise<ActionResponse<LandListing | null>> { 
+async function _getPropertyByIdAction(id: string): Promise<ActionResponse<LandListing | null>> {
     try {
         const docRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(id);
         const docSnap = await docRef.get();
@@ -807,8 +820,60 @@ async function _getPropertyByIdAction(id: string): Promise<ActionResponse<LandLi
             // ✅ FIX: serializeValue converts Firestore Timestamps to ISO strings
             // so the result is safe to pass across the server→client boundary.
             const data = { id: docSnap.id, ...serializeValue(docSnap.data()) } as LandListing;
-            return { success: true, error: null, data };
-        } else { 
+
+            /**
+             *   #340 THE PUBLIC DETAIL PAGE RETURNED THE WHOLE DOCUMENT, AT ANY
+             *        STATUS.
+             *
+             *        /farm-nation/property/[id] has no auth guard — it is not
+             *        under the (member) group and farm-nation/layout.tsx only
+             *        sets metadata — and this is the action all three of its
+             *        callers import. It had no session check, no status filter
+             *        and no strip, so ANY id returned:
+             *
+             *          documents          the C of O, survey plan, tax clearance
+             *          ownerEmail,        the owner's contact details
+             *          ownerPhone
+             *          verificationNotes, the admin's review of them
+             *          rejectionReason,
+             *          verifiedBy
+             *
+             *        for listings in ANY state — pending_verification, rejected
+             *        and deleted included. A rejected application was readable,
+             *        with the reason it was rejected, by anyone who could guess
+             *        or scrape an id.
+             *
+             *        Two rules, both from lib/land-visibility.ts so the four
+             *        readers of this collection finally share one definition:
+             *        a listing still in (or thrown out of) the review queue is
+             *        not viewable at all, and what is viewable is stripped.
+             *
+             *        The OWNER and an admin who may verify listings are exempt
+             *        — the owner's own edit screen and the admin queue both go
+             *        through here, and both need the whole record.
+             */
+            const sessionResult = await requireSession();
+            const viewer = sessionResult.session?.user;
+            const privileged = Boolean(
+                viewer && (
+                    viewer.id === (data as any).ownerId
+                    || hasAdminPermission(viewer.roles, "land:verify_listings")
+                )
+            );
+
+            if (privileged) {
+                return { success: true, error: null, data };
+            }
+
+            if (!isLandListingViewable((data as any).status)) {
+                // Indistinguishable from "no such listing", on purpose: telling a
+                // stranger that an id exists but is rejected is most of what the
+                // rejection record says.
+                return { success: true, error: null, data: null };
+            }
+
+            return { success: true, error: null, data: stripInternalLandFields(data as any) };
+        } else {
             return { success: true, error: null, data: null };
         }
     } catch (error: any) {

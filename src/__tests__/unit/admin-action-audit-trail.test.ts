@@ -171,7 +171,21 @@ function unauditedAdminWrites(): string[] {
  *                       addresses, so it records a 'data_access' row — the one
  *                       entry here that is deliberately not a write.
  */
-const KNOWN_UNAUDITED: string[] = [];
+const KNOWN_UNAUDITED: string[] = [
+    // #340. This is a READ that the detector sees as a write.
+    //
+    // getPropertyByIdAction now calls hasAdminPermission — not to authorise a
+    // change, but to decide whether the caller may see the deeds and the
+    // owner's contact details on a land listing. The only write in it is
+    // `viewCount: FieldValue.increment(1)`, a page-view counter that runs for
+    // every anonymous visitor and predates the gate.
+    //
+    // Recording an admin audit entry per page view would flood the log that
+    // #157 and #309 exist to keep readable. The scanner's shape — "permission
+    // check plus a write" — is right in general and wrong here, so this is the
+    // exemption rather than a change to the detector.
+    'src/app/actions/farm-nation/_fn_listings.ts::_getPropertyByIdAction',
+];
 
 describe('the audit trail', () => {
     it('records every admin write that was added to it, and gains no new gaps', () => {

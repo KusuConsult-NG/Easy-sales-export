@@ -9,6 +9,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { checkFarmNationStatusAction } from "@/app/actions/farm-nation";
 import { searchLandListingsAction } from "@/app/actions/land-listings";
+import { isPurchasable } from "@/lib/land-listing-status";
 
 const categories = [
     { name: "Arable Land", icon: "🌾" },
@@ -197,12 +198,35 @@ export default function FarmNationLandingPage() {
                                 </div>
                                 <div className="p-6">
                                     <div className="flex items-center gap-2 mb-2">
+                                        {/*
+                                          * #340. This read `property.documents.length > 0`.
+                                          *
+                                          * `documents` is an OBJECT —
+                                          * { landTitle, surveyPlan, taxClearance } — in both
+                                          * writers, so `.length` was undefined and
+                                          * `undefined > 0` is false. Every listing ever
+                                          * created read "Unverified Land", including the ones
+                                          * an admin had verified.
+                                          *
+                                          * And it was the wrong fact even when it worked:
+                                          * uploading a survey plan is not the same as an
+                                          * admin approving it. The status IS the verification
+                                          * decision — see lib/land-listing-status.ts, which
+                                          * holds the three spellings of "approved and for
+                                          * sale" — so the badge reads that, through the
+                                          * shared isPurchasable().
+                                          *
+                                          * `documents` no longer reaches this page at all:
+                                          * those URLs are the C of O and the survey plan, and
+                                          * land-visibility.ts strips them from every public
+                                          * payload.
+                                          */}
                                         <span className={`px-2 py-0.5 text-[10px] font-bold rounded-sm uppercase tracking-wider ${
-                                            (property.documents && property.documents.length > 0)
+                                            isPurchasable(property.status)
                                                 ? "bg-emerald-100 text-emerald-800"
                                                 : "bg-red-100 text-red-800"
                                         }`}>
-                                            {(property.documents && property.documents.length > 0) ? "Verified Land" : "Unverified Land"}
+                                            {isPurchasable(property.status) ? "Verified Land" : "Unverified Land"}
                                         </span>
                                     </div>
                                     <h3 className="text-xl font-bold text-slate-900 mb-2">{property.title}</h3>

@@ -362,13 +362,25 @@ export default function PropertyDetailsPage() {
                                             <p className="font-semibold text-slate-900">{property.ownerName}</p>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-3">
-                                        <Mail className="w-5 h-5 text-slate-400" />
-                                        <div>
-                                            <p className="text-xs text-slate-500">Email</p>
-                                            <p className="font-semibold text-slate-900">{property.ownerEmail}</p>
-                                        </div>
-                                    </div>
+                                    {/*
+                                      * #340. This printed {property.ownerEmail}.
+                                      *
+                                      * This page has no auth guard, so that was a land
+                                      * owner's email address on a public URL — and
+                                      * lib/land-visibility.ts had already listed ownerEmail
+                                      * as internal, for the reason its header gives: the
+                                      * owner "has not agreed to be listed anywhere yet".
+                                      * The action feeding this page simply never applied
+                                      * the strip. It does now, so this row would have
+                                      * rendered an empty string beside a Mail icon.
+                                      *
+                                      * A buyer is not stranded: the Buy button below goes
+                                      * to the checkout, which is the flow this module is
+                                      * built around. submitLandInquiryAction exists and is
+                                      * public by design for the "ask before buying" case —
+                                      * it has no UI, which is recorded as its own finding
+                                      * rather than built here.
+                                      */}
                                 </div>
                         </div>
                     </div>

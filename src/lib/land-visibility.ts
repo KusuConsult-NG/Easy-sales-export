@@ -59,18 +59,66 @@ import { PURCHASABLE_STATUSES } from "@/lib/land-listing-status";
 export const PUBLIC_LAND_STATUSES: readonly string[] = PURCHASABLE_STATUSES;
 
 /**
+ * Statuses that mean "still in, or rejected by, the review queue".
+ *
+ * #340. A listing in one of these belongs to somebody who has not agreed to be
+ * listed anywhere yet — or who was told no. The document carries the admin's
+ * decision as well as the owner's details, and nothing outside the review
+ * process has any business reading it.
+ *
+ * Deliberately NOT the complement of PUBLIC_LAND_STATUSES: `sold`, `leased` and
+ * the four money states are not public-for-sale, but a stranger seeing that a
+ * parcel is sold is the ordinary end of a listing's life, and refusing them
+ * would break the detail page for every completed sale.
+ */
+export const REVIEW_ONLY_LAND_STATUSES: readonly string[] = [
+    "draft",
+    "pending_verification",
+    "inspection_scheduled",
+    "rejected",
+    "deleted",
+];
+
+/** Whether a stranger may see this listing at all. */
+export function isLandListingViewable(status: unknown): boolean {
+    return !REVIEW_ONLY_LAND_STATUSES.includes(String(status ?? ""));
+}
+
+/**
  * Fields that exist for the review process and are nobody else's business.
  *
  * `verifiedBy` is an admin's user id. `rejectionReason` and `verificationNotes`
  * are internal review text — and since a listing that was rejected and later
  * approved now carries its earlier decision forward, a verified listing can
  * hold both.
+ *
+ * #340 ADDED TWO MORE, AND THEY WERE THE WORST OF THEM.
+ *
+ *   documents   { landTitle, surveyPlan, taxClearance } — the certificate of
+ *               occupancy, the survey plan and the tax clearance. The DEEDS.
+ *               The admin queue over this same collection is gated on
+ *               "land:verify_listings" and says so in its own comment: "the
+ *               URLs of their C of O, survey plan and tax clearance. Those are
+ *               the legal documents proving title to a parcel of land." Every
+ *               public reader published them.
+ *
+ *   ownerPhone  written by _listPropertyAction from the user document, beside
+ *               the ownerEmail this list already removed. Stripping one and
+ *               publishing the other is not a policy, it is an omission.
+ *
+ * Neither had a public reader. The only consumer of `documents` outside the
+ * review queue was a badge on the Farm Nation home page testing
+ * `documents.length` — on an object, which is undefined — so it read
+ * "Unverified Land" on every listing ever created. It reads the verification
+ * status now, which is the fact it was always trying to state.
  */
 export const INTERNAL_LAND_FIELDS: readonly string[] = [
     "verificationNotes",
     "rejectionReason",
     "verifiedBy",
     "ownerEmail",
+    "ownerPhone",
+    "documents",
     "previousOwnerId",
 ];
 

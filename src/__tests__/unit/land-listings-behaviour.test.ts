@@ -601,13 +601,111 @@ describe('submitLandListingAction', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('getPropertyByIdAction', () => {
-    it('is public, and returns the listing whatever its status', async () => {
+    /**
+     * #340. THIS BLOCK USED TO ASSERT THE DEFECT.
+     *
+     * It read, verbatim:
+     *
+     *     it('is public, and returns the listing whatever its status', ...
+     *         actAs(null);
+     *         seedListing('l1', { status: 'rejected' });
+     *         expect(res.data).toMatchObject({ id: 'l1', ... });
+     *
+     * — a signed-out caller, a REJECTED listing, and the whole document handed
+     * back. /farm-nation/property/[id] has no auth guard, so that was the
+     * review queue on a public URL: the owner's email and phone, the admin's
+     * rejectionReason and verifiedBy, and the URLs of the C of O and survey
+     * plan. lib/land-visibility.ts had already been written to prevent exactly
+     * this and reached one of four readers.
+     *
+     * Public is still public — browsing land for sale is the module — and the
+     * strangers' half is what changed.
+     */
+    it('IS STILL PUBLIC for a listing that is actually for sale', async () => {
         actAs(null);
-        seedListing('l1', { status: 'rejected' });
+        seedListing('l1', { status: 'verified' });
 
         const res = (await (await actions()).getPropertyByIdAction('l1')) as any;
         expect(res.success).toBe(true);
         expect(res.data).toMatchObject({ id: 'l1', title: 'Five hectares in Jos' });
+    });
+
+    it('BUT NOT ONE IN THE REVIEW QUEUE — rejected reads as absent', async () => {
+        // THE test.
+        actAs(null);
+        seedListing('l1', { status: 'rejected', rejectionReason: 'Title does not match' });
+
+        const res = (await (await actions()).getPropertyByIdAction('l1')) as any;
+        expect(res.success).toBe(true);
+        expect(res.data).toBeNull();
+    });
+
+    it('and pending_verification and deleted read the same way', async () => {
+        actAs(null);
+        for (const status of ['pending_verification', 'deleted', 'draft']) {
+            seedListing('l1', { status });
+            const res = (await (await actions()).getPropertyByIdAction('l1')) as any;
+            expect(res.data).toBeNull();
+        }
+    });
+
+    it('AND THE DEEDS AND THE OWNER\'S CONTACT DETAILS DO NOT GO OUT', async () => {
+        actAs(null);
+        seedListing('l1', {
+            status: 'verified',
+            ownerId: 'owner1',
+            ownerEmail: 'owner@example.com',
+            ownerPhone: '08011111111',
+            documents: { landTitle: 'https://cdn.test/c-of-o.pdf' },
+            verificationNotes: 'looks fine',
+            verifiedBy: 'admin7',
+        });
+
+        const res = (await (await actions()).getPropertyByIdAction('l1')) as any;
+
+        expect(res.data.ownerEmail).toBeUndefined();
+        expect(res.data.ownerPhone).toBeUndefined();
+        expect(res.data.documents).toBeUndefined();
+        expect(res.data.verificationNotes).toBeUndefined();
+        expect(res.data.verifiedBy).toBeUndefined();
+        expect(JSON.stringify(res.data)).not.toContain('c-of-o.pdf');
+        // Vacuity guard: the listing itself still came back.
+        expect(res.data.title).toBe('Five hectares in Jos');
+    });
+
+    it('THE OWNER still gets their own record whole — the edit screen needs it', async () => {
+        actAs('owner1');
+        seedListing('l1', {
+            status: 'pending_verification',
+            ownerId: 'owner1',
+            ownerEmail: 'owner@example.com',
+            documents: { landTitle: 'https://cdn.test/c-of-o.pdf' },
+        });
+
+        const res = (await (await actions()).getPropertyByIdAction('l1')) as any;
+        expect(res.data.ownerEmail).toBe('owner@example.com');
+        expect(res.data.documents.landTitle).toBe('https://cdn.test/c-of-o.pdf');
+    });
+
+    it('and so does an admin who may verify listings', async () => {
+        actAs('admin7', ['farm_nation_admin']);
+        seedListing('l1', {
+            status: 'rejected',
+            ownerId: 'owner1',
+            rejectionReason: 'Title does not match',
+            documents: { landTitle: 'https://cdn.test/c-of-o.pdf' },
+        });
+
+        const res = (await (await actions()).getPropertyByIdAction('l1')) as any;
+        expect(res.data.rejectionReason).toBe('Title does not match');
+    });
+
+    it('but an admin role that CANNOT verify listings is a stranger here', async () => {
+        // academy_admin is a real admin role and holds no land permission.
+        actAs('a1', ['academy_admin']);
+        seedListing('l1', { status: 'rejected', ownerId: 'owner1' });
+
+        expect(((await (await actions()).getPropertyByIdAction('l1')) as any).data).toBeNull();
     });
 
     it('reports null rather than an error for one that does not exist', async () => {
