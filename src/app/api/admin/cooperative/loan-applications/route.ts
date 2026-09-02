@@ -6,7 +6,7 @@ import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { filterByLoanProduct } from "@/lib/loan-product";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 
 /**
  * API Route: Get All Loan Applications (Admin Only)
@@ -21,8 +21,24 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        // Check if user is admin
-        if (!isAdmin(session.user.roles)) {
+        /**
+         *   #339 THE LOAN QUEUE'S READ GATE MATCHES ITS WRITE GATE.
+         *
+         *        This was isAdmin() — true for all TEN admin roles — over rows
+         *        that spread the whole application: the borrower's full name and
+         *        email, and their GUARANTOR's name, phone, email and
+         *        relationship. The guarantor is a third party who never signed
+         *        up for anything here.
+         *
+         *        Everything anyone can DO with one of these requires
+         *        "cooperatives:approve_loans" — approve-loan, reject-loan,
+         *        verify-guarantor and admin/_loans.ts all check it, and the
+         *        server action that returns the same list to the admin screen
+         *        (_getPendingLoanApplications) refuses without it. A support
+         *        agent or an academy_admin could not act on a single row and
+         *        could read every borrower and guarantor on the platform.
+         */
+        if (!hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }
