@@ -8,6 +8,29 @@ import QRCode from 'qrcode';
  * Payload: { userId, memberNumber, timestamp, signature }
  */
 
+/**
+ *   #344 THERE IS NO DEFAULT KEY.
+ *
+ *        Both functions below read the key as
+ *        `process.env.QR_ENCRYPTION_KEY || 'default-qr-secret-change-in-production'`.
+ *        A card signed with the fallback is a card anyone can forge, because
+ *        the fallback is in the source. #169 closed exactly this on
+ *        MFA_SECRET_KEY — the MFA routes refuse to run without the variable —
+ *        and this module was not fixed with it.
+ *
+ *        Refusing is the only safe answer: security-checks.ts already fails a
+ *        production boot whose QR_ENCRYPTION_KEY is missing or weak, and a
+ *        development box without the key gets a message that names the
+ *        variable instead of a card that looks signed and is not.
+ */
+function requireQrKey(): string {
+    const key = process.env.QR_ENCRYPTION_KEY;
+    if (!key) {
+        throw new Error("QR_ENCRYPTION_KEY is not set; digital ID cards cannot be signed or verified without it");
+    }
+    return key;
+}
+
 export interface DigitalIDPayload {
     userId: string;
     memberNumber: string;
@@ -35,7 +58,7 @@ export async function generateDigitalIDQR(
     email: string,
     role: string
 ): Promise<string> {
-    const secretKey = process.env.QR_ENCRYPTION_KEY || 'default-qr-secret-change-in-production';
+    const secretKey = requireQrKey();
     const expiryDays = parseInt(process.env.QR_CODE_EXPIRY_DAYS || '365', 10);
 
     const timestamp = Date.now();
@@ -79,8 +102,10 @@ export async function generateDigitalIDQR(
  * Verify and decode QR code
  */
 export function verifyDigitalIDQR(encryptedData: string): QRVerificationResult {
+    // Outside the try, on purpose: a missing key is a deployment fault and must
+    // surface as one, not be folded into "Invalid QR code format".
+    const secretKey = requireQrKey();
     try {
-        const secretKey = process.env.QR_ENCRYPTION_KEY || 'default-qr-secret-change-in-production';
 
         // Decrypt payload
         const decryptedData = decryptData(encryptedData, secretKey);

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Camera, Upload, CheckCircle, XCircle, AlertCircle, Loader2, ScanLine, StopCircle } from "lucide-react";
-import { verifyDigitalIDQR, type QRVerificationResult } from "@/lib/digital-id";
+import type { QRVerificationResult } from "@/lib/digital-id";
 import { logger } from '@/lib/logger';
 
 export default function VerifyIDPage() {
@@ -18,17 +18,52 @@ export default function VerifyIDPage() {
     const streamRef = useRef<MediaStream | null>(null);
     const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-    const runVerify = (data: string) => {
+    /**
+     *   #344 THIS VERIFIED IN THE BROWSER, AGAINST A KEY THE BROWSER DOES NOT
+     *        HAVE.
+     *
+     *        This was `const verificationResult = verifyDigitalIDQR(data)` — a
+     *        direct call, in a "use client" component, to the function in
+     *        lib/digital-id.ts that decrypts and checks the card's signature
+     *        with `process.env.QR_ENCRYPTION_KEY`. That variable is not
+     *        NEXT_PUBLIC_, so in the client bundle it is `undefined`, and the
+     *        function fell through to its default string. Every real card is
+     *        signed with the real key, so this page answered "Invalid QR code"
+     *        to every genuine card ever presented to it, and would have
+     *        answered "valid" to a card forged with the public default.
+     *
+     *        The sibling page at /verify-id/scan already does this correctly:
+     *        it POSTs to /api/qr/verify, where the key exists, the caller is
+     *        checked, and every attempt is written to the audit log. This page
+     *        now does the same — one verifier, on the server, for both doors.
+     */
+    const runVerify = async (data: string) => {
         if (!data.trim()) return;
         setVerifying(true);
         setResult(null);
-        const verificationResult = verifyDigitalIDQR(data);
-        setResult(verificationResult);
-        setVerifying(false);
-        logger.info("Digital ID verification attempt", {
-            timestamp: new Date().toISOString(),
-            result: verificationResult.valid ? "valid" : "invalid",
-        });
+        try {
+            const response = await fetch("/api/qr/verify", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ qrData: data }),
+            });
+            const body = await response.json().catch(() => ({}));
+
+            const verificationResult: QRVerificationResult = response.ok && body?.valid
+                ? { valid: true, payload: body.data }
+                : { valid: false, error: body?.error || `Verification failed (${response.status})` };
+
+            setResult(verificationResult);
+            logger.info("Digital ID verification attempt", {
+                timestamp: new Date().toISOString(),
+                result: verificationResult.valid ? "valid" : "invalid",
+            });
+        } catch (err) {
+            logger.error("Digital ID verification request failed", err);
+            setResult({ valid: false, error: "Could not reach the verification service. Please try again." });
+        } finally {
+            setVerifying(false);
+        }
     };
 
     // ── Camera scanning ─────────────────────────────────────────────────────────
