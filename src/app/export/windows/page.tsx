@@ -207,11 +207,25 @@ export default function ExportWindowsPage() {
                                         </div>
 
                                         <div className="flex items-center justify-between pt-4 border-t border-slate-200">
+                                            {/* "0 spots remaining" was what an
+                                                uncapped window showed: spotsLeft
+                                                came back as `totalSpots || 0`
+                                                minus `spotsFilled || 0`, and
+                                                nothing writes totalSpots. It is
+                                                null now where there is no limit,
+                                                and the count is simply not
+                                                claimed. */}
                                             <div className="text-sm">
-                                                <span className="font-semibold text-slate-900">
-                                                    {window.spotsLeft} spots
-                                                </span>{" "}
-                                                <span className="text-slate-500">remaining</span>
+                                                {typeof window.spotsLeft === "number" ? (
+                                                    <>
+                                                        <span className="font-semibold text-slate-900">
+                                                            {window.spotsLeft} spots
+                                                        </span>{" "}
+                                                        <span className="text-slate-500">remaining</span>
+                                                    </>
+                                                ) : (
+                                                    <span className="text-slate-500">Open for investment</span>
+                                                )}
                                             </div>
                                             <Link
                                                 href={`/export/windows/${window.id}`}

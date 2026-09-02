@@ -2,7 +2,6 @@
 
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from '@/lib/logger';
-import { auth } from "@/lib/auth";
 import { COLLECTIONS, type ExportWindow } from "@/lib/types/firestore";
 import { Timestamp } from "@/lib/firestore-compat";
 import { unstable_cache } from "next/cache";
@@ -15,8 +14,17 @@ export type ExportOpportunity = { id: string;
     minInvestment: number;
     projectedROI: string;
     status: string;
-    spotsLeft: number;
-    totalSpots: number;
+    /**
+     * `null` where the window has no spot limit, which is every window this
+     * codebase currently creates — nothing writes `totalSpots`, and the
+     * investment action treats its absence as NO LIMIT: "Check Funding Limit
+     * (Optional - if totalSpots defined)".
+     *
+     * These were `number`, produced by `data.totalSpots || 0`, which collapsed
+     * "no limit" into "zero left of zero". See the mapping below.
+     */
+    spotsLeft: number | null;
+    totalSpots: number | null;
     image: string;
     // Deep data
     description?: string;
@@ -33,6 +41,48 @@ export type ExportOpportunity = { id: string;
         status: string;
     }[];
 };
+
+/**
+ * How many spots are left, and out of how many — or `null` twice.
+ *
+ * "AVAILABLE SPOTS 0/0", ON A WINDOW WITH NO SPOT LIMIT.
+ *
+ * Both mappings in this file read
+ *
+ *     spotsLeft: (data.totalSpots || 0) - (data.spotsFilled || 0),
+ *     totalSpots: data.totalSpots || 0,
+ *
+ * and nothing in this repository writes `totalSpots`. It is read in three
+ * places, and the investment action states the contract out loud — "Check
+ * Funding Limit (Optional - if totalSpots defined)", with
+ * `if (exportData?.totalSpots && ...)` treating an absent value as NO LIMIT and
+ * accepting the money.
+ *
+ * The two public pages did not agree. `|| 0` turns "no limit" into "zero", so
+ * /export/windows rendered "0 spots" and /export/windows/{id} rendered
+ *
+ *     {window.spotsLeft}/{window.totalSpots}                    ->  0/0
+ *     style={{ width: `${(spotsLeft / totalSpots) * 100}%` }}   ->  width: NaN%
+ *
+ * `NaN%` is not a length the browser accepts, so the declaration is dropped and
+ * the bar falls back to `width: auto` inside a `w-full` parent — it renders
+ * COMPLETELY FULL. Every open opportunity was presented as sold out, above an
+ * invest button that works.
+ *
+ * `null` is the honest answer for a window with no cap; the pages omit the
+ * meter rather than drawing a false one. A window that HAS a limit is unchanged,
+ * including a genuinely full one, which still reports 0 left of N.
+ */
+function capacityOf(data: { totalSpots?: number | null; spotsFilled?: number | null }): {
+    spotsLeft: number | null;
+    totalSpots: number | null;
+} {
+    const total = typeof data.totalSpots === "number" && Number.isFinite(data.totalSpots)
+        ? data.totalSpots
+        : null;
+    if (total === null) return { spotsLeft: null, totalSpots: null };
+    return { spotsLeft: Math.max(0, total - (data.spotsFilled || 0)), totalSpots: total };
+}
 
 /**
  * Get all export investment opportunities
@@ -58,10 +108,31 @@ const getCachedExportOpportunities = (limit: number = 12, lastId?: string) => un
                 }
             }
 
-            query = query.limit(limit);
+            /**
+             * One extra row, so "is there more" is OBSERVED rather than guessed.
+             *
+             * This fetched exactly `limit` and inferred the cursor from a full
+             * page:
+             *
+             *     const lastDocId = snapshot.docs.length === limit ? ...id : null;
+             *     meta: { cursor: lastDocId, hasMore: !!lastDocId }
+             *
+             * `docs.length === limit` is true on the FINAL page whenever the
+             * catalogue size is an exact multiple of the page size, so the feed
+             * advertised another page and the next call came back empty.
+             *
+             * This codebase has corrected the identical line twice already — the
+             * academy catalogue (#216) and the export window list, both of which
+             * now read one extra row for exactly this reason. This was the third
+             * copy.
+             */
+            query = query.limit(limit + 1);
             const snapshot = await query.get();
 
-            const opportunities = snapshot.docs.map(doc => { const data = doc.data() as ExportWindow;
+            const hasMore = snapshot.docs.length > limit;
+            const pageDocs = hasMore ? snapshot.docs.slice(0, limit) : snapshot.docs;
+
+            const opportunities = pageDocs.map(doc => { const data = doc.data() as ExportWindow;
                 return {
                     id: doc.id,
                     commodity: data.commodity,
@@ -71,8 +142,7 @@ const getCachedExportOpportunities = (limit: number = 12, lastId?: string) => un
                     minInvestment: data.amount,
                     projectedROI: data.roi,
                     status: data.status === "active" ? "Opening Soon" : "Open",
-                    spotsLeft: (data.totalSpots || 0) - (data.spotsFilled || 0),
-                    totalSpots: data.totalSpots || 0,
+                    ...capacityOf(data),
                     image: data.image || "/images/export-placeholder.jpg",
                     // Deep data
                     description: data.description,
@@ -86,9 +156,11 @@ const getCachedExportOpportunities = (limit: number = 12, lastId?: string) => un
                     })) || [] };
             });
 
-            const lastDocId = snapshot.docs.length === limit ? snapshot.docs[snapshot.docs.length - 1].id : null;
+            const lastDocId = hasMore && pageDocs.length > 0
+                ? pageDocs[pageDocs.length - 1].id
+                : null;
 
-            return { success: true as const, data: opportunities, error: null, meta: { cursor: lastDocId, hasMore: !!lastDocId } };
+            return { success: true as const, data: opportunities, error: null, meta: { cursor: lastDocId, hasMore } };
         } catch (error: any) { logger.error("Error fetching export opportunities:", error);
             return { success: false as const, data: null, error: error.message, meta: null };
         }
@@ -161,8 +233,7 @@ const getCachedExportOpportunityById = (id: string) => unstable_cache(
                 minInvestment: data.amount,
                 projectedROI: data.roi,
                 status: data.status === "active" ? "Opening Soon" : "Open",
-                spotsLeft: (data.totalSpots || 0) - (data.spotsFilled || 0),
-                totalSpots: data.totalSpots || 0,
+                ...capacityOf(data),
                 image: data.image || "/images/export-placeholder.jpg",
                 // Deep data
                 description: data.description,

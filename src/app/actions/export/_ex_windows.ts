@@ -8,13 +8,56 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { refuseExportStatusChange, hasExportAdminAccess, EXPORT_WINDOW_ALL_STATUSES } from "@/lib/export-window-status";
 import { claimIdempotencyKey } from "@/lib/wallet-ledger";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
 import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import type { ExportWindow } from "@/lib/types/firestore";
 import { exportWindowSchema } from "@/lib/types/export-actions";
 import type { CreateExportActionState, UpdateStatusActionState } from "@/lib/types/export-actions";
+
+/**
+ * Flush the public opportunity feed.
+ *
+ * TWO CACHE TAGS THAT NOTHING COULD EVER TRIGGER.
+ *
+ * actions/export-investments.ts — the reader behind /export/windows and
+ * /export/windows/{id} — declares them:
+ *
+ *     { revalidate: 60,   tags: ["export-opportunities"] }
+ *     { revalidate: 3600, tags: [`export-opportunity-${id}`] }
+ *
+ * and `revalidateTag` appears nowhere in this codebase for either. A tag with
+ * no writer is a `revalidate` interval wearing a tag's clothes, so the
+ * single-opportunity entry lived its full HOUR: a window an admin closed, or
+ * whose ROI or description they corrected, kept serving the old copy to the
+ * public page with no way to flush it.
+ *
+ * The invest action re-reads the window and refuses a status that is not open,
+ * so this cost a visitor a filled-in form and a refusal rather than a bad
+ * investment — but the page was telling them something the server would not
+ * honour.
+ *
+ * Called from the three actions that change a window. Best-effort: the write
+ * has already committed by this point, and failing the action over a cache key
+ * would report a failure that did not happen.
+ *
+ * `"max"` is the second argument this version of Next.js requires — the
+ * one-argument form is deprecated (node_modules/next/dist/docs, revalidateTag).
+ * It marks the tag stale and serves stale-while-revalidate, so the next visitor
+ * to /export/windows refreshes it rather than every tagged page revalidating at
+ * once. `updateTag` would expire it immediately; that is for read-your-own-
+ * writes, and the admin closing a window is not the person browsing the public
+ * feed.
+ */
+function revalidateExportOpportunities(windowId?: string): void {
+    try {
+        revalidateTag("export-opportunities", "max");
+        if (windowId) revalidateTag(`export-opportunity-${windowId}`, "max");
+    } catch (err) {
+        logger.error("[export] failed to revalidate the opportunity cache", err);
+    }
+}
 
 // ============================================
 // Create Export Window Action
@@ -135,6 +178,7 @@ export async function createExportWindowAction(
         // appear in the URL). revalidatePath on a path with no route behind it
         // is a silent no-op, so this invalidated nothing.
         revalidatePath("/export/dashboard");
+        revalidateExportOpportunities();
 
         return { error: null, success: true as const, message: `Export window created successfully! Order ID: ${finalOrderId }`,
             meta: null
@@ -339,6 +383,8 @@ export async function updateExportStatusAction(
             }
         }
 
+        revalidateExportOpportunities(exportId);
+
         return { error: null, success: true as const, message: `Status updated to ${newStatus }`,
             meta: null
         , data: null };
@@ -426,6 +472,8 @@ export async function updateExportWindowAction(
 
         await exportRef.update({ ...cleanData,
             updatedAt: FieldValue.serverTimestamp() });
+
+        revalidateExportOpportunities(exportId);
 
         return { error: null, success: true as const, meta: null , data: { message: "Export window updated" } };
     } catch (error: any) { logger.error("Update export window error:", error);
