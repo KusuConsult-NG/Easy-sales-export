@@ -19,6 +19,7 @@ import { getLogisticsProvider } from "@/lib/logistics";
 import { runQueryWithRetry } from "@/lib/firestore-utils";
 import { ESCROW_RELEASABLE_FROM, pickOrderEscrow, escrowIdFor } from "@/lib/escrow-status";
 import { hasReservedStock } from "@/lib/order-status";
+import { scopeOrderToSeller } from "@/lib/order-scope";
 
 /**
  * Get all orders for a seller
@@ -48,7 +49,24 @@ async function _getSellerOrdersAction(filters?: { status?: OrderStatus; }) { let
         }
 
         const snapshot = await query.get();
-        const orders = serializeDocs<Order>(snapshot.docs);
+        /**
+         *   #342 THE SECOND READER OF THE SAME SHARED DOCUMENT.
+         *
+         *        A marketplace order is ONE row holding every seller's line
+         *        items and the whole basket's money; the escrow that pays each
+         *        seller is a row per seller. This returned the whole document to
+         *        any seller in `sellerIds` — another merchant's products, prices
+         *        and quantities, and a total that is not this seller's.
+         *
+         *        Fixed at both readers of this name at once, through the shared
+         *        rule in lib/order-scope.ts, because a fix that reaches one of a
+         *        pair is the shape this audit keeps finding.
+         *
+         *        The BUYER's copy of the same action, below, is untouched: the
+         *        whole basket is exactly what a buyer bought.
+         */
+        const orders = serializeDocs<Order>(snapshot.docs)
+            .map((o) => scopeOrderToSeller(o as any, userId) as Order);
 
         return { error: null, success: true as const, data: { orders } };
     } catch (error) { logger.error("Get seller orders error:", { 

@@ -11,7 +11,8 @@ import type { Product, Order } from "@/lib/types/marketplace";
 import { ProductSchema, OrderSchema, SellerAnalyticsSchema } from "@/lib/validations/marketplace";
 import { withSafeAction, ActionResponse } from "@/lib/safe-action";
 import { toMillis } from "@/lib/firestore-serialize";
-import { countsAsSellerRevenue, orderAmount } from "@/lib/order-status";
+import { countsAsSellerRevenue } from "@/lib/order-status";
+import { scopeOrderToSeller, sellerOrderAmount } from "@/lib/order-scope";
 import { isRetired } from "@/lib/record-retirement";
 
 /**
@@ -244,7 +245,29 @@ async function _getSellerOrdersAction(options: { limit?: number;
 
         const { serializeValue } = await import("@/lib/firestore-serialize");
         let orders = snapshot.docs.map((doc: any) => { 
-            const data = doc.data();
+            /**
+             *   #342 ONE ORDER DOCUMENT, SEVERAL SELLERS.
+             *
+             *        The query is correctly scoped — array-contains returns only
+             *        orders this seller is part of — and the document it returns
+             *        holds EVERY seller's line items and the WHOLE basket's
+             *        subtotal, delivery fee and total.
+             *
+             *        So the seller orders screen listed another merchant's
+             *        product titles as this seller's
+             *        (`order.items.map(i => i.productTitle).join(", ")`),
+             *        counted them (`{order.items.length} Items`), showed the
+             *        whole basket's money, and told the seller to pack and ship
+             *        it.
+             *
+             *        Scoped on the way out. See lib/order-scope.ts, which
+             *        reproduces the split _payment_orders.ts already uses to
+             *        size each seller's escrow row, so this figure and the
+             *        payout agree. Single-seller orders — and rows written
+             *        before every item carried a sellerId — are returned
+             *        untouched.
+             */
+            const data = scopeOrderToSeller(doc.data(), userId);
             try {
                 const parsed = OrderSchema.parse({ id: doc.id, ...data });
                 return serializeValue(parsed);
@@ -356,7 +379,20 @@ async function _getSellerAnalyticsAction(): Promise<ActionResponse<{ analytics: 
         ordersSnapshot.docs.forEach(doc => {
             const data = doc.data();
             const status = data.status || "";
-            const totalAmount = orderAmount(data);
+            /**
+             *   #342 WHOSE MONEY IS IT.
+             *
+             *        This summed `orderAmount(data)` — data.totalAmount, the
+             *        WHOLE basket including the full delivery fee — over every
+             *        order the seller appears in. On a shared basket a seller's
+             *        Total Sales and Monthly Revenue counted another merchant's
+             *        goods as their own, and disagreed with the payout computed
+             *        from their escrow row.
+             *
+             *        The comment below is careful about WHICH STATUSES count as
+             *        revenue. It never asked whose money it was.
+             */
+            const totalAmount = sellerOrderAmount(data, userId);
             const orderDate = getOrderDate(data.createdAt);
 
             // Revenue counts only orders that were actually PAID for.

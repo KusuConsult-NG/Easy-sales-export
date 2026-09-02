@@ -164,20 +164,35 @@ const KNOWN_DUPLICATES: Record<string, number> = {
                                            // to audit-log-actions.ts, which
                                            // gates again. Double-gated.
     getBuyerOrdersAction: 2,               // both filter buyerId == session id
-    getSellerOrdersAction: 2,              // both filter sellerIds
-                                           // array-contains session id; the
-                                           // UNWIRED one additionally requires
-                                           // the seller role — stricter, not
-                                           // weaker
+    getSellerOrdersAction: 2,              // #342 CORRECTED. This said "both
+                                           // filter sellerIds array-contains
+                                           // session id; the UNWIRED one
+                                           // additionally requires the seller
+                                           // role — stricter, not weaker".
+                                           // Every word true, and it answered
+                                           // "may this seller see this ORDER"
+                                           // when the defect was "what OF the
+                                           // order may they see". One order row
+                                           // holds every seller's items and the
+                                           // whole basket's money; both copies
+                                           // returned it whole. Both now scope
+                                           // through lib/order-scope.ts.
     getDashboardStatsAction: 2,            // admin analytics vs the member
                                            // dashboard: different figures for
                                            // different audiences, each gated
                                            // for its own
-    getPropertyByIdAction: 2,              // farm-nation Property vs
-                                           // land-listings LandListing, two
-                                           // shapes; the three farm-nation
-                                           // screens all use land-listings. A
-                                           // listing is public either way.
+    getPropertyByIdAction: 2,              // #340 CORRECTED. This ended "A
+                                           // listing is public either way" —
+                                           // which treated PUBLIC as the end of
+                                           // the question and never asked WHAT
+                                           // was public. Both copies returned
+                                           // the whole document at ANY status:
+                                           // the C of O and survey plan, the
+                                           // owner's email and phone, the
+                                           // admin's rejectionReason, on
+                                           // listings that were pending or
+                                           // rejected. Both now apply
+                                           // lib/land-visibility.ts.
     getRecentActivityAction: 2,            // cooperative admin report vs member
                                            // dashboard feed
 };

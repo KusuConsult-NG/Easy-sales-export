@@ -266,10 +266,21 @@ describe('both dashboards use it', () => {
         expect(src).not.toContain('status !== "cancelled" && status !== "disputed"');
     });
 
-    it('and coerces each amount', () => {
+    it('and coerces each amount — and takes only THIS seller\'s share of it', () => {
         const src = code(SELLER_DASH);
 
-        expect(src).toContain('orderAmount(data)');
+        // This asserted `orderAmount(data)`, whose point was the coercion:
+        // Number.isFinite rather than `|| 0`. That point stands and
+        // sellerOrderAmount keeps it — its single-seller branch IS
+        // orderAmount's arithmetic.
+        //
+        // What changed is #342. orderAmount(data) is data.totalAmount, the
+        // WHOLE basket, and one order row holds every seller's items. Summed
+        // over `sellerIds array-contains me`, a seller's Total Sales counted
+        // another merchant's goods and the full delivery fee. See
+        // lib/order-scope.ts, which reproduces the per-seller split
+        // _payment_orders.ts already uses to size each escrow row.
+        expect(src).toContain('sellerOrderAmount(data, userId)');
         expect(src).not.toContain('data.totalAmount || 0');
     });
 
