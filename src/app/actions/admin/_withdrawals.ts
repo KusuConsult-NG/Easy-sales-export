@@ -181,12 +181,32 @@ async function _processWithdrawalAction(
                 const userDoc = await db.collection(COLLECTIONS.USERS).doc(withdrawalData.userId).get();
                 const userData = userDoc.data();
 
-                if (userData?.bankAccountNumber && userData?.bankCode) {
+            /**
+             * The destination account, through the canonical resolver.
+             *
+             * This read the TOP-LEVEL `userData.bankAccountNumber` and `userData.bankAccountNumber.bankCode` only.
+             * Both shapes exist on a USERS document and which one a member has
+             * depends on how they were onboarded: admin/_legacy.ts writes the
+             * top-level `bankAccountNumber`, while admin/_applications.ts — the
+             * admin correction screen — writes `bankDetails.accountNumber`, and
+             * the module forms write a nested `bankDetails` block too.
+             *
+             * wave/_wv_admin_withdrawals.ts found and fixed exactly this, and
+             * its comment states the shape: "The list could see the account and
+             * the payout could not." That fix reached ONE of the four payout
+             * paths. This is another.
+             */
+                const canonical = extractCanonicalUser(userData ?? {});
+                const accountNumber = canonical.bankDetails.accountNumber || userData?.bankAccountNumber || "";
+                const bankCode = canonical.bankDetails.bankCode || "";
+                const accountName = canonical.bankDetails.accountName || userData?.bankAccountName || canonical.name;
+
+                if (accountNumber && bankCode) {
                     const payoutResult = await paystackPayout(
                         {
-                            accountNumber: userData.bankAccountNumber,
-                            bankCode: userData.bankCode,
-                            accountName: userData.bankAccountName || userData.name,
+                            accountNumber,
+                            bankCode,
+                            accountName,
                         },
                         withdrawalData.amount,
                         `Withdrawal payout - ${withdrawalId}`,
@@ -209,7 +229,14 @@ async function _processWithdrawalAction(
                             + "The money may have moved — reconcile the reference with Paystack before retrying.";
                     }
                 } else {
-                    payoutError = "User bank details not configured";
+                    // Named precisely, as the WAVE path does: "not configured"
+                    // was reported for an account number that was present and a
+                    // bank code stored under another key.
+                    const missing = [
+                        !accountNumber ? "account number" : null,
+                        !bankCode ? "bank code" : null,
+                    ].filter(Boolean).join(" and ");
+                    payoutError = `User bank details incomplete: no ${missing} on record`;
                 }
             } catch (payoutErr: any) {
                 payoutError = payoutErr.message;

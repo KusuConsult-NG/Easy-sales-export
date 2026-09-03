@@ -6,6 +6,7 @@ import { sellerNetFor } from "@/lib/platform-fee";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { extractCanonicalUser } from "@/lib/canonical/normalizer";
 import type { Order, OrderStatus } from "@/lib/types/marketplace";
 import { hasRole } from "@/lib/role-utils";
 import { FieldValue } from "@/lib/firestore-compat";
@@ -422,7 +423,28 @@ async function _confirmDeliveryAction(orderId: string) { let sessionResult;
             // `escrowAlreadyReleased` gates both money movements below. Leaving
             // sellerAmount at 0 is what stops the Paystack transfer, since the
             // caller guards on `sellerAmount > 0`.
-            if (!escrowAlreadyReleased && sellerData?.bankAccountNumber && sellerData?.bankCode) {
+            /**
+             * The destination account, through the canonical resolver.
+             *
+             * This read the TOP-LEVEL `sellerData.bankAccountNumber` and
+             * `sellerData.bankCode` only, and it gates `sellerAmount` — which
+             * the caller below guards the transfer on. So a seller whose bank
+             * details live under `bankDetails.*`, the shape the admin
+             * correction screen and the module forms write, was silently paid
+             * NOTHING for a completed order.
+             *
+             * wave/_wv_admin_withdrawals.ts found and fixed exactly this and
+             * states the shape: "The list could see the account and the payout
+             * could not." That fix reached one of the four payout paths.
+             */
+            const sellerCanonical = extractCanonicalUser(sellerData ?? {});
+            const sellerAccountNumber =
+                sellerCanonical.bankDetails.accountNumber || sellerData?.bankAccountNumber || "";
+            const sellerBankCode = sellerCanonical.bankDetails.bankCode || "";
+            const sellerAccountName =
+                sellerCanonical.bankDetails.accountName || sellerData?.bankAccountName || sellerCanonical.name;
+
+            if (!escrowAlreadyReleased && sellerAccountNumber && sellerBankCode) {
                 /**
                  *   #254 THE PAYOUT WITHHELD 2.5%. THE ESCROW RECORDED 5%.
                  *
@@ -549,19 +571,35 @@ async function _confirmDeliveryAction(orderId: string) { let sessionResult;
                 });
             }
 
-            return { sellerAmount, sellerData, currentOrder };
+            return {
+                sellerAmount,
+                sellerData,
+                sellerPayout: {
+                    accountNumber: sellerAccountNumber,
+                    bankCode: sellerBankCode,
+                    accountName: sellerAccountName,
+                },
+                currentOrder,
+            };
         })();
 
         if (result.sellerAmount > 0) { try {
-                const bankDetails = result.sellerData;
-                if (!bankDetails?.bankAccountNumber || !bankDetails?.bankCode) {
-                    throw new Error("Seller bank details are missing.");
+                // Resolved once, above, where the seller document was read —
+                // rather than resolved a second time here from a narrower set
+                // of keys than the condition that let us get this far.
+                const { accountNumber, bankCode, accountName } = result.sellerPayout;
+                if (!accountNumber || !bankCode) {
+                    const missing = [
+                        !accountNumber ? "account number" : null,
+                        !bankCode ? "bank code" : null,
+                    ].filter(Boolean).join(" and ");
+                    throw new Error(`Seller bank details incomplete: no ${missing} on record.`);
                 }
                 const res = await paystackPayout(
                     {
-                        accountNumber: bankDetails.bankAccountNumber,
-                        bankCode: bankDetails.bankCode,
-                        accountName: bankDetails.bankAccountName || (bankDetails as any).name || bankDetails.fullName || "" 
+                        accountNumber,
+                        bankCode,
+                        accountName,
                     },
                     result.sellerAmount,
                     `Escrow release for order ${orderId}`,

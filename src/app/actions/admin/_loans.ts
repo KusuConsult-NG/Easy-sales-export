@@ -18,6 +18,7 @@ import { serializeDocs } from "@/lib/firestore-serialize";
 import { createNotificationAction } from "@/app/actions/notifications";
 import { LoanApplicationReviewSchema } from "@/lib/schemas";
 import { hasAdminPermission } from "@/lib/admin-permissions";
+import { extractCanonicalUser } from "@/lib/canonical/normalizer";
 import { canSendEmail } from "@/lib/email-notifications";
 
 // ============================================
@@ -338,12 +339,32 @@ async function _approveLoanApplication(
             const borrowerDoc = await db.collection(COLLECTIONS.USERS).doc(loanData.userId).get();
             const borrowerData = borrowerDoc.data();
 
-            if (borrowerData?.bankAccountNumber && borrowerData?.bankCode) {
+            /**
+             * The destination account, through the canonical resolver.
+             *
+             * This read the TOP-LEVEL `borrowerData.bankAccountNumber` and `borrowerData.bankAccountNumber.bankCode` only.
+             * Both shapes exist on a USERS document and which one a member has
+             * depends on how they were onboarded: admin/_legacy.ts writes the
+             * top-level `bankAccountNumber`, while admin/_applications.ts — the
+             * admin correction screen — writes `bankDetails.accountNumber`, and
+             * the module forms write a nested `bankDetails` block too.
+             *
+             * wave/_wv_admin_withdrawals.ts found and fixed exactly this, and
+             * its comment states the shape: "The list could see the account and
+             * the payout could not." That fix reached ONE of the four payout
+             * paths. This is another.
+             */
+            const canonical = extractCanonicalUser(borrowerData ?? {});
+            const accountNumber = canonical.bankDetails.accountNumber || borrowerData?.bankAccountNumber || "";
+            const bankCode = canonical.bankDetails.bankCode || "";
+            const accountName = canonical.bankDetails.accountName || borrowerData?.bankAccountName || canonical.name;
+
+            if (accountNumber && bankCode) {
                 const disbResult = await paystackPayout(
                     {
-                        accountNumber: borrowerData.bankAccountNumber,
-                        bankCode: borrowerData.bankCode,
-                        accountName: borrowerData.bankAccountName || borrowerData.name,
+                        accountNumber,
+                        bankCode,
+                        accountName,
                     },
                     loanData.amount,
                     `Cooperative loan disbursement - ${applicationId}`,
@@ -379,7 +400,14 @@ async function _approveLoanApplication(
                     });
                 }
             } else {
-                disbursementError = "Borrower bank details not configured";
+                // Named precisely, as the WAVE path does: "bank details not
+                // configured" was reported for an account number that was
+                // present and a bank code stored under another key.
+                const missing = [
+                    !accountNumber ? "account number" : null,
+                    !bankCode ? "bank code" : null,
+                ].filter(Boolean).join(" and ");
+                disbursementError = `Borrower bank details incomplete: no ${missing} on record`;
                 await loanRef.update({ pendingManualDisbursement: true, disbursementNote: disbursementError });
             }
         } catch (disbErr: any) {
