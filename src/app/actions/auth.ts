@@ -351,22 +351,60 @@ export async function preValidateLoginAction(credentials: any): Promise<{ succes
                         return { success: false, error: "A temporary connection issue occurred. Please try again." };
                     }
 
-                    // Check if email exists in database to give a precise "Email address not registered" error
-                    const emailCheck = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS)
-                        .where("email", "==", email.toLowerCase())
-                        .limit(1)
-                        .get());
-                         
-                    if (emailCheck.empty) {
-                        return {
-                            success: false,
-                            error: "Email address not registered."
-                        };
-                    }
-                    
-                    return { 
-                        success: false, 
-                        error: "Incorrect password." 
+                    /**
+                     * THE PRE-CHECK ANSWERED THE QUESTION THE AUTHENTICATOR
+                     * REFUSES TO ANSWER.
+                     *
+                     * This ran a query whose ONLY purpose was to split one
+                     * failure into two answers:
+                     *
+                     *     emailCheck.empty  → "Email address not registered."
+                     *     otherwise         → "Incorrect password."
+                     *
+                     * That is an account-enumeration oracle on an endpoint
+                     * that needs no session. Anyone can post an address and
+                     * learn whether it holds an account here — savings, loans,
+                     * export investments — and the login rate limit does not
+                     * bound it, because the bucket is keyed on the email being
+                     * probed, so a list of addresses gets a fresh bucket per
+                     * probe.
+                     *
+                     * The platform had already decided this policy TWICE, and
+                     * this was the one place that contradicted it:
+                     *
+                     *   lib/auth.ts        maps auth/user-not-found AND
+                     *                      auth/wrong-password to the single
+                     *                      string "Invalid email or password."
+                     *   password-reset.ts  returns success for an unknown
+                     *                      address, and matches that shape for
+                     *                      a rate-limited one too, with the
+                     *                      comment "so the limit does not
+                     *                      become an oracle for which
+                     *                      addresses are registered"
+                     *
+                     * And this ran FIRST. The client calls this pre-check
+                     * before signIn(), so a failure here is what the user sees
+                     * — authorize()'s careful single message was never reached.
+                     * One flow, three implementations of the rule, and the one
+                     * that runs first was the one that broke it.
+                     *
+                     * The message is now authorize()'s, character for
+                     * character, so the two halves of a login cannot disagree.
+                     * The query is gone with it: it existed only to tell these
+                     * two cases apart, so keeping it would be paying for an
+                     * answer no longer given — on every failed login, which is
+                     * exactly when an attacker is driving the traffic.
+                     *
+                     * Timing is not addressed and is worth naming: the two
+                     * paths still differ in the work done before this point,
+                     * so a determined attacker with clean measurements may
+                     * still distinguish them. That is a much weaker signal
+                     * than a plain-text answer, and closing it means equalising
+                     * the auth path itself rather than the reply.
+                     */
+                    return {
+                        success: false,
+                        error: "Invalid email or password."
                     };
                 }
             } else {

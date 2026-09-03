@@ -145,6 +145,19 @@ async function actions() {
     return import('@/app/actions/auth');
 }
 
+/**
+ * Source with comments removed, for assertions of ABSENCE.
+ *
+ * This audit names what it deletes, so the explanation of a removed string
+ * necessarily contains that string. Scanning raw source would make every such
+ * assertion unfailable in one direction and unpassable in the other.
+ */
+function stripComments(source: string): string {
+    return source
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '');
+}
+
 const GOOD = 'Str0ng!NewPassw0rd';
 const CURRENT = '0ldPassw0rd!x';
 
@@ -367,5 +380,123 @@ describe('logoutAction clears cookies the browser will accept', () => {
         const calls = await runLogout('localhost:3000');
 
         expect(calls.filter(c => c.opts.domain !== undefined)).toEqual([]);
+    });
+});
+
+// ─── the enumeration oracle ──────────────────────────────────────────────────
+
+/**
+ * preValidateLoginAction ran a query whose only purpose was to split one
+ * failure into two answers — "Email address not registered." for an unknown
+ * address, "Incorrect password." for a known one. That is an
+ * account-enumeration oracle on an endpoint needing no session, and the login
+ * rate limit does not bound it: the bucket is keyed on the email being probed,
+ * so a list of addresses gets a fresh bucket per probe.
+ *
+ * The platform had already decided the policy twice — lib/auth.ts maps both
+ * auth/user-not-found and auth/wrong-password to one string, and
+ * password-reset.ts returns success for an unknown address and deliberately
+ * matches that shape when rate-limited too. This pre-check was the third
+ * implementation and the only one that broke the rule, and because the client
+ * calls it BEFORE signIn(), it was the one whose answer the user actually saw.
+ */
+describe('a wrong address and a wrong password are indistinguishable', () => {
+    const WRONG = 'Wr0ngPassw0rd!';
+
+    async function attempt(email: string) {
+        signInWithPassword.mockImplementation(async () => ({
+            data: { user: null }, error: { message: 'Invalid login credentials' },
+        }));
+        return (await actions()).preValidateLoginAction({ email, password: WRONG }) as any;
+    }
+
+    it('THE UNKNOWN ADDRESS AND THE KNOWN ONE GET THE SAME ANSWER', async () => {
+        // The whole finding in one assertion: seeding a profile for one of the
+        // two addresses must change nothing about the reply.
+        store.seed(COLLECTIONS.USERS, 'real-user', { email: 'registered@example.com' });
+
+        const known = await attempt('registered@example.com');
+        const unknown = await attempt('nobody@example.com');
+
+        expect(known.success).toBe(false);
+        expect(unknown.success).toBe(false);
+        expect(known.error).toBe(unknown.error);
+        expect(known.error).toBe('Invalid email or password.');
+    });
+
+    it('and the reply never names the address as unregistered', async () => {
+        const res = await attempt('nobody@example.com');
+
+        expect(String(res.error)).not.toMatch(/not registered/i);
+        expect(String(res.error)).not.toMatch(/incorrect password/i);
+    });
+
+    it('AND THE QUERY THAT ONLY EXISTED TO TELL THEM APART IS GONE', () => {
+        // Not just the message: the lookup ran on every failed login, which is
+        // exactly when an attacker is driving the traffic. Asserted at the
+        // source because the behavioural test above still passes with a dead
+        // query left in place.
+        //
+        // Comments are stripped first. This file explains at length what was
+        // removed and therefore quotes the old string — an assertion of
+        // absence over raw source would be defeated by the comment describing
+        // the fix, which is a way of writing a test that can only pass by
+        // saying nothing.
+        const source = stripComments(
+            readFileSync(join(process.cwd(), 'src/app/actions/auth.ts'), 'utf-8'),
+        );
+
+        expect(source).not.toContain('Email address not registered');
+        expect(source).not.toContain('Incorrect password.');
+        expect(source).not.toContain('emailCheck');
+    });
+
+    it('a transient failure is still told apart from a credential failure', async () => {
+        /**
+         * The one distinction that is legitimate: it says nothing about
+         * whether the account exists, and telling a user their connection
+         * dropped is not an oracle. Pinned so that closing the enumeration
+         * hole is not later "simplified" into one message for every outcome —
+         * which would leave every outage looking like a wrong password.
+         *
+         * Asserted by driving the branch rather than by grepping for the
+         * string. A source scan passed with the message deleted here, because
+         * the outer catch carries a second copy of it — a test that a mutation
+         * walked straight past.
+         */
+        delete process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+        signInWithPassword.mockImplementation(async () => ({
+            data: { user: null }, error: { message: 'TypeError: fetch failed' },
+        }));
+
+        const res: any = await (await actions()).preValidateLoginAction({
+            email: 'registered@example.com', password: WRONG,
+        });
+
+        expect(res.success).toBe(false);
+        expect(res.error).toBe('A temporary connection issue occurred. Please try again.');
+    });
+});
+
+describe('the three implementations of the rule now agree', () => {
+    it('authorize() maps a missing user and a wrong password to one string', () => {
+        const auth = readFileSync(join(process.cwd(), 'src/lib/auth.ts'), 'utf-8');
+
+        expect(auth).toContain('"auth/user-not-found": "Invalid email or password."');
+        expect(auth).toContain('"auth/wrong-password": "Invalid email or password."');
+    });
+
+    it('the pre-check that runs before it uses that same string', () => {
+        // Character for character, so the two halves of one login cannot
+        // disagree about what a failure means.
+        const actionsSrc = readFileSync(join(process.cwd(), 'src/app/actions/auth.ts'), 'utf-8');
+
+        expect(actionsSrc).toContain('error: "Invalid email or password."');
+    });
+
+    it('and the reset path still refuses to confirm an address at all', () => {
+        const reset = readFileSync(join(process.cwd(), 'src/app/actions/password-reset.ts'), 'utf-8');
+
+        expect(reset).toContain("don't reveal if email exists");
     });
 });

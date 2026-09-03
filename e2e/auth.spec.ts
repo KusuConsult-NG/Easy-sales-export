@@ -39,9 +39,12 @@ test.describe('Authentication Flow', () => {
         await page.click('button[type="submit"]');
 
         // Should see error message
+        // "Email address not registered." was a third accepted alternative
+        // here. It was the enumeration oracle in preValidateLoginAction, and
+        // accepting it meant this test passed either way — so it is gone, and
+        // the wrong address and the wrong password now have to look the same.
         const errorMessage = page.locator('text=Invalid credentials')
-            .or(page.locator('text=Invalid email or password'))
-            .or(page.locator('text=Email address not registered.'));
+            .or(page.locator('text=Invalid email or password'));
         await expect(errorMessage).toBeVisible({ timeout: 5000 });
 
         // Should still be on login page
