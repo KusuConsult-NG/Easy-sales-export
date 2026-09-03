@@ -66,6 +66,14 @@ async function _verifyBVNAction(payload: { bvn: string;
             return { success: false as const, error: 'A BVN must be 11 digits', data: null };
         }
 
+        // #357 this module imported isObviouslyFakeId and fakeIdErrorMessage
+        // and called NEITHER. The wire is run now. It is a no-op while
+        // KYC_REJECT_FAKE_IDS is unset, which is today's behaviour and the
+        // owner's testing requirement — see lib/kyc-validators.ts.
+        if (isObviouslyFakeId(String(bvn).trim())) {
+            return { success: false as const, error: fakeIdErrorMessage('BVN'), data: null };
+        }
+
         // Persist result to Firestore forcefully as fully verified
         await runQueryWithRetry(() => atomicUpdateUser(userId, { 
             'kyc.bvn': bvn ? hashData(bvn) : hashData('00000000000'),
@@ -124,6 +132,11 @@ async function _verifyNINAction(payload: { nin: string;
         // was then counted as "not provided" by updateOverallKYCStatus.
         if (!/^\d{11}$/.test(String(nin ?? "").trim())) {
             return { success: false as const, error: 'A NIN must be 11 digits', data: null };
+        }
+
+        // #357 — the other half of the same unrun wire. See the BVN path above.
+        if (isObviouslyFakeId(String(nin).trim())) {
+            return { success: false as const, error: fakeIdErrorMessage('NIN'), data: null };
         }
 
         // Persist result to Firestore forcefully as fully verified

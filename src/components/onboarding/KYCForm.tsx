@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import { User, MapPin, Phone, Calendar, CheckCircle2, AlertCircle, Loader2, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { verifyBVNAction, verifyNINAction, verifyVotersCardAction } from '@/app/actions/kyc';
-import { isObviouslyFakeId } from '@/lib/kyc-validators';
+import { isObviouslyFakeId, fakeIdErrorMessage } from '@/lib/kyc-validators';
 import { IdInput } from '@/components/ui/IdInput';
 import PhoneInput from '@/components/ui/PhoneInput';
 import { FormField, FormInput, FormSelect, FormTextarea } from '@/components/ui/FormField';
@@ -180,6 +180,14 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
             setBvnError('Please confirm that your BVN digits are correct before verifying.');
             return;
         }
+        // #357 this component imported isObviouslyFakeId and never called it.
+        // Called now — and, like the server, it answers false unless the
+        // rejection is switched on, so nothing changes today. The server makes
+        // the same check regardless; this only saves a round trip.
+        if (isObviouslyFakeId(bvn)) {
+            setBvnError(fakeIdErrorMessage('BVN'));
+            return;
+        }
 
         setBvnState('loading');
         setBvnError('');
@@ -217,6 +225,11 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
         }
         if (!ninConfirmed) {
             setNinError('Please confirm that your NIN digits are correct before verifying.');
+            return;
+        }
+        // #357 — the other half. See handleVerifyBVN above.
+        if (isObviouslyFakeId(nin)) {
+            setNinError(fakeIdErrorMessage('NIN'));
             return;
         }
 
