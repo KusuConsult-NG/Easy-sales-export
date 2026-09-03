@@ -60,8 +60,33 @@ export async function requireHubRegistration() {
         return sessionResult;
     }
     
+    /**
+     * Where to send the caller, decided inside the try and performed outside it.
+     *
+     *   #366 TWO OF THE THREE redirect() CALLS WERE INSIDE THE TRY BLOCK, AND
+     *        THE CLOSING COMMENT OF THIS FUNCTION SAYS THEY MUST NOT BE.
+     *
+     *        Next's redirect() works by throwing NEXT_REDIRECT. Both
+     *        /auth/reset-legacy-password redirects therefore landed in
+     *
+     *            } catch(err) {
+     *                console.error("Hub Guard Exception:", err);
+     *                throw err;
+     *            }
+     *
+     *        The rethrow kept the BEHAVIOUR right — the redirect still
+     *        happened, which is why nothing ever surfaced — and made the LOG
+     *        wrong: every legacy member sent to change a temporary password
+     *        produced a "Hub Guard Exception" naming a control-flow signal as a
+     *        fault. A log that cries wolf on the normal path is how the real
+     *        exception goes unread.
+     *
+     *        This was found by EXECUTING the guard for the first time; five
+     *        suites had asserted things about this file by reading it.
+     */
+    let redirectTo: string | null = null;
     let shouldRedirect = false;
-    
+
     // 2. Extrapolate db record for registration verification
     try {
         const { getCached, CacheKeys } = await import("@/lib/redis");
@@ -87,20 +112,21 @@ export async function requireHubRegistration() {
             // Strictly enforce userData.profileComplete === true. Deny dashboard or module access
             // to any account that does not meet this check.
             if (userData?.profileComplete === true) {
-                // User has explicitly completed their profile. 
+                // User has explicitly completed their profile.
                 // CRITICAL: Check if they still need to secure their account (legacy members)
                 if (userData.requiresPasswordChange) {
-                    redirect("/auth/reset-legacy-password");
+                    redirectTo = "/auth/reset-legacy-password";
+                } else {
+                    return sessionResult;
                 }
-                return sessionResult;
             } else {
                 // Check for legacy members who haven't completed profile yet but have the flag
                 if (userData?.requiresPasswordChange) {
-                    redirect("/auth/reset-legacy-password");
+                    redirectTo = "/auth/reset-legacy-password";
+                } else {
+                    console.warn(`[HubGuard] Redirecting user ${sessionResult.session.user.id} - Profile is incomplete.`);
+                    shouldRedirect = true;
                 }
-
-                console.warn(`[HubGuard] Redirecting user ${sessionResult.session.user.id} - Profile is incomplete.`);
-                shouldRedirect = true;
             }
         }
     } catch(err) {
@@ -112,6 +138,13 @@ export async function requireHubRegistration() {
     
     // IMPORTANT: Next.js redirect() MUST be called outside the try/catch block
     // to prevent swallowing the NEXT_REDIRECT internal exception.
+    //
+    // #366. Both of these are now out here. The reset redirect used to be
+    // inside, which is what the note above was written to prevent.
+    if (redirectTo) {
+        redirect(redirectTo);
+    }
+
     if (shouldRedirect) {
         redirect("/hub/register");
     }
