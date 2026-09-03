@@ -19,6 +19,7 @@ import { rateLimit, getActionClientIp } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 import { normalisePhone, phoneLookupVariants } from '@/lib/phone';
 import { isTransientError } from '@/lib/transient-error';
+import { withResponseFloor, atMost, RESPONSE_FLOOR_MS } from '@/lib/constant-time-response';
 
 const loginLimiter = rateLimit(rateLimitConfig.login);
 
@@ -226,7 +227,53 @@ export async function getPostLoginRedirect(email: string) { try {
     }
 }
 
+/**
+ * The login pre-check, with FAILURES held to a constant floor.
+ *
+ * #361 made an unknown address and a wrong password return the same string,
+ * and removed the query that had told them apart — so on this side of the
+ * wire the two failures now do identical work, which is asserted in
+ * auth-timing.test.ts rather than assumed.
+ *
+ * What remains is not ours: `signInWithPassword` runs inside the auth provider
+ * and may well take longer for an address it can find than one it cannot.
+ * Padding covers that too, since the pad is measured from the start of the
+ * call rather than from any point inside it.
+ *
+ * Only FAILURES are padded. A successful sign-in is the hot path and carries
+ * no enumeration signal — everyone already knows their own address is
+ * registered. That does make success distinguishable from failure by timing,
+ * which is fine: the reply says so anyway.
+ */
 export async function preValidateLoginAction(credentials: any): Promise<{ success: boolean; error: string | null }> {
+    const result = await withResponseFloorOnFailure(() => _preValidateLoginAction(credentials));
+    return result;
+}
+
+/**
+ * Pads only when `work` reports failure, so the success path stays fast.
+ *
+ * A throw is padded too — an exception that escapes early is as good an oracle
+ * as a fast rejection, and it is exactly the exit an author forgets.
+ */
+async function withResponseFloorOnFailure(
+    work: () => Promise<{ success: boolean; error: string | null }>,
+): Promise<{ success: boolean; error: string | null }> {
+    const startedAt = Date.now();
+    let succeeded = false;
+    try {
+        const result = await work();
+        succeeded = result.success;
+        return result;
+    } finally {
+        if (!succeeded) {
+            const remaining = RESPONSE_FLOOR_MS - (Date.now() - startedAt);
+            if (remaining > 0) await new Promise((r) => setTimeout(r, remaining));
+        }
+    }
+}
+
+async function _preValidateLoginAction(credentials: any): Promise<{ success: boolean; error: string | null }> {
     try {
         // THIS REFUSED EVERY LOGIN WHEN NEXT_PUBLIC_FIREBASE_API_KEY WAS ABSENT.
         //
@@ -628,7 +675,25 @@ async function resolvePostRegistrationRedirect(formData: FormData): Promise<stri
     return "/auth/get-started";
 }
 
-export async function registerAction(prevState: any, formData: FormData) { const fullName = formData.get("fullName") as string;
+/**
+ * Registration, held to a constant response floor.
+ *
+ * The body is a separate function purely so the padding cannot be forgotten.
+ * There are six ways out of it — a generic success for an address somebody
+ * else owns, a real success, "please log in", two provider failures and an
+ * exception — and padding each return individually is the shape this audit
+ * keeps finding fixed in five places out of six. One wrapper covers every
+ * exit, including the throw.
+ *
+ * Everything is padded, validation errors included. That costs a typo'd form
+ * the same second and a half, and buys the property that there are no timing
+ * classes at all rather than a smaller number of them.
+ */
+export async function registerAction(prevState: any, formData: FormData) {
+    return withResponseFloor(() => runRegistration(prevState, formData), RESPONSE_FLOOR_MS, "registerAction");
+}
+
+async function runRegistration(prevState: any, formData: FormData) { const fullName = formData.get("fullName") as string;
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
     const confirmPassword = formData.get("confirmPassword") as string;
@@ -766,7 +831,12 @@ export async function registerAction(prevState: any, formData: FormData) { const
                     }
 
                     if (!ownedUserId) {
-                        await notifyRegistrationAttempt(validatedData.email.toLowerCase());
+                        // Capped, not merely awaited. This send is the one piece
+                        // of work only the taken path does, so a slow Resend
+                        // call is precisely what would push this path past the
+                        // response floor and put the timing signal back. The
+                        // send is not cancelled, only stopped being waited on.
+                        await atMost(notifyRegistrationAttempt(validatedData.email.toLowerCase()), 400);
                         return {
                             success: true as const,
                             error: "",
