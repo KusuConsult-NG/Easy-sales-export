@@ -4,9 +4,26 @@ import { COLLECTIONS } from "./types/firestore";
 
 /**
  * CANONICAL VERIFICATION SCHEMA
- * 
- * This module provides the authoritative way to read and write user verification data.
- * It abstracts away the fragmented legacy collections.
+ *
+ *   #355 NOTHING IMPORTS THIS FILE, SO IT IS THE AUTHORITATIVE WAY TO DO
+ *        NOTHING.
+ *
+ *        Its header said "This module provides the authoritative way to read
+ *        and write user verification data. It abstracts away the fragmented
+ *        legacy collections." The intent is sound and the fragmentation is
+ *        real — #25 found verificationStatus written as a string by four
+ *        callers and as an object by three — but this module was never
+ *        adopted, so that fragmentation is still there and every caller still
+ *        reads whichever collection it happens to know about.
+ *
+ *        Two exports, zero callers, 0% coverage.
+ *
+ *        KEPT, not deleted. The header now says what it is rather than what it
+ *        was meant to become, so the next reader does not take it for the
+ *        abstraction the codebase already has.
+ *
+ *        OWNER DECISION: adopt it — which means moving the seven writers #25
+ *        found onto it — or retire it.
  */
 
 export interface CanonicalVerificationProfile {
