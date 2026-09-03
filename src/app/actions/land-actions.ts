@@ -13,7 +13,7 @@ import {
 import { type LandListing } from "@/types/strict";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
-import { hasAdminPermission } from "@/lib/admin-permissions";
+import { hasAdminPermission, isPlatformAdmin } from "@/lib/admin-permissions";
 import { isAdmin } from "@/lib/admin-permissions";
 import { PUBLIC_LAND_STATUSES, stripInternalLandFields } from "@/lib/land-visibility";
 import { isOwnerMutable } from "@/lib/land-listing-status";
@@ -313,7 +313,7 @@ async function _updateLandListing(
         }
 
         const listingData = listingDoc.data()!;
-        if (listingData.ownerId !== session.user.id && !(session.user.roles?.includes('admin') || session.user.roles?.includes('super_admin'))) {
+        if (listingData.ownerId !== session.user.id && !isPlatformAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized to edit this listing", data: null };
         }
 
@@ -460,7 +460,7 @@ async function _deleteLandListing(listingId: string): Promise<ActionResponse<nul
         }
 
         const listingData = listingDoc.data()!;
-        if (listingData.ownerId !== session.user.id && !(session.user.roles?.includes('admin') || session.user.roles?.includes('super_admin'))) {
+        if (listingData.ownerId !== session.user.id && !isPlatformAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized to delete this listing", data: null };
         }
 

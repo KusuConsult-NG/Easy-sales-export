@@ -48,6 +48,8 @@
  */
 
 /** The date WAVE closed to new male participants. */
+import { isPlatformAdmin } from "@/lib/admin-permissions";
+
 export const WAVE_MALE_CUTOFF_DATE = new Date("2026-06-17T00:00:00.000Z");
 
 /**
@@ -87,7 +89,7 @@ export function checkWaveEligibility(userData: Record<string, any> | null | unde
     }
 
     const roles: string[] = Array.isArray(userData.roles) ? userData.roles : [];
-    const isUserAdmin = roles.includes("admin") || roles.includes("super_admin");
+    const isUserAdmin = isPlatformAdmin(roles);
 
     const academyReg = userData.serviceRegistrations?.academy;
     const isAcademyElite =

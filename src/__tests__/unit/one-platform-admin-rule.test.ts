@@ -349,30 +349,38 @@ describe('#364 — and the three settings writes now leave a trace', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#364 — RECORDED, NOT REPAIRED: the same shape outside src/app/api', () => {
     /**
-     * Thirty-three files. NOT all the same question — see the header. The list
-     * may shrink; it may not grow. A file that leaves it must be deleted from
-     * here, which is the only way the decision above gets closed.
+     * WAS THIRTY-THREE. #365 took the server-side ones — fifteen files across
+     * src/app/actions and src/lib — and left eighteen. Every one that remains
+     * is on this list for a reason, not for want of a find-and-replace:
+     *
+     *   admin-permissions.ts       IS the authority. Correct by definition.
+     *   wave-access.ts             a deliberate three-role gate: + wave_admin.
+     *   academy/_ac_live.ts        the same: + academy_admin.
+     *   live-training/page.tsx     the same: + trainer.
+     *   auth.ts                    picks the post-login destination and
+     *                              deliberately also accepts the legacy
+     *                              'superadmin' spelling, which is not a role.
+     *   bulk-user-operations.ts    tests the TARGET user's roles and the
+     *                              operation's payload, not the caller's.
+     *   admin-users.ts             maps roles onto a display label.
+     *   audit-log-actions.ts       reads roles from the DATABASE, and also
+     *                              accepts a singular `role === "admin"`.
+     *                              See the owner decision in
+     *                              permission-is-the-authority.test.ts.
+     *   middleware.ts              decides who bypasses the WAVE gender
+     *                              restriction. Same owner decision.
+     *   the seven components       decide what to draw, not what to allow.
+     *
+     * The list may shrink; it may not grow. A file that leaves it must be
+     * deleted from here, which is the only way the decision gets closed.
      */
     const STILL_HAND_WRITTEN = [
         'src/app/academy/live/[courseId]/page.tsx',
         'src/app/actions/academy/_ac_live.ts',
         'src/app/actions/admin-users.ts',
-        'src/app/actions/admin/_applications.ts',
-        'src/app/actions/admin/_exports.ts',
-        'src/app/actions/admin/_marketplace.ts',
         'src/app/actions/audit-log-actions.ts',
-        'src/app/actions/audit.ts',
         'src/app/actions/auth.ts',
-        'src/app/actions/briefing.ts',
         'src/app/actions/bulk-user-operations.ts',
-        'src/app/actions/chatbot-admin.ts',
-        'src/app/actions/feature-toggles.ts',
-        'src/app/actions/forensics.ts',
-        'src/app/actions/land-actions.ts',
-        'src/app/actions/messages.ts',
-        'src/app/actions/notifications.ts',
-        'src/app/actions/wave/_wv_applications.ts',
-        'src/app/actions/wave/_wv_membership.ts',
         'src/app/admin/export/catalog/page.tsx',
         'src/app/admin/page.tsx',
         'src/app/admin/settings/security/page.tsx',
@@ -383,9 +391,7 @@ describe('#364 — RECORDED, NOT REPAIRED: the same shape outside src/app/api', 
         'src/components/dashboard/DashboardNav.tsx',
         'src/components/layout/Sidebar.tsx',
         'src/lib/admin-permissions.ts',
-        'src/lib/cooperative-admin-scope.ts',
         'src/lib/wave-access.ts',
-        'src/lib/wave-eligibility.ts',
         'src/middleware.ts',
     ];
 
@@ -400,6 +406,30 @@ describe('#364 — RECORDED, NOT REPAIRED: the same shape outside src/app/api', 
         // definition, and reading the list as "33 defects" would be wrong.
         expect(code('src/lib/admin-permissions.ts')).toContain('export function isSuperAdmin');
         expect(code('src/lib/admin-permissions.ts')).toContain('export function isPlatformAdmin');
+    });
+
+    it('and the fifteen server-side ones are gone — #365', () => {
+        // The half of the list that WAS an authorisation decision.
+        for (const file of [
+            'src/app/actions/admin/_applications.ts',
+            'src/app/actions/admin/_exports.ts',
+            'src/app/actions/admin/_marketplace.ts',
+            'src/app/actions/audit.ts',
+            'src/app/actions/briefing.ts',
+            'src/app/actions/chatbot-admin.ts',
+            'src/app/actions/feature-toggles.ts',
+            'src/app/actions/forensics.ts',
+            'src/app/actions/land-actions.ts',
+            'src/app/actions/messages.ts',
+            'src/app/actions/notifications.ts',
+            'src/app/actions/wave/_wv_applications.ts',
+            'src/app/actions/wave/_wv_membership.ts',
+            'src/lib/cooperative-admin-scope.ts',
+            'src/lib/wave-eligibility.ts',
+        ]) {
+            expect({ file, handWritten: HAND_WRITTEN.test(code(file)) })
+                .toEqual({ file, handWritten: false });
+        }
     });
 
     it('and three of them are deliberate three-role gates, not copies of this rule', () => {

@@ -6,7 +6,7 @@ import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
-import { hasAdminPermission } from "@/lib/admin-permissions";
+import { hasAdminPermission, isPlatformAdmin } from "@/lib/admin-permissions";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { z } from "zod";
 import { strictNameSchema, strictEmailSchema, strictPhoneSchema } from "@/lib/schemas";
@@ -261,7 +261,7 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
         const userRoles = userData?.roles || [];
-        const isUserAdmin = userRoles.includes("admin") || userRoles.includes("super_admin");
+        const isUserAdmin = isPlatformAdmin(userRoles);
         const academyReg = userData?.serviceRegistrations?.academy;
         const isAcademyElite = academyReg?.plan === 'elite' && (academyReg?.status === 'approved' || academyReg?.status === 'active');
         const hasWaveRole = userRoles.includes("wave_participant");

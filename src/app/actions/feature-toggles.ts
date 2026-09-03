@@ -9,6 +9,7 @@ import { Timestamp } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { DEFAULT_TOGGLES, resolveToggle, type FeatureToggle } from "@/lib/feature-toggles";
 import { createAdminAuditLog } from "@/lib/audit-log";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 
 /**
  * Get feature toggle state
@@ -45,7 +46,7 @@ export async function updateFeatureToggle(
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
     const { session } = sessionResult;
 
-        if (!session?.user || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) { return { success: false as const, error: "Unauthorized: Admin access required"};
+        if (!session?.user || !hasAdminPermission(session.user.roles, "config:feature_toggles")) { return { success: false as const, error: "Unauthorized: Admin access required"};
         }
 
         const toggleRef = db.collection(COLLECTIONS.FEATURE_TOGGLES).doc(featureName);
@@ -98,7 +99,7 @@ export async function getAllFeatureToggles(): Promise<
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
     const { session } = sessionResult;
 
-        if (!session?.user || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) { return { success: false as const, error: "Unauthorized: Admin access required"};
+        if (!session?.user || !hasAdminPermission(session.user.roles, "config:feature_toggles")) { return { success: false as const, error: "Unauthorized: Admin access required"};
         }
 
         const togglesRef = db.collection(COLLECTIONS.FEATURE_TOGGLES);

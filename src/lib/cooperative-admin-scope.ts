@@ -77,10 +77,11 @@
 
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { isPlatformAdmin } from "@/lib/admin-permissions";
 
 export async function getAdminScope(userId: string, userRoles: string[]): Promise<string | null> {
     // Super Admins and Platform Admins see everything.
-    if (userRoles.includes("super_admin") || userRoles.includes("admin")) return null;
+    if (isPlatformAdmin(userRoles)) return null;
 
     // The scoping read. See the note above: this field is not written by any
     // server path, so in practice this is undefined and every caller runs

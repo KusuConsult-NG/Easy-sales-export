@@ -5,6 +5,7 @@ import { requireSession } from "@/lib/session-guard";
 import { createAuditLog } from '@/lib/audit-log';
 import type { AuditAction, AuditLogEntry } from '@/lib/audit-log';
 import { getAuditLogsAction as coreGetAuditLogsAction } from './audit-log-actions';
+import { isPlatformAdmin } from "@/lib/admin-permissions";
 
 
 /**
@@ -70,7 +71,9 @@ export async function getAuditLogsAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthenticated", data: null };
         const { session } = sessionResult;
-        if (!session?.user || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) { return { error: "Unauthorized: Admin access required", success: false as const, data: null };
+        // #365. NOT audit:read, which every one of the ten admin roles holds —
+        // widening who may read the audit log is a decision, not a refactor.
+        if (!session?.user || !isPlatformAdmin(session.user.roles)) { return { error: "Unauthorized: Admin access required", success: false as const, data: null };
         }
 
         const result = await coreGetAuditLogsAction({ limit: limitCount });

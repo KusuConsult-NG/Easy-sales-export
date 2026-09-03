@@ -161,8 +161,15 @@ describe('the access control that was already right', () => {
         // isAdmin() would admit moderator, support and every module admin — the
         // widening refused in #115, #138 and #146. Not appropriate for reading
         // transcripts.
-        expect(action).toContain('roles.includes("super_admin")');
-        expect(codeOnly(action)).not.toContain('isAdmin(');
+        //
+        // #365. Was a literal `roles.includes("super_admin")`. isSuperAdmin()
+        // from admin-permissions.ts is that exact test and nothing wider — the
+        // point of the change was that the rule comes from one module, not that
+        // the audience moved. `isAdmin(` is still refused below, and
+        // `isSuperAdmin(` does not contain it as a substring.
+        expect(codeOnly(action)).toContain('isSuperAdmin(roles)');
+        expect(codeOnly(action)).not.toMatch(/\bisAdmin\(/);
+        expect(codeOnly(action)).not.toContain('isPlatformAdmin(');
     });
 
     it('resolving a session is audited', () => {

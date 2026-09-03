@@ -94,12 +94,15 @@ async function _editApplicationAction(params: {
         }
 
         let roles = session.user.roles;
-        const isAuthorizedSession = hasAdminPermission(roles, "users:update") || roles?.includes("super_admin") || roles?.includes("admin");
+        // #365. The two role literals were redundant — users:update is held by
+        // super_admin and admin and nobody else — and they meant the matrix
+        // could not revoke this. The permission is the authority.
+        const isAuthorizedSession = hasAdminPermission(roles, "users:update");
         
         if (!isAuthorizedSession) {
             const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
             const liveRoles = liveUserDoc.data()?.roles;
-            const isAuthorizedLive = hasAdminPermission(liveRoles, "users:update") || liveRoles?.includes("super_admin") || liveRoles?.includes("admin");
+            const isAuthorizedLive = hasAdminPermission(liveRoles, "users:update");
             if (!isAuthorizedLive) {
                 return { error: "Unauthorized: admin or users:update role required", success: false as const };
             }

@@ -9,6 +9,7 @@ import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { EXPORT_WINDOW_INVESTABLE_STATUSES } from "@/lib/export-window-status";
 import { checkCourseAccess } from "@/lib/academy-plan";
+import { isPlatformAdmin } from "@/lib/admin-permissions";
 
 /**
  * Forensic data-integrity scan.
@@ -62,7 +63,10 @@ export async function runForensicScanAction(): Promise<
     if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
         // Strict Admin Check
-        if (!session?.user?.roles?.includes("super_admin") && (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin"))) { return { success: false as const, results: [], error: "Unauthorized: Admin access required", data: null };
+        // #365. Was `!super_admin && (!admin && !super_admin)` — the same clause
+        // twice, which is what a copy-paste nobody read looks like. Same
+        // audience, stated once.
+        if (!isPlatformAdmin(session?.user?.roles)) { return { success: false as const, results: [], error: "Unauthorized: Admin access required", data: null };
         }
 
         const results: ScanResult[] = [];

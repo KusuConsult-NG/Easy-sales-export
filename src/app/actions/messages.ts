@@ -13,8 +13,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Conversation, Message, UserSearchResult } from "@/lib/types/messages";
 import * as messagingService from "@/infrastructure/messaging/service";
-import { ALL_ADMIN_ROLES, MODULE_ADMIN_ROLE, hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
-
+import { ALL_ADMIN_ROLES, MODULE_ADMIN_ROLE, hasAdminPermission, isAdmin, isPlatformAdmin } from "@/lib/admin-permissions";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 
 /**
@@ -418,7 +417,7 @@ export async function startSupportConversationAction(module?: string) {
         if (!targetAdmin) {
             targetAdmin = adminDocs.find(doc => {
                 const roles = doc.roles || doc.raw_data?.roles || [];
-                return roles.includes("super_admin") || roles.includes("admin");
+                return isPlatformAdmin(roles);
             });
         }
 

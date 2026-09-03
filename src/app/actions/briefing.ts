@@ -56,6 +56,7 @@ export interface BriefingRegistrationData { // Separated name fields (KYC-compli
 
 import { z } from "zod";
 import { strictEmailSchema, strictNameSchema, strictNigerianPhoneSchema } from "@/lib/schemas";
+import { isPlatformAdmin } from "@/lib/admin-permissions";
 // Zod Validation Schema for Registration Data
 const briefingRegistrationSchema = z.object({ fullName: strictNameSchema,
     firstName: z.string().trim().optional(),
@@ -153,7 +154,8 @@ export async function registerForBriefingAction(data: BriefingRegistrationData):
                 const { isAdmin } = await import("@/lib/admin-permissions");
                 isUserAdmin = isAdmin(roles);
             } catch (e) {
-                isUserAdmin = roles.includes("admin") || roles.includes("super_admin");
+                // #365. The fallback was NARROWER than the thing it fell back from.
+                isUserAdmin = isPlatformAdmin(roles);
             }
         }
 

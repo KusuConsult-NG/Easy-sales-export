@@ -36,11 +36,23 @@ async function _approveSellerVerificationAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
+        // #365. The permission is the authority now.
+        //
+        // This was a permission check whose REFUSAL was forgiven: the outer
+        // `if` fired when the caller lacked marketplace:approve_sellers, and
+        // the inner one then let them through anyway for holding the literal
+        // role "admin" or "super_admin". The comment beside it — "Fallback for
+        // super_admin if specific role missing, or strict check" — is an author
+        // unsure which of the two it was.
+        //
+        // Removing the fallback changes nothing today: PERMISSION_MATRIX gives
+        // marketplace:approve_sellers to super_admin, admin and
+        // marketplace_admin, so everyone the fallback admitted already passes
+        // the permission. What changes is the future — revoking the permission
+        // from `admin` in the matrix would have left this endpoint open, and a
+        // gate that cannot be closed from the matrix is not a gate.
         if (!session?.user || !hasAdminPermission(session.user.roles, "marketplace:approve_sellers")) {
-            // Fallback for super_admin if specific role missing, or strict check
-            if (!session?.user?.roles?.includes("super_admin") && !session?.user?.roles?.includes("admin")) {
-                return { error: "Unauthorized: Permission required - users:verify_sellers", success: false as const };
-            }
+            return { error: "Unauthorized: Permission required - marketplace:approve_sellers", success: false as const };
         }
 
         // 1. Get Verification Doc

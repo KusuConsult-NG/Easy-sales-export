@@ -143,11 +143,13 @@ async function _approveExportOnboardingAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
-        // Use general user update permission or create a new one. Using users:update for now.
+        // #365. Same shape as _marketplace.ts: a permission check whose
+        // refusal a role literal forgave. users:update is held by super_admin
+        // and admin, and export:approve_applications by those two plus
+        // export_admin, so the fallback admitted nobody the permissions did
+        // not — and it meant the matrix could not close this door.
         if (!session?.user || (!hasAdminPermission(session.user.roles, "users:update") && !hasAdminPermission(session.user.roles, "export:approve_applications"))) {
-            if (!session?.user?.roles?.includes("super_admin") && !session?.user?.roles?.includes("admin")) {
-                return { error: "Unauthorized: Permission required", success: false as const };
-            }
+            return { error: "Unauthorized: Permission required - export:approve_applications", success: false as const };
         }
 
         // 1. Get Application Doc — may be passed either as the Firestore doc ID or applicationId field

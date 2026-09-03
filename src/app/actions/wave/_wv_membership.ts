@@ -12,6 +12,7 @@ import { isAdmin } from "@/lib/role-utils";
 import { checkModuleAccess } from "@/lib/module-access-check";
 import { checkWaveEligibility } from "@/lib/wave-eligibility";
 import { toMillis } from "@/lib/firestore-serialize";
+import { isPlatformAdmin } from "@/lib/admin-permissions";
 
 /**
  * Check WAVE application status for current user
@@ -170,7 +171,7 @@ async function _checkWaveEligibilityAction(userId: string): Promise<ActionRespon
         const { session } = sessionResult;
 
         // Allow checking own eligibility or admin checking others
-        if (session.user.id !== userId && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
+        if (session.user.id !== userId && !isPlatformAdmin(session.user.roles)) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
 

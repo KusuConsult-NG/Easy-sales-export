@@ -10,6 +10,7 @@ import { getAdminChatSessions,
     type ChatbotMessageRow } from "@/lib/chatbot-db";
 import { logAdminAction } from "@/lib/audit-log";
 import { MODULE_CONFIGS, type ChatbotModule } from "@/lib/chatbot-knowledge";
+import { isSuperAdmin } from "@/lib/admin-permissions";
 
 /**
  * The modules to count, taken from the config map rather than written out
@@ -22,7 +23,7 @@ async function requireSuperAdmin() { const sessionResult = await requireSession(
     if (!sessionResult.session) throw new Error("Not authenticated");
     const { session } = sessionResult;
     const roles: string[] = session.user.roles ?? [];
-    if (!roles.includes("super_admin")) throw new Error("Requires super_admin role");
+    if (!isSuperAdmin(roles)) throw new Error("Requires super_admin role");
     return session.user;
 }
 
