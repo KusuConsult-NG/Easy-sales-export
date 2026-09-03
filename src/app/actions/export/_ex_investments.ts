@@ -216,8 +216,38 @@ export async function investInExportAction(
         if (amount < minInvestment) { return { success: false as const, error: `Minimum investment is ₦${minInvestment.toLocaleString()}` };
         }
 
-        // Check Funding Limit (Optional - if totalSpots defined)
-        if (exportData?.totalSpots && exportData?.spotsFilled >= exportData?.totalSpots) { return { success: false as const, error: "Investment slots are full"};
+        /**
+         *   #352 THIS CHECK HAS NEVER FIRED, AND CANNOT.
+         *
+         *        `totalSpots` HAS NO WRITER anywhere in this repository — not
+         *        in src, not in the migrations, not in the seed scripts. It is
+         *        a type declaration and four readers. So `exportData?.totalSpots`
+         *        is always undefined, the `&&` short-circuits, and the branch
+         *        is unreachable. Its own comment says "Optional - if totalSpots
+         *        defined", which is true and is exactly why it reads as a
+         *        control while being none: #274's shape.
+         *
+         *        IT IS KEPT, NOT REMOVED, and it is not the hole it looks
+         *        like. A window's real bound is the FUNDING model —
+         *        `fundedAmount` raised against `fundingGoal` through
+         *        incrementWithinCeiling in verifyExportInvestmentAction below,
+         *        which locks the row and refuses past the goal. That is
+         *        enforced and tested. The spots model is a parallel,
+         *        half-built third counter: `spotsFilled` is incremented in
+         *        three places for a denominator nobody sets.
+         *
+         *        The advisory read is now written so it would work if a window
+         *        ever carried a real spots limit, and the sibling funding check
+         *        that IS live is named beside it so the next reader does not
+         *        mistake this for the enforcement.
+         *
+         *        WHETHER TO BUILD THE SPOTS MODEL OR RETIRE IT IS THE OWNER'S:
+         *        it duplicates a bound that already works.
+         */
+        const declaredSpots = Number(exportData?.totalSpots) || 0;
+        const takenSpots = Number(exportData?.spotsFilled) || 0;
+        if (declaredSpots > 0 && takenSpots >= declaredSpots) {
+            return { success: false as const, error: "Investment slots are full"};
         }
 
         // A callback that is a page, on the base URL everything else uses.

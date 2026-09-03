@@ -17,6 +17,24 @@ export type ExportOpportunity = { id: string;
     status: string;
     spotsLeft: number;
     totalSpots: number;
+    /**
+     * #352 The capacity model that is actually maintained.
+     *
+     * `totalSpots` HAS NO WRITER anywhere in this repository — not in src, not
+     * in the migrations, not in the seed scripts. It is a type declaration and
+     * four readers. `spotsFilled` beside it is incremented in three places, so
+     * every window that has taken an investment carried a numerator with no
+     * denominator, and `totalSpots - spotsFilled` went NEGATIVE.
+     *
+     * What a window really carries is `fundingGoal` (written once, as
+     * targetVolume * slotPrice, by export-aggregation) and `fundedAmount`,
+     * which verifyExportInvestmentAction raises through incrementWithinCeiling
+     * against that goal. THAT is the bound that holds. These two are carried
+     * out so a screen can report availability from the model that exists
+     * instead of from the one that does not.
+     */
+    fundingGoal: number;
+    fundedAmount: number;
     image: string;
     // Deep data
     description?: string;
@@ -71,8 +89,13 @@ const getCachedExportOpportunities = (limit: number = 12, lastId?: string) => un
                     minInvestment: data.amount,
                     projectedROI: data.roi,
                     status: data.status === "active" ? "Opening Soon" : "Open",
-                    spotsLeft: (data.totalSpots || 0) - (data.spotsFilled || 0),
-                    totalSpots: data.totalSpots || 0,
+                    // #352 floored: totalSpots has no writer, so this was
+                    // 0 - spotsFilled — a NEGATIVE spot count on every window
+                    // that had taken an investment.
+                    spotsLeft: Math.max(0, (Number(data.totalSpots) || 0) - (Number(data.spotsFilled) || 0)),
+                    totalSpots: Number(data.totalSpots) || 0,
+                    fundingGoal: Number((data as any).fundingGoal ?? (data as any).goal) || 0,
+                    fundedAmount: Number((data as any).fundedAmount ?? (data as any).currentFunding) || 0,
                     image: data.image || "/images/export-placeholder.jpg",
                     // Deep data
                     description: data.description,
@@ -161,8 +184,11 @@ const getCachedExportOpportunityById = (id: string) => unstable_cache(
                 minInvestment: data.amount,
                 projectedROI: data.roi,
                 status: data.status === "active" ? "Opening Soon" : "Open",
-                spotsLeft: (data.totalSpots || 0) - (data.spotsFilled || 0),
-                totalSpots: data.totalSpots || 0,
+                // #352 see the list above — floored for the same reason.
+                spotsLeft: Math.max(0, (Number(data.totalSpots) || 0) - (Number(data.spotsFilled) || 0)),
+                totalSpots: Number(data.totalSpots) || 0,
+                fundingGoal: Number((data as any).fundingGoal ?? (data as any).goal) || 0,
+                fundedAmount: Number((data as any).fundedAmount ?? (data as any).currentFunding) || 0,
                 image: data.image || "/images/export-placeholder.jpg",
                 // Deep data
                 description: data.description,
