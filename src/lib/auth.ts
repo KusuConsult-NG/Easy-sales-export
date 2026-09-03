@@ -78,19 +78,67 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     const { email, password } = loginSchema.parse(credentials);
 
                     // ── STEP 3: Rate limit check ─────────────────────────────
+                    //
+                    // THE BRUTE-FORCE LIMIT WAS THROWN AND THEN CAUGHT BY ITS
+                    // OWN CIRCUIT BREAKER.
+                    //
+                    // This was written as one try/catch that both consumed the
+                    // attempt AND threw the refusal, with the catch telling the
+                    // two apart by reading the message:
+                    //
+                    //     if (!rateLimitResult.allowed) {
+                    //         throw new Error(rateLimitResult.error || "...");
+                    //     }
+                    //     } catch (err: any) {
+                    //         if (err.message?.includes("Too many login attempts")) {
+                    //             throw err; // Real rate limit
+                    //         }
+                    //         logger.error("... failing open ...");
+                    //     }
+                    //
+                    // consumeLoginAttempt does not say "Too many login
+                    // attempts". Both of its refusal paths — the Redis window
+                    // and the in-memory fallback — return
+                    //
+                    //     "Too many failed login attempts. If you cannot
+                    //      remember your credentials, please contact support
+                    //      at ..., or try again in N minutes."
+                    //
+                    // and "Too many failed login attempts".includes("Too many
+                    // login attempts") is false. So the refusal was raised,
+                    // caught, judged an infrastructure fault, logged as
+                    // "failing open", and the login continued. Executed rather
+                    // than argued: with the limiter returning allowed:false,
+                    // authorize() returned a complete signed-in user object.
+                    //
+                    // The endpoint is POST /api/auth/callback/credentials, and
+                    // nothing else stands in front of it. preValidateLoginAction
+                    // has the same gate and is correct — it RETURNS the refusal,
+                    // so no catch can reach it — but that runs in the browser's
+                    // login form only. A script posting credentials straight at
+                    // the NextAuth route had no password-attempt limit at all.
+                    //
+                    // The message match is gone rather than corrected. A guard
+                    // that has to recognise a sentence breaks the next time
+                    // somebody improves the sentence, which is exactly what
+                    // happened here. The distinction is structural now: the
+                    // catch covers only the call, so an exception out of the
+                    // limiter still fails open (Upstash down must not lock the
+                    // platform out), while the DECISION to refuse is taken
+                    // outside it and cannot be swallowed.
                     const { consumeLoginAttempt, resetLoginAttempts } = await import("@/lib/rate-limit");
+                    let rateLimitResult: Awaited<ReturnType<typeof consumeLoginAttempt>> | null = null;
                     try {
-                        const rateLimitResult = await consumeLoginAttempt(email);
-                        if (!rateLimitResult.allowed) {
-                            throw new Error(rateLimitResult.error || "Too many login attempts. Please try again later.");
-                        }
+                        rateLimitResult = await consumeLoginAttempt(email);
                     } catch (err: any) {
-                        // CIRCUIT BREAKER: Fail Open
-                        // If Upstash Redis times out or crashes, do NOT block the login.
-                        if (err.message && err.message.includes("Too many login attempts")) {
-                            throw err; // Real rate limit
-                        }
+                        // CIRCUIT BREAKER: Fail Open.
+                        // If Upstash Redis times out or crashes, do NOT block the
+                        // login. Only an exception reaches here; a refusal is a
+                        // return value and is handled below.
                         logger.error(`[Auth:Fallback] Redis consumeLoginAttempt failed, failing open. Error: ${err.message}`);
+                    }
+                    if (rateLimitResult && !rateLimitResult.allowed) {
+                        throw new Error(rateLimitResult.error || "Too many login attempts. Please try again later.");
                     }
 
                     // ── STEP 4: Supabase Auth Verification with JIT Fallback ──
