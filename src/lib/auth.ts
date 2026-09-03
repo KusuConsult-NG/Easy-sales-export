@@ -249,6 +249,61 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                             }
                         }
                     } else {
+                        // ── AN OUTAGE IS NOT A WRONG PASSWORD ────────────────
+                        //
+                        // Everything below this point treats a failed
+                        // signInWithPassword as a CREDENTIAL failure. It is not
+                        // always one. When the Supabase project is unreachable
+                        // the client does not throw — it RETURNS an
+                        // AuthRetryableFetchError, so `sbError` is set exactly
+                        // as it is for a wrong password, and the code fell
+                        // through to the legacy fallback and, with no Firebase
+                        // configured (which is this platform's shape today),
+                        // to `throw new Error("Invalid email or password")`.
+                        //
+                        // Executed rather than argued: with signInWithPassword
+                        // returning undici's "fetch failed", authorize() told
+                        // the user "Invalid email or password".
+                        //
+                        // That is the worst possible answer to an outage. It is
+                        // wrong, it is confident, and the action it invites —
+                        // reset your password — goes to the same service that
+                        // is down. Across 41k accounts an outage becomes a
+                        // reset stampede.
+                        //
+                        // The predicate for this already exists and is already
+                        // imported into this file. It was applied only to the
+                        // message in the outer catch — by which point the real
+                        // error had been replaced by the literal above, so it
+                        // could never fire. Applied HERE it sees the actual
+                        // fault, and the outer catch then reaches the same
+                        // verdict on the same string and shows "A temporary
+                        // connection issue occurred. Please try again."
+                        //
+                        // preValidateLoginAction, the twin of this check, has
+                        // classified its authError this way all along. Two
+                        // halves of one sign-in, and only the half that is
+                        // reachable without a browser got it wrong.
+                        //
+                        // Checked BEFORE the fallback, not after it as the twin
+                        // does: the JIT migration provisions the user through
+                        // supabaseAdmin, so an unreachable Supabase cannot
+                        // complete it either. Running it would spend a
+                        // round-trip at Google to reach a failure that is
+                        // already known, and a half-completed migration is a
+                        // worse outcome than a clean "try again".
+                        if (isTransientError(sbError)) {
+                            logger.error(
+                                `${authCtx} Supabase Auth is unreachable (${sbError?.message}). `
+                                + `NOT a credential failure — refusing without consulting the legacy fallback.`,
+                            );
+                            // Carries the original text so the outer catch logs
+                            // the real fault; that catch classifies it with the
+                            // same predicate on the same string, so the user is
+                            // shown the transient message and never this one.
+                            throw new Error(sbError?.message || "fetch failed");
+                        }
+
                         // Fallback: Verify credentials against Firebase Auth for JIT migration
                         logger.info(`${authCtx} Supabase Login failed (${sbError?.message}). Checking Firebase Auth for JIT migration...`);
 
