@@ -1,3 +1,55 @@
+/**
+ * Firebase Admin Firestore shim.
+ *
+ * #363 THIS FILE IS A SECOND DATABASE ADAPTER, AND IT DISAGREES WITH THE REAL
+ *      ONE. Its entry points now refuse; the classes below are kept, unchanged
+ *      and unreachable, so nothing is lost if Firestore ever comes back.
+ *
+ * package.json points `firebase-admin` at this directory, so
+ * `require("firebase-admin/firestore").getFirestore()` used to hand back a
+ * fully working Supabase-backed adapter — a parallel to src/lib/supabase-db.ts
+ * written against the same database and behaving differently in four ways that
+ * corrupt data rather than fail:
+ *
+ *  1. IT IGNORES THE TABLE MAP. supabase-db.ts routes ten collections to
+ *     dedicated tables via DEDICATED_TABLE_MAP (lib/supabase-table-map.ts).
+ *     This adapter special-cases exactly one, `users`, and sends EVERYTHING
+ *     else to document_collections. So a write to, say, marketplace_orders
+ *     through this door creates a shadow row under
+ *     collection_name = 'marketplace_orders' that the application never reads,
+ *     while the real row in the dedicated table is left untouched — and a read
+ *     through this door reports "does not exist" for a document that does.
+ *
+ *  2. update() IS AN UPSERT. It is `set(payload, { merge: true })`, so
+ *     updating a document that is not there CREATES it. Real Firestore throws;
+ *     supabase-db.ts documents the same call as a silent no-op. One method
+ *     name, three behaviours.
+ *
+ *  3. THE WRITE BATCH ONLY IMPLEMENTS delete(). batch.set() and batch.update()
+ *     are `undefined`, so a caller gets "this.batch.update is not a function"
+ *     — a TypeError that reads like a bug in the caller.
+ *
+ *  4. Query HAS NO orderBy, limit, startAfter OR offset. Every paged scan
+ *     written against it dies on the first line.
+ *
+ * And DocumentSnapshot.ref returns `new DocumentReference(null, this.id)` —
+ * collectionName NULL. A write through a snapshot's own ref therefore lands in
+ * document_collections under a null collection, or violates the NOT NULL
+ * constraint, depending on which comes first.
+ *
+ * Nothing in the running application reaches this file: src/lib/firebase-admin.ts
+ * re-exports supabaseDb and imports nothing from here. The only caller was
+ * scripts/firebase-migrate.js, which is registered in package.json as
+ * `npm run migrate:firebase`, claims a "Zero-Regression Guarantee", and hits
+ * defects 3 and 4 above before it can write anything. See #363 in that file.
+ *
+ * getFirestore() and the Firestore class now throw, in the style of the
+ * storage and messaging shims beside them, so the next caller is told where
+ * the supported door is instead of quietly writing through the wrong one.
+ * FieldValue, FieldPath, GeoPoint and AggregateField are left working: they
+ * are inert value objects, several tests mock against them, and they cannot
+ * write anything by themselves.
+ */
 try {
   global.WebSocket = require('ws');
 } catch (e) {}
@@ -5,6 +57,16 @@ try {
 const { createClient } = require('@supabase/supabase-js');
 const dotenv = require('dotenv');
 const path = require('path');
+
+function unsupported(op) {
+  throw new Error(
+    `[firebase-admin/firestore shim] ${op} is not available — this shim is a ` +
+    `SECOND database adapter that ignores DEDICATED_TABLE_MAP and would write ` +
+    `shadow rows into document_collections. Use supabaseDb from ` +
+    `"@/lib/supabase-db" (or getAdminDb() from "@/lib/firebase-admin", which ` +
+    `returns it) instead. See #363 in src/lib/shims/firebase-admin/firestore.js.`
+  );
+}
 
 // Load environment variables from .env.local
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
@@ -314,6 +376,14 @@ class WriteBatch {
   delete(ref) {
     this.operations.push({ type: 'delete', ref });
   }
+  // #363 These two were absent, so a caller got "batch.update is not a
+  // function". Present and refusing, so the message names the real door.
+  set() {
+    unsupported('batch.set()');
+  }
+  update() {
+    unsupported('batch.update()');
+  }
   async commit() {
     for (const op of this.operations) {
       if (op.type === 'delete') {
@@ -323,19 +393,25 @@ class WriteBatch {
   }
 }
 
+/**
+ * #363 The three doors into the adapter above. All three refuse.
+ *
+ * The bodies they used to have are kept verbatim in the comments beside each,
+ * because the classes they reach are still here and still correct for a real
+ * Firestore — what is wrong is using them against THIS database.
+ */
 class MockFirestore {
-  collection(name) {
-    return new CollectionReference(name);
+  collection(_name) {
+    // was: return new CollectionReference(_name);
+    unsupported('getFirestore().collection()');
   }
-  doc(path) {
-    const parts = path.split('/');
-    if (parts.length % 2 !== 0) throw new Error("Invalid document path: " + path);
-    const colName = parts.slice(0, -1).join('/');
-    const docId = parts[parts.length - 1];
-    return new DocumentReference(colName, docId);
+  doc(_path) {
+    // was: split the path and return new DocumentReference(collection, id)
+    unsupported('getFirestore().doc()');
   }
   batch() {
-    return new WriteBatch();
+    // was: return new WriteBatch();
+    unsupported('getFirestore().batch()');
   }
 }
 

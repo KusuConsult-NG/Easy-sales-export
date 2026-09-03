@@ -16,7 +16,63 @@
  * ============================================================
  */
 
+/**
+ * #363 THIS SCRIPT HAS NEVER RUN TO COMPLETION, AND CANNOT.
+ *
+ * `npm run setup:firebase` is registered in package.json. It dies twice over:
+ *
+ *   1. It hard-exits when FIREBASE_PROJECT_ID / FIREBASE_CLIENT_EMAIL /
+ *      FIREBASE_PRIVATE_KEY are unset. src/lib/firebase-admin.ts documents
+ *      those three variables as no longer used — Firebase is shimmed to
+ *      Supabase — so on any correctly configured machine it stops at step 1.
+ *
+ *   2. Past that, `require("firebase-admin")` does not resolve to Google's SDK.
+ *      package.json points it at file:./src/lib/shims/firebase-admin, whose
+ *      index.js is, in full, `module.exports = { auth: () => ({}) }`. So
+ *      `admin.apps` is undefined and step 2 throws "Cannot read properties of
+ *      undefined (reading 'length')" — caught, reported as a credential
+ *      problem, exit 1. `admin.credential`, `admin.firestore` and
+ *      `admin.storage`, used below, do not exist either.
+ *
+ * This is the same defect #328 found in scripts/firebase-schema-fix.ts, which
+ * opened with `import * as admin from 'firebase-admin'; if (!admin.apps.length)`.
+ * #328 lifted the eslint and tsconfig exclusions over scripts/ and migrated
+ * every .ts file in the directory. tsconfig's `include` covers .ts and .tsx
+ * only, so the three .js files there were never brought inside the
+ * typechecker, and this is one of them.
+ *
+ * WHAT IT WOULD DO IF IT RAN. Steps 3-7 create a Firebase Storage bucket, set
+ * its CORS policy, and deploy firestore.rules and storage.rules. File storage
+ * is Cloudinary (src/lib/storage-admin.ts); the database is Postgres, and its
+ * access rules are the RLS policies in supabase/migrations. Deploying
+ * Firestore rules would install a security posture over nothing while reading,
+ * to anybody auditing this repository, as though the rules were live.
+ *
+ * The body below is left intact — it is a correct Firebase setup script, and
+ * it is the record of what the Firebase deployment used to be. It runs only
+ * with an explicit override, so restoring Firebase is a matter of setting one
+ * variable rather than reconstructing this file.
+ */
 require("dotenv").config({ path: ".env.local" });
+
+if (process.env.FIREBASE_RESTORED !== "yes-firebase-is-back") {
+    console.error(
+        "\n❌ scripts/setup-firebase.js does not apply to this project.\n\n" +
+        "   Firebase was replaced by Supabase and Cloudinary. `firebase-admin`\n" +
+        "   resolves to src/lib/shims/firebase-admin, not Google's SDK, so this\n" +
+        "   script fails on admin.apps before it configures anything, and the\n" +
+        "   Firestore/Storage rules it deploys govern no live data.\n\n" +
+        "   What replaced each check:\n" +
+        "     Database        supabase/migrations (RLS), src/lib/supabase-db.ts\n" +
+        "     File storage    src/lib/storage-admin.ts (Cloudinary)\n" +
+        "     Local stack     npm run dev:local, then npm run seed:local\n" +
+        "     Migrations      npm run test:migrations\n\n" +
+        "   If Firebase is genuinely being restored, run again with\n" +
+        "   FIREBASE_RESTORED=yes-firebase-is-back — the original script is\n" +
+        "   below this guard, unchanged. See #363.\n"
+    );
+    process.exit(1);
+}
 
 const admin = require("firebase-admin");
 const { execSync, spawnSync } = require("child_process");

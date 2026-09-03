@@ -19,7 +19,69 @@
  *   - Dry-run mode shows what WOULD change without writing
  */
 
+/**
+ * #363 THE "ZERO-REGRESSION GUARANTEE" ABOVE HAS NEVER BEEN TESTED, BECAUSE
+ *      THIS SCRIPT HAS NEVER PATCHED A DOCUMENT.
+ *
+ * `npm run migrate:firebase` and `npm run migrate:firebase:dry` are registered
+ * in package.json. Four independent faults stop them, in this order:
+ *
+ *   1. initFirebase() exits 1 unless FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL
+ *      and FIREBASE_PRIVATE_KEY are set. src/lib/firebase-admin.ts documents
+ *      all three as no longer used.
+ *
+ *   2. Line 229 is `db.collection(c).orderBy("__name__").limit(SCAN_LIMIT)`.
+ *      `firebase-admin/firestore` resolves to src/lib/shims/firebase-admin,
+ *      whose Query class implements where() and get() and NOTHING ELSE — no
+ *      orderBy, no limit, no startAfter. Every collection throws on its first
+ *      line and lands in the `err("Failed to migrate ...")` catch.
+ *
+ *   3. BatchWriter.update() calls `this.batch.update(ref, data)`. That shim's
+ *      WriteBatch implemented only delete(), so the call was
+ *      "batch.update is not a function".
+ *
+ *   4. It patches `doc.ref`, and that shim's DocumentSnapshot.ref returns
+ *      `new DocumentReference(null, id)` — collection name NULL. Had 2 and 3
+ *      not fired first, every patch would have been written into
+ *      document_collections under a null collection, unreadable by the
+ *      application, or rejected by the NOT NULL constraint. The dry run prints
+ *      `ref.path`, which that class does not define, so it says
+ *      "Would update undefined" for every document.
+ *
+ * And underneath all four: the shim is a SECOND database adapter that routes
+ * every collection except `users` into document_collections, ignoring the
+ * DEDICATED_TABLE_MAP that src/lib/supabase-db.ts uses for ten of them. Its
+ * entry points now refuse for that reason; see #363 in
+ * src/lib/shims/firebase-admin/firestore.js.
+ *
+ * The SCHEMAS table below is the valuable part of this file and is untouched:
+ * it is a per-collection statement of required fields and canonical status
+ * values, and several of those vocabularies were reconciled by findings
+ * elsewhere in this audit. Rewriting the runner against supabaseDb is a real
+ * piece of work — it needs the pagination and the CAS primitives the adapter
+ * provides — and inventing it inside a repair would produce exactly the
+ * untested bulk writer this comment is about.
+ *
+ * OWNER DECISION: rewrite this against supabaseDb, or retire it and keep
+ * SCHEMAS as the schema statement it already is.
+ */
 require("dotenv").config({ path: ".env.local" });
+
+if (process.env.FIREBASE_RESTORED !== "yes-firebase-is-back") {
+    console.error(
+        "\n❌ scripts/firebase-migrate.js cannot run against this database.\n\n" +
+        "   It writes through firebase-admin/firestore, which resolves to\n" +
+        "   src/lib/shims/firebase-admin — a second adapter that ignores\n" +
+        "   DEDICATED_TABLE_MAP and would write shadow rows the app never reads.\n" +
+        "   Its Query has no orderBy/limit and its WriteBatch has no update(),\n" +
+        "   so this script has never patched a document. See #363.\n\n" +
+        "   The SCHEMAS table in this file is still accurate and still useful.\n" +
+        "   To act on it, write against supabaseDb from src/lib/supabase-db.ts,\n" +
+        "   the way scripts/repair-schemas.ts does.\n\n" +
+        "   FIREBASE_RESTORED=yes-firebase-is-back runs the original body.\n"
+    );
+    process.exit(1);
+}
 
 const { initializeApp, cert } = require("firebase-admin/app");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
