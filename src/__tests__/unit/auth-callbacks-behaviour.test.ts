@@ -32,6 +32,8 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { readFileSync, readdirSync, statSync } from 'fs';
+import { join } from 'path';
 
 type Callbacks = {
     jwt(params: Record<string, unknown>): Promise<Record<string, unknown>>;
@@ -400,65 +402,70 @@ describe('building the session', () => {
         expect(token.firebaseToken).toBeUndefined();
     });
 
-    it('mints a Firebase token for a live session', async () => {
+    /**
+     *   THE MINTING TESTS ARE GONE, AND WHAT THEY WERE TESTING WITH THEM.
+     *
+     *        Five tests stood here — mint, reuse inside fifty minutes, re-mint
+     *        past it, fall back to the stale token when minting fails, stay
+     *        usable when it fails with nothing cached — around a block in
+     *        lib/auth.ts that computed
+     *
+     *            adminAuth.createCustomToken(token.id, { roles, verified })
+     *
+     *        package.json maps firebase-admin to the local shim, and that
+     *        method is `return "mock-custom-token";`. Every session carried the
+     *        same literal string, shipped to the browser, shaped like a
+     *        credential. Nothing read it: `firebaseToken` appears nowhere
+     *        outside lib/auth.ts and this file. The client half is a stub too.
+     *
+     *        These tests could not see any of that BECAUSE THEY MOCKED IT.
+     *        `createCustomToken` was stubbed to return
+     *        'minted-firebase-token', and the assertions were about the cache
+     *        around it. Mocking the one function whose real implementation is
+     *        the defect is what kept thirty-five lines of dead machinery
+     *        looking alive, and counted this file as covered.
+     *
+     *        The lesson is not "do not mock". It is that a mock standing in for
+     *        a dependency you have never read is an assumption, and this suite
+     *        had one at its centre.
+     */
+    it('DOES NOT MINT ANYTHING, BECAUSE THERE IS NOTHING TO MINT', async () => {
         const cb = await callbacks();
+
         const session = await cb.session(sessionParams({ id: 'user-1', roles: ['seller'] }));
 
-        expect(session.firebaseToken).toBe('minted-firebase-token');
-        expect(createCustomToken).toHaveBeenCalledWith('user-1',
-            expect.objectContaining({ roles: ['seller'] }));
-    });
-
-    it('reusing a cached one inside fifty minutes', async () => {
-        const cb = await callbacks();
-        const session = await cb.session(sessionParams({
-            id: 'user-1',
-            firebaseToken: 'cached-token',
-            firebaseTokenMintedAt: Date.now() - 10 * 60 * 1000,
-        }));
-
-        expect(session.firebaseToken).toBe('cached-token');
         expect(createCustomToken).not.toHaveBeenCalled();
-    });
-
-    it('and re-minting once it is older than that', async () => {
-        // Firebase custom tokens expire at sixty minutes. Fifty is the margin, and
-        // reusing one past its life hands the browser a credential that fails.
-        const cb = await callbacks();
-        const session = await cb.session(sessionParams({
-            id: 'user-1',
-            firebaseToken: 'cached-token',
-            firebaseTokenMintedAt: Date.now() - 55 * 60 * 1000,
-        }));
-
-        expect(createCustomToken).toHaveBeenCalled();
-        expect(session.firebaseToken).toBe('minted-firebase-token');
-    });
-
-    it('falling back to the stale token when minting fails', async () => {
-        // Better a token with minutes left than none: the alternative is a
-        // signed-in member whose Firebase calls all fail.
-        createCustomToken.mockImplementation(async () => { throw new Error('firebase down'); });
-
-        const cb = await callbacks();
-        const session = await cb.session(sessionParams({
-            id: 'user-1',
-            firebaseToken: 'cached-token',
-            firebaseTokenMintedAt: Date.now() - 55 * 60 * 1000,
-        }));
-
-        expect(session.firebaseToken).toBe('cached-token');
-        expect(session.user).not.toBeNull();
-    });
-
-    it('and leaving the session usable when minting fails with nothing cached', async () => {
-        createCustomToken.mockImplementation(async () => { throw new Error('firebase down'); });
-
-        const cb = await callbacks();
-        const session = await cb.session(sessionParams({ id: 'user-1' }));
-
         expect(session.firebaseToken).toBeUndefined();
         expect(session.user).not.toBeNull();
+    });
+
+    it('and the shim it used to call really does return a constant', () => {
+        // The premise, read from the shim rather than remembered. If this is
+        // ever made real, the removal above is worth revisiting.
+        const shim = readFileSync(
+            join(process.cwd(), 'src/lib/shims/firebase-admin/auth.js'), 'utf-8');
+        const body = shim.slice(shim.indexOf('async createCustomToken('));
+
+        expect(body.slice(0, body.indexOf('}'))).toContain('return "mock-custom-token"');
+    });
+
+    it('and nothing in the application reads a firebaseToken', () => {
+        // The other half of the argument for deleting it. Scoped to src, and
+        // excluding this file and lib/auth.ts, which discuss it.
+        const hits: string[] = [];
+        const walk = (dir: string) => {
+            for (const entry of readdirSync(dir)) {
+                const full = join(dir, entry);
+                if (statSync(full).isDirectory()) { walk(full); continue; }
+                if (!/\.tsx?$/.test(entry)) continue;
+                const rel = full.replace(process.cwd() + '/', '');
+                if (rel === 'src/lib/auth.ts' || rel.includes('auth-callbacks-behaviour')) continue;
+                if (readFileSync(full, 'utf-8').includes('firebaseToken')) hits.push(rel);
+            }
+        };
+        walk(join(process.cwd(), 'src'));
+
+        expect(hits).toEqual([]);
     });
 });
 

@@ -524,42 +524,48 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     return session;
                 }
 
-                // Firebase custom token caching strategy:
-                // Tokens expire after 60 minutes. We cache in the JWT and only
-                // re-mint when the cached token is older than 50 minutes.
-                // This saves ~150ms per page load for 100k+ users.
-                const FIFTY_MINUTES_MS = 50 * 60 * 1000;
-                const cachedToken = token.firebaseToken as string | undefined;
-                const mintedAt = token.firebaseTokenMintedAt as number | undefined;
-                const now = Date.now();
-                const isTokenFresh = cachedToken && mintedAt && (now - mintedAt) < FIFTY_MINUTES_MS;
-
-                if (token.id) {
-                    if (isTokenFresh) {
-                        // Reuse cached token — skip expensive createCustomToken call
-                        session.firebaseToken = cachedToken;
-                    } else {
-                        // Mint fresh token and cache it in the JWT
-                        try {
-                            const { getAdminAuth } = await import("@/lib/firebase-admin");
-                            const adminAuth = getAdminAuth();
-                            const freshToken = await adminAuth.createCustomToken(token.id as string, {
-                                roles: (token.roles as any[]) || [],
-                                verified: (token.verified as boolean) ?? true,
-                            });
-                            session.firebaseToken = freshToken;
-                            // Cache in JWT for subsequent requests
-                            token.firebaseToken = freshToken;
-                            token.firebaseTokenMintedAt = now;
-                        } catch (error) {
-                            console.error("Failed to mint Firebase custom token:", error);
-                            // Fallback: use stale cached token if available
-                            if (cachedToken) {
-                                session.firebaseToken = cachedToken;
-                            }
-                        }
-                    }
-                }
+                /**
+                 *   THE CACHE WAS FOR A CONSTANT, AND NOTHING READ IT.
+                 *
+                 *        Thirty-five lines stood here: a fifty-minute TTL, a
+                 *        mint, a JWT cache, a staleness check, a re-mint and a
+                 *        fallback to the stale value on failure — machinery
+                 *        that reads as important, on the hot path of every
+                 *        session refresh.
+                 *
+                 *        It computed `adminAuth.createCustomToken(...)`, and
+                 *        package.json maps firebase-admin to
+                 *        src/lib/shims/firebase-admin. That shim's method is:
+                 *
+                 *            async createCustomToken(uid, claims) {
+                 *                return "mock-custom-token";
+                 *            }
+                 *
+                 *        So every session in the platform carried the same
+                 *        literal string, shaped like a credential and shipped
+                 *        to the browser in the session payload.
+                 *
+                 *        And nothing consumed it. `firebaseToken` appears
+                 *        nowhere outside this file and the test of this
+                 *        machinery — not in src, not in packages, not in any
+                 *        client. The other end is a stub too:
+                 *        shims/firebase/auth.js exports
+                 *        `signInWithCustomToken: async () => ({})`, and nothing
+                 *        calls that either. Both halves of a Firebase
+                 *        credential exchange, dead, in an app that
+                 *        authenticates against Supabase.
+                 *
+                 *        WHY THE TESTS DID NOT CATCH IT: they mocked
+                 *        createCustomToken to return 'minted-firebase-token'
+                 *        and asserted the caching behaviour around it. Mocking
+                 *        the one function whose real implementation IS the
+                 *        defect is what made the machinery look alive — and it
+                 *        is the reason this file's coverage counted as tested.
+                 *
+                 *        The revocation clearing above stays. A JWT minted
+                 *        before this change still carries the field, and
+                 *        stripping it from a revoked session costs nothing.
+                 */
             }
             return session;
         },
