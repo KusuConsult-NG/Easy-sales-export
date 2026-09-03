@@ -63,10 +63,43 @@ export async function bulkSuspendUsersAction(
                     continue;
                 }
 
-                // Prevent suspending admins (unless super_admin)
+                /**
+                 * WHO COUNTS AS AN ADMIN WORTH PROTECTING — asked with the
+                 * derived set, not with the string "admin".
+                 *
+                 * This read `userRoles.includes("admin")`, so it protected a
+                 * target whose roles array literally contains that one string
+                 * and nobody else. A super_admin whose roles are
+                 * ["super_admin"] — the ordinary shape — was NOT protected,
+                 * and `users:suspend` is held by plain `admin`.
+                 *
+                 * So an admin could suspend every super_admin on the platform.
+                 * `suspended: true` is exactly what lib/auth.ts refuses a login
+                 * for at its ban check, and what the jwt callback turns into
+                 * token.isBanned, so the sessions go too. The role hierarchy
+                 * inverted: the lower role could lock out the higher one.
+                 *
+                 * Executed, not argued: acting as ["admin"] against a target
+                 * with roles ["super_admin"], this returned
+                 * { success: true, suspended: 1 } and the document came back
+                 * with suspended: true.
+                 *
+                 * includesPrivilegedRole is the codebase's answer to this exact
+                 * question and was ALREADY IMPORTED INTO THIS FILE, used 165
+                 * lines below in bulkAssignRolesAction — under a comment
+                 * explaining that a hand-written ["admin", "super_admin"] went
+                 * stale when six module-admin roles were added. admin/_users.ts
+                 * and admin/_legacy.ts both use it for the same purpose. Three
+                 * spellings of one question in one file, and the two that were
+                 * hand-written were the two that were wrong.
+                 *
+                 * The set is derived from PERMISSION_MATRIX, so it also covers
+                 * cooperative_admin — a role that holds a permission `admin`
+                 * deliberately does not.
+                 */
                 const userData = userDoc.data();
                 const userRoles = userData?.roles || [];
-                if (userRoles.includes("admin") && !isSuperAdmin(session.user.roles)) { failedIds.push(userId);
+                if (includesPrivilegedRole(userRoles) && !isSuperAdmin(session.user.roles)) { failedIds.push(userId);
                     continue;
                 }
 
@@ -220,8 +253,14 @@ export async function bulkAssignRolesAction(
             return { success: false, error: "Cannot update more than 100 users at once", data: null };
         }
 
-        // Prevent removing admin role via bulk operation
-        if (rolesToRemove.includes("admin") || rolesToRemove.includes("super_admin")) {
+        // Prevent removing admin role via bulk operation.
+        //
+        // Asked with the derived set for the same reason the add side below
+        // already is: this hand-written pair missed cooperative_admin, so the
+        // one role the ADD side refused to grant without a super_admin was a
+        // role the REMOVE side would strip from anyone. Two halves of one
+        // guard, disagreeing about what "an admin role" is.
+        if (includesPrivilegedRole(rolesToRemove)) {
             return { success: false, error: "Cannot remove admin roles via bulk operation", data: null };
         }
 
@@ -373,9 +412,21 @@ export async function bulkDeleteUsersAction(
 
                 const userData = userDoc.data();
 
-                // Prevent deleting admins (unless you're super_admin)
+                /**
+                 * The same question, the same answer — see the note in
+                 * bulkSuspendUsersAction.
+                 *
+                 * NOT LIVE TODAY, and said plainly rather than overstated:
+                 * `users:delete` is held by super_admin alone, so
+                 * `!isSuperAdmin(session.user.roles)` is always false here and
+                 * this branch cannot be reached. It is fixed anyway because it
+                 * is one matrix edit away from being reached, and because a
+                 * guard that reads as protection while being wrong is worse
+                 * than no guard: the next person to grant `users:delete` to
+                 * `admin` would have no reason to look at this line.
+                 */
                 const userRoles = userData?.roles || [];
-                if (userRoles.includes("admin") && !isSuperAdmin(session.user.roles)) { failedIds.push(userId);
+                if (includesPrivilegedRole(userRoles) && !isSuperAdmin(session.user.roles)) { failedIds.push(userId);
                     continue;
                 }
 
@@ -456,7 +507,13 @@ export async function createImpersonationTokenAction(
         const targetUserData = targetUserDoc.data();
         const targetRoles = targetUserData?.roles || [];
 
-        if (targetRoles.includes("admin") || targetRoles.includes("super_admin")) { return { success: false as const, error: "Cannot impersonate admin users", data: null };
+        // "Cannot impersonate admin users" — asked with the derived set, so it
+        // means every admin role and not the two that were typed out.
+        // Impersonation is the most dangerous capability in this file, the rule
+        // is a blanket refusal with no super_admin escape, and the direction of
+        // this change is strictly narrower: it removes cooperative_admin from
+        // what an impersonation token can reach.
+        if (includesPrivilegedRole(targetRoles)) { return { success: false as const, error: "Cannot impersonate admin users", data: null };
         }
 
         const expiresAt = new Date(Date.now() + durationMinutes * 60 * 1000);
