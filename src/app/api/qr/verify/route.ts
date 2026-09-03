@@ -8,6 +8,7 @@ import { logger } from '@/lib/logger';
 import { verifyDigitalIDQR } from "@/lib/digital-id";
 import { createAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 
 import { withRateLimit } from "@/lib/rate-limit";
 
@@ -20,7 +21,10 @@ async function verifyHandler(request: NextRequest) {
     try {
         // Check authentication
         const session = (await requireSession()).session;
-        if (!session || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
+        // #364. Was `roles.includes("admin") || roles.includes("super_admin")`,
+        // which locked the academy_admin out of the academy's own certificates.
+        // The permission is the one ACADEMY_MANAGE already maps certificates to.
+        if (!session || !hasAdminPermission(session.user.roles, "academy:issue_certificates")) {
             return NextResponse.json(
                 { error: "Unauthorized - Admin access required" },
                 { status: 401 }

@@ -172,8 +172,16 @@ describe('the settings routes themselves are guarded', () => {
     const route = source('src/app/api/admin/settings/security/route.ts');
 
     it('reading requires an admin', () => {
-        expect(route).toContain('roles?.includes("admin")');
-        expect(route).toContain('roles?.includes("super_admin")');
+        // #364. Was two hand-written `roles?.includes(...)` tests. The audience
+        // is unchanged — security:view_logs is held by super_admin and admin
+        // and nobody else — but the rule now comes from PERMISSION_MATRIX
+        // instead of from a literal in this one file. Deliberately NOT
+        // config:read, which `support` also holds: lockout thresholds and the
+        // MFA switch are security posture, not ordinary settings.
+        const get = route.slice(route.indexOf('export async function GET'),
+            route.indexOf('export async function POST'));
+
+        expect(get).toContain('hasAdminPermission(session?.user?.roles, "security:view_logs")');
     });
 
     it('writing requires a super_admin', () => {
@@ -181,8 +189,18 @@ describe('the settings routes themselves are guarded', () => {
         // round and worth pinning.
         const post = route.slice(route.indexOf('export async function POST'));
 
-        expect(post).toContain('!session?.user?.roles?.includes("super_admin")');
+        expect(post).toContain('!isSuperAdmin(session.user.roles)');
         expect(post).toContain('Only super admins can change security settings');
+    });
+
+    it('and the write is recorded', () => {
+        // #364. It was not. This route sets the platform's session lifetime,
+        // MFA enforcement and lockout thresholds, and left no trace of who
+        // changed them.
+        const post = route.slice(route.indexOf('export async function POST'));
+
+        expect(post).toContain('recordAdminAction');
+        expect(post).toContain('"config_updated"');
     });
 
     it('records who changed it', () => {

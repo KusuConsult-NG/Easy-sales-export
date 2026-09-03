@@ -5,7 +5,7 @@ import { requireSession } from "@/lib/session-guard";
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
-import { includesPrivilegedRole } from "@/lib/admin-permissions";
+import { includesPrivilegedRole, isPlatformAdmin, isSuperAdmin } from "@/lib/admin-permissions";
 import { ALL_USER_ROLES, type UserRole } from "@/lib/types/roles";
 import { retirementPatch } from "@/lib/record-retirement";
 
@@ -36,9 +36,7 @@ export async function POST(req: NextRequest) {
     try {
         const session = (await requireSession()).session;
         const callerRoles = session?.user?.roles ?? [];
-        const isAdmin = callerRoles.includes("admin") || callerRoles.includes("super_admin");
-
-        if (!isAdmin) {
+        if (!isPlatformAdmin(callerRoles)) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
@@ -65,7 +63,7 @@ export async function POST(req: NextRequest) {
         // granter cannot. The set is derived from PERMISSION_MATRIX rather than
         // listed here — a local `["admin", "super_admin"]` is what went stale in
         // admin-permissions.ts when the module-admin roles were added.
-        if (includesPrivilegedRole(roles) && !callerRoles.includes("super_admin")) {
+        if (includesPrivilegedRole(roles) && !isSuperAdmin(callerRoles)) {
             return NextResponse.json(
                 { error: "Only super_admin can assign admin or super_admin roles." },
                 { status: 403 }
@@ -133,10 +131,7 @@ export async function DELETE(req: NextRequest) {
     try {
         const session = (await requireSession()).session;
         const callerRoles = session?.user?.roles ?? [];
-        const isSuperAdmin = callerRoles.includes("super_admin");
-        const isAdmin = callerRoles.includes("admin") || isSuperAdmin;
-
-        if (!isAdmin) {
+        if (!isPlatformAdmin(callerRoles)) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
@@ -150,7 +145,7 @@ export async function DELETE(req: NextRequest) {
             );
         }
 
-        if (includesPrivilegedRole(roles) && !isSuperAdmin) {
+        if (includesPrivilegedRole(roles) && !isSuperAdmin(callerRoles)) {
             return NextResponse.json(
                 { error: "Only super_admin can revoke admin or super_admin roles." },
                 { status: 403 }

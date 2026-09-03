@@ -9,6 +9,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from "@/lib/session-guard";
+import { isPlatformAdmin } from "@/lib/admin-permissions";
 import { detectOrphanedUsers, repairAllOrphanedUsers, repairOrphanedUser } from '@/lib/orphaned-user-repair';
 import { logger } from '@/lib/logger';
 
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
         // Check admin authentication
         const session = (await requireSession()).session;
 
-        if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
+        if (!isPlatformAdmin(session?.user?.roles)) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
 
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
         // Check admin authentication
         const session = (await requireSession()).session;
 
-        if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
+        if (!isPlatformAdmin(session?.user?.roles)) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
 

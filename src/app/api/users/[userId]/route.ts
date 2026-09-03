@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
+import { isPlatformAdmin } from "@/lib/admin-permissions";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { toMillis } from "@/lib/firestore-serialize";
@@ -30,7 +31,7 @@ export async function GET(
 
 
         // Users can only access their own profile (unless admin)
-        if (session.user.id !== userId && !session.user.roles?.includes('admin') && !session.user.roles?.includes('super_admin')) {
+        if (session.user.id !== userId && !isPlatformAdmin(session.user.roles)) {
             return NextResponse.json(
                 { error: 'Forbidden' },
                 { status: 403 }

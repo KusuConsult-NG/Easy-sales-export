@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { redis } from '@/lib/redis';
 import { requireSession } from "@/lib/session-guard";
+import { isPlatformAdmin } from "@/lib/admin-permissions";
 
 /**
  * Redis Cache Monitoring API
@@ -37,8 +38,7 @@ const ENFORCEMENT_NAMESPACE = '@upstash/';
 export async function GET(request: NextRequest) {
     // ADMIN AUTHENTICATION REQUIRED
     const session = (await requireSession()).session;
-    if (!session?.user?.roles?.includes('admin') &&
-        !session?.user?.roles?.includes('super_admin')) {
+    if (!isPlatformAdmin(session?.user?.roles)) {
         return NextResponse.json(
             { error: 'Unauthorized: Admin access required' },
             { status: 403 }
@@ -115,8 +115,7 @@ export async function GET(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
     // ADMIN AUTHENTICATION REQUIRED
     const session = (await requireSession()).session;
-    if (!session?.user?.roles?.includes('admin') &&
-        !session?.user?.roles?.includes('super_admin')) {
+    if (!isPlatformAdmin(session?.user?.roles)) {
         return NextResponse.json(
             { error: 'Unauthorized: Admin access required' },
             { status: 403 }

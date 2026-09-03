@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
@@ -16,7 +17,10 @@ export async function GET(request: NextRequest) {
         if (!session?.user) {
             return NextResponse.json({ found: false, error: "Unauthorized" }, { status: 401 });
         }
-        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
+        // #364. Was `roles.includes("admin") || roles.includes("super_admin")`.
+        // This looks a cooperative member up by member number; the role whose
+        // job that is, cooperative_admin, was the one role it refused.
+        if (!hasAdminPermission(session.user.roles, "cooperatives:approve_members")) {
             return NextResponse.json({ found: false, error: "Admin access required" }, { status: 403 });
         }
 

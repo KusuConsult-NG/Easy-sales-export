@@ -2,6 +2,8 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/session-guard";
+import { recordAdminAction } from "@/lib/audit-log";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from "@/lib/logger";
 
@@ -35,7 +37,9 @@ export async function GET() {
         if (!session?.user) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
-        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
+        // #364. Same widening as the localization route above: config:read
+        // for the read, config:update for the write.
+        if (!hasAdminPermission(session.user.roles, "config:read")) {
             return NextResponse.json({ success: false, error: "Admin access required" }, { status: 403 });
         }
 
@@ -64,7 +68,7 @@ export async function POST(request: Request) {
         if (!session?.user) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
-        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
+        if (!hasAdminPermission(session.user.roles, "config:update")) {
             return NextResponse.json({ success: false, error: "Admin access required" }, { status: 403 });
         }
 
@@ -99,6 +103,19 @@ export async function POST(request: Request) {
             updatedAt: new Date(),
             updatedBy: session.user.id,
         }, { merge: true });
+
+        // #364. This write became permission-gated in the same change, which is
+        // how the audit ratchet found it: the Server Action door
+        // (_savePlatformSettingsAction) has recorded config_updated all along
+        // and the API door recorded nothing. Two doors, one write, one of them
+        // leaving no trace.
+        await recordAdminAction({
+            action: "config_updated",
+            userId: session.user.id,
+            targetId: "notifications",
+            targetType: "platform_settings",
+            metadata: { changed: Object.keys(patch) },
+        });
 
         return NextResponse.json({ success: true, message: "Notification settings saved" });
     } catch (error: any) {

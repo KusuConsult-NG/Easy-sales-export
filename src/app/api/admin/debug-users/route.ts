@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from "next/server";
 import { getUsersAction } from "@/app/actions/admin";
 import { requireSession } from "@/lib/session-guard";
+import { isPlatformAdmin } from "@/lib/admin-permissions";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
@@ -20,7 +21,7 @@ export async function GET() {
 
     const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
     const roles: string[] = userDoc.data()?.roles || [];
-    if (!roles.includes('admin') && !roles.includes('super_admin')) {
+    if (!isPlatformAdmin(roles)) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

@@ -317,6 +317,48 @@ export function isSuperAdmin(userRoles: string[] | undefined): boolean {
 }
 
 /**
+ * The roles that administer the PLATFORM rather than one module.
+ *
+ * #364. Fifteen API routes under src/app/api asked this question by hand:
+ *
+ *     if (!session?.user?.roles?.includes("admin") &&
+ *         !session?.user?.roles?.includes("super_admin")) { ...403... }
+ *
+ * Fifteen literal copies of one rule, none of which can see PERMISSION_MATRIX.
+ * #356 replaced six copies of the same shape in src/app/actions and src/lib and
+ * did not reach src/app/api, because its ratchet was scoped to role names
+ * ending in `_admin` and this shape names none.
+ *
+ * DERIVED, NOT WRITTEN DOWN. A platform admin is a role that may change
+ * platform configuration — `config:update` — which today is exactly
+ * super_admin and admin. Deriving it means a matrix edit moves all fifteen
+ * doors together instead of leaving fifteen literals behind; the alternative is
+ * the hand-written list that went stale in PRIVILEGED_ROLES above, for exactly
+ * this reason.
+ *
+ * WHEN NOT TO USE THIS. It is for the routes whose audience genuinely is
+ * "platform staff" — repair tools, cache monitoring, cross-module scans. A
+ * route that belongs to a MODULE should ask for that module's permission, so
+ * its own admin is not locked out of its own surface: certificate verification
+ * asks for academy:issue_certificates, member lookup for
+ * cooperatives:approve_members. Reaching for isPlatformAdmin where a
+ * permission fits reproduces the lockout this constant exists to make visible.
+ */
+export const PLATFORM_ADMIN_ROLES: readonly AdminRole[] = (
+    Object.keys(PERMISSION_MATRIX) as AdminRole[]
+).filter((role) => PERMISSION_MATRIX[role].includes("config:update"));
+
+/**
+ * True when the caller administers the platform itself.
+ *
+ * Narrower than isAdmin(), which is true for all ten admin roles.
+ */
+export function isPlatformAdmin(userRoles: string[] | undefined): boolean {
+    if (!userRoles) return false;
+    return userRoles.some((role) => (PLATFORM_ADMIN_ROLES as readonly string[]).includes(role));
+}
+
+/**
  * Roles that only a super_admin may grant.
  *
  * DERIVED, BECAUSE A HAND-WRITTEN LIST WENT STALE

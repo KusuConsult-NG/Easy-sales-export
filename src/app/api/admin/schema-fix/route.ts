@@ -1,6 +1,7 @@
 
 import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/session-guard";
+import { isSuperAdmin } from "@/lib/admin-permissions";
 import { runSchemaStandardizationAction } from "@/app/actions/schema-standardization";
 
 export const dynamic = 'force-dynamic';
@@ -70,7 +71,7 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(request: Request) {
     const { session } = await requireSession();
-    if (!session?.user?.roles?.includes("super_admin")) {
+    if (!isSuperAdmin(session?.user?.roles)) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

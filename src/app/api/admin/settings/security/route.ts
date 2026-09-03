@@ -2,6 +2,8 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/session-guard";
+import { recordAdminAction } from "@/lib/audit-log";
+import { hasAdminPermission, isSuperAdmin } from "@/lib/admin-permissions";
 import { getAdminDb } from "@/lib/supabase-db";
 import { logger } from "@/lib/logger";
 
@@ -11,7 +13,12 @@ const DOC = "security";
 export async function GET() {
     try {
         const session = (await requireSession()).session;
-        if (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin")) {
+        // #364. NOT config:read, which `support` holds. Lockout thresholds and
+        // the MFA switch are security posture rather than ordinary settings,
+        // so this asks for security:view_logs — super_admin and admin, exactly
+        // the two roles the hand-written check allowed. Writing stays
+        // super_admin only, as it was.
+        if (!hasAdminPermission(session?.user?.roles, "security:view_logs")) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
@@ -38,7 +45,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
     try {
         const session = (await requireSession()).session;
-        if (!session?.user?.roles?.includes("super_admin")) {
+        if (!session?.user || !isSuperAdmin(session.user.roles)) {
             return NextResponse.json({ error: "Only super admins can change security settings" }, { status: 403 });
         }
 
@@ -55,6 +62,25 @@ export async function POST(req: NextRequest) {
             updatedAt: new Date().toISOString(),
             updatedBy: session.user.id,
         }, { merge: true });
+
+        // #364. Not reached by the audit ratchet — this route is gated on
+        // isSuperAdmin rather than a permission — but the change it makes is
+        // the platform's session lifetime, MFA enforcement and lockout
+        // thresholds. If any write on this platform belongs in the audit log,
+        // it is this one.
+        await recordAdminAction({
+            action: "config_updated",
+            userId: session.user.id,
+            targetId: DOC,
+            targetType: "platform_settings",
+            metadata: {
+                sessionDurationDays: Number(sessionDurationDays) || 30,
+                idleTimeoutHours: Number(idleTimeoutHours) || 24,
+                enforceMfa: Boolean(enforceMfa),
+                maxLoginAttempts: Number(maxLoginAttempts) || 5,
+                lockoutDurationMinutes: Number(lockoutDurationMinutes) || 30,
+            },
+        });
 
         return NextResponse.json({ success: true, message: "Security settings saved" });
     } catch (error) {

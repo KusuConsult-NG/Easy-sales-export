@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isRetired } from "@/lib/record-retirement";
@@ -58,9 +59,11 @@ export async function GET(request: NextRequest) {
         }
 
         // Access control
+        // #364. Was `roles.includes("admin") || roles.includes("super_admin")`,
+        // which locked the academy_admin out of the academy's own certificates.
+        // The permission is the one ACADEMY_MANAGE already maps certificates to.
         if (certData.userId !== session.user.id &&
-            !session.user.roles?.includes("admin") &&
-            !session.user.roles?.includes("super_admin")) {
+            !hasAdminPermission(session.user.roles, "academy:issue_certificates")) {
             return NextResponse.json(
                 { success: false, error: "Access denied" },
                 { status: 403 }

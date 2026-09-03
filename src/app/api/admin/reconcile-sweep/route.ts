@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { requireSession } from "@/lib/session-guard";
+import { isPlatformAdmin } from "@/lib/admin-permissions";
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from '@/lib/types/firestore';
 import { logger } from '@/lib/logger';
@@ -11,7 +12,7 @@ export async function GET() {
         const session = (await requireSession()).session;
 
         // 1. Authenticate Request
-        if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
+        if (!isPlatformAdmin(session?.user?.roles)) {
             logger.warn(`Unauthorized Reconcile Sweep attempt by UID: ${session?.user?.id}`);
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }

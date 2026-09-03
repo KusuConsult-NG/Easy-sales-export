@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
+import { isSuperAdmin } from "@/lib/admin-permissions";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { FEATURE_METADATA } from "@/lib/feature-toggles";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -10,7 +11,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 export async function POST() {
     try {
         const session = (await requireSession()).session;
-        if (!session?.user?.roles?.includes("super_admin")) {
+        if (!session?.user || !isSuperAdmin(session.user.roles)) {
             return NextResponse.json({ success: false, message: "Super Admin access required" }, { status: 403 });
         }
 
