@@ -29,7 +29,7 @@
 # and because a failing test is worth knowing about before it is on the remote,
 # where it is somebody else's problem too.
 echo "🧪 Running Jest unit tests..."
-npm run test
+TZ=UTC npm run test
 if [ $? -ne 0 ]; then
   echo "❌ Unit tests failed. Fix them before pushing."
   exit 1
