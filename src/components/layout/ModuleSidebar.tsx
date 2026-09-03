@@ -66,7 +66,20 @@ const ACADEMY_NAV: NavItem[] = [
     { name: "Browse Courses", href: "/academy/courses",     icon: Search },
     { name: "My Courses",     href: "/academy/my-courses",  icon: BookOpen },
     { name: "Live Classes",   href: "/academy/live",        icon: Video },
-    { name: "Certificates",   href: "/academy/certificate", icon: Award },
+    /**
+     *   #351 THIS 404'd. `/academy/certificate` has only a
+     *        `[certificateId]/page.tsx` under it and no index page, so the
+     *        Certificates item in the learner sidebar led nowhere — the same
+     *        shape as #51 and #52.
+     *
+     *        There is no certificate LIST screen in the product. The place a
+     *        learner actually reaches a certificate from is My Courses, which
+     *        renders "View Certificate" linking to
+     *        `/academy/certificate/${courseId}` for each completed course. The
+     *        link points at the screen that does the job rather than at a route
+     *        that has to be built first.
+     */
+    { name: "Certificates",   href: "/academy/my-courses",  icon: Award },
     { name: "My Progress",    href: "/academy/progress",    icon: TrendingUp },
 ];
 
