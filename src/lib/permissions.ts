@@ -1,7 +1,49 @@
 /**
  * Permission Matrix
- * 
- * Defines which roles can access which features and routes
+ *
+ *   #353 NOTHING IMPORTS THIS FILE, AND IT DISAGREES WITH THE SYSTEM THAT IS
+ *        ACTUALLY ENFORCED. READ BEFORE WIRING IT UP.
+ *
+ *        Its header said "Defines which roles can access which features and
+ *        routes", which reads as authoritative and is not true of any request
+ *        this application serves. There are zero importers of
+ *        `@/lib/permissions` in src/. `canAccessRoute`, `hasFeaturePermission`
+ *        and `getAccessibleRoutes` have never been called.
+ *
+ *        WHAT ACTUALLY DECIDES ACCESS:
+ *
+ *          lib/admin-permissions.ts   PERMISSION_MATRIX — the ten admin roles
+ *                                     and their capability strings, plus
+ *                                     isAdmin() and hasAdminPermission().
+ *                                     This is the authority.
+ *          lib/route-manifest.ts      which paths are protected
+ *          lib/session-guard.ts       who is signed in and not banned
+ *          lib/hub-guard.ts           who has completed hub registration
+ *          checkModuleAccess          per-module membership
+ *
+ *        WHY WIRING THIS UP AS-IS WOULD LOCK PEOPLE OUT. Nine of the twenty-one
+ *        values in the UserRole union are absent from ROUTE_PERMISSIONS below:
+ *
+ *            academy_admin        cooperative_admin    export_admin
+ *            farm_nation_admin    marketplace_admin    wave_admin
+ *            marketplace_buyer    marketplace_seller   academy_participant
+ *
+ *        So `canAccessRoute` would refuse every module admin at /admin, refuse
+ *        a marketplace_seller at /marketplace — the standardised role the type
+ *        itself calls "new standardized role" — and refuse an
+ *        academy_participant at /academy, the route this file marks "all
+ *        users". It also knows nothing of `moderator` or `support`.
+ *
+ *        It is KEPT rather than deleted, per the standing instruction to fix
+ *        rather than remove. The ratchet in
+ *        src/__tests__/unit/one-permission-authority.test.ts holds it: while it
+ *        has no importers it may drift, and the moment anything imports it its
+ *        vocabulary must match the real role set. That is the point at which
+ *        this becomes a decision rather than a document.
+ *
+ *        OWNER DECISION: adopt this as the route/feature layer and complete it
+ *        against the real roles, or retire it. It duplicates, incompletely, a
+ *        system that already works.
  */
 
 import type { UserRole } from "./types/roles";
