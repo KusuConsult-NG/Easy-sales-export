@@ -278,7 +278,22 @@ export async function getUserEnrolledCourses() { const sessionResult = await req
         // in now.
         const enrollments = serializeDocs(snapshot.docs);
 
-        return { error: null, success: true as const, data: { courses: enrollments }, courses: enrollments };
+        // `courses` and `enrollments` are the same array under two names, and
+        // that is deliberate rather than sloppy. This endpoint has no
+        // production caller yet, so there was no consumer to settle the
+        // question — and two audits independently gave the payload a key,
+        // picking different ones. `courses` matches the pre-existing failure
+        // branch below, which already returned `courses: []` and is the only
+        // evidence of the shape the original author meant; `enrollments`
+        // matches what the rows actually are. Publishing both means neither
+        // reading breaks, and a future caller can settle it by deleting the
+        // one it does not use.
+        return {
+            error: null,
+            success: true as const,
+            data: { courses: enrollments, enrollments },
+            courses: enrollments,
+        };
     } catch (error) {
         logger.error("Failed to fetch enrolled courses:", error);
         return { success: false as const, error: "Failed to fetch enrolled courses", data: null, courses: []};

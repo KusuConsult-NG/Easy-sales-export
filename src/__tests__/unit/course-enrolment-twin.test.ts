@@ -305,4 +305,24 @@ describe('getUserEnrolledCourses returns the enrolments it fetched', () => {
         expect(result.success).toBe(true);
         expect((result as any).data?.courses).toEqual([]);
     });
+
+    it('publishes the same rows under both key names', async () => {
+        // Two audits of this file independently named the payload, one
+        // `courses` and one `enrollments`, and there is no production caller
+        // to settle which is right. Both are populated so neither reading
+        // breaks; this pins that they stay the SAME rows rather than drifting
+        // into two lists that answer differently.
+        store.seed(COLLECTIONS.COURSE_ENROLLMENTS, 'e1', {
+            userId: LEARNER, courseId: 'course-a', status: 'active',
+        });
+        store.seed(COLLECTIONS.COURSE_ENROLLMENTS, 'e2', {
+            userId: LEARNER, courseId: 'course-b', status: 'active',
+        });
+
+        const result: any = await (await actions()).getUserEnrolledCourses();
+
+        expect(result.data.enrollments).toHaveLength(2);
+        expect(result.data.enrollments).toEqual(result.data.courses);
+        expect(result.data.enrollments).toEqual(result.courses);
+    });
 });

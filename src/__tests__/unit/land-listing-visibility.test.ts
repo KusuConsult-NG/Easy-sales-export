@@ -269,19 +269,32 @@ describe('verifyLandListing — who may verify', () => {
         expect(r.success).toBe(true);
     });
 
+    it('ACCEPTS THE FARM-NATION ADMIN, WHICH THE MATRIX SAYS OWNS THIS JOB', async () => {
+        // The guard was `admin || super_admin`, under a note reading "verifying
+        // land is not their job" — of moderator, support and every module
+        // admin. Right about all of those but one: land:verify_listings is
+        // granted to super_admin, admin AND farm_nation_admin, and to no other
+        // module admin. Farm Nation is the module this queue belongs to, and
+        // its own approve-land route already let this role through. The matrix
+        // is the definition of whose job it is, and the guard disagreed with it.
+        const r: any = await verify('fn-admin-1', ['farm_nation_admin']);
+
+        expect(r.success).toBe(true);
+    });
+
     it('still refuses a farmer', async () => {
         // Verifying your own land would be the whole game — verified listings
         // are what buyers trust and what farm-nation escrow transfers.
         const r: any = await verify(OWNER, ['farmer']);
 
         expect(r.success).toBe(false);
-        expect(String(r.error)).toMatch(/admin only/i);
+        expect(String(r.error)).toMatch(/unauthorized/i);
     });
 
     it('does not widen verification to every module admin', async () => {
-        // isAdmin() would have accepted these. Verifying land is not a
-        // moderator's job, and switching to the shared helper would have been
-        // the easy fix and the wrong one.
+        // isAdmin() would have accepted these, and it is still not the choice.
+        // Naming the permission admits exactly the three roles the matrix
+        // lists — which is neither the old pair nor isAdmin().
         for (const role of ['moderator', 'support', 'wave_admin', 'academy_admin']) {
             const r: any = await verify(`${role}-1`, [role]);
             expect(r.success).toBe(false);

@@ -13,7 +13,7 @@ import {
 import { type LandListing } from "@/types/strict";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
-import { isAdmin } from "@/lib/admin-permissions";
+import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { PUBLIC_LAND_STATUSES, stripInternalLandFields } from "@/lib/land-visibility";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { APPROVABLE_FROM_STATUSES, REJECTABLE_FROM_STATUSES } from "@/lib/land-listing-status";
@@ -441,14 +441,39 @@ async function _verifyLandListing(
     if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
     
-    // `.includes('admin')` alone refused a super_admin who did not also hold the
-    // literal 'admin' role — the one account that should never be locked out of
-    // a verification queue. isSuperAdmin is checked explicitly rather than
-    // switching to isAdmin(), which would WIDEN this to moderator, support and
-    // every module admin; verifying land is not their job.
-    const canVerifyLand = session?.user.roles?.includes('admin') || session?.user.roles?.includes('super_admin');
-    if (!session || !canVerifyLand) { 
-        return { success: false, error: "Unauthorized - Admin only", data: null };
+    /**
+     * THE ROLE THAT OWNS THIS QUEUE WAS THE ONE IT LOCKED OUT.
+     *
+     * The guard was `roles.includes('admin') || roles.includes('super_admin')`
+     * under a comment explaining that isAdmin() would wrongly widen this to
+     * "moderator, support and every module admin; verifying land is not their
+     * job". Right about isAdmin(), wrong about the conclusion — the choice is
+     * not between a hardcoded pair and a helper that admits everyone. There is
+     * a permission for this, `land:verify_listings`, and admin-permissions.ts
+     * grants it to exactly three roles:
+     *
+     *     farm_nation_admin: [..., "land:verify_listings"]
+     *
+     * super_admin, admin AND farm_nation_admin. Farm Nation is the module land
+     * verification belongs to. Every other door to this operation already asks
+     * for the permission by name — admin/_land.ts (twice),
+     * farm-nation/_fn_admin.ts, farm-nation-admin/_fna_verifications.ts
+     * (twice), land-listings.ts (three times), and the approve-land and
+     * reject-land route handlers. Eleven call sites agree; this was the
+     * twelfth, and it disagreed with all of them.
+     *
+     * So a farm_nation_admin could approve a listing through
+     * /api/admin/farm-nation/approve-land and was refused by this action: two
+     * doors to the same operation, one open and one shut, and which one you
+     * got depended on which screen you were standing on.
+     *
+     * Naming the permission is neither the old pair nor isAdmin(). It admits
+     * the three roles the matrix lists and still refuses moderator, support,
+     * wave_admin and academy_admin — which is what the old comment was
+     * protecting, and is asserted in land-listing-visibility.test.ts.
+     */
+    if (!hasAdminPermission(session?.user.roles, "land:verify_listings")) {
+        return { success: false, error: "Unauthorized - land:verify_listings required", data: null };
     }
 
     try { 

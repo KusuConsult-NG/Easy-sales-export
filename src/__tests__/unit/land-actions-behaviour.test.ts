@@ -422,13 +422,17 @@ describe('updateLandListing', () => {
 // ─── the verification ────────────────────────────────────────────────────────
 
 describe('verifyLandListing', () => {
-    it('refuses a caller who is not an admin', async () => {
+    it('refuses a caller without land:verify_listings', async () => {
+        // The message names the permission now rather than "Admin only",
+        // because the gate is the permission and not a role pair — a
+        // farm_nation_admin holds it and is admitted, which
+        // land-listing-visibility.test.ts asserts against the matrix.
         seedUnderReview('pending-1', 'pending_verification');
         actAs(OWNER);
 
         const { verifyLandListing } = await actions();
         expect(await verifyLandListing({ listingId: 'pending-1', verified: true })).toMatchObject({
-            success: false, error: 'Unauthorized - Admin only',
+            success: false, error: 'Unauthorized - land:verify_listings required',
         });
     });
 
