@@ -10,10 +10,53 @@ export default function AnnouncementBanner() {
     const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 
     useEffect(() => {
-        // Load dismissed from localStorage
-        const stored = localStorage.getItem("dismissed_announcements");
-        if (stored) {
-            setDismissed(new Set(JSON.parse(stored)));
+        /**
+         *   #347 THIS TOOK THE WHOLE DASHBOARD DOWN.
+         *
+         *        The original was three unguarded lines inside an effect:
+         *
+         *            const stored = localStorage.getItem("dismissed_announcements");
+         *            if (stored) {
+         *                setDismissed(new Set(JSON.parse(stored)));
+         *            }
+         *
+         *        This component renders on /dashboard, the screen every signed-in
+         *        member lands on. Three separate throws are possible, and a throw
+         *        in a "use client" effect is not a missing banner — it unmounts
+         *        the tree to the nearest error boundary, so the member sees the
+         *        error page instead of their dashboard:
+         *
+         *          localStorage itself   throws in Safari private browsing and
+         *                                wherever site data is blocked. The
+         *                                getItem call was the FIRST statement in
+         *                                the effect, so nothing below it ran.
+         *          JSON.parse            throws on any malformed value — a
+         *                                truncated write, an extension, a
+         *                                half-finished quota-exceeded set.
+         *          new Set(x)            throws on a non-iterable. `"5"` parses
+         *                                fine and `new Set(5)` is a TypeError, so
+         *                                a value that is valid JSON still breaks
+         *                                it.
+         *
+         *        And the state is a list of dismissed banner ids. The worst
+         *        honest outcome of failing to read it is that a member sees a
+         *        banner they had dismissed. That is the behaviour on any fault
+         *        now, and the bad value is cleared so the next visit is clean.
+         */
+        try {
+            const stored = localStorage.getItem("dismissed_announcements");
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                if (Array.isArray(parsed)) {
+                    setDismissed(new Set(parsed.filter((id): id is string => typeof id === "string")));
+                } else {
+                    localStorage.removeItem("dismissed_announcements");
+                }
+            }
+        } catch {
+            // Unreadable, unparseable or unusable. Start from "nothing
+            // dismissed" and drop the value rather than failing every render.
+            try { localStorage.removeItem("dismissed_announcements"); } catch { /* storage is gone entirely */ }
         }
 
         async function fetchAnnouncements() {
@@ -38,7 +81,12 @@ export default function AnnouncementBanner() {
         const newDismissed = new Set(dismissed);
         newDismissed.add(id);
         setDismissed(newDismissed);
-        localStorage.setItem("dismissed_announcements", JSON.stringify(Array.from(newDismissed)));
+        // #347 The write can throw too — a blocked store, or the quota. The
+        // banner is dismissed for this page view either way; only the
+        // remembering is lost.
+        try {
+            localStorage.setItem("dismissed_announcements", JSON.stringify(Array.from(newDismissed)));
+        } catch { /* the dismissal does not survive a reload; the page does */ }
     }
 
     const visibleAnnouncements = announcements.filter(
