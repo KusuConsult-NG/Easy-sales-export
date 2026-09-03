@@ -15,6 +15,7 @@ import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { getCached, setCache } from "@/lib/redis";
 import { sendWaveApplicationEmail } from "@/lib/email-notifications";
 import { extractCanonicalUser } from "@/lib/canonical/normalizer";
+import { stripPii, stripSecrets } from "@/lib/admin-pii";
 import { moduleGrantRole } from "@/lib/module-grant-roles";
 
 // ============================================================================
@@ -142,8 +143,20 @@ async function _getWaveApplicationsAction(): Promise<
             const uData = userMap.get(app.userId) || {};
             const canonical = extractCanonicalUser(uData, app);
 
+            /**
+             * Same shape as the three sibling lists: the hydrated `user` block
+             * gated its bankDetails and the spread beside it carried the same
+             * class of value through ungated. A WAVE application row holds the
+             * applicant's nin and bvn — admin/wave/applications/page.tsx reads
+             * both off it — and this list admits all ten admin roles.
+             *
+             * Follows THIS file's own gate, as #341 decided: a BVN is
+             * information the admin who approves the application has a reason
+             * to see, so it goes to whoever may approve; a credential goes to
+             * nobody, which is what stripSecrets removes on the other branch.
+             */
             return {
-                ...app,
+                ...(maySeeBankDetails ? stripSecrets(app) : stripPii(app)),
                 user: {
                     id: app.userId,
                     name: canonical.name,
@@ -535,6 +548,33 @@ async function _getStandardWaveApplicationsAction(options: {
             return { success: false as const, error: "Unauthorized" };
         }
 
+        /**
+         * THIS LIST HAD NO BANK GATE AT ALL.
+         *
+         * Its sibling 480 lines above — _getWaveApplicationsAction, the same
+         * records, the same screen — computes exactly this and gates on it,
+         * under a comment listing the six lists closed the same way. This one
+         * was not among them, and it emits MORE: both of its row builders
+         * return `user.bankDetails` outright, and the application branch also
+         * returns
+         *
+         *     data: { ...app, ...canonical, bankDetails }
+         *
+         * where `...canonical` is extractCanonicalUser's output, which carries
+         * the member's raw `nin` and `bvn`.
+         *
+         * The gate above is isAdmin(), true for all TEN admin roles. So
+         * moderator, support and every module admin received account numbers,
+         * BVNs and NINs for the whole WAVE membership — the 14,654 role-holders
+         * and 474 applicants this action's own comment counts.
+         *
+         * Same permission as the sibling, because it is the same question: who
+         * may act on a WAVE application.
+         */
+        const maySeeBankDetails = hasAdminPermission(session.user.roles, "wave:approve_applications");
+        const redact = <T,>(value: T): T =>
+            (maySeeBankDetails ? stripSecrets(value) : stripPii(value));
+
         const useMemoryPagination = !!options.search || !!options.dateFrom || !!options.dateTo || options.sortBy === "gender";
         const fetchLimit = useMemoryPagination ? 5000 : (options.limit || 50);
         const orderDirection = options.sortOrder || "desc";
@@ -713,7 +753,7 @@ async function _getStandardWaveApplicationsAction(options: {
                         state: canonical.address.state,
                         lga: canonical.address.lga,
                         gender: uData.gender || canonical.gender || "",
-                        bankDetails: canonical.bankDetails
+                        ...(maySeeBankDetails ? { bankDetails: canonical.bankDetails } : {}),
                     },
                     status: "approved",
                     // Where this row came from. `role_only` means the account holds
@@ -722,7 +762,7 @@ async function _getStandardWaveApplicationsAction(options: {
                     // from the 474 who applied.
                     source: hasApplication ? "application" : "role_only",
                     hasApplication,
-                    data: mockApp
+                    data: redact(mockApp)
                 };
             });
 
@@ -894,13 +934,15 @@ async function _getStandardWaveApplicationsAction(options: {
                     state: canonical.address.state,
                     lga: canonical.address.lga,
                     gender: app.gender || uData.gender || canonical.gender || "",
-                    bankDetails: canonical.bankDetails
+                    ...(maySeeBankDetails ? { bankDetails: canonical.bankDetails } : {}),
                 },
                 status: app.status || "pending",
                 data: {
-                    ...app,
-                    ...canonical, // Inject SSOT fields directly into the data object
-                    bankDetails: canonical.bankDetails
+                    // `...canonical` injects the SSOT fields — including the
+                    // member's raw nin and bvn — so the redaction has to wrap
+                    // the merged object, not either half of it.
+                    ...redact({ ...app, ...canonical }),
+                    ...(maySeeBankDetails ? { bankDetails: canonical.bankDetails } : {}),
                 }
             };
         });

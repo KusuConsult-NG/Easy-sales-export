@@ -19,6 +19,7 @@ import { getAdminScope, isWithinAdminScope } from "@/lib/cooperative-admin-scope
 import { balanceFieldOf } from "@/lib/cooperative-member-balance";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { extractCanonicalUser } from "@/lib/canonical/normalizer";
+import { stripPii, stripSecrets } from "@/lib/admin-pii";
 
 // ============================================================================
 // TRANSACTION MONITORING
@@ -160,6 +161,48 @@ async function _getAllTransactionsAction(options?: {
             });
         }
 
+        /**
+         * THE GATE WITHHELD ONE KEY AND THE ROW CARRIED THE SAME VALUES IN TWO
+         * OTHERS.
+         *
+         * `maySeeBankDetails` is computed above, on
+         * finance:process_withdrawals, and it gated the `bankDetails` key
+         * below — correctly. Two keys in the SAME object literal then handed
+         * the same data over regardless:
+         *
+         *   user: canonical      extractCanonicalUser returns bankDetails
+         *                        AND the member's raw bvn and nin. Emitted
+         *                        unconditionally.
+         *   metadata: raw        the whole transaction document, and the
+         *                        withdrawal rows carry bankName,
+         *                        accountNumber, accountName, bankCode — the
+         *                        very fields the gated branch three lines up
+         *                        reads them from.
+         *
+         * Executed: as a `support` admin — isAdmin() true,
+         * finance:process_withdrawals false — the response omitted the
+         * `bankDetails` key and shipped account number 0123456789 twice, at
+         * user.bankDetails.accountNumber and metadata.accountNumber, alongside
+         * user.bvn and user.nin.
+         *
+         * lib/admin-pii.ts exists for exactly this and says so in its own
+         * header: "several of those lists also spread a raw user or
+         * registration document into the response, where the same values sit
+         * nested and survive any field-by-field gate applied above them. This
+         * is the strip for those spreads." #341 applied it to the academy
+         * application list. This list is the sibling it did not reach.
+         *
+         * TWO BRANCHES, THE SAME RULE AS #341. A caller who MAY act on these
+         * records sees what they are deciding on minus any credential
+         * (stripSecrets); a caller who may not loses the PII as well
+         * (stripPii). The gated `bankDetails` key below is built from the
+         * UNREDACTED values on purpose — it is the deliberate, permissioned
+         * copy, and stripping its source would have emptied it for the one
+         * role entitled to it.
+         */
+        const redact = <T,>(value: T): T =>
+            (maySeeBankDetails ? stripSecrets(value) : stripPii(value));
+
         const transactions = rawDocs.map((raw: any) => {
             const dateVal = raw.date?.toDate ? raw.date.toDate() : (raw.date ? new Date(raw.date) : new Date());
             const canonical = userMap[raw.userId] || null;
@@ -168,7 +211,7 @@ async function _getAllTransactionsAction(options?: {
                 id: raw.id,
                 userId: raw.userId || "",
                 userName: canonical?.name || raw.userId || "Unknown",
-                user: canonical,
+                user: redact(canonical),
                 ...(maySeeBankDetails ? {
                     bankDetails: canonical?.bankDetails || {
                         bankName: raw.bankName || "",
@@ -183,7 +226,7 @@ async function _getAllTransactionsAction(options?: {
                 date: dateVal.toISOString(),
                 description: raw.description || raw.notes || raw.purpose || undefined,
                 reference: raw.reference || raw.paymentReference || raw.id?.slice(0, 12) || undefined,
-                metadata: raw,
+                metadata: redact(raw),
             };
         });
 

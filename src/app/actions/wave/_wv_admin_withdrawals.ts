@@ -13,6 +13,7 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { claimStatusTransition, claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { paystackPayout, payoutReference } from "@/lib/paystack-transfer";
 import { extractCanonicalUser } from "@/lib/canonical/normalizer";
+import { stripPii, stripSecrets } from "@/lib/admin-pii";
 
 async function _getStandardWaveWithdrawalsAction(options: {
     // The union the admin screen can filter by. `approved_processing` and
@@ -121,9 +122,37 @@ async function _getStandardWaveWithdrawalsAction(options: {
             });
         }
 
+        /**
+         * THE GATE BELOW WAS DEFEATED BY THE TWO KEYS BESIDE IT.
+         *
+         * `maySeeBankDetails` correctly withheld the top-level `bankDetails`,
+         * and then:
+         *
+         *   ...w                 the raw WAVE withdrawal row, which carries
+         *                        bankAccountNumber, accountName and bankCode at
+         *                        its root — admin/_withdrawals.ts says exactly
+         *                        this in its own comment, naming THIS queue,
+         *                        and strips them. This one did not.
+         *   user: userMap[...]   built above with `bankDetails:
+         *                        canonical.bankDetails` unconditionally, unlike
+         *                        the four sibling lists that build the same
+         *                        block and gate it there.
+         *
+         * The list's own gate is isAdmin(), true for all ten admin roles, so
+         * moderator, support and every module admin received the account
+         * numbers this permission exists to withhold.
+         *
+         * Same two branches as #341: a caller who MAY pay these out sees what
+         * they are acting on minus any credential; a caller who may not loses
+         * the PII with it. The gated block below still reads the UNREDACTED
+         * userMap, because that is the deliberate permissioned copy.
+         */
+        const redact = <T,>(value: T): T =>
+            (maySeeBankDetails ? stripSecrets(value) : stripPii(value));
+
         let enrichedWithdrawals = withdrawals.map((w: any) => ({
-            ...w,
-            user: userMap[w.userId] || null,
+            ...redact(w),
+            user: redact(userMap[w.userId] || null),
             bankDetails: !maySeeBankDetails ? undefined : userMap[w.userId]?.bankDetails || {
                 bankName: "",
                 accountNumber: "",

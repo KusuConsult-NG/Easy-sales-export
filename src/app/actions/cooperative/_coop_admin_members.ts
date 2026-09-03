@@ -6,7 +6,7 @@ import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { normalizeUserUpdate } from "@/lib/schema-normalizer";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
-import { stripPii } from "@/lib/admin-pii";
+import { stripPii, stripSecrets } from "@/lib/admin-pii";
 import { FieldValue } from "@/lib/firestore-compat";
 import { FieldPath } from "@/lib/firestore-compat";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
@@ -126,8 +126,20 @@ async function _getAllMembersAction(options?: {
             const uData = userMap.get(m.userId || m.id) || {};
             const canonical = extractCanonicalUser(uData, m);
 
+            /**
+             * The hydrated `user` block gated its bankDetails; the spread
+             * beside it did not. `m` is the raw cooperative member row, and
+             * this function's OWN search filter twelve lines below reads
+             * m.bankName, m.accountNumber, m.nin and m.bvn from it — so the
+             * row demonstrably carries them, and every admin role reached
+             * this list with them attached.
+             *
+             * The rule is already decided in this file: the member DETAIL
+             * view does `maySeeBankDetails ? ... : stripPii({...})`. The list
+             * is the sibling that did not get it.
+             */
             return {
-                ...m,
+                ...(maySeeBankDetails ? stripSecrets(m) : stripPii(m)),
                 user: {
                     id: m.userId || m.id,
                     name: canonical.name,
