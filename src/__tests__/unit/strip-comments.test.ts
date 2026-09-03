@@ -273,9 +273,20 @@ describe('it agrees with the naive version everywhere the naive version is right
         // files, using its own filter, and asserts on its own source nowhere), so
         // no assertion is affected. It is on the list because the list is about
         // which files the naive stripper mangles, not about which are read.
-        expect(AFFECTED.length).toBeLessThanOrEqual(10);
+        //
+        // TEN became ELEVEN the same way, which is the note above coming true a
+        // second time rather than a new phenomenon. excluded-suites-state.test.ts
+        // carries the identical `!t.startsWith('/*')` in a string, so the naive
+        // regex opens a comment there and runs to the next real `*/`; rewriting
+        // the db-integration assertion in it moved the damage from 0.9-ish to
+        // 0.211. Nothing reads that file naively either.
+        //
+        // Raised rather than relaxed, again, and both files named — a cap with
+        // no names would let an unrelated eleventh file take the slot silently.
+        expect(AFFECTED.length).toBeLessThanOrEqual(11);
         expect(AFFECTED).toContain('src/lib/csp.ts');
         expect(AFFECTED).toContain('src/__tests__/unit/harness-covers-adapter.test.ts');
+        expect(AFFECTED).toContain('src/__tests__/unit/excluded-suites-state.test.ts');
     });
 
     it('only two of them are application source, which is what narrows the risk', () => {

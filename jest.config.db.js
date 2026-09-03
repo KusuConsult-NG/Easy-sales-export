@@ -31,6 +31,7 @@ module.exports = createJestConfig({
         '^@/(.*)$': '<rootDir>/src/$1',
     },
     testMatch: ['**/__tests__/db-integration/**/*.test.ts'],
+    globalSetup: '<rootDir>/jest.db.globalsetup.js',
     setupFilesAfterEnv: ['<rootDir>/jest.db.setup.js'],
     testEnvironment: 'node',
     // Real network round trips, and some tests open two concurrent sessions.

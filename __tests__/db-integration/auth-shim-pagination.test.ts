@@ -62,7 +62,7 @@ async function purge() {
     }
 }
 
-maybeDescribe('firebase-admin auth shim: pagination and the missing methods', () => {
+maybeDescribeAuth('firebase-admin auth shim: pagination and the missing methods', () => {
     beforeAll(async () => {
         await purge();
         for (let i = 0; i < SEEDED; i++) {

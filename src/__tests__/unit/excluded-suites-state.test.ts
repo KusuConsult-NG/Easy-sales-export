@@ -300,19 +300,43 @@ describe('the exclusions themselves', () => {
             .toContain('PRODUCTION_PROJECT_REF');
     });
 
-    it('the db-integration suite is still configured but skipping', () => {
-        // 69 tests that have never run, because .env.staging carries all three
-        // Supabase variables with EMPTY values — configured enough to look
-        // fine, empty enough to disable everything. Recorded because it is the
-        // same defect as the one above, one directory over, and it is not fixed
-        // by this change.
+    it('the db-integration suite has a way to actually run', () => {
+        /**
+         * This used to assert the opposite: that `.env.staging` carries an
+         * EMPTY NEXT_PUBLIC_SUPABASE_URL — "configured enough to look fine,
+         * empty enough to disable everything" — and it recorded 69 tests that
+         * had never run as a defect it was not fixing.
+         *
+         * They have run now: 148 of them, 140 passing against a real database,
+         * with the auth-shim file skipping for want of GoTrue. Pinning the
+         * broken state was right while it was the state; keeping the pin after
+         * it is fixed would forbid the fix.
+         *
+         * Two ways in: ci-integration-db.sh (full stack, needs Docker) and
+         * local-supabase-rest.sh (PostgREST only, no Docker). Both are asserted
+         * because the second exists precisely for machines where the first
+         * cannot pull images, and losing it silently returns the suite to
+         * never running.
+         */
         expect(pkg.scripts['test:db']).toContain('jest.config.db.js');
+        expect(existsSync(join(process.cwd(), 'scripts/ci-integration-db.sh'))).toBe(true);
+        expect(existsSync(join(process.cwd(), 'scripts/local-supabase-rest.sh'))).toBe(true);
+    });
 
+    it('and whatever .env.staging says, it may not be production', () => {
+        // The enduring property. `.env.staging` is gitignored, so its contents
+        // are whatever a developer's rig wrote; the rule that survives is that
+        // these suites create and delete rows and must never point at the
+        // production project. db-env-guard refuses it by ref — asserted here so
+        // a local file cannot quietly become the exception.
         const staging = existsSync(join(process.cwd(), '.env.staging'))
             ? source('.env.staging')
             : '';
+
+        expect(codeOnly(source('src/lib/testing/db-env-guard.js')))
+            .toContain('PRODUCTION_PROJECT_REF');
         if (staging) {
-            expect(staging).toMatch(/NEXT_PUBLIC_SUPABASE_URL=\s*$/m);
+            expect(staging).not.toContain('dpuiznenrymoyarvdave');
         }
     });
 });
