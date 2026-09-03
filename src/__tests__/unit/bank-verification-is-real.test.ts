@@ -180,11 +180,21 @@ describe('#284 — the export onboarding component, the copy I first cleared', (
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#284 — the step still cannot continue without a resolved name', () => {
-    it('BankAccountStep gates Continue on accountName', () => {
-        // Unchanged, and worth pinning: the gate was always right. What was
-        // wrong is that the stub always satisfied it. Now only a real
-        // resolution does.
-        expect(codeOnly(STEP)).toMatch(/disabled=\{!data\?\.accountName/);
+    it('BankAccountStep gates Continue on the VERIFICATION, not on a name', () => {
+        // #346 REWRITTEN. This read:
+        //
+        //     expect(codeOnly(STEP)).toMatch(/disabled=\{!data\?\.accountName/);
+        //
+        // under the comment "the gate was always right. What was wrong is that
+        // the stub always satisfied it." The first half was false. The gate was
+        // a test for a NON-EMPTY STRING, and the component had an effect that
+        // propagated the applicant's TYPED name — so a seller reached Complete
+        // Registration without the verify button ever being pressed. A gate
+        // that a text input satisfies is not a gate.
+        const code = codeOnly(STEP);
+
+        expect(code).toMatch(/disabled=\{!data\?\.verified/);
+        expect(code).toContain('data?.verified && data.accountName');
     });
 
     it('and it is still this component the step renders', () => {
@@ -225,7 +235,13 @@ describe('#284 — nothing else in the app simulates a verification', () => {
                 // ever starts feeding a decision the exemption is visible.
                 if (f === 'src/lib/logistics.ts') return;
                 // The record of the defect, in the component that had it.
-                if (/#284/.test(raw(f).slice(0, raw(f).indexOf(line)).slice(-1200))) return;
+                // #346 widened from /#284/ and made to consider the line
+                // itself: the scan hit this file's own successor module,
+                // lib/bank-account-resolve.ts, whose header quotes what #284
+                // removed. A finding marker near a "simulat" mention is the
+                // signature of a tombstone, not of a live simulation.
+                const before = raw(f).slice(0, raw(f).indexOf(line)).slice(-1200);
+                if (/#(284|346)/.test(before) || /#(284|346)/.test(line)) return;
                 offenders.push(`${f}:${i + 1}  ${line.trim().slice(0, 80)}`);
             });
         }

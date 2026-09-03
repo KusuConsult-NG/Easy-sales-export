@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Building2, CheckCircle, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { getBankList } from "@/app/actions/paystack";
 
@@ -16,6 +16,8 @@ export interface BankAccountData {
     accountNumber: string;
     accountName: string;
     verified: boolean;
+    /** #346 The server re-resolves at the point of record, and needs this. */
+    bankCode?: string;
 }
 
 interface Bank {
@@ -63,19 +65,56 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
         }
     }, [initialData, isInitialized]);
 
-    // Auto-propagate changes to parent
+    /**
+     *   #346 SECURITY: `verified: true`, WRITTEN AS A LITERAL, ON DATA NOBODY
+     *        HAD VERIFIED.
+     *
+     *        handleVerify below is real — #284 pointed it at
+     *        /api/kyc/verify-bank-account and it only succeeds on a name the
+     *        bank resolves. This effect made that irrelevant:
+     *
+     *            if (bankName && accountNumber.length === 10 && accountName) {
+     *                onVerified({ ..., verified: true, ... });
+     *            }
+     *
+     *        `accountName` is the state behind a text input the applicant fills
+     *        in themselves. Pick a bank, type ten digits, type any name — and
+     *        the parent was told, in as many words, that the account was
+     *        verified. export/onboarding's step gates Continue on
+     *        `!bankData?.verified`, so that was the whole gate.
+     *
+     *        The flag now comes from the `verified` STATE, which only
+     *        handleVerify sets, and the name only leaves here once it has been
+     *        resolved. The propagation itself stays — the parent needs the
+     *        typed digits for its draft — it simply no longer asserts a fact it
+     *        has no basis for.
+     *
+     *        AND `onVerified` WAS IN THE DEPENDENCY ARRAY. The export step
+     *        declares its handler in the component body, and the wizard's
+     *        setter returns a fresh object every call, so the effect re-ran on
+     *        every render: effect → parent setState → render → effect. An
+     *        unbounded loop that also wrote localStorage each pass. The
+     *        callback is held in a ref so this effect depends on the DATA, not
+     *        on the identity of the function receiving it.
+     */
+    const onVerifiedRef = useRef(onVerified);
+    useEffect(() => { onVerifiedRef.current = onVerified; });
+
     useEffect(() => {
-        if (bankName && accountNumber && accountNumber.length === 10 && accountName) {
-            onVerified({
+        if (bankName && accountNumber && accountNumber.length === 10) {
+            onVerifiedRef.current({
                 bankName,
                 accountNumber,
-                accountName,
-                verified: true,
+                bankCode: banks.find((b) => b.name === bankName)?.code ?? "",
+                // Only a resolved name leaves this component; anything else is
+                // the applicant's guess and must not reach a payout record.
+                accountName: verified ? accountName : "",
+                verified,
                 bvn: bvn || undefined,
                 bvnVerified: bvnVerified || undefined
             });
         }
-    }, [bankName, accountNumber, accountName, bvn, bvnVerified, onVerified]);
+    }, [bankName, accountNumber, accountName, verified, bvn, bvnVerified, banks]);
 
     async function loadBankList() {
         setLoadingBanks(true);
@@ -164,11 +203,12 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
             setVerified(true);
             setError("");
 
-            onVerified({ 
-                bankName, 
-                accountNumber, 
-                accountName: newAccountName, 
-                verified: true 
+            onVerified({
+                bankName,
+                accountNumber,
+                accountName: newAccountName,
+                verified: true,
+                bankCode,
             });
         } catch (err) {
             console.error('Bank verification error:', err);
@@ -351,19 +391,19 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
                     <label className="block text-sm font-medium text-slate-900 mb-2">
                         Account Name
                     </label>
+                    {/* #346 READ-ONLY. This was editable and labelled "Enter the
+                        name associated with this account", and what was typed
+                        here became the account holder — see the effect above.
+                        The name comes back from the bank or it does not exist. */}
                     <input
                         type="text"
                         value={accountName}
-                        onChange={(e) => {
-                            setAccountName(e.target.value);
-                            setError("");
-                        }}
-                        disabled={verifying}
-                        placeholder="Enter your account name"
-                        className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                        readOnly
+                        placeholder="Fills in when you verify"
+                        className="w-full px-4 py-2.5 bg-slate-100 border border-slate-300 rounded-lg text-slate-600 cursor-not-allowed"
                     />
                     <p className="text-xs text-slate-500 mt-1">
-                        Enter the name associated with this account
+                        We fetch this from your bank when you verify the account
                     </p>
                 </div>
             )}

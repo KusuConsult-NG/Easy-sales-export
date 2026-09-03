@@ -29,7 +29,7 @@
  * the store rather than the return value.
  */
 
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
 import { COLLECTIONS } from '@/lib/types/firestore';
 
@@ -51,11 +51,39 @@ function actAs(id: string | null, roles: string[] = ['user']): void {
     ));
 }
 
+/**
+ * #346 The bank both writers here now ask.
+ *
+ * submitExportOnboardingAction and resubmitExportApplicationAction re-resolve
+ * the settlement account before recording it — the payload used to be taken on
+ * trust. The stub answers with a name DELIBERATELY DIFFERENT from the one the
+ * fixture submits, so an assertion can tell the bank's answer from the
+ * applicant's claim.
+ */
+const RESOLVED_ACCOUNT_NAME = 'ADAEZE N OBI';
+
+const SAVED_ENV = { ...process.env };
+const realFetch = global.fetch;
+
+function bankResolvesTo(accountName: string | null): void {
+    process.env.PAYSTACK_SECRET_KEY = 'sk_test_export';
+    global.fetch = jest.fn(async () => (accountName === null
+        ? { ok: false, status: 422, json: async () => ({ message: 'Could not resolve account name' }) }
+        : { ok: true, json: async () => ({ status: true, data: { account_name: accountName, account_number: '0123456789' } }) }
+    )) as any;
+}
+
 beforeEach(() => {
     jest.clearAllMocks();
     store = installFakeDb();
     actAs(APPLICANT);
     store.seed(COLLECTIONS.USERS, APPLICANT, { email: 'applicant@example.com', roles: ['user'] });
+    bankResolvesTo(RESOLVED_ACCOUNT_NAME);
+});
+
+afterEach(() => {
+    process.env = { ...SAVED_ENV };
+    global.fetch = realFetch;
 });
 
 async function actions() {
@@ -71,7 +99,9 @@ function submission(overrides: Record<string, unknown> = {}): FormData {
             address: '1 Market Road, Ikeja',
         },
         kycData: { nin: '12345678901', bvn: '', cacNumber: 'RC123456' },
-        bank: { accountNumber: '0123456789', bankName: 'Zenith', accountName: 'Ada Obi' },
+        // #346 bankCode is what the server re-resolves on; accountName is
+        // the applicant's claim and is not what gets recorded.
+        bank: { accountNumber: '0123456789', bankName: 'Zenith', accountName: 'Ada Obi', bankCode: '057' },
         terms: { termsAccepted: true, privacyAccepted: true },
         ...overrides,
     };
@@ -91,6 +121,42 @@ function applications(): Array<[string, Record<string, unknown>]> {
 }
 
 // ─── submission ──────────────────────────────────────────────────────────────
+
+describe('#346 — the settlement account is resolved before it is recorded', () => {
+    it('RECORDS THE BANK’S NAME, NOT THE ONE THE FORM SENT', async () => {
+        // THE test. The fixture claims "Ada Obi"; the bank says
+        // "ADAEZE N OBI". Before #346 the claim was stored, and export returns
+        // and withdrawals are paid against it.
+        const { submitExportOnboardingAction } = await actions();
+        expect((await submitExportOnboardingAction(null, submission())).success).toBe(true);
+
+        const [[, app]] = applications();
+        expect((app.bank as any).accountName).toBe(RESOLVED_ACCOUNT_NAME);
+        expect((app.bank as any).verified).toBe(true);
+    });
+
+    it('AND REFUSES OUTRIGHT WHEN THE ACCOUNT DOES NOT RESOLVE', async () => {
+        bankResolvesTo(null);
+        const { submitExportOnboardingAction } = await actions();
+
+        const result = await submitExportOnboardingAction(null, submission());
+
+        expect(result.success).toBe(false);
+        expect(result.error).toMatch(/could not resolve/i);
+        expect(applications()).toHaveLength(0);
+    });
+
+    it('and when Paystack cannot be reached at all — it fails CLOSED', async () => {
+        // The choice this makes explicit: a Paystack outage refuses
+        // registrations rather than recording unverified payout accounts.
+        process.env.PAYSTACK_SECRET_KEY = 'sk_test_export';
+        global.fetch = jest.fn(async () => { throw new Error('ECONNRESET'); }) as any;
+        const { submitExportOnboardingAction } = await actions();
+
+        expect((await submitExportOnboardingAction(null, submission())).success).toBe(false);
+        expect(applications()).toHaveLength(0);
+    });
+});
 
 describe('submitting an export onboarding application', () => {
     it('files the application and stamps the registration', async () => {

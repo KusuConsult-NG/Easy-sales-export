@@ -2,6 +2,7 @@
 
 import { requireSession } from "@/lib/session-guard";
 import { checkModuleAccess } from "@/lib/module-access-check";
+import { resolveBankAccount } from "@/lib/bank-account-resolve";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { supabaseDb as db } from "@/lib/supabase-db";
@@ -245,7 +246,9 @@ async function _submitMarketplaceOnboardingAction(
             return { success: false as const, error: "Location details (State, LGA, Address) are required.", data: null };
         }
 
-        const bankParsed = parseJsonField<{ bankName?: string; accountNumber?: string; accountName?: string }>("bankAccount", {});
+        const bankParsed = parseJsonField<{
+            bankName?: string; accountNumber?: string; accountName?: string; bankCode?: string;
+        }>("bankAccount", {});
         if (!bankParsed.ok) {
             return { success: false as const, error: "Bank account details could not be read. Please re-enter them.", data: null };
         }
@@ -255,6 +258,50 @@ async function _submitMarketplaceOnboardingAction(
         if (isSeller && (!bankAccount?.bankName || !bankAccount?.accountNumber || !bankAccount?.accountName)) {
             return { success: false as const, error: "Bank account details (Bank Name, Account Number, Account Name) are required.", data: null };
         }
+
+        /**
+         *   #346 SECURITY: THE SELLER'S PAYOUT ACCOUNT NAME WAS WHATEVER THE
+         *        REQUEST SAID IT WAS.
+         *
+         *        #284 made the onboarding component resolve the account through
+         *        Paystack instead of simulating it. This action — the thing
+         *        that WRITES the record — never checked: it required the three
+         *        strings above to be non-empty and stored them. The browser was
+         *        the whole control, and #346 found two ways past it in the
+         *        component itself before even considering a crafted request.
+         *
+         *        This is a marketplace SELLER. `bankDetails.accountName` is
+         *        what the admin payout queue displays, what an approver checks
+         *        the transfer against, and what the escrow release pays out
+         *        towards.
+         *
+         *        The account is re-resolved here and the BANK'S name is what
+         *        gets stored — the submitted `accountName` is never written.
+         *        Failing closed is deliberate: an account that cannot be
+         *        resolved is not a verified one, and recording it anyway is the
+         *        defect being closed. Buyers are unaffected — they have no
+         *        payout account, so this runs for sellers only.
+         */
+        let resolvedAccountName = "";
+        if (isSeller) {
+            const resolution = await resolveBankAccount(bankAccount.accountNumber, bankAccount.bankCode);
+            if (!resolution.ok) {
+                return {
+                    success: false as const,
+                    error: resolution.reason
+                        || "We could not confirm that bank account. Please verify it again before submitting.",
+                    data: null,
+                };
+            }
+            resolvedAccountName = resolution.accountName ?? "";
+        }
+
+        // The record. `accountName` is the BANK'S answer for a seller; the
+        // submitted one is never stored. A buyer has no payout account, so
+        // there is nothing to resolve and nothing here to be wrong.
+        const bankAccountRecord = isSeller
+            ? { ...bankAccount, accountName: resolvedAccountName, verified: true }
+            : bankAccount;
 
         const categoriesParsed = parseJsonField<string[]>("sellerCategories", []);
         const certificationsParsed = parseJsonField<string[]>("certifications", []);
@@ -337,7 +384,7 @@ async function _submitMarketplaceOnboardingAction(
                 farmPhotoUrls,
                 productSampleUrls 
             },
-            bankAccount,
+            bankAccount: bankAccountRecord,
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
             _version: 0 
@@ -361,12 +408,13 @@ async function _submitMarketplaceOnboardingAction(
             };
 
             // Replicate bankAccount to user root bankDetails (DISEASE 6 / Save Bank Account Details fix)
-            if (bankAccount?.accountNumber) {
+            if (bankAccountRecord?.accountNumber) {
                 userUpdate.bankDetails = {
-                    accountNumber: bankAccount.accountNumber,
-                    bankName: bankAccount.bankName || "",
-                    accountName: bankAccount.accountName || "",
-                    bankCode: (bankAccount as any).bankCode || ""
+                    accountNumber: bankAccountRecord.accountNumber,
+                    bankName: bankAccountRecord.bankName || "",
+                    // #346 the resolved name for a seller, never the typed one.
+                    accountName: bankAccountRecord.accountName || "",
+                    bankCode: (bankAccountRecord as any).bankCode || ""
                 };
             }
 
@@ -399,7 +447,7 @@ async function _submitMarketplaceOnboardingAction(
                     lga: location.lga,
                     category: (formData.get("sellerCategory") as string) || "retail"
                 },
-                bankDetails: bankAccount,
+                bankDetails: bankAccountRecord,
                 documents: {
                     businessDoc: businessRegistrationUrl || undefined,
                     farmPhotos: farmPhotoUrls,

@@ -34,7 +34,7 @@
  * other is the sort of asymmetry that reads as a bug when it is a decision.
  */
 
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
 import { COLLECTIONS } from '@/lib/types/firestore';
 
@@ -70,12 +70,44 @@ function actAs(id: string | null, roles: string[] = ['user']): void {
     ));
 }
 
+/**
+ * #346 The bank the action now asks.
+ *
+ * submitMarketplaceOnboardingAction re-resolves a seller's account through
+ * lib/bank-account-resolve before recording it, because the payload used to be
+ * taken on trust. Every test here that expected a successful SELLER submission
+ * failed the moment that landed — they had all been filing registrations whose
+ * payout account nobody had checked.
+ *
+ * The stub answers with a name DELIBERATELY DIFFERENT from the one the fixture
+ * submits, so the assertions below can tell the bank's answer from the
+ * applicant's claim.
+ */
+const RESOLVED_ACCOUNT_NAME = 'ADAEZE N OBI';
+
+function bankResolvesTo(accountName: string | null): void {
+    process.env.PAYSTACK_SECRET_KEY = 'sk_test_marketplace';
+    global.fetch = jest.fn(async () => (accountName === null
+        ? { ok: false, status: 422, json: async () => ({ message: 'Could not resolve account name' }) }
+        : { ok: true, json: async () => ({ status: true, data: { account_name: accountName, account_number: '0123456789' } }) }
+    )) as any;
+}
+
+const SAVED_ENV = { ...process.env };
+const realFetch = global.fetch;
+
 beforeEach(() => {
     jest.clearAllMocks();
     uploadFileToStorage.mockImplementation(
         async (_f: unknown, destination: string) => `https://storage.test/${destination}`);
     store = installFakeDb();
     actAs(SELLER);
+    bankResolvesTo(RESOLVED_ACCOUNT_NAME);
+});
+
+afterEach(() => {
+    process.env = { ...SAVED_ENV };
+    global.fetch = realFetch;
 });
 
 async function actions() {
@@ -109,7 +141,9 @@ function submission(overrides: Record<string, unknown> = {}): FormData {
         productionCapacity: '5 tonnes',
         location: JSON.stringify({ state: 'Plateau', lga: 'Jos North', address: '12 Market Road' }),
         bankAccount: JSON.stringify({
-            bankName: 'Zenith', accountNumber: '0123456789', accountName: 'Ada Obi',
+            // #346 bankCode is what the server re-resolves on. `accountName`
+            // is the applicant's claim and is no longer what gets recorded.
+            bankName: 'Zenith', accountNumber: '0123456789', accountName: 'Ada Obi', bankCode: '057',
         }),
         sellerCategories: JSON.stringify(['grains']),
         certifications: JSON.stringify(['NAFDAC']),
@@ -475,7 +509,12 @@ describe('submitMarketplaceOnboardingAction — what a SELLER gets', () => {
             productionCapacity: '5 tonnes',
         });
         expect(verification.location).toMatchObject({ state: 'Plateau', lga: 'Jos North' });
-        expect(verification.bankAccount).toMatchObject({ accountNumber: '0123456789' });
+        expect(verification.bankAccount).toMatchObject({
+            accountNumber: '0123456789',
+            // #346 the BANK'S name, not the 'Ada Obi' the fixture submitted.
+            accountName: RESOLVED_ACCOUNT_NAME,
+            verified: true,
+        });
         expect(verification.sellerCategories).toEqual(['grains']);
         expect(verification.certifications).toEqual(['NAFDAC']);
     });
@@ -508,8 +547,15 @@ describe('submitMarketplaceOnboardingAction — what a SELLER gets', () => {
         await submitMarketplaceOnboardingAction(submission());
 
         const user = readUser();
+        // #346 REWRITTEN. This expected `accountName: 'Ada Obi'` — the string
+        // the fixture submitted — and `bankCode: ''`, because nothing sent one.
+        // Both were the defect: the payout name mirrored onto the user record
+        // was the applicant's own claim, resolved by nobody.
         expect(user.bankDetails).toMatchObject({
-            accountNumber: '0123456789', bankName: 'Zenith', accountName: 'Ada Obi', bankCode: '',
+            accountNumber: '0123456789',
+            bankName: 'Zenith',
+            accountName: RESOLVED_ACCOUNT_NAME,
+            bankCode: '057',
         });
         expect(user.address).toMatchObject({
             street: '12 Market Road', state: 'Plateau', lga: 'Jos North', country: 'Nigeria',

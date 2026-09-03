@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Building2, CheckCircle, AlertCircle, Loader2, RefreshCw } from "lucide-react";
 import { getBankList } from "@/app/actions/paystack";
 
@@ -15,7 +15,16 @@ interface BankAccountVerificationProps {
     accountNumber?: string;
     accountName?: string;
     onVerify?: (isValid: boolean, accountName?: string) => void;
-    onVerified?: (accountData: { bankName: string; accountNumber: string; accountName: string }) => void;
+    /**
+     * Called with the current bank details AND whether the account has actually
+     * been resolved. `verified` is new in #346 — consumers used to infer it
+     * from `accountName` being non-empty, which the applicant could type.
+     */
+    onVerified?: (accountData: {
+        bankName: string; accountNumber: string; accountName: string; verified: boolean;
+        /** #346 The server re-resolves at the point of record, and needs this. */
+        bankCode: string;
+    }) => void;
     initialData?: {
         bankName: string;
         accountNumber: string;
@@ -64,15 +73,61 @@ export default function BankAccountVerification({
         loadBanks();
     }, []);
 
+    /**
+     *   #346 SECURITY: THIS EFFECT WAS A WAY PAST THE VERIFY BUTTON.
+     *
+     *        #284 replaced the simulated verification in handleVerify with a
+     *        real call to /api/kyc/verify-bank-account. This effect, sitting
+     *        forty lines above it, made that irrelevant:
+     *
+     *            if (bankName && accountNumber.length === 10 && resolvedName) {
+     *                onVerified?.({ bankName, accountNumber, accountName: resolvedName });
+     *            }
+     *
+     *        `resolvedName` is the state behind an ordinary TEXT INPUT the
+     *        applicant fills in themselves ("Enter account name"). So picking a
+     *        bank, typing ten digits and typing any name at all propagated a
+     *        complete, apparently-resolved bank account to the parent — without
+     *        the verify button ever being pressed.
+     *
+     *        And marketplace onboarding's step gated Continue on
+     *        `!data?.accountName`. A MARKETPLACE SELLER — the party the escrow
+     *        pays out to — completed registration with a bank account whose
+     *        holder name they had typed. That is the account an admin approves
+     *        against and the payout queue transfers to.
+     *
+     *        Two changes close it. The account-name input is now read-only: the
+     *        name is RESOLVED, never entered. And this effect propagates the
+     *        real verification state instead of implying one, so a consumer
+     *        gates on the fact rather than on a string being non-empty.
+     *
+     *        THE SECOND DEFECT IN THE SAME FIVE LINES: `onVerified` was in the
+     *        dependency array. Neither consumer memoises it (marketplace passes
+     *        an inline arrow; the export step declares the handler in its body),
+     *        and both wizards' setters return a fresh object every time — so
+     *        the effect re-ran on every render, called the parent, re-rendered,
+     *        and ran again. An unbounded update loop, with a localStorage write
+     *        per iteration. The callback is held in a ref so the effect depends
+     *        on the DATA it sends, not on the identity of the function it sends
+     *        it to.
+     */
+    const onVerifiedRef = useRef(onVerified);
+    useEffect(() => { onVerifiedRef.current = onVerified; });
+
     useEffect(() => {
-        if (bankName && accountNumber && accountNumber.length === 10 && resolvedName) {
-            onVerified?.({
+        if (bankName && accountNumber && accountNumber.length === 10) {
+            const verified = verificationStatus === "success" && Boolean(resolvedName);
+            onVerifiedRef.current?.({
                 bankName,
                 accountNumber,
-                accountName: resolvedName
+                bankCode: banks.find((b) => b.name === bankName)?.code ?? "",
+                // Only a resolved name leaves this component. Anything else is
+                // the applicant's guess and must not reach a payout record.
+                accountName: verified ? resolvedName : "",
+                verified,
             });
         }
-    }, [bankName, accountNumber, resolvedName, onVerified]);
+    }, [bankName, accountNumber, resolvedName, verificationStatus, banks]);
 
     async function loadBanks() {
         setLoadingBanks(true);
@@ -160,7 +215,7 @@ export default function BankAccountVerification({
             setVerificationStatus("success");
 
             onVerify?.(true, resolved);
-            onVerified?.({ bankName, accountNumber, accountName: resolved });
+            onVerified?.({ bankName, accountNumber, accountName: resolved, verified: true, bankCode });
         } catch (error) {
             console.error('Bank verification error:', error);
             setVerificationStatus("error");
@@ -179,7 +234,9 @@ export default function BankAccountVerification({
         onVerified?.({
             bankName,
             accountNumber,
-            accountName: ""
+            accountName: "",
+            verified: false,
+            bankCode: banks.find((b) => b.name === bankName)?.code ?? "",
         });
     }
 
@@ -252,13 +309,17 @@ export default function BankAccountVerification({
                                 <label className="block text-sm font-medium text-slate-700">
                                     Account Name
                                 </label>
+                                {/* #346 READ-ONLY. This was an editable field
+                                    labelled "Enter account name", and what was
+                                    typed into it became the account's holder
+                                    name — see the effect above. The name comes
+                                    back from the bank, or it does not exist. */}
                                 <input
                                     type="text"
                                     value={resolvedName}
-                                    onChange={(e) => setResolvedName(e.target.value)}
-                                    placeholder="Enter account name"
-                                    disabled={isVerifying}
-                                    className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm disabled:opacity-50"
+                                    readOnly
+                                    placeholder="Fills in when you verify"
+                                    className="w-full px-4 py-2.5 bg-slate-100 border border-slate-300 rounded-lg text-sm text-slate-600 cursor-not-allowed"
                                 />
                             </div>
                         </div>

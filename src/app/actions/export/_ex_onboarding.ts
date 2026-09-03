@@ -2,6 +2,7 @@
 
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { hashData } from "@/lib/security";
+import { resolveBankAccount } from "@/lib/bank-account-resolve";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
@@ -65,6 +66,37 @@ export async function submitExportOnboardingAction(
         }
         const validatedData = validation.data;
 
+
+        /**
+         *   #346 SECURITY: THE SETTLEMENT ACCOUNT NAME CAME FROM THE REQUEST.
+         *
+         *        Same shape as the marketplace half of this finding: #284 made
+         *        the onboarding COMPONENT resolve the account through Paystack,
+         *        and this action — which writes the record — accepted whatever
+         *        three strings arrived. Export returns and withdrawals are paid
+         *        to this account.
+         *
+         *        Re-resolved here, and the BANK'S name is what is stored. An
+         *        account that cannot be resolved is refused rather than
+         *        recorded, for the same reason the component refuses it.
+         */
+        const bankResolution = await resolveBankAccount(
+            validatedData.bank.accountNumber, (validatedData.bank as any).bankCode,
+        );
+        if (!bankResolution.ok) {
+            return {
+                success: false as const,
+                error: bankResolution.reason
+                    || "We could not confirm that bank account. Please verify it again before submitting.",
+                meta: null,
+            };
+        }
+        const verifiedBank = {
+            ...validatedData.bank,
+            accountName: bankResolution.accountName ?? "",
+            verified: true,
+        };
+
         const idDocument = formData.get("idDocument");
         const proofOfAddress = formData.get("proofOfAddress");
 
@@ -112,7 +144,7 @@ export async function submitExportOnboardingAction(
                 ...validatedData.kycData,
                 documents: documents // Now contains URLs
             },
-            bank: validatedData.bank,
+            bank: verifiedBank,
             terms: validatedData.terms,
             status: "pending_review",
             submittedAt: FieldValue.serverTimestamp(),
@@ -608,6 +640,25 @@ export async function resubmitExportApplicationAction(
         }
         const validatedData = validation.data;
 
+        // #346 The resubmission is a second writer of the same record and had
+        // the same hole. See submitExportOnboardingAction above.
+        const bankResolution = await resolveBankAccount(
+            validatedData.bank.accountNumber, (validatedData.bank as any).bankCode,
+        );
+        if (!bankResolution.ok) {
+            return {
+                success: false as const,
+                error: bankResolution.reason
+                    || "We could not confirm that bank account. Please verify it again before resubmitting.",
+                data: null, meta: null,
+            };
+        }
+        const verifiedBank = {
+            ...validatedData.bank,
+            accountName: bankResolution.accountName ?? "",
+            verified: true,
+        };
+
         const batch = db.batch();
         batch.update(appRef, { 
             userId, // Ensure userId is populated
@@ -616,7 +667,7 @@ export async function resubmitExportApplicationAction(
                 ...validatedData.kycData,
                 documents: fields.kyc?.documents || {}
             },
-            bank: validatedData.bank,
+            bank: verifiedBank,
             terms: validatedData.terms,
             status: 'pending_review',
             revisionNote: null,
@@ -641,11 +692,12 @@ export async function resubmitExportApplicationAction(
             phone: validatedData.profile.phone,
             stateOfOrigin: validatedData.profile.state,
             // Mirror bank details
-            ...(validatedData.bank.accountNumber ? {
+            ...(verifiedBank.accountNumber ? {
                 bankDetails: {
-                    accountNumber: validatedData.bank.accountNumber,
-                    bankName: validatedData.bank.bankName || "",
-                    accountName: validatedData.bank.accountName || "",
+                    accountNumber: verifiedBank.accountNumber,
+                    bankName: verifiedBank.bankName || "",
+                    // #346 the resolved name, never the submitted one.
+                    accountName: verifiedBank.accountName || "",
                     bankCode: ""
                 }
             } : {}),
