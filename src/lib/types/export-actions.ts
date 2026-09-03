@@ -97,6 +97,16 @@ export const exportOnboardingSchema = z.object({
         nin: z.string().optional().or(z.literal("")),
         bvn: z.string().optional().or(z.literal("")),
         cacNumber: z.string().optional().or(z.literal("")),
+        /**
+         * #349 KYCForm collects a Voter's Card number and offers to verify it.
+         * Zod strips unknown keys, so the number and its verification were
+         * dropped between the step and the record — collected, validated, and
+         * never stored.
+         */
+        votersCard: z.string().optional().or(z.literal("")),
+        votersCardVerified: z.boolean().optional(),
+        ninVerified: z.boolean().optional(),
+        bvnVerified: z.boolean().optional(),
     }),
     bank: z.object({
         accountNumber: z.string().length(10, "Account number must be 10 digits"),

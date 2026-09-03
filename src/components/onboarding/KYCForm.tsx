@@ -75,12 +75,30 @@ function VerifyBadge({ state, message }: { state: VerifyState; message?: string 
 }
 
 export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFormProps) {
-    const [formData, setFormData] = useState<Partial<KYCData>>(() => {
-        const initial = { ...initialData };
-        if (initial.nin) initial.ninVerified = true;
-        if (initial.bvn) initial.bvnVerified = true;
-        return initial;
-    });
+    /**
+     *   #349 #285's DEFECT SURVIVED, FOUR LINES ABOVE #285's OWN FIX.
+     *
+     *        This initialiser read:
+     *
+     *            const initial = { ...initialData };
+     *            if (initial.nin) initial.ninVerified = true;
+     *            if (initial.bvn) initial.bvnVerified = true;
+     *
+     *        — the presence of a NUMBER asserted as a verification, which is
+     *        exactly what #285 removed from handleChange. The badge states
+     *        immediately below were corrected by #285 and read the FLAGS, so
+     *        the screen showed "not verified" while the DATA said verified, and
+     *        it is the data that onDataChange propagates and the export step
+     *        gates its Continue button on.
+     *
+     *        #285's ratchet could not see it: it filters on the last verify
+     *        handler appearing before the other assignments, and this sits in a
+     *        useState initialiser above every handler in the file.
+     *
+     *        A saved verification comes back on `ninVerified` / `bvnVerified`,
+     *        which the caller persists. A saved NUMBER is a saved number.
+     */
+    const [formData, setFormData] = useState<Partial<KYCData>>(() => ({ ...initialData }));
     // #285 These read `initialData?.bvn` / `?.nin` — the presence of a NUMBER —
     // and so showed "Verified" for any saved value. The voters-card line below
     // always read the verified FLAG; these two now match it.
@@ -417,7 +435,50 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                     error={ninError}
                     hint="Dial *346# to retrieve your NIN. Your name must match your NIN record exactly."
                     accentColor="orange"
+                    /* #349 THE VERIFY BUTTON. handleVerifyNIN, handleVerifyBVN,
+                       handleVerifyVotersCard and the VerifyBadge component were
+                       all UNREACHABLE: IdInput takes a `suffix` for exactly
+                       this ("a Verify button or status badge", its own doc) and
+                       no call site passed one, and there was no <button> in the
+                       file at all. So the three states never left 'idle', the
+                       badge never rendered, and the only way the export step's
+                       "Please verify your NIN before continuing" could be
+                       satisfied was the initialiser defect above. */
+                    suffix={
+                        ninState === 'verified'
+                            ? <VerifyBadge state={ninState} />
+                            : (
+                                <button
+                                    type="button"
+                                    onClick={handleVerifyNIN}
+                                    disabled={ninState === 'loading'}
+                                    className="px-4 py-2 text-sm font-semibold rounded-lg bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                >
+                                    {ninState === 'loading' ? 'Verifying…' : 'Verify'}
+                                </button>
+                            )
+                    }
                 />
+                {/* #349 THE CONFIRMATION CHECKBOX, WHICH ALSO DID NOT EXIST.
+                    handleVerifyNIN refuses while `ninConfirmed` is false, and
+                    #285's write-up calls it "a real gate" — but setNinConfirmed
+                    and setBvnConfirmed were never called from anywhere in this
+                    file, so with the Verify button wired the handler would have
+                    refused every time with "Please confirm that your digits are
+                    correct". Three halves of one control had been built and
+                    none of them rendered. handleChange already clears it when
+                    the number is edited. */}
+                {ninState !== 'verified' && (
+                    <label className="mt-2 flex items-start gap-2 text-sm text-slate-600 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={ninConfirmed}
+                            onChange={(e) => setNinConfirmed(e.target.checked)}
+                            className="mt-0.5 w-4 h-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500"
+                        />
+                        <span>I confirm the NIN digits above are correct.</span>
+                    </label>
+                )}
             </div>
 
             {/* ── Voter's Card — collect number only, no verification required ── */}
@@ -431,6 +492,21 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                     placeholder="e.g. 90F5B123456789012345"
                     hint="The Voter Identification Number (VIN) as printed on your Permanent Voter Card."
                     accentColor="orange"
+                    error={votersCardError}
+                    suffix={
+                        votersCardState === 'verified'
+                            ? <VerifyBadge state={votersCardState} />
+                            : (
+                                <button
+                                    type="button"
+                                    onClick={handleVerifyVotersCard}
+                                    disabled={votersCardState === 'loading'}
+                                    className="px-4 py-2 text-sm font-semibold rounded-lg bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                >
+                                    {votersCardState === 'loading' ? 'Verifying…' : 'Verify'}
+                                </button>
+                            )
+                    }
                 />
             </div>
 
@@ -449,7 +525,32 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                         error={bvnError}
                         hint="Dial *565*0# to retrieve your BVN. Your name must match your BVN record exactly."
                         accentColor="orange"
+                        suffix={
+                            bvnState === 'verified'
+                                ? <VerifyBadge state={bvnState} />
+                                : (
+                                    <button
+                                        type="button"
+                                        onClick={handleVerifyBVN}
+                                        disabled={bvnState === 'loading'}
+                                        className="px-4 py-2 text-sm font-semibold rounded-lg bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                    >
+                                        {bvnState === 'loading' ? 'Verifying…' : 'Verify'}
+                                    </button>
+                                )
+                        }
                     />
+                    {bvnState !== 'verified' && (
+                        <label className="mt-2 flex items-start gap-2 text-sm text-slate-600 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={bvnConfirmed}
+                                onChange={(e) => setBvnConfirmed(e.target.checked)}
+                                className="mt-0.5 w-4 h-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500"
+                            />
+                            <span>I confirm the BVN digits above are correct.</span>
+                        </label>
+                    )}
                 </div>
             )}
 
