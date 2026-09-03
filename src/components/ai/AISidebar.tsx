@@ -1,5 +1,16 @@
 "use client";
 
+/**
+ *   #361 THIS FILE IS NOT RENDERED. NOTHING IMPORTS IT.
+ *
+ *        Kept, not deleted, per the standing instruction — and the links inside
+ *        it were still repaired in #359, because a component one import away
+ *        from being live should be correct either way.
+ *
+ *        See src/__tests__/unit/nav-components-are-rendered.test.ts for the
+ *        measurement and the list of the seven.
+ */
+
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { usePathname } from "next/navigation";

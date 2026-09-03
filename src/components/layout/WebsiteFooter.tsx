@@ -1,3 +1,13 @@
+/**
+ *   #361 THIS FILE IS NOT RENDERED. NOTHING IMPORTS IT.
+ *
+ *        Kept, not deleted, per the standing instruction — and the links inside
+ *        it were still repaired in #359, because a component one import away
+ *        from being live should be correct either way.
+ *
+ *        See src/__tests__/unit/nav-components-are-rendered.test.ts for the
+ *        measurement and the list of the seven.
+ */
 import Link from "next/link";
 import { Facebook, Twitter, Instagram, Linkedin, Mail, Phone, MapPin, MessageCircle } from "lucide-react";
 import { COMPANY_INFO } from "@/lib/constants";

@@ -72,6 +72,16 @@ export const MODULE_NAVIGATION: Record<string, NavigationItem[]> = {
          *        and preferences tabs, and its security tab is what links on
          *        to settings/security/mfa. The tab is selectable by query
          *        param now, so this lands where the label promises.
+         *
+         *   #361 CORRECTION TO THE ABOVE: NOBODY EVER SAW THIS LINK.
+         *
+         *        This table is read by components/layout/Sidebar.tsx, and
+         *        NOTHING IMPORTS Sidebar.tsx. The rendered navigation is
+         *        ModuleSidebar.tsx (via ClientLayout) and AdminSidebar.tsx
+         *        (via app/admin/layout.tsx). So the 404 above was real but
+         *        unreachable, and #359's severity claim was wrong.
+         *
+         *        The repair stands: this file is one import from being live.
          */
         { name: "Settings", href: "/profile?tab=preferences", icon: Settings },
     ],

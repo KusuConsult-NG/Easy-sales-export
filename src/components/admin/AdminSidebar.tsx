@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import {
+    Activity,
     LayoutDashboard,
     Users,
     Waves,
@@ -48,6 +49,18 @@ const NAV_ITEMS = [
     { label: "Orphaned Users", href: "/admin/orphaned-users", icon: UserX, section: "platform" },
 
     { label: "Feature Toggles", href: "/admin/feature-toggles", icon: ToggleLeft, section: "platform" },
+    /**
+     *   #361 /admin/system-health HAD NO REACHABLE LINK ANYWHERE IN THE APP.
+     *
+     *        The page exists, runs runSystemHealthDiagnostic, and gates itself
+     *        on isAdmin. The only thing that named it was
+     *        lib/sidebar-config.ts — which is read by components/layout/
+     *        Sidebar.tsx, which nothing imports. So the platform diagnostic was
+     *        reachable only by typing the URL.
+     *
+     *        This is the nav table /admin/layout.tsx actually renders.
+     */
+    { label: "System Health", href: "/admin/system-health", icon: Activity, section: "platform" },
     // Announcements and banners render site-wide via AnnouncementBanner.tsx.
     // The actions existed and the page did not, so the only way to publish was
     // to write to the database by hand.
