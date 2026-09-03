@@ -423,12 +423,25 @@ describe('moderateReviewAction — and the product rating nobody used to write',
         expect(await moderate('approved')).toMatchObject({ success: false });
     });
 
-    it.each([['mod-1', 'moderator'], ['mkt-1', 'marketplace_admin'], [BUYER, 'general_user']])(
+    it.each([['mod-1', 'moderator'], ['mkt-1', 'marketplace_admin']])(
+        'ADMITS %s, WHICH THE MATRIX SAYS OWNS THIS JOB', async (id, role) => {
+            //   #265 These two were refused, under a note explaining that
+            //        switching to isAdmin() "would admit moderator, support and
+            //        every module admin". True of isAdmin(), and not the
+            //        choice. marketplace:moderate_reviews is granted to
+            //        super_admin, admin, moderator and marketplace_admin — not
+            //        support, not every module admin. The role literally named
+            //        "moderator" could not moderate.
+            actAs(id, [role]);
+
+            expect(await moderate('approved')).toMatchObject({ success: true });
+            expect(store.get(REVIEWS, 'r1')?.status).toBe('approved');
+        });
+
+    it.each([[BUYER, 'general_user'], ['sup-1', 'support'], ['wave-1', 'wave_admin']])(
         'refuses %s', async (id, role) => {
             actAs(id, [role]);
-            expect(await moderate('approved')).toMatchObject({
-                success: false, error: 'Not authorized as admin',
-            });
+            expect(await moderate('approved')).toMatchObject({ success: false });
             expect(store.get(REVIEWS, 'r1')?.status).toBe('pending');
         });
 
@@ -543,9 +556,14 @@ describe('getAdminReviewsAction', () => {
         actAs('admin-1', ['admin']);
     });
 
-    it('refuses a moderator — review moderation is not widened to isAdmin()', async () => {
+    it('admits a moderator, and still refuses a role without the permission', async () => {
+        // #265 The queue and the moderate button are one job, so they take one
+        // permission. Support is the control: a role that holds neither.
         actAs('mod-1', ['moderator']);
-        expect(await list()).toMatchObject({ success: false, error: 'Not authorized as admin' });
+        expect(await list()).toMatchObject({ success: true });
+
+        actAs('sup-1', ['support']);
+        expect(await list()).toMatchObject({ success: false });
     });
 
     it('returns everything newest first, with exact counts on the first page', async () => {

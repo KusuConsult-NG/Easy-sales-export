@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
+import { waveCommission, sumWaveCommissions } from "@/lib/wave-commission";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { debitJsonbBalance } from "@/lib/wallet-ledger";
 import { getFeatureToggle } from "@/app/actions/feature-toggles";
@@ -106,11 +107,23 @@ async function _calculateEarningsAction(userId: string): Promise<ActionResponse<
             );
         }
 
-        const commissionRate = 0.05;
+        // One commission rate for the whole platform (#253).
+        //
+        // This was `const commissionRate = 0.05;`, and order-management.ts —
+        // which CREDITS the balance a member withdraws against — carried its
+        // own `const waveCommissionRate = 0.05`. Two live copies of one number
+        // that had to agree, kept in step by nothing but luck. Change one and
+        // this screen becomes a lie about money: it would report earnings the
+        // balance does not contain.
+        const { getWaveSettings } = await import("@/lib/system-settings");
+        const { commissionRate } = await getWaveSettings();
         let totalSales = 0;
-        let totalEarnings = 0;
-        let pendingAmount = 0;
-        let calculatedPaidAmount = 0;
+        // #270 Accumulated in kobo and converted once, rather than added as
+        // floats. 99.95 + 99.95 is not reliably 199.90, and this total is
+        // written to the member's stored balance by the backfill below.
+        const earnedCommissions: number[] = [];
+        const pendingCommissions: number[] = [];
+        const paidCommissions: number[] = [];
         const transactions: any[] = [];
 
         escrowDocs.forEach(doc => {
@@ -129,15 +142,19 @@ async function _calculateEarningsAction(userId: string): Promise<ActionResponse<
             const saleAmount = Number(escrow.amount ?? escrow.grossAmount ?? 0);
             if (!Number.isFinite(saleAmount) || saleAmount <= 0) return;
 
-            const commission = saleAmount * commissionRate;
+            // #270 Was `saleAmount * commissionRate` — unrounded, and summed
+            // into a total that reached 2538.3500000000004 and got PERSISTED as
+            // waveEarningsBalance by the backfill below. Same function as the
+            // credit in order-management.ts now, so the two cannot drift.
+            const commission = waveCommission(saleAmount, commissionRate);
 
             totalSales += saleAmount;
-            totalEarnings += commission;
+            earnedCommissions.push(commission);
 
             if (isPaid) {
-                calculatedPaidAmount += commission;
+                paidCommissions.push(commission);
             } else {
-                pendingAmount += commission;
+                pendingCommissions.push(commission);
             }
 
             transactions.push({
@@ -165,6 +182,10 @@ async function _calculateEarningsAction(userId: string): Promise<ActionResponse<
          * `rejected` is correctly absent: a rejection restores the balance
          * separately, and counting it here would deduct it twice.
          */
+        const totalEarnings = sumWaveCommissions(earnedCommissions);
+        const pendingAmount = sumWaveCommissions(pendingCommissions);
+        const calculatedPaidAmount = sumWaveCommissions(paidCommissions);
+
         const COMMITTED_WITHDRAWAL_STATUSES = [
             "pending",
             "approved",

@@ -9,7 +9,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { claimPaymentOnce } from "@/lib/wallet-ledger";
+import { claimPaymentOnce, markFulfilmentFailed } from "@/lib/wallet-ledger";
 import { rateLimit } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
@@ -156,7 +156,11 @@ export async function initializeEnrollmentPaymentAction(
 export async function verifyEnrollmentPaymentAction(reference: string): Promise<
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
-> { try {
+> {
+    // Set once THIS call owns the fulfilment — see the catch at the end (#259).
+    let claimedReference: string | null = null;
+
+    try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
     const { session } = sessionResult;
@@ -306,6 +310,9 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
             return { error: null, success: true as const, data: null };
         }
 
+        // This call claimed it, so this call owes the fulfilment (#259).
+        claimedReference = reference;
+
         {
             const enrollmentRef = db.collection(COLLECTIONS.ENROLLMENTS).doc(enrollmentId);
             await enrollmentRef.update({
@@ -327,6 +334,28 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
             // in SQL (migration 010), and needs no read at all.
             const courseRef = db.collection(COLLECTIONS.ACADEMY_COURSES).doc(metadata.courseId);
             await courseRef.update({
+                /**
+                 *   #336 A PAID ENROLMENT COUNTED ON A DIFFERENT FIELD FROM A
+                 *        FREE ONE.
+                 *
+                 *        This incremented `students`. _ac_enrollment.ts — the
+                 *        free/auto path — increments `enrolledCount`, which is
+                 *        what lib/types/academy.ts declares (required) and what
+                 *        both course creators now initialise. So the two halves
+                 *        of "how many people are on this course" were kept in
+                 *        two different places, and neither was ever the whole
+                 *        number.
+                 *
+                 *        `enrolledCount` is incremented here so the paid half
+                 *        lands in the same tally as the free half. `students`
+                 *        is incremented alongside rather than dropped, because
+                 *        rows already carry it — the same treatment #183 gave
+                 *        `message`/`content`. Nothing reads either yet; if a
+                 *        screen is ever built it should read `enrolledCount`,
+                 *        and courses enrolled before this commit will need a
+                 *        one-off backfill from `students`.
+                 */
+                enrolledCount: FieldValue.increment(1),
                 students: FieldValue.increment(1) });
 
             // (The processed_payments row is written by claimPaymentOnce above.)
@@ -334,6 +363,17 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
 
         return { error: null, success: true as const, data: null };
     } catch (error: any) { // 🔒 SECURITY FIX #2: Sanitized error logging
+        // Money collected, nothing delivered — reconciliation has to see it,
+        // not just the log (#259). Guarded on having claimed: a failure before
+        // the claim collected nothing in our name, and on a DUPLICATE the
+        // earlier delivery owns the reference.
+        if (claimedReference) {
+            await markFulfilmentFailed(
+                claimedReference,
+                error instanceof Error ? error.message : String(error),
+            );
+        }
+
         logger.error('[Payment Verification Error]', {
             timestamp: new Date().toISOString(),
             action: 'verifyEnrollment',
@@ -438,6 +478,9 @@ export const initiateAcademyPaymentAction = withFlexibleSafeAction("initiateAcad
  * Verify academy registration payment callback
  */
 async function _verifyAcademyPaymentAction(reference: string): Promise<ActionResponse<null>> {
+    // Set once THIS call owns the fulfilment — see the catch at the end (#259).
+    let claimedReference: string | null = null;
+
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: 'Unauthorized', data: null };
@@ -555,6 +598,9 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<ActionRes
             logger.info(`[verifyAcademyPaymentAction] Payment ${reference} already claimed — nothing to do.`);
             return { success: true, error: null, data: null };
         }
+
+        // This call claimed it, so this call owes the fulfilment.
+        claimedReference = reference;
 
         {
             const appQuery = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
@@ -682,6 +728,15 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<ActionRes
 
         return { success: true, error: null, data: null };
     } catch (error) {
+        // See #259 — a fulfilment that dies after the claim must be visible to
+        // reconciliation, not only to the log.
+        if (claimedReference) {
+            await markFulfilmentFailed(
+                claimedReference,
+                error instanceof Error ? error.message : String(error),
+            );
+        }
+
         logger.error("Academy payment verification error:", {
             reference,
             error: error instanceof Error ? error.message : String(error)
@@ -699,7 +754,9 @@ async function _checkAcademyPaymentStatusAction(): Promise<ActionResponse<any>> 
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: 'Unauthorized', data: null };
         const { session } = sessionResult;
-        if (!session?.user?.id) return { error: null, success: true as const, data: "unpaid" };
+        // #316 — a session with no user id is a broken session, not a learner
+        // known not to have paid. It used to answer "unpaid" definitively.
+        if (!session?.user?.id) return { success: false as const, error: "Unauthorized", data: null };
 
         // Payment bypass — see src/lib/payment-bypass.ts for who and why.
         if (isPaymentBypassAccount(session.user.email)) {
@@ -748,10 +805,26 @@ async function _checkAcademyPaymentStatusAction(): Promise<ActionResponse<any>> 
 
         return { error: null, success: true as const, data: "unpaid" };
     } catch (error) {
+        // Was: { error: null, success: true, data: "unpaid" } — #316.
+        //
+        // A database failure asserted a DEFINITIVE "this learner has not paid".
+        // It is #313's shape on money: not knowing reported as a fact, in the
+        // direction that harms the person who DID pay.
+        //
+        // And it defeated the caller that was doing the right thing.
+        // academy/(learner)/layout.tsx guards its hard redirect with
+        // `payStatus.success && payStatus.data === "unpaid"` under the comment
+        // "Only hard-redirect if the payment check definitively confirms
+        // unpaid" — success:true made that guard meaningless, so a transient
+        // read error threw a paid learner out of the academy and into the
+        // payment flow, which offers to charge them again.
+        //
+        // Callers must now distinguish three answers, not two: paid, unpaid,
+        // and we-could-not-tell.
         logger.error("Check academy payment status error:", {
             error: error instanceof Error ? error.message : String(error)
         });
-        return { error: null, success: true as const, data: "unpaid" };
+        return { success: false as const, error: "Could not check payment status", data: null };
     }
 }
 export const checkAcademyPaymentStatusAction = withFlexibleSafeAction("checkAcademyPaymentStatusAction", _checkAcademyPaymentStatusAction);

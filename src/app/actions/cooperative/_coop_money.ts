@@ -14,6 +14,7 @@ import { invalidateCooperativeCache, invalidateAdminGlobalStats } from "@/lib/ca
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { debitJsonbBalance, debitJsonbBalanceWithFloor, claimSingleOpenLoanApplication, compensateJsonbDebit } from "@/lib/wallet-ledger";
 import { canTransactAsMember, NOT_A_TRANSACTING_MEMBER_MESSAGE } from "@/lib/cooperative-membership-status";
+import { ONE_OPEN_LOAN_APPLICATION_MESSAGE } from "@/lib/loan-application-location";
 import {
     COOPERATIVE_MINIMUM_BALANCE,
     COOPERATIVE_MINIMUM_WITHDRAWAL,
@@ -22,7 +23,10 @@ import {
     availableAboveFloor,
 } from "@/lib/cooperative-limits";
 import { COOPERATIVE_CONFIG } from "@/lib/constants";
-import { contributionSchema, loanApplicationSchema, fixedSavingsSchema, type MembershipRegistrationState, type LoanApplicationState, type FixedSavingsState, type WithdrawalActionState } from "@/lib/types/cooperative";
+// contributionSchema is no longer imported here: the action that parsed with it
+// no longer reads its input at all (#333, below). The schema itself stays in
+// lib/types/cooperative.ts — it is the shape a paid contribution form submits.
+import { loanApplicationSchema, fixedSavingsSchema, type MembershipRegistrationState, type LoanApplicationState, type FixedSavingsState, type WithdrawalActionState } from "@/lib/types/cooperative";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { parseFormData } from "@/lib/form-validation";
 import type { CooperativeTransaction, MakeContributionState, GetTransactionsState } from "@/lib/types/cooperative";
@@ -37,6 +41,9 @@ import {
 } from "@/lib/cooperative-savings";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
 import { isTransientError } from "@/lib/transient-error";
+import { isRetired } from "@/lib/record-retirement";
+import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
+import { readCooperativeBalance } from "@/lib/cooperative-member-balance";
 
 /**
  * Server Actions for Cooperative Management
@@ -92,7 +99,14 @@ async function _initiateCooperativePaymentAction(
         // Check if already active or paid
         const memberDoc = await runQueryWithRetry(() => memberRef.get());
         if (memberDoc.exists) { const data = memberDoc.data();
-            if (data?.membershipStatus === "active") {
+            // canTransactAsMember, not `=== "active"`: "approved" is the legacy
+            // spelling of the same state. A legacy member falling past this
+            // branch is not merely told the wrong thing — the merge below
+            // rewrites their membershipStatus to "pending" and Paystack charges
+            // them the registration fee a second time. See
+            // lib/cooperative-membership-status.ts, which this file already
+            // uses for the withdrawal door below.
+            if (canTransactAsMember(data)) {
                 return {
                     error: null,
                     success: true as const,
@@ -161,120 +175,104 @@ async function _initiateCooperativePaymentAction(
 export const initiateCooperativePaymentAction = withFlexibleSafeAction("initiateCooperativePaymentAction", _initiateCooperativePaymentAction);
 
 
+/**
+ *   #333 A SECOND CONTRIBUTION ACTION CREDITED SAVINGS WITH NO PAYMENT AT ALL.
+ *
+ *        Two ways to add to a member's cooperative savings existed in this
+ *        codebase. Only one of them took money.
+ *
+ *          THE WIRED ONE   /cooperatives/(member)/contribute
+ *                          → initializeContributionPaymentAction  (Paystack)
+ *                          → verifyContributionPaymentAction      (_payment.ts)
+ *
+ *                          claims the reference through claimPaymentOnce,
+ *                          verifies the charge, then increments BOTH
+ *                          totalContributions and savingsBalance, writes the
+ *                          unified and cooperative ledger rows against the
+ *                          Paystack reference, and recomputes the tier.
+ *
+ *          THIS ONE        read an amount off a FormData and did:
+ *
+ *                              savingsBalance: FieldValue.increment(amount)
+ *                              totalSavings:   FieldValue.increment(amount)
+ *
+ *                          for "savings", or
+ *
+ *                              loanBalance: FieldValue.increment(-amount)
+ *
+ *                          for "loan_repayment". No payment. No reference. No
+ *                          claim. The amount was whatever the caller typed.
+ *
+ *        SAVINGS ARE SPENDABLE, WHICH IS WHY THIS IS NOT COSMETIC.
+ *        _withdrawal.ts debits savingsBalance for a real bank transfer,
+ *        _loans_repayments.ts repays a loan from it, and the borrowing limit is
+ *        a multiple of it (COOPERATIVE_TIERS.maxLoanMultiplier). So a caller
+ *        could mint savings, withdraw them as money, or borrow against them —
+ *        and on the other branch simply erase their own loan balance.
+ *
+ *        AND IT WAS THE ONE MONEY ACTION IN THIS FILE WITH NO MEMBER GUARD.
+ *        The withdrawal, the loan application and the fixed-savings creator all
+ *        call canTransactAsMember (lines below). This asked only that a
+ *        membership row exist, so a SUSPENDED member could use it too.
+ *
+ *        Even used as intended it left the row inconsistent: it never touched
+ *        totalContributions or tier, both of which the paid path maintains, and
+ *        its cooperative_transactions row carried no `reference` — the field
+ *        the admin ledger screen and its CSV export both read.
+ *
+ *        REACHABILITY, CHECKED BEFORE CONCLUDING ANYTHING. Its only UI,
+ *        components/modals/ContributionModal.tsx, is imported by NOTHING — no
+ *        page renders it. But this file is "use server" and the cooperative
+ *        barrel re-exports this action (index.ts), and that barrel is imported
+ *        by client components that ARE rendered (RecordRepaymentModal,
+ *        LoanApplicationWizard, RepaymentSchedule, RepayFromSavingsModal). So
+ *        it compiled into a live authenticated POST endpoint with no screen in
+ *        front of it — exactly what #279 was, where an unreferenced
+ *        enrollInCourseAction granted paid courses for free.
+ *
+ *        REFUSED RATHER THAN REMOVED. Nothing here is deleted: the export, the
+ *        signature and the state shape all stand, so the barrel and the modal
+ *        still compile and no stored data is touched. What changes is that the
+ *        endpoint no longer moves money — it points the caller at the paid
+ *        flow, which is the only one that should ever credit savings.
+ *
+ *        NOT REPAIRED HERE, RECORDED: ContributionModal has no payment step to
+ *        route to. Giving it one means building a second checkout for a page
+ *        that already exists at /cooperatives/(member)/contribute. That is a
+ *        product decision, not an audit's.
+ */
+export const UNPAID_CONTRIBUTION_MESSAGE =
+    "Contributions must be paid for. Please use the Contribute page so your "
+    + "payment can be verified before your savings are credited.";
+
 async function _makeContributionAction(
-    prevState: MakeContributionState,
-    formData: FormData
-): Promise<MakeContributionState> { try {
-        const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
-        const { session } = sessionResult;
-        if (!session?.user) { return { error: "You must be logged in to make a contribution", success: false as const, data: null };
-        }
-
-        const userId = session.user.id;
-
-        // Strip currency formatting before validating.
-        //
-        // contributionSchema now coerces, which fixes the string-vs-number
-        // rejection that broke every contribution. Coercion alone is not
-        // enough for a formatted amount though: Number("₦10,000") is NaN, and
-        // the amount field is currency-formatted in the UI. The loan path
-        // already did this; this one did not, which would have left a subset of
-        // submissions failing after the coercion fix and looked like the bug
-        // was only half-fixed.
-        const contribAmount = parseCurrencyStringToFloat(formData.get("amount") as string);
-        const contribFd = new FormData();
-        for (const [k, v] of formData.entries()) contribFd.append(k, v);
-        contribFd.set("amount", isNaN(contribAmount) ? "0" : String(contribAmount));
-
-        const parsed = parseFormData(contributionSchema, contribFd);
-        if (!parsed.success) {
-            return { error: parsed.error ?? "Validation failed", success: false as const, data: null };
-        }
-        const { cooperativeId, amount, type } = parsed.data;
-
-        if (amount <= 0) { return { error: "Contribution amount must be positive", success: false as const, data: null };
-        }
-
-        // Verify membership
-        const membershipsRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
-        const membershipSnapshot = await membershipsRef
-            .where("userId", "==", userId)
-            .where("cooperativeId", "==", cooperativeId)
-            .get();
-
-        if (membershipSnapshot.empty) { return { error: "You are not a member of this cooperative", success: false as const, data: null };
-        }
-
-        const membershipDoc = membershipSnapshot.docs[0];
-
-        // The comment here used to claim this was one atomic commit, and that
-        // without it two concurrent contributions would double-count. Neither
-        // was true: the adapter queues the writes and flushes them one by one
-        // after the callback returns, so there was no isolation and no rollback.
-        // The re-read of the membership inside the wrapper was protected by
-        // nothing — the query four lines above already returned this document —
-        // so it is gone rather than left there looking like a guard.
-        //
-        // The double-counting it worried about is handled by the primitive, not
-        // the wrapper: FieldValue.increment applies the addition in SQL
-        // (migration 010), so concurrent contributions cannot lose one another.
-        //
-        // The balance moves FIRST and the ledger rows are written LAST, so a
-        // crash part-way leaves the member credited without a receipt rather
-        // than a receipt with no credit.
-        const txRef = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc();
-
-        if (type === "savings") {
-            await membershipDoc.ref.update({
-                savingsBalance: FieldValue.increment(amount)
-            });
-            await db.collection(COLLECTIONS.COOPERATIVES).doc(cooperativeId).update({
-                totalSavings: FieldValue.increment(amount)
-            });
-        } else {
-            await membershipDoc.ref.update({
-                loanBalance: FieldValue.increment(-amount)
-            });
-        }
-
-        // Ledger rows last — see the ordering note above.
-        await txRef.set({
-            userId,
-            cooperativeId,
-            type,
-            amount,
-            date: FieldValue.serverTimestamp(),
-            status: "completed",
-            description: type === "savings" ? "Savings contribution" : "Loan repayment"
-        });
-
-        // Universal ledger sync
-        await db.collection(COLLECTIONS.TRANSACTIONS).doc(txRef.id).set({ id: txRef.id,
-            userId,
-            type: type,
-            module: "cooperative",
-            amount: amount,
-            currency: "NGN",
-            status: "completed",
-            date: FieldValue.serverTimestamp(),
-            reference: txRef.id,
-            description: type === "savings" ? "Savings contribution" : "Loan repayment"
-        });
-
-        revalidatePath("/cooperatives");
-        // /dashboard/cooperatives has no route — the cooperative dashboard is
-        // /cooperatives/dashboard, which is revalidated on the line below. A
-        // revalidatePath on a path with no route is a silent no-op, so this
-        // line invalidated nothing at all. Same as the academy and export
-        // dashboards, fixed in their own passes.
-        revalidatePath("/cooperatives/dashboard");
-        return { error: null, success: true as const, data: { message: "Contribution successful" }, meta: null };
-    } catch (error) { logger.error("Contribution failed:", {
-            error: error instanceof Error ? error.message : String(error)
-        });
-        return { error: error instanceof Error ? error.message : "Failed to make contribution", success: false as const, data: null };
+    _prevState: MakeContributionState,
+    _formData: FormData
+): Promise<MakeContributionState> {
+    // requireSession stays, even though the answer below is the same either
+    // way. This is still an exported server action, and the per-function auth
+    // ratchet (action-auth-per-function.test.ts) asserts that every one of them
+    // reaches a guard — an assertion that is worth more than the one call it
+    // costs here. It also means an unauthenticated POST is told it is
+    // unauthenticated, rather than being handed a message about the Contribute
+    // page it cannot reach.
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) {
+        return {
+            success: false as const,
+            error: sessionResult.error?.error ?? "Authentication required",
+            data: null,
+        };
     }
+
+    // Nothing is read from the form and nothing is written. Logged at warn
+    // because a call reaching here now means either a stale client or someone
+    // posting the action id directly.
+    logger.warn(
+        "[Cooperative] makeContributionAction was called. It credits nothing — "
+        + "contributions go through initializeContributionPaymentAction."
+    );
+    return { error: UNPAID_CONTRIBUTION_MESSAGE, success: false as const, data: null };
 }
 
 export const makeContributionAction = withFlexibleSafeAction("makeContributionAction", _makeContributionAction);
@@ -515,15 +513,25 @@ async function _applyForLoanAction(
         // A row lock could not fix it, because the thing being guarded is the
         // ABSENCE of rows — there is nothing to lock. Migration 021 does the
         // check and the insert under a per-borrower advisory lock instead.
-        const membershipsRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
-        const membershipSnapshot = await membershipsRef.where("userId", "==", userId).get();
+        // #345 THREE LOAN DOORS, THREE DIFFERENT WAYS OF FINDING THE MEMBER.
+        //
+        // This one queried the `userId` FIELD only. The other two read
+        // `.doc(userId)` only. Neither half is complete: most writers key the
+        // row by the user id, joinCooperativeAction gives it an auto-generated
+        // one with `userId` as a field, and getCooperativeApplicationAction
+        // heals rows that have the id and NOT the field — proof both shapes are
+        // in the data. So each door refused a set of genuine members the other
+        // two admitted, with "you must be a cooperative member" as the message.
+        // findCooperativeMemberRow walks both, and all three now call it.
+        const memberRow = await findCooperativeMemberRow(
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), userId,
+        );
 
-        if (membershipSnapshot.empty) {
+        if (!memberRow) {
             throw new Error("You must be a cooperative member to apply for a loan");
         }
 
-        const membershipDoc = membershipSnapshot.docs[0];
-        const membershipData = membershipDoc.data();
+        const membershipData = memberRow.data;
 
         // NO STATUS CHECK AT ALL, where the route doing the same work has one.
         //
@@ -570,7 +578,11 @@ async function _applyForLoanAction(
         // refuses outright if the borrower has any open application or loan, so
         // there is never a balance to add here. If that guard is ever relaxed,
         // this argument is where the outstanding balance belongs.
-        const savingsBalance = Number(membershipData.savingsBalance) || 0;
+        // #345 read through readCooperativeBalance, not `savingsBalance` alone:
+        // a legacy nested-member row keeps the same money under `balance`, and
+        // reading one field scored such a member at zero savings and refused
+        // every loan they were entitled to.
+        const savingsBalance = readCooperativeBalance(membershipData);
         const eligibility = isEligibleForLoan(savingsBalance, amount, 0);
         if (!eligibility.eligible) {
             throw new Error(eligibility.reason ?? "You are not eligible for this loan amount.");
@@ -609,6 +621,17 @@ async function _applyForLoanAction(
         }
 
         const prod = productDoc.data()!;
+
+        // #302 A retired product is refused here rather than by absence.
+        //
+        // Deleting a product used to remove the row, so this existence check
+        // was what stopped a borrower applying to a withdrawn product. The row
+        // survives now — the terms of loans already written against it are on
+        // it — so the refusal has to be explicit, with the same message, or the
+        // guard would quietly stop guarding.
+        if (isRetired(prod) || prod.isActive === false) {
+            throw new Error("That loan product is no longer available.");
+        }
         const interestRate = Number(prod.interestRate);
         const durationMonths = Number(prod.durationMonths);
 
@@ -662,7 +685,11 @@ async function _applyForLoanAction(
         });
 
         if (!claim.claimed) {
-            throw new Error("Active or pending loan application already exists platform-wide.");
+            // #288. This action's catch forwards `error.message` to the member
+            // loan page, which renders it verbatim — so this string is UI copy,
+            // not a log line, and it read "already exists platform-wide". The
+            // sentence is shared with the other doors onto the same rule.
+            throw new Error(ONE_OPEN_LOAN_APPLICATION_MESSAGE);
         }
 
         try {

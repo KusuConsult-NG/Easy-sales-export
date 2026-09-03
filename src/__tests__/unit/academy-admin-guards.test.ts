@@ -65,6 +65,7 @@ const APP = 'app-1';
 const mockAdminAuditLog = jest.fn(async () => ({})) as jest.Mock<any>;
 
 jest.mock('@/lib/audit-log', () => ({
+    recordAdminAction: (p: any) => (global as any).mockRecordAdminAction(p),
     createAdminAuditLog: (...a: any[]) => mockAdminAuditLog(...a),
     logAuditAction: jest.fn(async () => ({})),
     logAdminAction: jest.fn(async () => ({})),

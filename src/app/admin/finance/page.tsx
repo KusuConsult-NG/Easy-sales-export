@@ -23,6 +23,7 @@ import { formatCurrency } from "@/lib/utils";
 // firestore-compat so this page no longer pulls in the browser database client.
 import { Timestamp } from "@/lib/firestore-compat";
 import { getFinancialOverviewAction } from "@/app/actions/admin-analytics";
+import { recordExport } from "@/lib/record-export";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 interface Transaction {
@@ -211,6 +212,10 @@ export default function AdminFinancePage() {
             download: `transactions-${activeTab}-${new Date().toISOString().slice(0, 10)}.csv`,
         });
         a.click();
+        // #309 The download is recorded. This screen exports the finance
+        // transaction list — amounts, phone numbers and reasons — and left no
+        // trace at all. recordExport never throws and never blocks.
+        recordExport("finance_report", { count: rows.length, filters: { tab: activeTab } });
     }
 
     return (

@@ -11,7 +11,6 @@ import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { sendBatchEmailNotifications } from "@/lib/email-notifications";
 import { FieldValue } from "@/lib/firestore-compat";
-import { collectRecipients } from "@/app/actions/broadcast";
 import { logger } from "@/lib/logger";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { rateLimit, createRateLimitResponse } from "@/lib/rate-limiter";

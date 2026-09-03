@@ -466,6 +466,15 @@ export const COLLECTIONS = {
     ANNOUNCEMENTS: "announcements",
     BANNERS: "banners",
     AUDIT_LOGS: "audit_logs",
+
+    /**
+     * What an erasure moved off a member's row rather than destroying — #300.
+     *
+     * Lives inside document_collections, which has RLS enabled and NO policies
+     * (migration 004), so it is reachable only through the service key. No
+     * browser session can read it.
+     */
+    ERASURE_RETENTION: "erasure_retention",
     FEATURE_TOGGLES: "feature_toggles",
     IMPERSONATION_TOKENS: "impersonation_tokens",
 

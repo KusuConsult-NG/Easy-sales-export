@@ -8,6 +8,34 @@ import QRCode from 'qrcode';
  * Payload: { userId, memberNumber, timestamp, signature }
  */
 
+/**
+ *   #344 THERE IS NO DEFAULT KEY.
+ *
+ *        Both functions below read the key as
+ *        `process.env.QR_ENCRYPTION_KEY || 'default-qr-secret-change-in-production'`.
+ *        A card signed with the fallback is a card anyone can forge, because
+ *        the fallback is in the source. #169 closed exactly this on
+ *        MFA_SECRET_KEY — the MFA routes refuse to run without the variable —
+ *        and this module was not fixed with it.
+ *
+ *        Refusing is the only safe answer: security-checks.ts already fails a
+ *        production boot whose QR_ENCRYPTION_KEY is missing or weak, and a
+ *        development box without the key gets a message that names the
+ *        variable instead of a card that looks signed and is not.
+ */
+function requireQrKey(): string {
+    // Both audits added this guard independently, under different names
+    // (requireQrKey / requireQrSecretKey) with identical bodies. One survives.
+    // The other's note is worth keeping: failing closed here, the way
+    // MFA_SECRET_KEY already does in api/auth/mfa/verify/route.ts, means a
+    // future direct import cannot silently regress to the same public default.
+    const key = process.env.QR_ENCRYPTION_KEY;
+    if (!key) {
+        throw new Error("QR_ENCRYPTION_KEY is not set; digital ID cards cannot be signed or verified without it");
+    }
+    return key;
+}
+
 export interface DigitalIDPayload {
     userId: string;
     memberNumber: string;
@@ -25,34 +53,6 @@ export interface QRVerificationResult {
     error?: string;
 }
 
-/**
- * Both functions below used to fall back to the literal string
- * 'default-qr-secret-change-in-production' whenever QR_ENCRYPTION_KEY was
- * unset. That fallback is public — it is this file, in a public repository —
- * so a QR code signed or checked against it carries no security value: anyone
- * can compute the same signature offline.
- *
- * It also could not have been fixed by setting the env var everywhere it
- * matters, because verifyDigitalIDQR was called directly from a Client
- * Component (src/app/verify-id/page.tsx). Next.js does not expose
- * non-NEXT_PUBLIC_ variables to client bundles, so `process.env.QR_ENCRYPTION_KEY`
- * was `undefined` there unconditionally — every build shipped the fallback
- * string itself into the browser bundle (confirmed by grepping
- * .next/static/chunks/app/verify-id/page-*.js for it). That page now calls the
- * server-side /api/qr/verify route instead, as its sibling
- * verify-id/scan/page.tsx already did.
- *
- * Failing closed here, the way MFA_SECRET_KEY already does in
- * api/auth/mfa/verify/route.ts, means a future direct import cannot silently
- * regress to the same public secret.
- */
-function requireQrSecretKey(): string {
-    const key = process.env.QR_ENCRYPTION_KEY;
-    if (!key) {
-        throw new Error('QR_ENCRYPTION_KEY is not set.');
-    }
-    return key;
-}
 
 /**
  * Generate QR code data URL for user
@@ -64,7 +64,7 @@ export async function generateDigitalIDQR(
     email: string,
     role: string
 ): Promise<string> {
-    const secretKey = requireQrSecretKey();
+    const secretKey = requireQrKey();
     const expiryDays = parseInt(process.env.QR_CODE_EXPIRY_DAYS || '365', 10);
 
     const timestamp = Date.now();
@@ -108,8 +108,10 @@ export async function generateDigitalIDQR(
  * Verify and decode QR code
  */
 export function verifyDigitalIDQR(encryptedData: string): QRVerificationResult {
+    // Outside the try, on purpose: a missing key is a deployment fault and must
+    // surface as one, not be folded into "Invalid QR code format".
+    const secretKey = requireQrKey();
     try {
-        const secretKey = requireQrSecretKey();
 
         // Decrypt payload
         const decryptedData = decryptData(encryptedData, secretKey);

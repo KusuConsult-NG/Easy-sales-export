@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
             const { invalidateAdminGlobalStats } = await import("@/lib/cache-invalidation");
             await invalidateAdminGlobalStats();
             const { revalidateTag } = await import("next/cache");
-            revalidateTag("land-listings", "page");
+            revalidateTag("land-listings", { expire: 0 });
         } catch (cacheError) {
             logger.error('[Dispatch Inspector Route Cache] Cache clear error:', cacheError);
         }

@@ -237,10 +237,21 @@ export async function POST(req: NextRequest) {
         }
 
         // 9. Persist messages (fire-and-forget — never blocks the response)
-        const userMsgId = `${sessionId}_u_${Date.now()}`;
-        const botMsgId = `${sessionId}_a_${Date.now() + 1}`;
-        saveMessageAsync(userMsgId, sessionId, userId, "user", message, validModule, isEscalation);
-        saveMessageAsync(botMsgId, sessionId, userId, "assistant", reply, validModule, false);
+        // The two halves of a turn carry DISTINCT timestamps (#248).
+        //
+        // Each call used to stamp its own Timestamp.now(), which has
+        // millisecond precision, and the second runs microseconds after the
+        // first — so both rows landed on the same millisecond and the readers,
+        // which order on `timestamp`, left the tie to the database. An admin
+        // could be shown the answer above the question, and the same order is
+        // replayed to the model as history. The ids below already encoded the
+        // sequence; now the stored rows do too.
+        const askedAt = Date.now();
+        const answeredAt = askedAt + 1;
+        const userMsgId = `${sessionId}_u_${askedAt}`;
+        const botMsgId = `${sessionId}_a_${answeredAt}`;
+        saveMessageAsync(userMsgId, sessionId, userId, "user", message, validModule, isEscalation, askedAt, userEmail);
+        saveMessageAsync(botMsgId, sessionId, userId, "assistant", reply, validModule, false, answeredAt, userEmail);
 
         return NextResponse.json({
             reply,

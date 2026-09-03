@@ -8,6 +8,7 @@
 import { redis, isRedisConfigured } from './redis';
 import { Ratelimit } from '@upstash/ratelimit';
 import { checkFallbackLimit } from './rate-limiter-fallback';
+import { clientIpFromHeaders } from './client-ip';
 
 interface RateLimitConfig {
     interval: number; // Time window in milliseconds
@@ -43,8 +44,6 @@ export function rateLimit(config: RateLimitConfig) {
 
     return {
         check: async (identifier: string): Promise<{ success: boolean; limit: number; remaining: number; reset: number }> => {
-            const now = Date.now();
-
             // The in-memory fallback needs the same separation, and gets it here
             // rather than from a prefix it does not have. Namespacing only the
             // Redis path would leave every limit colliding again the moment
@@ -93,18 +92,14 @@ export function rateLimit(config: RateLimitConfig) {
  * Get client IP address from request
  */
 export function getClientIp(request: Request): string {
-    const realIp = request.headers.get('x-real-ip');
-    const forwarded = request.headers.get('x-forwarded-for');
-
-    if (realIp) {
-        return realIp;
-    }
-
-    if (forwarded) {
-        return forwarded.split(',')[0].trim();
-    }
-
-    return 'unknown';
+    // One rule, in lib/client-ip.ts (#260). This read x-real-ip whole and then
+    // took the LEFTMOST x-forwarded-for entry — the one the caller wrote — so
+    // rotating a header gave every request its own rate-limit bucket.
+    //
+    // "unknown" groups everyone we cannot identify into ONE bucket, which
+    // over-limits. That is the safe direction for a limiter: the alternative is
+    // a bucket the caller names.
+    return clientIpFromHeaders(request.headers) ?? 'unknown';
 }
 
 /**
@@ -113,18 +108,8 @@ export function getClientIp(request: Request): string {
 export async function getActionClientIp(): Promise<string> {
     const { headers } = await import('next/headers');
     const headersList = await headers();
-    const realIp = headersList.get('x-real-ip');
-    const forwarded = headersList.get('x-forwarded-for');
-
-    if (realIp) {
-        return realIp;
-    }
-
-    if (forwarded) {
-        return forwarded.split(',')[0].trim();
-    }
-
-    return 'unknown';
+    // Same rule as getClientIp — see lib/client-ip.ts (#260).
+    return clientIpFromHeaders(headersList as unknown as Headers) ?? 'unknown';
 }
 
 /**

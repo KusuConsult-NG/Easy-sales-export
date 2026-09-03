@@ -191,7 +191,13 @@ export async function notifyPaymentReceived(params: {
         const smsPromises = [];
         if (sellerPhone) {
             const { sendSMS } = await import("@/lib/africastalking");
-            const smsMessage = `EasySales: Escrow is funded with ${formatted} for order #${orderNumber}. Please deliver the products. Log in for details.`;
+            // #266 NOT `formatted`. That is Intl currency formatting, which
+            // emits the naira sign — right for the in-app notifications above,
+            // which render HTML, and wrong here, where sendSMS puts the text
+            // through a 7-bit gate that replaced it with "?". The seller was
+            // told escrow was funded with "?45,000".
+            const { formatNairaForSMS } = await import("@/lib/sms-utils");
+            const smsMessage = `EasySales: Escrow is funded with ${formatNairaForSMS(amount)} for order #${orderNumber}. Please deliver the products. Log in for details.`;
             smsPromises.push(sendSMS(sellerPhone, smsMessage));
         }
 

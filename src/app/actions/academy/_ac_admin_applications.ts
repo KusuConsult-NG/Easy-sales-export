@@ -8,6 +8,7 @@ import { FieldPath } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
+import { stripPii, stripSecrets } from "@/lib/admin-pii";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { ActionResponse, withFlexibleSafeAction } from "@/lib/safe-action";
 import { resolveApplicationPlan } from "@/lib/academy-plan";
@@ -354,7 +355,7 @@ async function _getStandardAcademyApplicationsAction(options: {
                     phone: app.phone || pi.phone || uData.phone || uData.phoneNumber || uData.kyc?.phoneNumber || uData.kyc?.phone || null,
                     email: app.email || pi.email || uData.email || null,
                     gender: app.gender || pi.gender || uData.gender || null,
-                    dateOfBirth: app.dateOfBirth || pi.dateOfBirth || uData.dob || null,
+                    dateOfBirth: app.dateOfBirth || pi.dateOfBirth || uData.dateOfBirth || uData.dob || null,
                     occupation: app.occupation || pi.occupation || uData.occupation || null,
                     stateOfOrigin: app.stateOfOrigin || pi.stateOfOrigin || uData.state || uData.stateOfOrigin || (typeof uData.address === 'object' ? uData.address?.state : uData.stateOfOrigin) || uData.verificationProfile?.address?.state || null,
                     lga: app.lga || pi.lga || uData.lga || (typeof uData.address === 'object' ? uData.address?.lga : uData.lga) || null,
@@ -396,7 +397,35 @@ async function _getStandardAcademyApplicationsAction(options: {
                         ...(bankDetails ? { bankDetails } : {}),
                     },
                     status: app.status || "pending",
-                    data: mergedData,
+                    /**
+                     *   #341 THE GATE ABOVE, AND THE SPREAD BELOW IT.
+                     *
+                     *        `mergedData` is `{ ...uData, ...app, ... }` and
+                     *        `uData` is the whole USERS document. `...app`
+                     *        overrides the keys the two share; every key only
+                     *        the user document has survives the merge — bvn,
+                     *        nin, documents, nextOfKin, verificationProfile,
+                     *        the bank block, and totpSecret and
+                     *        mfaRecoveryCodes.
+                     *
+                     *        So maySeeBankDetails, three lines up, gated a
+                     *        `bankDetails` key that a caller who failed the gate
+                     *        received anyway, one level along in the same
+                     *        object. lib/admin-pii.ts's header describes exactly
+                     *        this: "the same values sit nested and survive any
+                     *        field-by-field gate applied above them."
+                     *
+                     *        And this object is RENDERED. The screen passes
+                     *        `_raw: d` to DynamicDetailModal, which prints every
+                     *        key not on a fixed exclude list — a list that
+                     *        covers bvnVerified and bvnStatus and not `bvn`.
+                     *
+                     *        The credentials go for everyone: no admin
+                     *        permission is a reason to hold somebody's second
+                     *        factor. The identity and money keys follow the
+                     *        gate the file already computed.
+                     */
+                    data: maySeeBankDetails ? stripSecrets(mergedData) : stripPii(mergedData),
                     submittedAt: app.submittedAt,
                     isLegacy: !!(app._isLegacy || uData.legacyOnboardedBy || uData.isLegacy || app.isLegacy)
                 };
@@ -443,7 +472,7 @@ async function _getStandardAcademyApplicationsAction(options: {
                     phone: app.phone || pi.phone || uData.phone || uData.phoneNumber || uData.kyc?.phoneNumber || uData.kyc?.phone || null,
                     email: app.email || pi.email || uData.email || null,
                     gender: app.gender || pi.gender || uData.gender || null,
-                    dateOfBirth: app.dateOfBirth || pi.dateOfBirth || uData.dob || null,
+                    dateOfBirth: app.dateOfBirth || pi.dateOfBirth || uData.dateOfBirth || uData.dob || null,
                     occupation: app.occupation || pi.occupation || uData.occupation || null,
                     stateOfOrigin: app.stateOfOrigin || pi.stateOfOrigin || uData.state || uData.stateOfOrigin || (typeof uData.address === 'object' ? uData.address?.state : uData.stateOfOrigin) || uData.verificationProfile?.address?.state || null,
                     lga: app.lga || pi.lga || uData.lga || (typeof uData.address === 'object' ? uData.address?.lga : uData.lga) || null,
@@ -485,7 +514,35 @@ async function _getStandardAcademyApplicationsAction(options: {
                         ...(bankDetails ? { bankDetails } : {}),
                     },
                     status: app.status || "pending",
-                    data: mergedData,
+                    /**
+                     *   #341 THE GATE ABOVE, AND THE SPREAD BELOW IT.
+                     *
+                     *        `mergedData` is `{ ...uData, ...app, ... }` and
+                     *        `uData` is the whole USERS document. `...app`
+                     *        overrides the keys the two share; every key only
+                     *        the user document has survives the merge — bvn,
+                     *        nin, documents, nextOfKin, verificationProfile,
+                     *        the bank block, and totpSecret and
+                     *        mfaRecoveryCodes.
+                     *
+                     *        So maySeeBankDetails, three lines up, gated a
+                     *        `bankDetails` key that a caller who failed the gate
+                     *        received anyway, one level along in the same
+                     *        object. lib/admin-pii.ts's header describes exactly
+                     *        this: "the same values sit nested and survive any
+                     *        field-by-field gate applied above them."
+                     *
+                     *        And this object is RENDERED. The screen passes
+                     *        `_raw: d` to DynamicDetailModal, which prints every
+                     *        key not on a fixed exclude list — a list that
+                     *        covers bvnVerified and bvnStatus and not `bvn`.
+                     *
+                     *        The credentials go for everyone: no admin
+                     *        permission is a reason to hold somebody's second
+                     *        factor. The identity and money keys follow the
+                     *        gate the file already computed.
+                     */
+                    data: maySeeBankDetails ? stripSecrets(mergedData) : stripPii(mergedData),
                     submittedAt: app.submittedAt,
                     isLegacy: !!(app._isLegacy || uData.legacyOnboardedBy || uData.isLegacy || app.isLegacy)
                 };

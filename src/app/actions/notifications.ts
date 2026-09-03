@@ -5,6 +5,7 @@ import { requireSession } from "@/lib/session-guard";
 import { ActionResponse } from "@/lib/safe-action";
 import * as notificationService from "@/infrastructure/notifications/service";
 import type { Notification } from "@/infrastructure/notifications/service";
+import { isSafeInternalPath } from "@/lib/safe-redirect";
 
 
 /**
@@ -21,8 +22,12 @@ import type { Notification } from "@/infrastructure/notifications/service";
  * to a browser and look relative to a naive check.
  */
 function isSafeNotificationLink(link: string | undefined): boolean {
+    // An absent link is fine — the notification simply has no destination.
     if (!link) return true;
-    return link.startsWith("/") && !link.startsWith("//");
+    // The shared rule (#262). This carried its own copy, correct on the
+    // protocol-relative case but blind to the backslash authority and to the
+    // leading control characters a browser strips.
+    return isSafeInternalPath(link);
 }
 
 /**

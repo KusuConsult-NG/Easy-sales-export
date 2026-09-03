@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { z } from "zod";
 import { strictNameSchema, strictEmailSchema, strictPhoneSchema } from "@/lib/schemas";
@@ -709,8 +710,10 @@ async function _requestWaveRevisionAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
-        if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
-            return { success: false as const, error: 'Admin access required', data: null };
+        // #265 wave_admin holds wave:approve_applications and was refused
+        // here, while the rest of the WAVE admin surface admits it.
+        if (!hasAdminPermission(session?.user?.roles, "wave:approve_applications")) {
+            return { success: false as const, error: 'Unauthorized: wave:approve_applications required', data: null };
         }
 
         const appRef = db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId);

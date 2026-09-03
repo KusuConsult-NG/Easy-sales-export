@@ -239,7 +239,20 @@ describe('#175 — the completion marker means the migration completed', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('what the migration actually moves', () => {
-    it('re-keys the cooperative membership and removes the old row', async () => {
+    /**
+     * This ended `expect(store.get(MEMBERS, LEGACY)).toBeUndefined()` — the
+     * source row destroyed once the copy was written.
+     *
+     * #303 keeps it. The copy is a set(..., { merge: true }) whose success this
+     * code does not verify, the delete was fire-and-forget behind a .catch()
+     * that only logged, and the whole thing runs unattended on LOGIN. A copy
+     * that went wrong left nothing to go back to.
+     *
+     * The test below it — the generated-id branch — already asserted the source
+     * being REPOINTED rather than deleted. The two branches simply disagreed;
+     * they agree now.
+     */
+    it('re-keys the cooperative membership and MARKS the old row migrated', async () => {
         store.seed(USERS, LEGACY, { email: 'ada@example.com' });
         store.seed(MEMBERS, LEGACY, { userId: LEGACY, savingsBalance: 50_000, status: 'active' });
 
@@ -248,7 +261,13 @@ describe('what the migration actually moves', () => {
         expect(store.get(MEMBERS, ACTIVE)).toMatchObject({
             userId: ACTIVE, id: ACTIVE, savingsBalance: 50_000,
         });
-        expect(store.get(MEMBERS, LEGACY)).toBeUndefined();
+
+        const legacyRow = store.get(MEMBERS, LEGACY);
+        expect(legacyRow).toBeDefined();
+        // Still holds what it held, and now says where it went.
+        expect(legacyRow?.savingsBalance).toBe(50_000);
+        expect(legacyRow?._migratedTo).toBe(ACTIVE);
+        expect(legacyRow?.retired).toBe(true);
     });
 
     it('finds a membership keyed by a generated id, and repoints it', async () => {

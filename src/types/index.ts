@@ -550,7 +550,19 @@ export interface Course {
     thumbnail?: string;
     category?: "export" | "farming" | "business" | "compliance" | string;
     level: "beginner" | "intermediate" | "advanced";
-    enrollmentCount?: number;
+    /**
+     *   #336 ONE ENROLMENT TALLY, FOUR NAMES.
+     *
+     *        `enrollmentCount` was declared here and written by nothing, in a
+     *        type that ALSO declares `enrolledCount` two lines apart. A second
+     *        spelling on the same interface is how a fifth writer gets added:
+     *        whichever one autocomplete offers first wins, and the two never
+     *        meet. Removed rather than left as a slot to fall into — see
+     *        lib/types/academy.ts, which declares `enrolledCount` required.
+     *
+     *        Nothing DELETED any data: no writer ever produced this key, so
+     *        there is no row carrying it.
+     */
     enrolledCount?: number;
     rating?: number;
     status?: "upcoming" | "open" | "in_progress" | "completed";

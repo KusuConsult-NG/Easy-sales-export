@@ -39,26 +39,22 @@ const createUser = jest.fn(async (_args: Record<string, unknown>) => ({
 }));
 const listUsers = jest.fn(async () => ({ data: { users: [] as Array<{ id: string; email: string }> } }));
 
+/** The ownership proof for #238: the anon client's password check. */
+const signInWithPassword = jest.fn(async (_c: { email: string; password: string }) => ({
+    data: { user: null as { id: string } | null }, error: { message: 'Invalid login credentials' } as { message: string } | null,
+}));
+jest.mock('@supabase/supabase-js', () => ({
+    createClient: () => ({
+        auth: { signInWithPassword: (c: { email: string; password: string }) => signInWithPassword(c) },
+    }),
+}));
+
 jest.mock('@/lib/supabase', () => ({
     supabaseAdmin: {
         auth: { admin: { createUser: (a: Record<string, unknown>) => createUser(a), listUsers: () => listUsers() } },
         from: () => ({ select: () => ({ eq: () => ({ limit: async () => ({ data: [], error: null }) }) }) }),
         rpc: async () => ({ data: null, error: null }),
     },
-}));
-
-// registerAction verifies ownership of an already-registered address by
-// signing in with the submitted password. Unmocked, that reaches for a real
-// anon client — and the action treats a throw as "not owned", so the tests
-// would pass for the wrong reason.
-jest.mock('@supabase/supabase-js', () => ({
-    createClient: () => ({
-        auth: {
-            signInWithPassword: async () => ({
-                data: { user: null }, error: { message: 'Invalid login credentials' },
-            }),
-        },
-    }),
 }));
 
 jest.mock('resend', () => ({
@@ -85,6 +81,11 @@ beforeEach(() => {
     store = installFakeDb();
     createUser.mockImplementation(async () => ({ data: { user: { id: 'supabase-uid-1' } }, error: null }));
     listUsers.mockImplementation(async () => ({ data: { users: [] } }));
+    signInWithPassword.mockImplementation(async () => ({
+        data: { user: null }, error: { message: 'Invalid login credentials' },
+    }));
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'http://127.0.0.1:54321';
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-test-key';
     check.mockImplementation(async () => ({ success: true, remaining: 4 }));
 });
 
@@ -99,6 +100,13 @@ function seedUser(extra: Record<string, unknown>): void {
 }
 
 async function redirectFor(email = EMAIL): Promise<string | undefined> {
+    // #239: the action answers for the SESSION, not for the parameter — an
+    // unauthenticated caller used to be able to map any address to its
+    // account's shape. The harness therefore logs the caller in as the address
+    // it is asking about, which is exactly what LoginForm's post-signIn call
+    // looks like.
+    const { auth } = await import('@/lib/auth');
+    (auth as unknown as jest.Mock<any>).mockResolvedValue({ user: { id: 'user-1', email } });
     const { getPostLoginRedirect } = await actions();
     const result = await getPostLoginRedirect(email);
     return (result as { data?: { redirectUrl?: string } }).data?.redirectUrl
@@ -106,6 +114,64 @@ async function redirectFor(email = EMAIL): Promise<string | undefined> {
 }
 
 // ─── the precedence ──────────────────────────────────────────────────────────
+
+describe('#239 — the redirect describes the SESSION, not any email a caller types', () => {
+    /**
+     * getPostLoginRedirect is a "use server" export — a public endpoint — and
+     * it answered for ANY email, no session required. The redirect it returns
+     * is a description of the account: "/admin" says the address belongs to an
+     * admin, "/wave/dashboard" names their module,
+     * "/auth/reset-legacy-password" says a forced reset is pending. An
+     * unauthenticated caller could walk an address list through it and map who
+     * is who on the platform.
+     */
+    it('AN UNAUTHENTICATED CALLER LEARNS NOTHING ABOUT AN ADMIN', async () => {
+        seedUser({ roles: ['super_admin'] });
+        const { auth } = await import('@/lib/auth');
+        (auth as unknown as jest.Mock<any>).mockResolvedValue(null);
+
+        const { getPostLoginRedirect } = await actions();
+        const result = await getPostLoginRedirect(EMAIL) as any;
+
+        // Was: /admin — the account's shape, handed to anyone.
+        expect(result.data?.redirectUrl ?? result.redirectUrl).toBe('/dashboard');
+    });
+
+    it('NOR ABOUT A PENDING FORCED PASSWORD RESET', async () => {
+        seedUser({ requiresPasswordChange: true });
+        const { auth } = await import('@/lib/auth');
+        (auth as unknown as jest.Mock<any>).mockResolvedValue(null);
+
+        const { getPostLoginRedirect } = await actions();
+        const result = await getPostLoginRedirect(EMAIL) as any;
+
+        expect(result.data?.redirectUrl ?? result.redirectUrl).toBe('/dashboard');
+    });
+
+    it("and a logged-in caller asking about SOMEBODY ELSE gets their own answer", async () => {
+        seedUser({ roles: ['super_admin'] });
+        store.seed(COLLECTIONS.USERS, 'user-2', { email: 'me@example.com', roles: ['general_user'] });
+        const { auth } = await import('@/lib/auth');
+        (auth as unknown as jest.Mock<any>).mockResolvedValue({ user: { id: 'user-2', email: 'me@example.com' } });
+
+        const { getPostLoginRedirect } = await actions();
+        const result = await getPostLoginRedirect(EMAIL) as any;
+
+        // The parameter names the admin; the answer is the caller's own.
+        expect(result.data?.redirectUrl ?? result.redirectUrl).not.toBe('/admin');
+    });
+
+    it('and an auth() failure fails closed to the generic dashboard', async () => {
+        seedUser({ roles: ['super_admin'] });
+        const { auth } = await import('@/lib/auth');
+        (auth as unknown as jest.Mock<any>).mockRejectedValue(new Error('deadlock'));
+
+        const { getPostLoginRedirect } = await actions();
+        const result = await getPostLoginRedirect(EMAIL) as any;
+
+        expect(result.data?.redirectUrl ?? result.redirectUrl).toBe('/dashboard');
+    });
+});
 
 describe('a forced password change comes first', () => {
     it('before the admin console', async () => {
@@ -340,48 +406,103 @@ describe('registration', () => {
             expect.objectContaining({ email: 'ada@example.com' }));
     });
 
-    it('and never asking the auth provider who owns an address', async () => {
+    /**
+     *   #238 REGISTERING WITH SOMEBODY ELSE'S EMAIL REWROTE THEIR ACCOUNT.
+     *
+     *        When Supabase said the address was taken, this branch looked the
+     *        existing account up by email and ADOPTED its id — no password
+     *        check. The profile write then ran against users/{that id} with
+     *        set(merge), where an array is a value: the victim's fullName,
+     *        phone and gender were overwritten with whatever the form said and
+     *        their `roles` were REPLACED with ["general_user"]. Submitting the
+     *        register form with an admin's email and any password at all
+     *        demoted that admin, from an unauthenticated page.
+     *
+     *        The branch exists for one legitimate case — the user whose first
+     *        attempt crashed between the auth write and the profile write,
+     *        retrying — and the proof of being that user is the password. It is
+     *        verified against the existing account now, and even then the
+     *        profile is only created when it is genuinely missing.
+     *
+     *        The test above this block used to PIN the defect: it asserted that
+     *        listUsers-based adoption succeeded. (listUsers was its own fault —
+     *        one page, so past ~50 accounts the recovery path silently died.)
+     */
+    it('#238: adopts the existing auth account ONLY when the password proves ownership', async () => {
+        createUser.mockImplementation(async () => ({
+            data: { user: null as never }, error: { message: 'User already been registered' },
+        }));
+        signInWithPassword.mockImplementation(async () => ({
+            data: { user: { id: 'existing-uid' } }, error: null,
+        }));
+        // The crash-recovery state: auth account exists, no profile document.
+
+        const { registerAction } = await actions();
+        const result = await registerAction(null, form());
+
+        expect(result.success).toBe(true);
+        expect(signInWithPassword).toHaveBeenCalledWith(
+            expect.objectContaining({ email: 'new@example.com' }));
+        expect(store.get(COLLECTIONS.USERS, 'existing-uid')?.fullName).toBe('Ada Obi');
+    });
+
+    it('#238: A WRONG PASSWORD ADOPTS NOTHING AND WRITES NOTHING', async () => {
         /**
-         * These two tests used to pin the opposite behaviour. The first
-         * asserted `listUsers()` was called and the id adopted, under a
-         * comment reading "A half-finished registration leaves an auth account
-         * with no profile. Refusing outright would lock that address out for
-         * ever; adopting the id lets the profile be completed."
+         * Two audits fixed this branch and the merge had to choose between the
+         * REPLIES, not the protections — both refuse to adopt the account.
          *
-         * The intent was right and the mechanism was an account takeover:
-         * adopting the id required NO password, so the public form rewrote any
-         * known account's name, phone and roles. The resume case is still
-         * served — see register-enumeration.test.ts — but only after the caller
-         * signs in with the password they submitted.
+         * #238 refused and said "already been registered". #363 refused and
+         * said nothing at all, because that message is an enumeration oracle
+         * on a form needing no session: anyone could post an address and learn
+         * whether it holds an account. The merged action keeps #363's reply,
+         * so a non-owner now gets exactly what a real signup returns and the
+         * owner is told by email instead.
          *
-         * The second asserted `success: false` with "already been registered",
-         * which is the enumeration oracle stated in a test.
+         * What #238 asserted that still holds, and is what this test is for:
+         * nothing is adopted and nothing is written.
          */
         createUser.mockImplementation(async () => ({
             data: { user: null as never }, error: { message: 'User already been registered' },
         }));
+        signInWithPassword.mockImplementation(async () => ({
+            data: { user: null }, error: { message: 'Invalid login credentials' },
+        }));
 
         const { registerAction } = await actions();
-        await registerAction(null, form());
+        const result: any = await registerAction(null, form());
 
+        // Was: the account adopted anyway, the victim's profile rewritten and
+        // their roles reset, success reported to the impostor.
+        expect(store.size(COLLECTIONS.USERS)).toBe(0);
         expect(listUsers).not.toHaveBeenCalled();
+        // And the reply gives the prober nothing — see register-enumeration.
+        expect(String(result.error ?? '')).not.toMatch(/already been registered/i);
     });
 
-    it('and answering a taken address exactly as it answers a free one', async () => {
-        const { registerAction } = await actions();
-
+    it("#238: AND A COMPLETE ACCOUNT IS NEVER REWRITTEN, EVEN BY ITS OWNER", async () => {
+        // Re-registering with the RIGHT password must not reset a real profile
+        // to day-one defaults — roles included. Naming the account here is safe
+        // because only somebody who just proved the password can reach it.
         createUser.mockImplementation(async () => ({
             data: { user: null as never }, error: { message: 'User already been registered' },
         }));
-        const taken: any = await registerAction(null, form());
-
-        createUser.mockImplementation(async () => ({
-            data: { user: { id: 'supabase-uid-1' } as never }, error: null,
+        signInWithPassword.mockImplementation(async () => ({
+            data: { user: { id: 'existing-uid' } }, error: null,
         }));
-        const free: any = await registerAction(null, form());
+        store.seed(COLLECTIONS.USERS, 'existing-uid', {
+            email: 'new@example.com', fullName: 'The Real Ada',
+            phone: '08099999999', roles: ['general_user', 'admin'],
+        });
 
-        expect(taken).toEqual(free);
-        expect(String(taken.error ?? '')).not.toMatch(/already been registered/i);
+        const { registerAction } = await actions();
+        const result: any = await registerAction(null, form());
+
+        expect(result.success).toBe(false);
+        expect(String(result.error)).toMatch(/log in/i);
+        const victim = store.get(COLLECTIONS.USERS, 'existing-uid')!;
+        expect(victim.fullName).toBe('The Real Ada');
+        expect(victim.phone).toBe('08099999999');
+        expect(victim.roles).toEqual(['general_user', 'admin']);
     });
 
     it('and surfacing any other auth failure rather than swallowing it', async () => {
@@ -481,5 +602,85 @@ describe('the duplicate-phone guard sees every spelling that is stored', () => {
         expect(phoneLookupVariants('12345')).toEqual(['12345']);
         expect(phoneLookupVariants('')).toEqual([]);
         expect(phoneLookupVariants(null)).toEqual([]);
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('preValidateLoginAction — the login gate, executed for the first time', () => {
+    /**
+     * The largest never-run block in the auth actions (lines ~257–560): the
+     * Supabase sign-in, the profile fetch, the auto-repair for a missing
+     * profile, and the ban check. No new defects asserted here — the
+     * enumeration oracle at the end of the failure path is an owner decision
+     * already on record — but a login gate that has never executed is how the
+     * five-logins lockout (documented inside it) survived to production.
+     */
+    const call = async (email = 'ada@example.com', password = 'Str0ng!Passw0rd') =>
+        (await (await actions()).preValidateLoginAction({ email, password })) as any;
+
+    const supabaseAccepts = (uid = 'sb-uid-1') =>
+        signInWithPassword.mockImplementation(async () => ({
+            data: { user: { id: uid } }, error: null,
+        }));
+
+    it('accepts a valid login and leaves the profile alone', async () => {
+        supabaseAccepts('sb-uid-1');
+        store.seed(COLLECTIONS.USERS, 'sb-uid-1', {
+            email: 'ada@example.com', roles: ['general_user'], _migratedAt: '2026-01-01',
+        });
+
+        expect(await call()).toMatchObject({ success: true });
+    });
+
+    it('refuses a banned account even with the right password', async () => {
+        supabaseAccepts('sb-uid-1');
+        store.seed(COLLECTIONS.USERS, 'sb-uid-1', {
+            email: 'ada@example.com', roles: ['general_user'], _migratedAt: '2026-01-01',
+            isBanned: true,
+        });
+
+        const res = await call();
+        expect(res.success).toBe(false);
+        expect(res.error).toMatch(/suspended/i);
+    });
+
+    it('and a suspended flag the same way', async () => {
+        supabaseAccepts('sb-uid-1');
+        store.seed(COLLECTIONS.USERS, 'sb-uid-1', {
+            email: 'ada@example.com', roles: ['general_user'], _migratedAt: '2026-01-01',
+            suspended: true,
+        });
+
+        expect(await call()).toMatchObject({ success: false });
+    });
+
+    it('auto-repairs a missing profile rather than locking the account out', async () => {
+        supabaseAccepts('sb-uid-1');
+        // Auth account exists, no profile row at all — the lockout state.
+
+        const res = await call();
+
+        expect(res.success).toBe(true);
+        const repaired = store.get(COLLECTIONS.USERS, 'sb-uid-1');
+        expect(repaired).toBeDefined();
+        expect(repaired!.roles).toEqual(['general_user']);
+        expect(repaired!.profileComplete).toBe(false);
+    });
+
+    it('rejects malformed input before touching any store', async () => {
+        const res = await call('not-an-email', 'x');
+        expect(res.success).toBe(false);
+        expect(signInWithPassword).not.toHaveBeenCalled();
+    });
+
+    it('reports a wrong password without a stack trace', async () => {
+        signInWithPassword.mockImplementation(async () => ({
+            data: { user: null }, error: { message: 'Invalid login credentials' },
+        }));
+        store.seed(COLLECTIONS.USERS, 'u1', { email: 'ada@example.com' });
+
+        const res = await call();
+        expect(res.success).toBe(false);
+        expect(typeof res.error).toBe('string');
     });
 });

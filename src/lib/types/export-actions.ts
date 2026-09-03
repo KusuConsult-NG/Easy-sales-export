@@ -97,11 +97,26 @@ export const exportOnboardingSchema = z.object({
         nin: z.string().optional().or(z.literal("")),
         bvn: z.string().optional().or(z.literal("")),
         cacNumber: z.string().optional().or(z.literal("")),
+        /**
+         * #349 KYCForm collects a Voter's Card number and offers to verify it.
+         * Zod strips unknown keys, so the number and its verification were
+         * dropped between the step and the record — collected, validated, and
+         * never stored.
+         */
+        votersCard: z.string().optional().or(z.literal("")),
+        votersCardVerified: z.boolean().optional(),
+        ninVerified: z.boolean().optional(),
+        bvnVerified: z.boolean().optional(),
     }),
     bank: z.object({
         accountNumber: z.string().length(10, "Account number must be 10 digits"),
         bankName: z.string().min(2, "Bank name is required"),
+        // #346 The submitted name is NOT what gets recorded — _ex_onboarding
+        // re-resolves the account and stores the bank's answer. It stays
+        // required so an empty form is still refused before the network call.
         accountName: z.string().min(2, "Account name is required"),
+        /** #346 Needed to re-resolve the account server-side. */
+        bankCode: z.string().optional().or(z.literal("")),
     }),
     terms: z.object({
         termsAccepted: z.boolean(),

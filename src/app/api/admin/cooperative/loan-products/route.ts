@@ -6,6 +6,7 @@ import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isAdmin } from "@/lib/admin-permissions";
+import { isRetired } from "@/lib/record-retirement";
 
 /**
  * API Route: Get All Loan Products (Admin Only)
@@ -33,10 +34,15 @@ export async function GET(request: NextRequest) {
             .orderBy("minAmount", "asc")
             .get();
 
-        const products = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        }));
+        // #302 Retired products leave this list too — it is the second of two
+        // that read this collection, and fixing one of a pair is the mistake
+        // this audit keeps finding.
+        const products = snapshot.docs
+            .filter(doc => !isRetired(doc.data()))
+            .map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
 
         return NextResponse.json({
             success: true,

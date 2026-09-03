@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
+// #351 the presets name a day in the ADMIN'S calendar, not UTC's.
+import { localCalendarDate } from "@/lib/date-utils";
 import { Calendar, X, ChevronDown } from "lucide-react";
 
 export interface DateRange {
@@ -21,31 +23,31 @@ const PRESETS: Array<{ label: string; getDates: () => DateRange }> = [
     {
         label: "Today",
         getDates: () => {
-            const d = new Date().toISOString().slice(0, 10);
+            const d = localCalendarDate();
             return { from: d, to: d };
         },
     },
     {
         label: "Last 7 days",
         getDates: () => {
-            const to = new Date().toISOString().slice(0, 10);
-            const from = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
+            const to = localCalendarDate();
+            const from = localCalendarDate(new Date(Date.now() - 6 * 86400000));
             return { from, to };
         },
     },
     {
         label: "Last 30 days",
         getDates: () => {
-            const to = new Date().toISOString().slice(0, 10);
-            const from = new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
+            const to = localCalendarDate();
+            const from = localCalendarDate(new Date(Date.now() - 29 * 86400000));
             return { from, to };
         },
     },
     {
         label: "Last 90 days",
         getDates: () => {
-            const to = new Date().toISOString().slice(0, 10);
-            const from = new Date(Date.now() - 89 * 86400000).toISOString().slice(0, 10);
+            const to = localCalendarDate();
+            const from = localCalendarDate(new Date(Date.now() - 89 * 86400000));
             return { from, to };
         },
     },
@@ -53,7 +55,7 @@ const PRESETS: Array<{ label: string; getDates: () => DateRange }> = [
         label: "This year",
         getDates: () => {
             const year = new Date().getFullYear();
-            return { from: `${year}-01-01`, to: new Date().toISOString().slice(0, 10) };
+            return { from: `${year}-01-01`, to: localCalendarDate() };
         },
     },
     {

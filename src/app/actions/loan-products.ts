@@ -8,6 +8,7 @@ import { hasAdminPermission } from "@/lib/admin-permissions";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { FieldValue } from "@/lib/firestore-compat";
+import { retirementPatch, isRetired } from "@/lib/record-retirement";
 
 export interface LoanProduct { id?: string;
     name: string;
@@ -152,7 +153,12 @@ export async function getAdminLoanProductsAction(options: { limit?: number;
         const hasMore = snapshot.docs.length > fetchLimit;
         const docs = hasMore ? snapshot.docs.slice(0, fetchLimit) : snapshot.docs;
 
-        const products = serializeDocs(docs) as unknown as LoanProduct[];
+        // #302 Retired products leave this list, so "delete" still looks like
+        // delete to the admin who pressed it. The row survives for the loans
+        // that were written against it; the cursor still advances by raw rows.
+        const products = serializeDocs(
+            docs.filter((d: any) => !isRetired(d.data())),
+        ) as unknown as LoanProduct[];
         const nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : undefined;
 
         return { error: null, success: true as const, data: products, lastDocId: nextCursor, hasMore
@@ -248,8 +254,34 @@ export async function deleteAdminLoanProductAction(productId: string) { try {
         const doc = await docRef.get();
         if (!doc.exists) return { success: false as const, error: "Product not found", data: null };
 
-        await docRef.delete();
-        
+        /**
+         *   #302 DESTROYING A LOAN PRODUCT DESTROYED THE TERMS OF EVERY LOAN
+         *        WRITTEN AGAINST IT.
+         *
+         *        LOAN_PRODUCTS holds the interest rate and duration a
+         *        cooperative loan was granted on. _coop_money.ts and
+         *        api/cooperative/apply-loan both read LOAN_PRODUCTS.doc(id) and
+         *        fail closed when it is missing — correctly — but that only
+         *        protects NEW applications. For a loan already disbursed, the
+         *        row was the record of what the borrower agreed to.
+         *
+         *        The sibling API route's own comment admitted this:
+         *        "Irreversible, and the deleted product's terms are gone with
+         *        it — so the record keeps them", mitigating the loss by copying
+         *        the product into an audit-log entry. That is a workaround for a
+         *        destruction that did not need to happen.
+         *
+         *        `isActive` already exists on this collection — every creator
+         *        writes it — and NOTHING read it. So the retirement flag was
+         *        there, unused, while the code deleted instead. It is read now:
+         *        both admin lists filter it and both apply paths refuse it.
+         */
+        await docRef.update({
+            isActive: false,
+            ...retirementPatch(sessionResult.session.user.id, doc.data()?.status),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
         await createAdminAuditLog({ action: "loan_product_deleted",
             userId: sessionResult.session.user.id,
             targetId: productId,

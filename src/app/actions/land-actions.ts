@@ -16,7 +16,7 @@ import { requireSession } from "@/lib/session-guard";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { PUBLIC_LAND_STATUSES, stripInternalLandFields } from "@/lib/land-visibility";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
-import { APPROVABLE_FROM_STATUSES, REJECTABLE_FROM_STATUSES } from "@/lib/land-listing-status";
+import { APPROVABLE_FROM_STATUSES, REJECTABLE_FROM_STATUSES, isOwnerMutable } from "@/lib/land-listing-status";
 
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { logger } from "@/lib/logger";
@@ -374,8 +374,28 @@ async function _updateLandListing(
         }
 
         const listingData = listingDoc.data()!;
-        if (listingData.ownerId !== session.user.id && !(session.user.roles?.includes('admin') || session.user.roles?.includes('super_admin'))) { 
+        if (listingData.ownerId !== session.user.id && !(session.user.roles?.includes('admin') || session.user.roles?.includes('super_admin'))) {
             return { success: false, error: "Unauthorized to edit this listing", data: null };
+        }
+
+        // AN OWNER EDIT ERASED A BUYER'S RESERVATION.
+        //
+        // The write below sets `status: "pending_verification"` unconditionally.
+        // A buyer reserving this parcel claims it to "pending"
+        // (_fn_purchases.ts) and then pays at Paystack; the fulfilment and the
+        // cancel path both advance it FROM "pending" via claimStatusTransition.
+        // An owner edit landing in that window rewrote the status, so the claim
+        // could never fire: the buyer's money was taken for a listing that had
+        // been re-priced and pulled back into review under them. Same fault the
+        // admin decision paths were taught about (DECISION_LOCKED_STATUSES);
+        // this is the owner's copy of it, and `sold` was editable too.
+        if (!isOwnerMutable(listingData.status)) {
+            return {
+                success: false,
+                error: `This listing cannot be edited right now (status: ${listingData.status}). `
+                    + `A purchase is in progress or completed.`,
+                data: null,
+            };
         }
 
         const { listingId, ...updateData } = validated;
@@ -471,9 +491,14 @@ async function _verifyLandListing(
      * the three roles the matrix lists and still refuses moderator, support,
      * wave_admin and academy_admin — which is what the old comment was
      * protecting, and is asserted in land-listing-visibility.test.ts.
+     *
+     * FOUND TWICE, INDEPENDENTLY — the parallel audit reached the same guard
+     * from the same matrix (#265), which is the strongest evidence either
+     * produced that naming the permission is the right call rather than a
+     * preference.
      */
-    if (!hasAdminPermission(session?.user.roles, "land:verify_listings")) {
-        return { success: false, error: "Unauthorized - land:verify_listings required", data: null };
+    if (!hasAdminPermission(session?.user?.roles, "land:verify_listings")) {
+        return { success: false, error: "Unauthorized: land:verify_listings required", data: null };
     }
 
     try { 
@@ -589,9 +614,23 @@ async function _deleteLandListing(listingId: string): Promise<ActionResponse<nul
         }
 
         const listingData = listingDoc.data()!;
-        if (listingData.ownerId !== session.user.id && !(session.user.roles?.includes('admin') || session.user.roles?.includes('super_admin'))) { 
+        if (listingData.ownerId !== session.user.id && !(session.user.roles?.includes('admin') || session.user.roles?.includes('super_admin'))) {
             return { success: false, error: "Unauthorized to delete this listing", data: null };
         }
+
+        // Deleting mid-purchase is the edit fault with a tombstone: the buyer's
+        // "pending" reservation (or a completed sale) was overwritten with
+        // "deleted", and the claim that fulfils or cancels the purchase can
+        // never move a deleted row. Same rule as the edit above.
+        if (!isOwnerMutable(listingData.status)) {
+            return {
+                success: false,
+                error: `This listing cannot be deleted right now (status: ${listingData.status}). `
+                    + `A purchase is in progress or completed.`,
+                data: null,
+            };
+        }
+
 
         // Soft delete by updating status
         await db.collection(COLLECTIONS.LAND_LISTINGS).doc(listingId).update({ 
@@ -628,8 +667,10 @@ async function _getLandStatistics(): Promise<ActionResponse<any>> {
     if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
     
-    if (!session || !(session.user.roles?.includes('admin') || session.user.roles?.includes('super_admin'))) { 
-        return { success: false, error: "Unauthorized - Admin only", data: null };
+    // #265 Same permission as the verification queue above: an admin running
+    // that queue needs the numbers that describe it.
+    if (!session || !hasAdminPermission(session.user.roles, "land:verify_listings")) {
+        return { success: false, error: "Unauthorized: land:verify_listings required", data: null };
     }
 
     try {

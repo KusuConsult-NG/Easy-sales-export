@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useToast } from "@/contexts/ToastContext";
 import { runServiceRegistrationRecoveryAction } from "@/app/actions/data-recovery";
+import { loadSettings, SETTINGS_LOAD_FAILED_MESSAGE } from "@/lib/settings-load";
 
 interface SecuritySettings {
     sessionDurationDays: number;
@@ -33,22 +34,30 @@ export default function SecuritySettingsPage() {
     const [recoveryStats, setRecoveryStats] = useState<any>(null);
     const isSuperAdmin = session?.user?.roles?.includes("super_admin");
 
+    /**
+     * #295. A failed load used to leave DEFAULTS in the form, indistinguishable
+     * from what is stored — and Save posts the whole object, so changing one
+     * field would overwrite session duration, idle timeout, lockout settings
+     * and enforceMfa with values nobody chose.
+     */
+    const [loadError, setLoadError] = useState<string | null>(null);
+
     useEffect(() => {
         const load = async () => {
-            try {
-                const res = await fetch("/api/admin/settings/security");
-                const data = await res.json();
-                if (data.success && data.settings) setSettings(data.settings);
-            } catch {
-                // Use defaults if fetch fails
-            } finally {
-                setIsLoading(false);
-            }
+            const result = await loadSettings<SecuritySettings>("/api/admin/settings/security");
+            if (result.ok) setSettings(result.settings);
+            else setLoadError(result.reason);
+            setIsLoading(false);
         };
         load();
     }, []);
 
     async function handleSave() {
+        // #295. Refuse rather than persist defaults that were never read.
+        if (loadError) {
+            showToast(SETTINGS_LOAD_FAILED_MESSAGE, "error");
+            return;
+        }
         setIsSaving(true);
         try {
             const res = await fetch("/api/admin/settings/security", {
@@ -109,7 +118,9 @@ export default function SecuritySettingsPage() {
                 {isSuperAdmin && (
                     <button
                         onClick={handleSave}
-                        disabled={isSaving}
+                        // #295. Saving from a form that never read the stored
+                        // settings persists defaults over them.
+                        disabled={isSaving || !!loadError}
                         className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 disabled:opacity-50 transition"
                     >
                         {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -117,6 +128,20 @@ export default function SecuritySettingsPage() {
                     </button>
                 )}
             </div>
+
+            {/*
+              * #295. The screen used to be indistinguishable from a successful
+              * load: defaults in every field, no message, Save enabled.
+              */}
+            {loadError && (
+                <div role="alert" className="mb-6 bg-rose-50 border border-rose-200 rounded-xl p-4 flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                    <div className="text-sm text-rose-800">
+                        <p className="font-bold">{SETTINGS_LOAD_FAILED_MESSAGE}</p>
+                        <p className="mt-1 text-rose-700">{loadError}</p>
+                    </div>
+                </div>
+            )}
 
             {!isSuperAdmin && (
                 <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">

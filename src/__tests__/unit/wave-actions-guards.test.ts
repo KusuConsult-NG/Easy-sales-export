@@ -74,6 +74,7 @@ jest.mock('@/lib/status-transition', () => ({
     claimStatusTransitionFromAny: jest.fn(async () => ({ claimed: true })),
 }));
 jest.mock('@/lib/audit-log', () => ({
+    recordAdminAction: (p: any) => (global as any).mockRecordAdminAction(p),
     createAdminAuditLog: jest.fn(async () => ({})),
     logAdminAction: jest.fn(async () => ({})),
     logAdminFinancialAction: jest.fn(async () => ({})),

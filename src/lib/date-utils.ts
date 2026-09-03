@@ -67,6 +67,27 @@ export function formatLocalDateTime(date: any): string {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
+ * TODAY, AS THE PERSON LOOKING AT THE SCREEN RECKONS IT.
+ *
+ * #351. Admin date presets were built as `new Date().toISOString().slice(0, 10)`,
+ * which is the UTC calendar date. Nigeria is UTC+1, so between 00:00 and 01:00
+ * WAT the UTC date is still YESTERDAY: an admin who clicked "Today" at 00:30 on
+ * the 4th got the 3rd's data under a button labelled Today, and "Last 7 days"
+ * covered the seven days ending yesterday. "This year" was worse — its year came
+ * from `getFullYear()` (LOCAL) and its end date from toISOString (UTC), so the
+ * two halves of one range disagreed at the boundary.
+ *
+ * A preset names a day in the reader's calendar. #33 fixed the same confusion in
+ * the query these strings feed; this is the other end of it.
+ */
+export function localCalendarDate(d: Date = new Date()): string {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+}
+
+/**
  * Returns the UTC start of a given YYYY-MM-DD date string.
  * e.g. "2026-05-15" → 2026-05-15T00:00:00.000Z
  */

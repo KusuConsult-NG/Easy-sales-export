@@ -26,8 +26,29 @@ export function KYCVerificationStep({
     onNext,
     onBack,
     initialData,
+    onChange,
 }: KYCVerificationStepProps) {
-    const [kycData, setKycData] = useState<Partial<KYCData>>(initialData?.kycData || {});
+    /**
+     *   #349 `onChange` WAS DECLARED AND NEVER DESTRUCTURED.
+     *
+     *        The export wizard passes `onChange={handleStepChange}` to every
+     *        step, and handleStepChange is what writes the draft to
+     *        localStorage. This step named the prop in its interface and then
+     *        left it out of the destructure, so it was the ONE step whose data
+     *        never reached the draft.
+     *
+     *        The cost lands on the step where it hurts most: KYC is the screen
+     *        with the two document uploads and the identity numbers. A member
+     *        who was interrupted — including by the Paystack redirect the draft
+     *        exists to survive — came back to an empty identity form while
+     *        every other step was restored.
+     */
+    const [kycData, setKycDataState] = useState<Partial<KYCData>>(initialData?.kycData || {});
+
+    function setKycData(next: Partial<KYCData>) {
+        setKycDataState(next);
+        onChange?.({ kyc: { kycData: next } });
+    }
     const [idDocument, setIdDocument] = useState<File | null>(null);
     const [proofOfAddress, setProofOfAddress] = useState<File | null>(null);
     const [saving, setSaving] = useState(false);

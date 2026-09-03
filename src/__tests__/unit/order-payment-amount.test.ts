@@ -87,11 +87,26 @@ describe('the rule', () => {
     });
 
     it('does not consult platform fee bounds at all', () => {
-        // It takes two numbers. A rule that cannot see the fee configuration cannot
-        // strand a charged buyer when an admin changes it.
+        // It takes two numbers. A rule that cannot see the fee configuration
+        // cannot strand a charged buyer when an admin changes it.
+        //
+        // Scoped to checkOrderPaymentAmount rather than the whole FILE as of
+        // #272: checkOrderAmountBounds now lives beside it and does take fees,
+        // deliberately — bounds belong at PLACEMENT, and putting them in one
+        // module with the payment rule is what keeps the distinction visible.
+        // The property here is that the PAYMENT verdict is fee-blind.
         expect(checkOrderPaymentAmount.length).toBe(2);
-        expect(code('src/lib/order-payment-amount.ts')).not.toContain('minOrderAmount');
-        expect(code('src/lib/order-payment-amount.ts')).not.toContain('getPlatformFees');
+
+        const src = code('src/lib/order-payment-amount.ts');
+        const paymentRule = src.slice(
+            src.indexOf('export function checkOrderPaymentAmount'),
+            src.indexOf('export function checkOrderAmountBounds'),
+        );
+
+        expect(paymentRule.length).toBeGreaterThan(200);
+        expect(paymentRule).not.toContain('minOrderAmount');
+        expect(paymentRule).not.toContain('maxOrderAmount');
+        expect(src).not.toContain('getPlatformFees');
     });
 });
 
@@ -120,11 +135,18 @@ describe('both fulfilment paths use it', () => {
         expect(src).not.toMatch(/amountInNaira > fees\.maxOrderAmount/);
     });
 
-    it('but placement still enforces the minimum', () => {
-        // Vacuity guard: if the bound were gone entirely rather than moved, this
-        // whole change would be a removal of a control.
+    it('but placement still enforces the minimum — and now the maximum too', () => {
+        // Vacuity guard: if the bound were gone entirely rather than moved,
+        // this whole change would be a removal of a control.
+        //
+        // It counted the literal `totalAmount < fees.minOrderAmount` three
+        // times. #272 replaced those three hand-written comparisons with one
+        // shared call that applies BOTH bounds — because the ceiling had been
+        // lost when this pair was dropped from the payment path on an argument
+        // that named only the floor. Counting the shared call keeps the vacuity
+        // guard and stops pinning an expression.
         const src = code(ORDERS);
-        expect((src.match(/totalAmount < fees\.minOrderAmount/g) || []).length).toBeGreaterThanOrEqual(3);
+        expect((src.match(/checkOrderAmountBounds\(/g) || []).length).toBe(3);
     });
 
     it('the interactive path still needs the fee percentage for the escrow split', () => {

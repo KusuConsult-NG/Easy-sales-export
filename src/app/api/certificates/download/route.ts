@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { isRetired } from "@/lib/record-retirement";
 
 /**
  * GET - Download certificate
@@ -41,6 +42,20 @@ export async function GET(request: NextRequest) {
         }
 
         const certData = certDoc.data()!;
+
+        // #303 A removed certificate is refused here rather than by absence.
+        //
+        // The row used to be destroyed, so a request for a removed certificate
+        // 404'd on the existence check above. Keeping the row removes that, and
+        // without this the download would start working again for anything
+        // somebody had already deleted — a regression introduced by the fix.
+
+        if (isRetired(certData)) {
+            return NextResponse.json(
+                { success: false, error: "Certificate not found" },
+                { status: 404 }
+            );
+        }
 
         // Access control
         if (certData.userId !== session.user.id &&

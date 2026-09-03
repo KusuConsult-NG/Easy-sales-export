@@ -347,3 +347,161 @@ export function exportWindowFundingGoal(
 
     return targetVolume * slotPrice;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * May this window still take an investment?
+ *
+ *   #275 AN EXPIRED WINDOW STAYED OPEN FOR EVER, AND TWO OF THE THREE PATHS
+ *        TOOK MONEY FOR IT.
+ *
+ *        Three doors onto investing in an export window:
+ *
+ *          export-aggregation.ts   status === "open" AND now > endDate
+ *          export/_ex_investments  status only
+ *          export-payment.ts       status only
+ *
+ *        One checked the deadline. The other two checked that the window said
+ *        "open" — and NOTHING EVER MAKES IT SAY ANYTHING ELSE. A scan for a
+ *        writer of "closed" on export_windows finds none: the string appears in
+ *        type unions and in the two status lists above, and in no assignment
+ *        anywhere. No scheduled job, no admin action, no code path closes a
+ *        window when its endDate passes.
+ *
+ *        So a window whose period ended months ago is still "open".
+ *        getExportOpportunities lists it as a live opportunity, with its own
+ *        closeDate in the past printed on the card, and two of the three paths
+ *        charge whoever clicks it.
+ *
+ *        The same "defined more than once, one of them hardened" shape this
+ *        file already opens with about updateExportStatusAction — a third time,
+ *        on the door where money enters.
+ *
+ * WHY THE UNION AND NOT THE STRICTER RULE
+ * ---------------------------------------
+ * "open" OR "active", which is what the two unhardened paths accept, rather
+ * than the "open" the hardened one takes. No window that can be invested in
+ * today stops being investable; two paths simply gain the deadline check.
+ *
+ * "active" is a status NO WRITER PRODUCES — export-aggregation.ts creates an
+ * investable window "open" and its own type excludes "active", as does
+ * EXPORT_WINDOW_ALL_STATUSES. It is kept anyway: narrowing a money path on the
+ * strength of a static scan would refuse a single hand-edited production row.
+ * Recorded in export-window-expiry.test.ts, not acted on.
+ *
+ * AN ABSENT OR UNREADABLE endDate IS NOT A DEADLINE. That is exactly what
+ * export-aggregation.ts already did — `new Date() > new Date(undefined)` is
+ * false — and copying the hardened path rather than inventing a stricter rule
+ * keeps this a fix. #272's reasoning, not #245's: a deadline nobody set is not
+ * a control that failed.
+ */
+export type ExportInvestmentVerdict =
+    | { ok: true }
+    | { ok: false; reason: "not_open" | "expired"; message: string };
+
+function endDateOf(value: unknown): Date | null {
+    if (!value) return null;
+    // export_windows rows carry both a Firestore Timestamp and an ISO string;
+    // getExportOpportunities branches on .toDate?.() for the same reason.
+    const raw = typeof (value as { toDate?: () => Date }).toDate === "function"
+        ? (value as { toDate: () => Date }).toDate()
+        : value as string | number | Date;
+
+    const d = new Date(raw as string);
+    return Number.isNaN(d.getTime()) ? null : d;
+}
+
+export function exportWindowAcceptsInvestment(
+    windowData: { status?: unknown; endDate?: unknown } | null | undefined,
+    now: Date = new Date(),
+): ExportInvestmentVerdict {
+    const status = String(windowData?.status ?? "");
+
+    // EXPORT_WINDOW_INVESTABLE_STATUSES, not a second copy of it — the
+    // vocabulary test above caught me declaring one, which is the exact
+    // duplication this file exists to prevent.
+    if (!(EXPORT_WINDOW_INVESTABLE_STATUSES as readonly string[]).includes(status)) {
+        return {
+            ok: false,
+            reason: "not_open",
+            message: "This export window is no longer accepting investments",
+        };
+    }
+
+    const endDate = endDateOf(windowData?.endDate);
+    if (endDate && now > endDate) {
+        return {
+            ok: false,
+            reason: "expired",
+            message: "This export window has expired and is no longer accepting investments",
+        };
+    }
+
+    return { ok: true };
+}
+
+/**
+ * What one naira invested in a window pays back — #324.
+ *
+ * THE PAYING PATH WAS THE ONE THAT NEVER ADOPTED THIS MODULE
+ * ----------------------------------------------------------
+ * Three places decide an export return, and until now the two that only TALK
+ * about it agreed while the one that MOVES MONEY did not.
+ *
+ * The two fulfilment paths — payments/service.ts and export/_ex_investments.ts
+ * — both compute it as:
+ *
+ *     exportData.returnMultiplier ?? exportData.expectedReturnMultiplier ?? 1.20
+ *
+ * and /export/windows/[id] quotes the investor exportWindowRoiPercent(...),
+ * which defaults to DEFAULT_EXPORT_ROI_PERCENT = 20 for exactly the reason
+ * written above it: 20% "is the return the platform already pays when a window
+ * records nothing", and using anything else "would have the page advertise one
+ * figure and the payout compute another."
+ *
+ * cron/release-escrow — the job that actually credits the member — did:
+ *
+ *     const roiString = data.roi || "15%";
+ *     let roiPercentage = 0.15;
+ *     const match = roiString.match(/(\d+)%/);
+ *     if (match) roiPercentage = parseInt(match[1]) / 100;
+ *     const totalPayout = amount * (1 + roiPercentage);
+ *
+ * Three separate problems in five lines:
+ *
+ *   1. It reads `data.roi`, and NOTHING WRITES AN ROI ONTO A WINDOW — the note
+ *      on exportWindowRoiPercent above establishes that, and it still holds.
+ *      So the branch that reads a configured rate never runs.
+ *   2. Its default is therefore always in force, and it is 15, not 20. Every
+ *      delivered window paid 1.15x while the platform quoted 1.20x at the
+ *      moment the member paid in. A five-point shortfall on every export
+ *      return, silently, forever.
+ *   3. It never looks at `roiPercentage` at all — the field
+ *      payments/service.ts's own warning tells the operator to add ("Add
+ *      'roiPercentage' to the window doc"). An operator who followed that
+ *      instruction was still paid the default.
+ *
+ * This is #38/#179/#183's shape — one rule in N copies that disagree — landing
+ * on the copy that pays.
+ *
+ * WHAT THIS DOES AND DOES NOT DECIDE
+ * ----------------------------------
+ * It is the two fulfilment paths' rule, extracted verbatim, so pointing them at
+ * it changes nothing and pointing the cron at it makes the payout match the
+ * quote. It deliberately does NOT consult the `roi` / `roiPercentage` STRINGS
+ * for money: no money path has ever done so, and making them authoritative
+ * would change what the two working paths pay. That the strings are display-only
+ * while the multiplier is the money is now one documented fact in one place,
+ * rather than a difference between three files.
+ */
+export function exportWindowReturnMultiplier(window: Record<string, unknown> | null | undefined): number {
+    const raw = (window?.returnMultiplier ?? window?.expectedReturnMultiplier) as unknown;
+    const parsed = Number(raw);
+
+    // Finite and positive, or the platform default. A window carrying a string,
+    // a zero or a negative must not silently pay nothing or take money back.
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+
+    return 1 + DEFAULT_EXPORT_ROI_PERCENT / 100;
+}

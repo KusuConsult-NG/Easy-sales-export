@@ -2,6 +2,7 @@
 
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
+import { sellerNetFor } from "@/lib/platform-fee";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -9,14 +10,16 @@ import type { Order, OrderStatus } from "@/lib/types/marketplace";
 import { hasRole } from "@/lib/role-utils";
 import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
-import { paystackPayout } from "@/lib/paystack-transfer";
+import { paystackPayout, payoutReference } from "@/lib/paystack-transfer";
 import { claimStatusTransition, claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
+import { waveCommission } from "@/lib/wave-commission";
 import { getLogisticsProvider } from "@/lib/logistics";
 import { runQueryWithRetry } from "@/lib/firestore-utils";
 import { ESCROW_RELEASABLE_FROM, pickOrderEscrow, escrowIdFor } from "@/lib/escrow-status";
 import { hasReservedStock } from "@/lib/order-status";
+import { scopeOrderToSeller } from "@/lib/order-scope";
 
 /**
  * Get all orders for a seller
@@ -46,7 +49,24 @@ async function _getSellerOrdersAction(filters?: { status?: OrderStatus; }) { let
         }
 
         const snapshot = await query.get();
-        const orders = serializeDocs<Order>(snapshot.docs);
+        /**
+         *   #342 THE SECOND READER OF THE SAME SHARED DOCUMENT.
+         *
+         *        A marketplace order is ONE row holding every seller's line
+         *        items and the whole basket's money; the escrow that pays each
+         *        seller is a row per seller. This returned the whole document to
+         *        any seller in `sellerIds` — another merchant's products, prices
+         *        and quantities, and a total that is not this seller's.
+         *
+         *        Fixed at both readers of this name at once, through the shared
+         *        rule in lib/order-scope.ts, because a fix that reaches one of a
+         *        pair is the shape this audit keeps finding.
+         *
+         *        The BUYER's copy of the same action, below, is untouched: the
+         *        whole basket is exactly what a buyer bought.
+         */
+        const orders = serializeDocs<Order>(snapshot.docs)
+            .map((o) => scopeOrderToSeller(o as any, userId) as Order);
 
         return { error: null, success: true as const, data: { orders } };
     } catch (error) { logger.error("Get seller orders error:", { 
@@ -403,14 +423,101 @@ async function _confirmDeliveryAction(orderId: string) { let sessionResult;
             // sellerAmount at 0 is what stops the Paystack transfer, since the
             // caller guards on `sellerAmount > 0`.
             if (!escrowAlreadyReleased && sellerData?.bankAccountNumber && sellerData?.bankCode) {
-                const platformCommissionRate = 0.025;
-                sellerAmount = Math.floor(currentOrder.totalAmount * (1 - platformCommissionRate));
+                /**
+                 *   #254 THE PAYOUT WITHHELD 2.5%. THE ESCROW RECORDED 5%.
+                 *
+                 *        This was:
+                 *
+                 *            const platformCommissionRate = 0.025;
+                 *            sellerAmount = Math.floor(
+                 *                currentOrder.totalAmount * (1 - platformCommissionRate));
+                 *
+                 *        Both escrow creators — marketplace/_payment_orders.ts
+                 *        and _payment_verify.ts — write
+                 *        `platformFee = grossAmount * fees.platformFeePercentage`
+                 *        and `netAmount = grossAmount - platformFee`, with that
+                 *        percentage at 0.05. So for a 100,000 order the escrow
+                 *        row says the platform took 5,000 and the seller is owed
+                 *        95,000, and this paid 97,500. The platform collected
+                 *        half what its own books recorded, every time.
+                 *
+                 *        AND THE BASE WAS WRONG. `totalAmount` is the WHOLE
+                 *        order; the seller here is `sellerIds[0]` and the escrow
+                 *        is per-seller. On a two-seller order the first seller
+                 *        was paid for both sellers' items.
+                 *
+                 *        Paying the figure the escrow already holds fixes both,
+                 *        and takes the rate out of this file's hands — a local
+                 *        literal is what let it drift to 0.025.
+                 *
+                 * The fallback covers rows written before netAmount existed. It
+                 * uses the CONFIGURED percentage rather than a literal, so the
+                 * two paths still agree.
+                 */
+                const escrowData = escrowDoc.exists ? escrowDoc.data() : undefined;
+                const recordedNet = Number(escrowData?.netAmount);
+
+                if (Number.isFinite(recordedNet) && recordedNet > 0) {
+                    //   #271 NOT Math.floor(recordedNet).
+                    //
+                    //        The escrow row is the authority on what the seller
+                    //        is owed, and flooring it discards any kobo it
+                    //        records. Harmless while every gross is a whole
+                    //        naira and wrong the moment one is not —
+                    //        initiateTransfer already converts to integer kobo,
+                    //        so nothing downstream ever needed the floor.
+                    sellerAmount = recordedNet;
+                } else {
+                    //   #271 THE COMMENT ABOVE CLAIMED THESE TWO PATHS AGREED.
+                    //        THEY DID NOT.
+                    //
+                    //        This was `Math.floor(gross * (1 - pct))` while the
+                    //        three escrow creators write
+                    //        `gross - Math.round(gross * pct)`. Sharing the
+                    //        PERCENTAGE was the fix that note describes, and it
+                    //        was not enough: the two EXPRESSIONS are not the
+                    //        same function.
+                    //
+                    //        Across every whole-naira gross from 500 to 20,000
+                    //        at 5% they disagree on 8,775 of 19,501 values —
+                    //        45% — always by exactly NGN 1 and always against
+                    //        the seller. gross 1,002: the escrow row says 952,
+                    //        this paid 951.
+                    //
+                    //        With f = frac(gross x rate) and 0 < f < 0.5,
+                    //        Math.round rounds the fee down while Math.floor on
+                    //        the complement rounds the net down too, so the
+                    //        same naira is deducted twice.
+                    const { getPlatformFees } = await import("@/lib/system-settings");
+                    const fees = await getPlatformFees();
+                    const gross = Number(escrowData?.grossAmount ?? currentOrder.totalAmount);
+                    sellerAmount = sellerNetFor(gross, fees.platformFeePercentage);
+                }
             }
 
             // PHASE 2: WAVE LEDGER SYNC (IF APPLICABLE)
             if (isWaveMember && !escrowAlreadyReleased) {
-                const waveCommissionRate = 0.05; // 5% as per wave.ts
-                const earningsAmount = Math.floor(currentOrder.totalAmount * waveCommissionRate);
+                // One commission rate for the whole platform (#253). This was a
+                // local `0.05` with the comment "5% as per wave.ts" — a copy
+                // admitting it was a copy — while wave/_wv_earnings.ts carried
+                // its own literal for the figure it SHOWS the member. Two live
+                // numbers that had to agree, kept in step by nobody.
+                //   #270 AND ONE ROUNDING RULE TOO.
+                //
+                //        This was `Math.floor(totalAmount * waveCommissionRate)`
+                //        — whole naira, rounded DOWN — while _wv_earnings.ts,
+                //        the file that SHOWS her the figure, multiplied raw and
+                //        unrounded. Both numbers appear on the same page, and
+                //        they disagreed in the direction that matters: she was
+                //        shown more than she could withdraw. Up to NGN 1 per
+                //        sale, permanently, growing with every order.
+                //
+                //        #253 unified the rate across these two files and left
+                //        the rounding in both, so they went on disagreeing
+                //        about the same money by a different route.
+                const { getWaveSettings } = await import("@/lib/system-settings");
+                const { commissionRate: waveCommissionRate } = await getWaveSettings();
+                const earningsAmount = waveCommission(currentOrder.totalAmount, waveCommissionRate);
 
                 // Increment persistent balance on user doc
                 await sellerRef.update({
@@ -457,7 +564,11 @@ async function _confirmDeliveryAction(orderId: string) { let sessionResult;
                         accountName: bankDetails.bankAccountName || (bankDetails as any).name || bankDetails.fullName || "" 
                     },
                     result.sellerAmount,
-                    `Escrow release for order ${orderId}`
+                    `Escrow release for order ${orderId}`,
+                    // Stable across retries of THIS release (#249). An escrow is
+                    // released once; the reference is what makes Paystack refuse
+                    // a second transfer rather than honouring it.
+                    payoutReference("ESCROW", orderId),
                 );
 
                 await orderRef.update({ escrowReleased: res.success,
@@ -466,6 +577,11 @@ async function _confirmDeliveryAction(orderId: string) { let sessionResult;
                     sellerAmountPaid: result.sellerAmount,
                     escrowReleaseError: res.success ? null : res.error,
                     escrowPendingManualRelease: !res.success,
+                    // A duplicate reference means the seller was already paid; an
+                    // indeterminate failure means we cannot say. Either way a
+                    // human has to check Paystack before anyone releases again,
+                    // and "pending manual release" alone reads as "just do it".
+                    escrowNeedsReconciliation: !!(res.duplicate || res.indeterminate),
                     _version: FieldValue.increment(1) });
             } catch (err) { logger.error("Payout side effect failed:", { userId, error: err });
                 await orderRef.update({ escrowPendingManualRelease: true, _version: FieldValue.increment(1) });

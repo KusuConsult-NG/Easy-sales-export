@@ -11,6 +11,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import {
     processMarketplaceOrder,
+    processWalletFunding,
     processExportInvestment,
     processCooperativeRegistration,
     processAcademyRegistration,
@@ -188,8 +189,10 @@ async function paystackSyncHandler(_req: NextRequest) {
                             } else if (type === "wave_registration" || type === "wave_application") {
                                 await processWaveRegistration(reference, amountNGN, userId, paidAtDate);
                             } else if (type === "wallet_funding") {
-                                const { confirmWalletFundingAction } = await import("@/app/actions/wallet");
-                                await confirmWalletFundingAction(reference, paidAtDate);
+                                // #298. A processor that THROWS on refusal, like the
+                                // other six branches — so a wallet credit that did not
+                                // happen is not counted as synced.
+                                await processWalletFunding(reference, paidAtDate);
                             } else {
                                 await docRef.set({
                                     reference,

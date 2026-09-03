@@ -40,6 +40,34 @@ export const LOAN_APPLICATION_COLLECTIONS = [
     COLLECTIONS.COOPERATIVE_LOANS,
 ] as const;
 
+/**
+ * What a borrower is told when the one-open-application rule refuses them.
+ *
+ *   #288 THE REASON WAS WRITTEN, THROWN, AND THEN DISCARDED.
+ *
+ *        claimSingleOpenLoanApplication enforces "one open application per
+ *        borrower across BOTH collections above" — the rule this module's
+ *        header exists to describe. Four actions throw when the claim is lost.
+ *        Two of them return `error?.message`, so the borrower learns why.
+ *
+ *        loan-actions.ts — the action behind /loans/apply, which is the ONLY
+ *        loan application page in the product — ended its catch with a flat
+ *        `"Failed to submit loan application"`. The specific sentence was
+ *        composed one line above the throw and replaced two lines below it, so
+ *        an applicant who already had one open was told the submission had
+ *        failed, with no way to discover that it had in fact been refused, on
+ *        purpose, for a reason they could act on. Pressing the button again is
+ *        the only move that message suggests, and it can never work.
+ *
+ *        The message lives here rather than in each action because the RULE is
+ *        platform-wide across the two collections named above, and this module
+ *        is where that scope is already documented. The four throw sites said
+ *        it four times in engineer's words ("already exists platform-wide"),
+ *        which is also what one of them then showed to a member.
+ */
+export const ONE_OPEN_LOAN_APPLICATION_MESSAGE =
+    "You already have a loan application in progress. Only one may be open at a time — check its status before applying again.";
+
 export interface ResolvedLoanApplication {
     /** Document reference in the collection that actually holds the row. */
     ref: any;

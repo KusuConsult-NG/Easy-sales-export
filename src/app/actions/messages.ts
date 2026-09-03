@@ -13,7 +13,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Conversation, Message, UserSearchResult } from "@/lib/types/messages";
 import * as messagingService from "@/infrastructure/messaging/service";
-import { ALL_ADMIN_ROLES, MODULE_ADMIN_ROLE, hasAdminPermission } from "@/lib/admin-permissions";
+import { ALL_ADMIN_ROLES, MODULE_ADMIN_ROLE, hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
 
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 
@@ -205,7 +205,11 @@ export async function searchUsersAction(query: string) {
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userRoles: string[] = userDoc.data()?.roles ?? [];
-        const userIsAdmin = userRoles.some(r => r === "admin" || r === "super_admin" || r.endsWith("_admin"));
+        // #356 the same hand-written test as five other sites. It scoped a
+        // moderator's or support account's user search as if they were an
+        // ordinary member, so they could not find the person they were
+        // helping.
+        const userIsAdmin = isAdmin(userRoles);
 
         const ROLE_MODULE_KEYWORDS: Record<string, string> = {
             wave_participant: "wave",
@@ -259,7 +263,33 @@ export async function searchUsersAction(query: string) {
         try {
             [adminsSnapshot, generalSnapshot, exactEmailSnapshot] = await Promise.all([
                 db.collection(COLLECTIONS.USERS).where("roles", "array-contains-any", ADMIN_ROLES).get(),
-                db.collection(COLLECTIONS.USERS).orderBy("lastLoginAt", "desc").limit(500).get(),
+                /**
+                 *   #335 THE 500 MOST RECENTLY ACTIVE USERS WERE AN ARBITRARY
+                 *        500, BECAUSE NOTHING WRITES lastLoginAt.
+                 *
+                 *        The name/email match below happens in JavaScript over
+                 *        whatever this query returns, so the ORDER decides who
+                 *        can be found at all. `lastLoginAt` is written by no
+                 *        code path in src/ — not on login, not anywhere — so
+                 *        every row was missing the sort key and the slice was
+                 *        an arbitrary 500 of the whole user table. On a
+                 *        platform with more than 500 accounts, searching a
+                 *        colleague by name returned "no results" depending on
+                 *        nothing the searcher could see or influence.
+                 *
+                 *        `updatedAt` is a NATIVE column on users (see
+                 *        supabase-table-map.ts) and every write touches it, so
+                 *        ordering by it gives the slice the meaning this line
+                 *        always intended — most recently active first. It is
+                 *        also exactly the fallback broadcast-logic.ts and
+                 *        sms-broadcast.ts already use for "recently active":
+                 *        `updatedAt || lastLoginAt || createdAt`.
+                 *
+                 *        The cap is still a cap. Searching by FULL email is
+                 *        unaffected either way — that is the third query below,
+                 *        an equality match with no limit.
+                 */
+                db.collection(COLLECTIONS.USERS).orderBy("updatedAt", "desc").limit(500).get(),
                 db.collection(COLLECTIONS.USERS).where("email", "==", trimmedQuery.toLowerCase()).get()
             ]);
         } catch (e) {

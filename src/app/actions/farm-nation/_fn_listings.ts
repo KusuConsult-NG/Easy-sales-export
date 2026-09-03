@@ -6,6 +6,8 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isBrowsable, AWAITING_VERIFICATION_STATUS } from "@/lib/land-listing-status";
+import { hasAdminPermission } from "@/lib/admin-permissions";
+import { stripInternalLandFields, isLandListingViewable } from "@/lib/land-visibility";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { isValidState, isValidLGA, normalizeLocation } from "@/lib/locations";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
@@ -153,7 +155,41 @@ async function _getPropertyByIdAction(propertyId: string): Promise<ActionRespons
 
         const property = serializeDoc<Property>(propertyDoc.id, data);
 
-        return { success: true as const, data: { property }, error: null };
+        /**
+         *   #340 THE THIRD PUBLIC READER OF THIS DOCUMENT.
+         *
+         *        Same shape as land-listings.ts's getPropertyByIdAction: no
+         *        session check, no status filter, the whole document — the
+         *        deeds, the owner's email and phone, and the admin's review
+         *        notes — for any id, at any status.
+         *
+         *        There are two actions of this name over one collection. Fixing
+         *        one and not the other is the shape this audit keeps finding, so
+         *        both take the same rule, from lib/land-visibility.ts. The owner
+         *        and an admin who may verify listings still see everything.
+         */
+        const sessionResult = await requireSession();
+        const viewer = sessionResult.session?.user;
+        const privileged = Boolean(
+            viewer && (
+                viewer.id === (data as any).ownerId
+                || hasAdminPermission(viewer.roles, "land:verify_listings")
+            )
+        );
+
+        if (privileged) {
+            return { success: true as const, data: { property }, error: null };
+        }
+
+        if (!isLandListingViewable((data as any).status)) {
+            return { success: false as const, data: null, error: "Property not found", meta: null };
+        }
+
+        return {
+            success: true as const,
+            data: { property: stripInternalLandFields(property as any) },
+            error: null,
+        };
     } catch (error: any) { 
         logger.error("Get property error:", error);
         return { success: false as const, data: null, error: error.message, meta: null };

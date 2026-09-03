@@ -190,9 +190,13 @@ describe('the response is bounded and current', () => {
 
 describe('the POST, which was already right', () => {
     it('is admin-only', () => {
+        // #265 The guard was a hand-written `admin || super_admin` pair, which
+        // refused wave_admin — the role holding wave:manage_training, the
+        // permission that names this exact operation. Asserted by permission
+        // rather than by the literal role check it used to spell out.
         const post = route.slice(route.indexOf('export async function POST'));
 
-        expect(post).toContain('session.user.roles?.includes("admin")');
+        expect(post).toContain('wave:manage_training');
         expect(post).toContain('{ status: 403 }');
     });
 

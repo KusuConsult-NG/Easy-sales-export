@@ -26,15 +26,77 @@ export default function OrphanedUsersPage() {
     // accounts of 41,105.
     const [scan, setScan] = useState<{ scanned: number; complete: boolean } | null>(null);
 
+    /**
+     *   #296 A REFUSAL RENDERED AS A CLEAN BILL OF HEALTH.
+     *
+     *        /api/admin/orphaned-users answers a non-super-admin with
+     *        `{ error: 'Unauthorized' }` and a 403, and any fault with
+     *        `{ error }` and a 500. There is no `success` field, so
+     *        `response.ok` is the ONLY signal — and none of the three handlers
+     *        looked at it.
+     *
+     *        detectOrphaned did:
+     *
+     *            const data = await response.json();
+     *            setOrphanedUsers(data.users || []);
+     *            setScan({ scanned: data.scanned ?? 0,
+     *                      complete: data.complete !== false });
+     *
+     *        On a 403 that is an empty list and `complete: true` — because
+     *        `undefined !== false` — so the screen printed
+     *
+     *            "No orphaned users among all 0 Auth accounts"
+     *
+     *        An admin whose session had expired, or who lacked the role, was
+     *        told the platform was healthy. This screen's own header records
+     *        the LAST time it said "no orphaned users" when it had not looked:
+     *        that was a partial scan presented as a total. Same sentence, a
+     *        different door.
+     *
+     *        And a throw left the previous list on screen with no message at
+     *        all, so a failed rescan after a repair looked like a successful
+     *        one.
+     *
+     *        repairAll rendered the error body as Repair Results — `Total:
+     *        undefined, Repaired: undefined` in a green panel — and then
+     *        refreshed the list, which came back empty for the same reason,
+     *        making a repair that never ran look complete.
+     *
+     *        repairSingle discarded the response entirely.
+     */
+    const [error, setError] = useState<string | null>(null);
+
+    /** The one place that turns a Response into either data or a reason. */
+    const readJson = async (response: Response): Promise<{ ok: true; data: any } | { ok: false; reason: string }> => {
+        let data: any = null;
+        try {
+            data = await response.json();
+        } catch {
+            return { ok: false, reason: `The response was not readable (HTTP ${response.status})` };
+        }
+        if (!response.ok) {
+            return { ok: false, reason: String(data?.error || `Request failed (HTTP ${response.status})`) };
+        }
+        return { ok: true, data };
+    };
+
     const detectOrphaned = async () => {
         setLoading(true);
+        setError(null);
         try {
-            const response = await fetch('/api/admin/orphaned-users');
-            const data = await response.json();
+            const result = await readJson(await fetch('/api/admin/orphaned-users'));
+            if (!result.ok) {
+                // Leave the list and the scan summary ALONE. Replacing them
+                // with zeroes is what produced "no orphaned users among all 0".
+                setError(result.reason);
+                return;
+            }
+            const data = result.data;
             setOrphanedUsers(data.users || []);
             setScan({ scanned: data.scanned ?? 0, complete: data.complete !== false });
-        } catch (error) {
-            logger.error('Failed to detect orphaned users', error);
+        } catch (err) {
+            logger.error('Failed to detect orphaned users', err);
+            setError(err instanceof Error ? err.message : 'The scan could not be run.');
         } finally {
             setLoading(false);
         }
@@ -44,19 +106,24 @@ export default function OrphanedUsersPage() {
         if (!confirm(`Repair ${orphanedUsers.length} orphaned users?`)) return;
 
         setRepairing(true);
+        setError(null);
         try {
-            const response = await fetch('/api/admin/orphaned-users', {
+            const result = await readJson(await fetch('/api/admin/orphaned-users', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({}),
-            });
-            const data = await response.json();
-            setResults(data);
+            }));
+            if (!result.ok) {
+                setError(result.reason);
+                return;
+            }
+            setResults(result.data);
 
             // Refresh list
             await detectOrphaned();
-        } catch (error) {
-            logger.error('Failed to repair orphaned users', error);
+        } catch (err) {
+            logger.error('Failed to repair orphaned users', err);
+            setError(err instanceof Error ? err.message : 'The repair could not be run.');
         } finally {
             setRepairing(false);
         }
@@ -66,18 +133,23 @@ export default function OrphanedUsersPage() {
         if (!confirm('Repair this user?')) return;
 
         setRepairing(true);
+        setError(null);
         try {
-            const response = await fetch('/api/admin/orphaned-users', {
+            const result = await readJson(await fetch('/api/admin/orphaned-users', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ uid }),
-            });
-            await response.json();
+            }));
+            if (!result.ok) {
+                setError(result.reason);
+                return;
+            }
 
             // Refresh list
             await detectOrphaned();
-        } catch (error) {
-            logger.error('Failed to repair user', error);
+        } catch (err) {
+            logger.error('Failed to repair user', err);
+            setError(err instanceof Error ? err.message : 'The repair could not be run.');
         } finally {
             setRepairing(false);
         }
@@ -147,7 +219,19 @@ export default function OrphanedUsersPage() {
                 </div>
             )}
 
-            {orphanedUsers.length === 0 && !loading && (
+            {/* #296. A failure is not a result. */}
+            {error && (
+                <div role="alert" className="mb-6 p-4 bg-rose-50 border border-rose-200 rounded-md">
+                    <h3 className="font-semibold text-rose-900">The scan did not run</h3>
+                    <p className="mt-1 text-sm text-rose-800">{error}</p>
+                    <p className="mt-1 text-xs text-rose-700">
+                        Nothing below reflects this attempt — it is whatever the last successful scan
+                        found, or nothing at all.
+                    </p>
+                </div>
+            )}
+
+            {orphanedUsers.length === 0 && !loading && !error && (
                 <div className="p-6 text-center text-gray-500 bg-white border border-gray-200 rounded-md">
                     {scan
                         ? scan.complete

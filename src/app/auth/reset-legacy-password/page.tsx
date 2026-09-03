@@ -52,10 +52,20 @@ export default function ResetLegacyPasswordPage() {
                 // directly and skip the change entirely. The flow here was
                 // right; the action it depended on was reachable without it.
                 setIsSuccess(true);
-                showToast("Account secured successfully", "success");
-                
+                // #306 The change now revokes every session, this one included —
+                // there is no way to exempt the caller, and leaving the intruder
+                // signed in was the defect. So this goes to sign-in rather than
+                // to /dashboard, which would have bounced there anyway once the
+                // token re-synced, without saying why.
+                showToast(
+                    result.sessionsRevoked
+                        ? "Account secured. Please sign in again with your new password."
+                        : "Password changed, but your other devices could not be signed out. Please contact support.",
+                    result.sessionsRevoked ? "success" : "error",
+                );
+
                 setTimeout(() => {
-                    router.push("/dashboard");
+                    router.push(result.sessionsRevoked ? "/auth/login" : "/dashboard");
                 }, 2000);
             } else {
                 showToast(result.error || "Failed to update security. Check your default PIN.", "error");

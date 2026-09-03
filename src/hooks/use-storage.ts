@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { postUploadWithRetry } from "@/lib/upload-request";
 
 interface UploadState {
     progress: number;
@@ -47,30 +48,19 @@ export function useStorage() {
                 [file.name]: { ...prev[file.name], progress: 50 },
             }));
 
-            // Step 2: Upload via API route (Cloudinary, authenticated, streaming)
-            // Retry wrapper for robust uploads
-            const uploadWithRetry = async (attempt = 1): Promise<any> => {
-                try {
-                    const res = await fetch("/api/upload", { method: "POST", body: formData });
-                    const resData = await res.json();
-                    if (!res.ok || !resData.success || !resData.url) throw new Error(resData.error || "Upload failed");
-                    return resData;
-                } catch (err) {
-                    if (attempt < 3) {
-                        // Exponential backoff: 1s, 2s, 4s...
-                        await new Promise(r => setTimeout(r, Math.pow(2, attempt - 1) * 1000));
-                        // Update progress to indicate retry
-                        setUploadState(prev => ({
-                            ...prev,
-                            [file.name]: { ...prev[file.name], progress: 50 + (attempt * 10) }, // Slight visual bump per retry
-                        }));
-                        return uploadWithRetry(attempt + 1);
-                    }
-                    throw err;
-                }
-            };
-
-            const result = await uploadWithRetry();
+            // Step 2: Upload via API route (Cloudinary, authenticated)
+            //
+            // #297. This copy of the retry loop was NOT fixed by #291, which
+            // corrected only MasterUploader's. It retried a 400 for a bad type,
+            // a 400 for an oversized file, a 401 and a 429 — three uploads of a
+            // file the route had already refused. One implementation now, in
+            // lib/upload-request.ts.
+            const result = await postUploadWithRetry(formData, {
+                onRetry: (attempt) => setUploadState(prev => ({
+                    ...prev,
+                    [file.name]: { ...prev[file.name], progress: 50 + attempt * 10 },
+                })),
+            });
 
             setUploadState(prev => ({
                 ...prev,

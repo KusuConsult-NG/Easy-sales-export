@@ -36,7 +36,19 @@ const faqs = [
             },
             {
                 q: "Is my data secure?",
-                a: "Yes! We use Firebase Authentication, encrypted connections (HTTPS), and follow industry-standard security practices. Your payment information is processed securely through Paystack."
+                /*
+                 * #334. This said "We use Firebase Authentication".
+                 *
+                 * Firebase is the FALLBACK, not the authenticator. lib/auth.ts
+                 * signs you in against Supabase Auth and only reaches for
+                 * Firebase when that fails, to migrate a legacy account — its
+                 * own comment says "Supabase is the primary authenticator", and
+                 * a deployment with no Firebase credential configured is a
+                 * supported one that simply has no fallback. So the page named
+                 * the one component a deployment may not have at all, and did
+                 * not name the one that actually checks the password.
+                 */
+                a: "Yes. Sign-in is handled by Supabase Auth over encrypted connections (HTTPS), sessions are signed, and we follow industry-standard security practices. Your payment information is processed securely through Paystack — we never store your card details."
             },
         ]
     },
@@ -46,7 +58,70 @@ const faqs = [
         questions: [
             {
                 q: "How do I make a purchase?",
-                a: "Browse products, add items to your cart, proceed to checkout, and choose between Paystack (card payment) or Bank Transfer. For bank transfers, send payment to the provided account details and your order will be verified within 24 hours."
+                /*
+                 *   #334 THIS PAGE DESCRIBED A CHECKOUT THE PRODUCT DOES NOT
+                 *        HAVE, AND A MANUAL VERIFICATION NOBODY PERFORMS.
+                 *
+                 *        It said: "choose between Paystack (card payment) or
+                 *        Bank Transfer. For bank transfers, send payment to the
+                 *        provided account details and your order will be
+                 *        verified within 24 hours."
+                 *
+                 *        Bank transfer is not missing — but it is not a CHOICE
+                 *        the platform offers, and there is no 24-hour manual
+                 *        verification behind it. Paystack's own payment page
+                 *        accepts it: initializePaystackPayment defaults to
+                 *        channels ["card","bank_transfer","bank","ussd"] and
+                 *        _payment_orders.ts passes no override, so Paystack
+                 *        issues the account and confirms the transfer itself,
+                 *        automatically. The platform never sees an account
+                 *        number and has nothing to verify.
+                 *
+                 *        What the page described — pick a method here, then
+                 *        send money to details we give you, then wait a day for
+                 *        a human — matches nothing in the code. A buyer
+                 *        following it would hunt for an option that is not on
+                 *        the screen, and then wait for a confirmation step that
+                 *        does not exist. The two are not the same promise, and
+                 *        the difference is where a buyer's money sits.
+                 *
+                 *        THERE IS NO CHOOSER AT ALL. Both checkouts declare
+                 *
+                 *            useState<"paystack">("paystack")
+                 *
+                 *        — marketplace/checkout and export/buyer/cart — a union
+                 *        with ONE member, and `setPaymentMethod` is never called
+                 *        anywhere in the codebase. The checkout submits to
+                 *        initializeOrderPaymentAction and nothing else. The only
+                 *        bank details the marketplace holds are the SELLER's,
+                 *        collected at onboarding; no screen has ever shown a
+                 *        buyer an account to pay into.
+                 *
+                 *        A buyer following this would look for an option that is
+                 *        not there — or, worse, transfer money to an account
+                 *        found somewhere else on the strength of it.
+                 *
+                 *        THE FEATURE IS THREE-QUARTERS BUILT, WHICH IS WHY THE
+                 *        COPY LOOKS PLAUSIBLE. _payment_orders.ts exports
+                 *        createBankTransferOrderAction and
+                 *        createPaymentOnDeliveryOrderAction: session-guarded,
+                 *        cart-validated, fee-calculated, #272 bounds-checked,
+                 *        writing paymentMethod "bank_transfer" and
+                 *        "payment_on_delivery" and reserving stock
+                 *        (lib/order-status.ts documents both). NO SCREEN CALLS
+                 *        EITHER. And the three layers do not even agree on the
+                 *        vocabulary: lib/validations/marketplace.ts accepts
+                 *        ["escrow","wallet","payment_on_delivery"] — so
+                 *        "bank_transfer" is not a value the checkout schema
+                 *        would take — while marketplace-notifications.ts renders
+                 *        a "Pay on Delivery" label for a method no buyer can
+                 *        select.
+                 *
+                 *        The copy is corrected to what the product does. Whether
+                 *        to WIRE those two creators or retire them is a product
+                 *        decision and is recorded for the owner, not made here.
+                 */
+                a: "Browse products, add items to your cart, and proceed to checkout. Enter your delivery address, then pay through Paystack — its payment page accepts card, bank transfer, USSD and direct bank. Your payment is held in escrow. When your order arrives, open it under Marketplace → My Orders and click 'Confirm Receipt' to mark it delivered; the platform then releases the payment to the seller."
             },
             {
                 q: "What if I have an issue with my order?",
@@ -86,7 +161,24 @@ const faqs = [
             },
             {
                 q: "Can I get a certificate?",
-                a: "Yes! Complete all lessons and pass the final quiz with 70%+ score. Your certificate will be automatically generated and available for download in Dashboard → Certificates."
+                /*
+                 * #334. This promised "pass the final quiz with 70%+ score".
+                 *
+                 * There is no 70% rule. Each quiz carries its own passingScore
+                 * and QuizComponent prints it on the quiz itself ("Passing
+                 * score: N%"). The platform's DEFAULT is 95, not 70:
+                 * _ac_progress.ts grades with `quiz?.passingScore ?? 95` and
+                 * _ac_quiz.ts stores 95 for a module that never had one — the
+                 * two are deliberately aligned, and its comment says so. The
+                 * only 70 anywhere is the admin quiz builder's blank-form
+                 * default, a starting value an author types over.
+                 *
+                 * So a learner could be told 70 and meet a 95 bar. The figure
+                 * is removed rather than changed to 95: the number is per-quiz
+                 * and is already shown on the quiz, which is the one place it
+                 * cannot go stale.
+                 */
+                a: "Yes. Complete all lessons and pass each module quiz at the passing score shown on that quiz. Your certificate is generated automatically and available for download in Dashboard → Certificates."
             },
             {
                 q: "Are courses self-paced?",

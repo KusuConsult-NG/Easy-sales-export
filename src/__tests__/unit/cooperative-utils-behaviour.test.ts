@@ -48,6 +48,7 @@ let store: FakeDbHandle;
 const MEMBER = 'member-1';
 const MEMBERS = COLLECTIONS.COOPERATIVE_MEMBERS;
 const LOANS = COLLECTIONS.COOPERATIVE_LOANS;
+const INSTALMENTS = COLLECTIONS.LOAN_REPAYMENTS;
 
 const utils = async () => await import('@/lib/cooperative-utils');
 
@@ -125,17 +126,50 @@ describe('#184 — credit is the tier rule, not a copy of its number', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('#183 — the next payment the widget exists to show', () => {
+describe('#183/#335 — the next payment the widget exists to show', () => {
+    /**
+     * THESE FIXTURES USED TO SEED A SHAPE NO WRITER PRODUCES — #335.
+     *
+     * The two tests below seeded a COOPERATIVE_LOANS row carrying
+     * `nextPaymentDate` and `nextPaymentAmount` and asserted the widget read
+     * them back. They passed, and the behaviour they described has never
+     * happened in production: nothing in src/ writes either field onto a loan.
+     * _loans_applications.ts writes `monthlyPayment` and a SCHEDULE, and the
+     * instalments go to LOAN_REPAYMENTS.
+     *
+     * So the suite was green over a defect, because the fake database will
+     * accept any shape a test hands it. A fixture is only evidence if some
+     * writer produces it — that is the whole point of seeding one.
+     *
+     * The claims are unchanged: find this member's next payment, ignore other
+     * members, stay quiet when nothing is owed. They are now made against the
+     * instalment rows _loans_repayments.ts actually writes.
+     */
     beforeEach(() => {
         store.seed(MEMBERS, MEMBER, { savingsBalance: 200_000, loanBalance: 50_000 });
     });
 
-    it('FINDS THE LOAN, WHICH IS KEYED ON memberId', async () => {
-        store.seed(LOANS, 'loan-1', {
-            memberId: MEMBER, status: 'disbursed',
-            nextPaymentDate: '2026-09-01T00:00:00.000Z',
-            nextPaymentAmount: 12_500,
-        });
+    /** An instalment in the shape _loans_repayments.ts writes at disbursement. */
+    const instalment = (over: Record<string, unknown> = {}) => ({
+        loanId: 'loan-1',
+        userId: MEMBER,
+        installmentNumber: 1,
+        dueDate: '2026-09-01T00:00:00.000Z',
+        principalAmount: 10_000,
+        interestAmount: 2_500,
+        totalAmount: 12_500,
+        paidAmount: 0,
+        status: 'pending',
+        ...over,
+    });
+
+    it('FINDS THE EARLIEST INSTALMENT STILL OWED', async () => {
+        // THE test. Two instalments, the later one seeded first so that
+        // returning "whichever came back first" cannot pass.
+        store.seed(INSTALMENTS, 'inst-2', instalment({
+            installmentNumber: 2, dueDate: '2026-10-01T00:00:00.000Z',
+        }));
+        store.seed(INSTALMENTS, 'inst-1', instalment());
 
         const res = await (await utils()).getCooperativeQuickStats();
 
@@ -144,31 +178,42 @@ describe('#183 — the next payment the widget exists to show', () => {
         expect(res.data?.nextPaymentDate?.toISOString()).toBe('2026-09-01T00:00:00.000Z');
     });
 
-    it('falls back to the monthly payment when no explicit next amount is recorded', async () => {
-        store.seed(LOANS, 'loan-1', {
-            memberId: MEMBER, status: 'approved',
-            nextPaymentDate: '2026-09-01T00:00:00.000Z',
-            monthlyPayment: 9_000,
-        });
+    it('reports what is STILL OWED on a part-paid instalment', async () => {
+        // Replaces "falls back to the monthly payment": there is no fallback
+        // now, because the instalment carries the real figure. A member who
+        // has part-paid owes the remainder, which is what my-loans shows them.
+        store.seed(INSTALMENTS, 'inst-1', instalment({
+            paidAmount: 3_500, status: 'partial',
+        }));
 
         const res = await (await utils()).getCooperativeQuickStats();
         expect(res.data?.nextPaymentAmount).toBe(9_000);
     });
 
-    it('does not look for a loan when nothing is owed', async () => {
+    it('skips an instalment already paid', async () => {
+        store.seed(INSTALMENTS, 'inst-1', instalment({
+            paidAmount: 12_500, status: 'paid',
+        }));
+        store.seed(INSTALMENTS, 'inst-2', instalment({
+            installmentNumber: 2, dueDate: '2026-10-01T00:00:00.000Z', totalAmount: 12_500,
+        }));
+
+        const res = await (await utils()).getCooperativeQuickStats();
+        expect(res.data?.nextPaymentDate?.toISOString()).toBe('2026-10-01T00:00:00.000Z');
+    });
+
+    it('does not look for a payment when nothing is owed', async () => {
         store.seed(MEMBERS, MEMBER, { savingsBalance: 200_000, loanBalance: 0 });
-        store.seed(LOANS, 'loan-1', {
-            memberId: MEMBER, status: 'disbursed', nextPaymentAmount: 12_500,
-        });
+        store.seed(INSTALMENTS, 'inst-1', instalment());
 
         const res = await (await utils()).getCooperativeQuickStats();
         expect(res.data?.nextPaymentAmount).toBeUndefined();
     });
 
-    it('ignores another member\'s loan', async () => {
-        store.seed(LOANS, 'theirs', {
-            memberId: 'somebody-else', status: 'disbursed', nextPaymentAmount: 99_999,
-        });
+    it('ignores another member\'s instalment', async () => {
+        store.seed(INSTALMENTS, 'theirs', instalment({
+            userId: 'somebody-else', totalAmount: 99_999,
+        }));
 
         const res = await (await utils()).getCooperativeQuickStats();
         expect(res.data?.nextPaymentAmount).toBeUndefined();

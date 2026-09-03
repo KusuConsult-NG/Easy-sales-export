@@ -223,7 +223,12 @@ export default function SellerOrderDetailPage() {
                         <AlertCircle className="w-6 h-6 text-rose-600 shrink-0" />
                         <div>
                             <p className="font-semibold text-rose-900 text-sm">Dispute in Progress</p>
-                            <p className="text-rose-700 text-xs mt-0.5">Our team is reviewing this dispute. Please check your email for updates.</p>
+                            {/* Was: "Please check your email for updates." — #312.
+                                resolveDisputeAction sends an in-app notification, an SMS
+                                and a push to both parties, and no email at all. So this
+                                named the one channel that is never used and omitted the
+                                three that are. Its buyer-side twin said the same thing. */}
+                            <p className="text-rose-700 text-xs mt-0.5">Our team is reviewing this dispute. You&rsquo;ll be notified here and by SMS when it is resolved.</p>
                         </div>
                     </div>
                 )}

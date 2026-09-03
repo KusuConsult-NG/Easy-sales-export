@@ -49,6 +49,8 @@ export interface LoanApplication {
     durationMonths: number;
     status: "pending" | "approved" | "rejected" | "disbursed" | "repaid" | "partially_approved";
     contributionAmount: number;
+    /** #345 what the form SENT; the rules ran on `contributionAmount`, the recorded savings. */
+    claimedContributionAmount?: number;
     tier: "Member";
     interestRate: number;
     totalRepayment: number;

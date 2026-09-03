@@ -137,6 +137,26 @@ async function _upsertAcademyCourseAction(
             await newRef.set({
                 ...cleanData,
                 createdAt: FieldValue.serverTimestamp(),
+                /**
+                 *   #336 THE TALLY THE TYPE REQUIRES WAS THE ONE NO CREATOR
+                 *        WROTE.
+                 *
+                 *        lib/types/academy.ts declares `enrolledCount: number`
+                 *        — REQUIRED — and this creator initialised
+                 *        `studentsCount` instead, while the other creator
+                 *        (_ac_catalog.ts) initialised no counter at all. So
+                 *        every course was born violating its own type, and the
+                 *        two enrolment paths then incremented two further
+                 *        names: `enrolledCount` (free, _ac_enrollment.ts) and
+                 *        `students` (paid, _payment.ts). Four names, one tally.
+                 *
+                 *        `enrolledCount` is initialised here because it is the
+                 *        declared one and the one the free path already
+                 *        maintains. `studentsCount` is KEPT rather than
+                 *        renamed: rows already carry it, and this audit does
+                 *        not strand data.
+                 */
+                enrolledCount: 0,
                 studentsCount: 0,
                 rating: 0,
                 status: "draft",

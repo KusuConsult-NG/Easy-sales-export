@@ -5,7 +5,7 @@ import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 
 /**
  * API Route: Get All Land Verifications (Admin)
@@ -20,8 +20,28 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        // Check admin role from session
-        if (!isAdmin(session.user.roles)) {
+        /**
+         *   #339 THE SECOND DOOR ONTO THE DEEDS.
+         *
+         *        #148 closed exactly this on the server action that feeds the
+         *        admin screen — _fna_verifications.ts getAdminLandVerifications,
+         *        whose comment reads: "This was isAdmin() — true for all TEN
+         *        admin roles — over a list that spreads the whole land listing
+         *        into every row: the owner's email and phone, and the URLs of
+         *        their C of O, survey plan and tax clearance."
+         *
+         *        This route spreads `...doc.data()` from the same collection and
+         *        kept isAdmin(). It has no caller in the app, which is why the
+         *        earlier fix did not reach it — and no reason it should stay
+         *        open, because an HTTP GET is reachable with a session cookie
+         *        whether or not any screen calls it.
+         *
+         *        Gated on the permission every WRITE against these listings
+         *        already requires: approve-land, reject-land and
+         *        updateAdminLandListingAction all check "land:verify_listings".
+         *        Refused wholesale rather than stripped, matching the action.
+         */
+        if (!hasAdminPermission(session.user.roles, "land:verify_listings")) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }

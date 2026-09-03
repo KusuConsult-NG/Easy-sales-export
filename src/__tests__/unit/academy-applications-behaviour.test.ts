@@ -464,10 +464,27 @@ describe('requestAcademyRevisionAction', () => {
     it('refuses a non-admin', async () => {
         actAs(LEARNER, ['user']);
         const { requestAcademyRevisionAction } = await actions();
-        expect(await requestAcademyRevisionAction('app-1', 'Please redo')).toMatchObject({
-            success: false, error: 'Admin access required',
-        });
+        expect(await requestAcademyRevisionAction('app-1', 'Please redo')).toMatchObject({ success: false });
         expect(store.get(APPS, 'app-1')!.status).toBe('pending');
+    });
+
+    it('ADMITS THE ACADEMY ADMIN, WHO COULD ALREADY SEE THIS QUEUE', async () => {
+        //   #265 _ac_admin_applications.ts admits academy_admin to READ the
+        //        pending queue in this very collection; this write refused the
+        //        same role. The academy admin opened the screen, saw the
+        //        applications, and every button said "Admin access required".
+        actAs('academy-admin-1', ['academy_admin']);
+        const { requestAcademyRevisionAction } = await actions();
+
+        expect(await requestAcademyRevisionAction('app-1', 'Please redo')).toMatchObject({ success: true });
+    });
+
+    it('and still refuses an admin of a different module', async () => {
+        // The fix is the named permission, not isAdmin().
+        actAs('wave-admin-1', ['wave_admin']);
+        const { requestAcademyRevisionAction } = await actions();
+
+        expect(await requestAcademyRevisionAction('app-1', 'Please redo')).toMatchObject({ success: false });
     });
 
     it('refuses an application that does not exist', async () => {

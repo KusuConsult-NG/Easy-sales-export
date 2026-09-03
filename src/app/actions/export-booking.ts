@@ -9,9 +9,50 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { incrementWithinCeiling } from "@/lib/wallet-ledger";
 import { serializeDocs } from "@/lib/firestore-serialize";
 
+/**
+ *   #348 THE BOOKING WIZARD ASKED FOR FOUR SCREENS AND SENT THREE FIELDS.
+ *
+ *        BookingWizard.tsx validates the member through four stages —
+ *        refusing to advance without moisture and foreign-matter percentages,
+ *        a declared Phytosanitary Certificate, a port, a vessel, and UPLOADS
+ *        of the Bill of Lading and Certificate of Origin. Then handleConfirm
+ *        sent:
+ *
+ *            createBookingAction({ exportWindowId, quantity, totalPrice })
+ *
+ *        Everything from stages 2, 3 and 4 was discarded at the call site,
+ *        including both files. The member selected two documents, watched them
+ *        be accepted, and nothing was uploaded anywhere — there was no upload
+ *        code in the component at all. The booking row carried none of it, so
+ *        the export team had a reserved slot and no idea what was in it or how
+ *        it was shipping.
+ *
+ *        The fields are part of the payload now, validated here rather than
+ *        only in the browser, and the two documents are uploaded before the
+ *        booking is sent so the row references real files.
+ */
 export interface CreateBookingData { exportWindowId: string;
     quantity: number;
-    totalPrice: number; }
+    totalPrice: number;
+    /** Stage 2 — quality declaration. Percentages, 0-100. */
+    moisturePercent?: number;
+    foreignMatterPercent?: number;
+    hasPhytosanitaryCertificate?: boolean;
+    /** Stage 3 — logistics. */
+    shippingTerms?: string;
+    portOfOrigin?: string;
+    vessel?: string;
+    /** Stage 4 — uploaded document URLs, not the files themselves. */
+    billOfLadingUrl?: string;
+    certificateOfOriginUrl?: string; }
+
+/** A percentage the member declared: 0-100, or undefined if unusable. */
+function percentOrUndefined(value: unknown): number | undefined {
+    if (value === undefined || value === null || value === "") return undefined;
+    const n = Number(value);
+    if (!Number.isFinite(n) || n < 0 || n > 100) return undefined;
+    return n;
+}
 
 /**
  * Create an export booking in Firestore
@@ -106,6 +147,14 @@ export async function createBookingAction(data: CreateBookingData) { try {
             };
         }
 
+        // #348 The quality and logistics declaration, coerced here rather than
+        // trusted: the browser's validation is a convenience, and these values
+        // are what an export officer reads off the booking. A percentage that
+        // is not a usable percentage is recorded as absent rather than as NaN
+        // or as a string.
+        const moisturePercent = percentOrUndefined(data.moisturePercent);
+        const foreignMatterPercent = percentOrUndefined(data.foreignMatterPercent);
+
         // Create booking. The volume is already reserved above, so this cannot
         // oversell even if two bookings land together.
         const bookingRef = await db.collection(COLLECTIONS.EXPORT_BOOKINGS).add({
@@ -115,6 +164,17 @@ export async function createBookingAction(data: CreateBookingData) { try {
             totalPrice,
             slotPriceAtBooking: slotPrice,
             status: 'pending',
+            // #348 What the wizard collected and then threw away.
+            ...(moisturePercent !== undefined ? { moisturePercent } : {}),
+            ...(foreignMatterPercent !== undefined ? { foreignMatterPercent } : {}),
+            hasPhytosanitaryCertificate: Boolean(data.hasPhytosanitaryCertificate),
+            shippingTerms: String(data.shippingTerms ?? "").slice(0, 40),
+            portOfOrigin: String(data.portOfOrigin ?? "").slice(0, 120),
+            vessel: String(data.vessel ?? "").slice(0, 120),
+            documents: {
+                billOfLading: String(data.billOfLadingUrl ?? ""),
+                certificateOfOrigin: String(data.certificateOfOriginUrl ?? ""),
+            },
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp()
         });

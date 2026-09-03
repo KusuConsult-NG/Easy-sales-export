@@ -247,6 +247,38 @@ export const DECISION_LOCKED_STATUSES: readonly string[] = [
 ];
 
 /**
+ * Statuses from which the OWNER may edit or withdraw their listing.
+ *
+ * The admin decision paths were taught (above) that a reserved listing is not
+ * theirs to claim. The owner's own paths in land-actions.ts had the same fault
+ * and nobody had looked: updateLandListing wrote `status:
+ * "pending_verification"` unconditionally and deleteLandListing wrote
+ * `status: "deleted"` — both straight over a buyer's `pending` reservation
+ * while that buyer was at Paystack. The buyer's cancel and the payment
+ * fulfilment both advance the listing FROM "pending" via claimStatusTransition,
+ * so either owner write left a paid or in-flight purchase pointing at a
+ * listing in a state the claim can never move — the money taken, the parcel
+ * re-listed or tombstoned.
+ *
+ * Deliberately the same shape as APPROVABLE_FROM: the review states, the
+ * for-sale states, and `rejected` (an owner fixing a rejected listing is the
+ * ordinary flow). `pending` and every DECISION_LOCKED status are refused.
+ * A row with NO status is allowed — legacy listings predate the vocabulary,
+ * and refusing them would strand their owners entirely.
+ */
+export const OWNER_MUTABLE_STATUSES: readonly string[] = [
+    ...IN_REVIEW_STATUSES,
+    ...PURCHASABLE_STATUSES,
+    "rejected",
+];
+
+/** May the OWNER edit or delete a listing currently in `status`? */
+export function isOwnerMutable(status: string | null | undefined): boolean {
+    if (status === null || status === undefined || status === "") return true;
+    return OWNER_MUTABLE_STATUSES.includes(String(status));
+}
+
+/**
  * The `verificationStatus` field: one shape, one set of values.
  *
  * THE FIELD HELD TWO DIFFERENT TYPES

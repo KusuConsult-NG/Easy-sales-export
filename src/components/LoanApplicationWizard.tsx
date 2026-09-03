@@ -295,8 +295,22 @@ export default function LoanApplicationWizard({
                                     <p className="text-2xl font-bold">{formData.durationMonths} months</p>
                                 </div>
                                 <div>
+                                    {/*
+                                      * #345. This read a hardcoded "2.0%".
+                                      *
+                                      * The figures either side of it are computed
+                                      * with getTierInterestRate(tier), which returns
+                                      * DEFAULT_MONTHLY_INTEREST_RATE = 10 — ten
+                                      * percent per MONTH — and the server records the
+                                      * same 10. So the review screen showed "Monthly
+                                      * Interest 2.0%" beside a Total Interest figure
+                                      * computed at five times that, and the applicant
+                                      * signed for a rate the screen never showed them.
+                                      * It reads the rate the application is actually
+                                      * filed at.
+                                      */}
                                     <p className="text-blue-100 text-sm">Monthly Interest</p>
-                                    <p className="text-2xl font-bold">2.0%</p>
+                                    <p className="text-2xl font-bold">{getTierInterestRate(tier)}%</p>
                                 </div>
                                 <div>
                                     <p className="text-blue-100 text-sm">Total Interest</p>

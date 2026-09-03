@@ -168,6 +168,13 @@ async function fromPostgres(
      * That matters beyond one assertion: the point of this file is to be the
      * thing that certifies the fake the whole unit suite runs on. A yardstick
      * measuring a different query certifies nothing.
+     *
+     * FOUND TWICE, INDEPENDENTLY. The parallel audit reached the same line from
+     * the same failing case — "pg returned insertion order [t,s], the fake id
+     * order [s,t], and both were 'right' about different queries" — and tied it
+     * to the pagination cursor the fallback exists for. Two audits converging on
+     * one line, from one failure, is the strongest evidence either produced that
+     * the fix is the right one.
      */
     const orderBy = order
         ? ` order by raw_data->>${literal(order[0])} ${order[1] === 'desc' ? 'desc' : 'asc'}`

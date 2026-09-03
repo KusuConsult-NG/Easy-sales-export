@@ -67,6 +67,7 @@ const ADMIN = 'admin-1';
 const TARGET = 'user-1';
 
 jest.mock('@/lib/audit-log', () => ({
+    recordAdminAction: (p: any) => (global as any).mockRecordAdminAction(p),
     logAuditAction: jest.fn(async () => ({})),
     createAdminAuditLog: jest.fn(async () => ({})),
     logAdminAction: jest.fn(async () => ({})),

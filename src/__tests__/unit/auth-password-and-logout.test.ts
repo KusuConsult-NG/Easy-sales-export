@@ -239,25 +239,57 @@ describe('changePasswordAction writes the new password once, to the right accoun
     });
 
     it('clears the forced-change flag and stamps the revocation point', async () => {
+        /**
+         * `Date.now()`, not this session's `authAt` — and the change is the
+         * other audit's #306 correcting this branch's reasoning, not a merge
+         * accident.
+         *
+         * This used to stamp `session.user.authAt`, arguing that "a stolen
+         * cookie is necessarily older than the session you are sitting in".
+         * That holds for a copied cookie and NOT for the case the feature
+         * exists for: somebody who learned your password and signed in
+         * independently, whose session is minted whenever they sign in. Sign in
+         * Monday, they sign in Tuesday, you change your password Wednesday from
+         * your Monday session — and a revocation point of Monday leaves their
+         * Tuesday session alive.
+         *
+         * It is also the right unit: lib/auth.ts compares against `token.authAt`
+         * in milliseconds, and password-reset.ts already stamped Date.now().
+         * Seconds here would have compared a 10-digit number against a 13-digit
+         * one and never fired.
+         */
         seedLegacyProfile();
+        const before = Date.now();
 
         await (await actions()).changePasswordAction(CURRENT, GOOD);
 
         const profile = store.get(COLLECTIONS.USERS, LEGACY_PROFILE_ID)!;
         expect(profile.requiresPasswordChange).toBeUndefined();
-        expect(profile.sessionsValidFrom).toBe(sessionUser!.authAt);
+        expect(Number(profile.sessionsValidFrom)).toBeGreaterThanOrEqual(before);
+        expect(Number(profile.sessionsValidFrom)).toBeLessThanOrEqual(Date.now());
     });
 
-    it('does not revoke when this session records no issue time, rather than guessing', async () => {
-        // Fails OPEN deliberately: a wrong value signs out a user who did
-        // nothing wrong, a missing one leaves a session that still expires.
+    it('revokes on a clock the server owns, not on a value the session supplies', async () => {
+        /**
+         * This used to assert that a session with no `authAt` stamps NOTHING,
+         * failing open deliberately — "a wrong value signs out a user who did
+         * nothing wrong, a missing one leaves a session that still expires".
+         *
+         * That reasoning belonged to the old model, where the stamp came from
+         * the session. Under #306 the stamp is Date.now(), which the server
+         * always has, so there is no missing-input case left to fail open on —
+         * and failing open here would leave every other session alive after a
+         * password change, which is the one thing the feature is for.
+         */
         seedLegacyProfile();
         sessionUser = { id: LEGACY_PROFILE_ID, email: EMAIL };
+        const before = Date.now();
 
         const res: any = await (await actions()).changePasswordAction(CURRENT, GOOD);
 
         expect(res.success).toBe(true);
-        expect(store.get(COLLECTIONS.USERS, LEGACY_PROFILE_ID)!.sessionsValidFrom).toBeUndefined();
+        const stamped = Number(store.get(COLLECTIONS.USERS, LEGACY_PROFILE_ID)!.sessionsValidFrom);
+        expect(stamped).toBeGreaterThanOrEqual(before);
     });
 
     it('refuses a new password that would not pass registration', async () => {

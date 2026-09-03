@@ -5,7 +5,8 @@ import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { isAdmin } from "@/lib/admin-permissions";
+import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
+import { stripPii } from "@/lib/admin-pii";
 
 /**
  * API Route: Get All Seller Verifications (Admin Only)
@@ -27,6 +28,30 @@ export async function GET(request: NextRequest) {
                 { status: 403 }
             );
         }
+
+        /**
+         *   #339 THE SECOND DOOR ONTO THE SELLER KYC PACK.
+         *
+         *        #154 gated the server action over this collection — the raw
+         *        application is spread into the response, and
+         *        api/marketplace/submit-verification writes into it:
+         *
+         *            documents:   { businessDoc, idDoc, addressProof }
+         *            bankDetails: { bankName, accountNumber, accountName }
+         *            bankAccount: { bankName, accountNumber, accountName }
+         *
+         *        — scanned identity papers and a bank account number. That fix
+         *        used lib/admin-pii's stripPii over "marketplace:approve_sellers".
+         *        This route spreads `...data` from the same collection and was
+         *        still on isAdmin(), true for all TEN admin roles.
+         *
+         *        Same resolution, for the same reason the action gave: a support
+         *        agent answering "did my verification go through" needs the
+         *        STATUS, so the list stays open and the identity and money keys
+         *        come out. Only super_admin, admin and marketplace_admin — who
+         *        can actually approve one — see the pack.
+         */
+        const maySeeVerificationPii = hasAdminPermission(session.user.roles, "marketplace:approve_sellers");
 
         // Get all seller verifications (Admin SDK)
         const snapshot = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
@@ -55,7 +80,7 @@ export async function GET(request: NextRequest) {
 
                 return {
                     id: verDoc.id,
-                    ...data,
+                    ...(maySeeVerificationPii ? data : stripPii(data)),
                     // Defensive name chain: structured fields → legacy fullName → name → email
                     userName: (userData?.firstName || userData?.lastName)
                         ? [userData?.firstName, userData?.otherName, userData?.lastName].filter(Boolean).join(" ")

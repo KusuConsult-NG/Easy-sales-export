@@ -1,3 +1,4 @@
+import { postUploadWithRetry } from "@/lib/upload-request";
 /**
  * File Upload Utilities — Cloudinary via /api/upload
  *
@@ -44,34 +45,16 @@ export async function uploadFile(
     formData.append("folder", folder);
     formData.append("documentType", documentType);
 
-    // Simple retry wrapper with progress updates
-    const uploadWithRetry = async (attempt = 1): Promise<any> => {
-        try {
-            onProgress?.({ progress: 20 + attempt * 15, status: "uploading" });
-
-            const res = await fetch("/api/upload", {
-                method: "POST",
-                body: formData,
-            });
-
-            const data = await res.json();
-
-            if (!res.ok || !data.success || !data.url) {
-                throw new Error(data.error || "Upload failed");
-            }
-
-            return data;
-        } catch (err: any) {
-            if (attempt < 3) {
-                await new Promise((r) => setTimeout(r, Math.pow(2, attempt - 1) * 1000));
-                return uploadWithRetry(attempt + 1);
-            }
-            throw err;
-        }
-    };
-
+    /**
+     * #297. This copy of the retry loop was NOT fixed by #291 either — there
+     * were three, and that finding corrected one. It retried every refusal the
+     * route gives, including the rate limiter's 429. One implementation now, in
+     * lib/upload-request.ts.
+     */
     try {
-        const result = await uploadWithRetry();
+        const result = await postUploadWithRetry(formData, {
+            onRetry: (attempt) => onProgress?.({ progress: 20 + attempt * 15, status: "uploading" }),
+        });
 
         onProgress?.({ progress: 100, status: "completed", url: result.url });
         return result.url as string;

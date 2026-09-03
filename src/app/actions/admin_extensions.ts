@@ -10,6 +10,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logAuditAction } from "./audit";
 import { hasAdminPermission, isSuperAdmin } from "@/lib/admin-permissions";
+import { userErasurePatch, erasedEmailFor, erasureRetentionRecord } from "@/lib/user-erasure";
 
 type ActionState = 
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
@@ -67,30 +68,66 @@ export async function softDeleteUserAction(targetUserId: string): Promise<Action
             return { error: "Only a super admin can delete an administrator", success: false as const, data: null };
         }
 
-        // PII Scrubbing
-        const timestamp = Date.now();
-        const scrubbedEmail = `deleted_${timestamp}_${targetUserId}@deleted.com`;
-        const scrubbedPhone = `DELETED-${timestamp.toString(36).toUpperCase()}`;
-        const scrubbedName = "Deleted User";
+        /**
+         *   #305 #283's FIX NEVER REACHED THIS DOOR — THE SECOND ADMIN
+         *        DELETION PATH SCRUBBED THREE FIELDS BY HAND.
+         *
+         *        This wrote its own list:
+         *
+         *            email:       `deleted_${timestamp}_${id}@deleted.com`
+         *            phone:       `DELETED-...`
+         *            fullName / displayName: "Deleted User"
+         *
+         *        and that was the whole of it. bvn, nin, nextOfKin, the
+         *        identity-document URLs, dateOfBirth, the bank account number,
+         *        name and code, firstName/lastName/otherName, residentialAddress
+         *        — all left on the row of an account an admin had just told
+         *        somebody was deleted.
+         *
+         *        #283 found exactly this on the MEMBER's own erasure path,
+         *        established that a hand-written list in one file is how the
+         *        omission happens, and moved the definition to
+         *        lib/user-erasure.ts where user-erasure.test.ts checks it
+         *        against the User type. That file's own header even names this
+         *        path — "there is more than one deletion path" — and this path
+         *        went on not using it. The copy somebody remembered fixing, and
+         *        the copy added later, one more time.
+         *
+         *        `originalEmail: userData.email` went too. It was annotated
+         *        "Optional: Keep for audit, or remove if strict GDPR" and kept
+         *        the real address on the scrubbed row, so the scrub above it
+         *        removed the email into the field beside it.
+         *
+         *   #300 AND NOTHING IS DESTROYED BY IT.
+         *
+         *        The retention record is written FIRST, exactly as the member's
+         *        own erasure does, so the identity-document references survive
+         *        in the server-only collection rather than being dropped along
+         *        with the row's copy of them. Owner's instruction, applied on
+         *        both deletion paths rather than one.
+         */
+        const scrubbedEmail = erasedEmailFor(targetUserId);
 
+
+        await db.collection(COLLECTIONS.ERASURE_RETENTION).doc(targetUserId).set(
+            erasureRetentionRecord(targetUserId, userData),
+            { merge: true },
+        );
         // 1. Update Firestore Doc (Soft Delete)
-        await userRef.update({ deleted: true,
+        await userRef.update({
+            // The shared definition, checked against the User type.
+
+            ...userErasurePatch(targetUserId),
+            deleted: true,
             deletedAt: FieldValue.serverTimestamp(),
             deletedBy: session.user.id,
-
-            // PII Removal
-            email: scrubbedEmail,
-            originalEmail: userData.email, // Optional: Keep for audit, or remove if strict GDPR
-            phone: scrubbedPhone,
-            fullName: scrubbedName,
-            displayName: scrubbedName,
 
             // Deactivate Roles
             roles: ["deleted"],
             isActive: false,
+            suspended: true,
             // The field lib/auth.ts actually refuses to log in. roles and
             // isActive are read by nothing in the sign-in path.
-            suspended: true,
 
             updatedAt: FieldValue.serverTimestamp() });
 

@@ -8,6 +8,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { generateReference } from "@/lib/paystack";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { COOPERATIVE_CONFIG } from "@/lib/constants";
+import { isDecidedAgainst } from "@/lib/registration-progress";
 import { getBaseUrl } from "@/lib/server-utils";
 import { paystackBaseUrl } from "@/lib/paystack-host";
 
@@ -47,13 +48,45 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Check if user already has a membership application (Admin SDK)
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (userDoc.exists && userDoc.data()?.cooperativeMembershipId) {
-            return NextResponse.json(
-                { success: false, error: "You already have a cooperative membership" },
-                { status: 400 }
-            );
+        // THE DUPLICATE GUARD READ A FIELD NOTHING WRITES.
+        //
+        // `cooperativeMembershipId` appears in two type declarations, one
+        // validation schema and one reader — and in NO writer, so this check
+        // could never fire. Any existing member could reach Paystack through
+        // this route and be charged the ₦10,000 registration fee AGAIN; and for
+        // a SUSPENDED member the webhook fulfilment then rewrote their
+        // membership "active" and re-granted the role, so an admin's Suspend
+        // was reversible for the price of the fee (#240 — the cooperative twin
+        // of the academy's #231; the fulfilment side is guarded now too).
+        //
+        // The guard asks the collection that actually holds memberships. The
+        // same rule as the action-path initiator (_coop_money.ts): an active or
+        // paid membership does not buy another, and a decided-against one does
+        // not buy its way back.
+        const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(session.user.id);
+        const memberSnap = await memberRef.get();
+        let existingMember = memberSnap.exists ? memberSnap.data() : null;
+        if (!existingMember) {
+            const byUserId = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                .where("userId", "==", session.user.id)
+                .limit(1)
+                .get();
+            existingMember = byUserId.empty ? null : byUserId.docs[0].data();
+        }
+        if (existingMember) {
+            const status = String(existingMember.membershipStatus ?? existingMember.status ?? "");
+            if (isDecidedAgainst(status)) {
+                return NextResponse.json(
+                    { success: false, error: "Your cooperative membership is not currently active. Please contact the cooperative administrator." },
+                    { status: 403 }
+                );
+            }
+            if (status === "active" || status === "approved" || existingMember.paymentStatus === "completed") {
+                return NextResponse.json(
+                    { success: false, error: "You already have a cooperative membership" },
+                    { status: 400 }
+                );
+            }
         }
 
         // Generate payment reference

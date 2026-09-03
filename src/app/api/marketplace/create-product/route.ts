@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
                         const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
                         const destination = `products/${userId}/${productId}/${fileName}`;
                         // isPublic = true so buyers can see images
-                        const url = await uploadFileToStorage(image, destination, true);
+                        const url = await uploadFileToStorage(image, destination);
                         images.push(url);
                     } catch (uploadErr) {
                         logger.error("Image upload failed:", uploadErr);
@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
                     const ext = video.name.split(".").pop() || "mp4";
                     const fileName = `${Date.now()}_video.${ext}`;
                     const destination = `products/${userId}/${productId}/${fileName}`;
-                    videoUrl = await uploadFileToStorage(video, destination, true);
+                    videoUrl = await uploadFileToStorage(video, destination);
                 } catch (uploadErr) {
                     logger.error("Video upload failed:", uploadErr);
                 }

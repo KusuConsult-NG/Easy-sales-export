@@ -184,28 +184,67 @@ export async function getCooperativeQuickStats(): Promise<{
 
         if (loanBalance > 0) {
             /**
-             * `memberId`, not `userId`.
+             *   #335 THE FIX FOR THIS WIDGET LANDED ON THE FILTER KEY AND LEFT
+             *        THE ORDER KEY AND BOTH READ FIELDS EQUALLY UNWRITTEN.
              *
-             * Every other query against COOPERATIVE_LOANS in the cooperative
-             * module filters on `memberId` — that is the field the loan rows are
-             * written with. This one asked for `userId`, matched nothing, and
-             * left nextPaymentDate and nextPaymentAmount permanently undefined:
-             * a dashboard widget whose whole purpose is "when is my next
-             * payment" that could never answer. Same shape as #49 and #88, a
-             * query keyed on a field the writers do not set.
+             *        The note that stood here recorded a real repair — the
+             *        query asked for `userId` where the loan rows carry
+             *        `memberId` — and concluded that the widget could now
+             *        answer "when is my next payment". It still could not:
+             *
+             *            .orderBy('nextPaymentDate', 'asc')      nothing writes it
+             *            loanData.nextPaymentDate                nothing writes it
+             *            loanData.nextPaymentAmount              nothing writes it
+             *
+             *        _loans_applications.ts writes `monthlyPayment` and a
+             *        SCHEDULE; neither of the two fields read here is on a loan
+             *        document, anywhere. So the order key ordered nothing (and
+             *        `.limit(1)` therefore picked an arbitrary loan), the date
+             *        came back undefined every time, and CooperativeWidget
+             *        guards the whole block on `stats.nextPaymentDate &&` — so
+             *        the panel this exists to fill has never rendered, taking
+             *        the amount beside it along with it.
+             *
+             *        Same shape as #83 and #297: one half of a path corrected
+             *        and its siblings missed, with the correcting comment left
+             *        implying the whole thing was done.
+             *
+             *        WHERE THE ANSWER ACTUALLY LIVES. Instalments are rows in
+             *        LOAN_REPAYMENTS, each with loanId, userId, dueDate,
+             *        totalAmount, paidAmount and status —
+             *        _loans_repayments.ts writes them at disbursement. The
+             *        member's own /cooperatives/my-loans page already derives
+             *        the next payment from exactly that: the first instalment
+             *        still "pending" or "partial", and totalAmount - paidAmount
+             *        as the sum owed. This is the same derivation, so the
+             *        widget and the page can no longer disagree.
+             *
+             *        Filtered on `userId` alone and ordered in JavaScript, on
+             *        purpose: `userId` is an equality filter on a field the
+             *        writer sets, and a member has at most a few dozen
+             *        instalments. Ordering by dueDate in the query would put a
+             *        JSONB timestamp key back in the sort position — which is
+             *        what this finding is about.
              */
-            const loansQuery = db.collection(COLLECTIONS.COOPERATIVE_LOANS)
-                .where('memberId', '==', session.user.id)
-                .where('status', 'in', ['disbursed', 'approved'])
-                .orderBy('nextPaymentDate', 'asc')
-                .limit(1);
+            const instalmentsSnapshot = await db.collection(COLLECTIONS.LOAN_REPAYMENTS)
+                .where('userId', '==', session.user.id)
+                .get();
 
-            const loansSnapshot = await loansQuery.get();
+            const outstanding = instalmentsSnapshot.docs
+                .map((doc: any) => doc.data() as any)
+                .filter((inst: any) => inst?.status === 'pending' || inst?.status === 'partial')
+                .map((inst: any) => ({
+                    due: inst.dueDate?.toDate
+                        ? inst.dueDate.toDate()
+                        : (inst.dueDate ? new Date(inst.dueDate) : undefined),
+                    owed: (Number(inst.totalAmount) || 0) - (Number(inst.paidAmount) || 0),
+                }))
+                .filter((inst) => inst.due instanceof Date && !Number.isNaN(inst.due.getTime()))
+                .sort((a, b) => a.due!.getTime() - b.due!.getTime());
 
-            if (!loansSnapshot.empty) {
-                const loanData = loansSnapshot.docs[0].data() as any;
-                nextPaymentDate = loanData.nextPaymentDate?.toDate ? loanData.nextPaymentDate.toDate() : (loanData.nextPaymentDate ? new Date(loanData.nextPaymentDate) : undefined);
-                nextPaymentAmount = loanData.nextPaymentAmount || loanData.monthlyPayment;
+            if (outstanding.length > 0) {
+                nextPaymentDate = outstanding[0].due;
+                nextPaymentAmount = outstanding[0].owed;
             }
         }
 

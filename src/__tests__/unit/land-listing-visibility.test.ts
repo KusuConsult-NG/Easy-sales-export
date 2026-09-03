@@ -46,6 +46,7 @@ const STRANGER = 'stranger-1';
 const LISTING = 'listing-1';
 
 jest.mock('@/lib/audit-log', () => ({
+    recordAdminAction: (p: any) => (global as any).mockRecordAdminAction(p),
     createAdminAuditLog: jest.fn(async () => ({})),
     logAdminAction: jest.fn(async () => ({})),
 }));

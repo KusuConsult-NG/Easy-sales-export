@@ -9,6 +9,7 @@ import { revalidatePath } from "next/cache";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { claimPaymentOnce, decrementManyOrFail, markFulfilmentFailed } from "@/lib/wallet-ledger";
 import { getPlatformFees } from "@/lib/system-settings";
+import { platformFeeFor, sellerNetFor } from "@/lib/platform-fee";
 import { checkOrderPaymentAmount } from "@/lib/order-payment-amount";
 import { escrowIdFor } from "@/lib/escrow-status";
 import { rateLimit } from "@/lib/rate-limiter";
@@ -402,8 +403,9 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
                 const escrowId = escrowIdFor(orderData.orderId, sellerId, Object.keys(sellerTotals));
                 const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId);
 
-                const platformFee = Math.round(grossAmount * fees.platformFeePercentage);
-                const netAmount = grossAmount - platformFee;
+                // #271 One split, computed once.
+                const platformFee = platformFeeFor(grossAmount, fees.platformFeePercentage);
+                const netAmount = sellerNetFor(grossAmount, fees.platformFeePercentage);
 
                 const originalCreatedAt = orderData.createdAt || FieldValue.serverTimestamp();
 

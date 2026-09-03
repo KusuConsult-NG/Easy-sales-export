@@ -74,6 +74,14 @@ function setDocs(savings: number) {
         empty: false,
         docs: [],
         data: () => ({
+            // #276 added a canTransactAsMember guard to this action: existing
+            // is not the same as may-transact, and this moves savings. The
+            // fixture describes a member with money in the pot and a live
+            // instalment, which in production means an approved membership —
+            // it just never said so, so the new guard refused every case here
+            // and the action looked broken. Stating it makes the fixture the
+            // member it always described.
+            membershipStatus: 'active',
             savingsBalance: savings,
             loanId: 'loan-1',
             userId: BORROWER,

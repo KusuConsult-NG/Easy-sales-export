@@ -1,141 +1,74 @@
-import * as admin from 'firebase-admin';
-import path from 'path';
-import dotenv from 'dotenv';
-import fs from 'fs';
+/**
+ * Academy schema & data repair — CLI entrypoint.
+ *
+ * THIS SCRIPT CRASHED ON ITS NINTH LINE, AND ALWAYS HAD — #328.
+ *
+ * It opened with:
+ *
+ *     import * as admin from 'firebase-admin';
+ *     ...
+ *     if (!admin.apps.length) { ... admin.initializeApp({ credential: ... }) }
+ *     const db = admin.firestore();
+ *
+ * `firebase-admin` here is not Google's SDK. package.json resolves it to
+ * `file:./src/lib/shims/firebase-admin`, whose index.js is two lines:
+ *
+ *     module.exports = { auth: () => ({}) };
+ *
+ * So `admin.apps` is undefined, `admin.apps.length` throws "Cannot read
+ * properties of undefined (reading 'length')", and everything below it — the
+ * tier migration, the course seeding, and the closing "🎉 All fixes applied
+ * successfully" — was unreachable from the day it was written.
+ *
+ * A one-second typecheck names every line of it. It had never been run:
+ * tsconfig.json excluded `scripts` and eslint.config.mjs ignored `scripts/**`,
+ * so this directory was the only place in the repository outside both gates,
+ * while holding the files that write to the live database by hand. Both
+ * exclusions are gone; see the notes left in their place.
+ *
+ * The repairs themselves now live in ./academy-schema-repair.ts, which has no
+ * side effects on import and is executed by
+ * src/__tests__/unit/maintenance-scripts-are-inside-the-gates.test.ts.
+ *
+ * The name is kept so an operator's existing notes still find it. It targets
+ * Supabase, like everything else here.
+ *
+ *     npx tsx scripts/firebase-schema-fix.ts
+ */
 
-// Load environment variables
-dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
+import * as path from "path";
+import * as dotenv from "dotenv";
 
-if (!admin.apps.length) {
-    if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_CLIENT_EMAIL || !process.env.FIREBASE_PRIVATE_KEY) {
-        console.error("❌ Missing Firebase credentials in .env.local (need FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY)");
-        process.exit(1);
-    }
-    
-    try {
-        admin.initializeApp({
-            credential: admin.credential.cert({
-                projectId: process.env.FIREBASE_PROJECT_ID,
-                clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-                privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-            }),
-        });
-        console.log("✅ Firebase Admin initialized.");
-    } catch (e) {
-        console.error("❌ Failed to initialize Firebase Admin", e);
-        process.exit(1);
-    }
-}
+dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
 
-const db = admin.firestore();
-
-async function migrateLegacyAdvancedTier() {
-    console.log("🔍 Scanning for users with legacy 'advanced' Academy tier...");
-    let updatedCount = 0;
-    
-    try {
-        const usersSnap = await db.collection("users").get();
-        const batch = db.batch();
-        let batchCount = 0;
-
-        usersSnap.forEach((doc) => {
-            const data = doc.data();
-            const academyPlan = data?.serviceRegistrations?.academy?.plan;
-
-            if (academyPlan === "advanced") {
-                batch.update(doc.ref, {
-                    "serviceRegistrations.academy.plan": "standard",
-                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
-                });
-                batchCount++;
-                updatedCount++;
-            }
-
-            // Execute batch if limit reached
-            if (batchCount === 400) {
-                batch.commit();
-                batchCount = 0;
-            }
-        });
-
-        if (batchCount > 0) {
-            await batch.commit();
-        }
-
-        console.log(`✅ Migrated ${updatedCount} users from 'advanced' to 'standard' tier.`);
-    } catch (error) {
-        console.error("❌ Error migrating users:", error);
-    }
-}
-
-async function initializeAcademyCourses() {
-    console.log("🔍 Checking default Academy Courses...");
-    
-    const courses = [
-        {
-            title: "Foundation Program",
-            description: "30-day program providing basic training and foundational knowledge required for export business.",
-            instructor: "Easy Sales Export Team",
-            duration: "30 days",
-            level: "beginner",
-            tier: "foundation",
-            price: 25000, // Or whatever default is, standard was 50000 
-            modules: [],
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
-        },
-        {
-            title: "Standard Program",
-            description: "60-day program including Foundation plus local/international market access and LLC incorporation details.",
-            instructor: "Easy Sales Export Team",
-            duration: "60 days",
-            level: "intermediate",
-            tier: "standard",
-            price: 50000,
-            modules: [],
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
-        },
-        {
-            title: "Elite Program",
-            description: "90-day program with direct mentorship, all standard features, and USA/UK/Canada incorporation help.",
-            instructor: "Easy Sales Export Team",
-            duration: "90 days",
-            level: "advanced",
-            tier: "elite",
-            price: 100000,
-            modules: [],
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
-        }
-    ];
-
-    try {
-        const coursesRef = db.collection("academy_courses");
-        
-        for (const defaultCourse of courses) {
-            const querySnap = await coursesRef.where("tier", "==", defaultCourse.tier).limit(1).get();
-            if (querySnap.empty) {
-                console.log(`Missing ${defaultCourse.tier} course. Creating...`);
-                await coursesRef.add(defaultCourse);
-            } else {
-                console.log(`✅ ${defaultCourse.tier} course already exists.`);
-            }
-        }
-    } catch (error) {
-        console.error("❌ Error initializing courses:", error);
-    }
-}
+import { migrateLegacyAcademyPlans, initializeAcademyCourses } from "./academy-schema-repair";
+import { isApply, targetHost, modeBanner, runScript } from "./_maintenance-guard";
 
 async function main() {
-    console.log("🚀 Starting Firebase Schema & Data Fixes for Academy...");
-    await migrateLegacyAdvancedTier();
-    await initializeAcademyCourses();
-    console.log("🎉 All fixes applied successfully.");
-    process.exit(0);
+    // Report-only until --apply, and the target host is named rather than
+    // hidden — the convention scripts/_maintenance-guard.ts now holds for every
+    // writing script here (#329).
+    console.log(modeBanner("🚀 Academy schema & data repair", isApply(), targetHost()));
+
+    // NOT wrapped in per-step try/catch. Each half of the original caught its
+    // own errors, logged them and returned normally, after which main() printed
+    // "🎉 All fixes applied successfully." and exited 0 — so a run that
+    // repaired nothing was indistinguishable from one that repaired
+    // everything. A failed step fails the run now.
+    console.log("🔍 Scanning for academy plans stored under a name we no longer sell...");
+    const repaired = await migrateLegacyAcademyPlans((m) => console.log(m));
+    for (const { id, from, to } of repaired) {
+        console.log(`   ${id}: "${from}" → "${to}"`);
+    }
+
+    console.log("\n🔍 Checking default Academy Courses...");
+    const created = await initializeAcademyCourses((m) => console.log(m));
+
+    console.log("\n--- Complete ---");
+    console.log(`Academy plans repaired: ${repaired.length}`);
+    console.log(`Courses created:        ${created.length}${created.length ? ` (${created.join(", ")})` : ""}`);
 }
 
-main().catch((err) => {
-    console.error(err);
-    process.exit(1);
-});
+if (require.main === module) {
+    runScript("Academy schema & data repair", main);
+}

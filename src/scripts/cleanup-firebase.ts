@@ -139,15 +139,59 @@ async function main() {
     console.log('║                                                       ║');
     console.log('╚═══════════════════════════════════════════════════════╝\n');
 
-    // Safety checks
-    const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
-    console.log(`Firebase Project: ${projectId}\n`);
-
-    if (projectId?.includes('prod') || projectId?.includes('production')) {
-        console.error('❌ BLOCKED: This appears to be a production project!');
-        console.error('❌ Will not delete production data.');
+    /**
+     *   #304 THE ONLY GUARD ON THE MOST DESTRUCTIVE FILE IN THE REPOSITORY
+     *        CHECKED A SYSTEM THIS SCRIPT DOES NOT TOUCH.
+     *
+     *        It read NEXT_PUBLIC_FIREBASE_PROJECT_ID and blocked if the name
+     *        contained "prod":
+     *
+     *            if (projectId?.includes('prod') || projectId?.includes('production'))
+     *
+     *        while every delete below goes through `supabaseDb` — the SUPABASE
+     *        database. Firebase is not this platform's datastore; the script's
+     *        own import says so on line 15. So the guard inspected the name of a
+     *        project that is no longer used and let the deletes run against the
+     *        live one.
+     *
+     *        Three ways it failed:
+     *
+     *          WRONG SYSTEM.  A Supabase URL was never consulted at all.
+     *          UNSET IS FALSY. With the Firebase variable absent — which it is,
+     *                          Firebase having been left behind — `undefined?.
+     *                          includes('prod')` is undefined, so the block did
+     *                          not fire. The check passed by being unanswerable.
+     *          NAME MATCHING.  Even pointed at the right system, "does the name
+     *                          contain the letters p-r-o-d" is not a test of
+     *                          whether a database holds real members' money.
+     *
+     *        Replaced with the guard scripts/seed-local.ts already uses, on the
+     *        connection this script actually deletes through: the target must be
+     *        localhost, or the operator must set an explicit variable whose
+     *        value states what they are doing. Same shape, same wording, so
+     *        there is one convention for "this touches a real database" rather
+     *        than two.
+     */
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+    if (!supabaseUrl) {
+        console.error('❌ BLOCKED: NEXT_PUBLIC_SUPABASE_URL is not set.');
+        console.error('❌ This script deletes through Supabase; refusing to run without knowing the target.');
         process.exit(1);
     }
+
+    const targetHost = new URL(supabaseUrl).hostname;
+    const targetIsLocal =
+        targetHost === 'localhost' || targetHost === '127.0.0.1' || targetHost === '0.0.0.0';
+
+    if (!targetIsLocal && process.env.CLEANUP_ALLOW_REMOTE !== 'yes-destroy-a-remote-database') {
+        console.error(`❌ BLOCKED: ${targetHost} is not a local database.`);
+        console.error('❌ This deletes EVERY user and EVERY collection, and it cannot be undone.');
+        console.error('❌ If you truly mean to wipe a remote TEST database, set');
+        console.error('❌   CLEANUP_ALLOW_REMOTE=yes-destroy-a-remote-database');
+        process.exit(1);
+    }
+
+    console.log(`Supabase target: ${targetHost}${targetIsLocal ? ' (local)' : ' (REMOTE — override in effect)'}\n`);
 
     // Confirmation prompts
     const confirm1 = await question('Are you ABSOLUTELY SURE you want to delete all data? (type "yes"): ');
@@ -157,9 +201,13 @@ async function main() {
         process.exit(0);
     }
 
-    const confirm2 = await question('Type the project ID to confirm: ');
-    if (confirm2 !== projectId) {
-        console.log('❌ Project ID mismatch. Cancelled.');
+    // #304 This asked for the FIREBASE project id and compared against a
+    // variable that is normally unset, so the operator was asked to confirm a
+    // target the script was not going to touch. It names the Supabase host now
+    // — the thing the deletes below actually run against.
+    const confirm2 = await question(`Type the target host (${targetHost}) to confirm: `);
+    if (confirm2 !== targetHost) {
+        console.log('❌ Host mismatch. Cancelled.');
         rl.close();
         process.exit(0);
     }

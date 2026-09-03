@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import { User, MapPin, Phone, Calendar, CheckCircle2, AlertCircle, Loader2, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { verifyBVNAction, verifyNINAction, verifyVotersCardAction } from '@/app/actions/kyc';
-import { isObviouslyFakeId } from '@/lib/kyc-validators';
+import { isObviouslyFakeId, fakeIdErrorMessage } from '@/lib/kyc-validators';
 import { IdInput } from '@/components/ui/IdInput';
 import PhoneInput from '@/components/ui/PhoneInput';
 import { FormField, FormInput, FormSelect, FormTextarea } from '@/components/ui/FormField';
@@ -75,14 +75,35 @@ function VerifyBadge({ state, message }: { state: VerifyState; message?: string 
 }
 
 export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFormProps) {
-    const [formData, setFormData] = useState<Partial<KYCData>>(() => {
-        const initial = { ...initialData };
-        if (initial.nin) initial.ninVerified = true;
-        if (initial.bvn) initial.bvnVerified = true;
-        return initial;
-    });
-    const [bvnState, setBvnState] = useState<VerifyState>(initialData?.bvn ? 'verified' : 'idle');
-    const [ninState, setNinState] = useState<VerifyState>(initialData?.nin ? 'verified' : 'idle');
+    /**
+     *   #349 #285's DEFECT SURVIVED, FOUR LINES ABOVE #285's OWN FIX.
+     *
+     *        This initialiser read:
+     *
+     *            const initial = { ...initialData };
+     *            if (initial.nin) initial.ninVerified = true;
+     *            if (initial.bvn) initial.bvnVerified = true;
+     *
+     *        — the presence of a NUMBER asserted as a verification, which is
+     *        exactly what #285 removed from handleChange. The badge states
+     *        immediately below were corrected by #285 and read the FLAGS, so
+     *        the screen showed "not verified" while the DATA said verified, and
+     *        it is the data that onDataChange propagates and the export step
+     *        gates its Continue button on.
+     *
+     *        #285's ratchet could not see it: it filters on the last verify
+     *        handler appearing before the other assignments, and this sits in a
+     *        useState initialiser above every handler in the file.
+     *
+     *        A saved verification comes back on `ninVerified` / `bvnVerified`,
+     *        which the caller persists. A saved NUMBER is a saved number.
+     */
+    const [formData, setFormData] = useState<Partial<KYCData>>(() => ({ ...initialData }));
+    // #285 These read `initialData?.bvn` / `?.nin` — the presence of a NUMBER —
+    // and so showed "Verified" for any saved value. The voters-card line below
+    // always read the verified FLAG; these two now match it.
+    const [bvnState, setBvnState] = useState<VerifyState>(initialData?.bvnVerified ? 'verified' : 'idle');
+    const [ninState, setNinState] = useState<VerifyState>(initialData?.ninVerified ? 'verified' : 'idle');
     const [votersCardState, setVotersCardState] = useState<VerifyState>(initialData?.votersCardVerified ? 'verified' : 'idle');
     const [bvnError, setBvnError] = useState<string>('');
     const [ninError, setNinError] = useState<string>('');
@@ -93,18 +114,48 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
 
     function handleChange(field: keyof KYCData, value: string | boolean) {
         const updated = { ...formData, [field]: value };
+        /**
+         *   #285 TYPING A BVN OR NIN MARKED IT VERIFIED.
+         *
+         *        The comment below says "Reset verify state when the field
+         *        changes", and the voters-card branch does exactly that. These
+         *        two did the opposite:
+         *
+         *            setBvnState(value ? 'verified' : 'idle');
+         *            setBvnConfirmed(!!value);
+         *            updated.bvnVerified = !!value;
+         *
+         *        So entering eleven digits showed the green "Verified" badge,
+         *        ticked the "I confirm my digits are correct" box on the
+         *        member's behalf, and set bvnVerified on the data the step
+         *        persists — with no call to verifyBVNAction at all.
+         *
+         *        AND IT DISARMED A REAL GATE. KYCVerificationStep refuses to
+         *        continue while `kycData.bvn` is set and `kycData.bvnVerified`
+         *        is not. That check was written correctly and could never fire,
+         *        because the form handed it a flag that was true by
+         *        construction — #274's shape, in the identity form.
+         *
+         *        The confirmation checkbox was defeated the same way: the
+         *        `if (!bvnConfirmed)` guard in handleVerifyBVN exists to make
+         *        the member confirm the digits, and auto-ticking it meant the
+         *        guard could never refuse either.
+         *
+         *        Only verifyBVNAction/verifyNINAction returning isMatch may set
+         *        these now, which is what the three handlers below already do.
+         */
         // Reset verify state when the field changes
         if (field === 'bvn') {
-            setBvnState(value ? 'verified' : 'idle');
+            setBvnState('idle');
             setBvnError('');
-            setBvnConfirmed(!!value);
-            updated.bvnVerified = !!value;
+            setBvnConfirmed(false);
+            updated.bvnVerified = false;
         }
         if (field === 'nin') {
-            setNinState(value ? 'verified' : 'idle');
+            setNinState('idle');
             setNinError('');
-            setNinConfirmed(!!value);
-            updated.ninVerified = !!value;
+            setNinConfirmed(false);
+            updated.ninVerified = false;
         }
         if (field === 'votersCard') {
             setVotersCardState('idle');
@@ -127,6 +178,14 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
         }
         if (!bvnConfirmed) {
             setBvnError('Please confirm that your BVN digits are correct before verifying.');
+            return;
+        }
+        // #357 this component imported isObviouslyFakeId and never called it.
+        // Called now — and, like the server, it answers false unless the
+        // rejection is switched on, so nothing changes today. The server makes
+        // the same check regardless; this only saves a round trip.
+        if (isObviouslyFakeId(bvn)) {
+            setBvnError(fakeIdErrorMessage('BVN'));
             return;
         }
 
@@ -166,6 +225,11 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
         }
         if (!ninConfirmed) {
             setNinError('Please confirm that your NIN digits are correct before verifying.');
+            return;
+        }
+        // #357 — the other half. See handleVerifyBVN above.
+        if (isObviouslyFakeId(nin)) {
+            setNinError(fakeIdErrorMessage('NIN'));
             return;
         }
 
@@ -384,7 +448,50 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                     error={ninError}
                     hint="Dial *346# to retrieve your NIN. Your name must match your NIN record exactly."
                     accentColor="orange"
+                    /* #349 THE VERIFY BUTTON. handleVerifyNIN, handleVerifyBVN,
+                       handleVerifyVotersCard and the VerifyBadge component were
+                       all UNREACHABLE: IdInput takes a `suffix` for exactly
+                       this ("a Verify button or status badge", its own doc) and
+                       no call site passed one, and there was no <button> in the
+                       file at all. So the three states never left 'idle', the
+                       badge never rendered, and the only way the export step's
+                       "Please verify your NIN before continuing" could be
+                       satisfied was the initialiser defect above. */
+                    suffix={
+                        ninState === 'verified'
+                            ? <VerifyBadge state={ninState} />
+                            : (
+                                <button
+                                    type="button"
+                                    onClick={handleVerifyNIN}
+                                    disabled={ninState === 'loading'}
+                                    className="px-4 py-2 text-sm font-semibold rounded-lg bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                >
+                                    {ninState === 'loading' ? 'Verifying…' : 'Verify'}
+                                </button>
+                            )
+                    }
                 />
+                {/* #349 THE CONFIRMATION CHECKBOX, WHICH ALSO DID NOT EXIST.
+                    handleVerifyNIN refuses while `ninConfirmed` is false, and
+                    #285's write-up calls it "a real gate" — but setNinConfirmed
+                    and setBvnConfirmed were never called from anywhere in this
+                    file, so with the Verify button wired the handler would have
+                    refused every time with "Please confirm that your digits are
+                    correct". Three halves of one control had been built and
+                    none of them rendered. handleChange already clears it when
+                    the number is edited. */}
+                {ninState !== 'verified' && (
+                    <label className="mt-2 flex items-start gap-2 text-sm text-slate-600 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={ninConfirmed}
+                            onChange={(e) => setNinConfirmed(e.target.checked)}
+                            className="mt-0.5 w-4 h-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500"
+                        />
+                        <span>I confirm the NIN digits above are correct.</span>
+                    </label>
+                )}
             </div>
 
             {/* ── Voter's Card — collect number only, no verification required ── */}
@@ -398,6 +505,21 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                     placeholder="e.g. 90F5B123456789012345"
                     hint="The Voter Identification Number (VIN) as printed on your Permanent Voter Card."
                     accentColor="orange"
+                    error={votersCardError}
+                    suffix={
+                        votersCardState === 'verified'
+                            ? <VerifyBadge state={votersCardState} />
+                            : (
+                                <button
+                                    type="button"
+                                    onClick={handleVerifyVotersCard}
+                                    disabled={votersCardState === 'loading'}
+                                    className="px-4 py-2 text-sm font-semibold rounded-lg bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                >
+                                    {votersCardState === 'loading' ? 'Verifying…' : 'Verify'}
+                                </button>
+                            )
+                    }
                 />
             </div>
 
@@ -416,7 +538,32 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                         error={bvnError}
                         hint="Dial *565*0# to retrieve your BVN. Your name must match your BVN record exactly."
                         accentColor="orange"
+                        suffix={
+                            bvnState === 'verified'
+                                ? <VerifyBadge state={bvnState} />
+                                : (
+                                    <button
+                                        type="button"
+                                        onClick={handleVerifyBVN}
+                                        disabled={bvnState === 'loading'}
+                                        className="px-4 py-2 text-sm font-semibold rounded-lg bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                    >
+                                        {bvnState === 'loading' ? 'Verifying…' : 'Verify'}
+                                    </button>
+                                )
+                        }
                     />
+                    {bvnState !== 'verified' && (
+                        <label className="mt-2 flex items-start gap-2 text-sm text-slate-600 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={bvnConfirmed}
+                                onChange={(e) => setBvnConfirmed(e.target.checked)}
+                                className="mt-0.5 w-4 h-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500"
+                            />
+                            <span>I confirm the BVN digits above are correct.</span>
+                        </label>
+                    )}
                 </div>
             )}
 

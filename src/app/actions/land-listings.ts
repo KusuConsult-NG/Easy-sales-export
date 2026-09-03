@@ -11,7 +11,8 @@ import { createAdminAuditLog, logAdminAction } from "@/lib/audit-log";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { createNotificationAction } from "@/app/actions/notifications";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
-import { revalidateTag } from "next/cache";
+import { updateTag } from "next/cache";
+import { retirementPatch } from "@/lib/record-retirement";
 import { invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
@@ -22,6 +23,7 @@ import {
     type LandListingStatus,
     type LandVerificationStatus,
 } from "@/lib/land-listing-status";
+import { stripInternalLandFields, isLandListingViewable } from "@/lib/land-visibility";
 
 /**
  * Farm Nation - Land Listings & Verification
@@ -232,6 +234,26 @@ async function _verifyLandListingAction(
             return { success: false, error: "Unauthorized: Admin access required", data: null };
         }
 
+        // #282 THE ACTOR IS THE SESSION, NOT THE ARGUMENT.
+        //
+        // `adminId` is a caller parameter and it was written as `verifiedBy`
+        // and passed to logAdminAction as the acting admin, while the guard
+        // above had already established who the caller actually is. So one land
+        // admin could record a decision against another's name, and the audit
+        // entry would corroborate it.
+        //
+        // Three of the five land decision paths already did this correctly:
+        // api/admin/farm-nation/approve-land, admin/_land.ts, and
+        // _deleteLandListingAction further down THIS FILE, which takes the same
+        // unused adminId parameter and logs session.user.id.
+        //
+        // Nothing calls these two today, so this is latent rather than live —
+        // but they are exported and the next caller would have inherited it.
+        // The parameter is kept so the signature does not change and is
+        // deliberately ignored, the same treatment farm-nation-payment.ts gives
+        // its `amount` and _submitForVerificationAction gives its `ownerId`.
+        const actingAdminId = session.user.id;
+
         const listingRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(listingId);
         const listingDoc = await listingRef.get();
 
@@ -269,7 +291,7 @@ async function _verifyLandListingAction(
                 // top-level fields, which every other writer already sets.
                 verificationStatus: "approved",
                 verified: true,
-                verifiedBy: adminId,
+                verifiedBy: actingAdminId,
                 verifiedAt: FieldValue.serverTimestamp(),
                 // The prior rejection reason is cleared on the record but kept in
                 // the audit log below, which is where a reversed decision belongs.
@@ -294,13 +316,46 @@ async function _verifyLandListingAction(
 
         await logAdminAction(
             "land_verified",
-            adminId,
+            actingAdminId,
             listingId,
             "land_listing"
         );
 
-        revalidateTag("land-listings", "page");
-        revalidateTag(`property-${listingId}`, "page");
+        /**
+         *   #252 revalidateTag(tag, "page") THREW, AT ALL FIFTEEN CALL SITES.
+         *
+         *        The second argument is a cacheLife PROFILE NAME. This version
+         *        of Next ships seven — default, seconds, minutes, hours, days,
+         *        weeks, max — and next.config.ts defines no custom ones. "page"
+         *        is not among them and is not a Next concept at all.
+         *
+         *        An unknown name is not ignored. revalidation-utils.js:
+         *
+         *            cacheLife = workStore?.cacheLifeProfiles[profile];
+         *            if (!cacheLife) throw new Error(
+         *                `Invalid profile provided "${profile}" ...`);
+         *
+         *        and that runs in executeRevalidates — the `finally` of the
+         *        Server Action wrapper, AFTER this function's work has
+         *        completed. So the listing really was verified, and then the
+         *        response threw. The admin saw a failure for an operation that
+         *        had succeeded, and clicked again.
+         *
+         *        updateTag is the documented replacement for immediate expiry
+         *        inside a Server Action. Immediate rather than
+         *        stale-while-revalidate on purpose: this cache exists so a
+         *        decision an admin just made is visible, and serving the old
+         *        value to the next reader one more time is the thing being
+         *        fixed. The three farm-nation ROUTE HANDLERS cannot use it —
+         *        updateTag throws outside a Server Action — so they pass an
+         *        inline `{ expire: 0 }` profile, which is validated by shape
+         *        rather than looked up by name.
+         *
+         *        revalidate-tag-profile-is-real.test.ts reads the valid names
+         *        from Next itself and fails on any new site that invents one.
+         */
+        updateTag("land-listings");
+        updateTag(`property-${listingId}`);
         await invalidateAdminGlobalStats();
 
         // A verified listing is what a buyer trusts. Who verified it, and when,
@@ -340,6 +395,26 @@ async function _rejectLandListingAction(
             return { success: false, error: "Unauthorized: Admin access required", data: null };
         }
 
+        // #282 THE ACTOR IS THE SESSION, NOT THE ARGUMENT.
+        //
+        // `adminId` is a caller parameter and it was written as `verifiedBy`
+        // and passed to logAdminAction as the acting admin, while the guard
+        // above had already established who the caller actually is. So one land
+        // admin could record a decision against another's name, and the audit
+        // entry would corroborate it.
+        //
+        // Three of the five land decision paths already did this correctly:
+        // api/admin/farm-nation/approve-land, admin/_land.ts, and
+        // _deleteLandListingAction further down THIS FILE, which takes the same
+        // unused adminId parameter and logs session.user.id.
+        //
+        // Nothing calls these two today, so this is latent rather than live —
+        // but they are exported and the next caller would have inherited it.
+        // The parameter is kept so the signature does not change and is
+        // deliberately ignored, the same treatment farm-nation-payment.ts gives
+        // its `amount` and _submitForVerificationAction gives its `ownerId`.
+        const actingAdminId = session.user.id;
+
         const listingRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(listingId);
         const listingDoc = await listingRef.get();
 
@@ -358,7 +433,7 @@ async function _rejectLandListingAction(
             patch: {
                 verificationStatus: "rejected",
                 verified: false,
-                verifiedBy: adminId,
+                verifiedBy: actingAdminId,
                 verifiedAt: FieldValue.serverTimestamp(),
                 rejectionReason: reason,
                 updatedAt: FieldValue.serverTimestamp()
@@ -381,14 +456,14 @@ async function _rejectLandListingAction(
 
         await logAdminAction(
             "land_rejected",
-            adminId,
+            actingAdminId,
             listingId,
             "land_listing",
             reason
         );
 
-        revalidateTag("land-listings", "page");
-        revalidateTag(`property-${listingId}`, "page");
+        updateTag("land-listings");
+        updateTag(`property-${listingId}`);
         await invalidateAdminGlobalStats();
 
         await recordAdminAction({
@@ -570,7 +645,19 @@ async function _searchLandListingsAction(filters: {
 
         const lastDocId = snapshot.docs.length === limit ? snapshot.docs[snapshot.docs.length - 1].id : null;
 
-        return { success: true, error: null, data: { listings: results, lastDocId } };
+        /**
+         * #340. The review fields, the owner's contact details and the DEEDS do
+         * not go to a stranger.
+         *
+         * This action has no session check — search is public, which is right —
+         * and it returned the stored document. lib/land-visibility.ts exists for
+         * this exact payload and was written after the same defect was found in
+         * /api/farm-nation/listings; its header names the reason. It reached one
+         * reader out of four.
+         */
+        const listings = results.map((l) => stripInternalLandFields(l as any)) as unknown as LandListing[];
+
+        return { success: true, error: null, data: { listings, lastDocId } };
     } catch (error: any) { 
         logger.error("Land search error:", error);
         throw error;
@@ -724,7 +811,7 @@ export async function submitLandListingAction(...args: Parameters<typeof _submit
 /**
  * Get single land listing by ID
  */
-async function _getPropertyByIdAction(id: string): Promise<ActionResponse<LandListing | null>> { 
+async function _getPropertyByIdAction(id: string): Promise<ActionResponse<LandListing | null>> {
     try {
         const docRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(id);
         const docSnap = await docRef.get();
@@ -733,8 +820,60 @@ async function _getPropertyByIdAction(id: string): Promise<ActionResponse<LandLi
             // ✅ FIX: serializeValue converts Firestore Timestamps to ISO strings
             // so the result is safe to pass across the server→client boundary.
             const data = { id: docSnap.id, ...serializeValue(docSnap.data()) } as LandListing;
-            return { success: true, error: null, data };
-        } else { 
+
+            /**
+             *   #340 THE PUBLIC DETAIL PAGE RETURNED THE WHOLE DOCUMENT, AT ANY
+             *        STATUS.
+             *
+             *        /farm-nation/property/[id] has no auth guard — it is not
+             *        under the (member) group and farm-nation/layout.tsx only
+             *        sets metadata — and this is the action all three of its
+             *        callers import. It had no session check, no status filter
+             *        and no strip, so ANY id returned:
+             *
+             *          documents          the C of O, survey plan, tax clearance
+             *          ownerEmail,        the owner's contact details
+             *          ownerPhone
+             *          verificationNotes, the admin's review of them
+             *          rejectionReason,
+             *          verifiedBy
+             *
+             *        for listings in ANY state — pending_verification, rejected
+             *        and deleted included. A rejected application was readable,
+             *        with the reason it was rejected, by anyone who could guess
+             *        or scrape an id.
+             *
+             *        Two rules, both from lib/land-visibility.ts so the four
+             *        readers of this collection finally share one definition:
+             *        a listing still in (or thrown out of) the review queue is
+             *        not viewable at all, and what is viewable is stripped.
+             *
+             *        The OWNER and an admin who may verify listings are exempt
+             *        — the owner's own edit screen and the admin queue both go
+             *        through here, and both need the whole record.
+             */
+            const sessionResult = await requireSession();
+            const viewer = sessionResult.session?.user;
+            const privileged = Boolean(
+                viewer && (
+                    viewer.id === (data as any).ownerId
+                    || hasAdminPermission(viewer.roles, "land:verify_listings")
+                )
+            );
+
+            if (privileged) {
+                return { success: true, error: null, data };
+            }
+
+            if (!isLandListingViewable((data as any).status)) {
+                // Indistinguishable from "no such listing", on purpose: telling a
+                // stranger that an id exists but is rejected is most of what the
+                // rejection record says.
+                return { success: true, error: null, data: null };
+            }
+
+            return { success: true, error: null, data: stripInternalLandFields(data as any) };
+        } else {
             return { success: true, error: null, data: null };
         }
     } catch (error: any) {
@@ -935,18 +1074,39 @@ async function _deleteLandListingAction(
             return { success: false, error: "Listing not found", data: null };
         }
 
-        await listingRef.delete();
+        /**
+         *   #301 THE STATUS FOR THIS ALREADY EXISTED AND THE CODE IGNORED IT.
+         *
+         *        land-listing-status.ts declares "deleted" in LandListingStatus
+         *        and its own header describes the behaviour as "delete sets
+         *        `deleted`". No reader admits that status — it is in neither
+         *        PURCHASABLE_STATUSES nor BROWSABLE_STATUSES — so setting it is
+         *        sufficient to remove a listing from every buyer-facing screen.
+         *
+         *        The code called .delete() instead, destroying a row that land
+         *        purchases and farm-nation transactions reference by id
+         *        (_fna_finance.ts reads LAND_LISTINGS.doc(preTxData.propertyId)
+         *        while settling a transaction).
+         *
+         *        So the vocabulary described a soft delete the code had stopped
+         *        performing. It performs it again.
+         */
+        await listingRef.update({
+            status: "deleted",
+            ...retirementPatch(session.user.id, listingDoc.data()?.status),
+            updatedAt: new Date().toISOString(),
+        });
 
         await logAdminAction(
             "land_deleted",
             session.user.id,
             listingId,
             "land_listing",
-            "Listing was permanently deleted"
+            "Listing was retired (status: deleted) — the row is retained so purchases and transactions that reference it stay readable"
         );
 
-        revalidateTag("land-listings", "page");
-        revalidateTag(`property-${listingId}`, "page");
+        updateTag("land-listings");
+        updateTag(`property-${listingId}`);
         await invalidateAdminGlobalStats();
 
         // Irreversible, and nothing else records that the listing ever existed.

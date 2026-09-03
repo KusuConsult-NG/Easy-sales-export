@@ -124,7 +124,7 @@ export async function uploadResourceAction(formData: FormData): Promise<
         // Upload via the shared server-side uploader (Cloudinary).
         // This previously went through the firebase-admin/storage shim, whose
         // bucket handle has no makePublic() — so every resource upload threw.
-        const fileUrl = await uploadFileToStorage(file, storagePath, true);
+        const fileUrl = await uploadFileToStorage(file, storagePath);
 
         // Create Firestore record
         const resourceData: Omit<WaveResource, "id"> = { title,

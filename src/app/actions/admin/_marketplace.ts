@@ -2,7 +2,7 @@
 
 import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
 import { withFlexibleSafeAction, ActionResponse, type ActionState } from "@/lib/safe-action";
-import { revalidatePath, revalidateTag } from 'next/cache';
+import { revalidatePath, updateTag } from 'next/cache';
 import { invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from '@/lib/logger';
@@ -23,6 +23,7 @@ import {
     PRODUCT_REJECTABLE_FROM,
     normaliseProductStatus,
 } from "@/lib/product-status";
+import { canSendEmail } from "@/lib/email-notifications";
 
 // ============================================
 // Seller Verification (Marketplace)
@@ -139,13 +140,16 @@ async function _approveSellerVerificationAction(
         }
 
         // 4. Send Approval Email
-        if (process.env.RESEND_API_KEY) {
-            // Get user email - fetch user doc to be safe
-            const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-            const userData = userDoc.data();
-            const userEmail = userData?.email;
+        //
+        // #308 The address is fetched BEFORE the guard now. It used to be read
+        // inside `if (process.env.RESEND_API_KEY)`, so with no key configured
+        // the code never even looked to see whether the seller had an email —
+        // the two reasons a message goes undelivered were one silent branch.
+        const approvalUserDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        const userEmail = approvalUserDoc.data()?.email;
 
-            if (userEmail) {
+        if (canSendEmail("seller approval email", userEmail)) {
+            {
                 try {
                     const { Resend } = await import("resend");
                     const resend = new Resend(process.env.RESEND_API_KEY);
@@ -197,7 +201,7 @@ async function _approveSellerVerificationAction(
         try {
             revalidatePath("/marketplace", "page");
             revalidatePath("/dashboard", "page");
-            revalidateTag(`user-status-${userId}`, "page");
+            updateTag(`user-status-${userId}`);
         } catch (revalError) {
             logger.warn("Revalidation failed (expected in test/script environments):", revalError);
         }
@@ -379,7 +383,9 @@ async function _getStandardSellerVerificationsAction(
                 .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
                 .join(' ');
             const rawLowerQ = search.trim().toLowerCase();
-            const rawUpperQ = search.trim().toUpperCase();
+            // rawUpperQ is gone with the businessRegNumber facet below — it
+            // existed only to upper-case a registration number for that prefix
+            // range, and nothing else in this search is case-folded upward.
 
             const promises = [];
             
@@ -409,14 +415,30 @@ async function _getStandardSellerVerificationsAction(
                     .get()
             );
 
-            // businessRegNumber prefix
-            promises.push(
-                db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
-                    .where("businessRegNumber", ">=", rawUpperQ)
-                    .where("businessRegNumber", "<=", rawUpperQ + "\uf8ff")
-                    .limit(50)
-                    .get()
-            );
+            //   #335 A SEARCH FACET ON A FIELD THE PLATFORM NEVER COLLECTS.
+            //
+            //        A third query ran here on every admin seller search:
+            //
+            //            .where("businessRegNumber", ">=", rawUpperQ)
+            //            .where("businessRegNumber", "<=", rawUpperQ + "\uf8ff")
+            //
+            //        Nothing writes businessRegNumber. The one creator of
+            //        SELLER_VERIFICATIONS \u2014 api/marketplace/submit-verification
+            //        \u2014 stores businessName, businessType, businessDescription,
+            //        contact, address and bank details, and no registration
+            //        number at all; nor does the legacy import. The field name
+            //        appears nowhere else in src/ except the render below,
+            //        which has therefore always shown blank.
+            //
+            //        So this was a round-trip per search that could not
+            //        contribute a row, sitting beside two facets that work.
+            //        Removed rather than left costing a query to return
+            //        nothing. The businessName and email facets are untouched.
+            //
+            //        RECORDED: whether sellers SHOULD supply a CAC/registration
+            //        number is an onboarding question \u2014 the form does not ask
+            //        for one. If it is ever added, this facet is the shape to
+            //        restore, and the detail line below will fill in on its own.
 
             const snaps = await Promise.all(promises);
             const seenIds = new Set<string>();

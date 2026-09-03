@@ -3,7 +3,7 @@
 import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
 import { ZodError } from "zod";
 import { withFlexibleSafeAction, ActionResponse, type ActionState } from "@/lib/safe-action";
-import { revalidatePath, revalidateTag } from 'next/cache';
+import { revalidatePath, updateTag } from 'next/cache';
 import { invalidateAdminGlobalStats, invalidateServiceCache } from "@/lib/cache-invalidation";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from '@/lib/logger';
@@ -15,8 +15,10 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { ExportOnboardingReviewSchema } from "@/lib/schemas";
 import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
+import { stripPii } from "@/lib/admin-pii";
 import { atomicUpdateUser } from "@/lib/services/userService";
 import { recordAdminAction } from "@/lib/audit-log";
+import { canSendEmail } from "@/lib/email-notifications";
 
 // ============================================
 // Export Window Management (Admin)
@@ -211,7 +213,7 @@ async function _approveExportOnboardingAction(
         }
 
         // 4. Send Approval Email
-        if (process.env.RESEND_API_KEY && appData.userEmail) {
+        if (canSendEmail("export decision email", appData.userEmail)) {
             try {
                 const { Resend } = await import("resend");
                 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -259,7 +261,7 @@ async function _approveExportOnboardingAction(
         // Revalidate
         revalidatePath("/export", "page");
         revalidatePath("/dashboard", "page");
-        revalidateTag(`user-status-${userId}`, "page");
+        updateTag(`user-status-${userId}`);
 
         return {
             error: null,
@@ -284,10 +286,12 @@ async function _requestExportApplicationRevisionAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
-            if (!session?.user?.roles?.includes("super_admin") && !session?.user?.roles?.includes("admin")) {
-                return { error: "Unauthorized: admin or users:update role required", success: false as const };
-            }
+        // #265 export_admin holds export:approve_applications and was refused
+        // here, while _approveExportOnboardingAction above already accepts it.
+        // Approving and asking for a revision are the same job.
+        if (!hasAdminPermission(session?.user?.roles, "users:update")
+            && !hasAdminPermission(session?.user?.roles, "export:approve_applications")) {
+            return { error: "Unauthorized: export:approve_applications required", success: false as const };
         }
 
         if (!revisionNote?.trim()) {
@@ -337,7 +341,7 @@ async function _requestExportApplicationRevisionAction(
         });
 
         // Send email notification to applicant
-        if (process.env.RESEND_API_KEY && appData.userEmail) {
+        if (canSendEmail("export decision email", appData.userEmail)) {
             try {
                 const { Resend } = await import("resend");
                 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -408,6 +412,8 @@ async function _getExportApplicationsStatsAction(): Promise<ActionResponse<any>>
             return { success: false as const, error: "Unauthorized", data: null };
         }
 
+
+
         const { getCached, setCache } = await import("@/lib/redis");
         const cacheKey = "admin:export-stats:global";
 
@@ -474,7 +480,26 @@ async function _getStandardExportApplicationsAction(options: {
 
         if (!isAdmin(session.user.roles)) {
             return { success: false as const, error: "Unauthorized", data: null };
+
         }
+
+        /**
+         *   #338 THE STRIP WRITTEN FOR RAW-DOCUMENT SPREADS WAS NOT APPLIED
+         *        HERE EITHER.
+         *
+         *        Both branches below emit `data: { ...mergedData, bankDetails }`
+         *        — the whole EXPORT_APPLICATIONS document merged with the user
+         *        document — and it is rendered field by field by
+         *        DynamicDetailModal, whose exclude list covers bvnVerified and
+         *        bvnStatus but not `bvn` itself.
+         *
+         *        The gate above is isAdmin(), true for all TEN admin roles.
+         *        lib/admin-pii.ts exists for exactly this ("This is the strip
+         *        for those spreads") and was applied to three sites; this was
+         *        not one of them. Gated on the permission the screen exists to
+         *        exercise, as _withdrawals.ts and _marketplace.ts do.
+         */
+        const maySeeApplicantPii = hasAdminPermission(session.user.roles, "export:approve_applications");
 
         const useMemoryPagination = options.sortBy === "gender" || !!options.search || !!options.dateFrom || !!options.dateTo;
         const fetchLimit = useMemoryPagination ? 5000 : (options.limit || 50);
@@ -625,7 +650,7 @@ async function _getStandardExportApplicationsAction(options: {
                     ...app,
                     phone:              app.phone              || profile?.phone              || uData.phone       || uData.phoneNumber || uData.kyc?.phoneNumber || uData.kyc?.phone || null,
                     gender:             app.gender             || profile?.gender             || uData.gender      || null,
-                    dateOfBirth:        app.dateOfBirth        || profile?.dateOfBirth        || uData.dob         || null,
+                    dateOfBirth:        app.dateOfBirth        || profile?.dateOfBirth        || uData.dateOfBirth || uData.dob || null,
                     occupation:         app.occupation         || profile?.occupation         || uData.occupation  || null,
                     stateOfOrigin:      app.stateOfOrigin      || app.state || profile?.state || profile?.stateOfOrigin || app.companyInfo?.state || (typeof uData.address === 'object' ? uData.address?.state : uData.state) || uData.stateOfOrigin || uData.state || null,
                     lga:                app.lga                || profile?.lga                || app.companyInfo?.lga   || (typeof uData.address === 'object' ? uData.address?.lga   : uData.lga)   || uData.lga || null,
@@ -657,10 +682,9 @@ async function _getStandardExportApplicationsAction(options: {
                         bankDetails
                     },
                     status: status,
-                    data: {
-                        ...mergedData,
-                        bankDetails
-                    }
+                    data: maySeeApplicantPii
+                        ? { ...mergedData, bankDetails }
+                        : stripPii({ ...mergedData, bankDetails })
                 };
             });
 
@@ -700,7 +724,7 @@ async function _getStandardExportApplicationsAction(options: {
                     ...app,
                     phone:              app.phone              || profile?.phone              || uData.phone       || uData.phoneNumber || uData.kyc?.phoneNumber || uData.kyc?.phone || null,
                     gender:             app.gender             || profile?.gender             || uData.gender      || null,
-                    dateOfBirth:        app.dateOfBirth        || profile?.dateOfBirth        || uData.dob         || null,
+                    dateOfBirth:        app.dateOfBirth        || profile?.dateOfBirth        || uData.dateOfBirth || uData.dob || null,
                     occupation:         app.occupation         || profile?.occupation         || uData.occupation  || null,
                     stateOfOrigin:      app.stateOfOrigin      || app.state || profile?.state || profile?.stateOfOrigin || app.companyInfo?.state || (typeof uData.address === 'object' ? uData.address?.state : uData.state) || uData.stateOfOrigin || uData.state || null,
                     lga:                app.lga                || profile?.lga                || app.companyInfo?.lga   || (typeof uData.address === 'object' ? uData.address?.lga   : uData.lga)   || uData.lga || null,
@@ -732,10 +756,9 @@ async function _getStandardExportApplicationsAction(options: {
                         bankDetails
                     },
                     status: status,
-                    data: {
-                        ...mergedData,
-                        bankDetails
-                    }
+                    data: maySeeApplicantPii
+                        ? { ...mergedData, bankDetails }
+                        : stripPii({ ...mergedData, bankDetails })
                 };
             });
         }
@@ -767,10 +790,11 @@ async function _rejectExportApplicationAction(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         // Use general user update permission or create a new one. Using users:update for now.
-        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
-            if (!session?.user?.roles?.includes("super_admin") && !session?.user?.roles?.includes("admin")) {
-                return { error: "Unauthorized: Permission required - users:update", success: false as const };
-            }
+        // #265 As above: the export admin could approve an application and
+        // could not reject one.
+        if (!hasAdminPermission(session?.user?.roles, "users:update")
+            && !hasAdminPermission(session?.user?.roles, "export:approve_applications")) {
+            return { error: "Unauthorized: export:approve_applications required", success: false as const };
         }
 
         const valid = ExportOnboardingReviewSchema.safeParse({ applicationId, status: "rejected", reason });
@@ -838,7 +862,7 @@ async function _rejectExportApplicationAction(
         }
 
         // 4. Send Rejection Email
-        if (process.env.RESEND_API_KEY && appData.userEmail) {
+        if (canSendEmail("export decision email", appData.userEmail)) {
             try {
                 const { Resend } = await import("resend");
                 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -887,7 +911,7 @@ async function _rejectExportApplicationAction(
         // Revalidate
         revalidatePath("/export", "page");
         revalidatePath("/dashboard", "page");
-        revalidateTag(`user-status-${userId}`, "page");
+        updateTag(`user-status-${userId}`);
 
         return {
             error: null,

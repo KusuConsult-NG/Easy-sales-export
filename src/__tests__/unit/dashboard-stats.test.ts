@@ -61,7 +61,8 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 
 const USER = 'user-1';
 
-jest.mock('@/lib/audit-log', () => ({ createAdminAuditLog: jest.fn(async () => ({})) }));
+jest.mock('@/lib/audit-log', () => ({
+    recordAdminAction: (p: any) => (global as any).mockRecordAdminAction(p), createAdminAuditLog: jest.fn(async () => ({})) }));
 
 function setSession(id: string | null) {
     (global as any).mockRequireSession.mockImplementation(() => Promise.resolve(

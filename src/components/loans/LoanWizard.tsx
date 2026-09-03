@@ -20,6 +20,23 @@ import { uploadDocumentAction } from "@/app/actions/upload";
 import { BUSINESS_LOAN_MONTHLY_RATE, MIN_TERM_MONTHS, MAX_TERM_MONTHS } from "@/lib/loan-terms";
 import { LoanPurpose } from "@/types/strict";
 
+/**
+ *   #289 NONE OF THIS FORM'S TEN INPUTS HAD AN ACCESSIBLE NAME.
+ *
+ *        Every field was `<label className="...">Loan Amount (₦)</label>`
+ *        followed by a sibling `<input>`. No `htmlFor`, no `id`, and the input
+ *        not nested inside the label — so nothing associated the two. A screen
+ *        reader announces ten unlabelled edit boxes on a form that asks for a
+ *        loan amount, collateral value and annual revenue.
+ *
+ *        Found because a test could not fill the form: getByLabelText is how
+ *        testing-library reaches a field, and it reaches it the same way a
+ *        screen reader does. The wizard was unfillable by both for the same
+ *        reason.
+ *
+ *        Same class as this file's h1 note below — /loans/apply had no
+ *        document heading either.
+ */
 const STEPS = [
     { id: 1, title: "Loan Details", icon: DollarSign, description: "Amount & Purpose" },
     { id: 2, title: "Collateral", icon: FileText, description: "Security Information" },
@@ -29,6 +46,39 @@ const STEPS = [
 ];
 
 interface LoanWizardProps {
+    /**
+     * Files the application. MUST REJECT IF THE APPLICATION WAS NOT FILED.
+     *
+     *   #287 A REFUSED LOAN APPLICATION SAID NOTHING AND SHOWED NOTHING.
+     *
+     *        /loans/apply is the only loan application page in the product. Its
+     *        handler was:
+     *
+     *            const result = await submitLoanApplication(data);
+     *            if (result.success) { router.push(...) }
+     *            // If not success, error handling should be done in the component
+     *
+     *        The component had no error handling. So every refusal — not signed
+     *        in, validation rejected server-side, or the one-open-application
+     *        rule (#288) — produced exactly nothing: the button said
+     *        "Submitting…", said "Submit Application" again, and the applicant
+     *        stayed on step 5 with no message. The only move that dead button
+     *        suggests is pressing it again, which can never work.
+     *
+     *        A thrown error was no better. `await onSubmit(data)` had a
+     *        `finally` and no `catch`, so a rejection became an unhandled
+     *        promise rejection and the screen still said nothing.
+     *
+     *        THE UNREFERENCED COPY OF THIS WIZARD GOT IT RIGHT.
+     *        components/LoanApplicationWizard.tsx — no importer anywhere — has
+     *        `setError(res.error)`, a catch, and a finally. The wired one is the
+     *        one that dropped the answer, which is the shape of #276, #277,
+     *        #279 and #281 with the halves the other way round.
+     *
+     * Rejecting rather than returning a result is deliberate: a `void` return
+     * can be ignored by writing no code, which is precisely how this happened. A
+     * rejection cannot — the catch below is the only place it can land.
+     */
     onSubmit: (data: LoanApplicationData) => Promise<void>;
     onCancel?: () => void;
 }
@@ -55,6 +105,9 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [uploading, setUploading] = useState<string[]>([]);
     const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
+    // #287. What the server said when it refused, so the applicant can act on
+    // it. Nothing held this before, so nothing could be shown.
+    const [submitError, setSubmitError] = useState<string | null>(null);
 
     const methods = useForm<LoanApplicationData>({
         resolver: zodResolver(loanApplicationSchema as any),
@@ -159,8 +212,19 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
 
     async function handleSubmit(data: LoanApplicationData) {
         setIsSubmitting(true);
+        setSubmitError(null);
         try {
             await onSubmit(data);
+        } catch (err) {
+            // #287. There was no catch here at all — only a finally — so a
+            // rejected submission became an unhandled promise rejection and the
+            // screen said nothing. On success onSubmit navigates away, so
+            // reaching this line means the application was NOT filed.
+            setSubmitError(
+                err instanceof Error && err.message
+                    ? err.message
+                    : "Your application could not be submitted. Please try again."
+            );
         } finally {
             setIsSubmitting(false);
         }
@@ -279,11 +343,12 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                                     </h3>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-900 mb-2">
+                                        <label htmlFor="loan-amount" className="block text-sm font-medium text-slate-900 mb-2">
                                             Loan Amount (₦)
                                         </label>
                                         <input
                                             type="number"
+                                            id="loan-amount"
                                             {...register("amount", { valueAsNumber: true })}
                                             className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-[#1358ec] focus:border-transparent"
                                             placeholder="10,000"
@@ -294,10 +359,11 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-900 mb-2">
+                                        <label htmlFor="loan-purpose" className="block text-sm font-medium text-slate-900 mb-2">
                                             Loan Purpose
                                         </label>
                                         <select
+                                            id="loan-purpose"
                                             {...register("purpose")}
                                             className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-[#1358ec]"
                                         >
@@ -313,7 +379,7 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-900 mb-2">
+                                        <label htmlFor="loan-repayment-period" className="block text-sm font-medium text-slate-900 mb-2">
                                             Repayment Period (Months)
                                         </label>
                                         <input
@@ -321,6 +387,7 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                                             min={MIN_TERM_MONTHS}
                                             max={MAX_TERM_MONTHS}
                                             step={1}
+                                            id="loan-repayment-period"
                                             {...register("repaymentPeriod", { valueAsNumber: true })}
                                             className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-[#1358ec]"
                                             placeholder="12"
@@ -344,10 +411,11 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                                     </h3>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-900 mb-2">
+                                        <label htmlFor="collateral-type" className="block text-sm font-medium text-slate-900 mb-2">
                                             Collateral Type
                                         </label>
                                         <input
+                                            id="collateral-type"
                                             {...register("collateral.type")}
                                             className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-[#1358ec]"
                                             placeholder="e.g., Land, Vehicle, Equipment"
@@ -358,11 +426,12 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-900 mb-2">
+                                        <label htmlFor="collateral-value" className="block text-sm font-medium text-slate-900 mb-2">
                                             Estimated Value (₦)
                                         </label>
                                         <input
                                             type="number"
+                                            id="collateral-value"
                                             {...register("collateral.value", { valueAsNumber: true })}
                                             className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-[#1358ec]"
                                             placeholder="50,000"
@@ -373,10 +442,11 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-900 mb-2">
+                                        <label htmlFor="collateral-description" className="block text-sm font-medium text-slate-900 mb-2">
                                             Description
                                         </label>
                                         <textarea
+                                            id="collateral-description"
                                             {...register("collateral.description")}
                                             rows={4}
                                             className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-[#1358ec]"
@@ -398,11 +468,12 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
 
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-900 mb-2">
+                                            <label htmlFor="business-name" className="block text-sm font-medium text-slate-900 mb-2">
                                                 Business Name
                                             </label>
                                             <input
-                                                {...register("businessDetails.name")}
+                                                id="business-name"
+                                            {...register("businessDetails.name")}
                                                 className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-[#1358ec]"
                                             />
                                             {errors.businessDetails?.name && (
@@ -411,11 +482,12 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-900 mb-2">
+                                            <label htmlFor="business-type" className="block text-sm font-medium text-slate-900 mb-2">
                                                 Business Type
                                             </label>
                                             <input
-                                                {...register("businessDetails.type")}
+                                                id="business-type"
+                                            {...register("businessDetails.type")}
                                                 className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-[#1358ec]"
                                             />
                                             {errors.businessDetails?.type && (
@@ -424,12 +496,13 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-900 mb-2">
+                                            <label htmlFor="business-years" className="block text-sm font-medium text-slate-900 mb-2">
                                                 Years in Operation
                                             </label>
                                             <input
                                                 type="number"
-                                                {...register("businessDetails.yearsInOperation", { valueAsNumber: true })}
+                                                id="business-years"
+                                            {...register("businessDetails.yearsInOperation", { valueAsNumber: true })}
                                                 className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-[#1358ec]"
                                             />
                                             {errors.businessDetails?.yearsInOperation && (
@@ -438,12 +511,13 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-900 mb-2">
+                                            <label htmlFor="business-revenue" className="block text-sm font-medium text-slate-900 mb-2">
                                                 Annual Revenue (₦)
                                             </label>
                                             <input
                                                 type="number"
-                                                {...register("businessDetails.annualRevenue", { valueAsNumber: true })}
+                                                id="business-revenue"
+                                            {...register("businessDetails.annualRevenue", { valueAsNumber: true })}
                                                 className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-[#1358ec]"
                                             />
                                             {errors.businessDetails?.annualRevenue && (
@@ -537,6 +611,22 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                             )}
                         </motion.div>
                     </AnimatePresence>
+
+                    {/*
+                      * #287. Above the buttons, so it is beside the control the
+                      * applicant just pressed rather than at the top of a page
+                      * they are scrolled past. role="alert" so a screen reader
+                      * announces it — the previous behaviour was silent in
+                      * every sense.
+                      */}
+                    {submitError && (
+                        <div
+                            role="alert"
+                            className="mb-4 flex gap-2 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"
+                        >
+                            <span>{submitError}</span>
+                        </div>
+                    )}
 
                     {/* Navigation Buttons */}
                     <div className="flex justify-between">

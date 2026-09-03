@@ -81,6 +81,15 @@ export default function AcademyOnboardingPage() {
                     const payStatus = await checkAcademyPaymentStatusAction();
                     if (payStatus.success && payStatus.data === "paid") {
                         router.replace("/academy/application/pending");
+                    } else if (!payStatus.success) {
+                        // #316 — the check failed. Redirecting to the
+                        // application form pushes a learner who may have paid
+                        // back toward the payment step. Stay put and let the
+                        // page report it.
+                        logger.error("[AcademySetup] Payment status unreadable; not redirecting", {
+                            error: payStatus.error,
+                        });
+                        setIsLoading(false);
                     } else {
                         router.replace("/academy/application");
                     }

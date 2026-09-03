@@ -34,7 +34,7 @@
  * other is the sort of asymmetry that reads as a bug when it is a decision.
  */
 
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
 import { COLLECTIONS } from '@/lib/types/firestore';
 
@@ -48,7 +48,11 @@ jest.mock('@/lib/redis', () => ({
 const uploadFileToStorage = jest.fn(
     async (_file: unknown, destination: string, _public?: boolean) => `https://storage.test/${destination}`);
 jest.mock('@/lib/storage-admin', () => ({
-    uploadFileToStorage: (f: unknown, d: string, p?: boolean) => uploadFileToStorage(f, d, p),
+    // Two parameters, matching the real signature. This forwarded a third
+    // (`p?: boolean`) and therefore recorded `undefined` as a third argument on
+    // every call — so an arity assertion here measured the HARNESS rather than
+    // the code, which is how the first rewrite of the test below failed.
+    uploadFileToStorage: (f: unknown, d: string) => uploadFileToStorage(f, d),
 }));
 
 let store: FakeDbHandle;
@@ -66,12 +70,44 @@ function actAs(id: string | null, roles: string[] = ['user']): void {
     ));
 }
 
+/**
+ * #346 The bank the action now asks.
+ *
+ * submitMarketplaceOnboardingAction re-resolves a seller's account through
+ * lib/bank-account-resolve before recording it, because the payload used to be
+ * taken on trust. Every test here that expected a successful SELLER submission
+ * failed the moment that landed — they had all been filing registrations whose
+ * payout account nobody had checked.
+ *
+ * The stub answers with a name DELIBERATELY DIFFERENT from the one the fixture
+ * submits, so the assertions below can tell the bank's answer from the
+ * applicant's claim.
+ */
+const RESOLVED_ACCOUNT_NAME = 'ADAEZE N OBI';
+
+function bankResolvesTo(accountName: string | null): void {
+    process.env.PAYSTACK_SECRET_KEY = 'sk_test_marketplace';
+    global.fetch = jest.fn(async () => (accountName === null
+        ? { ok: false, status: 422, json: async () => ({ message: 'Could not resolve account name' }) }
+        : { ok: true, json: async () => ({ status: true, data: { account_name: accountName, account_number: '0123456789' } }) }
+    )) as any;
+}
+
+const SAVED_ENV = { ...process.env };
+const realFetch = global.fetch;
+
 beforeEach(() => {
     jest.clearAllMocks();
     uploadFileToStorage.mockImplementation(
         async (_f: unknown, destination: string) => `https://storage.test/${destination}`);
     store = installFakeDb();
     actAs(SELLER);
+    bankResolvesTo(RESOLVED_ACCOUNT_NAME);
+});
+
+afterEach(() => {
+    process.env = { ...SAVED_ENV };
+    global.fetch = realFetch;
 });
 
 async function actions() {
@@ -105,7 +141,9 @@ function submission(overrides: Record<string, unknown> = {}): FormData {
         productionCapacity: '5 tonnes',
         location: JSON.stringify({ state: 'Plateau', lga: 'Jos North', address: '12 Market Road' }),
         bankAccount: JSON.stringify({
-            bankName: 'Zenith', accountNumber: '0123456789', accountName: 'Ada Obi',
+            // #346 bankCode is what the server re-resolves on. `accountName`
+            // is the applicant's claim and is no longer what gets recorded.
+            bankName: 'Zenith', accountNumber: '0123456789', accountName: 'Ada Obi', bankCode: '057',
         }),
         sellerCategories: JSON.stringify(['grains']),
         certifications: JSON.stringify(['NAFDAC']),
@@ -414,13 +452,41 @@ describe('submitMarketplaceOnboardingAction — validation runs before any uploa
         expect(verification.documents.businessRegistrationUrl).toContain('start_selling/documents');
     });
 
-    it('uploads verification documents PRIVATELY', async () => {
+    it('uploads verification documents — PUBLICLY, which is #280', async () => {
+        /**
+         * This test was called "uploads verification documents PRIVATELY" and
+         * asserted `call[2] === false` — the third argument to
+         * uploadFileToStorage, which that function had ALREADY stopped reading.
+         * Its own doc said so: "Retained for call-site compatibility ... the
+         * parameter no longer changes the returned URL."
+         *
+         * So the suite was asserting the privacy of a seller's business
+         * registration document by checking that a caller passed a flag into a
+         * parameter nothing consulted. It passed, every run, while every one of
+         * those documents was a public Cloudinary URL.
+         *
+         * That is the sharpest version of a shape this audit keeps finding: not
+         * only was the control inert, the TEST FOR IT was inert in the same way,
+         * so the inertness had a green tick over it.
+         *
+         * The parameter is gone. What is asserted now is what actually happens
+         * — the uploads occur, to the documents folder — plus the honest name.
+         * The exposure is tracked in upload-privacy-is-not-claimed.test.ts,
+         * which fails when somebody implements authenticated delivery.
+         */
         seedUser();
         const { submitMarketplaceOnboardingAction } = await actions();
         await submitMarketplaceOnboardingAction(withFiles());
 
-        for (const call of uploadFileToStorage.mock.calls as any[]) {
-            expect(call[2]).toBe(false);
+        const calls = uploadFileToStorage.mock.calls as any[];
+        expect(calls.length).toBeGreaterThan(0);
+
+        for (const call of calls) {
+            // No boolean third argument, because there is no longer a privacy
+            // flag to hide behind. Asserted on the VALUE rather than on arity:
+            // arity here is the mock forwarder's, not the call site's.
+            expect(typeof call[2]).not.toBe('boolean');
+            expect(String(call[1])).toContain('start_selling');
         }
     });
 });
@@ -443,7 +509,12 @@ describe('submitMarketplaceOnboardingAction — what a SELLER gets', () => {
             productionCapacity: '5 tonnes',
         });
         expect(verification.location).toMatchObject({ state: 'Plateau', lga: 'Jos North' });
-        expect(verification.bankAccount).toMatchObject({ accountNumber: '0123456789' });
+        expect(verification.bankAccount).toMatchObject({
+            accountNumber: '0123456789',
+            // #346 the BANK'S name, not the 'Ada Obi' the fixture submitted.
+            accountName: RESOLVED_ACCOUNT_NAME,
+            verified: true,
+        });
         expect(verification.sellerCategories).toEqual(['grains']);
         expect(verification.certifications).toEqual(['NAFDAC']);
     });
@@ -476,8 +547,15 @@ describe('submitMarketplaceOnboardingAction — what a SELLER gets', () => {
         await submitMarketplaceOnboardingAction(submission());
 
         const user = readUser();
+        // #346 REWRITTEN. This expected `accountName: 'Ada Obi'` — the string
+        // the fixture submitted — and `bankCode: ''`, because nothing sent one.
+        // Both were the defect: the payout name mirrored onto the user record
+        // was the applicant's own claim, resolved by nobody.
         expect(user.bankDetails).toMatchObject({
-            accountNumber: '0123456789', bankName: 'Zenith', accountName: 'Ada Obi', bankCode: '',
+            accountNumber: '0123456789',
+            bankName: 'Zenith',
+            accountName: RESOLVED_ACCOUNT_NAME,
+            bankCode: '057',
         });
         expect(user.address).toMatchObject({
             street: '12 Market Road', state: 'Plateau', lga: 'Jos North', country: 'Nigeria',

@@ -46,17 +46,30 @@ describe('digital-id — QR_ENCRYPTION_KEY has no fallback', () => {
 
         await expect(
             generateDigitalIDQR('user-1', 'ESE-2026-USER1', 'Ada Member', 'ada@example.com', 'member')
-        ).rejects.toThrow('QR_ENCRYPTION_KEY is not set.');
+        ).rejects.toThrow('QR_ENCRYPTION_KEY is not set');
     });
 
-    it('verifyDigitalIDQR fails closed with a config error, not a crash or a silent pass', async () => {
+    it('verifyDigitalIDQR THROWS on a missing key rather than calling the card invalid', async () => {
+        /**
+         * This used to assert the opposite — that a missing key comes back as
+         * a structured `{ valid: false, error }` rather than an exception —
+         * on the reasoning that a verifier should not 500.
+         *
+         * The other audit put requireQrKey OUTSIDE the try deliberately, and
+         * its note is the better argument: "a missing key is a deployment
+         * fault and must surface as one, not be folded into 'Invalid QR code
+         * format'." Returning `valid: false` tells the operator nothing and
+         * tells every cardholder their card is bad — a broken deployment that
+         * looks like a field of forgeries. Failing closed is not enough on its
+         * own; it has to fail closed AUDIBLY.
+         */
         delete process.env.QR_ENCRYPTION_KEY;
+        // freshModule(), like every other test here: the module reads the env
+        // var at call time but is cached, so a stale import would answer with
+        // the key a previous test set.
         const { verifyDigitalIDQR } = await freshModule();
 
-        const result = verifyDigitalIDQR('anything');
-
-        expect(result.valid).toBe(false);
-        expect(result.error).toBe('Service configuration error');
+        expect(() => verifyDigitalIDQR('anything')).toThrow(/QR_ENCRYPTION_KEY is not set/);
     });
 
     it('a QR minted before the fix — signed with the old public default — no longer verifies', async () => {

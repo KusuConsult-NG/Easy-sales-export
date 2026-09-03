@@ -73,6 +73,7 @@ jest.mock('@/lib/firebase-admin', () => ({
     getAdminAuth: () => ({ listUsers: jest.fn(async () => ({ users: [] })) }),
 }));
 jest.mock('@/lib/audit-log', () => ({
+    recordAdminAction: (p: any) => (global as any).mockRecordAdminAction(p),
     createAdminAuditLog: jest.fn(async () => ({})),
     logAdminAction: jest.fn(async () => ({})),
 }));

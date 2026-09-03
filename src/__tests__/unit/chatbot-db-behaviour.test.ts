@@ -56,7 +56,16 @@ const seedSession = (id: string, lastMessageDaysAgo: number, messages: number) =
             id: `${id}-m${i}`, sessionId: id, userId: `u-${id}`,
             role: i % 2 === 0 ? 'user' : 'assistant',
             content: `message ${i}`, module: 'hub',
-            timestamp: daysAgo(lastMessageDaysAgo), isEscalation: false,
+            // One millisecond apart, which is what the route writes (#248).
+            //
+            // These all shared a single timestamp, and the thread test then
+            // asserted they came back in the order their IDS happened to sort —
+            // an unordered fallback in the adapter, not a guarantee the code
+            // makes. Three alternating-role messages inside one millisecond is
+            // also not a shape the app produces: a turn is one user message and
+            // one reply, and the next turn is later.
+            timestamp: new Date(new Date(daysAgo(lastMessageDaysAgo)).getTime() + i).toISOString(),
+            isEscalation: false,
         });
     }
 };

@@ -45,6 +45,7 @@ jest.mock('@/app/actions/notifications', () => ({
 
 const mockAudit = jest.fn(async (_args: any) => ({}));
 jest.mock('@/lib/audit-log', () => ({
+    recordAdminAction: jest.fn(async () => ({})),
     createAdminAuditLog: (args: any) => mockAudit(args),
     logAdminAction: jest.fn(async () => ({})),
 }));

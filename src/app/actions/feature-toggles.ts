@@ -7,7 +7,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { DEFAULT_TOGGLES, type FeatureToggle } from "@/lib/feature-toggles";
+import { DEFAULT_TOGGLES, resolveToggle, type FeatureToggle } from "@/lib/feature-toggles";
 import { createAdminAuditLog } from "@/lib/audit-log";
 
 /**
@@ -18,17 +18,16 @@ export async function getFeatureToggle(featureName: string): Promise<boolean> { 
         const toggleRef = db.collection(COLLECTIONS.FEATURE_TOGGLES).doc(featureName);
         const toggleDoc = await toggleRef.get();
 
-        if (!toggleDoc.exists) {
-            // Return default value
-            return DEFAULT_TOGGLES[featureName] ?? false;
-        }
-
-        const toggle = toggleDoc.data() as FeatureToggle;
-        return toggle.enabled;
+        return resolveToggle(featureName, {
+            stored: toggleDoc.exists ? (toggleDoc.data() as FeatureToggle).enabled : undefined,
+        });
     } catch (error) {
-        logger.error(`Failed to get feature toggle for ${featureName}:`, error);
-        // Return default on error
-        return DEFAULT_TOGGLES[featureName] ?? false;
+        // A READ FAILURE IS NOT A DEFAULT (#245). This returned
+        // DEFAULT_TOGGLES on error, and seven of those default to true — so any
+        // transient database error re-enabled a feature an admin had killed.
+        // See resolveToggle in lib/feature-toggles.ts.
+        logger.error(`Failed to get feature toggle for ${featureName} — failing CLOSED:`, error);
+        return resolveToggle(featureName, { readFailed: true });
     }
 }
 
@@ -126,7 +125,7 @@ export async function hasFeatureAccess(
 
         if (!toggleDoc.exists) {
             // Feature not found, use default
-            return DEFAULT_TOGGLES[featureName] ?? false;
+            return resolveToggle(featureName, { stored: undefined });
         }
 
         const toggle = toggleDoc.data() as FeatureToggle;
@@ -148,7 +147,8 @@ export async function hasFeatureAccess(
 
         return true;
     } catch (error) {
-        logger.error(`Failed to check feature access for ${featureName}:`, error);
-        return DEFAULT_TOGGLES[featureName] ?? false;
+        // Fails closed for the reason recorded on resolveToggle (#245).
+        logger.error(`Failed to check feature access for ${featureName} — failing CLOSED:`, error);
+        return resolveToggle(featureName, { readFailed: true });
     }
 }

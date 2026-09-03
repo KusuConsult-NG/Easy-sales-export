@@ -18,12 +18,27 @@ export default function GeneralSettingsPage() {
     });
 
     useEffect(() => {
-        getPlatformSettingsAction().then((data: any) => {
-            if (data?.success === false) {
-                toast.error(data.error || "Failed to load settings");
-            } else {
-                setSettings(data);
+        getPlatformSettingsAction().then((res: any) => {
+            if (res?.success === false) {
+                toast.error(res.error || "Failed to load settings");
+                setLoading(false);
+                return;
             }
+            // Was: `setSettings(data)` where `data` was the WHOLE response —
+            // #317. withFlexibleSafeAction passes the action's result through
+            // unchanged, so `settings` became { success, error, data }, every
+            // `settings.platformName` was undefined, and the four inputs went
+            // blank the moment the load resolved.
+            //
+            // Save then sent that object straight into
+            // savePlatformSettingsAction, which spreads it into a merge write —
+            // so pressing Save stored `success: true`, `error: null` and a
+            // nested `data` object in platform_settings/general and never wrote
+            // platformName, supportEmail, contactPhone, defaultCurrency or
+            // maintenanceMode at all. This screen has never loaded or saved the
+            // platform's settings. #211–#216's shape: an admin control that had
+            // never done the thing it is named for.
+            if (res?.data) setSettings(res.data);
             setLoading(false);
         });
     }, []);

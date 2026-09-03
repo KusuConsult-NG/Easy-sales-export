@@ -219,10 +219,43 @@ export async function getBroadcastHistoryAction(): Promise<
  * Collect Recipients
  * (Required by Send API)
  */
-export async function collectRecipients(filters?: BroadcastFilters): Promise<any[]> { 
+export async function collectRecipients(filters?: BroadcastFilters): Promise<any[]> {
+    /**
+     *   #307 A FAILURE TO BUILD THE AUDIENCE LOOKED EXACTLY LIKE AN EMPTY ONE.
+     *
+     *        This returned `[]` for every outcome that was not a success —
+     *        an unauthorised caller, a database error, a malformed filter — so
+     *        "the list could not be built" and "nobody matched" were the same
+     *        answer, and the reason was discarded on the line that produced it.
+     *
+     *        THE CALLER THAT MATTERS ALREADY AVOIDS IT. api/admin/broadcast/send
+     *        imports this function and never calls it: it calls
+     *        getCleanBroadcastList directly and surfaces the reason —
+     *
+     *            return NextResponse.json({ success: false, sent: 0, failed: 0,
+     *                error: listResult.error || "No recipients matched the
+     *                selected filters." });
+     *
+     *        — which is the correct behaviour, and is the evidence that the
+     *        distinction matters to somebody. previewBroadcastAction does the
+     *        same. So the only door that conflates the two is the one named
+     *        after the job, which is what the next person will reach for.
+     *
+     *        That is this codebase's recurring shape with the roles reversed:
+     *        usually the wired door is the unhardened one. Here the wired doors
+     *        are right and the unwired one is a trap.
+     *
+     *        It throws now. The return type is `any[]`, so there is no room in
+     *        it for a refusal — a caller either gets the audience or gets the
+     *        reason it could not be built, and cannot mistake one for the other
+     *        by writing `.length === 0`.
+     */
     const result = await getCleanBroadcastListAction(filters);
-    if (result.success && result.data?.recipients) {
-        return result.data.recipients;
+
+    if (!result.success) {
+        throw new Error(result.error || "The broadcast recipient list could not be built.");
     }
-    return [];
+
+    // A successful call with no recipients is a real answer: nobody matched.
+    return result.data?.recipients ?? [];
 }

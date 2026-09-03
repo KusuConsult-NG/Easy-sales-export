@@ -214,7 +214,13 @@ describe('every path onto a legacy nested member uses it', () => {
     it('the escrow cron credits the field the member actually has', () => {
         const cron = code(ESCROW_CRON);
 
-        expect(cron).toContain('[balanceFieldOf(memberDoc.data())]: FieldValue.increment(totalPayout)');
+        // Was `balanceFieldOf(memberDoc.data())`. #319 gave the cron two places
+        // to find a member — the current top-level record and the legacy nested
+        // one — so the document's data is resolved into `memberData` before the
+        // single credit rather than read off one snapshot inline. The rule this
+        // test exists for is unchanged: the increment goes to whichever field
+        // that document already carries, never a fixed name.
+        expect(cron).toContain('[balanceFieldOf(memberData)]: FieldValue.increment(totalPayout)');
         expect(cron).not.toContain('{ savingsBalance: FieldValue.increment(totalPayout)');
     });
 

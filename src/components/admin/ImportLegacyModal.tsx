@@ -114,6 +114,19 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }
     const [error, setError] = useState<string | null>(null);
     const [isSuccess, setIsSuccess] = useState(false);
 
+    /**
+     *   #290 WHAT ACTUALLY HAPPENED, WHICH THIS SCREEN USED TO INVENT.
+     *
+     *        onboardLegacyMemberAction distinguishes three outcomes and this
+     *        component read `result.success` and threw the rest away, then
+     *        printed one hardcoded sentence for all three.
+     */
+    const [outcome, setOutcome] = useState<{
+        isNewUser: boolean;
+        emailSent: boolean;
+        temporaryPassword: string | null;
+    } | null>(null);
+
     // ── field helpers ────────────────────────────────────────────────────────
     function field<K extends keyof typeof formData>(key: K, value: (typeof formData)[K]) {
         setFormData((prev) => ({ ...prev, [key]: value }));
@@ -240,6 +253,17 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }
             setIsLoading(false);
 
             if (result.success) {
+                // #290. Defaults describe the OLD claim, so a server that
+                // stopped reporting these fields degrades to what the screen
+                // used to say rather than to something new and equally
+                // unfounded. The success panel below still labels it as
+                // unconfirmed in that case.
+                const r = result as Record<string, any>;
+                setOutcome({
+                    isNewUser: r.isNewUser !== false,
+                    emailSent: r.emailSent === true,
+                    temporaryPassword: typeof r.temporaryPassword === "string" ? r.temporaryPassword : null,
+                });
                 setIsSuccess(true);
                 onSuccess();
             } else {
@@ -280,6 +304,7 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }
         });
         setStep(0);
         setIsSuccess(false);
+        setOutcome(null);
         setError(null);
         onClose();
     }
@@ -814,10 +839,16 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }
                 <form onSubmit={handleSubmit} className="space-y-5">
                     {/* Info Banner */}
                     <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
+                        {/*
+                          * #290. Said "a secure password setup link". It is a
+                          * six-digit temporary PIN, and it is sent only when the
+                          * account is new — see the success panel below.
+                          */}
                         <p className="text-sm text-indigo-800">
                             Fill in the member&apos;s complete profile below. Their account will be created immediately with full
-                            access to the selected services, and a welcome email containing a secure{" "}
-                            <strong>password setup link</strong> will be sent directly to them.
+                            access to the selected services, and a welcome email containing a{" "}
+                            <strong>temporary PIN</strong> will be sent to them. They set their own password the first time they
+                            sign in. If the member already has an account, this updates their profile and sends nothing.
                         </p>
                     </div>
 
@@ -862,12 +893,81 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }
                     <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
                         <CheckCircle className="w-10 h-10 text-green-600" />
                     </div>
-                    <h3 className="text-2xl font-bold text-slate-900 mb-2">Successfully Onboarded!</h3>
-                    <p className="text-slate-600 mb-8 max-w-sm mx-auto">
-                        <strong>{formData.fullName}</strong> has been onboarded as a legacy member with a complete profile and
-                        full platform access. A welcome email with a secure <strong>password setup link</strong> has been sent
-                        to <strong>{formData.email}</strong>.
-                    </p>
+                    <h3 className="text-2xl font-bold text-slate-900 mb-2">
+                        {outcome && !outcome.isNewUser ? "Profile Updated" : "Successfully Onboarded!"}
+                    </h3>
+
+                    {/*
+                      *   #290 THREE OUTCOMES, ONE SENTENCE.
+                      *
+                      *        This panel used to say, unconditionally:
+                      *
+                      *            "A welcome email with a secure password setup
+                      *             link has been sent to {email}."
+                      *
+                      *        Three things were wrong with that.
+                      *
+                      *        1. IT IS A TEMPORARY PIN, NOT A SETUP LINK.
+                      *           sendLegacyMemberWelcomeEmail sends a six-digit
+                      *           PIN the member signs in with, and
+                      *           getPostLoginRedirect then forces them through
+                      *           /auth/reset-legacy-password. An admin reading
+                      *           "setup link" tells the member to look for
+                      *           something that will never arrive.
+                      *
+                      *        2. FOR AN EXISTING MEMBER NO EMAIL IS SENT AT
+                      *           ALL. The action guards the send with
+                      *           `if (isNewUser)`, so re-running the import
+                      *           against somebody who already has an account
+                      *           updates their profile silently — and this
+                      *           screen said an email had gone out.
+                      *
+                      *        3. WHEN THE SEND FAILED, THE PIN WAS DESTROYED.
+                      *           The action still returns success (the member
+                      *           DOES exist, which is why) and hands back the
+                      *           temporary PIN with "please share it manually".
+                      *           This component discarded that, printed the
+                      *           sentence above, and the only credential for
+                      *           the new account was gone. The member cannot
+                      *           sign in; the admin has no idea.
+                      */}
+                    {outcome && !outcome.isNewUser ? (
+                        <p className="text-slate-600 mb-8 max-w-sm mx-auto">
+                            <strong>{formData.fullName}</strong> already had an account, so their profile and service access
+                            were updated. Their existing password is unchanged and <strong>no email was sent</strong>.
+                        </p>
+                    ) : outcome && outcome.emailSent ? (
+                        <p className="text-slate-600 mb-8 max-w-sm mx-auto">
+                            <strong>{formData.fullName}</strong> has been onboarded as a legacy member with a complete profile
+                            and full platform access. A welcome email containing their <strong>temporary PIN</strong> has been
+                            sent to <strong>{formData.email}</strong>. They will be asked to set a password the first time they
+                            sign in.
+                        </p>
+                    ) : (
+                        <div className="mb-8 max-w-sm mx-auto space-y-4 text-left">
+                            <p className="text-slate-600 text-center">
+                                <strong>{formData.fullName}</strong> has been onboarded and their account exists.
+                            </p>
+                            <div role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+                                <p className="font-bold">The welcome email did NOT send.</p>
+                                <p className="mt-1">
+                                    Give <strong>{formData.fullName}</strong> the temporary PIN below yourself — it is the only
+                                    way into the account, and it is not shown again after you close this.
+                                </p>
+                                {outcome?.temporaryPassword ? (
+                                    <p className="mt-3 rounded-lg bg-white px-3 py-2 text-center font-mono text-lg font-bold tracking-widest text-slate-900">
+                                        {outcome.temporaryPassword}
+                                    </p>
+                                ) : (
+                                    <p className="mt-3">
+                                        The PIN was not returned. Use the password reset flow for{" "}
+                                        <strong>{formData.email}</strong> to give them a way in.
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
                     <button onClick={handleClose}
                         className="w-full max-w-xs px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition shadow-xl shadow-blue-100">
                         Return to Dashboard

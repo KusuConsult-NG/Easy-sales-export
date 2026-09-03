@@ -74,6 +74,18 @@ const GATED_LISTS: ReadonlyArray<readonly [string, string]> = [
     ['src/app/actions/admin/_land.ts', 'land:verify_listings'],
     ['src/app/actions/admin/_loans.ts', 'cooperatives:approve_loans'],
     ['src/app/actions/disputes.ts', 'finance:resolve_disputes'],
+
+    // #339. These four are HTTP routes, and this scan could not see them until
+    // they were fixed: each spread a raw document — `...data`, `...doc.data()`
+    // — with no literal `bankDetails` anywhere in the file to match on. The
+    // account number was in the document, not in the source. They are here now
+    // because the fix names the fields it is protecting.
+    //
+    // None is called by any screen. That is why the earlier passes over these
+    // modules did not reach them, and it is not a reason to leave an HTTP GET
+    // open: a session cookie is all it takes.
+    ['src/app/api/admin/marketplace/withdrawals/route.ts', 'finance:process_withdrawals'],
+    ['src/app/api/admin/marketplace/seller-verifications/route.ts', 'marketplace:approve_sellers'],
 ];
 
 /**

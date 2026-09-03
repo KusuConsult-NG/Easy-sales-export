@@ -327,3 +327,67 @@ export function stripAnswerKey<T>(course: T): T {
         }),
     } as T;
 }
+
+/**
+ * The grade that goes on a course certificate — #321.
+ *
+ * THE CERTIFICATE PRINTED WHATEVER THE LEARNER TYPED
+ * --------------------------------------------------
+ * /api/academy/certificate/generate built its grade like this:
+ *
+ *     const { courseId, quizScore } = await request.json();
+ *     ...
+ *     grade: quizScore || progressData.quizScores?.[0]?.bestScore,
+ *
+ * `quizScore` is request BODY. Any learner who had completed a course could
+ * POST { courseId, quizScore: 100 } and be issued a certificate saying 100.
+ * Nothing checked it was a number, in range, or anywhere near the score the
+ * platform itself had recorded — the same shape as #285, where typing a BVN
+ * marked it verified, on a document whose whole purpose is to be shown to
+ * somebody else as proof.
+ *
+ * AND THE FALLBACK COULD NEVER FIRE
+ * ---------------------------------
+ * `quizScores?.[0]?.bestScore` is wrong twice over. quiz/submit writes
+ *
+ *     [`quizScores.${moduleId}`]: scorePercentage
+ *
+ * and types/academy-actions.ts declares `quizScores: Record<string, number>` —
+ * a map keyed by MODULE ID whose values are plain numbers. So `[0]` indexes a
+ * key no module has, and `.bestScore` reads a property off a number. Every
+ * other reader in the app gets this right (`quizScores?.[module.id]`); this one
+ * site did not, and `bestScore` appears nowhere else in the codebase.
+ *
+ * The fallback was therefore always undefined, which means there was no path on
+ * which the platform's own recorded score reached the certificate. #89's shape
+ * — a read keyed on something nothing writes — sitting underneath #43's.
+ *
+ * WHY THE AVERAGE
+ * ---------------
+ * quizScores holds one percentage per module the learner has been graded on,
+ * so a single course-level figure has to combine them, and the mean is the
+ * ordinary reading of "grade" over a set of module scores. Lowest-module or
+ * latest-module are defensible alternatives and are a product decision — but
+ * each of them is a decision about which true number to print, where the code
+ * this replaces printed a number the holder chose.
+ *
+ * Returns null when nothing has been graded, so a caller must decide what an
+ * ungraded completion says rather than being handed a 0 that looks like a
+ * failing mark.
+ */
+export function courseGradeFromQuizScores(
+    quizScores: Record<string, unknown> | null | undefined,
+): number | null {
+    if (!quizScores || typeof quizScores !== "object") return null;
+
+    // Non-numeric entries are dropped rather than coerced. A NaN would render
+    // on the certificate as "NaN", and a legacy row holding a string is exactly
+    // the case that would produce one.
+    const scores = Object.values(quizScores)
+        .map((v) => Number(v))
+        .filter((v) => Number.isFinite(v));
+
+    if (scores.length === 0) return null;
+
+    return Math.round(scores.reduce((sum, v) => sum + v, 0) / scores.length);
+}

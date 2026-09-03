@@ -21,10 +21,30 @@ export type ExportOpportunity = { id: string;
      * (Optional - if totalSpots defined)".
      *
      * These were `number`, produced by `data.totalSpots || 0`, which collapsed
-     * "no limit" into "zero left of zero". See the mapping below.
+     * "no limit" into "zero left of zero" — a window displayed as sold out.
+     *
+     * BOTH AUDITS FOUND THIS (#250 / #352) AND FIXED IT DIFFERENTLY. The other
+     * floored the subtraction at zero, which stops the count going NEGATIVE —
+     * a real bug, since spotsFilled IS incremented in three places — but still
+     * renders an uncapped window as 0-of-0. `null` says "no limit" and the
+     * screens guard on `typeof === "number"`, so both the negative count and
+     * the false sell-out are closed.
      */
     spotsLeft: number | null;
     totalSpots: number | null;
+    /**
+     * #352, kept in full: the capacity model that is actually maintained.
+     *
+     * `totalSpots` has no writer anywhere in this repository. What a window
+     * really carries is `fundingGoal` (written once, as targetVolume *
+     * slotPrice, by export-aggregation) and `fundedAmount`, which
+     * verifyExportInvestmentAction raises through incrementWithinCeiling
+     * against that goal. THAT is the bound that holds, and it is carried out
+     * so a screen can report availability from the model that exists instead
+     * of from the one that does not.
+     */
+    fundingGoal: number;
+    fundedAmount: number;
     image: string;
     // Deep data
     description?: string;
@@ -143,6 +163,8 @@ const getCachedExportOpportunities = (limit: number = 12, lastId?: string) => un
                     projectedROI: data.roi,
                     status: data.status === "active" ? "Opening Soon" : "Open",
                     ...capacityOf(data),
+                    fundingGoal: Number((data as any).fundingGoal ?? (data as any).goal) || 0,
+                    fundedAmount: Number((data as any).fundedAmount ?? (data as any).currentFunding) || 0,
                     image: data.image || "/images/export-placeholder.jpg",
                     // Deep data
                     description: data.description,
@@ -234,6 +256,8 @@ const getCachedExportOpportunityById = (id: string) => unstable_cache(
                 projectedROI: data.roi,
                 status: data.status === "active" ? "Opening Soon" : "Open",
                 ...capacityOf(data),
+                fundingGoal: Number((data as any).fundingGoal ?? (data as any).goal) || 0,
+                fundedAmount: Number((data as any).fundedAmount ?? (data as any).currentFunding) || 0,
                 image: data.image || "/images/export-placeholder.jpg",
                 // Deep data
                 description: data.description,

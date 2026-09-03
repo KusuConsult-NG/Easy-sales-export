@@ -417,18 +417,29 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 if (trigger === "update" || !lastSynced || (now - lastSynced) > SYNC_INTERVAL) {
                     try {
                         const { getUserProfile } = await import("@/lib/user-cache");
-                        let cachedProfile = await getUserProfile(token.id as string);
+                        const cachedProfile = await getUserProfile(token.id as string);
                         
                         // Self-healing migration interceptor:
                         // If the loaded profile points to a migrated target, load the migrated target profile and update the session token ID!
-                        if (cachedProfile && (cachedProfile as any)._migratedTo && (cachedProfile as any)._migratedTo !== token.id) {
-                            const migratedId = (cachedProfile as any)._migratedTo;
-                            console.log(`[NextAuth JWT] Intercepted legacy user ${token.id} migrated to ${migratedId}. Updating token ID.`);
-                            const migratedProfile = await getUserProfile(migratedId);
-                            if (migratedProfile) {
-                                token.id = migratedId;
-                                cachedProfile = migratedProfile;
-                            }
+                        /**
+                         *   #343 THE SAME CAST, THE SAME DEAD BRANCH.
+                         *
+                         *        This read `(cachedProfile as any)._migratedTo`,
+                         *        which getUserProfile never returns — it resolves
+                         *        the migration ITSELF and returns the target
+                         *        profile, so the field is consumed and dropped
+                         *        before this line sees it. The branch could never
+                         *        run, and `token.id` therefore kept the LEGACY id
+                         *        while every other claim on the token came from
+                         *        the migrated account.
+                         *
+                         *        The fact is still available, and typed: the
+                         *        profile that comes back carries the id it was
+                         *        actually loaded for.
+                         */
+                        if (cachedProfile && cachedProfile.id && cachedProfile.id !== token.id) {
+                            console.log(`[NextAuth JWT] Intercepted legacy user ${token.id} migrated to ${cachedProfile.id}. Updating token ID.`);
+                            token.id = cachedProfile.id;
                         }
 
                         if (cachedProfile) {
@@ -454,7 +465,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                              * and for the same reason: this is the only place
                              * the profile is re-read.
                              */
-                            const revokedBefore = Number((cachedProfile as any).sessionsValidFrom) || 0;
+                            // #343. `as any` was hiding that CachedUserProfile did not declare
+                            // this field and getUserProfile did not carry it, so
+                            // this was Number(undefined) || 0 = 0 and the
+                            // predicate below could never fire. Typed now, so the
+                            // compiler is the one checking.
+                            const revokedBefore = Number(cachedProfile.sessionsValidFrom) || 0;
                             const issuedAtMs = typeof token.authAt === "number"
                                 ? token.authAt
                                 : (typeof token.iat === "number" ? token.iat * 1000 : 0);

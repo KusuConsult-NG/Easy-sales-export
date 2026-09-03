@@ -2,7 +2,7 @@
 
 import { ZodError } from "zod";
 import { withFlexibleSafeAction, ActionResponse, type ActionState } from "@/lib/safe-action";
-import { revalidateTag } from 'next/cache';
+import { updateTag } from 'next/cache';
 import { invalidateAdminGlobalStats, invalidateServiceCache } from "@/lib/cache-invalidation";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from '@/lib/logger';
@@ -16,6 +16,7 @@ import { LandListingVerificationSchema } from "@/lib/schemas";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { requireAdmin } from "@/lib/require-admin";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
+import { canSendEmail } from "@/lib/email-notifications";
 import {
     APPROVABLE_FROM_STATUSES,
     REJECTABLE_FROM_STATUSES,
@@ -215,7 +216,14 @@ async function _verifyLandListing(
             const listingData = listingDoc.data()!;
 
             // Send email notification via Resend
-            if (process.env.RESEND_API_KEY) {
+            //
+            // #308 This already logged the missing-ADDRESS case ("Missing
+            // ownerEmail for land listing") — the one place among the ten that
+            // did — and was silent on the missing-KEY case, which is the other
+            // half. canSendEmail covers both, so the inner check below is a
+            // second, narrower statement of the same thing rather than the only
+            // one; it is kept because its message names the listing id.
+            if (canSendEmail("land listing decision email", listingData.ownerEmail)) {
                 const { Resend } = await import("resend");
                 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -277,7 +285,7 @@ async function _verifyLandListing(
         // Clear cache
         try {
             await invalidateAdminGlobalStats();
-            revalidateTag("land-listings", "page");
+            updateTag("land-listings");
         } catch (cacheError) {
             logger.error('[Land Verification Stats] Cache clear error:', cacheError);
         }

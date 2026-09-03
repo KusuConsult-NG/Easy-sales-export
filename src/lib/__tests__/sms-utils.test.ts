@@ -47,10 +47,34 @@ describe('sanitiseForGSM7', () => {
         expect(findNonGSM7Chars(result)).toHaveLength(0);
     });
 
-    it('leaves Nigerian currency sign ₦ replaced with ?', () => {
-        // ₦ (U+20A6) is not in GSM-7 — should become ?
+    it('sends the Nigerian currency sign as "NGN", not as "?"', () => {
+        //   #266 THIS TEST USED TO PIN THE DEFECT.
+        //
+        //        It read "leaves Nigerian currency sign ₦ replaced with ?" and
+        //        asserted exactly that, with a comment explaining the mechanism
+        //        — "₦ (U+20A6) is not in GSM-7 — should become ?" — which is
+        //        true about the encoding and skips the question that matters.
+        //
+        //        Every money SMS the platform sends is built with
+        //        Intl.NumberFormat currency formatting, so every one of them
+        //        went out reading "?25,000". A member was told their withdrawal
+        //        of "?25,000" was approved. The behaviour was not unnoticed; it
+        //        was certified here.
+        //
+        //        "should become ?" was a description of what the code did,
+        //        written as if it were a requirement. Nothing wants a question
+        //        mark where the currency goes.
         const result = sanitiseForGSM7('Pay \u20a65,000');
-        expect(result).toBe('Pay ?5,000');
+
+        expect(result).toBe('Pay NGN5,000');
+        expect(findNonGSM7Chars(result)).toHaveLength(0);
+    });
+
+    it('and still replaces a character it has no reading for', () => {
+        // The rule the one above is an exception to, kept explicit: an unknown
+        // non-GSM-7 character must still be replaced, or the UCS-2 billing
+        // problem this module exists for comes back.
+        expect(sanitiseForGSM7('rating \u2605')).toBe('rating ?');
     });
 });
 

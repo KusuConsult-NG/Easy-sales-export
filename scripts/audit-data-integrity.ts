@@ -12,9 +12,12 @@ dotenv.config({ path: path.resolve(process.cwd(), envFile) });
 
 import { db } from "../src/lib/firebase-admin";
 import { COLLECTIONS } from "../src/lib/types/firestore";
-import * as fs from "fs";
+import { runScript } from "./_maintenance-guard";
+// `import * as fs from "fs"` appeared twice in this file — once above the
+// db import and once here — which is TS2300 twice over. Nobody ever saw it
+// because scripts/ was excluded from tsconfig and eslint alike (#328).
 
-async function runAudit() {
+export async function runAudit() {
     console.log("🚀 Starting Optimized Data Integrity Audit...");
     const stats = {
         totalSellersChecked: 0,
@@ -88,9 +91,22 @@ async function runAudit() {
     console.log("\n📊 AUDIT RESULTS (1000 Sample):");
     console.table(stats);
 
-    const reportPath = "./artifacts/audit_report_sample.json";
+    // THE REPORT WAS WRITTEN INTO A DIRECTORY THAT DOES NOT EXIST — #329.
+    //
+    // `artifacts/` is not in the repository and is not created by anything;
+    // writeFileSync therefore threw ENOENT after the whole audit had run, and
+    // the `.catch(console.error)` at the bottom logged it and exited 0. So the
+    // audit did all its work, lost the report, and reported success.
+    const reportDir = path.resolve(process.cwd(), "artifacts");
+    fs.mkdirSync(reportDir, { recursive: true });
+
+    const reportPath = path.join(reportDir, "audit_report_sample.json");
     fs.writeFileSync(reportPath, JSON.stringify({ stats, timestamp: new Date().toISOString() }, null, 2));
     console.log(`\n✅ Audit report saved to ${reportPath}`);
 }
 
-runAudit().catch(console.error);
+// `runAudit().catch(console.error)` exited 0 after a failed audit — #329. This
+// script reads only, so there is no --apply gate; the exit code is the fix.
+if (require.main === module) {
+    runScript("Data integrity audit", runAudit);
+}

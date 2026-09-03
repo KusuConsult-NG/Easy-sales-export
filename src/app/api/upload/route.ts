@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { withRateLimit } from "@/lib/rate-limit";
-import { assertAllowedFileType, detectFileType } from "@/lib/storage-admin";
+import { assertAllowedFileType, cloudinaryResourceType, detectFileType, extensionForType } from "@/lib/storage-admin";
 import { shouldUseLocalDiskStorage, writeToLocalDisk } from "@/lib/storage-backend";
 
 /**
@@ -21,22 +21,14 @@ const ALLOWED_UPLOAD_TYPES = [
 ];
 
 /**
- * The extension a stored asset gets, chosen by its real type.
+ * The extension a stored asset gets, chosen by its real type, and which
+ * Cloudinary endpoint stores it — both from storage-admin now.
  *
- * Cloudinary serves a `raw` asset according to its extension, so this is what
- * decides the Content-Type a browser sees. Taking it from the uploaded
- * filename let the caller choose that.
+ * This file used to hold its own EXTENSION_FOR_TYPE. storage-admin.ts needed
+ * the same table and did not have it, which is #263: it took the extension
+ * from the filename instead, and it is the busier uploader of the two. Two
+ * tables drift, so there is one.
  */
-const EXTENSION_FOR_TYPE: Record<string, string> = {
-    "application/pdf": ".pdf",
-    "image/jpeg": ".jpg",
-    "image/png": ".png",
-    "image/webp": ".webp",
-    "image/gif": ".gif",
-    "video/mp4": ".mp4",
-    "video/quicktime": ".mov",
-    "video/webm": ".webm",
-};
 
 /**
  * POST - Generic File Upload via Cloudinary
@@ -220,7 +212,7 @@ async function uploadHandler(request: NextRequest) {
         // sanitiser exists to prevent.
         const userId = session.user.id;
         const timestamp = Math.floor(Date.now() / 1000);
-        const extension = EXTENSION_FOR_TYPE[detectedType] ?? "";
+        const extension = extensionForType(detectedType);
 
         const safeDocType = documentType.replace(/[^a-zA-Z0-9-]/g, "-");
         const safeFolderName = folder.split("/").map(part => part.replace(/[^a-zA-Z0-9-]/g, "-")).join("/");
@@ -273,11 +265,7 @@ async function uploadHandler(request: NextRequest) {
         // "raw" for PDFs/documents, "video" for video files, "image" for everything else
         // Also from the detected type. Choosing this from the client's claim
         // meant a PNG declared as application/pdf was stored as a raw asset.
-        const resourceType = detectedType === "application/pdf"
-            ? "raw"
-            : detectedType.startsWith("video/")
-            ? "video"
-            : "image";
+        const resourceType = cloudinaryResourceType(detectedType);
         
         const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`;
         

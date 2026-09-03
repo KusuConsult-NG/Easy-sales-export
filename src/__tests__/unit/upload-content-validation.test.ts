@@ -67,11 +67,14 @@ describe('assertAllowedFileType — the policy /api/upload was missing', () => {
     it('accepts content that really is a PNG', async () => {
         // Vacuity guard, and the one that matters: without it, a validator that
         // rejects everything passes every test below while breaking all uploads.
-        await expect(assertType('image/png')).resolves.toBeUndefined();
+        // Resolves to the DETECTED type as of #263 — it always knew it and
+        // used to discard it, which is how storage-admin ended up deciding the
+        // stored extension from the filename instead.
+        await expect(assertType('image/png')).resolves.toBe('image/png');
     });
 
     it('accepts content that really is a PDF', async () => {
-        await expect(assertType('application/pdf', 'statement.pdf')).resolves.toBeUndefined();
+        await expect(assertType('application/pdf', 'statement.pdf')).resolves.toBe('application/pdf');
     });
 
     it('rejects HTML however it is declared', async () => {
@@ -102,7 +105,7 @@ describe('assertAllowedFileType — the policy /api/upload was missing', () => {
     it('decides on the bytes, not the filename', async () => {
         // A real PNG called .exe is still a PNG. Blocking it would be theatre,
         // and theatre is what the declared-type check already was.
-        await expect(assertType('image/png', 'totally-a-virus.exe')).resolves.toBeUndefined();
+        await expect(assertType('image/png', 'totally-a-virus.exe')).resolves.toBe('image/png');
     });
 });
 

@@ -18,24 +18,13 @@ import { inviteRefusalReason, INVITE_WRONG_ACCOUNT_MESSAGE } from "@/lib/coopera
 import { mayClaimMembershipByEmail } from "@/lib/cooperative-membership-claim";
 import { revalidatePath } from "next/cache";
 import { registrationProgressScore } from "@/lib/registration-progress";
+import { cooperativeIdentityConflict } from "@/lib/cooperative-identity-conflict";
+// Restored after the merge: taking the other audit's version of the import
+// hunk dropped these two, which the rest of the file still uses. hashData
+// keeps the BVN/NIN replica on the users row hashed; isTransientError is the
+// one shared classifier the seventeen hand-rolled copies collapsed into.
 import { hashData } from "@/lib/security";
-import { normalisePhone } from "@/lib/phone";
 import { isTransientError } from "@/lib/transient-error";
-
-/**
- * Rows read per field by the cross-account duplicate guard.
- *
- * It read ONE, with no orderBy, and refused if that row belonged to somebody
- * else. Postgres does not promise an order for a query that does not ask for
- * one, so with the caller's own record beside another account's the guard's
- * answer was decided by nothing more than how two ids happened to sort — and in
- * the direction where the caller's own row came back first it failed OPEN,
- * admitting the duplicate it exists to refuse.
- *
- * The same number and the same reasoning as DUPLICATE_SCAN_LIMIT in
- * academy/_ac_applications.ts, which this guard is a copy of.
- */
-const DUPLICATE_SCAN_LIMIT = 20;
 
 /**
  * 2. COMPLETE REGISTRATION (Step 2)
@@ -160,35 +149,16 @@ export async function registerCooperativeMemberAction(
         // 🔒 DEDUP GUARD: Collection-level phone & email check
         // Catches cross-account duplicates (same phone/email, different account)
         //
-        // BOTH PHONE FORMS. `08012345678` and `+2348012345678` are the same
-        // person, rows already exist in each, and this compared the typed value
-        // alone — so a member whose record was stored in the other form was
-        // invisible to the guard. The academy application dedup carries this
-        // same correction, with the same helper.
-        const phoneForms = [...new Set(
-            [validatedData.phone, normalisePhone(validatedData.phone)].filter(Boolean),
-        )] as string[];
+        // The rule moved to lib/cooperative-identity-conflict.ts so the RESUBMIT
+        // path can ask it too — it never did, and it writes the same fields to
+        // the same collection. See that file for what the original comparison
+        // got wrong (the document id rather than `userId`, one row rather than
+        // the matching set, and one spelling of each value rather than both).
+        const identityConflict = await runQueryWithRetry(() =>
+            cooperativeIdentityConflict(db, userId, validatedData.phone, validatedData.email));
 
-        const [coopPhoneExists, coopEmailExists] = await runQueryWithRetry(() => Promise.all([
-            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                .where("phone", "in", phoneForms)
-                .limit(DUPLICATE_SCAN_LIMIT)
-                .get(),
-            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                .where("email", "==", validatedData.email)
-                .limit(DUPLICATE_SCAN_LIMIT)
-                .get(),
-        ]));
-
-        // A row belonging to ANOTHER account is the conflict; the caller's own
-        // record is the edit path. Asked of every row read rather than of one
-        // arbitrary row — see DUPLICATE_SCAN_LIMIT.
-        const belongsToSomeoneElse = (snap: { docs: Array<{ id: string; data(): any }> }) =>
-            snap.docs.some((doc) => doc.id !== userId && (doc.data()?.userId ?? doc.id) !== userId);
-
-        if (belongsToSomeoneElse(coopPhoneExists)) { return { error: "A cooperative member with this phone number already exists.", success: false as const, data: null };
-        }
-        if (belongsToSomeoneElse(coopEmailExists)) { return { error: "A cooperative member with this email address already exists.", success: false as const, data: null };
+        if (identityConflict) {
+            return { error: identityConflict, success: false as const, data: null };
         }
 
         // Determine if payment is already completed (user paid before or during onboarding)
@@ -425,27 +395,31 @@ export async function joinCooperativeAction(
 
         const userId = session.user.id;
 
-        /**
-         * THE OPENING BALANCE WAS WHATEVER THE CALLER SENT.
-         *
-         * `initialContribution` is a parameter and went straight into
-         * `savingsBalance` with no validation. The only thing standing near it
-         * is `if (initialContribution > 0)` below, and that guards the two
-         * LEDGER rows and the cooperative's `totalSavings` — not the balance.
-         *
-         * So `joinCooperativeAction(coopId, -50000)` opened a savings account at
-         * minus fifty thousand naira, with no transaction row behind it and the
-         * cooperative's own total untouched: a member balance no ledger explains
-         * and no reconciliation can find. This file is "use server", so the
-         * parameter is directly reachable.
-         *
-         * A non-finite value had the same shape from the other side: `NaN > 0`
-         * is false, so NaN was written as the balance and every later sum that
-         * touched it became NaN.
-         */
-        if (!Number.isFinite(initialContribution) || initialContribution < 0) {
+        // AN UNPAID CONTRIBUTION, CREDITED IN FULL.
+        //
+        // `initialContribution` is a "use server" parameter, so it is whatever
+        // the caller sent regardless of its declared type — and nothing in the
+        // UI calls this action, which does not make it unreachable: every
+        // exported server action is a public endpoint.
+        //
+        // It was written straight through as `savingsBalance`, as a COMPLETED
+        // `contribution` row in both the cooperative and the universal ledger,
+        // and incremented into the cooperative's `totalSavings`. No payment was
+        // taken anywhere in this function. So one call credited the caller any
+        // sum they named, in books an admin reads and reconciles — and the
+        // cooperative loan limit is a multiple of savings balance
+        // (lib/cooperative-utils.ts), so it was borrowing power too.
+        //
+        // Contributions have a paid path. Joining is not it: this creates the
+        // membership at zero and the member contributes through the flow that
+        // takes the money.
+        if (initialContribution !== 0) {
+            logger.warn(
+                "[joinCooperativeAction] refused an initial contribution — joining does not move money",
+                { userId, cooperativeId, initialContribution },
+            );
             return {
-                error: "The opening contribution must be zero or a positive amount.",
+                error: "Contributions are made from the cooperative dashboard, not when joining.",
                 success: false as const,
                 data: null,
             };
@@ -472,44 +446,40 @@ export async function joinCooperativeAction(
         const batch = db.batch();
 
         const newMemberRef = membershipsRef.doc();
+
+        // AND THE MEMBERSHIP IT CREATED WAS ALREADY ACTIVE.
+        //
+        // `status: "active"` on a row this function writes with no registration
+        // fee, no onboarding and no admin. Two readers act on it:
+        //
+        //   checkModuleAccess Layer 2.6 takes `membershipStatus || status`, so
+        //   "active" here granted the whole cooperative module — dashboard,
+        //   contributions, loans, withdrawals.
+        //
+        //   canTransactAsMember reads the same pair, so the new member could
+        //   transact immediately.
+        //
+        // Every other way into this cooperative — registerCooperativeMember, the
+        // Paystack webhook, the admin approval — makes a member pending until
+        // the fee is confirmed. This one door did not, so calling it was a
+        // complete bypass of the other three.
+        //
+        // "pending" is what the paid path writes before payment clears, so the
+        // webhook and the admin screen already know how to advance it.
         batch.set(newMemberRef, { userId,
             cooperativeId,
-            savingsBalance: initialContribution,
+            savingsBalance: 0,
             loanBalance: 0,
             memberSince: FieldValue.serverTimestamp(),
             monthlyTarget: 50000,
-            status: "active"
+            membershipStatus: "pending",
+            paymentStatus: "pending",
+            onboardingCompleted: false,
+            status: "pending"
         });
 
         const cooperativeUpdateData: Record<string, FieldValue | number> = { memberCount: FieldValue.increment(1)
         };
-
-        if (initialContribution > 0) { const txRef = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc();
-            batch.set(txRef, {
-                userId,
-                cooperativeId,
-                type: "contribution",
-                amount: initialContribution,
-                date: FieldValue.serverTimestamp(),
-                status: "completed",
-                description: "Initial contribution upon joining"
-            });
-
-            // Universal ledger sync
-            batch.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(txRef.id), { id: txRef.id,
-                userId,
-                type: "contribution",
-                module: "cooperative",
-                amount: initialContribution,
-                currency: "NGN",
-                status: "completed",
-                date: FieldValue.serverTimestamp(),
-                reference: txRef.id,
-                description: "Initial contribution upon joining"
-            });
-
-            cooperativeUpdateData.totalSavings = FieldValue.increment(initialContribution);
-        }
 
         batch.update(cooperativeRef, cooperativeUpdateData);
         await batch.commit();
@@ -651,6 +621,8 @@ export async function resubmitCooperativeApplicationAction(
 
         let memberRef;
         let existingMemberData: any = null;
+        /** True when there is no member row yet, so the write must CREATE one. */
+        let memberIsNew = false;
         if (snap.empty) {
             const docRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(session.user.id);
             const docSnap = await runQueryWithRetry(() => docRef.get());
@@ -658,43 +630,25 @@ export async function resubmitCooperativeApplicationAction(
                 memberRef = docRef;
                 existingMemberData = docSnap.data();
             } else {
-                /**
-                 * "AUTO-HEAL BY ALLOWING A NEW CREATION" — WHICH CREATED NOTHING.
-                 *
-                 * This branch exists for a user whose registration status says
-                 * pending / pending_repair while the member record has gone. It
-                 * set `memberRef = docRef` and left the rest to the batch below
-                 * — which calls `batch.update(memberRef, ...)`, and update()
-                 * does not create.
-                 *
-                 * The adapter is explicit about it: update() on a missing
-                 * document is a no-op, logged with the warning "no rows will be
-                 * affected ... use set(data, { merge: true }) if the document
-                 * may not exist yet", under a comment reading "this is how 'the
-                 * save button did nothing' bugs reach production".
-                 *
-                 * So the resubmitted application was discarded in full — every
-                 * field the member had just re-entered, and their re-uploaded
-                 * documents. The OTHER half of the batch lands, because the user
-                 * document does exist: their status was flipped to "pending",
-                 * putting a review request in the queue with no application
-                 * behind it. And the action returned success, so the member was
-                 * told their application had been resubmitted.
-                 *
-                 * The row is seeded here so the batch has something to update.
-                 * Seeding rather than switching the batch to set(merge) because
-                 * updatePayload addresses the documents by dotted path
-                 * (`documents.validId.url`), which update() resolves into the
-                 * nested map and a merging set() on a NEW document would store
-                 * as literal keys containing dots.
-                 */
-                logger.info(`[resubmitCooperativeApplication] Member doc not found for user ${session.user.id} — creating the record so the resubmission is not lost.`);
-                await runQueryWithRetry(() => docRef.set({
-                    userId: session.user.id,
-                    createdAt: FieldValue.serverTimestamp(),
-                }, { merge: true }));
+                // THE "AUTO-HEAL" SAVED NOTHING.
+                //
+                // This branch says it falls back to "new registration creation",
+                // and then the commit below did `batch.update(memberRef, ...)`.
+                // update() on a missing document is a documented NO-OP in this
+                // adapter — it logs "no rows will be affected. Use set(data,
+                // { merge: true }) if the document may not exist yet" and
+                // returns. So the member filled in the entire KYC form,
+                // pressed Resubmit, was told it succeeded, and no member record
+                // existed afterwards. The user document WAS updated to
+                // "pending", so the screen then showed them waiting for a review
+                // of an application that was never written. Repeatable for ever.
+                //
+                // The branch is right — a member whose row was lost must be able
+                // to recreate it. The write was the wrong verb.
+                logger.info(`[resubmitCooperativeApplication] Member doc not found for user ${session.user.id} — falling back to new registration creation.`);
                 memberRef = docRef;
                 existingMemberData = {};
+                memberIsNew = true;
             }
         } else {
             const sortedDocs = snap.docs.sort((a, b) => { const aTime = toMillis(a.data().createdAt);
@@ -722,6 +676,19 @@ export async function resubmitCooperativeApplicationAction(
         }
         if (nin && nin.length !== 11) {
             return { success: false as const, error: "NIN must be exactly 11 digits" };
+        }
+
+        // The same identity guard the SUBMIT path applies — this path had none.
+        // A member in revision_required could resubmit carrying somebody else's
+        // phone number or email address and it went straight through, into the
+        // roster the admin screens and the broadcast tools read.
+
+
+        const identityConflict = await runQueryWithRetry(() =>
+            cooperativeIdentityConflict(db, session.user.id, validatedData.phone, validatedData.email));
+
+        if (identityConflict) {
+            return { success: false as const, error: identityConflict };
         }
 
         const validIdUrl = (formData.get("validIdUrl") as string) || existingMemberData?.documents?.validId?.url || "";
@@ -774,7 +741,20 @@ export async function resubmitCooperativeApplicationAction(
         }
 
         const batch = db.batch();
-        batch.update(memberRef, updatePayload);
+        // set(merge) when the row has to be created, update when it exists — see
+        // the fallback branch above for what the unconditional update() did.
+        // merge keeps this identical to update() for an existing row, so the
+        // path that always worked is unchanged.
+        if (memberIsNew) {
+            batch.set(memberRef, {
+                ...updatePayload,
+                paymentStatus: existingMemberData?.paymentStatus ?? "pending",
+                onboardingCompleted: true,
+                createdAt: FieldValue.serverTimestamp(),
+            }, { merge: true });
+        } else {
+            batch.update(memberRef, updatePayload);
+        }
         batch.update(db.collection(COLLECTIONS.USERS).doc(session.user.id), { 
             'serviceRegistrations.cooperatives.status': 'pending',
             firstName: validatedData.firstName,

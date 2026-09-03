@@ -13,9 +13,11 @@ import {
 import { Timestamp } from "@/lib/firestore-compat";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
+import { canTransactAsMember, NOT_A_TRANSACTING_MEMBER_MESSAGE } from "@/lib/cooperative-membership-status";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { withSafeAction, type ActionResponse } from "@/lib/safe-action";
 import { isAdmin } from "@/lib/admin-permissions";
+import { checkRepaymentAmount } from "@/lib/loan-repayment-amount";
 import { calculatePenalty } from "@/lib/calculatePenalty";
 import type { LoanApplication, RepaymentInstallment } from "@/lib/types/cooperative-loans";
 import { resolveLoanApplication, normaliseLoanApplication } from "@/lib/loan-application-location";
@@ -227,6 +229,37 @@ export async function submitRepaymentAction(data: {
 
         const installmentRef = db.collection(COLLECTIONS.LOAN_REPAYMENTS).doc(data.installmentId);
 
+        /**
+         *   #286 BOUNDED BEFORE THE REFERENCE IS CLAIMED.
+         *
+         *        This is the FAST PATH, not the guard — the authoritative check
+         *        is the identical call inside the credit block below, on the
+         *        read that the credit itself is computed from. Both are the same
+         *        expression from lib/loan-repayment-amount.ts, so they cannot
+         *        disagree.
+         *
+         *        It exists here because claimPaymentOnce runs a few lines down,
+         *        and a refusal after the claim BURNS THE BANK REFERENCE: the
+         *        admin correcting a mistyped amount would resubmit the real
+         *        reference, hit the duplicate branch, and be told the repayment
+         *        succeeded when nothing was credited. Mistyping an amount is the
+         *        ordinary case this refusal is for, so it has to happen before
+         *        the reference is spent.
+         *
+         *        A read that misses is left to the block below, which already
+         *        reports "Installment not found" — refusing here on a failed
+         *        read would duplicate that message in two places.
+         */
+        {
+            const preflight = await installmentRef.get();
+            if (preflight.exists) {
+                const bound = checkRepaymentAmount(data.amount, preflight.data() as Record<string, any>);
+                if (!bound.ok) {
+                    return { success: false as const, error: bound.message, data: null };
+                }
+            }
+        }
+
         // Resolved rather than assumed — a loan filed through the member loan
         // page lives in cooperative_loans, and the admin queue offers Record
         // Repayment on exactly those rows. See lib/loan-application-location.ts.
@@ -329,6 +362,36 @@ export async function submitRepaymentAction(data: {
             }
 
             const dueDate = (installmentData.dueDate as Timestamp).toDate();
+
+            /**
+             *   #286 THE AMOUNT WAS NEVER COMPARED TO WHAT THE INSTALMENT OWED.
+             *
+             *        Only `data.amount <= 0` was checked. The credit below is
+             *        `paidAmount: FieldValue.increment(amount)` and the status
+             *        is `newPaidAmount >= totalDue ? "paid"`, so a larger
+             *        amount marked the instalment paid and left paidAmount
+             *        above totalAmount — with nothing carrying the excess
+             *        forward, crediting it, or refunding it.
+             *
+             *        RecordRepaymentModal displays the outstanding figure right
+             *        beside the input and validated only `> 0`, which is #272's
+             *        shape: the screen knew the number it was not enforcing.
+             *
+             *        THIS IS THE AUTHORITATIVE CHECK, on the same read the
+             *        credit below is computed from. The identical call before
+             *        claimPaymentOnce is a fast path that keeps a mistyped
+             *        amount from spending the bank reference; it cannot be the
+             *        guard, because claimPaymentOnce serialises on the
+             *        REFERENCE and not on the instalment, so two different
+             *        references against one instalment could both clear it.
+             *        Failing here throws into the catch, which calls
+             *        markFulfilmentFailed — a claimed payment that was not
+             *        credited is recorded rather than lost.
+             */
+            const bound = checkRepaymentAmount(data.amount, installmentData);
+            if (!bound.ok) {
+                throw new Error(bound.message);
+            }
 
             if (installmentData.status === "paid") {
                 throw new Error("Installment already fully paid");
@@ -530,6 +593,14 @@ export async function repayLoanFromSavingsAction(data: {
             return { success: false as const, error: "You must be a cooperative member", data: null };
         }
 
+        // #276 Existing is not the same as may transact, and this moves savings.
+        // Found by the DERIVED door list rather than by anyone remembering it —
+        // the hand-written list in cooperative-transacting-membership.test.ts
+        // named four doors and there were seven.
+        if (!canTransactAsMember(memberDoc.data())) {
+            return { success: false as const, error: NOT_A_TRANSACTING_MEMBER_MESSAGE, data: null };
+        }
+
         const currentBalance = Number(memberDoc.data()?.savingsBalance || 0);
         if (currentBalance - data.amount < COOPERATIVE_MINIMUM_BALANCE) {
             return {
@@ -537,6 +608,30 @@ export async function repayLoanFromSavingsAction(data: {
                 error: `You must keep a minimum balance of ${formatMinimumBalance()}. Available for repayment: ₦${availableAboveFloor(currentBalance).toLocaleString()}`,
                 data: null,
             };
+        }
+
+        /**
+         *   #286 BOUNDED BEFORE THE MONEY MOVES, NOT AT THE CREDIT.
+         *
+         *        This path DEBITS savings and credits the instalment
+         *        afterwards, and the comment further down says a failure
+         *        between the two is "DELIBERATELY NOT COMPENSATED". So checking
+         *        the amount at the credit step would leave the member's savings
+         *        short by exactly the overpayment it refused.
+         *
+         *        Same shared rule as submitRepaymentAction, applied earlier.
+         *        The instalment is read here for that purpose and for nothing
+         *        else; submitRepaymentAction re-reads it inside its own
+         *        transaction, which is where the authoritative check lives.
+         */
+        const boundDoc = await db.collection(COLLECTIONS.LOAN_REPAYMENTS).doc(data.installmentId).get();
+        if (!boundDoc.exists) {
+            return { success: false as const, error: "Installment not found", data: null };
+        }
+
+        const bound = checkRepaymentAmount(data.amount, boundDoc.data() as Record<string, any>);
+        if (!bound.ok) {
+            return { success: false as const, error: bound.message, data: null };
         }
 
         // Deterministic in the instalment and the amount, so a double-click or a

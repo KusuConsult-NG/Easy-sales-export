@@ -11,10 +11,42 @@ function safeRevalidatePath(path: string, type?: "layout" | "page") {
     }
 }
 
-function safeRevalidateTag(tag: string, type?: string) {
+/**
+ *   #256 THIS TOOK A `type` AND THREW IT AWAY, BEHIND A CAST.
+ *
+ *        It was:
+ *
+ *            function safeRevalidateTag(tag: string, type?: string) {
+ *                try { (revalidateTag as any)(tag); } catch {}
+ *            }
+ *
+ *        The parameter was accepted and never passed, and the `as any` existed
+ *        to silence the type error that omitting the second argument causes.
+ *        Four callers pass "page" believing it does something. That is #252
+ *        again — the same wrong second argument — with the compiler's objection
+ *        cast away instead of heard, and the cast is also why the #252 ratchet
+ *        could not see this one: the source reads `revalidateTag as any)(tag)`
+ *        rather than `revalidateTag(`.
+ *
+ *        The bare single-argument call it was actually making still works, but
+ *        Next deprecates it ("may be removed in a future version") and warns on
+ *        every call.
+ *
+ * `{ expire: 0 }` rather than updateTag: this module is imported by BOTH Server
+ * Actions and route handlers, and updateTag throws in a route handler. An
+ * inline object profile is legal in both and is validated by shape rather than
+ * looked up by name, so it cannot hit the invalid-name throw. Immediate expiry
+ * matches what the bare form did, and matches what these callers want — every
+ * one of them is invalidating after a decision an admin just made.
+ *
+ * The `type` parameter is gone rather than plumbed through: no caller had a
+ * meaningful value for it, and keeping a parameter that is always the same
+ * wrong string is how this survived.
+ */
+function safeRevalidateTag(tag: string) {
     try {
-        (revalidateTag as any)(tag);
-    } catch (e) {
+        revalidateTag(tag, { expire: 0 });
+    } catch {
         // Safe to ignore outside Next.js request context (e.g. standalone scripts)
     }
 }
@@ -64,7 +96,7 @@ export async function invalidateSellerCache(userId: string): Promise<void> {
         safeRevalidatePath("/admin/marketplace/sellers", "page");
         safeRevalidatePath("/admin/marketplace/buyers", "page");
         safeRevalidatePath("/dashboard", "page");
-        safeRevalidateTag("module-registration-stats-service", "page");
+        safeRevalidateTag("module-registration-stats-service");
 
         console.log(`[Cache Invalidation] Cleared seller cache for: ${userId}`);
     } catch (error) {
@@ -93,7 +125,7 @@ export async function invalidateCooperativeCache(userId: string, cooperativeId?:
         safeRevalidatePath("/admin/cooperatives", "page");
         safeRevalidatePath("/admin/cooperatives/members", "page");
         safeRevalidatePath("/dashboard", "page");
-        safeRevalidateTag("module-registration-stats-service", "page");
+        safeRevalidateTag("module-registration-stats-service");
 
         console.log(`[Cache Invalidation] Cleared cooperative cache for: ${userId}${cooperativeId ? ` (coop: ${cooperativeId})` : ""}`);
     } catch (error) {
@@ -119,7 +151,7 @@ export async function invalidateServiceCache(userId: string, service?: string): 
             if (service === "wave") {
                 safeRevalidatePath("/wave/dashboard", "page");
             }
-            safeRevalidateTag("module-registration-stats-service", "page");
+            safeRevalidateTag("module-registration-stats-service");
         }
 
         console.log(`[Cache Invalidation] Cleared ${service || 'service'} cache for: ${userId}`);
@@ -141,7 +173,7 @@ export async function invalidateAdminGlobalStats(): Promise<void> {
             deleteCache("admin:coop-reports:global"),
         ]);
         // Also trigger Next.js tag and path revalidation
-        safeRevalidateTag("module-registration-stats-service", "page");
+        safeRevalidateTag("module-registration-stats-service");
         safeRevalidatePath("/admin", "layout");
         safeRevalidatePath("/admin/dashboard", "page");
         console.log(`[Cache Invalidation] Cleared global admin stats and tags`);

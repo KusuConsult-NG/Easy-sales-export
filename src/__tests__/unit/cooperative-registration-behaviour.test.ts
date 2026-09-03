@@ -3,13 +3,64 @@
  */
 
 /**
- * Cooperative registration, EXECUTED — the onboarding submit, the invite
- * redemption, the revision resubmission and the application read-back.
+ * _coop_registration.ts, EXECUTED. It was the lowest-covered file left at
+ * 36.3%, and it is the front door to the module that holds members' savings.
  *
- * At 35%. This file holds the invite claim that stops one link admitting two
- * fee-free members, the compensating release that hands the token back when the
- * registration then fails, and the optimistic-locking version guard — none of
- * which had ever run.
+ *   #233 joinCooperativeAction WAS A FREE MEMBERSHIP WITH FREE SAVINGS.
+ *
+ *        Nothing in the UI calls it. That does not make it unreachable: this
+ *        file is "use server", so every export is a public endpoint, and the
+ *        action is re-exported from the cooperative barrel.
+ *
+ *        `initialContribution` is a caller-supplied number. It was written
+ *        straight through as `savingsBalance`, as a COMPLETED `contribution`
+ *        row in the cooperative ledger AND in the universal ledger, and
+ *        incremented into the cooperative's `totalSavings`. No payment is taken
+ *        anywhere in the function. The cooperative loan limit is a multiple of
+ *        savings balance (lib/cooperative-utils.ts), so it was borrowing power
+ *        as well as a number on a dashboard.
+ *
+ *        And the membership it created was `status: "active"` — with no
+ *        registration fee, no onboarding and no admin. checkModuleAccess Layer
+ *        2.6 reads `membershipStatus || status`, so that granted the whole
+ *        cooperative module; canTransactAsMember reads the same pair, so the
+ *        new member could contribute, borrow and withdraw immediately. Every
+ *        other way in — registerCooperativeMember, the Paystack webhook, the
+ *        admin approval — makes a member pending until the fee clears. This one
+ *        door bypassed all three.
+ *
+ *   #234 THE RESUBMIT "AUTO-HEAL" SAVED NOTHING.
+ *
+ *        resubmitCooperativeApplicationAction has a fallback for a member whose
+ *        record was lost: it logs "falling back to new registration creation"
+ *        and then commits `batch.update(memberRef, ...)`. update() on a missing
+ *        document is a documented NO-OP in this adapter — it warns "no rows will
+ *        be affected. Use set(data, { merge: true }) if the document may not
+ *        exist yet" and returns.
+ *
+ *        So the member filled in the whole KYC form, pressed Resubmit, and was
+ *        told it succeeded. No member record existed afterwards. The USER
+ *        document WAS updated to "pending", so the screen then showed them
+ *        waiting for review of an application that was never written —
+ *        repeatable for ever. The adapter's own warning names this exact
+ *        failure: "this is how 'the save button did nothing' bugs reach
+ *        production."
+ *
+ *   #235 AND THE RESUBMIT PATH HAD NO DUPLICATE-IDENTITY GUARD.
+ *
+ *        The submit path checks the roster for a matching phone and email
+ *        before writing. The resubmit path — same fields, same collection —
+ *        checked neither, so a member in revision_required could resubmit
+ *        carrying somebody else's phone number or email address.
+ *
+ *        That is #32 again: WAVE's resubmission bypassed its own duplicate
+ *        guards for the same reason. A resubmit is written as a separate
+ *        function from a submit, and only one of them gets the rule. Both ask
+ *        lib/cooperative-identity-conflict.ts now.
+ *
+ *        The original comparison had two faults of its own, recorded there: it
+ *        compared the DOCUMENT id rather than the row's `userId`, and it read
+ *        one row rather than the matching set.
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
@@ -17,50 +68,40 @@ import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
 import { COLLECTIONS } from '@/lib/types/firestore';
 
 jest.mock('@/lib/redis', () => ({
-    getCached: async () => null,
-    setCache: async () => undefined,
-    deleteCache: async () => undefined,
+    getCached: async () => null, setCache: async () => undefined,
+    deleteCache: async () => undefined, deleteCachePattern: async () => undefined, redis: null,
+}));
+
+jest.mock('next/cache', () => ({
+    revalidatePath: () => undefined,
+    revalidateTag: () => undefined,
 }));
 
 jest.mock('@/lib/cache-invalidation', () => ({
     invalidateUserCache: async () => undefined,
-    invalidateServiceCache: async () => undefined,
 }));
 
-/**
- * claimStatusTransition is a Postgres CAS — it calls supabaseAdmin.rpc directly
- * rather than going through the adapter, so the in-memory store cannot see it.
- * Backed by the same store here, with the same compare-and-set semantics the
- * SQL function has, so the claim and the compensating release below are really
- * exercised rather than stubbed to a fixed answer.
- */
-const mockClaim = jest.fn(async (args: any) => {
-    const { collection, id, from, to, patch } = args;
-    const doc = store.get(collection, id);
-    if (!doc) return { claimed: false, exists: false, status: null };
-    if (doc.status !== from) return { claimed: false, exists: true, status: doc.status };
-    store.seed(collection, id, { ...doc, ...(patch ?? {}), status: to });
-    return { claimed: true, exists: true, status: to };
-});
-jest.mock('@/lib/status-transition', () => ({
-    claimStatusTransition: (args: any) => mockClaim(args),
+const mockRequireSession = jest.fn() as jest.Mock<any>;
+jest.mock('@/lib/session-guard', () => ({
+    requireSession: (...a: any[]) => mockRequireSession(...a),
 }));
 
 let store: FakeDbHandle;
 
 const MEMBER = 'member-1';
+const STRANGER = 'stranger-9';
+const USERS = COLLECTIONS.USERS;
+const MEMBERS = COLLECTIONS.COOPERATIVE_MEMBERS;
+const COOPS = COLLECTIONS.COOPERATIVES;
+const COOP_TX = COLLECTIONS.COOPERATIVE_TRANSACTIONS;
 
-function actAs(id: string | null, email = `${id}@example.com`): void {
-    (globalThis as {
-        mockRequireSession: { mockImplementation: (f: () => unknown) => void };
-    }).mockRequireSession.mockImplementation(() =>
-        Promise.resolve(
-            id === null
-                ? { session: null, error: { error: 'Authentication required' } }
-                : { session: { user: { id, email, roles: [], name: id } }, error: null },
-        ),
-    );
-}
+const actions = async () => await import('@/app/actions/cooperative/_coop_registration');
+
+const actAs = (id: string | null, email = 'ada@example.com') =>
+    mockRequireSession.mockResolvedValue(
+        id === null
+            ? { session: null, error: { error: 'Unauthorized' } }
+            : { session: { user: { id, email, roles: ['general_user'] } }, error: null });
 
 beforeEach(() => {
     jest.clearAllMocks();
@@ -68,639 +109,317 @@ beforeEach(() => {
     actAs(MEMBER);
 });
 
-async function actions() {
-    return import('@/app/actions/cooperative/_coop_registration');
-}
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#233 — joining does not move money and does not admit anybody', () => {
+    const join = async (amount = 0, coop = 'default') =>
+        (await (await actions())).joinCooperativeAction(coop, amount) as any;
 
-// ─── seeds ───────────────────────────────────────────────────────────────────
-
-/** Every field cooperativeMembershipSchema requires, plus the two document urls. */
-function form(overrides: Record<string, string> = {}): FormData {
-    const fd = new FormData();
-    const fields: Record<string, string> = {
-        firstName: 'Amaka',
-        lastName: 'Okonkwo',
-        dateOfBirth: '1990-04-12',
-        gender: 'female',
-        email: `${MEMBER}@example.com`,
-        phone: '08012345678',
-        stateOfOrigin: 'Enugu',
-        lga: 'Nsukka',
-        ward: 'Ward 3',
-        residentialAddress: '12 Market Road, Nsukka',
-        occupation: 'Trader',
-        nextOfKinName: 'Chidi Okonkwo',
-        nextOfKinPhone: '08087654321',
-        nextOfKinAddress: '12 Market Road, Nsukka',
-        validIdUrl: 'https://cdn/id.png',
-        validIdName: 'National ID',
-        passportPhotoUrl: 'https://cdn/photo.png',
-        passportPhotoName: 'Passport',
-        ...overrides,
-    };
-    for (const [k, v] of Object.entries(fields)) if (v !== '') fd.set(k, v);
-    return fd;
-}
-
-function seedUser(extra: Record<string, unknown> = {}): void {
-    store.seed(COLLECTIONS.USERS, MEMBER, {
-        email: `${MEMBER}@example.com`,
-        name: 'Amaka',
-        roles: [],
-        ...extra,
-    });
-}
-
-const readMember = (id = MEMBER) => store.get(COLLECTIONS.COOPERATIVE_MEMBERS, id) as Record<string, any> | undefined;
-const readUser = (id = MEMBER) => store.get(COLLECTIONS.USERS, id) as Record<string, any> | undefined;
-
-// ─── registerCooperativeMemberAction ─────────────────────────────────────────
-
-describe('registerCooperativeMemberAction', () => {
-    it('refuses a caller with no session', async () => {
-        actAs(null);
-        const { registerCooperativeMemberAction } = await actions();
-
-        expect(await registerCooperativeMemberAction(form())).toMatchObject({ success: false });
-        expect(store.size(COLLECTIONS.COOPERATIVE_MEMBERS)).toBe(0);
-    });
-
-    it('records the profile and leaves an unpaid member pending', async () => {
-        seedUser();
-        const { registerCooperativeMemberAction } = await actions();
-
-        expect(await registerCooperativeMemberAction(form())).toMatchObject({ success: true });
-
-        expect(readMember()).toMatchObject({
-            userId: MEMBER,
-            fullName: 'Amaka Okonkwo',
-            membershipStatus: 'pending',
-            paymentStatus: 'pending',
-            onboardingCompleted: true,
-        });
-        expect(readUser()?.roles ?? []).not.toContain('cooperative_member');
-    });
-
-    it('and activates one whose payment is already recorded', async () => {
-        seedUser({ serviceRegistrations: { cooperatives: { paymentStatus: 'completed' } } });
-        const { registerCooperativeMemberAction } = await actions();
-
-        await registerCooperativeMemberAction(form());
-
-        expect(readMember()).toMatchObject({ membershipStatus: 'active', paymentStatus: 'completed' });
-        expect(readUser()?.roles).toContain('cooperative_member');
-        expect(readUser()?.isVerified).toBe(true);
-    });
-
-    it('refuses a submission missing its ID upload', async () => {
-        seedUser();
-        const { registerCooperativeMemberAction } = await actions();
-
-        const fd = form();
-        fd.delete('validIdUrl');
-        expect(await registerCooperativeMemberAction(fd)).toMatchObject({
-            success: false, error: 'A valid ID document upload is required',
-        });
-        expect(store.size(COLLECTIONS.COOPERATIVE_MEMBERS)).toBe(0);
-    });
-
-    it('refuses a BVN that is not eleven digits', async () => {
-        seedUser();
-        const { registerCooperativeMemberAction } = await actions();
-
-        expect(await registerCooperativeMemberAction(form({ bvn: '123' }))).toMatchObject({
-            success: false, error: 'BVN must be exactly 11 digits',
-        });
-    });
-
-    it('refuses a member who has already completed onboarding and paid', async () => {
-        seedUser();
-        store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, MEMBER, {
-            userId: MEMBER, onboardingCompleted: true, paymentStatus: 'completed',
-        });
-        const { registerCooperativeMemberAction } = await actions();
-
-        expect(await registerCooperativeMemberAction(form())).toMatchObject({
-            success: false,
-            error: 'You have already completed onboarding. Profile updates require admin approval.',
-        });
-    });
-
-    describe('the optimistic-locking guard', () => {
-        it('refuses a submission carrying a stale version', async () => {
-            seedUser();
-            store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, MEMBER, { userId: MEMBER, _version: 4 });
-            const { registerCooperativeMemberAction } = await actions();
-
-            const result = await registerCooperativeMemberAction(form({ _version: '2' }));
-            expect(result.success).toBe(false);
-            expect(result.error).toContain('STALE_DATA');
-        });
-
-        it('and accepts the current one, returning the next', async () => {
-            seedUser();
-            store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, MEMBER, { userId: MEMBER, _version: 4 });
-            const { registerCooperativeMemberAction } = await actions();
-
-            const result: any = await registerCooperativeMemberAction(form({ _version: '4' }));
-            expect(result.success).toBe(true);
-            expect(result.data.version).toBe(5);
-            expect(readMember()?._version).toBe(5);
-        });
-    });
-
-    describe('the cross-account duplicate guard', () => {
-        it('refuses a phone number another member already holds', async () => {
-            seedUser();
-            store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, 'someone-else', {
-                userId: 'someone-else', phone: '08012345678', email: 'other@example.com',
-            });
-            const { registerCooperativeMemberAction } = await actions();
-
-            expect(await registerCooperativeMemberAction(form())).toMatchObject({
-                success: false,
-                error: 'A cooperative member with this phone number already exists.',
-            });
-        });
-
-        it('but not the caller editing their own record', async () => {
-            seedUser();
-            store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, MEMBER, {
-                userId: MEMBER, phone: '08012345678', email: `${MEMBER}@example.com`,
-            });
-            const { registerCooperativeMemberAction } = await actions();
-
-            expect(await registerCooperativeMemberAction(form())).toMatchObject({ success: true });
-        });
-
-        /**
-         * `.limit(1)` DECIDED THE ANSWER, AND ONE PHONE FORM MISSED THE OTHER.
-         *
-         * The guard read a single row per field with no ordering and refused if
-         * that row belonged to somebody else. With the caller's OWN row beside
-         * another account's, which one came back decided whether the caller
-         * could edit their own registration — and Postgres does not promise an
-         * order for a query that does not ask for one.
-         *
-         * Both halves are the academy application defect verbatim, diagnosed and
-         * fixed there (DUPLICATE_SCAN_LIMIT and `.where("personalInfo.phone",
-         * "in", phoneForms)`) and left standing here. Two member rows CAN share
-         * a phone: legacy imports and joinCooperativeAction both write into this
-         * collection without passing this guard.
-         */
-        it('sees a conflict that does not happen to be the first row back', async () => {
-            // THE test for the `.limit(1)`. The caller's own record is keyed by
-            // their user id and sorts before 'z-other', so the single row the
-            // guard read was their own — `phoneDoc.id === userId`, no refusal —
-            // and the genuine cross-account duplicate one row further down was
-            // never looked at. The guard failed OPEN, silently, decided by
-            // nothing more than how two ids happen to sort.
-            seedUser();
-            store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, MEMBER, {
-                userId: MEMBER, phone: '08012345678', email: `${MEMBER}@example.com`,
-            });
-            store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, 'z-other', {
-                userId: 'z-other', phone: '08012345678', email: 'other@example.com',
-            });
-            const { registerCooperativeMemberAction } = await actions();
-
-            const result = await registerCooperativeMemberAction(form());
-            expect(result.success).toBe(false);
-            expect(result.error).toContain('phone number');
-        });
-
-        it('and the same for the email, whichever row comes back first', async () => {
-            seedUser();
-            store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, MEMBER, {
-                userId: MEMBER, phone: '08000000000', email: `${MEMBER}@example.com`,
-            });
-            store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, 'z-other', {
-                userId: 'z-other', phone: '08099999999', email: `${MEMBER}@example.com`,
-            });
-            const { registerCooperativeMemberAction } = await actions();
-
-            const result = await registerCooperativeMemberAction(form());
-            expect(result.success).toBe(false);
-            expect(result.error).toContain('email address');
-        });
-
-        it('and finds a conflict recorded in the other phone form', async () => {
-            // 08012345678 and +2348012345678 are the same person. Rows already
-            // exist in each form, so querying one alone misses the other.
-            seedUser();
-            store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, 'someone-else', {
-                userId: 'someone-else', phone: '+2348012345678', email: 'other@example.com',
-            });
-            const { registerCooperativeMemberAction } = await actions();
-
-            expect(await registerCooperativeMemberAction(form({ phone: '08012345678' })))
-                .toMatchObject({ success: false });
-        });
-
-        it('and the caller\'s own row in the other form is still their own', async () => {
-            // The mirror of the case above: normalising must not turn the
-            // caller's own record into somebody else's conflict.
-            seedUser();
-            store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, MEMBER, {
-                userId: MEMBER, phone: '+2348012345678', email: `${MEMBER}@example.com`,
-            });
-            const { registerCooperativeMemberAction } = await actions();
-
-            expect(await registerCooperativeMemberAction(form({ phone: '08012345678' })))
-                .toMatchObject({ success: true });
-        });
-    });
-
-    describe('the invite', () => {
-        function seedInvite(id: string, extra: Record<string, unknown> = {}): void {
-            store.seed(COLLECTIONS.COOPERATIVES_INVITES, id, {
-                status: 'pending',
-                email: `${MEMBER}@example.com`,
-                createdAt: new Date().toISOString(),
-                ...extra,
-            });
-        }
-
-        it('waives the fee and activates the member', async () => {
-            seedUser();
-            seedInvite('tok-1');
-            const { registerCooperativeMemberAction } = await actions();
-
-            expect(await registerCooperativeMemberAction(form({ inviteToken: 'tok-1' })))
-                .toMatchObject({ success: true });
-
-            expect(readMember()).toMatchObject({
-                paymentStatus: 'completed',
-                membershipStatus: 'active',
-                _importSource: 'email_invite',
-            });
-        });
-
-        it('is consumed, so one link cannot admit two fee-free members', async () => {
-            // THE reason the claim moved ahead of the transaction: it was marked
-            // used by a blind update inside runTransaction, which takes no lock
-            // on this adapter.
-            seedUser();
-            seedInvite('tok-1');
-            const { registerCooperativeMemberAction } = await actions();
-
-            await registerCooperativeMemberAction(form({ inviteToken: 'tok-1' }));
-            expect(store.get(COLLECTIONS.COOPERATIVES_INVITES, 'tok-1')).toMatchObject({
-                status: 'used', usedBy: MEMBER,
-            });
-
-            // A second account presenting the same link.
-            actAs('member-2', 'member-2@example.com');
-            store.seed(COLLECTIONS.USERS, 'member-2', { email: 'member-2@example.com', roles: [] });
-            const second = await registerCooperativeMemberAction(form({
-                inviteToken: 'tok-1',
-                email: 'member-2@example.com',
-                phone: '08099999999',
-            }));
-
-            expect(second).toMatchObject({
-                success: false, error: 'This invitation has already been used or revoked.',
-            });
-            expect(readMember('member-2')).toBeUndefined();
-        });
-
-        it('is handed back when the registration then fails', async () => {
-            // The claim happens before the writes, which is the only order that
-            // can refuse a second use — so a later failure must not leave the
-            // member holding a link that reports "already used".
-            seedUser();
-            seedInvite('tok-1');
-            store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, MEMBER, { userId: MEMBER, _version: 9 });
-            const { registerCooperativeMemberAction } = await actions();
-
-            const result = await registerCooperativeMemberAction(form({
-                inviteToken: 'tok-1', _version: '1',
-            }));
-
-            expect(result.success).toBe(false);
-            expect(store.get(COLLECTIONS.COOPERATIVES_INVITES, 'tok-1')).toMatchObject({
-                status: 'pending', usedBy: null,
-            });
-        });
-
-        it('is refused when it was issued to a different address', async () => {
-            seedUser();
-            seedInvite('tok-1', { email: 'somebody-else@example.com' });
-            const { registerCooperativeMemberAction } = await actions();
-
-            const result = await registerCooperativeMemberAction(form({ inviteToken: 'tok-1' }));
-            expect(result.success).toBe(false);
-            // And it is not consumed by the attempt.
-            expect(store.get(COLLECTIONS.COOPERATIVES_INVITES, 'tok-1')?.status).toBe('pending');
-        });
-    });
-});
-
-// ─── the identity numbers ────────────────────────────────────────────────────
-
-describe('the identity numbers the applicant typed', () => {
-    it('are not recorded as verified', async () => {
-        // THE test. `bvnVerified: bvn ? true : false` asserted a check nothing
-        // performs, and admin/users renders it as a green "Verified" badge for
-        // the reviewer deciding whether to approve this very application.
-        seedUser();
-        const { registerCooperativeMemberAction } = await actions();
-
-        await registerCooperativeMemberAction(form({ bvn: '12345678901', nin: '10987654321' }));
-
-        expect(readMember()?.bvnVerified).toBeUndefined();
-        expect(readMember()?.ninVerified).toBeUndefined();
-        expect(readUser()?.bvnVerified).toBeUndefined();
-        expect(readUser()?.ninVerified).toBeUndefined();
-    });
-
-    it('and do not reach the users table in the clear', async () => {
-        // kyc.ts, marketplace/_mp_seller_verification.ts, the WAVE application
-        // and export onboarding all hash before storing. This path wrote the
-        // raw number onto the user document.
-        seedUser();
-        const { registerCooperativeMemberAction } = await actions();
-
-        await registerCooperativeMemberAction(form({ bvn: '12345678901', nin: '10987654321' }));
-
-        expect(readUser()?.bvn).not.toBe('12345678901');
-        expect(readUser()?.nin).not.toBe('10987654321');
-        expect(String(readUser()?.bvn)).toMatch(/^[a-f0-9]{64}$/);
-    });
-
-    it('while the application record an admin reviews keeps the readable copy', async () => {
-        // The member document IS the application. _coop_admin_members searches
-        // it by bvn, and the precedent fixes left the reviewable copy alone.
-        seedUser();
-        const { registerCooperativeMemberAction } = await actions();
-
-        await registerCooperativeMemberAction(form({ bvn: '12345678901' }));
-
-        expect(readMember()?.bvn).toBe('12345678901');
-    });
-
-    it('and an admin\'s manual verification is not overwritten', async () => {
-        // admin/_users.ts toggles bvnVerified by hand after a real check.
-        // Writing `false` from here would undo it on any resubmission, which is
-        // why the field is not written at all.
-        seedUser({ bvnVerified: true, kyc: { bvnVerified: true } });
-        const { registerCooperativeMemberAction } = await actions();
-
-        await registerCooperativeMemberAction(form({ bvn: '12345678901' }));
-
-        expect(readUser()?.bvnVerified).toBe(true);
-    });
-});
-
-// ─── resubmitCooperativeApplicationAction ────────────────────────────────────
-
-describe('resubmitCooperativeApplicationAction', () => {
-    it('refuses an application that is not open for resubmission', async () => {
-        seedUser({ serviceRegistrations: { cooperatives: { status: 'active' } } });
-        const { resubmitCooperativeApplicationAction } = await actions();
-
-        expect(await resubmitCooperativeApplicationAction(form())).toMatchObject({
-            success: false, error: 'Your application cannot be resubmitted at this time.',
-        });
-    });
-
-    it('updates the existing record and returns it to pending', async () => {
-        seedUser({ serviceRegistrations: { cooperatives: { status: 'revision_required' } } });
-        store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, MEMBER, {
-            userId: MEMBER, membershipStatus: 'revision_required', revisionNote: 'Photo unclear',
-        });
-        const { resubmitCooperativeApplicationAction } = await actions();
-
-        expect(await resubmitCooperativeApplicationAction(form())).toMatchObject({ success: true });
-
-        expect(readMember()).toMatchObject({
-            membershipStatus: 'pending', revisionNote: null, firstName: 'Amaka',
-        });
-        expect(readUser()?.serviceRegistrations?.cooperatives?.status).toBe('pending');
-    });
-
-    it('creates the record when the member document has gone missing', async () => {
-        // THE test. The fallback says "auto-heal by allowing a new registration
-        // creation" and then called batch.update on a document that does not
-        // exist. update() does not create — the adapter no-ops it with a warning
-        // whose own comment reads "this is how 'the save button did nothing'
-        // bugs reach production". So the resubmitted application was discarded,
-        // the user's status was still flipped to pending, and the action
-        // returned success.
-        seedUser({ serviceRegistrations: { cooperatives: { status: 'pending_repair' } } });
-        const { resubmitCooperativeApplicationAction } = await actions();
-
-        expect(await resubmitCooperativeApplicationAction(form())).toMatchObject({ success: true });
-
-        expect(readMember()).toMatchObject({
-            userId: MEMBER, firstName: 'Amaka', lastName: 'Okonkwo', membershipStatus: 'pending',
-        });
-    });
-
-    it('and does not leave a pending status with no application behind it', async () => {
-        seedUser({ serviceRegistrations: { cooperatives: { status: 'pending_repair' } } });
-        const { resubmitCooperativeApplicationAction } = await actions();
-
-        await resubmitCooperativeApplicationAction(form());
-
-        const statusSaysPending = readUser()?.serviceRegistrations?.cooperatives?.status === 'pending';
-        expect(statusSaysPending).toBe(true);
-        expect(readMember()).toBeDefined();
-    });
-
-    it('keeps the documents already on file when none are re-uploaded', async () => {
-        seedUser({ serviceRegistrations: { cooperatives: { status: 'revision_required' } } });
-        store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, MEMBER, {
-            userId: MEMBER,
-            documents: {
-                validId: { url: 'https://cdn/old-id.png', name: 'Old ID' },
-                passportPhoto: { url: 'https://cdn/old-photo.png', name: 'Old Photo' },
-            },
-        });
-        const { resubmitCooperativeApplicationAction } = await actions();
-
-        const fd = form();
-        fd.delete('validIdUrl');
-        fd.delete('passportPhotoUrl');
-
-        expect(await resubmitCooperativeApplicationAction(fd)).toMatchObject({ success: true });
-        expect(readMember()?.documents?.validId?.url).toBe('https://cdn/old-id.png');
-    });
-});
-
-// ─── joinCooperativeAction ───────────────────────────────────────────────────
-
-describe('joinCooperativeAction', () => {
     beforeEach(() => {
-        store.seed(COLLECTIONS.COOPERATIVES, 'coop-1', { name: 'Nsukka Traders', memberCount: 0, totalSavings: 0 });
+        store.seed(COOPS, 'default', { name: 'Default', memberCount: 3, totalSavings: 100 });
+    });
+
+    it.each([1, 5_000, 5_000_000, -1_000, 0.5])(
+        'REFUSES AN INITIAL CONTRIBUTION OF %s', async (amount) => {
+            const res = await join(amount);
+
+            expect(res.success).toBe(false);
+            expect(res.error).toMatch(/contributions are made/i);
+        });
+
+    it('AND WRITES NO MEMBERSHIP, NO LEDGER ROW AND NO SAVINGS', async () => {
+        await join(5_000_000);
+
+        expect(store.size(MEMBERS)).toBe(0);
+        expect(store.size(COOP_TX)).toBe(0);
+        expect(store.size(COLLECTIONS.TRANSACTIONS)).toBe(0);
+        expect(store.get(COOPS, 'default')?.totalSavings).toBe(100);
+        expect(store.get(COOPS, 'default')?.memberCount).toBe(3);
+    });
+
+    it('AND A LEGITIMATE JOIN CREATES A PENDING MEMBERSHIP, NOT AN ACTIVE ONE', async () => {
+        // Was: status "active" — which checkModuleAccess Layer 2.6 and
+        // canTransactAsMember both honour, with no fee and no admin.
+        expect(await join(0)).toMatchObject({ success: true });
+
+        const [, row] = store.all(MEMBERS)[0];
+        expect(row.membershipStatus).toBe('pending');
+        expect(row.status).toBe('pending');
+        expect(row.paymentStatus).toBe('pending');
+        expect(row.onboardingCompleted).toBe(false);
+        expect(row.savingsBalance).toBe(0);
+    });
+
+    it('and it does not grant the cooperative module', async () => {
+        store.seed(USERS, MEMBER, { email: 'ada@example.com', roles: ['general_user'] });
+
+        await join(0);
+
+        const { checkModuleAccess } = await import('@/lib/module-access-check');
+        expect(await checkModuleAccess(MEMBER, ['general_user'] as never, 'cooperatives' as never))
+            .toBe(false);
+    });
+
+    it('and the new member cannot transact', async () => {
+        await join(0);
+
+        const { canTransactAsMember } = await import('@/lib/cooperative-membership-status');
+        const [, row] = store.all(MEMBERS)[0];
+        expect(canTransactAsMember(row as any)).toBe(false);
+    });
+
+    // ── and the parts that were always right stay right ──────────────────────
+
+    it('still counts the member on the cooperative', async () => {
+        await join(0);
+        expect(store.get(COOPS, 'default')?.memberCount).toBe(4);
     });
 
     it('refuses a cooperative that does not exist', async () => {
-        const { joinCooperativeAction } = await actions();
-
-        expect(await joinCooperativeAction('nope')).toMatchObject({
-            success: false, error: 'Cooperative not found',
-        });
-    });
-
-    it('adds the member and counts them', async () => {
-        const { joinCooperativeAction } = await actions();
-
-        expect(await joinCooperativeAction('coop-1')).toMatchObject({ success: true });
-
-        const [, member] = store.all(COLLECTIONS.COOPERATIVE_MEMBERS)[0];
-        expect(member).toMatchObject({ userId: MEMBER, cooperativeId: 'coop-1', status: 'active', savingsBalance: 0 });
-        expect(store.get(COLLECTIONS.COOPERATIVES, 'coop-1')?.memberCount).toBe(1);
-    });
-
-    it('records an opening contribution in both ledgers', async () => {
-        const { joinCooperativeAction } = await actions();
-
-        await joinCooperativeAction('coop-1', 25000);
-
-        expect(store.size(COLLECTIONS.COOPERATIVE_TRANSACTIONS)).toBe(1);
-        expect(store.size(COLLECTIONS.TRANSACTIONS)).toBe(1);
-        expect(store.get(COLLECTIONS.COOPERATIVES, 'coop-1')?.totalSavings).toBe(25000);
+        expect(await join(0, 'nope')).toMatchObject({ success: false });
+        expect(store.size(MEMBERS)).toBe(0);
     });
 
     it('refuses a second join of the same cooperative', async () => {
-        const { joinCooperativeAction } = await actions();
-
-        await joinCooperativeAction('coop-1');
-        expect(await joinCooperativeAction('coop-1')).toMatchObject({
-            success: false, error: 'You are already a member of this cooperative',
-        });
-        expect(store.size(COLLECTIONS.COOPERATIVE_MEMBERS)).toBe(1);
+        expect(await join(0)).toMatchObject({ success: true });
+        expect(await join(0)).toMatchObject({ success: false });
+        expect(store.size(MEMBERS)).toBe(1);
     });
 
-    /**
-     * THE OPENING BALANCE WAS WHATEVER THE CALLER SENT.
-     *
-     * `initialContribution` arrives as a parameter and was written straight to
-     * `savingsBalance` with no validation at all. The only thing standing near
-     * it is `if (initialContribution > 0)`, which guards the two LEDGER rows and
-     * the cooperative's `totalSavings` — not the balance itself.
-     *
-     * So `joinCooperativeAction(coopId, -50000)` opened a savings account at
-     * minus fifty thousand naira, with no transaction behind it and the
-     * cooperative's own total untouched: a member balance that no ledger
-     * explains and no reconciliation can find. This file is "use server", so the
-     * parameter is reachable directly.
-     *
-     * A non-finite value was the same shape: `NaN > 0` is false, so `NaN` was
-     * written as the balance and every later sum involving it became NaN.
-     */
-    it('refuses a negative opening contribution', async () => {
-        const { joinCooperativeAction } = await actions();
-
-        const result = await joinCooperativeAction('coop-1', -50000);
-        expect(result.success).toBe(false);
-        expect(store.size(COLLECTIONS.COOPERATIVE_MEMBERS)).toBe(0);
-    });
-
-    it('and one that is not a number at all', async () => {
-        const { joinCooperativeAction } = await actions();
-
-        expect(await joinCooperativeAction('coop-1', Number.NaN)).toMatchObject({ success: false });
-        expect(await joinCooperativeAction('coop-1', Number.POSITIVE_INFINITY)).toMatchObject({ success: false });
-        expect(store.size(COLLECTIONS.COOPERATIVE_MEMBERS)).toBe(0);
-    });
-
-    it('while zero is a normal opening balance', async () => {
-        // Vacuity guard: joining without contributing is the default.
-        const { joinCooperativeAction } = await actions();
-
-        expect(await joinCooperativeAction('coop-1', 0)).toMatchObject({ success: true });
-        expect(store.size(COLLECTIONS.COOPERATIVE_TRANSACTIONS)).toBe(0);
+    it('refuses a caller with no session', async () => {
+        actAs(null);
+        expect(await join(0)).toMatchObject({ success: false });
+        expect(store.size(MEMBERS)).toBe(0);
     });
 });
 
-// ─── getCooperativeApplicationAction ─────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#234 — resubmitting when the member row is gone actually saves', () => {
+    const resubmit = async (over: Record<string, string> = {}) => {
+        const fd = new FormData();
+        const fields: Record<string, string> = {
+            firstName: 'Ada', lastName: 'Obi',
+            dateOfBirth: '1994-05-10', gender: 'female',
+            email: 'ada@example.com', phone: '08012345678',
+            occupation: 'Trader', stateOfOrigin: 'Plateau',
+            lga: 'Jos North', ward: 'Ward A',
+            residentialAddress: '1 Market Road',
+            nextOfKinName: 'Ngozi Obi', nextOfKinPhone: '08087654321',
+            nextOfKinAddress: '2 Market Road',
+            validIdUrl: 'https://cdn.test/id.png', validIdName: 'NIN slip',
+            passportPhotoUrl: 'https://cdn.test/photo.png', passportPhotoName: 'Passport',
+            ...over,
+        };
+        for (const [k, v] of Object.entries(fields)) if (v !== '') fd.set(k, v);
+        return (await (await actions())).resubmitCooperativeApplicationAction(fd) as any;
+    };
 
-describe('getCooperativeApplicationAction', () => {
-    it('returns the application found by userId', async () => {
-        store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, 'row-1', {
-            userId: MEMBER, firstName: 'Amaka', revisionNote: 'Photo unclear',
-            createdAt: new Date('2026-01-01').toISOString(),
-        });
-        const { getCooperativeApplicationAction } = await actions();
-
-        const result: any = await getCooperativeApplicationAction();
-        expect(result.success).toBe(true);
-        expect(result.data.application.firstName).toBe('Amaka');
-        expect(result.data.revisionNote).toBe('Photo unclear');
+    /** In revision_required, and the member row was lost. */
+    const seedOrphaned = () => store.seed(USERS, MEMBER, {
+        email: 'ada@example.com',
+        roles: ['general_user'],
+        serviceRegistrations: { cooperatives: { status: 'revision_required' } },
     });
 
-    it('heals a record keyed by user id that never carried the field', async () => {
-        store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, MEMBER, {
-            firstName: 'Amaka', createdAt: new Date('2026-01-01').toISOString(),
-        });
-        const { getCooperativeApplicationAction } = await actions();
+    it('CREATES THE MEMBER ROW INSTEAD OF SILENTLY WRITING NOTHING', async () => {
+        seedOrphaned();
 
-        expect((await getCooperativeApplicationAction() as any).data.application.firstName).toBe('Amaka');
-        expect(readMember()?.userId).toBe(MEMBER);
+        expect(await resubmit()).toMatchObject({ success: true });
+
+        // Was: reported success and left the collection empty, for ever.
+        const row = store.get(MEMBERS, MEMBER);
+        expect(row).toBeDefined();
+        expect(row!.firstName).toBe('Ada');
+        expect(row!.userId).toBe(MEMBER);
+        expect(row!.membershipStatus).toBe('pending');
+        expect(row!.onboardingCompleted).toBe(true);
     });
 
-    it('and says so when there is nothing to return', async () => {
-        const { getCooperativeApplicationAction } = await actions();
+    it('AND CARRIES THE UPLOADED DOCUMENTS ONTO THE NEW ROW', async () => {
+        // The dotted paths in the payload have to survive the create, not just
+        // the update — they are written as `documents.validId.url`.
+        seedOrphaned();
 
-        expect(await getCooperativeApplicationAction()).toMatchObject({
-            success: false, error: 'No application found',
-        });
+        await resubmit();
+
+        expect(store.get(MEMBERS, MEMBER)?.documents?.validId?.url)
+            .toBe('https://cdn.test/id.png');
+        expect(store.get(MEMBERS, MEMBER)?.documents?.passportPhoto?.url)
+            .toBe('https://cdn.test/photo.png');
     });
 
-    it('takes the most recent when a learner has several rows', async () => {
-        store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, 'old', {
-            userId: MEMBER, firstName: 'Old', createdAt: new Date('2026-01-01').toISOString(),
-        });
-        store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, 'new', {
-            userId: MEMBER, firstName: 'New', createdAt: new Date('2026-06-01').toISOString(),
-        });
-        const { getCooperativeApplicationAction } = await actions();
+    it('AND THE USER DOCUMENT AND THE MEMBER ROW NOW AGREE', async () => {
+        // The user doc write always landed; only the member row was lost. The
+        // screen therefore showed a review pending on nothing.
+        seedOrphaned();
 
-        expect((await getCooperativeApplicationAction() as any).data.application.firstName).toBe('New');
+        await resubmit();
+
+        expect(store.get(USERS, MEMBER)?.serviceRegistrations.cooperatives.status).toBe('pending');
+        expect(store.get(MEMBERS, MEMBER)?.membershipStatus).toBe('pending');
+    });
+
+    // ── the path that always worked, unchanged ───────────────────────────────
+
+    it('still updates an existing member row without recreating it', async () => {
+        store.seed(USERS, MEMBER, {
+            email: 'ada@example.com', roles: ['general_user'],
+            serviceRegistrations: { cooperatives: { status: 'revision_required' } },
+        });
+        store.seed(MEMBERS, MEMBER, {
+            userId: MEMBER, firstName: 'Old', lastName: 'Name',
+            email: 'ada@example.com', phone: '08012345678',
+            membershipStatus: 'revision_required', paymentStatus: 'completed',
+            revisionNote: 'Photo unreadable',
+            createdAt: '2026-01-01T00:00:00.000Z',
+        });
+
+        expect(await resubmit()).toMatchObject({ success: true });
+
+        const row = store.get(MEMBERS, MEMBER)!;
+        expect(row.firstName).toBe('Ada');
+        expect(row.membershipStatus).toBe('pending');
+        expect(row.revisionNote).toBeNull();
+        // Untouched fields survive: the write is a patch, not a replacement.
+        expect(row.paymentStatus).toBe('completed');
+        expect(store.size(MEMBERS)).toBe(1);
+    });
+
+    it.each(['active', 'approved', 'rejected', 'suspended'])(
+        'still refuses to resubmit from %s', async (status) => {
+            store.seed(USERS, MEMBER, {
+                email: 'ada@example.com', roles: ['general_user'],
+                serviceRegistrations: { cooperatives: { status } },
+            });
+
+            const res = await resubmit();
+            expect(res.success).toBe(false);
+            expect(res.error).toMatch(/cannot be resubmitted/i);
+        });
+
+    it('still refuses a caller with no session', async () => {
+        actAs(null);
+        expect(await resubmit()).toMatchObject({ success: false });
+    });
+
+    it('still refuses a malformed BVN', async () => {
+        seedOrphaned();
+        expect(await resubmit({ bvn: '123' })).toMatchObject({ success: false });
+        expect(store.size(MEMBERS)).toBe(0);
     });
 });
 
-// ─── validateCooperativeInviteAction ─────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#235 — the resubmit path asks the same identity question', () => {
+    const resubmit = async (over: Record<string, string> = {}) => {
+        const fd = new FormData();
+        const fields: Record<string, string> = {
+            firstName: 'Ada', lastName: 'Obi',
+            dateOfBirth: '1994-05-10', gender: 'female',
+            email: 'ada@example.com', phone: '08012345678',
+            occupation: 'Trader', stateOfOrigin: 'Plateau',
+            lga: 'Jos North', ward: 'Ward A',
+            residentialAddress: '1 Market Road',
+            nextOfKinName: 'Ngozi Obi', nextOfKinPhone: '08087654321',
+            nextOfKinAddress: '2 Market Road',
+            validIdUrl: 'https://cdn.test/id.png',
+            passportPhotoUrl: 'https://cdn.test/photo.png',
+            ...over,
+        };
+        for (const [k, v] of Object.entries(fields)) if (v !== '') fd.set(k, v);
+        return (await (await actions())).resubmitCooperativeApplicationAction(fd) as any;
+    };
 
-describe('validateCooperativeInviteAction', () => {
-    it('refuses an empty token', async () => {
-        const { validateCooperativeInviteAction } = await actions();
-        expect(await validateCooperativeInviteAction('')).toMatchObject({ success: false });
+    const inRevision = () => store.seed(USERS, MEMBER, {
+        email: 'ada@example.com',
+        roles: ['general_user'],
+        serviceRegistrations: { cooperatives: { status: 'revision_required' } },
     });
 
-    it('refuses a token that does not exist', async () => {
-        const { validateCooperativeInviteAction } = await actions();
-        expect(await validateCooperativeInviteAction('nope')).toMatchObject({
-            success: false, error: 'Invalid or expired invitation link.',
+    it("REFUSES SOMEBODY ELSE'S PHONE NUMBER", async () => {
+        inRevision();
+        store.seed(MEMBERS, 'row-of-stranger', {
+            userId: STRANGER, email: 'other@example.com', phone: '08012345678',
         });
+
+        const res = await resubmit();
+
+        expect(res.success).toBe(false);
+        expect(res.error).toMatch(/phone number already exists/i);
+        expect(store.get(MEMBERS, MEMBER)).toBeUndefined();
     });
 
-    it('accepts a pending invitation issued to the caller', async () => {
-        store.seed(COLLECTIONS.COOPERATIVES_INVITES, 'tok-1', {
-            status: 'pending', email: `${MEMBER}@example.com`, createdAt: new Date().toISOString(),
+    it("REFUSES SOMEBODY ELSE'S EMAIL ADDRESS", async () => {
+        inRevision();
+        store.seed(MEMBERS, 'row-of-stranger', {
+            userId: STRANGER, email: 'ada@example.com', phone: '09099999999',
         });
-        const { validateCooperativeInviteAction } = await actions();
 
-        expect(await validateCooperativeInviteAction('tok-1')).toMatchObject({ success: true });
+        const res = await resubmit();
+
+        expect(res.success).toBe(false);
+        expect(res.error).toMatch(/email address already exists/i);
     });
 
-    it('refuses one issued to somebody else', async () => {
-        store.seed(COLLECTIONS.COOPERATIVES_INVITES, 'tok-1', {
-            status: 'pending', email: 'other@example.com', createdAt: new Date().toISOString(),
+    it('and does NOT refuse the caller over their own row', async () => {
+        // The original comparison used the DOCUMENT id, so a row with an
+        // auto-generated id — which joinCooperativeAction creates — read as a
+        // stranger's and locked the owner out of their own resubmission.
+        inRevision();
+        store.seed(MEMBERS, 'auto-generated-id', {
+            userId: MEMBER, email: 'ada@example.com', phone: '08012345678',
+            membershipStatus: 'revision_required',
+            createdAt: '2026-01-01T00:00:00.000Z',
         });
-        const { validateCooperativeInviteAction } = await actions();
 
-        expect(await validateCooperativeInviteAction('tok-1')).toMatchObject({ success: false });
+        expect(await resubmit()).toMatchObject({ success: true });
     });
 
-    it('refuses one already used', async () => {
-        store.seed(COLLECTIONS.COOPERATIVES_INVITES, 'tok-1', {
-            status: 'used', email: `${MEMBER}@example.com`, createdAt: new Date().toISOString(),
+    it('scans the whole matching set, not one row', async () => {
+        // With the caller's own row beside a stranger's, which one answered
+        // used to depend on row order.
+        inRevision();
+        store.seed(MEMBERS, 'a-own-row', {
+            userId: MEMBER, email: 'ada@example.com', phone: '08012345678',
+            membershipStatus: 'revision_required',
+            createdAt: '2026-01-01T00:00:00.000Z',
         });
-        const { validateCooperativeInviteAction } = await actions();
+        store.seed(MEMBERS, 'b-stranger-row', {
+            userId: STRANGER, email: 'ada@example.com', phone: '08012345678',
+        });
 
-        expect(await validateCooperativeInviteAction('tok-1')).toMatchObject({ success: false });
+        expect(await resubmit()).toMatchObject({ success: false });
+    });
+
+    it('matches a phone stored in the imported E.164 form', async () => {
+        // #80: the roster holds both the typed and the normalised spelling.
+        inRevision();
+        store.seed(MEMBERS, 'imported', {
+            userId: STRANGER, email: 'other@example.com', phone: '+2348012345678',
+        });
+
+        expect(await resubmit()).toMatchObject({ success: false });
+    });
+
+    it('matches however the CALLER capitalises the address', async () => {
+        // The Zod schema lowercases the email before the guard sees it, so a
+        // conflict cannot be dodged by typing a capital letter. (A stored row
+        // that itself carries capitals — a legacy import — is a different,
+        // narrower blind spot: equality queries cannot close it, and the
+        // helper's comment records that honestly rather than pretending.)
+        inRevision();
+        store.seed(MEMBERS, 'stored-lower', {
+            userId: STRANGER, email: 'ada@example.com', phone: '09099999999',
+        });
+
+        expect(await resubmit({ email: 'ADA@Example.com' })).toMatchObject({ success: false });
+    });
+
+    it('lets a clean resubmission through', async () => {
+        inRevision();
+        store.seed(MEMBERS, 'unrelated', {
+            userId: STRANGER, email: 'other@example.com', phone: '09099999999',
+        });
+
+        expect(await resubmit()).toMatchObject({ success: true });
     });
 });

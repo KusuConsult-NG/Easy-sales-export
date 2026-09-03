@@ -56,13 +56,40 @@ export function ExportCartProvider({ children }: { children: React.ReactNode }) 
     // Hydrate from localStorage on mount
      
     useEffect(() => {
+        /**
+         *   #347 THE try/catch HERE CAUGHT NOTHING.
+         *
+         *        It read:
+         *
+         *            try {
+         *                const saved = localStorage.getItem(STORAGE_KEY);
+         *                if (saved) setTimeout(() => setCart(JSON.parse(saved)), 0);
+         *            } catch { }
+         *
+         *        The parse was DEFERRED into a timer callback, which runs on a
+         *        later tick with an empty stack — outside this try entirely. So
+         *        a malformed stored cart threw as an unhandled error rather
+         *        than being ignored as intended, and the guard read as present
+         *        while doing nothing. The getItem call was genuinely covered;
+         *        the statement that can actually fail was not.
+         *
+         *        Parsed here, inside the guard, and only a real array is
+         *        restored — `"5"` is valid JSON that setCart would happily
+         *        accept and every consumer would then iterate.
+         */
         try {
             const saved = localStorage.getItem(STORAGE_KEY);
             if (saved) {
-                setTimeout(() => setCart(JSON.parse(saved)), 0);
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed)) {
+                    setTimeout(() => setCart(parsed), 0);
+                } else {
+                    localStorage.removeItem(STORAGE_KEY);
+                }
             }
         } catch {
-            // Ignore parse errors
+            // Unreadable or unusable. An empty cart is the honest fallback.
+            try { localStorage.removeItem(STORAGE_KEY); } catch { /* no store */ }
         }
          
         setIsHydrated(true);

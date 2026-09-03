@@ -18,6 +18,7 @@ import { serializeDocs } from "@/lib/firestore-serialize";
 import { createNotificationAction } from "@/app/actions/notifications";
 import { LoanApplicationReviewSchema } from "@/lib/schemas";
 import { hasAdminPermission } from "@/lib/admin-permissions";
+import { canSendEmail } from "@/lib/email-notifications";
 
 // ============================================
 // Loan Application Management (Admin)
@@ -333,7 +334,7 @@ async function _approveLoanApplication(
         let disbursementError: string | undefined;
 
         try {
-            const { paystackPayout } = await import("@/lib/paystack-transfer");
+            const { paystackPayout, payoutReference } = await import("@/lib/paystack-transfer");
             const borrowerDoc = await db.collection(COLLECTIONS.USERS).doc(loanData.userId).get();
             const borrowerData = borrowerDoc.data();
 
@@ -345,7 +346,11 @@ async function _approveLoanApplication(
                         accountName: borrowerData.bankAccountName || borrowerData.name,
                     },
                     loanData.amount,
-                    `Cooperative loan disbursement - ${applicationId}`
+                    `Cooperative loan disbursement - ${applicationId}`,
+                    // Stable across retries of THIS disbursement (#249): a loan
+                    // is disbursed once, and the reference is what enforces it
+                    // at Paystack rather than only in our own records.
+                    payoutReference("LOAN", applicationId),
                 );
 
                 if (disbResult.success) {
@@ -357,10 +362,19 @@ async function _approveLoanApplication(
                         status: "disbursed",
                     });
                 } else {
-                    disbursementError = disbResult.error;
+                    // A duplicate reference means the first attempt disbursed;
+                    // an indeterminate one means we cannot say. Neither is a
+                    // plain "it failed", and both need a human to check the
+                    // reference against Paystack before anyone pays again (#250).
+                    disbursementError = disbResult.duplicate
+                        ? "Already disbursed under this reference — verify with Paystack before retrying"
+                        : disbResult.indeterminate
+                            ? `Disbursement outcome UNKNOWN (${disbResult.error || "no response"}) — reconcile before retrying`
+                            : disbResult.error;
                     await loanRef.update({
                         disbursed: false,
-                        disbursementError: disbResult.error,
+                        disbursementError,
+                        needsReconciliation: !!(disbResult.duplicate || disbResult.indeterminate),
                         pendingManualDisbursement: true,
                     });
                 }
@@ -379,7 +393,7 @@ async function _approveLoanApplication(
             await invalidateCooperativeCache(loanData.userId);
         } catch (e) { logger.error('[admin] cache invalidation failed silently:', e); }
 
-        if (process.env.RESEND_API_KEY && loanData.userEmail) {
+        if (canSendEmail("loan decision email", loanData.userEmail)) {
             try {
                 const { Resend } = await import("resend");
                 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -492,7 +506,7 @@ async function _rejectLoanApplication(
         const { loanData } = txResult;
 
         // SIDE EFFECTS (Post-Commit)
-        if (process.env.RESEND_API_KEY && loanData.userEmail) {
+        if (canSendEmail("loan decision email", loanData.userEmail)) {
             try {
                 const { Resend } = await import("resend");
                 const resend = new Resend(process.env.RESEND_API_KEY);

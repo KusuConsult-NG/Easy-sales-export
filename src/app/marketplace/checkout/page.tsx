@@ -515,7 +515,10 @@ export default function CheckoutPage() {
 
         // Migrate guest cart to user-scoped cart if logged in
         if (userId) {
-            const guestCart = localStorage.getItem("marketplace_cart");
+            // #347 getItem itself throws where site data is blocked, and it sat
+            // outside the try below.
+            let guestCart: string | null = null;
+            try { guestCart = localStorage.getItem("marketplace_cart"); } catch { /* no store */ }
             if (guestCart) {
                 try {
                     const parsedGuestCart = JSON.parse(guestCart);
@@ -525,13 +528,39 @@ export default function CheckoutPage() {
                 } catch (e) {
                     console.error("Failed to parse guest cart:", e);
                 }
-                localStorage.removeItem("marketplace_cart");
+                try { localStorage.removeItem("marketplace_cart"); } catch { /* no store */ }
             }
         }
 
-        const savedCart = localStorage.getItem(cartKey);
-        if (savedCart) {
-            const parsedCart = JSON.parse(savedCart);
+        /**
+         *   #347 THE CHECKOUT PAGE, TAKEN DOWN BY ITS OWN CART.
+         *
+         *        `JSON.parse(savedCart)` here was unguarded — in an effect, so
+         *        a throw unmounts to the error boundary and the buyer gets the
+         *        error page instead of checkout, on every visit, until they
+         *        clear site data.
+         *
+         *        The guest-cart migration TWELVE LINES ABOVE is wrapped in a
+         *        try/catch and checks Array.isArray. The author knew; the guard
+         *        went on the less important half. And a non-array that parses
+         *        cleanly ("5", {}) reaches estimateCartWeight, which iterates
+         *        it — a second throw the shape check now prevents.
+         *
+         *        An unreadable cart is an EMPTY cart, which this page already
+         *        knows how to handle: it sends the buyer back to the
+         *        marketplace. That is the fallback, and the bad value is
+         *        dropped so the next visit starts clean.
+         */
+        let parsedCart: unknown = null;
+        try {
+            const savedCart = localStorage.getItem(cartKey);
+            if (savedCart) parsedCart = JSON.parse(savedCart);
+        } catch (e) {
+            console.error("Failed to read the saved cart:", e);
+            try { localStorage.removeItem(cartKey); } catch { /* storage is gone entirely */ }
+        }
+
+        if (Array.isArray(parsedCart) && parsedCart.length > 0) {
             setCart(parsedCart);
             setWeight(estimateCartWeight(parsedCart));
         } else {

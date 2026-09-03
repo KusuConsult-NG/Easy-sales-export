@@ -3,9 +3,9 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
-import { adminStorage } from "@/lib/firebase-admin";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { retirementPatch } from "@/lib/record-retirement";
 
 /**
  * DELETE - Delete certificate
@@ -47,21 +47,40 @@ export async function DELETE(
             );
         }
 
-        // Delete from storage (Admin SDK)
-        try {
-            const bucket = adminStorage.bucket();
-            const file = bucket.file(certData.storagePath || certData.fileUrl);
-            await file.delete();
-        } catch (storageError: any) {
-            logger.warn("Storage delete failed (file may not exist):", storageError);
-        }
-
-        // Delete from Firestore (Admin SDK)
-        await db.collection(COLLECTIONS.USER_CERTIFICATES).doc(id).delete();
+        /**
+         *   #303 THIS DESTROYED THE STORED FILE. IT IS THE ONE IRREVERSIBLE ACT
+         *        IN THE CODEBASE, AND THE ONE THE OWNER NAMED.
+         *
+         *        Two lines used to sit here:
+         *
+         *            const file = bucket.file(certData.storagePath || certData.fileUrl);
+         *            await file.delete();
+         *            await db.collection(USER_CERTIFICATES).doc(id).delete();
+         *
+         *        A certificate is somebody's proof of a qualification. The
+         *        storage delete was wrapped in a try/catch that logged a WARNING
+         *        and carried on — "file may not exist" — so a failure to remove
+         *        the file still removed the row, leaving the file with nothing
+         *        recording whose it was. That is #292's shape again, on a
+         *        different bucket.
+         *
+         *        Nothing is deleted now: the file is untouched and the row is
+         *        marked. The listing filters retired certificates and the
+         *        download route refuses them, so the member sees the same
+         *        outcome they did before — the certificate is gone from their
+         *        screen — while the artefact survives.
+         *
+         *        deleteCertificateAction in actions/certificates.ts is the other
+         *        door onto this, and it changes with this one.
+         */
+        await db.collection(COLLECTIONS.USER_CERTIFICATES).doc(id).update({
+            ...retirementPatch(session.user.id, certData.status),
+            removedByOwner: true,
+        });
 
         return NextResponse.json({
             success: true,
-            message: "Certificate deleted",
+            message: "Certificate removed",
         });
     } catch (error: any) {
         logger.error("Delete error:", error);

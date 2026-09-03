@@ -124,13 +124,15 @@ export default function ExportWindowDetailPage() {
                 "Commodity Type": windowData.commodity,
                 "Destination": windowData.destination,
                 "Status": windowData.status,
-                // Only when the window actually has a cap. `totalSpots` is null
-                // for a window with no spot limit — which is every window this
-                // codebase creates — and `.toString()` on it was a hard render
-                // failure waiting on the first listing that reached this
-                // fallback branch.
-                ...(typeof windowData.totalSpots === "number"
-                    ? { "Total Spots": windowData.totalSpots.toString() }
+                // #352 only when there IS a spots model. See the availability
+                // panel below: nothing writes totalSpots, so this row said
+                // "Total Spots: 0" on every window.
+                // `typeof === "number"` as well as `> 0`: the mapping returns
+                // null for a window with no cap, and `null > 0` is false but
+                // TypeScript cannot narrow on it. Both audits wanted the same
+                // thing here — the row hidden when there is no spots model.
+                ...(typeof windowData.totalSpots === "number" && windowData.totalSpots > 0
+                    ? { "Total Spots": String(windowData.totalSpots) }
                     : {}),
                 "Certification": "Export Certified"
             },
@@ -314,32 +316,72 @@ export default function ExportWindowDetailPage() {
                                 </div>
                             </div>
 
-                            {/* Availability.
-                                Drawn only where the window HAS a spot limit.
-                                `totalSpots` is null when it does not, and this
-                                block used to read `0/0` above a progress bar
-                                whose width computed to `NaN%` — a length the
-                                browser rejects, so the declaration was dropped
-                                and the bar fell back to `width: auto` inside a
-                                `w-full` parent and rendered COMPLETELY FULL.
-                                Every uncapped opportunity was shown as sold out,
-                                above an invest button that works. */}
-                            {typeof window.totalSpots === "number" && window.totalSpots > 0 && (
-                                <div className="bg-slate-50 rounded-xl p-4 mb-6">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <span className="text-sm text-slate-600">Available Spots</span>
-                                        <span className="font-bold text-slate-900">
-                                            {window.spotsLeft}/{window.totalSpots}
-                                        </span>
+                            {/*
+                              *   #352 THIS PANEL SHOWED "-3/0" AND A PROGRESS
+                              *        BAR OF -Infinity%.
+                              *
+                              *        It read `spotsLeft`/`totalSpots`, and
+                              *        `totalSpots` HAS NO WRITER anywhere in
+                              *        this repository. `spotsFilled` beside it
+                              *        is incremented on every investment, so
+                              *        the numerator grew against a denominator
+                              *        that stayed 0: spotsLeft was
+                              *        `0 - spotsFilled`, a negative number, and
+                              *        the width was `-3 / 0 * 100` —
+                              *        `-Infinity%`, an invalid CSS length.
+                              *
+                              *        Every export window that had ever taken
+                              *        an investment showed a NEGATIVE
+                              *        availability count to the next investor
+                              *        deciding whether to put money in.
+                              *
+                              *        The window's real capacity is the FUNDING
+                              *        model: `fundingGoal` (written as
+                              *        targetVolume * slotPrice) against
+                              *        `fundedAmount`, which is what
+                              *        incrementWithinCeiling actually enforces
+                              *        when an investment is verified. The panel
+                              *        reports that when there is no spots
+                              *        denominator, which today is always.
+                              */}
+                            <div className="bg-slate-50 rounded-xl p-4 mb-6">
+                                {typeof window.totalSpots === "number" && window.totalSpots > 0 ? (
+                                    <>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-sm text-slate-600">Available Spots</span>
+                                            <span className="font-bold text-slate-900">
+                                                {window.spotsLeft ?? 0}/{window.totalSpots}
+                                            </span>
+                                        </div>
+                                        <div className="w-full bg-slate-200 rounded-full h-2">
+                                            <div
+                                                className="bg-purple-600 h-2 rounded-full"
+                                                style={{ width: `${Math.min(100, Math.max(0, ((window.totalSpots - (window.spotsLeft ?? 0)) / window.totalSpots) * 100))}%` }}
+                                            ></div>
+                                        </div>
+                                    </>
+                                ) : window.fundingGoal > 0 ? (
+                                    <>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-sm text-slate-600">Funded</span>
+                                            <span className="font-bold text-slate-900">
+                                                ₦{window.fundedAmount.toLocaleString()} / ₦{window.fundingGoal.toLocaleString()}
+                                            </span>
+                                        </div>
+                                        <div className="w-full bg-slate-200 rounded-full h-2">
+                                            <div
+                                                className="bg-purple-600 h-2 rounded-full"
+                                                style={{ width: `${Math.min(100, Math.max(0, (window.fundedAmount / window.fundingGoal) * 100))}%` }}
+                                            ></div>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-sm text-slate-600">Availability</span>
+                                        <span className="font-bold text-slate-900">Open</span>
                                     </div>
-                                    <div className="w-full bg-slate-200 rounded-full h-2">
-                                        <div
-                                            className="bg-purple-600 h-2 rounded-full"
-                                            style={{ width: `${((window.spotsLeft ?? 0) / window.totalSpots) * 100}%` }}
-                                        ></div>
-                                    </div>
-                                </div>
-                            )}
+                                )}
+                            </div>
 
                             {/* Dates */}
                             <div className="space-y-3 mb-6">

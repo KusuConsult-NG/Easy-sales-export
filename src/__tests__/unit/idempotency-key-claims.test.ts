@@ -74,7 +74,14 @@ describe('submitWithdrawalAction — the key that locked funds twice', () => {
         mockClaimIdempotencyKey.mockResolvedValue({ claimed: true, heldAt: null });
         mockDebitJsonbBalance.mockResolvedValue({ ok: true, balance: 80_000, reason: null });
         mockDebitWithFloor.mockResolvedValue({ ok: true, balance: 80_000, reason: null });
-        setDocs({ cooperativeId: 'coop-1', savingsBalance: 100_000 });
+        // membershipStatus: #276 added a canTransactAsMember guard to
+        // submitWithdrawalAction — platform.ts checked only that a membership
+        // row EXISTED, so a member at "pending" could withdraw. This fixture
+        // describes a member with ₦100,000 of savings withdrawing them, which
+        // is an approved member; it simply never said which status. Without it
+        // the new guard refuses and the two amount assertions below fail
+        // against working code.
+        setDocs({ cooperativeId: 'coop-1', savingsBalance: 100_000, membershipStatus: 'active' });
     });
 
     it('locks no funds when the key was already claimed', async () => {

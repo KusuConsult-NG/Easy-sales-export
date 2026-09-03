@@ -3,7 +3,7 @@
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { requireAdmin } from "@/lib/require-admin";
-import { revalidatePath, revalidateTag } from "next/cache";
+import { revalidatePath } from "next/cache";
 import { logger } from "@/lib/logger";
 import { recordAdminAction } from "@/lib/audit-log";
 

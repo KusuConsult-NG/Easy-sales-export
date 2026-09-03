@@ -45,6 +45,32 @@ export default function InvoiceGenerator({
     const generatePDF = async () => {
         setIsGenerating(true);
         try {
+            /**
+             *   #351 THE NAIRA SIGN DROPPED OUT OF EVERY FIGURE.
+             *
+             *        jsPDF's built-in helvetica is a WinAnsi (cp1252) font.
+             *        "₦" is U+20A6, which WinAnsi has no code point for, so
+             *        jsPDF emitted nothing for it: an invoice line that read
+             *        "₦45,000" on screen printed as "45,000", and the header
+             *        columns "Unit Price (₦)" printed as "Unit Price ()".
+             *
+             *        A money document that does not name its currency is the
+             *        same defect as #266, where every money SMS rendered the
+             *        sign as "?" for the same reason one layer down.
+             *
+             *        "NGN" is the fix that needs no embedded font. Embedding a
+             *        Unicode face would also work and costs ~150KB in the
+             *        bundle for a component nothing currently renders.
+             *
+             *        RECORDED, NOT REPAIRED BEYOND THIS: nothing in the product
+             *        imports InvoiceGenerator. The currency is corrected because
+             *        it is two lines and would otherwise be waiting for whoever
+             *        wires it up, but the pagination gap below is left as-is —
+             *        the layout uses fixed Y offsets with no addPage() guard, so
+             *        an invoice with enough line items runs off the bottom of
+             *        page one. Fixing that is building the feature, not
+             *        repairing it.
+             */
             const { jsPDF } = await import('jspdf');
             const autoTable = (await import('jspdf-autotable')).default;
             const doc = new jsPDF();
@@ -105,7 +131,7 @@ export default function InvoiceGenerator({
 
             autoTable(doc, {
                 startY: tableStartY,
-                head: [['Description', 'Qty', 'Unit Price (₦)', 'Total (₦)']],
+                head: [['Description', 'Qty', 'Unit Price (NGN)', 'Total (NGN)']],
                 body: invoice.items.map(item => [
                     item.description,
                     item.quantity.toString(),
@@ -144,20 +170,20 @@ export default function InvoiceGenerator({
 
             // Subtotal
             doc.text('Subtotal:', totalsX, currentY);
-            doc.text(`₦${invoice.subtotal.toLocaleString()}`, 190, currentY, { align: 'right' });
+            doc.text(`NGN ${invoice.subtotal.toLocaleString()}`, 190, currentY, { align: 'right' });
             currentY += 6;
 
             // Tax if applicable
             if (invoice.tax && invoice.tax > 0) {
                 doc.text(`Tax (${invoice.taxRate || 0}%):`, totalsX, currentY);
-                doc.text(`₦${invoice.tax.toLocaleString()}`, 190, currentY, { align: 'right' });
+                doc.text(`NGN ${invoice.tax.toLocaleString()}`, 190, currentY, { align: 'right' });
                 currentY += 6;
             }
 
             // Shipping if applicable
             if (invoice.shipping && invoice.shipping > 0) {
                 doc.text('Shipping:', totalsX, currentY);
-                doc.text(`₦${invoice.shipping.toLocaleString()}`, 190, currentY, { align: 'right' });
+                doc.text(`NGN ${invoice.shipping.toLocaleString()}`, 190, currentY, { align: 'right' });
                 currentY += 6;
             }
 
@@ -166,7 +192,7 @@ export default function InvoiceGenerator({
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(...darkColor);
             doc.text('Total:', totalsX, currentY + 3);
-            doc.text(`₦${invoice.total.toLocaleString()}`, 190, currentY + 3, { align: 'right' });
+            doc.text(`NGN ${invoice.total.toLocaleString()}`, 190, currentY + 3, { align: 'right' });
 
             // Notes section
             if (invoice.notes) {

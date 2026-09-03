@@ -28,10 +28,18 @@ export async function updateLessonProgress(
         const validated = courseProgressSchema.parse(data);
 
         // The id is userId_lessonId. The comment here read
-        // "userId_courseId_lessonId", which is not what the line below builds
-        // and matters because the row also STORES a client-supplied courseId:
-        // a caller sending a different courseId for the same lesson retags its
-        // own row, which completedLessonIds then filters out of the course the
+        // "userId_courseId_lessonId", which is not what the line below builds.
+        //
+        // The parallel audit reached the same line and added the reason the
+        // short key is workable: lesson ids are minted as `l-${Date.now()}` in
+        // the course builder, so they are near-unique across courses and
+        // getLessonProgress(lessonId) can reconstruct the key from the lesson
+        // alone. "Near": two lessons added in the same millisecond in different
+        // courses collide, which is why the caveat below still stands.
+        //
+        // It matters because the row also STORES a client-supplied courseId: a
+        // caller sending a different courseId for the same lesson retags its own
+        // row, which completedLessonIds then filters out of the course the
         // lesson really belongs to. The id shape is left alone deliberately —
         // getLessonProgress reads this exact key, so changing it would orphan
         // every existing row and silently reset every learner's position. That

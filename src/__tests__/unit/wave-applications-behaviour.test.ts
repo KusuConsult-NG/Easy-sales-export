@@ -734,9 +734,24 @@ describe('requestWaveRevisionAction', () => {
     it('refuses a non-admin', async () => {
         actAs(APPLICANT, ['user']);
         const { requestWaveRevisionAction } = await actions();
-        expect(await requestWaveRevisionAction('app-1', 'Please redo')).toMatchObject({
-            success: false, error: 'Admin access required',
-        });
+        expect(await requestWaveRevisionAction('app-1', 'Please redo')).toMatchObject({ success: false });
+        expect(claimStatusTransitionFromAny).not.toHaveBeenCalled();
+    });
+
+    it('ADMITS THE WAVE ADMIN, WHO HOLDS wave:approve_applications', async () => {
+        // #265 A hand-written `admin || super_admin` pair refused the role the
+        // module exists for, while the rest of the WAVE admin surface admits it.
+        actAs('wave-admin-1', ['wave_admin']);
+        const { requestWaveRevisionAction } = await actions();
+
+        expect(await requestWaveRevisionAction('app-1', 'Please redo')).toMatchObject({ success: true });
+    });
+
+    it('and still refuses an admin of a different module', async () => {
+        actAs('academy-admin-1', ['academy_admin']);
+        const { requestWaveRevisionAction } = await actions();
+
+        expect(await requestWaveRevisionAction('app-1', 'Please redo')).toMatchObject({ success: false });
         expect(claimStatusTransitionFromAny).not.toHaveBeenCalled();
     });
 

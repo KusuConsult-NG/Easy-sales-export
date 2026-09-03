@@ -29,6 +29,7 @@ import {
 import type { AuditLogEntry, AuditSeverity } from "@/lib/audit-log";
 import { useAdminData } from "@/hooks/useAdminData";
 import { toSafeDate } from "@/lib/utils";
+import { recordExport } from "@/lib/record-export";
 
 const severityConfig = {
     info: { color: "blue", icon: Info, label: "Info" },
@@ -105,6 +106,10 @@ export default function AdminAuditLogsPage() {
             a.download = `audit-logs-${new Date().toISOString()}.csv`;
             a.click();
             window.URL.revokeObjectURL(url);
+            // #309 The download is recorded. Fourteen admin screens built a CSV
+            // and two of them left a trace; several of these carry BVN, NIN and
+            // bank details. recordExport never throws and never blocks.
+            recordExport("audit_logs");
             showToast("Logs exported successfully", "success");
         } else {
             showToast(result.error || "Failed to export logs", "error");

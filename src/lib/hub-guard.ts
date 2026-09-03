@@ -3,6 +3,7 @@ import { requireSession } from "@/lib/session-guard";
 import { redirect } from "next/navigation";
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { isAdmin } from "@/lib/admin-permissions";
 
 /**
  * Enforces strict module onboarding checks.
@@ -24,14 +25,38 @@ export async function requireHubRegistration() {
         redirect(`/auth/login?error=${encodeURIComponent(errorMessage)}`);
     }
     
-    // ── ADMIN BYPASS ──────────────────────────────────────────────────────────
-    // Admin/super_admin accounts are provisioned directly and are NEVER subject
-    // to the hub registration completeness check. They should always pass through.
+    /**
+     * ── ADMIN BYPASS ─────────────────────────────────────────────────────────
+     * Admin accounts are provisioned directly and are never subject to the hub
+     * registration completeness check.
+     *
+     *   #353 THIS TEST LOCKED OUT TWO OF THE TEN ADMIN ROLES.
+     *
+     *        It was written by hand:
+     *
+     *            r === 'admin' || r === 'super_admin' || r.endsWith('_admin')
+     *
+     *        `moderator` and `support` are neither of the two literals and
+     *        neither ends in `_admin`. They ARE admin roles — both are keys of
+     *        PERMISSION_MATRIX and both make isAdmin() true — so an account
+     *        holding one fell through to the profileComplete check below and
+     *        was redirected to /hub/register.
+     *
+     *        This guard wraps six layouts (marketplace seller, buyer and
+     *        onboarding, farm-nation member and onboarding, the export app), so
+     *        a support or moderator account could not enter any of them. That
+     *        is #265's shape — eight module-admin lockouts from a hand-written
+     *        role list — repeating for the two roles that do not share the
+     *        suffix.
+     *
+     *        `endsWith('_admin')` was also a latent trap in the other
+     *        direction: any future role ending in those seven characters would
+     *        have bypassed registration without being an admin at all. The
+     *        suffix is not the fact; membership of PERMISSION_MATRIX is, and
+     *        isAdmin() is where that lives.
+     */
     const sessionRoles: string[] = (sessionResult.session.user as any)?.roles || [];
-    const isAdminAccount = sessionRoles.some((r: string) =>
-        r === 'admin' || r === 'super_admin' || r.endsWith('_admin')
-    );
-    if (isAdminAccount) {
+    if (isAdmin(sessionRoles)) {
         return sessionResult;
     }
     

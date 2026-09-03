@@ -45,6 +45,7 @@ const MEMBER = 'member-1';
 const RESOURCE = 'resource-1';
 
 jest.mock('@/lib/audit-log', () => ({
+    recordAdminAction: (p: any) => (global as any).mockRecordAdminAction(p),
     createAdminAuditLog: jest.fn(async () => ({})),
 }));
 

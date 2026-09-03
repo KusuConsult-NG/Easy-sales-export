@@ -11,6 +11,7 @@ import { extractCanonicalUser } from "@/lib/canonical/normalizer";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { RESOURCE_LIVE_FIELDS, RESOURCE_WITHDRAWN_FIELDS } from "@/lib/wave-resource-visibility";
+import { retirementPatch } from "@/lib/record-retirement";
 
 // ============================================================================
 // RESOURCES MANAGEMENT
@@ -340,43 +341,90 @@ async function _deleteTrainingEventAction(
             return { success: false as const, error: "Unauthorized" , data: null };
         }
 
-        await db.collection(COLLECTIONS.WAVE_TRAINING_EVENTS).doc(eventId).delete();
+        /**
+         *   #302 THIS DESTROYED THREE THINGS, AND ONE OF THE THREE WAS MY OWN
+         *        EARLIER FIX.
+         *
+         *        The event, its live-session documents, and every registration
+         *        against it. The note below used to argue for deleting the
+         *        registrations: "Deleted rather than marked, matching how the
+         *        event itself is removed: a registration for an event that does
+         *        not exist is not a record of anything."
+         *
+         *        That reasoning was sound only while the event was destroyed.
+         *        It is retired now, so the event DOES exist, and a member's
+         *        record of a training they registered for — and possibly
+         *        ATTENDED, since `attended` is set on these rows and
+         *        _member.ts counts trainingsCompleted from them — is a record
+         *        of something. Deleting it erased attendance history to tidy up
+         *        a count.
+         *
+         *        "cancelled" was already in the vocabulary
+         *        (types/wave-actions.ts) and the member list already excludes
+         *        it — it queries status in ["upcoming", "ongoing"] — so the
+         *        status change alone takes the event off every member's screen.
+         */
+        const eventRef = db.collection(COLLECTIONS.WAVE_TRAINING_EVENTS).doc(eventId);
+        const eventSnap = await eventRef.get();
+        if (!eventSnap.exists) {
+            return { success: false as const, error: "Event not found", data: null };
+        }
 
-        // Clean up associated training sessions if any exist
+        await eventRef.update({
+            status: "cancelled",
+            ...retirementPatch(session.user.id, eventSnap.data()?.status),
+        });
+
+        // The live-session documents are retired with it. Nothing joins a
+        // cancelled event's room — _wv_admin_live gates on the event — and the
+        // session row is the record that the class was scheduled.
         const sessionQuery = await db.collection(COLLECTIONS.WAVE_TRAINING_SESSIONS)
             .where("roomName", "==", `wave-training-${eventId}`)
             .get();
         if (!sessionQuery.empty) {
-            const deleteBatch = db.batch();
-            sessionQuery.docs.forEach(doc => deleteBatch.delete(doc.ref));
-            await deleteBatch.commit();
+            const sessionBatch = db.batch();
+            sessionQuery.docs.forEach(doc => sessionBatch.update(doc.ref, {
+                status: "cancelled",
+                ...retirementPatch(session.user.id, doc.data()?.status),
+            }));
+            await sessionBatch.commit();
         }
 
         /**
-         * The REGISTRATIONS were left behind.
+         * The REGISTRATIONS were left behind, and then over-corrected.
          *
-         * Deleting an event cleaned up its live-session documents and nothing
-         * else, so every member who had signed up kept a row in
+         * FIRST DEFECT: deleting an event cleaned up its live-session documents
+         * and nothing else, so every member who had signed up kept a row in
          * WAVE_TRAINING_REGISTRATIONS pointing at an event that no longer
-         * exists. Two readers walk those rows — _member.ts builds the member's
+         * existed. Two readers walk those rows — _member.ts builds the member's
          * training history and their dashboard counts from them — so a deleted
          * event went on being counted as training the member is registered for,
          * with nothing left to render but the id.
          *
-         * Deleted rather than marked, matching how the event itself is removed:
-         * a registration for an event that does not exist is not a record of
-         * anything.
+         * SECOND DEFECT, #302: the fix for that deleted the registrations. It
+         * took a member's record of a training they signed up for — and
+         * possibly attended, since `attended` lives on these rows and
+         * trainingsCompleted is counted from them — and destroyed it to correct
+         * a count. Erasing attendance history is not a way to fix a tally.
+         *
+         * Now: the registration is marked cancelled and stays. The two readers
+         * exclude cancelled rows from the counts, which is what the counts
+         * needed all along, and the member's history keeps the row.
          */
         const registrationQuery = await db.collection(COLLECTIONS.WAVE_TRAINING_REGISTRATIONS)
             .where("eventId", "==", eventId)
             .get();
         if (!registrationQuery.empty) {
             const regBatch = db.batch();
-            registrationQuery.docs.forEach(doc => regBatch.delete(doc.ref));
+            registrationQuery.docs.forEach(doc => regBatch.update(doc.ref, {
+                status: "cancelled",
+                eventCancelled: true,
+                ...retirementPatch(session.user.id, doc.data()?.status),
+            }));
             await regBatch.commit();
             logger.info(
-                `[WAVE Training] Deleted event ${eventId} and released ` +
-                `${registrationQuery.docs.length} registration(s) that pointed at it.`
+                `[WAVE Training] Cancelled event ${eventId} and marked ` +
+                `${registrationQuery.docs.length} registration(s) that point at it.`
             );
         }
 

@@ -21,6 +21,7 @@ import {
 import { getFeatureTogglesAction } from "@/app/actions/health";
 import { useToast } from "@/contexts/ToastContext";
 import { useSession } from "next-auth/react";
+import { walletLedgerMovesBalance } from "@/lib/types/marketplace";
 
 const fmt = (n: number = 0) =>
     new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }).format(n || 0);
@@ -400,6 +401,24 @@ export default function WalletPage() {
                                             <div className="flex-1 min-w-0">
                                                 <p className="font-semibold text-slate-900 text-sm truncate">{txn.description}</p>
                                                 <p className="text-xs text-slate-400 mt-0.5">{fmtDate(txn.createdAt)}</p>
+                                                {/*
+                                                  * THIS ROW IS NOT WALLET MONEY — #332.
+                                                  *
+                                                  * The WAVE earnings credit is written into
+                                                  * wallet_transactions, but the amount goes to
+                                                  * serviceRegistrations.wave.waveEarningsBalance — a
+                                                  * separate pot with its own withdrawal flow. This
+                                                  * query filters on userId alone, so the row appears
+                                                  * here as a green "+₦N" while the balance above
+                                                  * excludes it, and the statement does not add up.
+                                                  * Said plainly rather than hidden: it is the
+                                                  * seller's record of what they earned.
+                                                  */}
+                                                {!walletLedgerMovesBalance(txn) && (
+                                                    <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 mt-1 inline-block">
+                                                        WAVE earnings — not included in your wallet balance
+                                                    </p>
+                                                )}
                                             </div>
                                             <div className="flex items-center gap-3 shrink-0">
                                                 <div className="text-right">

@@ -54,6 +54,7 @@
 import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { cloudinaryResourceType, extensionForType } from '@/lib/storage-admin';
 
 function source(rel: string): string {
     return readFileSync(join(process.cwd(), rel), 'utf-8');
@@ -80,25 +81,36 @@ describe('the stored extension comes from the content', () => {
     });
 
     it('maps the detected type to a fixed extension', () => {
-        expect(route).toContain('const extension = EXTENSION_FOR_TYPE[detectedType]');
-        expect(route).toContain('"application/pdf": ".pdf"');
+        // The TABLE MOVED to storage-admin under #263, because that file needed
+        // the same one and did not have it — it took the extension from the
+        // filename instead, which is this defect in the busier uploader.
+        //
+        // These three assertions used to pin the route's literal source text,
+        // and pinning text is what made them break on a change that made the
+        // code more correct rather than less. They ask the shared function now,
+        // which is the property they were reaching for.
+        expect(route).toContain('extensionForType(detectedType)');
+        expect(extensionForType('application/pdf')).toBe('.pdf');
     });
 
     it('falls back to no extension rather than to the filename', () => {
         // An unmapped type must not reach for the caller's name again.
-        expect(route).toContain('EXTENSION_FOR_TYPE[detectedType] ?? ""');
+        expect(extensionForType('application/zip')).toBe('');
+        expect(extensionForType(undefined)).toBe('');
     });
 
     it('every accepted type has an extension', () => {
         // Otherwise an allowed upload silently loses its extension and a raw
         // asset is served as the wrong thing — the same class, arrived at from
-        // the other side.
-        const allowed = route.slice(route.indexOf('const ALLOWED_UPLOAD_TYPES'), route.indexOf('const EXTENSION_FOR_TYPE'));
-        const mapped = route.slice(route.indexOf('const EXTENSION_FOR_TYPE'));
+        // the other side. Read out of the route's own list rather than a copy
+        // of it here, so adding a type without an extension fails this.
+        const listStart = route.indexOf('const ALLOWED_UPLOAD_TYPES');
+        const allowed = route.slice(listStart, route.indexOf('];', listStart));
+        const types = [...allowed.matchAll(/"([a-z]+\/[a-z0-9.+-]+)"/g)].map((m) => m[1]);
 
-        for (const type of ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4', 'video/quicktime', 'video/webm']) {
-            expect(allowed).toContain(`"${type}"`);
-            expect(mapped.slice(0, 600)).toContain(`"${type}":`);
+        expect(types.length).toBeGreaterThanOrEqual(8);
+        for (const type of types) {
+            expect({ type, ext: extensionForType(type) }).toEqual({ type, ext: expect.stringMatching(/^\.\w+$/) });
         }
     });
 });
@@ -112,8 +124,15 @@ describe('the two type checks now agree', () => {
     });
 
     it('picks the Cloudinary resource type from the content', () => {
-        expect(route).toContain('detectedType === "application/pdf"');
+        // Also shared with storage-admin as of #263. `raw` is the branch that
+        // lets the extension decide the Content-Type, so it is the one that
+        // must never be chosen from a client-declared value.
+        expect(route).toContain('cloudinaryResourceType(detectedType)');
         expect(code).not.toContain('file.type === "application/pdf"');
+
+        expect(cloudinaryResourceType('application/pdf')).toBe('raw');
+        expect(cloudinaryResourceType('video/mp4')).toBe('video');
+        expect(cloudinaryResourceType('image/png')).toBe('image');
     });
 
     it('sends the blob with the detected type', () => {

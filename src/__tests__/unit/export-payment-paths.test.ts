@@ -242,7 +242,13 @@ describe('verifyExportInvestmentAction', () => {
         const { verifyExportInvestmentAction } = await import('@/app/actions/export');
         const result = await verifyExportInvestmentAction('PSK-3');
 
-        expect(result.success).toBe(false);
+        // The webhook fulfilled it, so this must not fulfil it again — that is
+        // what the two write assertions below check, and it is unchanged.
+        //
+        // It reports SUCCESS now rather than failure (#259): the investment
+        // exists and the investor has been charged, so telling them it failed
+        // is wrong. This asserted `false`, which pinned that in place.
+        expect(result.success).toBe(true);
         expect((global as any).mockFirestoreUpdate).not.toHaveBeenCalled();
         expect((global as any).mockFirestoreTxSet).not.toHaveBeenCalled();
     });

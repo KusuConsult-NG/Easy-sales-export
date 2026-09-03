@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { normalizeUserUpdate } from "@/lib/schema-normalizer";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
+import { stripPii } from "@/lib/admin-pii";
 import { FieldValue } from "@/lib/firestore-compat";
 import { FieldPath } from "@/lib/firestore-compat";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
@@ -649,6 +650,10 @@ export async function getStandardCooperativeMembersAction(
             return paginatedErr('Unauthorized');
         }
 
+        // #338. Who may read a member's identity and bank details, as opposed
+        // to who may see the roster at all.
+        const maySeeMemberPii = hasAdminPermission(liveRoles, "cooperatives:approve_members");
+
         let cursorSnap = null;
         if (cursorId && !/^\d+$/.test(cursorId)) {
             cursorSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(cursorId).get();
@@ -885,10 +890,38 @@ export async function getStandardCooperativeMembersAction(
                         bankDetails
                     },
                     status: app.membershipStatus || "pending",
-                    data: {
-                        ...mergedData,
-                        bankDetails
-                    }
+                    /**
+                     *   #338 THE STRIP WRITTEN FOR RAW-DOCUMENT SPREADS WAS NOT
+                     *        APPLIED TO THIS ONE.
+                     *
+                     *        `...mergedData` is the whole COOPERATIVE_MEMBERS
+                     *        document merged with the user document, and
+                     *        `bankDetails` is then re-attached beside it with
+                     *        the account number in the clear. It is rendered
+                     *        field-by-field by DynamicDetailModal, whose
+                     *        exclude list covers bvnVerified/bvnStatus but not
+                     *        `bvn` itself — so the number was displayed.
+                     *
+                     *        The gate above is isAdmin(), which is true for all
+                     *        TEN admin roles. That is #152's finding on a
+                     *        different screen: the fix there added a maySeePii
+                     *        gate to admin/_users.ts, and lib/admin-pii.ts was
+                     *        written for exactly this case — its own header
+                     *        says "several of those lists also spread a raw
+                     *        user or registration document into the response
+                     *        ... This is the strip for those spreads." It was
+                     *        applied to three sites and missed here.
+                     *
+                     *        Gated on the permission the screen exists to
+                     *        exercise, matching _withdrawals.ts and
+                     *        _marketplace.ts: an admin who may approve members
+                     *        sees what they need to approve one; the rest get
+                     *        the record with the identity and bank keys removed
+                     *        at any depth.
+                     */
+                    data: maySeeMemberPii
+                        ? { ...mergedData, bankDetails }
+                        : stripPii({ ...mergedData, bankDetails })
                 };
             });
 

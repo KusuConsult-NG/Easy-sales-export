@@ -57,7 +57,8 @@ const VICTIM_EMAIL = 'orphan@example.com';
 const MEMBER_DOC = 'member-doc-1';
 const PAYMENT_REF = 'PSK-REF-ORPHAN';
 
-jest.mock('@/lib/audit-log', () => ({ createAdminAuditLog: jest.fn(async () => ({})) }));
+jest.mock('@/lib/audit-log', () => ({
+    recordAdminAction: (p: any) => (global as any).mockRecordAdminAction(p), createAdminAuditLog: jest.fn(async () => ({})) }));
 jest.mock('@/lib/firestore-utils', () => ({
     runQueryWithRetry: (fn: any) => fn(),
     safeCollection: jest.fn(),

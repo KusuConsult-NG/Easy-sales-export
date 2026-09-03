@@ -7,6 +7,36 @@ import { logger } from "@/lib/logger";
 import { sendBriefingConfirmationEmail } from "@/lib/email-notifications";
 import { generateAndSendWhatsAppInvite } from "@/lib/whatsapp-invites";
 import { ActionResponse, withSafeAction } from "@/lib/safe-action";
+import { rateLimit, getActionClientIp } from "@/lib/rate-limiter";
+import { rateLimitConfig } from "@/lib/rate-limits.config";
+
+/**
+ *   #268 THE ONE PUBLIC ENDPOINT THAT MAILS STRANGERS HAD NO RATE LIMIT.
+ *
+ *        registerForBriefingAction is unauthenticated by design, and on every
+ *        successful call it sends a confirmation email through Resend AND a
+ *        WhatsApp invite. It had no limit of any kind, so a loop with fresh
+ *        addresses mails arbitrary third parties from our domain as fast as
+ *        requests can be made. The Resend bill and the junk registrations are
+ *        recoverable; sender reputation is not, because the recipients never
+ *        asked and will mark it as spam.
+ *
+ *        Three public endpoints here send mail to an unauthenticated caller's
+ *        chosen address. api/contact and actions/password-reset both take the
+ *        contactForm bucket; this one took nothing — and it is the only one that
+ *        also sends a WhatsApp invite. password-reset.ts already carries the
+ *        argument in full ("unauthenticated, sends a real email through Resend
+ *        on every call, and had no limit of any kind"). One copy short.
+ *
+ *        KEYED ON THE CALLER, NOT THE ADDRESS, and that differs from
+ *        password-reset deliberately. There, one address is what gets abused,
+ *        so the address is the key. Here the duplicate check already refuses a
+ *        second registration for the same email BEFORE anything is sent, so one
+ *        address cannot be mailed twice however hard you try; what is abused is
+ *        the endpoint, with a fresh address each time. getActionClientIp is
+ *        what #260 made trustworthy.
+ */
+const briefingLimiter = rateLimit(rateLimitConfig.contactForm);
 
 // Status type for strict typing
 export type BriefingStatus = "registered" | "attended" | "cancelled";
@@ -55,6 +85,17 @@ export async function registerForBriefingAction(data: BriefingRegistrationData):
             return { success: false as const, error: firstError, data: null };
         }
 
+        // Before anything is written or sent. See #268 above.
+        const callerIp = await getActionClientIp();
+        const limit = await briefingLimiter.check(`wave-briefing:${callerIp}`);
+        if (!limit.success) {
+            return {
+                success: false as const,
+                error: "Too many registration attempts. Please try again later.",
+                data: null,
+            };
+        }
+
         const validData = validationResult.data!;
         const emailToStore = validData.email;
         const phoneToStore = validData.phoneNumber;
@@ -85,7 +126,28 @@ export async function registerForBriefingAction(data: BriefingRegistrationData):
             }
         }
 
-        if (userProfile) {
+        /**
+         *   #269 AND AN ANONYMOUS CALLER'S ROLES CAME FROM AN EMAIL THEY TYPED.
+         *
+         *        This read `userProfile.roles`, and userProfile may have come
+         *        from the EMAIL FALLBACK above — a USERS lookup on the address
+         *        the caller submitted, with no session at all. isUserAdmin
+         *        waives the female-only participation gate, so typing an
+         *        admin's address was treated as being one. Nobody proved
+         *        anything; they knew an address.
+         *
+         *        #36's class ("adopts an application matched on a free-text
+         *        email"), and #83's, which found that fix had landed on WAVE
+         *        only. Here it is again, in a public action, granting a waiver.
+         *
+         *        Roles come from the AUTHENTICATED session and nowhere else.
+         *        The gender lookup above stays: genderToValidate prefers the
+         *        submitted value and skips the gate entirely when nothing
+         *        resolves, so adopting a stranger's recorded gender can only
+         *        make this stricter. It grants nothing, which is the whole
+         *        difference between the two halves.
+         */
+        if (sessionUserId && userProfile) {
             const roles = userProfile.roles || [];
             try {
                 const { isAdmin } = await import("@/lib/admin-permissions");

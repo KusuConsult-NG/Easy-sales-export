@@ -14,6 +14,13 @@ interface BankAccountData {
     bankName: string;
     accountNumber: string;
     accountName: string;
+    /**
+     * #346 Whether the account was actually resolved by the bank. This step
+     * used to gate Continue on `accountName` alone, and the applicant could
+     * type that — so a seller finished registration with a payout account
+     * whose holder name they had made up.
+     */
+    verified?: boolean;
 }
 
 interface BankAccountStepProps {
@@ -25,16 +32,16 @@ interface BankAccountStepProps {
 }
 
 export default function BankAccountStep({ data, onChange, onNext, onBack, isSubmitting }: BankAccountStepProps) {
-    function handleVerified(accountData: { bankName: string; accountNumber: string; accountName: string }) {
+    function handleVerified(accountData: BankAccountData) {
         onChange(accountData);
     };
 
     function handleContinue() {
-        // debug removed — use logger if needed
-        if (data?.accountName) {
+        // #346 gates on the verification, not on the name being non-empty.
+        if (data?.verified && data.accountName) {
             onNext();
         } else {
-            console.warn("BankAccountStep: Cannot continue, accountName is missing");
+            console.warn("BankAccountStep: cannot continue, the bank account is not verified");
         }
     };
 
@@ -131,7 +138,7 @@ export default function BankAccountStep({ data, onChange, onNext, onBack, isSubm
                 </button>
                 <button
                     onClick={handleContinue}
-                    disabled={!data?.accountName || isSubmitting}
+                    disabled={!data?.verified || !data?.accountName || isSubmitting}
                     className="px-8 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
                 >
                     {isSubmitting && <Loader2 className="w-5 h-5 animate-spin" />}

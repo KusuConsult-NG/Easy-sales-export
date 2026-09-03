@@ -268,13 +268,38 @@ describe('#162 — deleting a training event', () => {
         store.seed(REGS, 'reg-other', { userId: MEMBER, eventId: 'event-2', attended: false });
     });
 
-    it('RELEASES THE REGISTRATIONS THAT POINTED AT IT', async () => {
+    /**
+     * This asserted the destruction of all three — event, session, and the two
+     * registrations — with the registrations "released" meaning deleted.
+     *
+     * #302 reverses it. The registrations carry `attended`, and _member.ts
+     * counts trainingsCompleted from them, so deleting them erased a member's
+     * attendance history in order to correct a registration tally. The tally is
+     * corrected at the reader instead.
+     *
+     * The original concern is still pinned: a cancelled event must stop
+     * inflating trainingsRegistered. That is now checked in the assertions
+     * below and in the reader's own suite, rather than by the row being gone.
+     */
+    it('CANCELS the event and MARKS the registrations — nothing is destroyed', async () => {
         expect(await remove()).toMatchObject({ success: true });
 
-        expect(store.size(EVENTS)).toBe(0);
-        expect(store.size(SESSIONS)).toBe(0);
-        const remaining = store.all(REGS).map(([id]) => id);
-        expect(remaining).toEqual(['reg-other']);
+        expect(store.size(EVENTS)).toBe(1);
+        expect(store.get(EVENTS, EVENT)?.status).toBe('cancelled');
+        expect(store.get(EVENTS, EVENT)?.title).toBe('Export Readiness');
+
+        expect(store.size(SESSIONS)).toBe(1);
+        expect(store.get(SESSIONS, 'sess-1')?.status).toBe('cancelled');
+
+        // All three registrations survive.
+        expect(store.all(REGS).map(([id]) => id).sort())
+            .toEqual(['reg-1', 'reg-2', 'reg-other']);
+
+        // The two that pointed at this event are marked so the member's counts
+        // can exclude them; the one for another event is untouched.
+        expect(store.get(REGS, 'reg-1')?.eventCancelled).toBe(true);
+        expect(store.get(REGS, 'reg-2')?.eventCancelled).toBe(true);
+        expect(store.get(REGS, 'reg-other')?.eventCancelled).toBeUndefined();
     });
 
     it('refuses a role that does not manage WAVE training', async () => {

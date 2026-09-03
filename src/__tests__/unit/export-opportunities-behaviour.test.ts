@@ -293,9 +293,15 @@ describe('the pages draw the meter only when there is one', () => {
     it('and reaches toString only once it knows there is a number', () => {
         const src = page('src/app/export/windows/[id]/page.tsx');
 
-        // `.toString()` on the total is fine — it is inside the guard now. What
-        // must not exist is an unguarded one, so the guard is what is pinned.
-        const call = src.indexOf('windowData.totalSpots.toString()');
+        // Stringifying the total is fine — it is inside the guard. What must
+        // not exist is an UNGUARDED one, so the guard is what is pinned, not
+        // the spelling: the merge took the other audit's `String(x)` over this
+        // branch's `x.toString()`, which is the same operation and would have
+        // made this assertion fail while the property it cares about held.
+        const call = Math.max(
+            src.indexOf('windowData.totalSpots.toString()'),
+            src.indexOf('String(windowData.totalSpots)'),
+        );
         expect(call).toBeGreaterThan(-1);
         const guard = src.lastIndexOf('typeof windowData.totalSpots === "number"', call);
         expect(guard).toBeGreaterThan(-1);

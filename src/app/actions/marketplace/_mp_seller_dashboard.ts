@@ -11,7 +11,9 @@ import type { Product, Order } from "@/lib/types/marketplace";
 import { ProductSchema, OrderSchema, SellerAnalyticsSchema } from "@/lib/validations/marketplace";
 import { withSafeAction, ActionResponse } from "@/lib/safe-action";
 import { toMillis } from "@/lib/firestore-serialize";
-import { countsAsSellerRevenue, orderAmount } from "@/lib/order-status";
+import { countsAsSellerRevenue } from "@/lib/order-status";
+import { scopeOrderToSeller, sellerOrderAmount } from "@/lib/order-scope";
+import { isRetired } from "@/lib/record-retirement";
 
 /**
  * The most rows the analytics summary will read from each collection.
@@ -111,7 +113,30 @@ async function _getSellerProductsAction(options: {
             }
         });
 
-        if (search) { 
+        /**
+         *   #301 THE ONE LIST THAT WOULD HAVE KEPT SHOWING A DELETED PRODUCT.
+         *
+         *        Deleting a product now retires the row instead of destroying
+         *        it, and every buyer-facing query filters status == "active" so
+         *        the listing leaves the catalogue on that alone. This list does
+         *        not: it queries by sellerId, and by an OPTIONAL status, so with
+         *        the default "all" tab a retired product would sit on the
+         *        seller's own screen with no way left to remove it.
+         *
+         *        Filtered here rather than in the query because both query paths
+         *        (ordered and the missing-index fallback) converge on this
+         *        array, and because `retired` is absent on every existing row —
+         *        a .where() on a field that does not exist yet is exactly the
+         *        shape that has emptied lists in this codebase before.
+         *
+         *        Asking for the archived tab explicitly still shows them, so
+         *        nothing is hidden from the person who owns it.
+         */
+        if (status !== "archived") {
+            products = products.filter((p: any) => !isRetired(p));
+        }
+
+        if (search) {
             const searchLower = search.toLowerCase();
             products = products.filter((p: any) =>
                 p.title?.toLowerCase()?.includes(searchLower) ||
@@ -220,7 +245,29 @@ async function _getSellerOrdersAction(options: { limit?: number;
 
         const { serializeValue } = await import("@/lib/firestore-serialize");
         let orders = snapshot.docs.map((doc: any) => { 
-            const data = doc.data();
+            /**
+             *   #342 ONE ORDER DOCUMENT, SEVERAL SELLERS.
+             *
+             *        The query is correctly scoped — array-contains returns only
+             *        orders this seller is part of — and the document it returns
+             *        holds EVERY seller's line items and the WHOLE basket's
+             *        subtotal, delivery fee and total.
+             *
+             *        So the seller orders screen listed another merchant's
+             *        product titles as this seller's
+             *        (`order.items.map(i => i.productTitle).join(", ")`),
+             *        counted them (`{order.items.length} Items`), showed the
+             *        whole basket's money, and told the seller to pack and ship
+             *        it.
+             *
+             *        Scoped on the way out. See lib/order-scope.ts, which
+             *        reproduces the split _payment_orders.ts already uses to
+             *        size each seller's escrow row, so this figure and the
+             *        payout agree. Single-seller orders — and rows written
+             *        before every item carried a sellerId — are returned
+             *        untouched.
+             */
+            const data = scopeOrderToSeller(doc.data(), userId);
             try {
                 const parsed = OrderSchema.parse({ id: doc.id, ...data });
                 return serializeValue(parsed);
@@ -332,7 +379,20 @@ async function _getSellerAnalyticsAction(): Promise<ActionResponse<{ analytics: 
         ordersSnapshot.docs.forEach(doc => {
             const data = doc.data();
             const status = data.status || "";
-            const totalAmount = orderAmount(data);
+            /**
+             *   #342 WHOSE MONEY IS IT.
+             *
+             *        This summed `orderAmount(data)` — data.totalAmount, the
+             *        WHOLE basket including the full delivery fee — over every
+             *        order the seller appears in. On a shared basket a seller's
+             *        Total Sales and Monthly Revenue counted another merchant's
+             *        goods as their own, and disagreed with the payout computed
+             *        from their escrow row.
+             *
+             *        The comment below is careful about WHICH STATUSES count as
+             *        revenue. It never asked whose money it was.
+             */
+            const totalAmount = sellerOrderAmount(data, userId);
             const orderDate = getOrderDate(data.createdAt);
 
             // Revenue counts only orders that were actually PAID for.

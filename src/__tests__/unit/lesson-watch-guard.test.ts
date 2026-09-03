@@ -75,9 +75,13 @@ jest.mock('@/lib/redis', () => ({
     setCache: async () => undefined,
     deleteCache: async () => undefined,
 }));
+// The WHOLE module surface, which the audit-log-mock ratchet enforces: a mock
+// covering two thirds of it fails inside a generic catch and reads as a defect
+// in the code under test.
 jest.mock('@/lib/audit-log', () => ({
     createAdminAuditLog: jest.fn(async () => ({})),
     logAdminAction: jest.fn(async () => ({})),
+    recordAdminAction: jest.fn(async () => ({})),
 }));
 
 let store: FakeDbHandle;

@@ -233,7 +233,11 @@ export default function BuyerOrderDetailPage() {
                         <AlertCircle className="w-6 h-6 text-rose-600 shrink-0" />
                         <div>
                             <p className="font-semibold text-rose-900 text-sm">Order Under Review</p>
-                            <p className="text-rose-700 text-xs mt-0.5">Our team is reviewing this dispute. We'll reach out via your registered email.</p>
+                            {/* Was: "We'll reach out via your registered email." — #312.
+                                Nothing on the dispute path sends an email; resolution
+                                notifies in-app, by SMS and by push. Same false claim as
+                                the seller's copy of this banner. */}
+                            <p className="text-rose-700 text-xs mt-0.5">Our team is reviewing this dispute. You&rsquo;ll be notified here and by SMS when it is resolved.</p>
                         </div>
                     </div>
                 )}

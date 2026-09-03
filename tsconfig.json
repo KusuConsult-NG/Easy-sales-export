@@ -105,7 +105,13 @@
   ],
   "exclude": [
     "node_modules",
-    "scripts",
+    // "scripts" WAS EXCLUDED HERE — #328.
+    //
+    // eslint.config.mjs ignored the same directory, so those files were the
+    // only ones in the repository outside both gates — while importing the
+    // same `db` the application does and writing to the live Supabase project
+    // by hand. scripts/firebase-schema-fix.ts has crashed on its ninth line
+    // since it was written; one run of tsc says why.
     "tests",
     "__tests__",
     "e2e",

@@ -567,6 +567,62 @@ describe('onboardLegacyMemberAction — the welcome email', () => {
         expect(res.success).toBe(true);
         expect(res.message).toContain('welcome email failed to send');
     });
+
+    /**
+     *   #290 THE SAME THREE OUTCOMES, AS FIELDS.
+     *
+     *        Everything above was already true and already tested. What was
+     *        missing is that the outcome existed ONLY as English prose, so
+     *        ImportLegacyModal — the only caller — read `success`, dropped the
+     *        rest, and printed one hardcoded sentence for all three cases. For
+     *        the failed-email case that sentence claimed the email had been
+     *        sent AND destroyed the temporary PIN, which is the only way into
+     *        the account that had just been created.
+     *
+     *        message is deliberately unchanged; the four assertions above still
+     *        pin it. See legacy-onboarding-outcome.render.test.tsx for what the
+     *        admin now sees.
+     */
+    it('#290 reports isNewUser/emailSent as FIELDS, not only in the prose', async () => {
+        const res: any = await onboard();
+
+        expect({ isNewUser: res.isNewUser, emailSent: res.emailSent }).toEqual({
+            isNewUser: true, emailSent: true,
+        });
+        // Nothing to hand over, so nothing is handed over.
+        expect(res.temporaryPassword).toBeNull();
+    });
+
+    it('#290 RETURNS THE PIN AS A FIELD when the email failed', async () => {
+        sendLegacyMemberWelcomeEmail.mockImplementation(async () =>
+            ({ success: false, error: 'smtp down' }));
+
+        const res: any = await onboard();
+
+        expect(res.emailSent).toBe(false);
+        expect(res.temporaryPassword).toMatch(/^\d{6}$/);
+        // It is the same PIN the prose has always embedded, not a second one.
+        expect(res.message).toContain(res.temporaryPassword);
+        // And the same one the member's account was created with.
+        const [, , sentPin] = sendLegacyMemberWelcomeEmail.mock.calls[0] as [string, string, string];
+        expect(res.temporaryPassword).toBe(sentPin);
+    });
+
+    it('#290 says an EXISTING member got no email, and hands over no PIN', async () => {
+        // The case with no send at all. A screen that cannot tell this apart
+        // tells the admin an email went out to somebody nothing was sent to.
+        existingAuthRecord('real-uid');
+        store.seed(COLLECTIONS.USERS, 'real-uid', { email: 'ada@example.com' });
+
+        const res: any = await onboard();
+
+        expect({ isNewUser: res.isNewUser, emailSent: res.emailSent }).toEqual({
+            isNewUser: false, emailSent: false,
+        });
+        // Their existing password stands, so there is no PIN to reveal — and
+        // revealing one would be worse than saying nothing.
+        expect(res.temporaryPassword).toBeNull();
+    });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

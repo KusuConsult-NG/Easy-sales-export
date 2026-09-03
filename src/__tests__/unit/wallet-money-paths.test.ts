@@ -61,7 +61,15 @@ jest.mock('@/lib/status-transition', () => ({
     claimStatusTransition: (...a: any[]) => mockClaimStatus(...a),
     claimStatusTransitionFromAny: jest.fn(),
 }));
-jest.mock('@/lib/paystack-transfer', () => ({ paystackPayout: (...a: any[]) => mockPayout(...a) }));
+jest.mock('@/lib/paystack-transfer', () => ({
+    paystackPayout: (...a: any[]) => mockPayout(...a),
+    // The REAL payoutReference. A mock that stubs only paystackPayout leaves
+    // this undefined, the caller throws on the call, and the action's own catch
+    // turns it into a generic failure — the fourth time an incomplete mock has
+    // made a working path look broken in this codebase. Taken from the real
+    // module so the reference asserted here is the reference sent (#249).
+    payoutReference: (jest.requireActual('@/lib/paystack-transfer') as typeof import('@/lib/paystack-transfer')).payoutReference,
+}));
 jest.mock('@/lib/audit-log', () => ({
     createAdminAuditLog: jest.fn(async () => ({})),
     logAdminFinancialAction: jest.fn(async () => ({})),

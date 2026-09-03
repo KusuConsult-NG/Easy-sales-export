@@ -431,10 +431,16 @@ describe('verifyExportInvestmentAction', () => {
         expect(claimPaymentOnce).not.toHaveBeenCalled();
     });
 
-    it('reports a duplicate delivery rather than fulfilling twice', async () => {
+    it('does not fulfil a duplicate delivery twice — and calls it SUCCESS', async () => {
+        // The not-fulfilling half is the point and is unchanged. The reported
+        // outcome is not: this asserted { success: false, error: 'Payment
+        // already processed' }, which is what an investor saw AFTER being
+        // charged for an investment that had already been recorded (#259).
+        // Four sibling paths had already been fixed to report success; this was
+        // the one that was missed, and this test was pinning it in place.
         claimPaymentOnce.mockImplementation(async () => ({ claimed: false }));
 
-        expect(await verify()).toMatchObject({ success: false, error: 'Payment already processed' });
+        expect(await verify()).toMatchObject({ success: true });
         expect(store.size(SLOTS)).toBe(0);
         expect(incrementWithinCeiling).not.toHaveBeenCalled();
     });

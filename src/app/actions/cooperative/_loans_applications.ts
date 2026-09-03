@@ -11,7 +11,9 @@ import { requireSession } from "@/lib/session-guard";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import type { LoanApplication } from "@/lib/types/cooperative-loans";
-import { normaliseLoanApplication, LOAN_APPLICATION_COLLECTIONS, resolveLoanApplication } from "@/lib/loan-application-location";
+import { normaliseLoanApplication, LOAN_APPLICATION_COLLECTIONS, resolveLoanApplication, ONE_OPEN_LOAN_APPLICATION_MESSAGE } from "@/lib/loan-application-location";
+import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
+import { readCooperativeBalance } from "@/lib/cooperative-member-balance";
 
 /**
  * Submit loan application
@@ -44,23 +46,57 @@ export async function submitLoanApplicationAction(formData: {
             return { success: false as const, error: "Unauthorized" , data: null };
         }
 
+        /**
+         *   #345 SECURITY: THE SAVINGS FIGURE EVERY ELIGIBILITY RULE RAN ON WAS
+         *        THE CALLER'S.
+         *
+         *        `formData.contributionAmount` came from the browser and was
+         *        the sole input to the tier, the 0.5x loan cap and
+         *        isEligibleForLoan(). This is a "use server" export, so a
+         *        request carrying `contributionAmount: 50_000_000` cleared the
+         *        ₦5,000 minimum and the cap and filed a pending application for
+         *        ₦25m against a member with nothing saved. Approval is a
+         *        separate admin claim, so no money moved — but the queue an
+         *        admin works from was fillable with applications the rules
+         *        forbid.
+         *
+         *        api/cooperative/apply-loan, the other writer of this
+         *        collection, already reads the savings off the membership row.
+         *        This one now does the same, and the caller's figure is
+         *        ignored — kept on the type so existing callers compile, and
+         *        recorded on the application only as what the member CLAIMED.
+         *
+         *        The row is located through findCooperativeMemberRow and the
+         *        balance read through readCooperativeBalance, so that
+         *        introducing this read does not refuse a member whose row has
+         *        an auto-generated id or whose savings sit under the legacy
+         *        `balance` field. See both modules for why either happens.
+         */
+        const memberRow = await findCooperativeMemberRow(
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), session.user.id,
+        );
+        if (!memberRow) {
+            return { success: false as const, error: "You must be a cooperative member to apply for a loan", data: null };
+        }
+        const savingsBalance = readCooperativeBalance(memberRow.data);
+
         // ===== TIER VALIDATION =====
         // Import tier functions
         const { calculateUserTier, COOPERATIVE_TIERS, getTierMaxDuration } = await import("@/lib/cooperative-tiers");
 
-        // 1. Calculate actual tier based on contribution
-        const actualTier = calculateUserTier(formData.contributionAmount);
+        // 1. Calculate actual tier based on the member's RECORDED savings
+        const actualTier = calculateUserTier(savingsBalance);
 
         // 2. Verify submitted tier matches contribution level
         if (formData.tier !== actualTier) {
             return {
                 success: false as const,
-                error: `Tier mismatch: Your contribution of ₦${formData.contributionAmount.toLocaleString()} qualifies for ${actualTier} tier, not ${formData.tier} tier`};
+                error: `Tier mismatch: Your savings of ₦${savingsBalance.toLocaleString()} qualify for ${actualTier} tier, not ${formData.tier} tier`};
         }
 
         // 3. Validate loan amount against tier multiplier
         const tierInfo = COOPERATIVE_TIERS[actualTier];
-        const maxLoanAmount = formData.contributionAmount * tierInfo.maxLoanMultiplier;
+        const maxLoanAmount = savingsBalance * tierInfo.maxLoanMultiplier;
 
         if (formData.amount > maxLoanAmount) {
             return {
@@ -113,7 +149,10 @@ export async function submitLoanApplicationAction(formData: {
             purpose: formData.purpose,
             durationMonths: formData.durationMonths,
             status: "pending",
-            contributionAmount: formData.contributionAmount,
+            // The figure the rules ran on, and — separately — what the form
+            // sent, so a mismatch is visible on the record rather than lost.
+            contributionAmount: savingsBalance,
+            claimedContributionAmount: formData.contributionAmount,
             tier: formData.tier,
             interestRate,
             totalRepayment,
@@ -149,7 +188,9 @@ export async function submitLoanApplicationAction(formData: {
             const coopLoansSnap = await coopLoansQuery.get();
 
             if (!generalLoansSnap.empty || !coopLoansSnap.empty) {
-                throw new Error("Active or pending loan application already exists platform-wide.");
+                // #288. Reaches the caller through `error?.message` in this
+                // file's catch, so it is UI copy. Shared with the other doors.
+                throw new Error(ONE_OPEN_LOAN_APPLICATION_MESSAGE);
             }
 
             // 2. Standard eligibility check (using active/disbursed only for balance calculation)
@@ -164,7 +205,7 @@ export async function submitLoanApplicationAction(formData: {
             }, 0);
 
             const eligibility = isEligibleForLoan(
-                formData.contributionAmount,
+                savingsBalance,
                 formData.amount,
                 currentLoanBalance
             );

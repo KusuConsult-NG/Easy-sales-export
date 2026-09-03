@@ -119,14 +119,75 @@ export default function BookingWizard({ isOpen, onClose, exportWindow }: Booking
     }
     function back() { setStep(s => s - 1); }
 
+    /**
+     * #348 Upload one of the stage-4 documents through the authenticated
+     * /api/upload route, the same door the admin export-orders screen uses.
+     * Returns the stored URL, or null with the reason already shown.
+     */
+    async function uploadDocument(file: File, documentType: string): Promise<string | null> {
+        try {
+            const body = new FormData();
+            body.append("file", file);
+            body.append("folder", "export-bookings");
+            body.append("documentType", documentType);
+
+            const res = await fetch("/api/upload", { method: "POST", body });
+            const uploaded = await res.json().catch(() => ({}));
+            if (!res.ok || !uploaded?.success || !uploaded?.url) {
+                showToast(uploaded?.error || `Could not upload your ${documentType.replace(/_/g, " ")}.`, "error");
+                return null;
+            }
+            return uploaded.url as string;
+        } catch {
+            showToast("Upload failed. Please check your connection and try again.", "error");
+            return null;
+        }
+    }
+
     async function handleConfirm() {
         if (!exportWindow) return;
         setSubmitting(true);
         try {
+            /**
+             *   #348 THIS SENT THREE FIELDS OUT OF FOUR SCREENS.
+             *
+             *        The call was:
+             *
+             *            createBookingAction({ exportWindowId, quantity, totalPrice })
+             *
+             *        Stage 2's quality declaration, stage 3's port and vessel
+             *        and BOTH of stage 4's uploads were dropped here. The
+             *        wizard refuses to advance without any of them, so the
+             *        member is made to produce a Bill of Lading and a
+             *        Certificate of Origin, watches them be accepted — and
+             *        there was no upload code anywhere in this file. Nothing
+             *        left the browser. The export team got a reserved slot with
+             *        no idea what was in it or how it was shipping.
+             *
+             *        The documents are uploaded first, so a booking is never
+             *        created against files that failed to store. The volume is
+             *        reserved by createBookingAction, and reserving capacity for
+             *        a booking whose paperwork did not arrive is the outcome
+             *        this ordering avoids.
+             */
+            const bolUrl = bolFile ? await uploadDocument(bolFile, "bill_of_lading") : null;
+            if (bolFile && !bolUrl) { setSubmitting(false); return; }
+
+            const coUrl = coFile ? await uploadDocument(coFile, "certificate_of_origin") : null;
+            if (coFile && !coUrl) { setSubmitting(false); return; }
+
             const result = await createBookingAction({
                 exportWindowId: exportWindow.id || "",
                 quantity: volume,
                 totalPrice,
+                moisturePercent: parseFloat(moisture),
+                foreignMatterPercent: parseFloat(foreignMatter),
+                hasPhytosanitaryCertificate: hasPhyto,
+                shippingTerms,
+                portOfOrigin: port,
+                vessel,
+                billOfLadingUrl: bolUrl ?? undefined,
+                certificateOfOriginUrl: coUrl ?? undefined,
             });
             if (result.success) {
                 setSuccess(true);
@@ -155,7 +216,18 @@ export default function BookingWizard({ isOpen, onClose, exportWindow }: Booking
                             <CheckCircle className="w-12 h-12 text-green-600" />
                         </div>
                         <h3 className="text-2xl font-bold text-slate-900 mb-2">Slot Booked!</h3>
-                        <p className="text-slate-500 text-sm">Your export slot is pending confirmation. You will receive an email with payment details.</p>
+                        {/* Was: "You will receive an email with payment details." — #311.
+                            createBookingAction contains no email and no notification
+                            code of any kind: it reserves the volume, writes the row and
+                            returns. So the member was told to wait for a message that
+                            nothing on the platform sends, which is #290's shape. The
+                            copy now says only what is true, and points at the support
+                            route that does work. */}
+                        <p className="text-slate-500 text-sm">
+                            Your export slot is reserved and pending confirmation. Bookings are
+                            not confirmed automatically &mdash; message the export team from
+                            Messages to arrange payment.
+                        </p>
                     </div>
                 ) : (
                     <>
@@ -364,7 +436,13 @@ export default function BookingWizard({ isOpen, onClose, exportWindow }: Booking
                                         <span className="font-bold text-slate-900">Total Amount</span>
                                         <span className="text-2xl font-bold text-primary">₦{totalPrice.toLocaleString()}</span>
                                     </div>
-                                    <p className="text-xs text-slate-400 text-center">Payment details will be sent to your registered email after confirmation.</p>
+                                    {/* #348. Was: "Payment details will be sent to your registered email
+                                        after confirmation." #311 corrected the SUCCESS screen's
+                                        version of this promise and missed this one, in the same
+                                        file, because its ratchet matched the phrase "receive an
+                                        email". createBookingAction still contains no email and no
+                                        notification code of any kind. */}
+                                    <p className="text-xs text-slate-400 text-center">Your slot is reserved on confirmation and stays pending until the export team arranges payment with you from Messages.</p>
                                 </div>
                             )}
                         </div>

@@ -262,11 +262,24 @@ describe('the course verifier', () => {
     });
 
     it('and reports an already-claimed payment as SUCCESS', () => {
+        // This read the first 400 characters of the branch looking for the
+        // literal `success: true`, and broke when #258 removed the early return
+        // — the branch now FALLS THROUGH to the enrolment rather than answering
+        // on the spot, because "the learner paid and is enrolled" was an
+        // assumption that failed whenever the enrolment write had died.
+        //
+        // A character window is not a fact about behaviour. The executed
+        // version of this claim lives in
+        // academy-course-enrolment-completes.test.ts ("THE RETRY ENROLS THE
+        // LEARNER RATHER THAN ASSUMING IT ALREADY HAPPENED"), which drives the
+        // action with a claimed reference and asserts both success and the
+        // enrolment. What remains here is the part that is genuinely about the
+        // source: the failure return that used to be there is gone.
         const src = code(COURSE_PAY);
         const branch = src.slice(src.indexOf('if (!claim.claimed)'));
 
-        expect(branch.slice(0, 400)).toContain('success: true');
-        expect(branch.slice(0, 400)).not.toContain('error: "Payment already processed"');
+        expect(branch).not.toContain('error: "Payment already processed"');
+        expect(branch.slice(0, 400)).not.toContain('success: false');
     });
 
     it('with the pre-claim check-then-write read removed', () => {

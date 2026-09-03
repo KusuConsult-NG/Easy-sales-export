@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { isAdmin, hasAdminPermission, type AdminPermission } from "@/lib/admin-permissions";
 
 /**
  * requireAdmin — Live Role Re-Validation
@@ -13,8 +14,32 @@ import { COLLECTIONS } from "@/lib/types/firestore";
  *   const result = await requireAdmin();
  *   if ("error" in result) return { success: false, error: result.error };
  *   const { userId } = result;
+ *
+ * Pass a permission to require more than "is an admin at all":
+ *   const result = await requireAdmin("finance:resolve_disputes");
+ *
+ *   #356 THIS GATE CARRIED THE SAME HAND-WRITTEN ROLE TEST #353 HAD JUST
+ *        REMOVED FROM hub-guard.ts, AND IT GUARDS FIFTEEN ADMIN ACTION FILES.
+ *
+ *        It was:
+ *
+ *            roles.some(r => r === "admin" || r === "super_admin"
+ *                            || r.endsWith("_admin"))
+ *
+ *        `moderator` and `support` are neither literal and neither ends in
+ *        `_admin`, so both were refused by every action that routes through
+ *        here — the land queue, the withdrawal queue, legacy onboarding, the
+ *        SMS and in-app broadcasts, dispute escalation, maintenance. A support
+ *        account could not do any of the work its role exists for.
+ *
+ *        And the suffix was a trap in the other direction: any future role
+ *        ending in those seven characters would have been admitted without
+ *        being an admin. #353 said the suffix is not the fact and membership
+ *        of PERMISSION_MATRIX is; that fix landed on hub-guard alone, and this
+ *        was one of five more copies of the same test. isAdmin() is now asked
+ *        here, exactly as it is there.
  */
-export async function requireAdmin(): Promise<
+export async function requireAdmin(permission?: AdminPermission): Promise<
     { userId: string } | { error: string }
 > {
     // 1. Verify the user has an active NextAuth session
@@ -43,8 +68,15 @@ export async function requireAdmin(): Promise<
             return { error: "Account suspended. Contact support." };
         }
 
-        // 4. Verify the live role
-        if (!roles.some(r => r === "admin" || r === "super_admin" || r.endsWith("_admin"))) {
+        // 4. Verify the live role — see the #356 note above for what this was.
+        if (!isAdmin(roles)) {
+            return { error: "Unauthorized: Admin access required" };
+        }
+
+        // 5. And, when the caller named one, the specific permission. Asked of
+        //    PERMISSION_MATRIX rather than by naming roles at the call site,
+        //    which is how one screen ends up gated two ways.
+        if (permission && !hasAdminPermission(roles, permission)) {
             return { error: "Unauthorized: Admin access required" };
         }
 

@@ -39,6 +39,14 @@ export default function WaveTrainingPage() {
         try {
             // Check membership
             const membership = await checkWaveMembershipAction();
+
+            // #323, same as the profile page. A refusal returns data: null, so
+            // `!membership.data?.enrolled` was true and a real member was
+            // ejected to the marketing page on any transient failure.
+            if (!membership.success) {
+                showToast(membership.error || "Could not check your WAVE membership", "error");
+                return;
+            }
             if (!membership.data?.enrolled) {
                 router.push("/wave");
                 return;

@@ -12,6 +12,7 @@ import { loanApplicationSchema,
     type LoanApprovalData } from "@/lib/validations/loan";
 import { AuditActionType, LoanStatus, type LoanApplication } from "@/types/strict";
 import { calculateRepaymentTerms } from "@/lib/loan-terms";
+import { ONE_OPEN_LOAN_APPLICATION_MESSAGE } from "@/lib/loan-application-location";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
@@ -99,14 +100,41 @@ export async function submitLoanApplication(
                 },
             });
 
+            /**
+             *   #288 THE REFUSAL IS RETURNED, NOT THROWN.
+             *
+             *        This used to `throw new Error("Active or pending loan
+             *        application already exists platform-wide.")`. The catch at
+             *        the bottom of this function ends with a flat "Failed to
+             *        submit loan application", so the sentence composed here
+             *        was destroyed two lines later and the borrower was told
+             *        their submission had failed — not that it had been
+             *        refused, deliberately, for a reason they could act on.
+             *
+             *        The two sibling actions that enforce the same rule return
+             *        `error?.message`, so they always told the member. This one
+             *        is the action behind /loans/apply, the only loan
+             *        application page in the product, and it was the one that
+             *        did not.
+             *
+             *        Returned rather than made to survive the catch, because
+             *        `error?.message` in a catch also forwards messages nobody
+             *        wrote for a person — a PostgREST failure reads as an error
+             *        the applicant caused. A refusal is not an exception here;
+             *        it is an ordinary answer.
+             */
             if (!claim.claimed) {
-                throw new Error("Active or pending loan application already exists platform-wide.");
+                return { refused: ONE_OPEN_LOAN_APPLICATION_MESSAGE as string, loanId: null };
             }
 
-            return { loanId: loanRef.id };
+            return { refused: null, loanId: loanRef.id };
         })();
 
-        const { loanId } = result;
+        if (result.refused) {
+            return { success: false as const, error: result.refused, data: null };
+        }
+
+        const loanId = result.loanId as string;
 
         // 🚀 POST-COMMIT SIDE EFFECTS (Non-blocking)
         try { await createAdminAuditLog({

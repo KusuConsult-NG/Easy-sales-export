@@ -67,6 +67,34 @@ export async function POST(request: NextRequest) {
             updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
 
+        // SUSPENSION SUSPENDED NOTHING.
+        //
+        // This route wrote "suspended" onto the verification and the
+        // marketplace_sellers row and stopped. Every seller ACTION gates on the
+        // USER document — `sellerVerificationStatus === "approved"` in
+        // _mp_products.ts and its siblings — and that field was left saying
+        // "approved". So a suspended seller kept creating and editing products,
+        // answering quotes and receiving payouts; the admin pressing Suspend
+        // changed a word on the admin's own screen and nothing else. The same
+        // fault as the cooperative suspension before #210 taught it to revoke.
+        //
+        // The role is revoked too, matching what the cooperative and Farm
+        // Nation rejections do. Reversible: approve-seller re-grants it with
+        // arrayUnion("seller").
+        if (verificationData.userId) {
+            try {
+                await db.collection(COLLECTIONS.USERS).doc(verificationData.userId).update({
+                    sellerVerificationStatus: "suspended",
+                    "serviceRegistrations.marketplace.status": "suspended",
+                    "serviceRegistrations.marketplace.suspensionReason": reason,
+                    roles: FieldValue.arrayRemove("seller"),
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+            } catch (userUpdateErr) {
+                logger.error("[suspend-seller] Failed to sync suspension to user doc:", userUpdateErr);
+            }
+        }
+
         // Recorded, which it was not.
         //
         // "seller_suspended" is declared in the AuditAction union and had ZERO

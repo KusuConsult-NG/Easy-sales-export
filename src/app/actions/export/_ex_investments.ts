@@ -5,9 +5,10 @@ import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { exportWindowAcceptsInvestment, exportWindowReturnMultiplier } from "@/lib/export-window-status";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { hasAdminPermission } from "@/lib/admin-permissions";
-import { claimPaymentOnce, incrementWithinCeiling } from "@/lib/wallet-ledger";
+import { claimPaymentOnce, incrementWithinCeiling, markFulfilmentFailed } from "@/lib/wallet-ledger";
 import { checkOrderPaymentAmount } from "@/lib/order-payment-amount";
 import { revalidatePath } from "next/cache";
 import { toMillis } from "@/lib/firestore-serialize";
@@ -202,7 +203,12 @@ export async function investInExportAction(
         }
 
         const exportData = exportDoc.data();
-        if (exportData?.status !== "open" && exportData?.status !== "active") { return { success: false as const, error: "This export window is not open for investment"};
+        // #275 Was a status check with no deadline. An export window whose
+        // period ended is still "open" — nothing writes "closed" — so this
+        // accepted money for a window that closed months ago.
+        const investable = exportWindowAcceptsInvestment(exportData);
+        if (!investable.ok) {
+            return { success: false as const, error: investable.message };
         }
 
         // Validate Minimum Investment (assuming 'amount' in window is unit price or min investment)
@@ -210,8 +216,38 @@ export async function investInExportAction(
         if (amount < minInvestment) { return { success: false as const, error: `Minimum investment is ₦${minInvestment.toLocaleString()}` };
         }
 
-        // Check Funding Limit (Optional - if totalSpots defined)
-        if (exportData?.totalSpots && exportData?.spotsFilled >= exportData?.totalSpots) { return { success: false as const, error: "Investment slots are full"};
+        /**
+         *   #352 THIS CHECK HAS NEVER FIRED, AND CANNOT.
+         *
+         *        `totalSpots` HAS NO WRITER anywhere in this repository — not
+         *        in src, not in the migrations, not in the seed scripts. It is
+         *        a type declaration and four readers. So `exportData?.totalSpots`
+         *        is always undefined, the `&&` short-circuits, and the branch
+         *        is unreachable. Its own comment says "Optional - if totalSpots
+         *        defined", which is true and is exactly why it reads as a
+         *        control while being none: #274's shape.
+         *
+         *        IT IS KEPT, NOT REMOVED, and it is not the hole it looks
+         *        like. A window's real bound is the FUNDING model —
+         *        `fundedAmount` raised against `fundingGoal` through
+         *        incrementWithinCeiling in verifyExportInvestmentAction below,
+         *        which locks the row and refuses past the goal. That is
+         *        enforced and tested. The spots model is a parallel,
+         *        half-built third counter: `spotsFilled` is incremented in
+         *        three places for a denominator nobody sets.
+         *
+         *        The advisory read is now written so it would work if a window
+         *        ever carried a real spots limit, and the sibling funding check
+         *        that IS live is named beside it so the next reader does not
+         *        mistake this for the enforcement.
+         *
+         *        WHETHER TO BUILD THE SPOTS MODEL OR RETIRE IT IS THE OWNER'S:
+         *        it duplicates a bound that already works.
+         */
+        const declaredSpots = Number(exportData?.totalSpots) || 0;
+        const takenSpots = Number(exportData?.spotsFilled) || 0;
+        if (declaredSpots > 0 && takenSpots >= declaredSpots) {
+            return { success: false as const, error: "Investment slots are full"};
         }
 
         // A callback that is a page, on the base URL everything else uses.
@@ -264,7 +300,12 @@ export async function investInExportAction(
 export async function verifyExportInvestmentAction(reference: string): Promise<
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
-> { try {
+> {
+    // Set once the reference is OURS to fulfil — see the catch at the end
+    // (#259). Declared outside the try so the catch can see it.
+    let claimedReference: string | null = null;
+
+    try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired"};
         const { session } = sessionResult;
@@ -363,8 +404,40 @@ export async function verifyExportInvestmentAction(reference: string): Promise<
         });
 
         if (!claim.claimed) {
-            return { success: false as const, error: "Payment already processed" };
+            /**
+             *   #259 A DUPLICATE IS NOT A FAILURE.
+             *
+             *        This returned
+             *
+             *            { success: false, error: "Payment already processed" }
+             *
+             *        A claim that loses means the payment was ALREADY APPLIED —
+             *        by the Paystack webhook, or by an earlier delivery of this
+             *        same callback. The money moved and the investment exists.
+             *        Telling the investor it failed, after they have been
+             *        charged, is the outcome this codebase has already fixed
+             *        four times over: academy/_payment.ts twice,
+             *        api/cooperative/verify-payment, and
+             *        academy/_ac_course_payment.ts (#258). This was the site
+             *        that was missed — the same "the fix landed on one module
+             *        and not its siblings" shape as #83.
+             *
+             *        The amount check above runs BEFORE the claim, so reporting
+             *        success here cannot be used to wave through a payment that
+             *        does not match what was initiated.
+             */
+            logger.info(
+                `[verifyExportInvestmentAction] Payment ${reference} already claimed — ` +
+                `the investment is already recorded; reporting success.`);
+            return {
+                error: null,
+                success: true as const,
+                data: { message: "Investment verified" },
+            };
         }
+
+        // From here on the money is ours to account for.
+        claimedReference = reference;
 
         if (overfunded) {
             await db.collection(COLLECTIONS.FAILED_PAYMENTS).doc(reference).set({
@@ -400,7 +473,7 @@ export async function verifyExportInvestmentAction(reference: string): Promise<
                 purchaseDate: FieldValue.serverTimestamp(),
                 createdAt: FieldValue.serverTimestamp(),
                 roi: exportWindow.roiPercentage || exportWindow.roi || "15-20%",
-                expectedReturn: amount * (exportWindow.returnMultiplier ?? exportWindow.expectedReturnMultiplier ?? 1.20),
+                expectedReturn: amount * exportWindowReturnMultiplier(exportWindow),
                 source: "client_verify",
             });
 
@@ -485,7 +558,34 @@ export async function verifyExportInvestmentAction(reference: string): Promise<
 
         return { error: null, success: true as const , data: { message: "Investment verified" } };
 
-    } catch (error: any) { logger.error("Verify export investment error:", error);
+    } catch (error: any) {
+        /**
+         *   #259 A FULFILMENT THAT DIED AFTER THE CLAIM WAS INVISIBLE.
+         *
+         *        This logged and returned "Failed to verify investment", and
+         *        that was all. But the claim above is taken BEFORE the
+         *        fulfilment — deliberately, so a duplicate webhook cannot fulfil
+         *        twice — which means a throw below it leaves the payment sitting
+         *        in processed_payments marked "completed" with NO investment
+         *        behind it. Money collected, nothing delivered, and nothing in
+         *        the reconciliation queue to say so.
+         *
+         *        lib/wallet-ledger.ts exports markFulfilmentFailed for exactly
+         *        this, and seven other files import it. This was the only claim
+         *        site that could not record the outcome.
+         *
+         *        Guarded on `claimed`: a failure BEFORE the claim collected
+         *        nothing in our name, so marking it would put noise into a queue
+         *        a person works through by hand.
+         */
+        if (claimedReference) {
+            await markFulfilmentFailed(
+                claimedReference,
+                error instanceof Error ? error.message : String(error),
+            );
+        }
+
+        logger.error("Verify export investment error:", error);
         return { success: false as const, error: "Failed to verify investment"};
     }
 }

@@ -39,10 +39,22 @@ function actAs(id: string, roles: string[] = ['user']): void {
     }));
 }
 
+/** Savings the member is recorded as holding. Every rule below runs on THIS. */
+const SAVINGS = 100_000;
+
 beforeEach(() => {
     jest.clearAllMocks();
     store = installFakeDb();
     actAs(MEMBER);
+
+    // #345. This seed is new, and every "files it" test below failed without
+    // it — which is the finding: the action never looked the member up at all.
+    // It took the savings figure from the FORM, so a caller with no membership
+    // row whatsoever could file an application for any amount they cared to
+    // claim savings for. Nine tests in this file passed on that shape.
+    store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, MEMBER, {
+        userId: MEMBER, savingsBalance: SAVINGS, membershipStatus: 'active',
+    });
 });
 
 async function actions() {
@@ -60,7 +72,9 @@ function validForm(overrides: Record<string, unknown> = {}) {
         amount: 50_000,
         purpose: 'Stock for the shop',
         durationMonths: 6,
-        contributionAmount: 100_000,
+        // #345 this is now only what the form CLAIMS. The rules run on the
+        // seeded savings; it is kept here because the type still carries it.
+        contributionAmount: SAVINGS,
         tier: 'Member' as const,
         guarantorName: 'Chidi Eze',
         guarantorPhone: '08031111111',
@@ -131,7 +145,8 @@ describe('submitting a loan application', () => {
 
 describe('the tier rules', () => {
     it('refuse a tier that does not match the contribution', async () => {
-        // The tier arrives in the form and is recomputed from the contribution.
+        // The tier arrives in the form and is recomputed — from the member's
+        // RECORDED savings since #345, not from the figure they typed.
         // Trusting the submitted value would let a member claim a tier whose
         // multiplier lets them borrow more.
         const { calculateUserTier } = await import('@/lib/cooperative-tiers');
@@ -146,21 +161,27 @@ describe('the tier rules', () => {
         expect(filed()).toHaveLength(0);
     });
 
-    it('cap the amount at the tier multiple of the savings', async () => {
+    it('cap the amount at the tier multiple of the RECORDED savings', async () => {
+        // #345 REWRITTEN. It used to move the ceiling by passing a different
+        // `contributionAmount` on the form:
+        //
+        //     const contribution = 100_000;
+        //     const ceiling = contribution * multiplier;
+        //     validForm({ contributionAmount: contribution, amount: ceiling + 1 })
+        //
+        // which is the defect stated as a test — it asserted that the caller
+        // sets their own ceiling. The ceiling comes off the membership row now,
+        // so the seed is what moves it.
         const { COOPERATIVE_TIERS } = await import('@/lib/cooperative-tiers');
-        const multiplier = COOPERATIVE_TIERS.Member.maxLoanMultiplier;
-        const contribution = 100_000;
-        const ceiling = contribution * multiplier;
+        const ceiling = SAVINGS * COOPERATIVE_TIERS.Member.maxLoanMultiplier;
 
         const { submitLoanApplicationAction } = await actions();
 
-        const over = await submitLoanApplicationAction(
-            validForm({ contributionAmount: contribution, amount: ceiling + 1 }));
+        const over = await submitLoanApplicationAction(validForm({ amount: ceiling + 1 }));
         expect(over.success).toBe(false);
         expect(over.error).toMatch(/exceeds your limit/i);
 
-        const at = await submitLoanApplicationAction(
-            validForm({ contributionAmount: contribution, amount: ceiling }));
+        const at = await submitLoanApplicationAction(validForm({ amount: ceiling }));
         expect(at.success).toBe(true);
         expect(filed()).toHaveLength(1);
     });

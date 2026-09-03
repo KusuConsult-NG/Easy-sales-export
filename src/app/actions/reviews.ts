@@ -6,6 +6,8 @@
 
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
+import { hasAdminPermission } from "@/lib/admin-permissions";
+import { recordAdminAction } from "@/lib/audit-log";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -24,6 +26,7 @@ import {
     hasExistingReview,
     isReviewableOrderStatus,
 } from "@/lib/product-rating";
+import { isSafeInternalPath } from "@/lib/safe-redirect";
 
 const reviewSchema = z.object({ rating: z.number().min(1, "Rating must be at least 1").max(5, "Rating cannot exceed 5"),
     comment: z.string().trim().min(20, "Review must be at least 20 characters").max(500, "Review must not exceed 500 characters") });
@@ -43,8 +46,10 @@ function isSafeImageReference(value: string): boolean {
     const trimmed = value.trim();
     if (!trimmed) return false;
 
-    if (trimmed.startsWith("//")) return false;
-    if (trimmed.startsWith("/")) return true;
+    // The shared rule for the on-site case (#262) — it also refuses the
+    // backslash authority and the leading control characters a browser strips,
+    // which this copy did not.
+    if (trimmed.startsWith("/")) return isSafeInternalPath(trimmed);
 
     try {
         return new URL(trimmed).protocol === "https:";
@@ -467,12 +472,22 @@ export async function moderateReviewAction(
         // siblings. The #138 ratchet did not catch them because it matches the
         // `roles.includes("admin")` spelling and these say `hasRole(...)`.
         //
-        // Deliberately NOT switched to isAdmin(), which also admits moderator,
-        // support and every module admin. Widening review moderation while
-        // fixing a lockout would be a bad trade made quietly.
+        //   #265 AND THE REASONING ABOVE WAS AGAINST THE WRONG ALTERNATIVE.
+        //
+        //        "Deliberately NOT switched to isAdmin(), which also admits
+        //        moderator, support and every module admin" — correct about
+        //        isAdmin(), and it is not the choice. The matrix grants
+        //        marketplace:moderate_reviews to super_admin, admin, moderator
+        //        and marketplace_admin, and to nobody else: not support, not
+        //        every module admin. Naming the permission admits exactly the
+        //        four roles the matrix says own this job, which is neither the
+        //        old pair nor isAdmin().
+        //
+        //        So the marketplace admin and the MODERATOR — the role whose
+        //        name is the job — could not moderate a review.
         const callerRoles = userData?.roles || [];
-        if (!hasRole(callerRoles, "admin") && !hasRole(callerRoles, "super_admin")) {
-            return { success: false as const, error: "Not authorized as admin", data: null };
+        if (!hasAdminPermission(callerRoles, "marketplace:moderate_reviews")) {
+            return { success: false as const, error: "Unauthorized: marketplace:moderate_reviews required", data: null };
         }
 
         // Get review
@@ -506,6 +521,18 @@ export async function moderateReviewAction(
         // moderator removing a fake five-star changed nothing a buyer could see —
         // which is the one thing the queue is for.
         await recalculateProductRating(db as any, String(reviewDoc.data()?.productId ?? ""));
+
+        // #265 'review_moderate' already existed in the AuditAction union and
+        // nothing emitted it. Publishing or removing a review changes what
+        // every buyer sees about a seller, and now that moderator and
+        // marketplace_admin can do it, WHICH admin did is worth having.
+        await recordAdminAction({
+            action: 'review_moderate',
+            userId,
+            targetId: reviewId,
+            targetType: 'product_review',
+            details: `${status}${rejectionReason ? ` — ${rejectionReason}` : ''}`,
+        });
 
         return { success: true as const, data: null, error: null };
     } catch (error) { 
@@ -588,12 +615,22 @@ export async function getAdminReviewsAction(options: {
         // siblings. The #138 ratchet did not catch them because it matches the
         // `roles.includes("admin")` spelling and these say `hasRole(...)`.
         //
-        // Deliberately NOT switched to isAdmin(), which also admits moderator,
-        // support and every module admin. Widening review moderation while
-        // fixing a lockout would be a bad trade made quietly.
+        //   #265 AND THE REASONING ABOVE WAS AGAINST THE WRONG ALTERNATIVE.
+        //
+        //        "Deliberately NOT switched to isAdmin(), which also admits
+        //        moderator, support and every module admin" — correct about
+        //        isAdmin(), and it is not the choice. The matrix grants
+        //        marketplace:moderate_reviews to super_admin, admin, moderator
+        //        and marketplace_admin, and to nobody else: not support, not
+        //        every module admin. Naming the permission admits exactly the
+        //        four roles the matrix says own this job, which is neither the
+        //        old pair nor isAdmin().
+        //
+        //        So the marketplace admin and the MODERATOR — the role whose
+        //        name is the job — could not moderate a review.
         const callerRoles = userData?.roles || [];
-        if (!hasRole(callerRoles, "admin") && !hasRole(callerRoles, "super_admin")) {
-            return { success: false as const, error: "Not authorized as admin", data: null };
+        if (!hasAdminPermission(callerRoles, "marketplace:moderate_reviews")) {
+            return { success: false as const, error: "Unauthorized: marketplace:moderate_reviews required", data: null };
         }
 
         const fetchLimit = options.limit || 20;

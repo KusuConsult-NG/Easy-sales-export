@@ -17,9 +17,11 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { rateLimit, getActionClientIp } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
+import { isAdmin } from '@/lib/admin-permissions';
 import { normalisePhone, phoneLookupVariants } from '@/lib/phone';
 import { isTransientError } from '@/lib/transient-error';
 import { withResponseFloor, atMost, RESPONSE_FLOOR_MS } from '@/lib/constant-time-response';
+import { isSafeInternalPath } from '@/lib/safe-redirect';
 
 const loginLimiter = rateLimit(rateLimitConfig.login);
 
@@ -94,9 +96,42 @@ function determinePostRegistrationRedirect(platforms: string[], roles: UserRole[
 export async function getPostLoginRedirect(email: string) { try {
         let userData: FirestoreUser | null = null;
 
-        // Direct query by email - robust, fast, avoids NextAuth auth() session deadlock.
+        // WHO IS ASKING decides whose account is described.
+        //
+        // #239: this is a "use server" export, so it is a public endpoint — and
+        // it answered for ANY email a caller typed, no session required. The
+        // redirect it returns is a description of the account: "/admin" says
+        // the address belongs to an admin, "/wave/dashboard" names their
+        // module, "/auth/reset-legacy-password" says a forced reset is pending.
+        // An unauthenticated caller could walk an address list through it and
+        // map who is who on the platform.
+        //
+        // Both real callers (LoginForm.tsx) invoke it AFTER signIn() succeeds,
+        // so a session cookie exists by then. The session's email is used and
+        // the parameter is ignored for lookup; without a session the answer is
+        // the generic dashboard, which describes nobody. Fail closed on an
+        // auth() error for the same reason — the earlier comment here worried
+        // about auth() deadlocks in server actions, and a generic redirect is
+        // the safe outcome of one.
+        let sessionEmail: string | null = null;
+        try {
+            const session = await auth();
+            sessionEmail = session?.user?.email ?? null;
+        } catch {
+            sessionEmail = null;
+        }
+        if (!sessionEmail) {
+            return { error: null, success: true as const, data: { redirectUrl: '/dashboard' } };
+        }
+        if (email && email.toLowerCase() !== sessionEmail.toLowerCase()) {
+            logger.warn('[getPostLoginRedirect] asked about a different email than the session holds — answering for the session', {
+                sessionEmail,
+            });
+        }
+
+        // Direct query by email - robust, fast.
         const userSnapshot = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS)
-            .where('email', '==', email.toLowerCase())
+            .where('email', '==', sessionEmail.toLowerCase())
             .limit(1)
             .get());
         if (!userSnapshot.empty) {
@@ -109,21 +144,28 @@ export async function getPostLoginRedirect(email: string) { try {
             // ── ADMIN OVERRIDE ──────────────────────────────────────────────
             // If the user has ANY admin role (system or module-specific),
             // always ensure they land on the Admin Dashboard by default.
-            const hasAdminRole = userRoles.some((role: string) => { const r = role.toLowerCase();
-                return (
-                    r === 'admin' || 
-                    r === 'super_admin' || 
-                    r === 'superadmin' ||
-                    r.endsWith('_admin') ||
-                    r.includes('admin_dashboard')
-                );
-            });
+            //   #356 the sixth copy of the hand-written admin test. `moderator`
+            //        and `support` matched none of these branches, so both were
+            //        sent to the member dashboard instead of /admin at every
+            //        login — and `endsWith('_admin')` would have redirected any
+            //        future role sharing that suffix into the admin area.
+            //
+            //        isAdmin() is the fact. The two legacy spellings below are
+            //        KEPT rather than narrowed away: 'superadmin' without the
+            //        underscore is still honoured twenty lines down and in
+            //        api/admin/documents/[docId], so dropping it here would
+            //        strand whoever holds it.
+            const hasAdminRole = isAdmin(userRoles.map((role: string) => String(role).toLowerCase()))
+                || userRoles.some((role: string) => {
+                    const r = String(role).toLowerCase();
+                    return r === 'superadmin' || r.includes('admin_dashboard');
+                });
 
             // ── SECURITY GUARD: LEGACY PASSWORD RESET ──────────────────────
             // If the user was onboarded by an admin (legacy flow), 
             // they MUST change their password on first login.
             if ((userData as any).requiresPasswordChange) {
-                logger.info(`[getPostLoginRedirect] User ${email} requires password change, redirecting to security setup`);
+                logger.info(`[getPostLoginRedirect] User ${sessionEmail} requires password change, redirecting to security setup`);
                 return { error: null, success: true as const, data: { redirectUrl: '/auth/reset-legacy-password' } };
             }
 
@@ -650,9 +692,11 @@ async function notifyRegistrationAttempt(email: string): Promise<void> {
 async function resolvePostRegistrationRedirect(formData: FormData): Promise<string> {
     const callbackUrl = formData.get("callbackUrl") as string;
 
-    // `startsWith("/")` would accept "//evil.example", which a browser reads as
-    // absolute. A registration redirect is an open-redirect sink like any other.
-    if (callbackUrl && callbackUrl !== "/dashboard" && /^\/(?!\/|\\)/.test(callbackUrl)) {
+    // isSafeInternalPath, not startsWith("/") — "//evil.example" passes the
+    // latter and is absolute to a browser (#262). Both audits closed this sink;
+    // the other one extracted the rule into lib/safe-redirect.ts, so this uses
+    // that rather than carrying a second regex saying the same thing.
+    if (callbackUrl && callbackUrl !== "/dashboard" && isSafeInternalPath(callbackUrl)) {
         return callbackUrl;
     }
 
@@ -1076,7 +1120,7 @@ export async function changePasswordAction(
     currentPassword: string,
     newPassword: string
 ): Promise<
-    | { success: true; error: null }
+    | { success: true; error: null; sessionsRevoked: boolean }
     | { success: false; error: string; data?: null }
 > { try {
         const session = await auth();
@@ -1267,47 +1311,120 @@ export async function changePasswordAction(
         // an inline success — so stamping Date.now() would have signed the user
         // out of the flow they were standing in.
         //
-        // The predicate is strictly-before, which resolves that: stamping the
-        // CURRENT session's own issue time revokes everything minted before it
-        // and keeps this one. That is what "sign out my other sessions" means,
-        // and it needs no change to the flow.
-        //
-        // A stolen cookie is necessarily older than the session you are sitting
-        // in when you notice and react, so this covers the case the feature
-        // exists for. A session minted AFTER this one survives, deliberately: it
-        // could only have been created with a password, and after this call that
-        // is the new one.
-        //
-        // Fails OPEN when the issue time is unknown — the same asymmetry
-        // resetPasswordAction reasons about. A wrong value here signs out a user
-        // who did nothing wrong; a missing one leaves a stale session that still
-        // expires within maxAge.
-        const revokeBefore = session.user.authAt;
-        if (typeof revokeBefore !== "number" || !(revokeBefore > 0)) {
-            logger.error(
-                "[changePassword] password changed but other sessions were NOT revoked: "
-                + "this session records no issue time",
-                { userId: session.user.id },
-            );
-        }
+        /**
+         *   #306 THE REVOCATION LET THE INTRUDER'S SESSION THROUGH, AND THE
+         *        COMMENT EXPLAINING WHY WAS THE DEFECT.
+         *
+         *        This stamped `sessionsValidFrom = session.user.authAt` — the
+         *        issue time of the session doing the changing — and argued for
+         *        it in the two sentences above:
+         *
+         *          "A stolen cookie is necessarily older than the session you
+         *           are sitting in when you notice and react, so this covers the
+         *           case the feature exists for. A session minted AFTER this one
+         *           survives, deliberately: it could only have been created with
+         *           a password, and after this call that is the new one."
+         *
+         *        BOTH HALVES ARE FALSE.
+         *
+         *        The first holds only for a cookie copied out of the session you
+         *        are currently in. It does not hold for the case this actually
+         *        protects against — somebody who learned your PASSWORD and signed
+         *        in independently. Their session is minted whenever they sign in.
+         *        Sign in Monday; they sign in Tuesday; you notice Wednesday and
+         *        change your password from your Monday session. revokeBefore is
+         *        Monday, their session is Tuesday, Tuesday is not before Monday,
+         *        so THEY ARE NOT SIGNED OUT. That is the ordinary case, not a
+         *        corner one.
+         *
+         *        The second is a straight contradiction: a session minted after
+         *        yours but before this line could only have been created with the
+         *        OLD password, because the new one does not exist until this call
+         *        finishes.
+         *
+         *        So the revocation covered every session except the ones worth
+         *        revoking.
+         *
+         *        `Date.now()` now, matching resetPasswordAction. That revokes
+         *        EVERY session including the one making the call, which is the
+         *        price of correctness here: the predicate in lib/auth.ts is a
+         *        single scalar compared against each token's issue time, and
+         *        there is no mechanism to exempt one session — nothing re-stamps
+         *        `authAt` after a password change. Signing out everywhere is also
+         *        what people expect of a password change, and both callers only
+         *        read success/error, so neither breaks. They tell the user.
+         *
+         *        Fails OPEN is gone with it: there is no unknown issue time to
+         *        reason about any more, because the stamp no longer depends on
+         *        one.
+         */
+        const revokeBefore = Date.now();
 
+        /**
+         * Split from the flag-clearing write, because the two failures are not
+         * equally serious and one message covered both.
+         *
+         * The old catch logged "the forced-change flag was not cleared" — true,
+         * but the same write carried the session revocation, and a failure there
+         * leaves the intruder signed in. The log named the lesser consequence
+         * and the caller was told plainly that everything worked.
+         *
+         * Still best-effort: the password IS already changed in both stores by
+         * this line, so failing the whole operation would tell somebody their
+         * password had not changed when it had. What changes is that the caller
+         * is now told which of the two happened.
+         */
+        let sessionsRevoked = true;
         try {
             await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
                 requiresPasswordChange: FieldValue.delete(),
                 passwordChangedAt: FieldValue.serverTimestamp(),
-                ...(typeof revokeBefore === "number" && revokeBefore > 0
-                    ? { sessionsValidFrom: revokeBefore }
-                    : {}),
+                sessionsValidFrom: revokeBefore,
                 updatedAt: FieldValue.serverTimestamp(),
             });
-        } catch (flagErr: any) {
-            logger.error("[changePassword] Password changed but the forced-change flag was not cleared", {
-                userId: session.user.id,
-                error: flagErr?.message,
-            });
+        } catch (revokeErr: any) {
+            sessionsRevoked = false;
+            logger.error(
+                "[changePassword] password changed but OTHER SESSIONS WERE NOT REVOKED "
+                + "and the forced-change flag was not cleared",
+                { userId: session.user.id, error: revokeErr?.message },
+            );
         }
 
-        return { success: true as const, error: null };
+        /**
+         *   #343 THE WRITE ABOVE IS READ THROUGH A FIVE-MINUTE CACHE.
+         *
+         *        Both values it sets are decided from lib/user-cache.ts's
+         *        `user:profile:{id}` entry, and nothing here invalidated it:
+         *
+         *          sessionsValidFrom       the jwt callback's revocation point —
+         *                                  so the intruder this exists to eject
+         *                                  kept their session for the TTL on top
+         *                                  of the 2-minute sync interval.
+         *          requiresPasswordChange  session-guard and hub-guard both
+         *                                  redirect to /auth/reset-legacy-password
+         *                                  on it. A legacy member who changed
+         *                                  their password was sent straight back
+         *                                  to the page they had just completed,
+         *                                  again and again, for five minutes.
+         *
+         *        Best-effort and deliberately last: the password IS changed by
+         *        this line, and failing the call because a cache key would not
+         *        clear would report a failure that did not happen. A miss here
+         *        costs the old latency, not correctness.
+         */
+        try {
+            const { invalidateUserCache } = await import("@/lib/cache-invalidation");
+            await invalidateUserCache(session.user.id);
+        } catch (cacheErr: any) {
+            logger.warn(
+                "[changePassword] password changed but the cached profile was not cleared; "
+                + "revocation and the forced-change flag lag by the cache TTL",
+                { userId: session.user.id, error: cacheErr?.message },
+            );
+        }
+
+        return { success: true as const, error: null, sessionsRevoked };
     } catch (error: any) { logger.error("Error changing password:", error);
         return { success: false as const, error: error.message || "An unexpected error occurred. Please try again.", data: null };
     }

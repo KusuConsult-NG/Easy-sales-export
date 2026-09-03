@@ -69,6 +69,11 @@ export async function resolveSessionAction(
         const result = await resolveSession(sessionId, admin.id!);
         if (!result.success) throw new Error(result.error);
 
+        // Nothing changed, so nothing to record (#247). Writing a second row
+        // here would name this admin as the resolver of a session somebody else
+        // resolved — the defect already fixed once for disputes.
+        if (result.alreadyResolved) return { error: null, success: true as const };
+
         // Audit log
         await logAdminAction(
             "chatbot_session_resolved",

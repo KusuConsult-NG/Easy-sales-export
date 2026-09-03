@@ -92,6 +92,13 @@ export async function POST(request: NextRequest) {
                 sellerVerificationStatus: "rejected",
                 "serviceRegistrations.marketplace.status": "rejected",
                 "serviceRegistrations.marketplace.rejectionReason": reason,
+                // A rejection of an APPROVED seller is this route's revoke path
+                // (nothing guards the from-status, and the permission it asks
+                // for is marketplace:suspend_sellers). The status write above
+                // stops the seller ACTIONS; the role kept granting the module
+                // and would be re-healed from by anything reading roles alone.
+                // approve-seller re-grants it, so this is reversible.
+                roles: FieldValue.arrayRemove("seller"),
                 updatedAt: FieldValue.serverTimestamp(),
             });
         } catch (userUpdateErr) {

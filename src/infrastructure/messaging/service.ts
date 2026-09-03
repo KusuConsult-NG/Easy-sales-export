@@ -13,7 +13,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { requireSession } from "@/lib/session-guard";
-import { MODULE_ADMIN_ROLE } from "@/lib/admin-permissions";
+import { MODULE_ADMIN_ROLE, isAdmin } from "@/lib/admin-permissions";
 
 /**
  * Enforces strict role-based and context-based boundaries on conversations.
@@ -90,8 +90,18 @@ export async function getConversations(userId: string) {
  * Admin: Get all conversations
  */
 export async function getAllConversationsAdmin(roles: string[]) {
-    const isAdmin = roles.some(r => r === "admin" || r === "super_admin" || r.endsWith("_admin"));
-    if (!isAdmin) {
+    /**
+     *   #356 THIS REFUSED moderator AND support, THE TWO ROLES WHOSE JOB THIS
+     *        SCREEN IS.
+     *
+     *        The test was `r === "admin" || r === "super_admin" ||
+     *        r.endsWith("_admin")` — one of six hand-written copies, of which
+     *        #353 fixed only hub-guard's. Neither `moderator` nor `support`
+     *        matches it, and both are admin roles by the only definition this
+     *        codebase has, so a support account asking for the conversation
+     *        list got "Access denied" from the support inbox.
+     */
+    if (!isAdmin(roles)) {
         throw new Error("Access denied: Admin privileges required");
     }
 

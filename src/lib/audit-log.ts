@@ -2,6 +2,7 @@ import { getAdminDb } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { logger } from './logger';
+import { clientIpFromHeaders } from './client-ip';
 
 /**
  * Audit Log Types
@@ -126,6 +127,9 @@ export type AuditAction =
     | 'course_completed'
     | 'certificate_issued'
     | 'quiz_created'
+    // The editor at /admin/academy/[courseId]/quiz/[quizId] upserts, so it
+    // both creates and edits; 'quiz_created' alone could not say which (#264).
+    | 'quiz_updated'
     // Security Actions
     | 'mfa_enabled'
     | 'mfa_disabled'
@@ -174,6 +178,11 @@ export type AuditAction =
     | 'broadcast_sent'
     | 'cooperative_member_status_update'
     | 'cooperative_revision_request'
+    // The other two modules ask for revisions too, and neither recorded it
+    // — surfaced by the audit ratchet when #265 moved both guards onto a
+    // named permission.
+    | 'academy_revision_request'
+    | 'export_revision_request'
     | 'data_recovery_run'
     | 'escrow_status_update'
     | 'export_catalog_delete'
@@ -503,8 +512,17 @@ export function getSecurityContextFromHeaders(headers?: Headers): {
 } {
     if (!headers) return {};
 
+    // The address our own proxy observed, not the one the caller wrote (#260).
+    //
+    // This took the LEFTMOST x-forwarded-for entry, which is caller-supplied.
+    // An audit trail recording whatever IP the caller chose is worse than one
+    // with no IP field: it reads as evidence. Same shape as #129, where the
+    // dispute audit row named whichever admin the caller passed.
+    //
+    // Undefined rather than a placeholder when it cannot be established —
+    // leaving the field empty is honest; writing something false is not.
     return {
-        ipAddress: headers.get('x-forwarded-for')?.split(',')[0] || headers.get('x-real-ip') || undefined,
+        ipAddress: clientIpFromHeaders(headers) ?? undefined,
         userAgent: headers.get('user-agent') || undefined,
     };
 }

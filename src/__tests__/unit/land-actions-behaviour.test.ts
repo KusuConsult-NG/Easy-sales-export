@@ -432,7 +432,7 @@ describe('verifyLandListing', () => {
 
         const { verifyLandListing } = await actions();
         expect(await verifyLandListing({ listingId: 'pending-1', verified: true })).toMatchObject({
-            success: false, error: 'Unauthorized - land:verify_listings required',
+            success: false, error: 'Unauthorized: land:verify_listings required',
         });
     });
 
@@ -537,7 +537,13 @@ describe('getLandStatistics', () => {
         actAs(OWNER);
         const { getLandStatistics } = await actions();
 
-        expect(await getLandStatistics()).toMatchObject({ success: false, error: 'Unauthorized - Admin only' });
+        // The other audit moved this onto the same named permission as the
+        // verification queue (#265): an admin running that queue needs the
+        // numbers describing it, and the hardcoded role pair excluded the
+        // farm-nation admin whose queue it is.
+        expect(await getLandStatistics()).toMatchObject({
+            success: false, error: 'Unauthorized: land:verify_listings required',
+        });
     });
 
     it('counts by status and averages the price over what it counted', async () => {
