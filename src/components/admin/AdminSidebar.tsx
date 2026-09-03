@@ -3,6 +3,8 @@
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import {
+    Truck,
+    Package,
     Activity,
     LayoutDashboard,
     Users,
@@ -67,11 +69,28 @@ const NAV_ITEMS = [
     { label: "Announcements", href: "/admin/cms", icon: Megaphone, section: "platform" },
     // ── Modules ─────────────────────────────────────────────────────────────
     { label: "WAVE Program", href: "/admin/wave", icon: Waves, section: "modules", featureToggle: "wave_program" },
+    { label: "WAVE Shipments", href: "/admin/wave/shipments", icon: Truck, section: "modules", featureToggle: "wave_program" },
     { label: "Cooperatives", href: "/admin/cooperatives", icon: Building2, section: "modules", featureToggle: "cooperative_loans" },
+    /**
+     *   #362 THREE MORE BUILT ADMIN SCREENS THAT NO RENDERED NAV REACHED.
+     *
+     *        /admin/cooperatives/loan-products  409 lines — and #302 repaired
+     *                                           its delete path.
+     *        /admin/wave/shipments              803 lines.
+     *        /admin/export/catalog              490 lines, and it has its own
+     *                                           session gate on top of the
+     *                                           admin layout's.
+     *
+     *        All three were guarded and working; the only thing missing was a
+     *        way in. See the recorded list in
+     *        src/__tests__/unit/every-screen-has-a-way-in.test.ts.
+     */
+    { label: "Loan Products", href: "/admin/cooperatives/loan-products", icon: ScrollText, section: "modules", featureToggle: "cooperative_loans" },
     { label: "Marketplace", href: "/admin/marketplace", icon: ShoppingBag, section: "modules" },
     { label: "Escrow Management", href: "/admin/marketplace/escrow", icon: ShieldCheck, section: "modules", featureToggle: "escrow_messaging" },
     { label: "Export Windows", href: "/admin/export", icon: Container, section: "modules" },
     { label: "Export Applications", href: "/admin/export/applications", icon: FileText, section: "modules" },
+    { label: "Export Catalog", href: "/admin/export/catalog", icon: Package, section: "modules" },
     { label: "Farm Nation", href: "/admin/farm-nation", icon: Tractor, section: "modules", featureToggle: "farm_nation_purchases" },
     { label: "Academy", href: "/admin/academy", icon: GraduationCap, section: "modules", featureToggle: "academy_courses" },
     // ── Finance & Settings ───────────────────────────────────────────────────

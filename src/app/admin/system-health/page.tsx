@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { runSystemHealthDiagnostic, type HealthReport, type HealthIssue } from "@/app/actions/health";
 import { Activity, AlertTriangle, CheckCircle, RefreshCw, ShieldAlert, Server, Database, CreditCard, Mail, ToggleLeft, ToggleRight, Search } from "lucide-react";
 
@@ -41,6 +42,21 @@ export default function SystemHealthPage() {
                     </h1>
                     <p className="text-slate-500 mt-1">Diagnostic overview of active Data Integrity Rules and Platform Sessions.</p>
                 </div>
+                {/*
+                  *   #362 /admin/system-health/diagnostics HAD NO LINK EITHER.
+                  *
+                  *        204 lines, a sub-page of this screen, named by
+                  *        nothing. Its parent was orphaned too until #361 put
+                  *        it in the rendered admin nav — so the whole branch
+                  *        was reachable only by typing two URLs.
+                  */}
+                <Link
+                    href="/admin/system-health/diagnostics"
+                    className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-xl shadow-sm hover:bg-slate-50 transition-colors"
+                >
+                    <Search className="w-4 h-4" />
+                    Detailed Diagnostics
+                </Link>
                 <button
                     onClick={loadDiagnostic}
                     disabled={loading}

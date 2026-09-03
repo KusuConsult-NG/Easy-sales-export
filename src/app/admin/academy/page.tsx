@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, BookOpen, Edit, Trash2, Users, Loader2, RefreshCw, Video } from "lucide-react";
+import { Search, BookOpen, Edit, Trash2, Users, Loader2, RefreshCw, Video, Plus } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -110,6 +110,23 @@ export default function AcademyAdminPage() {
                         <p className="text-slate-600 mt-1">Create and manage courses, lessons, and quizzes</p>
                     </div>
                     <div className="flex items-center gap-3">
+                        {/*
+                          *   #362 THE CREATE-COURSE SCREEN HAD NO LINK.
+                          *
+                          *        This page's own subtitle says "Create and
+                          *        manage courses" and /admin/academy/create is
+                          *        184 lines of working form — reachable only by
+                          *        typing the URL. #211–#216 repaired that form
+                          *        so it actually creates a course; the entrance
+                          *        was never added.
+                          */}
+                        <Link
+                            href="/admin/academy/create"
+                            className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg font-medium flex items-center gap-2 transition-colors"
+                        >
+                            <Plus className="w-5 h-5" />
+                            Create Course
+                        </Link>
                         <Link
                             href="/admin/academy/applications"
                             className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg font-medium flex items-center gap-2 transition-colors"
