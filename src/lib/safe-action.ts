@@ -1,6 +1,7 @@
 import { logger } from "@/lib/logger";
 import { logTelemetryAction } from "@/app/actions/telemetry";
 import { logObservabilityTrace } from "@/lib/logger-server";
+import { redactPii } from "@/lib/admin-pii";
 import { z } from "zod";
 
 /**
@@ -38,20 +39,55 @@ export type ActionResponse<T = unknown, M = any> = {
 /**
  * Utility to redact sensitive fields from log payloads
  */
+/**
+ *   #360 SECURITY: THE REDACTION THAT RUNS ON EVERY SERVER ACTION'S ARGUMENTS
+ *        MISSED TWO OF ITS OWN SEVEN FIELDS AND ALL OF THE PII.
+ *
+ *        captureObservabilityTrace below JSON-stringifies the ARGUMENTS of any
+ *        action that throws and writes them to `error_observability_traces`.
+ *        Eighty-one action files are wrapped in withSafeAction, so those
+ *        arguments include a BVN, a NIN, a bank account number, an MFA token —
+ *        whatever the failing call was carrying. This was the only thing
+ *        standing between them and a database row:
+ *
+ *            const sensitiveFields = ['password', 'confirmPassword', 'pin',
+ *                                     'cvv', 'token', 'secret', 'authCode'];
+ *            if (sensitiveFields.includes(key.toLowerCase())) ...
+ *
+ *        (a) TWO OF THE SEVEN COULD NEVER MATCH. The list stores
+ *            `confirmPassword` and `authCode` in camelCase and the test
+ *            lower-cases the key first, so `'confirmpassword'` was compared
+ *            against `'confirmPassword'` and never equalled it. Both were
+ *            written out in full, every time.
+ *
+ *        (b) IT NAMED NO PII AT ALL. lib/admin-pii.ts has defined the platform
+ *            PII set since #151 — bvn, nin, accountNumber, bankDetails,
+ *            nextOfKin, documents — and the credential set since #341 —
+ *            totpSecret, mfaRecoveryCodes, passwordHash. None of the fourteen
+ *            appeared here. verifyBVNAction, verifyNINAction and
+ *            saveKYCProfileAction are all wrapped, so a throw inside any of
+ *            them wrote the raw identity number.
+ *
+ *        (c) AND NOTHING READS THE COLLECTION. `error_observability_traces`
+ *            appears exactly once in this repository — in the write, at
+ *            lib/logger-server.ts:20. No screen, no script, no migration, and
+ *            no erasure path names it. So it was accumulating identity
+ *            documents that nobody would ever look at, and that a
+ *            right-to-erasure request would not reach.
+ *
+ *        That is #305's shape — a hand-written PII list beside a shared
+ *        definition that already had the answer — with the added twist that
+ *        this copy was WRITING rather than reading.
+ *
+ *        One definition now. redactPii comes from lib/admin-pii.ts, matches
+ *        case-blind, and redacts rather than deletes so the trace still shows
+ *        which arguments were passed.
+ *
+ *        OWNER DECISION: `error_observability_traces` has no reader. Build a
+ *        screen for it, give it a retention sweep, or stop writing it.
+ */
 function redactSensitiveData(data: any): any {
-    if (!data || typeof data !== 'object') return data;
-    
-    const sensitiveFields = ['password', 'confirmPassword', 'pin', 'cvv', 'token', 'secret', 'authCode'];
-    const redacted = Array.isArray(data) ? [...data] : { ...data };
-    
-    for (const key in redacted) {
-        if (sensitiveFields.includes(key.toLowerCase())) {
-            redacted[key] = '[REDACTED]';
-        } else if (typeof redacted[key] === 'object') {
-            redacted[key] = redactSensitiveData(redacted[key]);
-        }
-    }
-    return redacted;
+    return redactPii(data);
 }
 
 /**

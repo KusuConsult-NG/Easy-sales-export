@@ -124,3 +124,64 @@ export function stripRegistrationPii(
     if (!registrations || typeof registrations !== "object") return {};
     return stripPii(registrations as Record<string, unknown>);
 }
+
+/**
+ * Credential words that belong in a DEBUGGING TRACE's redaction set but not in
+ * the admin-response strips above.
+ *
+ * `token` and `secret` are generic enough to name something innocuous in an
+ * admin payload, so widening SECRET_KEYS with them would change eight live
+ * call sites for no security gain. A trace is different: over-redacting a
+ * debugging artefact costs nothing, and under-redacting one writes a
+ * credential to a database row.
+ */
+export const TRACE_ONLY_SECRET_KEYS: readonly string[] = [
+    "confirmpassword",
+    "currentpassword",
+    "newpassword",
+    "pin",
+    "cvv",
+    "token",
+    "secret",
+    "authcode",
+    "otp",
+    "mfatoken",
+    "recoverycode",
+    "apikey",
+    "accesstoken",
+    "refreshtoken",
+];
+
+/** Everything redactPii hides, lower-cased once so matching is case-blind. */
+const TRACE_REDACT = new Set(
+    [...PII_KEYS, ...SECRET_KEYS, ...TRACE_ONLY_SECRET_KEYS].map((k) => k.toLowerCase()),
+);
+
+/**
+ * A copy of `value` with every sensitive key's VALUE replaced by "[REDACTED]",
+ * at any depth, case-insensitively.
+ *
+ *   #360 THIS EXISTS BECAUSE safe-action.ts HAD ITS OWN HAND-WRITTEN COPY, AND
+ *        IT RAN ON THE ARGUMENTS OF EVERY SERVER ACTION IN THE APPLICATION.
+ *
+ *        See the write-up in lib/safe-action.ts. In short: that list named
+ *        seven fields, two of which could never match because it stored them
+ *        camelCase and compared them lower-cased, and it named none of the PII
+ *        this file has defined since #151 — no bvn, no nin, no accountNumber,
+ *        no totpSecret.
+ *
+ *        REDACTED, NOT REMOVED. A trace exists to show which arguments an
+ *        action was called with; deleting the key hides that the argument was
+ *        passed at all, which is the thing a debugger needs to know.
+ */
+export function redactPii<T>(value: T): T {
+    if (Array.isArray(value)) return value.map((v) => redactPii(v)) as unknown as T;
+    if (value === null || typeof value !== "object") return value;
+    if (value instanceof Date) return value;
+
+    const out: Record<string, unknown> = {};
+    for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
+        out[key] = TRACE_REDACT.has(key.toLowerCase()) ? "[REDACTED]" : redactPii(v);
+    }
+    return out as unknown as T;
+}
