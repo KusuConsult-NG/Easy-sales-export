@@ -204,6 +204,12 @@ export async function POST(request: NextRequest) {
         // Create withdrawal request (Admin SDK with server timestamps)
         const withdrawalData = {
             userId,
+            // Which cooperative this belongs to, which this writer omitted.
+            // Both withdrawal decisions gate on it, and a row without one was
+            // waved through the cooperative-scope check — see
+            // isWithinAdminScope. `|| "default"` matches the one writer of this
+            // collection that did record it, cooperative/_withdrawal.ts.
+            cooperativeId: membershipData.cooperativeId || "default",
             userEmail: session.user.email,
             userName: membershipData.firstName + ' ' + membershipData.lastName,
             amount,

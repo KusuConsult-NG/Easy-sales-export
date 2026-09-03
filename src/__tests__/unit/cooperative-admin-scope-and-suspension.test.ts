@@ -134,7 +134,14 @@ describe('a cooperative-scoped admin', () => {
     it('cannot change a member of another cooperative', () => {
         // THE test.
         expect(update).toContain('const memberScope = await getAdminScope(session.user.id, roles);');
-        expect(update).toContain('memberScope && memberData.cooperativeId && memberData.cooperativeId !== memberScope');
+        // The rule, not its old spelling. It was written inline here and in
+        // both withdrawal decisions, and all three shared a hole: the
+        // `memberData.cooperativeId &&` conjunct is falsy on a record with no
+        // cooperativeId, which collapses the condition to "allowed". The bulk
+        // legacy import writes exactly such records, so for most members this
+        // guard did nothing. It now calls the shared isWithinAdminScope, which
+        // refuses an unlabelled record.
+        expect(update).toContain('isWithinAdminScope(memberScope, memberData.cooperativeId)');
         expect(update).toContain('Cannot change membership status for another cooperative');
     });
 
@@ -152,8 +159,11 @@ describe('a cooperative-scoped admin', () => {
         // than a design choice.
         const money = code(ADMIN_MONEY);
 
-        expect(money).toContain('withdrawalData.cooperativeId !== adminScope');
-        expect((money.match(/cooperativeId !== adminScope/g) ?? []).length).toBeGreaterThanOrEqual(2);
+        // Same change of spelling, same intent: both withdrawal actions apply
+        // the rule, which is what made its absence here a gap rather than a
+        // design choice. Counted, so one of the two silently losing it fails.
+        expect((money.match(/isWithinAdminScope\(adminScope, withdrawalData\.cooperativeId\)/g) ?? []).length)
+            .toBe(2);
     });
 });
 

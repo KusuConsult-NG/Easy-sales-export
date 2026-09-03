@@ -37,7 +37,13 @@ jest.mock('resend', () => ({
 }));
 
 const getAdminScope = jest.fn(async (_uid: string, _roles: unknown) => null as string | null);
+// requireActual, so only getAdminScope is stubbed. Listing exports by hand
+// meant that when the module gained isWithinAdminScope — the shared scope rule
+// the action now calls — this mock returned undefined for it and every test
+// below failed inside a generic catch, looking like a defect in the action.
+// The module owns its surface; the test overrides one function of it.
 jest.mock('@/lib/cooperative-admin-scope', () => ({
+    ...(jest.requireActual('@/lib/cooperative-admin-scope') as Record<string, unknown>),
     getAdminScope: (uid: string, roles: unknown) => getAdminScope(uid, roles),
 }));
 
@@ -286,15 +292,39 @@ describe('a scoped administrator', () => {
         expect((await updateStatus(MEMBER, 'active')).success).toBe(true);
     });
 
-    it('and a member with no cooperativeId is not blocked by a scope', async () => {
-        // Most legacy memberships carry no cooperativeId. Treating an absent one
-        // as "belongs to somebody else" would lock a scoped admin out of their own
-        // records.
+    it('and a member with no cooperativeId belongs to "default", not to everyone', async () => {
+        /**
+         * This test used to assert that an unlabelled member is reachable by
+         * ANY scoped admin, on the reasoning — correct as far as it went — that
+         * "most legacy memberships carry no cooperativeId" and refusing them
+         * "would lock a scoped admin out of their own records".
+         *
+         * Treating absence as a wildcard is how a cooperative_admin scoped to
+         * one cooperative could activate, approve or suspend a bulk-imported
+         * member of any other. The concern was real and the remedy was too
+         * wide.
+         *
+         * Nine writers already spell absence `cooperativeId || "default"`, so
+         * absence has a name. An admin scoped to "default" reaches these
+         * members — the original concern, met — and an admin scoped elsewhere
+         * does not.
+         */
+        store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, MEMBER,
+            { userId: TARGET, membershipStatus: 'pending' });
+
+        getAdminScope.mockImplementation(async () => 'default');
+        expect((await updateStatus(MEMBER, 'active')).success).toBe(true);
+    });
+
+    it('and an admin of another cooperative cannot reach that unlabelled member', async () => {
         getAdminScope.mockImplementation(async () => 'coop-A');
         store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, MEMBER,
             { userId: TARGET, membershipStatus: 'pending' });
 
-        expect((await updateStatus(MEMBER, 'active')).success).toBe(true);
+        const result = await updateStatus(MEMBER, 'active');
+
+        expect(result.success).toBe(false);
+        expect(String(result.error)).toMatch(/another cooperative/i);
     });
 });
 

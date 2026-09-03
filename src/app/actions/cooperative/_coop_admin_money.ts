@@ -15,7 +15,7 @@ import {
     sendWithdrawalRejectedEmail
 } from "@/lib/email-notifications";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { getAdminScope } from "@/lib/cooperative-admin-scope";
+import { getAdminScope, isWithinAdminScope } from "@/lib/cooperative-admin-scope";
 import { balanceFieldOf } from "@/lib/cooperative-member-balance";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { extractCanonicalUser } from "@/lib/canonical/normalizer";
@@ -304,7 +304,12 @@ export async function approveWithdrawalAction(
             }
 
             // 🔒 Prevent IDOR on Approval
-            if (adminScope && withdrawalData?.cooperativeId && withdrawalData.cooperativeId !== adminScope) {
+            //
+            // Was `adminScope && data?.cooperativeId && data.cooperativeId !==
+            // adminScope`, which does not fire when the row carries no
+            // cooperativeId — and two of the three writers of this collection
+            // never set one. See isWithinAdminScope.
+            if (!isWithinAdminScope(adminScope, withdrawalData.cooperativeId)) {
                 throw new Error("Unauthorized: Cannot approve withdrawal for another cooperative");
             }
 
@@ -539,7 +544,12 @@ export async function rejectWithdrawalAction(
             }
 
             // 🔒 Prevent IDOR on Rejection
-            if (adminScope && withdrawalData?.cooperativeId && withdrawalData.cooperativeId !== adminScope) {
+            //
+            // Was `adminScope && data?.cooperativeId && data.cooperativeId !==
+            // adminScope`, which does not fire when the row carries no
+            // cooperativeId — and two of the three writers of this collection
+            // never set one. See isWithinAdminScope.
+            if (!isWithinAdminScope(adminScope, withdrawalData.cooperativeId)) {
                 throw new Error("Unauthorized: Cannot reject withdrawal for another cooperative");
             }
 

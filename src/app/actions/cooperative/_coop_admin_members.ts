@@ -12,7 +12,7 @@ import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { ActionResponse, withFlexibleSafeAction } from "@/lib/safe-action";
 import { paginatedOk, paginatedErr, PaginatedAdminResponse } from "@/lib/admin-action-response";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { getAdminScope } from "@/lib/cooperative-admin-scope";
+import { getAdminScope, isWithinAdminScope } from "@/lib/cooperative-admin-scope";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { Resend } from "resend";
 import { deleteCache, invalidateCooperativeCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
@@ -249,8 +249,28 @@ async function _updateMemberStatusAction(
         //
         // So an administrator scoped to one cooperative could activate, approve
         // or suspend a member of any other.
+        //
+        // AND THE CHECK ITSELF DID NOT FIRE FOR MOST MEMBERS.
+        //
+        // It was `memberScope && memberData.cooperativeId && ... !== memberScope`.
+        // The middle conjunct is falsy on a member document with no
+        // cooperativeId, which collapses the condition to "allowed" — and the
+        // bulk legacy import in admin/_legacy.ts, which is where most members
+        // came from, writes COOPERATIVE_MEMBERS rows without one.
+        //
+        // Unlike the identical guard on the two withdrawal decisions, this one
+        // is REACHABLE: those gate on finance:process_withdrawals, held only by
+        // super_admin and admin, both of whom getAdminScope returns null for.
+        // This gates on cooperatives:approve_members, which cooperative_admin
+        // holds — so a genuinely scoped admin gets here, and for a
+        // bulk-imported member the guard waved them through. Activating,
+        // approving or suspending a member of another cooperative was the
+        // exact thing the comment above says it prevents.
+        //
+        // isWithinAdminScope refuses an unlabelled record instead. A platform
+        // admin (scope null) is unaffected.
         const memberScope = await getAdminScope(session.user.id, roles);
-        if (memberScope && memberData.cooperativeId && memberData.cooperativeId !== memberScope) {
+        if (!isWithinAdminScope(memberScope, memberData.cooperativeId)) {
             return {
                 success: false as const,
                 error: "Unauthorized: Cannot change membership status for another cooperative",

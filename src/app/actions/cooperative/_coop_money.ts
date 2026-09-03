@@ -401,6 +401,12 @@ async function _submitWithdrawalAction(
         // its audit entry.
         const withdrawalRef = db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).doc();
         await withdrawalRef.set({ userId,
+            // Which cooperative this belongs to, which this writer omitted.
+            // Both withdrawal decisions gate on it, and a row without one was
+            // waved through the cooperative-scope check — see
+            // isWithinAdminScope. `|| "default"` matches the one writer of this
+            // collection that did record it, cooperative/_withdrawal.ts.
+            cooperativeId: membershipSnap.data()?.cooperativeId || "default",
             amount,
             reason: reason || "Standard Withdrawal",
             bankAccount,
