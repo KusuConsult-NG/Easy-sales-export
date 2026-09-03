@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { registerAction } from "@/app/actions/auth";
 import { useToast } from "@/contexts/ToastContext";
-import { signIn, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 
 export interface ModuleRegisterProps {
     moduleName: string;
@@ -90,39 +90,27 @@ function ModuleRegisterContent({
 
     // Handle client-side Login & Redirect after successful registration
     // This removes the server-side "Race Condition" by using standard client auth flow
+    /**
+     * REGISTRATION NO LONGER SIGNS ANYONE IN, AND THAT IS THE POINT.
+     *
+     * This called signIn() with the credentials just typed and branched on the
+     * result — "Redirecting to setup..." or "auto-login failed. Please sign
+     * in." — which published the answer registerAction had stopped giving.
+     * Submitting the form with somebody else's address now returns exactly
+     * what a real signup returns, but a real signup could log in and a probe
+     * could not, so the outcome of THIS call still said whether the address
+     * was taken. A generic reply upstream cannot close an oracle the client
+     * re-opens a line later.
+     *
+     * Its twin in RegisterForm.tsx is changed the same way; leaving either one
+     * signing users in would have left the hole open through that page.
+     */
     useEffect(() => {
-        const performAutoLogin = async () => {
-            if (state.success && state.redirectUrl) {
-                showToast("Account created! Securely signing in...", "success");
-
-                try {
-                    // Use NextAuth Client SDK to establish session
-                    // This is robust and handles cookies correctly
-                    const result = await signIn("credentials", {
-                        email: formData.email,
-                        password: formData.password,
-                        redirect: false,
-                    });
-
-                    if (result?.error) {
-                        console.error("Auto-login failed:", result.error);
-                        showToast("Account created, but auto-login failed. Please sign in.", "error");
-                        router.push("/auth/login");
-                    } else {
-                        // Session established successfully
-                        showToast("Login successful! Redirecting to setup...", "success");
-                        router.push(state.redirectUrl);
-                    }
-                } catch (error) {
-                    console.error("Auto-login error:", error);
-                    showToast("Login error. Please sign in manually.", "error");
-                    router.push("/auth/login");
-                }
-            }
-        };
-
-        performAutoLogin();
-    }, [state, formData.email, formData.password, router, showToast]);
+        if (state.success && state.redirectUrl) {
+            showToast("Account created. Please log in to continue.", "success");
+            router.push("/auth/login?callbackUrl=" + encodeURIComponent(state.redirectUrl));
+        }
+    }, [state.success, state.redirectUrl, router, showToast]);
 
     // CHECK: If user is already logged in, redirect to the appropriate onboarding flow
     // This prevents logged-in users from seeing the registration form

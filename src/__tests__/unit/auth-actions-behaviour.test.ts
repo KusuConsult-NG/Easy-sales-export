@@ -47,6 +47,20 @@ jest.mock('@/lib/supabase', () => ({
     },
 }));
 
+// registerAction verifies ownership of an already-registered address by
+// signing in with the submitted password. Unmocked, that reaches for a real
+// anon client — and the action treats a throw as "not owned", so the tests
+// would pass for the wrong reason.
+jest.mock('@supabase/supabase-js', () => ({
+    createClient: () => ({
+        auth: {
+            signInWithPassword: async () => ({
+                data: { user: null }, error: { message: 'Invalid login credentials' },
+            }),
+        },
+    }),
+}));
+
 jest.mock('resend', () => ({
     Resend: class { emails = { send: async () => ({ error: null }) }; },
 }));
@@ -326,35 +340,48 @@ describe('registration', () => {
             expect.objectContaining({ email: 'ada@example.com' }));
     });
 
-    it('and adopting the existing auth account when the address is already registered', async () => {
-        // A half-finished registration leaves an auth account with no profile.
-        // Refusing outright would lock that address out for ever; adopting the id
-        // lets the profile be completed.
+    it('and never asking the auth provider who owns an address', async () => {
+        /**
+         * These two tests used to pin the opposite behaviour. The first
+         * asserted `listUsers()` was called and the id adopted, under a
+         * comment reading "A half-finished registration leaves an auth account
+         * with no profile. Refusing outright would lock that address out for
+         * ever; adopting the id lets the profile be completed."
+         *
+         * The intent was right and the mechanism was an account takeover:
+         * adopting the id required NO password, so the public form rewrote any
+         * known account's name, phone and roles. The resume case is still
+         * served — see register-enumeration.test.ts — but only after the caller
+         * signs in with the password they submitted.
+         *
+         * The second asserted `success: false` with "already been registered",
+         * which is the enumeration oracle stated in a test.
+         */
         createUser.mockImplementation(async () => ({
             data: { user: null as never }, error: { message: 'User already been registered' },
         }));
-        listUsers.mockImplementation(async () => ({
-            data: { users: [{ id: 'existing-uid', email: 'new@example.com' }] },
-        }));
 
         const { registerAction } = await actions();
-        const result = await registerAction(null, form());
+        await registerAction(null, form());
 
-        expect(listUsers).toHaveBeenCalled();
-        expect(result.success).not.toBe(false);
+        expect(listUsers).not.toHaveBeenCalled();
     });
 
-    it('but refusing when the address is registered and the account cannot be found', async () => {
+    it('and answering a taken address exactly as it answers a free one', async () => {
+        const { registerAction } = await actions();
+
         createUser.mockImplementation(async () => ({
             data: { user: null as never }, error: { message: 'User already been registered' },
         }));
-        listUsers.mockImplementation(async () => ({ data: { users: [] } }));
+        const taken: any = await registerAction(null, form());
 
-        const { registerAction } = await actions();
-        const result = await registerAction(null, form());
+        createUser.mockImplementation(async () => ({
+            data: { user: { id: 'supabase-uid-1' } as never }, error: null,
+        }));
+        const free: any = await registerAction(null, form());
 
-        expect(result.success).toBe(false);
-        expect(result.error).toMatch(/already been registered/i);
+        expect(taken).toEqual(free);
+        expect(String(taken.error ?? '')).not.toMatch(/already been registered/i);
     });
 
     it('and surfacing any other auth failure rather than swallowing it', async () => {

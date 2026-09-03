@@ -8,7 +8,7 @@ import { registerAction } from "@/app/actions/auth";
 import { useToast } from "@/contexts/ToastContext";
 import LoadingButton from "@/components/ui/LoadingButton";
 import { useSearchParams, useRouter } from "next/navigation";
-import { signIn, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 
 const initialState = { error: "", success: false, redirectUrl: "" };
 
@@ -39,28 +39,31 @@ export default function RegisterForm() {
         }
     }, [status, router, callbackUrl]);
 
-    // Handle successful registration
+    /**
+     * REGISTRATION NO LONGER SIGNS ANYONE IN, AND THAT IS THE POINT.
+     *
+     * This used to call signIn() with the credentials just typed, and branch:
+     *
+     *     result.error  → "Registration successful but automatic login failed."
+     *     otherwise     → straight into the app
+     *
+     * which published the answer registerAction had stopped giving. Submitting
+     * the form with somebody else's address now returns exactly what a real
+     * signup returns — but a real signup could log in and a probe could not, so
+     * the outcome of THIS call still said whether the address was taken. A
+     * generic error message upstream cannot close an oracle that the client
+     * re-opens one line later.
+     *
+     * Everyone goes to the login page instead. The cost is one extra password
+     * entry for a new user; the gain is that the two cases are genuinely
+     * indistinguishable rather than only similarly worded.
+     */
     useEffect(() => {
         if (state.success && !isPending && state.redirectUrl) {
-            showToast("Account created successfully! Logging you in...", "success");
-
-            // Sign in the user after registration
-            signIn("credentials", {
-                email: formData.email,
-                password: formData.password,
-                redirect: false,
-            }).then((result) => {
-                if (result?.error) {
-                    showToast("Registration successful but automatic login failed. Please log in manually.", "warning");
-                    router.push("/auth/login?callbackUrl=" + encodeURIComponent(state.redirectUrl));
-                } else {
-                    // Successful login, redirect to callback or dashboard
-                    // CRITICAL: Use hard redirect to ensure cookies are seen by middleware
-                    window.location.href = state.redirectUrl;
-                }
-            });
+            showToast("Account created. Please log in to continue.", "success");
+            router.push("/auth/login?callbackUrl=" + encodeURIComponent(state.redirectUrl));
         }
-    }, [state.success, state.redirectUrl, isPending, formData.email, formData.password, showToast, router]);
+    }, [state.success, state.redirectUrl, isPending, showToast, router]);
 
     // Show error toasts
     useEffect(() => {

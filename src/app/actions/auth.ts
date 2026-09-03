@@ -542,6 +542,92 @@ export async function preValidateLoginAction(credentials: any): Promise<{ succes
 export async function loginAction(prevState: any, formData: FormData) { return { error: "Please use client-side login", success: false as const, data: null };
 }
 
+/**
+ * Tell the owner of an address that somebody tried to register with it.
+ *
+ * The information "this address already has an account" is not secret FROM THE
+ * PERSON WHO OWNS IT — it is only secret from whoever is probing. Moving it
+ * out of the HTTP reply and into the inbox is what makes the two replies
+ * identical without the real owner losing anything: if it was them, they know
+ * to sign in; if it was not, they know somebody is trying.
+ *
+ * Rate-limited per address, and deliberately not per caller. The caller is
+ * anonymous and the address is what is being abused — without this, the
+ * registration form is a mail bomb aimed at anyone whose address you know.
+ * The bucket is separate from the login one so that a flood of registration
+ * attempts cannot lock the owner out of signing in, the same reasoning
+ * password-reset.ts uses for its own bucket.
+ *
+ * Best-effort and never awaited into the reply path's success: a mail failure
+ * must not change what the caller sees, or the failure itself becomes the
+ * oracle.
+ */
+async function notifyRegistrationAttempt(email: string): Promise<void> {
+    try {
+        const limiter = rateLimit(rateLimitConfig.contactForm);
+        const limit = await limiter.check(`register-notice:${email}`);
+        if (!limit.success) return;
+
+        const { sendEmailNotification, getBaseUrl } = await import("@/lib/email-notifications");
+        // EmailData is { to, subject, message, metadata?, headers? } — there is
+        // no title or call-to-action field, so the link goes in the body. An
+        // `as any` here would have compiled and silently dropped both.
+        await sendEmailNotification({
+            to: email,
+            subject: "Someone tried to register with your email address",
+            message:
+                "Somebody just submitted the registration form on Easy Sales Export using this email "
+                + "address. An account already exists for it, so nothing was created and nothing has "
+                + "changed.\n\n"
+                + "If this was you, sign in instead — or reset your password if you have forgotten it: "
+                + `${getBaseUrl()}/auth/login\n\n`
+                + "If it was not you, no action is needed. Whoever submitted the form was not signed in "
+                + "and gained no access to your account.",
+            metadata: { reason: "duplicate-registration-attempt" },
+        });
+    } catch (err) {
+        logger.error("[register] could not notify the address owner", err);
+    }
+}
+
+/**
+ * Where a registration lands, decided from the callback URL or the module
+ * domain it was submitted on.
+ *
+ * Extracted so that BOTH outcomes of registerAction can return it. Closing the
+ * enumeration hole below means the reply for "this address is already taken"
+ * has to be byte-identical to the reply for a real signup, and a redirect
+ * computed on only one of the two paths would be the difference that gives the
+ * answer away.
+ */
+async function resolvePostRegistrationRedirect(formData: FormData): Promise<string> {
+    const callbackUrl = formData.get("callbackUrl") as string;
+
+    // `startsWith("/")` would accept "//evil.example", which a browser reads as
+    // absolute. A registration redirect is an open-redirect sink like any other.
+    if (callbackUrl && callbackUrl !== "/dashboard" && /^\/(?!\/|\\)/.test(callbackUrl)) {
+        return callbackUrl;
+    }
+
+    // CRITICAL: Check the host header to see if the user registered on a specific module domain.
+    // If they did, redirect them directly to that module's onboarding instead of the hub selector.
+    try {
+        const { headers } = await import("next/headers");
+        const headersList = await headers();
+        const host = headersList.get("x-forwarded-host") || headersList.get("host") || "";
+        const normalizedHost = host.replace(/^www\./, "");
+        if (normalizedHost.includes("easysalesacademy.com")) return "/academy/setup";
+        if (normalizedHost.includes("farmnation.ng")) return "/farm-nation/onboarding";
+        if (normalizedHost.includes("marketplace.easysalesexport.com")) return "/marketplace/onboarding";
+        if (normalizedHost.includes("waveprogramme.com")) return "/wave/application";
+        if (normalizedHost.includes("easysalescooperative.com")) return "/cooperatives/onboarding";
+        if (normalizedHost.includes("easysalesexportng.com")) return "/export/onboarding";
+    } catch (e) {
+        logger.warn("Could not determine host for post-registration redirect:", { error: e instanceof Error ? e.message : String(e) });
+    }
+    return "/auth/get-started";
+}
+
 export async function registerAction(prevState: any, formData: FormData) { const fullName = formData.get("fullName") as string;
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
@@ -597,13 +683,107 @@ export async function registerAction(prevState: any, formData: FormData) { const
 
             if (sbErr) {
                 if (sbErr.message.includes('already been registered') || sbErr.message.includes('already registered') || sbErr.message.includes('already exists')) {
-                    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
-                    const match = existingUsers?.users?.find(u => u.email?.toLowerCase() === validatedData.email.toLowerCase());
-                    if (match) {
-                        canonicalUid = match.id;
-                    } else {
-                        return { success: false as const, error: "A user with this email address has already been registered", redirectUrl: "" };
+                    /**
+                     *   ANYONE COULD OVERWRITE ANYONE'S PROFILE, WITH NO PASSWORD.
+                     *
+                     *        This branch ran `listUsers()`, found the account
+                     *        that owns the address, and adopted its id:
+                     *
+                     *            canonicalUid = match.id;
+                     *
+                     *        Execution then fell through to the profile write
+                     *        below — `.doc(canonicalUid).set({...userProfile},
+                     *        { merge: true })` — so submitting the public
+                     *        registration form with a known email and ANY
+                     *        password rewrote that account's fullName,
+                     *        firstName, lastName, phone, gender and
+                     *        `roles: ["general_user"]`.
+                     *
+                     *        That demotes an admin to a general user and
+                     *        replaces the phone number account recovery is sent
+                     *        to. No credential was needed, because createUser
+                     *        had already failed — the attacker never proves
+                     *        anything about the address they are claiming.
+                     *
+                     *        The id is only adopted now if the caller proves
+                     *        they own the account by signing in with the
+                     *        password they submitted, and even then only when
+                     *        no profile exists — a complete account
+                     *        re-registering must log in, not have itself reset
+                     *        to day-one defaults.
+                     *
+                     *   AND THE REPLY ANNOUNCED THAT THE ADDRESS IS REGISTERED.
+                     *
+                     *        "A user with this email address has already been
+                     *        registered" is an enumeration oracle on a form
+                     *        that needs no session, on a platform holding
+                     *        savings, loans and investment records.
+                     *
+                     *        A generic message alone would not have closed it,
+                     *        because the client used to sign the user in on
+                     *        success: a real signup logged in and a probe did
+                     *        not, so the answer was still there in the outcome.
+                     *        Registration no longer signs anyone in — everyone
+                     *        is sent to the login page — which is what lets the
+                     *        two replies be identical rather than merely
+                     *        similarly worded.
+                     *
+                     *        So a caller who does not own the address gets the
+                     *        SAME payload a successful registration returns,
+                     *        including the same redirect, and nothing is
+                     *        written. The person who does own it is told by
+                     *        email, which is where that information belongs.
+                     */
+                    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+                    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+                    /**
+                     * Wrapped, and failing to "not owned" rather than throwing.
+                     *
+                     * Without this, an anon client that throws — bad config, a
+                     * network fault — escapes to the outer catch and answers
+                     * "Authentication system error. Please try again." A FREE
+                     * address never reaches this code at all, because createUser
+                     * succeeded and returned. So a throwing client would give
+                     * taken addresses one reply and free addresses another, and
+                     * the oracle this block exists to close would be back,
+                     * wearing the clothes of an infrastructure error.
+                     */
+                    let ownedUserId: string | null = null;
+                    try {
+                        if (supabaseUrl && supabaseAnonKey) {
+                            const { createClient } = await import('@supabase/supabase-js');
+                            const anonClient = createClient(supabaseUrl, supabaseAnonKey);
+                            const { data: owned } = await anonClient.auth.signInWithPassword({
+                                email: validatedData.email.toLowerCase(),
+                                password: validatedData.password,
+                            });
+                            ownedUserId = owned?.user?.id ?? null;
+                        }
+                    } catch (ownErr) {
+                        logger.error("[register] ownership check failed; treating as not owned", ownErr);
+                        ownedUserId = null;
                     }
+
+                    if (!ownedUserId) {
+                        await notifyRegistrationAttempt(validatedData.email.toLowerCase());
+                        return {
+                            success: true as const,
+                            error: "",
+                            redirectUrl: await resolvePostRegistrationRedirect(formData),
+                        };
+                    }
+
+                    const existingProfile = await runQueryWithRetry(() =>
+                        db.collection(COLLECTIONS.USERS).doc(ownedUserId).get());
+                    if (existingProfile.exists) {
+                        // Only reachable by someone who just proved the
+                        // password, so naming the account here tells them
+                        // nothing they did not already know.
+                        return { success: false as const, error: "An account with this email already exists. Please log in instead.", redirectUrl: "" };
+                    }
+
+                    canonicalUid = ownedUserId;
                 } else {
                     return { success: false as const, error: sbErr.message || "Registration failed", redirectUrl: "" };
                 }
@@ -687,27 +867,7 @@ export async function registerAction(prevState: any, formData: FormData) { const
             throw new Error("Failed to create user profile. Please try again.");
         }
 
-        // CRITICAL: Check the host header to see if the user registered on a specific module domain.
-        // If they did, redirect them directly to that module's onboarding instead of the hub selector.
-        const callbackUrl = formData.get("callbackUrl") as string;
-        let redirectUrl = "/auth/get-started";
-        
-        if (callbackUrl && callbackUrl !== "/dashboard" && callbackUrl.startsWith("/")) {
-            redirectUrl = callbackUrl;
-        } else {
-            try { const { headers } = await import("next/headers");
-                const headersList = await headers();
-                const host = headersList.get("x-forwarded-host") || headersList.get("host") || "";
-                const normalizedHost = host.replace(/^www\./, "");
-                if (normalizedHost.includes("easysalesacademy.com")) redirectUrl = "/academy/setup";
-                else if (normalizedHost.includes("farmnation.ng")) redirectUrl = "/farm-nation/onboarding";
-                else if (normalizedHost.includes("marketplace.easysalesexport.com")) redirectUrl = "/marketplace/onboarding";
-                else if (normalizedHost.includes("waveprogramme.com")) redirectUrl = "/wave/application";
-                else if (normalizedHost.includes("easysalescooperative.com")) redirectUrl = "/cooperatives/onboarding";
-                else if (normalizedHost.includes("easysalesexportng.com")) redirectUrl = "/export/onboarding";
-            } catch (e) { logger.warn("Could not determine host for post-registration redirect:", { error: e instanceof Error ? e.message : String(e) });
-            }
-        }
+        const redirectUrl = await resolvePostRegistrationRedirect(formData);
 
         // REGISTRATION ONLY - AUTHENTICATION IS HANDLED ON CLIENT
         // Server-side signIn in Server Actions causes race conditions with cookies.
