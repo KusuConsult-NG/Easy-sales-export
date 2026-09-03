@@ -36,6 +36,7 @@ import {
     fixedSavingsMaturityDate,
 } from "@/lib/cooperative-savings";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
+import { isTransientError } from "@/lib/transient-error";
 
 /**
  * Server Actions for Cooperative Management
@@ -149,17 +150,7 @@ async function _initiateCooperativePaymentAction(
             error: error instanceof Error ? error.message : String(error)
         });
         const errMsg = error instanceof Error ? error.message : String(error);
-        const isTransient = errMsg.includes("Premature close") || 
-                            errMsg.includes("socket hang up") || 
-                            errMsg.includes("ECONNRESET") ||
-                            errMsg.includes("Client network socket disconnected") ||
-                            errMsg.includes("FetchError") ||
-                            errMsg.includes("fetch failed") ||
-                            errMsg.includes("Connection closed") ||
-                            errMsg.includes("Socket closed") ||
-                            errMsg.includes("UNAVAILABLE") ||
-                            errMsg.includes("stream terminated") ||
-                            errMsg.includes("ERR_STREAM_PREMATURE_CLOSE");
+        const isTransient = isTransientError(errMsg);
         const userFriendlyMessage = isTransient 
             ? "A temporary connection issue occurred. Please try again." 
             : (errMsg && errMsg.length > 2 && !errMsg.includes("[object") ? errMsg : "Failed to initiate payment");

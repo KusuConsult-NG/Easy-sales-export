@@ -23,6 +23,7 @@ import { authConfig } from "./auth.config";
 import { runQueryWithRetry } from "@/lib/firestore-utils";
 import { supabase, supabaseAdmin } from "./supabase";
 import { supabaseDb as db } from "./supabase-db";
+import { isTransientError } from "@/lib/transient-error";
 
 /**
  * NextAuth v5 Configuration
@@ -357,17 +358,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
                     // Only fallback to error.message if it's not the exact raw ALL_CAPS string code 
                     // (prevents ugly raw strings in UI if mapping misses something)
-                    const isTransient = msg.includes("Premature close") || 
-                                        msg.includes("socket hang up") || 
-                                        msg.includes("ECONNRESET") ||
-                                        msg.includes("Client network socket disconnected") ||
-                                        msg.includes("FetchError") ||
-                                        msg.includes("fetch failed") ||
-                                        msg.includes("Connection closed") ||
-                                        msg.includes("Socket closed") ||
-                                        msg.includes("UNAVAILABLE") ||
-                                        msg.includes("stream terminated") ||
-                                        msg.includes("ERR_STREAM_PREMATURE_CLOSE");
+                    const isTransient = isTransientError(msg);
                     let userMessage = firebaseErrorMap[code] || firebaseErrorMap[error?.message] || "Authentication failed.";
                     if (isTransient) {
                         userMessage = "A temporary connection issue occurred. Please try again.";

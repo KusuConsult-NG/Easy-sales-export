@@ -18,6 +18,7 @@ import { revalidatePath } from "next/cache";
 import { rateLimit, getActionClientIp } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 import { normalisePhone, phoneLookupVariants } from '@/lib/phone';
+import { isTransientError } from '@/lib/transient-error';
 
 const loginLimiter = rateLimit(rateLimitConfig.login);
 
@@ -345,22 +346,7 @@ export async function preValidateLoginAction(credentials: any): Promise<{ succes
 
                 if (!responseData) {
                     const errMsg = authError.message || String(authError);
-                    const isTransient = errMsg.includes("Premature close") || 
-                                        errMsg.includes("socket hang up") || 
-                                        errMsg.includes("ECONNRESET") ||
-                                        errMsg.includes("Client network socket disconnected") ||
-                                        errMsg.includes("FetchError") ||
-                                        errMsg.includes("fetch failed") ||
-                                        errMsg.includes("Connection closed") ||
-                                        errMsg.includes("Socket closed") ||
-                                        errMsg.includes("UNAVAILABLE") ||
-                                        errMsg.includes("stream terminated") ||
-                                        errMsg.includes("ERR_STREAM_PREMATURE_CLOSE") ||
-                                        errMsg.includes("ENOTFOUND") ||
-                                        errMsg.includes("getaddrinfo") ||
-                                        errMsg.includes("network-error") ||
-                                        errMsg.includes("DEADLINE_EXCEEDED") ||
-                                        errMsg.includes("deadline exceeded");
+                    const isTransient = isTransientError(errMsg);
                     if (isTransient) {
                         return { success: false, error: "A temporary connection issue occurred. Please try again." };
                     }
@@ -505,22 +491,7 @@ export async function preValidateLoginAction(credentials: any): Promise<{ succes
     } catch (e: any) {
         logger.error(`[PreValidate] Exception: ${e.message}`, e);
         const errMsg = e.message || String(e);
-        const isTransient = errMsg.includes("Premature close") || 
-                            errMsg.includes("socket hang up") || 
-                            errMsg.includes("ECONNRESET") ||
-                            errMsg.includes("Client network socket disconnected") ||
-                            errMsg.includes("FetchError") ||
-                            errMsg.includes("fetch failed") ||
-                            errMsg.includes("Connection closed") ||
-                            errMsg.includes("Socket closed") ||
-                            errMsg.includes("UNAVAILABLE") ||
-                            errMsg.includes("stream terminated") ||
-                            errMsg.includes("ERR_STREAM_PREMATURE_CLOSE") ||
-                            errMsg.includes("ENOTFOUND") ||
-                            errMsg.includes("getaddrinfo") ||
-                            errMsg.includes("network-error") ||
-                            errMsg.includes("DEADLINE_EXCEEDED") ||
-                            errMsg.includes("deadline exceeded");
+        const isTransient = isTransientError(errMsg);
         if (isTransient) {
             return { success: false, error: "A temporary connection issue occurred. Please try again." };
         }

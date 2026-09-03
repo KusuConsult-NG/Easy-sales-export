@@ -19,6 +19,7 @@ import { isObviouslyFakeId, fakeIdErrorMessage } from '@/lib/kyc-validators';
 import { atomicUpdateUser } from '@/lib/services/userService';
 import { invalidateUserCache } from '@/lib/cache-invalidation';
 import { hashData } from '@/lib/security';
+import { isTransientError } from '@/lib/transient-error';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -84,17 +85,7 @@ async function _verifyBVNAction(payload: { bvn: string;
     } catch (error) { 
         const message = error instanceof Error ? error.message : 'An unexpected error occurred';
         logger.error('BVN verification action error', error);
-        const isTransient = message.includes("Premature close") || 
-                            message.includes("socket hang up") || 
-                            message.includes("ECONNRESET") ||
-                            message.includes("Client network socket disconnected") ||
-                            message.includes("FetchError") ||
-                            message.includes("fetch failed") ||
-                            message.includes("Connection closed") ||
-                            message.includes("Socket closed") ||
-                            message.includes("UNAVAILABLE") ||
-                            message.includes("stream terminated") ||
-                            message.includes("ERR_STREAM_PREMATURE_CLOSE");
+        const isTransient = isTransientError(message);
         const userFriendlyMessage = isTransient 
             ? "A temporary connection issue occurred. Please try again." 
             : message;
@@ -144,17 +135,7 @@ async function _verifyNINAction(payload: { nin: string;
     } catch (error) { 
         const message = error instanceof Error ? error.message : 'An unexpected error occurred';
         logger.error('NIN verification action error', error);
-        const isTransient = message.includes("Premature close") || 
-                            message.includes("socket hang up") || 
-                            message.includes("ECONNRESET") ||
-                            message.includes("Client network socket disconnected") ||
-                            message.includes("FetchError") ||
-                            message.includes("fetch failed") ||
-                            message.includes("Connection closed") ||
-                            message.includes("Socket closed") ||
-                            message.includes("UNAVAILABLE") ||
-                            message.includes("stream terminated") ||
-                            message.includes("ERR_STREAM_PREMATURE_CLOSE");
+        const isTransient = isTransientError(message);
         const userFriendlyMessage = isTransient 
             ? "A temporary connection issue occurred. Please try again." 
             : message;
@@ -211,17 +192,7 @@ async function _verifyVotersCardAction(payload: { votersCardNumber: string;
     } catch (error) { 
         const message = error instanceof Error ? error.message : 'An unexpected error occurred';
         logger.error("Voter's Card verification action error", error);
-        const isTransient = message.includes("Premature close") || 
-                            message.includes("socket hang up") || 
-                            message.includes("ECONNRESET") ||
-                            message.includes("Client network socket disconnected") ||
-                            message.includes("FetchError") ||
-                            message.includes("fetch failed") ||
-                            message.includes("Connection closed") ||
-                            message.includes("Socket closed") ||
-                            message.includes("UNAVAILABLE") ||
-                            message.includes("stream terminated") ||
-                            message.includes("ERR_STREAM_PREMATURE_CLOSE");
+        const isTransient = isTransientError(message);
         const userFriendlyMessage = isTransient 
             ? "A temporary connection issue occurred. Please try again." 
             : message;
@@ -371,17 +342,7 @@ async function _saveKYCProfileAction(payload: { firstName: string;
     } catch (error) { 
         const message = error instanceof Error ? error.message : 'An unexpected error occurred';
         logger.error('Save KYC profile error', error);
-        const isTransient = message.includes("Premature close") || 
-                            message.includes("socket hang up") || 
-                            message.includes("ECONNRESET") ||
-                            message.includes("Client network socket disconnected") ||
-                            message.includes("FetchError") ||
-                            message.includes("fetch failed") ||
-                            message.includes("Connection closed") ||
-                            message.includes("Socket closed") ||
-                            message.includes("UNAVAILABLE") ||
-                            message.includes("stream terminated") ||
-                            message.includes("ERR_STREAM_PREMATURE_CLOSE");
+        const isTransient = isTransientError(message);
         const userFriendlyMessage = isTransient 
             ? "A temporary connection issue occurred. Please try again." 
             : message;

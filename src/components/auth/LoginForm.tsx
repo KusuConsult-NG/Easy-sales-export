@@ -9,6 +9,7 @@ import { Mail, Lock, AlertCircle, Eye, EyeOff, CheckCircle, ArrowRight, Loader2,
 import { getPostLoginRedirect, preValidateLoginAction } from "@/app/actions/auth";
 import { useToast } from "@/contexts/ToastContext";
 import LoadingButton from "@/components/ui/LoadingButton";
+import { isTransientError } from "@/lib/transient-error";
 
 /**
  * Universal Login Form
@@ -91,22 +92,7 @@ export default function LoginForm({ defaultCallbackUrl = "/dashboard" }: { defau
                 const rawError = result.error;
                 const isOpaqueCode = rawError === "CredentialsSignin" || rawError === "CallbackRouteError";
                 
-                const isTransient = rawError.includes("Premature close") || 
-                                    rawError.includes("socket hang up") || 
-                                    rawError.includes("ECONNRESET") ||
-                                    rawError.includes("Client network socket disconnected") ||
-                                    rawError.includes("FetchError") ||
-                                    rawError.includes("fetch failed") ||
-                                    rawError.includes("Connection closed") ||
-                                    rawError.includes("Socket closed") ||
-                                    rawError.includes("UNAVAILABLE") ||
-                                    rawError.includes("stream terminated") ||
-                                    rawError.includes("ERR_STREAM_PREMATURE_CLOSE") ||
-                                    rawError.includes("ENOTFOUND") ||
-                                    rawError.includes("getaddrinfo") ||
-                                    rawError.includes("network-error") ||
-                                    rawError.includes("DEADLINE_EXCEEDED") ||
-                                    rawError.includes("deadline exceeded");
+                const isTransient = isTransientError(rawError);
                                     
                 if (isTransient) {
                     setError("A temporary connection issue occurred. Please try again.");

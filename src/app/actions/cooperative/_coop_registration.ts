@@ -20,6 +20,7 @@ import { revalidatePath } from "next/cache";
 import { registrationProgressScore } from "@/lib/registration-progress";
 import { hashData } from "@/lib/security";
 import { normalisePhone } from "@/lib/phone";
+import { isTransientError } from "@/lib/transient-error";
 
 /**
  * Rows read per field by the cross-account duplicate guard.
@@ -399,17 +400,7 @@ export async function registerCooperativeMemberAction(
         }
 
         const errMsg = error instanceof Error ? error.message : String(error);
-        const isTransient = errMsg.includes("Premature close") ||
-                            errMsg.includes("socket hang up") ||
-                            errMsg.includes("ECONNRESET") ||
-                            errMsg.includes("Client network socket disconnected") ||
-                            errMsg.includes("FetchError") ||
-                            errMsg.includes("fetch failed") ||
-                            errMsg.includes("Connection closed") ||
-                            errMsg.includes("Socket closed") ||
-                            errMsg.includes("UNAVAILABLE") ||
-                            errMsg.includes("stream terminated") ||
-                            errMsg.includes("ERR_STREAM_PREMATURE_CLOSE");
+        const isTransient = isTransientError(errMsg);
         const userFriendlyMessage = isTransient
             ? "A temporary connection issue occurred. Please try again."
             : errMsg;
@@ -823,17 +814,7 @@ export async function resubmitCooperativeApplicationAction(
             error: error instanceof Error ? error.message : String(error)
         });
         const errMsg = error instanceof Error ? error.message : String(error);
-        const isTransient = errMsg.includes("Premature close") || 
-                            errMsg.includes("socket hang up") || 
-                            errMsg.includes("ECONNRESET") ||
-                            errMsg.includes("Client network socket disconnected") ||
-                            errMsg.includes("FetchError") ||
-                            errMsg.includes("fetch failed") ||
-                            errMsg.includes("Connection closed") ||
-                            errMsg.includes("Socket closed") ||
-                            errMsg.includes("UNAVAILABLE") ||
-                            errMsg.includes("stream terminated") ||
-                            errMsg.includes("ERR_STREAM_PREMATURE_CLOSE");
+        const isTransient = isTransientError(errMsg);
         const userFriendlyMessage = isTransient 
             ? "A temporary connection issue occurred. Please try again." 
             : errMsg;

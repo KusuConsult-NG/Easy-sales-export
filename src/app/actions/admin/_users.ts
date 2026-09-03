@@ -20,6 +20,7 @@ import { stripRegistrationPii } from "@/lib/admin-pii";
 import { atomicUpdateUser } from "@/lib/services/userService";
 import { writeGuard, UserRolesWriteSchema } from "@/lib/write-guard";
 import { safeToISOString, safeToISOStringOptional } from "@/lib/date-utils";
+import { isTransientError } from "@/lib/transient-error";
 
 // ============================================
 // User Verification Toggle
@@ -798,17 +799,7 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
     } catch (error: any) {
         logger.error("Get users error:", error);
         const message = error?.message || String(error);
-        const isTransient = message.includes("Premature close") || 
-                            message.includes("socket hang up") || 
-                            message.includes("ECONNRESET") ||
-                            message.includes("Client network socket disconnected") ||
-                            message.includes("FetchError") ||
-                            message.includes("fetch failed") ||
-                            message.includes("Connection closed") ||
-                            message.includes("Socket closed") ||
-                            message.includes("UNAVAILABLE") ||
-                            message.includes("stream terminated") ||
-                            message.includes("ERR_STREAM_PREMATURE_CLOSE");
+        const isTransient = isTransientError(message);
         const userFriendlyMessage = isTransient 
             ? "A temporary connection issue occurred. Please try again." 
             : message;

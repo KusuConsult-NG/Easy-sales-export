@@ -2,6 +2,7 @@ import { logger } from "@/lib/logger";
 import { logTelemetryAction } from "@/app/actions/telemetry";
 import { logObservabilityTrace } from "@/lib/logger-server";
 import { z } from "zod";
+import { isTransientError } from "@/lib/transient-error";
 
 /**
  * Standardized response format for all Next.js Server Actions
@@ -134,17 +135,7 @@ export function withSafeAction<TArgs extends any[], TReturn>(
             });
 
             // Return safe string to client boundaries
-            const isTransient = errorMessage.includes("Premature close") || 
-                                errorMessage.includes("socket hang up") || 
-                                errorMessage.includes("ECONNRESET") ||
-                                errorMessage.includes("Client network socket disconnected") ||
-                                errorMessage.includes("FetchError") ||
-                                errorMessage.includes("fetch failed") ||
-                                errorMessage.includes("Connection closed") ||
-                                errorMessage.includes("Socket closed") ||
-                                errorMessage.includes("UNAVAILABLE") ||
-                                errorMessage.includes("stream terminated") ||
-                                errorMessage.includes("ERR_STREAM_PREMATURE_CLOSE");
+            const isTransient = isTransientError(errorMessage);
             const sanitizedMessage = isTransient 
                 ? "A temporary connection issue occurred. Please try again." 
                 : errorMessage;
@@ -199,17 +190,7 @@ export function withFlexibleSafeAction<TArgs extends any[], TReturn>(
             });
 
             // Return safe string to client boundaries
-            const isTransient = errorMessage.includes("Premature close") || 
-                                errorMessage.includes("socket hang up") || 
-                                errorMessage.includes("ECONNRESET") ||
-                                errorMessage.includes("Client network socket disconnected") ||
-                                errorMessage.includes("FetchError") ||
-                                errorMessage.includes("fetch failed") ||
-                                errorMessage.includes("Connection closed") ||
-                                errorMessage.includes("Socket closed") ||
-                                errorMessage.includes("UNAVAILABLE") ||
-                                errorMessage.includes("stream terminated") ||
-                                errorMessage.includes("ERR_STREAM_PREMATURE_CLOSE");
+            const isTransient = isTransientError(errorMessage);
             const sanitizedMessage = isTransient 
                 ? "A temporary connection issue occurred. Please try again." 
                 : errorMessage;

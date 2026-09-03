@@ -5,6 +5,7 @@
 
 import crypto from 'crypto';
 import { paystackBaseUrl } from "@/lib/paystack-host";
+import { isTransientError } from "@/lib/transient-error";
 
 /**
  * Convert Naira to Kobo (Paystack expects amounts in kobo)
@@ -150,19 +151,7 @@ export async function verifyPaystackPayment(
             return data;
         } catch (error: any) {
             const errMsg = error?.message || String(error);
-            const isTransient = errMsg.includes("Premature close") || 
-                                errMsg.includes("socket hang up") || 
-                                errMsg.includes("ECONNRESET") ||
-                                errMsg.includes("Client network socket disconnected") ||
-                                errMsg.includes("FetchError") ||
-                                errMsg.includes("fetch failed") ||
-                                errMsg.includes("Connection closed") ||
-                                errMsg.includes("Socket closed") ||
-                                errMsg.includes("UNAVAILABLE") ||
-                                errMsg.includes("stream terminated") ||
-                                errMsg.includes("ERR_STREAM_PREMATURE_CLOSE") ||
-                                errMsg.includes("timeout") ||
-                                errMsg.includes("exceeded");
+            const isTransient = isTransientError(errMsg) || errMsg.includes("timeout") || errMsg.includes("exceeded");
             if (isTransient && i < maxRetries - 1) {
                 console.warn(`[Paystack Verify Retry] Transient error: ${errMsg}. Retrying in ${delay}ms... (Attempt ${i + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
@@ -312,19 +301,7 @@ export async function initializePaystackPayment(
             };
         } catch (error: any) {
             const errMsg = error?.message || String(error);
-            const isTransient = errMsg.includes("Premature close") || 
-                                errMsg.includes("socket hang up") || 
-                                errMsg.includes("ECONNRESET") ||
-                                errMsg.includes("Client network socket disconnected") ||
-                                errMsg.includes("FetchError") ||
-                                errMsg.includes("fetch failed") ||
-                                errMsg.includes("Connection closed") ||
-                                errMsg.includes("Socket closed") ||
-                                errMsg.includes("UNAVAILABLE") ||
-                                errMsg.includes("stream terminated") ||
-                                errMsg.includes("ERR_STREAM_PREMATURE_CLOSE") ||
-                                errMsg.includes("timeout") ||
-                                errMsg.includes("exceeded");
+            const isTransient = isTransientError(errMsg) || errMsg.includes("timeout") || errMsg.includes("exceeded");
             if (isTransient && i < maxRetries - 1) {
                 console.warn(`[Paystack Initialize Retry] Transient error: ${errMsg}. Retrying in ${delay}ms... (Attempt ${i + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
