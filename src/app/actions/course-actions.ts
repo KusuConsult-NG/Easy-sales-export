@@ -27,41 +27,97 @@ export async function updateLessonProgress(
     try {
         const validated = courseProgressSchema.parse(data);
 
-        // Use a composite ID for uniqueness: userId_courseId_lessonId
+        // The id is userId_lessonId. The comment here read
+        // "userId_courseId_lessonId", which is not what the line below builds
+        // and matters because the row also STORES a client-supplied courseId:
+        // a caller sending a different courseId for the same lesson retags its
+        // own row, which completedLessonIds then filters out of the course the
+        // lesson really belongs to. The id shape is left alone deliberately —
+        // getLessonProgress reads this exact key, so changing it would orphan
+        // every existing row and silently reset every learner's position. That
+        // is a migration, not an edit. Recorded rather than done.
         const progressId = `${session.user.id}_${validated.lessonId}`;
         const lessonProgressRef = db.collection(COLLECTIONS.LESSON_VIDEO_PROGRESS).doc(progressId);
 
-        // Check existing progress to validate heartbeat watch speed
+        /**
+         * THE GUARD MEASURED ONE NUMBER AND THE CERTIFICATE DEPENDED ON ANOTHER.
+         *
+         * This is the platform's only defence against skimming a video, and
+         * real care went into it: elapsed wall-clock time against claimed watch
+         * time, anything faster than 2x playback clamped, an anomaly logged.
+         *
+         * It clamped `lastWatchedSecond` — the resume position, which nothing
+         * decides anything from. The line that matters is
+         *
+         *     completed: finalProgressPercent >= 95
+         *
+         * and `finalProgressPercent` began as `validated.progressPercent`, a
+         * number the browser sends. courseProgressSchema constrains it to
+         * 0..100 and nothing else. The two were tied together only INSIDE the
+         * clamp, and the clamp sat behind two conditions a caller controls:
+         *
+         *     if (existingDoc.exists)         — skipped on the very first write
+         *     if (progressIncreaseSeconds > 0) — skipped if seconds don't rise
+         *
+         * So one request with progressPercent 100 stored completed: true; and
+         * on every write after that, re-sending the SAME lastWatchedSecond made
+         * the increase 0 and let any percent through. The guard was not merely
+         * bypassed once — after the first write it never applied again.
+         *
+         * That matters more than one video. completeCourse was hardened so
+         * completion is derived rather than declared: every lesson must have a
+         * row here marked completed. Its comment says completion comes "from
+         * the per-lesson records that guard produces". The guard produced them
+         * on request, so the chain — one call per lesson, completeCourse,
+         * generateCourseCertificate — ended in a stored, numbered credential.
+         *
+         * THE SERVER CREDITS WATCH TIME NOW, RATHER THAN RECEIVING IT.
+         *
+         * The budget applies to every write. On the first there is no baseline
+         * to measure from and the server does not know when the video started,
+         * so the budget is the grace buffer alone: a real player's first
+         * heartbeat (~10s in) is untouched, and a claim of two hours is
+         * credited ten seconds.
+         *
+         * Percent then advances only by the FRACTION of the claimed watch time
+         * that was actually credited, which is what ties the two numbers
+         * together. Claim no new seconds and you earn no new percent.
+         *
+         * Percent is monotonic; the position is not. Scrubbing backwards is
+         * what a resume position is for, and it must not un-complete a lesson.
+         */
+        const MAX_SPEED_MULTIPLIER = 2.0;  // playback up to 2.0x is legitimate
+        const GRACE_BUFFER_SECONDS = 10;   // sync fluctuation, lag, heartbeat period
+
         const existingDoc = await lessonProgressRef.get();
-        let finalLastWatchedSecond = validated.lastWatchedSecond;
-        let finalProgressPercent = validated.progressPercent;
+        const existing = existingDoc.exists ? existingDoc.data() : null;
 
-        if (existingDoc.exists) {
-            const existing = existingDoc.data();
-            const lastUpdated = existing?.updatedAt ? (existing.updatedAt instanceof Timestamp ? existing.updatedAt.toDate() : new Date(existing.updatedAt)) : null;
-            
-            if (lastUpdated) {
-                const elapsedTimeSeconds = (Date.now() - lastUpdated.getTime()) / 1000;
-                const progressIncreaseSeconds = validated.lastWatchedSecond - (existing?.lastWatchedSecond || 0);
+        const previousSecond = Number(existing?.lastWatchedSecond) || 0;
+        const previousPercent = Number(existing?.progressPercent) || 0;
 
-                if (progressIncreaseSeconds > 0) {
-                    const maxSpeedMultiplier = 2.0; // Allowed playback rate up to 2.0x
-                    const graceBufferSeconds = 10;   // Extra buffer to account for minor sync fluctuations or lag
-                    const maxAllowedIncrease = (elapsedTimeSeconds * maxSpeedMultiplier) + graceBufferSeconds;
+        const lastUpdated = existing?.updatedAt
+            ? (existing.updatedAt instanceof Timestamp ? existing.updatedAt.toDate() : new Date(existing.updatedAt))
+            : null;
+        const elapsedTimeSeconds = lastUpdated
+            ? Math.max(0, (Date.now() - lastUpdated.getTime()) / 1000)
+            : 0;
 
-                    if (progressIncreaseSeconds > maxAllowedIncrease) {
-                        logger.warn(`[LMS Progress Guard] Watch-rate anomaly detected for user ${session.user.id} on lesson ${validated.lessonId}. Increase: ${progressIncreaseSeconds}s, Allowed: ${maxAllowedIncrease}s.`);
-                        // Clamp the increment to prevent cheating
-                        finalLastWatchedSecond = (existing?.lastWatchedSecond || 0) + maxAllowedIncrease;
-                        
-                        if (validated.lastWatchedSecond > 0) {
-                            const ratio = finalLastWatchedSecond / validated.lastWatchedSecond;
-                            finalProgressPercent = Math.min(100, Math.max(0, (existing?.progressPercent || 0) + (validated.progressPercent - (existing?.progressPercent || 0)) * ratio));
-                        }
-                    }
-                }
-            }
+        const budgetSeconds = (elapsedTimeSeconds * MAX_SPEED_MULTIPLIER) + GRACE_BUFFER_SECONDS;
+        const claimedIncrease = validated.lastWatchedSecond - previousSecond;
+
+        // A scrub back is `min` returning the claim; an over-claim is `min`
+        // returning the budget. Both are the position the learner may resume at.
+        const finalLastWatchedSecond = Math.min(validated.lastWatchedSecond, previousSecond + budgetSeconds);
+        const creditedIncrease = Math.max(0, finalLastWatchedSecond - previousSecond);
+
+        if (claimedIncrease > budgetSeconds) {
+            logger.warn(`[LMS Progress Guard] Watch-rate anomaly detected for user ${session.user.id} on lesson ${validated.lessonId}. Increase: ${claimedIncrease}s, Allowed: ${budgetSeconds}s.`);
         }
+
+        // No new seconds credited means no new percent, whatever was claimed.
+        const creditedShare = claimedIncrease > 0 ? creditedIncrease / claimedIncrease : 0;
+        const claimedPercentGain = Math.max(0, validated.progressPercent - previousPercent);
+        const finalProgressPercent = Math.min(100, previousPercent + (claimedPercentGain * creditedShare));
 
         await lessonProgressRef.set({ userId: session.user.id,
             courseId: validated.courseId,
