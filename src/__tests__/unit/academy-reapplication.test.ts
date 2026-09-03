@@ -164,11 +164,34 @@ describe('the identity it matches on', () => {
     it.each([
         ['src/app/actions/academy/_ac_enrollment.ts', 'checkAcademyStatusAction'],
         ['src/app/actions/academy/_payment.ts', 'checkAcademyPaymentStatusAction'],
-        ['src/lib/module-access-check.ts', 'Layer 2.7 — the academy access grant'],
     ])('%s (%s) is the reader that needed it', (rel: string) => {
         // Each of these queries the lowercased form. The write above is what
         // makes them able to find the row at all.
         expect(code(rel)).toContain('.where("personalInfo.email", "==", userData.email.toLowerCase())');
+    });
+
+    it('and module-access-check Layer 2.7 — the academy access grant — still does', () => {
+        /**
+         * Checked as a PROPERTY rather than as that literal.
+         *
+         * Layer 2.7's lookup moved into unclaimedApplicationForEmail, the one
+         * function all four email fallbacks now share, so the address field and
+         * the lowercasing are no longer on the same line. Both still have to
+         * hold, and asserting the literal would have made a refactor look like
+         * a regression — which is exactly what it did before this was rewritten.
+         */
+        const body = code('src/lib/module-access-check.ts');
+
+        // The field this layer matches on is still personalInfo.email.
+        expect(body).toContain('COLLECTIONS.ACADEMY_APPLICATIONS, userData.email, "Academy"');
+        expect(body).toContain('["personalInfo.email"]');
+
+        // And the shared lookup lowercases before it queries.
+        const helper = body.slice(body.indexOf('async function unclaimedApplicationForEmail'));
+        const normalise = helper.indexOf('.toLowerCase().trim()');
+        const query = helper.indexOf('.where(field, "==", normalised)');
+        expect(normalise).toBeGreaterThan(-1);
+        expect(query).toBeGreaterThan(normalise);
     });
 
     it('matches the phone in both the typed and the E.164 form', () => {

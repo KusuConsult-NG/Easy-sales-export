@@ -50,6 +50,102 @@ const APP_TO_ROLES: Partial<Record<AppIdentifier, string[]>> = {
 };
 
 /**
+ * An application matching this email that NOBODY has claimed yet.
+ *
+ * WHY THIS EXISTS — THE RULE WAS WRITTEN THREE TIMES AND NOT HERE.
+ * ---------------------------------------------------------------
+ * Three fallback layers below claim an application by email when no application
+ * carries the caller's userId. Each was written as:
+ *
+ *     let emailQuery = await db.collection(X)
+ *         .where("userEmail", "==", userData.email.toLowerCase()) ... .get();
+ *     if (emailQuery.empty) {
+ *         emailQuery = await db.collection(X)
+ *             .where("profile.email", "==", userData.email.toLowerCase()) ... .get();
+ *     }
+ *     if (!emailQuery.empty) {
+ *         const latestAppByEmail = latestApplication(emailQuery.docs);
+ *         appDocData = latestAppByEmail?.data();
+ *         appRef = latestAppByEmail?.ref;
+ *     }
+ *
+ * and carried the two defects #36 closed on the WAVE status action, and that
+ * export/_ex_onboarding.ts and farm-nation/_fn_onboarding.ts closed on theirs:
+ *
+ *   IT ADOPTED APPLICATIONS THAT ALREADY HAD AN OWNER. The `!appDocData.userId`
+ *   test further down guards only the HEALING WRITE. The document became
+ *   appDocData either way, and the block then grants the module role and writes
+ *   serviceRegistrations[module].status = "approved" onto the caller. That is
+ *   what this function fixes: only an UNCLAIMED application can be claimed.
+ *
+ * THE SECOND DEFECT THOSE FIXES ALSO CLOSED IS DELIBERATELY NOT CLOSED HERE.
+ * They dropped the fallback to `email` / `profile.email` on the grounds that
+ * `userEmail` is written from session.user.email at submission and is the
+ * address the account actually signed in as, while the other two arrive from an
+ * import or an admin edit. Removing it here fails two existing tests that pin
+ * the fallback with a stated reason — "WAVE records the address under two
+ * different names depending on which form wrote it" — and locking a legacy
+ * applicant out of their own module is a real cost against a risk the ownership
+ * filter above already bounds: what is adopted must be an application NOBODY
+ * owns. So the fallback stays and the disagreement with the three status actions
+ * is named rather than resolved by this pass. OWNER DECISION: drop the secondary
+ * field here too if legacy rows are no longer expected.
+ *
+ * The three actions that were fixed all funnel into this module, and the export
+ * copy's own note says the danger is that the status is written "to their user
+ * record, WHICH MODULE-ACCESS-CHECK READS". The fix reached the readers and not
+ * the thing they were describing.
+ *
+ * Executed before this change: two accounts sharing an email — which lib/auth.ts
+ * says exists, "Duplicate and legacy rows exist; broadcast.ts dedupes its
+ * recipient list by email for that reason" — and checkModuleAccess granted the
+ * second account `wave_participant` and wrote
+ * serviceRegistrations.wave = { status: "approved", applicationId: A1 } to its
+ * user document, off an application owned by the first.
+ *
+ * One function, three call sites, so a fourth layer cannot quietly disagree.
+ */
+async function unclaimedApplicationForEmail(
+    collection: string,
+    email: string | undefined,
+    label: string,
+    /**
+     * The address fields to try, in order — each layer keeps exactly the ones
+     * it already queried, so this function adds the ownership filter and
+     * changes nothing else about what is matched.
+     */
+    emailFields: readonly string[],
+): Promise<any | null> {
+    const normalised = (email ?? "").toLowerCase().trim();
+    if (!normalised) return null;
+
+    const db = getAdminDb();
+    let emailQuery: any = null;
+    for (const field of emailFields) {
+        emailQuery = await db.collection(collection)
+            .where(field, "==", normalised)
+            .limit(APPLICATION_SCAN_LIMIT)
+            .get();
+        if (!emailQuery.empty) break;
+    }
+
+    if (!emailQuery || emailQuery.empty) return null;
+
+    // Only an unclaimed application can be claimed. Filtered BEFORE choosing the
+    // latest, so "the newest one" cannot select somebody else's.
+    const unclaimed = emailQuery.docs.filter((d: any) => !d.data()?.userId);
+    if (unclaimed.length === 0) {
+        logger.warn(
+            `[ModuleAccess] ${emailQuery.docs.length} ${label} application(s) match ${normalised} `
+            + "but every one already belongs to another account; none claimed.",
+        );
+        return null;
+    }
+
+    return latestApplication(unclaimed);
+}
+
+/**
  * Returns true if the user has access to the given app.
  *
  * Layer 1 (fast)    — JWT role check via hasAppAccess(). Covers 99% of requests.
@@ -289,14 +385,19 @@ export async function checkModuleAccess(
                 appDocData = latestApp?.data();
                 appRef = latestApp?.ref;
             } else if (userData.email) {
-                const emailQuery = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
-                    .where("personalInfo.email", "==", userData.email.toLowerCase())
-                    .limit(APPLICATION_SCAN_LIMIT)
-                    .get();
-                if (!emailQuery.empty) {
-                    const latestAppByEmail = latestApplication(emailQuery.docs);
-                    appDocData = latestAppByEmail?.data();
-                    appRef = latestAppByEmail?.ref;
+                // Only an UNCLAIMED application, and on the same field this
+                // layer already queried. See unclaimedApplicationForEmail —
+                // this copy was missed by the first sweep of the three layers
+                // below because it issues a single query rather than a
+                // primary-with-fallback pair, and the structural test in
+                // module-access-claims-only-unowned-applications.test.ts is
+                // what found it.
+                const claimable = await unclaimedApplicationForEmail(
+                    COLLECTIONS.ACADEMY_APPLICATIONS, userData.email, "Academy",
+                    ["personalInfo.email"]);
+                if (claimable) {
+                    appDocData = claimable.data();
+                    appRef = claimable.ref;
                 }
             }
 
@@ -352,20 +453,13 @@ export async function checkModuleAccess(
                 appDocData = latestApp?.data();
                 appRef = latestApp?.ref;
             } else if (userData.email) {
-                let emailQuery = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
-                    .where("userEmail", "==", userData.email.toLowerCase())
-                    .limit(APPLICATION_SCAN_LIMIT)
-                    .get();
-                if (emailQuery.empty) {
-                    emailQuery = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
-                        .where("email", "==", userData.email.toLowerCase())
-                        .limit(APPLICATION_SCAN_LIMIT)
-                        .get();
-                }
-                if (!emailQuery.empty) {
-                    const latestAppByEmail = latestApplication(emailQuery.docs);
-                    appDocData = latestAppByEmail?.data();
-                    appRef = latestAppByEmail?.ref;
+                // Only an UNCLAIMED application, and only on the address the
+                // account signed in as. See unclaimedApplicationForEmail.
+                const claimable = await unclaimedApplicationForEmail(
+                    COLLECTIONS.WAVE_APPLICATIONS, userData.email, "WAVE", ["userEmail", "email"]);
+                if (claimable) {
+                    appDocData = claimable.data();
+                    appRef = claimable.ref;
                 }
             }
 
@@ -420,20 +514,13 @@ export async function checkModuleAccess(
                 appDocData = latestApp?.data();
                 appRef = latestApp?.ref;
             } else if (userData.email) {
-                let emailQuery = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
-                    .where("userEmail", "==", userData.email.toLowerCase())
-                    .limit(APPLICATION_SCAN_LIMIT)
-                    .get();
-                if (emailQuery.empty) {
-                    emailQuery = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
-                        .where("profile.email", "==", userData.email.toLowerCase())
-                        .limit(APPLICATION_SCAN_LIMIT)
-                        .get();
-                }
-                if (!emailQuery.empty) {
-                    const latestAppByEmail = latestApplication(emailQuery.docs);
-                    appDocData = latestAppByEmail?.data();
-                    appRef = latestAppByEmail?.ref;
+                // Only an UNCLAIMED application, and only on the address the
+                // account signed in as. See unclaimedApplicationForEmail.
+                const claimable = await unclaimedApplicationForEmail(
+                    COLLECTIONS.EXPORT_APPLICATIONS, userData.email, "Export", ["userEmail", "profile.email"]);
+                if (claimable) {
+                    appDocData = claimable.data();
+                    appRef = claimable.ref;
                 }
             }
 
@@ -488,20 +575,13 @@ export async function checkModuleAccess(
                 appDocData = latestApp?.data();
                 appRef = latestApp?.ref;
             } else if (userData.email) {
-                let emailQuery = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
-                    .where("userEmail", "==", userData.email.toLowerCase())
-                    .limit(APPLICATION_SCAN_LIMIT)
-                    .get();
-                if (emailQuery.empty) {
-                    emailQuery = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
-                        .where("profile.email", "==", userData.email.toLowerCase())
-                        .limit(APPLICATION_SCAN_LIMIT)
-                        .get();
-                }
-                if (!emailQuery.empty) {
-                    const latestAppByEmail = latestApplication(emailQuery.docs);
-                    appDocData = latestAppByEmail?.data();
-                    appRef = latestAppByEmail?.ref;
+                // Only an UNCLAIMED application, and only on the address the
+                // account signed in as. See unclaimedApplicationForEmail.
+                const claimable = await unclaimedApplicationForEmail(
+                    COLLECTIONS.FARM_NATION_APPLICATIONS, userData.email, "Farm Nation", ["userEmail", "profile.email"]);
+                if (claimable) {
+                    appDocData = claimable.data();
+                    appRef = claimable.ref;
                 }
             }
 
