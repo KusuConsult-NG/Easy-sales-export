@@ -59,7 +59,21 @@ export const MODULE_NAVIGATION: Record<string, NavigationItem[]> = {
     // ------------------------------------------------------------------
     "dashboard": [
         { name: "Overview", href: "/dashboard", icon: LayoutDashboard, exact: true },
-        { name: "Settings", href: "/settings", icon: Settings },
+        /**
+         *   #359 THIS WAS A 404. `/settings` HAS NO PAGE.
+         *
+         *        src/app/settings/ contains exactly one route —
+         *        settings/security/mfa — and no page.tsx of its own, so the
+         *        only Settings link a signed-in member has ever had led to
+         *        not-found. route-manifest.ts lists "/settings" twice as a
+         *        protected path, guarding a page that does not exist.
+         *
+         *        /profile IS the settings screen: it has general, security
+         *        and preferences tabs, and its security tab is what links on
+         *        to settings/security/mfa. The tab is selectable by query
+         *        param now, so this lands where the label promises.
+         */
+        { name: "Settings", href: "/profile?tab=preferences", icon: Settings },
     ],
 
     // ------------------------------------------------------------------

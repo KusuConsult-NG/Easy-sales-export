@@ -29,7 +29,19 @@ export default function ProfilePage() {
     const searchParams = useSearchParams();
     const notice = searchParams.get('notice');
     
-    const [activeTab, setActiveTab] = useState<'general' | 'security' | 'preferences'>('general');
+    /**
+     * #359 the `tab` query param is honoured now.
+     *
+     * The nav items labelled "Settings" used to point at /settings and
+     * /farm-nation/settings, neither of which has a page — they were 404s. This
+     * screen IS the settings screen (general, security, preferences), so those
+     * links now come here, and land on the tab the label promises rather than
+     * dumping the member on "general".
+     */
+    const requestedTab = searchParams.get('tab');
+    const [activeTab, setActiveTab] = useState<'general' | 'security' | 'preferences'>(
+        requestedTab === 'security' || requestedTab === 'preferences' ? requestedTab : 'general',
+    );
     const [isLoading, setIsLoading] = useState(false);
     const [isFetching, setIsFetching] = useState(true);
     const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);

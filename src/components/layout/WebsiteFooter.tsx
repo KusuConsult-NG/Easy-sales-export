@@ -19,8 +19,17 @@ export default function WebsiteFooter() {
         legal: [
             { name: "Terms of Service", href: "/terms" },
             { name: "Privacy Policy", href: "/privacy" },
-            { name: "Security", href: "/security" },
-            { name: "FAQ", href: "/faq" },
+            // #359 both were 404s on the PUBLIC footer, so every visitor who
+            // clicked either got not-found. Neither page has ever existed.
+            //
+            // "Security" now points at the privacy policy, whose section 5 is
+            // Data Security — the nearest page that is actually true. A
+            // dedicated security page is an owner decision, not something to
+            // invent here.
+            { name: "Security", href: "/privacy" },
+            // "FAQ" points at the help centre, which carries the "Frequently
+            // Asked Questions" section this link was named for.
+            { name: "FAQ", href: "/help" },
         ],
     };
 

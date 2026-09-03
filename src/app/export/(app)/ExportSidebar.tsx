@@ -32,7 +32,9 @@ const navItems = [
     { icon: LineChart, label: "My Portfolio", href: "/export/portfolio" },
     { icon: Package, label: "My Products", href: "/export/products" },
     { icon: History, label: "Transactions", href: "/export/transactions" },
-    { icon: User, label: "Profile", href: "/export/profile" },
+    // #359 was "/export/profile", which has no page. The profile screen is
+    // global — GLOBAL_NAV_ITEMS in lib/sidebar-config.ts points at the same one.
+    { icon: User, label: "Profile", href: "/profile" },
 ];
 
 export default function ExportSidebar() {

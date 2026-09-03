@@ -31,8 +31,11 @@ const navItems = [
     { icon: Map, label: "Properties", href: "/farm-nation/properties" },
     { icon: ShoppingCart, label: "My Purchases", href: "/farm-nation/my-purchases" },
     { icon: Sprout, label: "My Listings", href: "/farm-nation/list-land" },
-    { icon: User, label: "Profile", href: "/farm-nation/profile" },
-    { icon: Settings, label: "Settings", href: "/farm-nation/settings" },
+    // #359 both of these were 404s — neither /farm-nation/profile nor
+    // /farm-nation/settings has a page. The profile screen is global and holds
+    // the settings tabs; see the note in lib/sidebar-config.ts.
+    { icon: User, label: "Profile", href: "/profile" },
+    { icon: Settings, label: "Settings", href: "/profile?tab=preferences" },
 ];
 
 export default function FarmNationSidebar() {
