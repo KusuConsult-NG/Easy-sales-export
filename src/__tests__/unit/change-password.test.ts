@@ -154,16 +154,32 @@ describe('changePasswordAction — the primary store is the one that counts', ()
         );
     });
 
-    it('updates the legacy store too, so the fallback stops accepting the old password', async () => {
-        // lib/auth.ts falls back to Firebase whenever Supabase rejects a
-        // password. Leaving Firebase on the old secret keeps a superseded
-        // credential alive behind that fallback.
+    it('DOES NOT MAKE A SECOND WRITE THROUGH THE FIREBASE SHIM', async () => {
+        /**
+         * This test used to assert the opposite, under the comment "updates the
+         * legacy store too, so the fallback stops accepting the old password".
+         * The reasoning was right about the risk and wrong about the call.
+         *
+         * package.json maps firebase-admin to src/lib/shims/firebase-admin, and
+         * that shim's updateUser is supabaseAdmin.auth.admin.updateUserById.
+         * So `adminAuth.updateUser` wrote to the SAME Supabase store the line
+         * above had just written to — the legacy store was never updated, and
+         * this assertion was pinning a call that could not do what it said.
+         *
+         * It also passed `session.user.id` where the Supabase write correctly
+         * passes `supabaseAuthId`; for a migrated account those differ, so it
+         * addressed an id that does not exist and threw into a catch that
+         * logged "skipped".
+         *
+         * Removing it opens nothing: the stale Firebase password cannot
+         * complete a login, because lib/auth.ts's fallback provisions the
+         * account in Supabase afterwards and turns "already exists" into
+         * auth/invalid-credential. Asserted in
+         * auth-password-and-logout.test.ts, which also pins the shim.
+         */
         await change(GOOD_OLD, GOOD_NEW);
 
-        expect(mockFirebaseUpdateUser).toHaveBeenCalledWith(
-            USER,
-            expect.objectContaining({ password: GOOD_NEW })
-        );
+        expect(mockFirebaseUpdateUser).not.toHaveBeenCalled();
     });
 
     it('reports failure when the primary store cannot be written', async () => {

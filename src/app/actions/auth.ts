@@ -1,7 +1,6 @@
 "use server";
 
 import { auth, signIn, signOut } from "@/lib/auth";
-import { adminAuth } from "@/lib/firebase-admin";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { registerSchema, loginSchema } from "@/lib/schemas";
@@ -749,27 +748,68 @@ export async function logoutAction() {
         // We clear both standard and secure token names used in auth.config.ts
         const tokenNames = ['authjs.session-token', '__Secure-authjs.session-token', 'next-auth.session-token', '__Secure-next-auth.session-token'];
         
+        /**
+         * THE TWO NAMES THAT ARE LIVE IN PRODUCTION WERE THE TWO THE BROWSER
+         * THREW AWAY.
+         *
+         * Every deletion below was sent as
+         *
+         *     cookieStore.set(name, "", { expires: new Date(0), path: "/" })
+         *
+         * with no `secure`. Half these names carry a cookie prefix, and both
+         * prefixes are enforced by the browser on the way IN: a Set-Cookie for
+         * a `__Secure-` or `__Host-` name without the Secure attribute is
+         * rejected outright, and `__Host-` additionally requires path "/" and
+         * forbids Domain. auth.config.ts names the cookies
+         * `__Secure-authjs.session-token` and `__Host-authjs.csrf-token`
+         * whenever useSecureCookies is on, which is every production deploy —
+         * so the deletions this code is most explicit about were discarded, and
+         * the ones that landed were the development-only names.
+         *
+         * `secure` follows the NAME rather than the environment. A prefixed
+         * name is rejected without it in every environment, so attaching it
+         * unconditionally to those is strictly better than a NODE_ENV check;
+         * and the unprefixed names are the development ones, where a Secure
+         * attribute over plain http would break the delete that currently
+         * works — the mirror image of the bug being fixed.
+         *
+         * Honest severity: signOut() below clears the current session cookie
+         * itself with the right attributes, so logout worked. This is a
+         * belt-and-braces pass that silently did nothing.
+         */
+        const isPrefixed = (name: string) => name.startsWith("__Secure-") || name.startsWith("__Host-");
+
+        // Only the session names are ever Domain-scoped, and none of them is
+        // `__Host-` prefixed — that prefix forbids Domain outright. A
+        // `!name.startsWith("__Host-")` guard here would be a guard that never
+        // fires, which is the thing this audit keeps finding; the invariant is
+        // asserted over the list itself in auth-password-and-logout.test.ts,
+        // where it can actually be broken.
         for (const name of tokenNames) {
             if (domain) {
                 cookieStore.set(name, "", {
                     domain,
                     expires: new Date(0),
                     path: "/",
+                    ...(isPrefixed(name) ? { secure: true } : {}),
                 });
             }
             // Also clear without explicit domain to be sure
             cookieStore.set(name, "", {
                 expires: new Date(0),
                 path: "/",
+                ...(isPrefixed(name) ? { secure: true } : {}),
             });
         }
 
-        // Clear CSRF tokens too to be safe
+        // Clear CSRF tokens too to be safe. Never Domain-scoped: every prefixed
+        // name here is `__Host-`, which forbids it.
         const csrfNames = ['authjs.csrf-token', '__Host-authjs.csrf-token', 'next-auth.csrf-token', '__Host-next-auth.csrf-token'];
         for (const name of csrfNames) {
             cookieStore.set(name, "", {
                 expires: new Date(0),
                 path: "/",
+                ...(isPrefixed(name) ? { secure: true } : {}),
             });
         }
 
@@ -915,16 +955,41 @@ export async function changePasswordAction(
             return { success: false as const, error: "Could not update your password. Please try again or contact support.", data: null };
         }
 
-        // Firebase second, and it matters: lib/auth.ts falls back to it when
-        // Supabase rejects a password, so leaving the old one there keeps a
-        // superseded credential alive. Best-effort because plenty of accounts
-        // have no Firebase record at all — the primary store is already correct
-        // by this point.
-        try {
-            await adminAuth.updateUser(session.user.id, { password: newPassword });
-        } catch (fbErr: any) {
-            logger.warn("[changePassword] Legacy Firebase password update skipped:", fbErr?.message);
-        }
+        // A "write the password to Firebase as well" block used to sit here.
+        // Its reasoning was sound and it could not carry it out.
+        //
+        // It read: "Firebase second, and it matters: lib/auth.ts falls back to
+        // it when Supabase rejects a password, so leaving the old one there
+        // keeps a superseded credential alive", and then called
+        //
+        //     await adminAuth.updateUser(session.user.id, { password })
+        //
+        // package.json maps firebase-admin to src/lib/shims/firebase-admin, and
+        // that shim's updateUser is one line — supabaseAdmin.auth.admin
+        // .updateUserById(uid, updateData). So it wrote to the SAME Supabase
+        // store the call above just wrote to. Firebase, the real
+        // identitytoolkit.googleapis.com service the fallback actually verifies
+        // against, was never touched.
+        //
+        // And it used the wrong id. This function goes to care above to
+        // separate `session.user.id` (the legacy profile id) from
+        // `supabaseAuthId` (the Supabase account) precisely because they differ
+        // for a migrated account — then passed the legacy one here. So for the
+        // very accounts the block existed to serve it addressed a Supabase id
+        // that does not exist, threw, and was logged as "Legacy Firebase
+        // password update skipped": an optional step degrading gracefully,
+        // rather than one that had never once succeeded.
+        //
+        // registerAction had the identical block and it was removed for exactly
+        // this reason; that comment is 200 lines above and this call did not
+        // get it.
+        //
+        // Removing it opens nothing. The stale Firebase password cannot log
+        // anyone in: lib/auth.ts's fallback provisions the account in Supabase
+        // after the Firebase check passes, and for anyone who has changed their
+        // password that account already exists, so createUser answers "already
+        // exists" and the branch throws auth/invalid-credential. The fallback
+        // can only complete for an account not yet in Supabase.
 
         // Clear the forced-change flag HERE, because this is the only place that
         // knows a password was actually changed.
