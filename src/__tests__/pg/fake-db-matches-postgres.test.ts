@@ -147,9 +147,31 @@ async function fromPostgres(
         }
     }
 
+    /**
+     * THE ADAPTER'S OWN DEFAULT ORDER, WHICH THIS OMITTED.
+     *
+     * supabase-db.ts:1689 ends every query build with
+     *
+     *     if (this._orderBy.length === 0) query = query.order('id');
+     *
+     * so an unordered query is never actually unordered in production — it
+     * comes back by id. This helper issued raw SQL with no ORDER BY at all and
+     * compared the fake against Postgres's heap order, which is not a query
+     * the adapter can ever send.
+     *
+     * With three or four seeded rows heap order usually coincides with id
+     * order, so most comparisons here passed by luck; `{ t, f, s }` filtered to
+     * { t, s } is a case where it does not, and it was the one failing test the
+     * first time this suite was run against a real cluster. The fake was right
+     * and the yardstick was wrong.
+     *
+     * That matters beyond one assertion: the point of this file is to be the
+     * thing that certifies the fake the whole unit suite runs on. A yardstick
+     * measuring a different query certifies nothing.
+     */
     const orderBy = order
         ? ` order by raw_data->>${literal(order[0])} ${order[1] === 'desc' ? 'desc' : 'asc'}`
-        : '';
+        : ' order by id';
     const cap = limit !== undefined ? ` limit ${Number(limit)}` : '';
 
     return (await q<{ id: string }>(
@@ -209,6 +231,41 @@ dbDescribe('the harness is talking to a real database', () => {
             `select count(*)::text as n from information_schema.tables
               where table_schema = 'public' and table_name = 'document_collections'`);
         expect(Number(n)).toBe(1);
+    });
+});
+
+dbDescribe('an unordered query is not unordered', () => {
+    it('COMES BACK BY ID, WHICH IS WHAT THE ADAPTER ASKS FOR', async () => {
+        /**
+         * The regression test for the yardstick itself.
+         *
+         * Ids are seeded in an order that is deliberately NOT their sorted
+         * order, so heap order and id order cannot coincide. Before
+         * fromPostgres was given the adapter's `order by id`, this compared the
+         * fake against Postgres's arbitrary heap order and the two disagreed —
+         * which read as "the fake is wrong" when the fake was right.
+         */
+        const ids = await both({
+            zulu: { kind: 'x' },
+            alpha: { kind: 'x' },
+            mike: { kind: 'x' },
+        }, [['kind', '==', 'x']]);
+
+        expect(ids).toEqual(['alpha', 'mike', 'zulu']);
+    });
+
+    it('AND THAT DECIDES WHICH ROWS A LIMIT KEEPS', async () => {
+        // The consequence, which is the reason this is worth a test rather
+        // than a comment: with no orderBy, `.limit(n)` does not take "the first
+        // n written" or "the newest n" — it takes the n lowest ids. Every
+        // `.limit(1)` dedup check in this codebase resolves that way.
+        const ids = await both({
+            zulu: { kind: 'y' },
+            alpha: { kind: 'y' },
+            mike: { kind: 'y' },
+        }, [['kind', '==', 'y']], undefined, 2);
+
+        expect(ids).toEqual(['alpha', 'mike']);
     });
 });
 
