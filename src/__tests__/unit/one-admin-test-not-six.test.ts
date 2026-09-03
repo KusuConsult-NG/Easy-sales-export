@@ -259,9 +259,25 @@ describe('#356 — the other four copies', () => {
     });
 
     it("and 'superadmin' really is still honoured elsewhere, so keeping it is not cargo", () => {
-        // The reason the legacy branch stays. If these two go, it can go.
-        expect(source('src/app/actions/auth.ts')).toContain("roleStrings.includes('superadmin')");
-        expect(source('src/app/api/admin/documents/[docId]/route.ts')).toContain('"superadmin"');
+        /**
+         * The reason the legacy branch stays: if nothing honours the spelling,
+         * carrying it in the redirect is cargo.
+         *
+         * This used to cite TWO sites, the second being the guard in
+         * /api/admin/documents/[docId]. That guard has since been replaced by a
+         * named permission — its list also carried `cooperative_manager`, which
+         * is not a role at all — so the citation went with it. The claim is
+         * unchanged and still true: auth.ts honours the spelling, in two places,
+         * and both are asserted here rather than one.
+         *
+         * Worth stating plainly: an evidence citation is not the finding. When
+         * the evidence moves, repoint it — narrowing the assertion to whatever
+         * still passes would leave the test green and meaningless.
+         */
+        const auth = source('src/app/actions/auth.ts');
+
+        expect(auth).toContain("roleStrings.includes('superadmin')");
+        expect(auth).toContain("r === 'superadmin'");
     });
 });
 
