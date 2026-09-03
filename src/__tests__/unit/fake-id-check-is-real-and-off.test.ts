@@ -242,18 +242,28 @@ describe('#357 — both callers actually call it now', () => {
     it('THE IMPORTED-AND-NEVER-CALLED STATE CANNOT COME BACK', () => {
         // The finding in one measurement. An import of this module that never
         // calls anything is the exact shape all three callers were in.
+        //
+        // Reads the WHOLE import statement rather than the one line carrying
+        // the module path. Both callers have since grown a multi-line import —
+        // the voter's-card validators joined this module — and a line-based
+        // scan finds `} from '@/lib/kyc-validators';`, which carries no names
+        // at all. That tripped the vacuity guard below, correctly: the check
+        // had stopped being able to see what was imported. It now cannot be
+        // fooled by formatting.
         for (const file of [SERVER, FORM]) {
             const code = source(file);
-            const importLine = code.split('\n').find((l) => l.includes('kyc-validators'))!;
-            const names = [...importLine.matchAll(/\b(isObviouslyFakeId|fakeIdErrorMessage|looksLikeFakeId)\b/g)]
-                .map((m) => m[1]);
+            const statement = code.match(
+                /import\s*\{([^}]*)\}\s*from\s*['"][^'"]*kyc-validators['"]\s*;/);
+
+            expect(statement).not.toBeNull();                 // the import exists
+            const names = [...statement![1].matchAll(/\b([A-Za-z_$][\w$]*)\b/g)].map((m) => m[1]);
 
             expect(names.length).toBeGreaterThan(0);          // vacuity guard
+            const body = code.replace(statement![0], '');
             for (const name of names) {
-                const uses = code.split('\n')
-                    .filter((l) => !l.includes('kyc-validators'))
-                    .filter((l) => l.includes(`${name}(`));
-                expect(uses.length).toBeGreaterThan(0);
+                // Every name brought in must be USED — called, or read as the
+                // constant it is. That is the whole property.
+                expect(body.includes(name)).toBe(true);
             }
         }
     });

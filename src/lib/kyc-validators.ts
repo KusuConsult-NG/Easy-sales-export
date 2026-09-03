@@ -128,3 +128,76 @@ export function fakeIdErrorMessage(field: 'NIN' | 'BVN'): string {
         `Please double-check and enter your real ${field} as issued by ${field === 'NIN' ? 'NIMC (dial *346#)' : 'your bank (dial *565*0#)'}.`
     );
 }
+
+/**
+ * ─── Voter's card ────────────────────────────────────────────────────────────
+ *
+ * THE THIRD IDENTITY PATH NEVER GOT THE CHECK THE OTHER TWO HAVE.
+ *
+ * actions/kyc.ts verifies three documents. Two of them validate their input:
+ *
+ *     BVN   if (!/^\d{11}$/.test(...)) return 'A BVN must be 11 digits'
+ *     NIN   if (!/^\d{11}$/.test(...)) return 'A NIN must be 11 digits'
+ *     VIN   if (!votersCardNumber)     return "Voter's Card number is required"
+ *
+ * The third accepts any non-empty string. And because the voter's-card path
+ * force-marks itself verified — a deliberate relaxation, PVC lookups being
+ * unreliable — and updateOverallKYCStatus counts any stored card as a document
+ * on file, submitting the single character "x" wrote kyc.status: 'verified' and
+ * kycVerified: true on the account. Executed, not argued.
+ *
+ * The comment on the BVN check names this exact consequence — "that marked an
+ * account KYC-verified having submitted no identity document whatsoever" — and
+ * the voter's-card path went on doing it.
+ *
+ * WHAT THIS DOES AND DOES NOT CLAIM
+ * ---------------------------------
+ * It does not make KYC trustworthy. All three paths are self-asserted while
+ * QoreID is out, which is the owner's documented decision and is not this
+ * function's business. It makes the three paths AGREE, so that a character
+ * typed into a box is no longer an identity document.
+ *
+ * WHY THE RULE IS LOOSER THAN THE SPEC
+ * ------------------------------------
+ * An INEC Voter Identification Number is 19 alphanumeric characters. Requiring
+ * exactly that would be the strict reading, and it is deliberately not what
+ * this does: the whole reason this path force-passes is so a legitimate holder
+ * is not stuck, and refusing a real card that was transcribed unusually would
+ * reintroduce that in a worse form. 9 to 25 characters refuses junk without
+ * that risk. To tighten it to the spec, change the two bounds below — the
+ * tests state the bounds rather than restating the regex.
+ */
+export const VOTERS_CARD_MIN_LENGTH = 9;
+export const VOTERS_CARD_MAX_LENGTH = 25;
+
+/**
+ * The stored form of a voter's card number: no separators, upper case.
+ *
+ * VINs are commonly written in space- or hyphen-separated groups, so the same
+ * card reaches this action in several shapes. Normalising before storing means
+ * the value an admin reviews is the value another submission would produce.
+ *
+ * NOT hashed, unlike BVN and NIN in the same object. That asymmetry is
+ * deliberate: the voter's-card path exists to defer to MANUAL REVIEW, and an
+ * admin cannot review a digest. The other two are hashed because nothing reads
+ * them back.
+ */
+export function normaliseVotersCardNumber(value: unknown): string {
+    return String(value ?? '').replace(/[\s-]/g, '').toUpperCase();
+}
+
+/** Could this plausibly be a voter's card number at all? */
+export function isPlausibleVotersCardNumber(value: unknown): boolean {
+    const normalised = normaliseVotersCardNumber(value);
+    if (normalised.length < VOTERS_CARD_MIN_LENGTH) return false;
+    if (normalised.length > VOTERS_CARD_MAX_LENGTH) return false;
+    return /^[A-Z0-9]+$/.test(normalised);
+}
+
+/** The message shown when it could not. */
+export function votersCardErrorMessage(): string {
+    return (
+        "That does not look like a Voter's Card number. Enter the VIN printed on your card — "
+        + `${VOTERS_CARD_MIN_LENGTH}–${VOTERS_CARD_MAX_LENGTH} letters and digits, no other characters.`
+    );
+}

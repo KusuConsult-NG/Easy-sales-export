@@ -9,7 +9,12 @@
 import { useState } from 'react';
 import { User, MapPin, Phone, Calendar, CheckCircle2, AlertCircle, Loader2, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { verifyBVNAction, verifyNINAction, verifyVotersCardAction } from '@/app/actions/kyc';
-import { isObviouslyFakeId, fakeIdErrorMessage } from '@/lib/kyc-validators';
+import {
+    isObviouslyFakeId,
+    fakeIdErrorMessage,
+    isPlausibleVotersCardNumber,
+    votersCardErrorMessage,
+} from '@/lib/kyc-validators';
 import { IdInput } from '@/components/ui/IdInput';
 import PhoneInput from '@/components/ui/PhoneInput';
 import { FormField, FormInput, FormSelect, FormTextarea } from '@/components/ui/FormField';
@@ -265,6 +270,14 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
         }
         if (!firstName || !lastName) {
             setVotersCardError("Enter your first name and last name before verifying Voter's Card.");
+            return;
+        }
+        // The same pre-check the BVN field makes, for the same reason: the
+        // server refuses this regardless, and doing it here saves a round trip.
+        // Until now this field had no format check on either side, and a single
+        // character was enough to mark the whole account KYC-verified.
+        if (!isPlausibleVotersCardNumber(votersCard)) {
+            setVotersCardError(votersCardErrorMessage());
             return;
         }
 

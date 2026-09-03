@@ -3,11 +3,29 @@
 /**
  * KYC Server Actions
  *
- * Handles real-time BVN and NIN verification via QoreID and persists
- * the result to the user's Firestore document.
+ * THE HEADER DESCRIBED A VERIFICATION THAT DOES NOT HAPPEN.
+ *
+ * It read "Handles real-time BVN and NIN verification via QoreID", and the
+ * module imported `qoreIdService` — which appeared nowhere below its import
+ * line. Every path here writes `verified: true` from what the user typed, under
+ * its own comments saying so ("forcefully as fully verified", "QoreID
+ * bypassed"). The import and the sentence were the only things still claiming
+ * otherwise, and both are gone: an unused import of the verification service is
+ * the same "reads as present, is none" shape that lib/kyc-validators.ts's own
+ * #357 note is about.
+ *
+ * WHAT THIS MODULE ACTUALLY DOES TODAY
+ * ------------------------------------
+ * It records self-asserted identity numbers, checks their FORMAT, and persists
+ * them against the user's document. That is the owner's standing decision while
+ * QoreID is out — see lib/kyc-validators.ts for the switch that turns the
+ * placeholder screening back on with it.
+ *
+ * To re-wire QoreID, import qoreIdService here again and call it between each
+ * format check and its write; the format checks stay either way, because they
+ * are about whether the caller supplied a document at all.
  */
 
-import { qoreIdService } from '@/lib/qoreid';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { runQueryWithRetry } from '@/lib/firestore-utils';
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -15,7 +33,13 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { logger } from '@/lib/logger';
 import { requireSession } from '@/lib/session-guard';
 import { withSafeAction, type ActionResponse } from '@/lib/safe-action';
-import { isObviouslyFakeId, fakeIdErrorMessage } from '@/lib/kyc-validators';
+import {
+    isObviouslyFakeId,
+    fakeIdErrorMessage,
+    isPlausibleVotersCardNumber,
+    normaliseVotersCardNumber,
+    votersCardErrorMessage,
+} from '@/lib/kyc-validators';
 import { atomicUpdateUser } from '@/lib/services/userService';
 import { invalidateUserCache } from '@/lib/cache-invalidation';
 import { hashData } from '@/lib/security';
@@ -176,6 +200,36 @@ async function _verifyVotersCardAction(payload: { votersCardNumber: string;
 
         if (!votersCardNumber) { return { success: false as const, error: "Voter's Card number is required", data: null };
         }
+
+        /**
+         * THE THIRD IDENTITY PATH ACCEPTED ANYTHING.
+         *
+         * The line above was the whole check. BVN and NIN each test
+         * /^\d{11}$/ and refuse anything else; this one refused only the
+         * empty string. Combined with the forced pass below and
+         * updateOverallKYCStatus counting any stored card as a document on
+         * file, submitting the single character "x" wrote
+         * kyc.status: 'verified' and kycVerified: true on the account.
+         *
+         * Executed rather than argued: verifyVotersCardAction with
+         * votersCardNumber "x" returned success and the user document came
+         * back { kycVerified: true, kyc: { status: 'verified',
+         * votersCard: 'x' } }.
+         *
+         * The comment on the BVN check names this exact consequence — "that
+         * marked an account KYC-verified having submitted no identity document
+         * whatsoever" — and this path went on doing it. The fix from that
+         * finding reached two of the three siblings.
+         *
+         * The forced pass below is NOT touched. That is the owner's decision,
+         * documented and reasoned, and it is a different question from whether
+         * the thing being passed is a voter's card number at all.
+         */
+        if (!isPlausibleVotersCardNumber(votersCardNumber)) {
+            return { success: false as const, error: votersCardErrorMessage(), data: null };
+        }
+        const normalisedVotersCard = normaliseVotersCardNumber(votersCardNumber);
+
         if (!firstName || !lastName) { return { success: false as const, error: "First name and last name are required for Voter's Card verification", data: null };
         }
 
@@ -186,7 +240,7 @@ async function _verifyVotersCardAction(payload: { votersCardNumber: string;
         const originalStatus = 'pending_manual_review';
 
         // Persist result to Firestore but forcefully override to allow the user to pass
-        await runQueryWithRetry(() => atomicUpdateUser(userId, { 'kyc.votersCard': votersCardNumber,
+        await runQueryWithRetry(() => atomicUpdateUser(userId, { 'kyc.votersCard': normalisedVotersCard,
             // Relaxation for Voter's Card: since PVC names in Nigeria often have inconsistent ordering
             // or the DB fails, we forcefully mark it verified so the user isn't stuck.
             'kyc.votersCardVerified': true,
