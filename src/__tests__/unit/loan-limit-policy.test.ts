@@ -64,6 +64,9 @@ jest.mock('@/lib/logger', () => ({
 
 const USER_ID = 'admin-id'; // matches jest.setup.js's default session
 
+/** A doc-id read that finds nothing — see withSavings. */
+const MEMBER_DOC_ABSENT = { exists: false, id: USER_ID, data: () => undefined };
+
 /** A product with usable terms, so nothing downstream refuses for another reason. */
 const PRODUCT = {
     exists: true,
@@ -84,7 +87,28 @@ function membershipSnapshot(savingsBalance: number) {
  */
 function withSavings(savingsBalance: number) {
     global.mockFirestoreGet.mockImplementation((key: string) => {
+        // #345 the member lookup tries the DOCUMENT ID first, then the `userId`
+        // FIELD. This fixture is a field-keyed row — the shape
+        // joinCooperativeAction writes — so the doc-id read must MISS here and
+        // the query must serve it. Without this branch the doc-id read fell
+        // through to PRODUCT and the action read a loan product as a
+        // membership: zero savings, every loan refused.
+        if (key === USER_ID) return Promise.resolve(MEMBER_DOC_ABSENT);
         if (key === 'cooperative_members') return Promise.resolve(membershipSnapshot(savingsBalance));
+        return Promise.resolve(PRODUCT);
+    });
+}
+
+/** The doc-id-keyed shape, which most writers produce. */
+function withSavingsKeyedById(savingsBalance: number) {
+    global.mockFirestoreGet.mockImplementation((key: string) => {
+        if (key === USER_ID) {
+            return Promise.resolve({
+                exists: true, id: USER_ID,
+                data: () => ({ savingsBalance, membershipStatus: 'active' }),
+            });
+        }
+        if (key === 'cooperative_members') return Promise.resolve({ empty: true, docs: [] });
         return Promise.resolve(PRODUCT);
     });
 }
@@ -106,6 +130,18 @@ beforeEach(() => {
 describe('cooperative loan limit — savings must cover twice the loan', () => {
     it('allows a loan of exactly half the savings', async () => {
         withSavings(100_000);
+        const res = await apply(50_000);
+        expect(res.success).toBe(true);
+        expect(mockClaim).toHaveBeenCalledTimes(1);
+    });
+
+    it('and does so whichever way the membership row is keyed — #345', async () => {
+        // The lookup walks the document id and then the `userId` field, because
+        // COOPERATIVE_MEMBERS holds both shapes. This door used to query the
+        // field ONLY, so a member whose row carries the id and not the field —
+        // the shape getCooperativeApplicationAction heals on the fly — was told
+        // to join a cooperative they already belonged to.
+        withSavingsKeyedById(100_000);
         const res = await apply(50_000);
         expect(res.success).toBe(true);
         expect(mockClaim).toHaveBeenCalledTimes(1);

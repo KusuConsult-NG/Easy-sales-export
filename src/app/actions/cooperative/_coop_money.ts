@@ -41,6 +41,8 @@ import {
 } from "@/lib/cooperative-savings";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
 import { isRetired } from "@/lib/record-retirement";
+import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
+import { readCooperativeBalance } from "@/lib/cooperative-member-balance";
 
 /**
  * Server Actions for Cooperative Management
@@ -514,15 +516,25 @@ async function _applyForLoanAction(
         // A row lock could not fix it, because the thing being guarded is the
         // ABSENCE of rows — there is nothing to lock. Migration 021 does the
         // check and the insert under a per-borrower advisory lock instead.
-        const membershipsRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
-        const membershipSnapshot = await membershipsRef.where("userId", "==", userId).get();
+        // #345 THREE LOAN DOORS, THREE DIFFERENT WAYS OF FINDING THE MEMBER.
+        //
+        // This one queried the `userId` FIELD only. The other two read
+        // `.doc(userId)` only. Neither half is complete: most writers key the
+        // row by the user id, joinCooperativeAction gives it an auto-generated
+        // one with `userId` as a field, and getCooperativeApplicationAction
+        // heals rows that have the id and NOT the field — proof both shapes are
+        // in the data. So each door refused a set of genuine members the other
+        // two admitted, with "you must be a cooperative member" as the message.
+        // findCooperativeMemberRow walks both, and all three now call it.
+        const memberRow = await findCooperativeMemberRow(
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), userId,
+        );
 
-        if (membershipSnapshot.empty) {
+        if (!memberRow) {
             throw new Error("You must be a cooperative member to apply for a loan");
         }
 
-        const membershipDoc = membershipSnapshot.docs[0];
-        const membershipData = membershipDoc.data();
+        const membershipData = memberRow.data;
 
         // NO STATUS CHECK AT ALL, where the route doing the same work has one.
         //
@@ -569,7 +581,11 @@ async function _applyForLoanAction(
         // refuses outright if the borrower has any open application or loan, so
         // there is never a balance to add here. If that guard is ever relaxed,
         // this argument is where the outstanding balance belongs.
-        const savingsBalance = Number(membershipData.savingsBalance) || 0;
+        // #345 read through readCooperativeBalance, not `savingsBalance` alone:
+        // a legacy nested-member row keeps the same money under `balance`, and
+        // reading one field scored such a member at zero savings and refused
+        // every loan they were entitled to.
+        const savingsBalance = readCooperativeBalance(membershipData);
         const eligibility = isEligibleForLoan(savingsBalance, amount, 0);
         if (!eligibility.eligible) {
             throw new Error(eligibility.reason ?? "You are not eligible for this loan amount.");

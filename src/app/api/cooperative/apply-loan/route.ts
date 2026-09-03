@@ -12,6 +12,8 @@ import { isEligibleForLoan } from "@/lib/cooperative-tiers";
 import { FieldValue } from "@/lib/firestore-compat";
 import { withRateLimit } from "@/lib/rate-limit";
 import { isRetired } from "@/lib/record-retirement";
+import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
+import { readCooperativeBalance } from "@/lib/cooperative-member-balance";
 
 /**
  * API Route: Submit Loan Application
@@ -73,16 +75,25 @@ async function applyLoanHandler(request: NextRequest) {
         }
 
         // Check membership status (Admin SDK)
-        const membershipDoc = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
+        //
+        // #345. This was `.doc(userId)` alone, and so was the member-facing
+        // action. Most writers key the row by the user id, but
+        // joinCooperativeAction gives it an auto-generated one and carries the
+        // user in a `userId` FIELD — a row a doc-id read cannot see. The miss
+        // was then reported as "you must be a cooperative member" to somebody
+        // who is one. findCooperativeMemberRow walks both, in that order.
+        const memberRow = await findCooperativeMemberRow(
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), userId,
+        );
 
-        if (!membershipDoc.exists) {
+        if (!memberRow) {
             return NextResponse.json(
                 { success: false, message: "You must be a cooperative member to apply for loans" },
                 { status: 403 }
             );
         }
 
-        const membershipData = membershipDoc.data()!;
+        const membershipData = memberRow.data;
 
         // "approved" is the LEGACY spelling of "active", not a lesser status —
         // the member directory and the admin list both query for either, under
@@ -169,7 +180,9 @@ async function applyLoanHandler(request: NextRequest) {
         // rule is expressed, so a future change to it reaches every path at
         // once — including the minimum-contribution floor, which this route
         // never applied at all.
-        const totalSavings = Number(membershipData.savingsBalance) || 0;
+        // #345 read through the shared reader: a legacy row keeps this money under
+        // `balance`, and reading only `savingsBalance` on one scored it as zero.
+        const totalSavings = readCooperativeBalance(membershipData);
         const eligibility = isEligibleForLoan(totalSavings, amount, 0);
         if (!eligibility.eligible) {
             return NextResponse.json(
