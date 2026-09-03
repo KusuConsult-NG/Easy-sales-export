@@ -3,7 +3,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
-interface EmailData {
+export interface EmailData {
     to: string;
     subject: string;
     message: string; // HTML content
@@ -73,9 +73,18 @@ export async function queueEmail(data: EmailData): Promise<{ success: boolean; q
 }
 
 /**
- * Internal helper to save to Firestore
+ * Put one email on the retry queue.
+ *
+ *   #354 EXPORTED. It used to be private to queueEmail, and queueEmail had no
+ *        callers — so the only writer of COLLECTIONS.EMAIL_QUEUE was
+ *        unreachable and the cron that drains it ran against an empty
+ *        collection forever. sendEmailNotification, the sender the whole
+ *        application actually uses, now calls this when a send fails.
+ *
+ *        The row shape is the cron's contract: status "pending" and a
+ *        `nextRetry` it selects on. Both are set so the next run picks it up.
  */
-async function saveToQueue(data: EmailData, lastError: string) {
+export async function saveToQueue(data: EmailData, lastError: string) {
     try {
         await db.collection(COLLECTIONS.EMAIL_QUEUE).add({
             to: data.to,

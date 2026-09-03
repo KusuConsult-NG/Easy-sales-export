@@ -193,6 +193,7 @@ export async function sendEmailNotification(data: EmailData): Promise<{ success:
 
         if (result.error) {
             console.error('[EMAIL] Resend API Error:', result.error);
+            await queueForRetry(data, result.error.message);
             return { success: false, error: result.error.message };
         }
 
@@ -214,10 +215,57 @@ export async function sendEmailNotification(data: EmailData): Promise<{ success:
             error: error.message,
         });
 
+        await queueForRetry(data, error.message || 'Failed to send email');
+
         return {
             success: false,
             error: error.message || 'Failed to send email'
         };
+    }
+}
+
+/**
+ *   #354 THE RETRY QUEUE HAD NO PRODUCER.
+ *
+ *        lib/email-queue.ts exports queueEmail — "send now, and save to the
+ *        queue if that fails" — and NOTHING CALLED IT. Its private saveToQueue
+ *        was the only writer of COLLECTIONS.EMAIL_QUEUE anywhere in the
+ *        repository, so the collection was never written.
+ *
+ *        Meanwhile /api/cron/process-email-queue runs on a schedule to drain
+ *        that collection, and #326 hardened it against sending the same email
+ *        twice. A consumer, a schedule and a double-send guard, all built
+ *        around a queue with no producer.
+ *
+ *        This function — sendEmailNotification — is the choke point for the
+ *        typed senders in this module: seventeen of the nineteen
+ *        send*Email helpers below route through it, including
+ *        sendPasswordResetEmail, sendSellerApprovalEmail and
+ *        sendWithdrawalApprovedEmail. On a Resend failure it logged, returned
+ *        `{ success: false }`, and the email was gone. A 429 during a
+ *        broadcast, or a network blip while a password-reset link was going
+ *        out, lost that message with no second attempt.
+ *
+ *        SCOPE, STATED. Eight files import Resend directly rather than coming
+ *        through here, and sendBatchEmailNotifications is a separate path.
+ *        Those are not covered by this repair — the queue is wired to the
+ *        sender the typed helpers use, which is where a lost password-reset or
+ *        approval notice actually comes from.
+ *
+ *        The two ends are connected now. Failures are queued and the cron
+ *        retries them; a failure to QUEUE is swallowed, because the caller has
+ *        already been told the send failed and throwing here would turn a lost
+ *        email into a failed operation.
+ */
+async function queueForRetry(data: EmailData, lastError: string): Promise<void> {
+    try {
+        const { saveToQueue } = await import('@/lib/email-queue');
+        await saveToQueue(
+            { to: data.to, subject: data.subject, message: data.message, metadata: data.metadata },
+            lastError,
+        );
+    } catch (queueError) {
+        console.error('[EMAIL] Failed to queue for retry:', queueError);
     }
 }
 
