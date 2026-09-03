@@ -18,6 +18,7 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { rateLimit, getActionClientIp } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
+import { isAdmin } from '@/lib/admin-permissions';
 import { normalisePhone, phoneLookupVariants } from '@/lib/phone';
 import { isSafeInternalPath } from '@/lib/safe-redirect';
 
@@ -142,15 +143,22 @@ export async function getPostLoginRedirect(email: string) { try {
             // ── ADMIN OVERRIDE ──────────────────────────────────────────────
             // If the user has ANY admin role (system or module-specific),
             // always ensure they land on the Admin Dashboard by default.
-            const hasAdminRole = userRoles.some((role: string) => { const r = role.toLowerCase();
-                return (
-                    r === 'admin' || 
-                    r === 'super_admin' || 
-                    r === 'superadmin' ||
-                    r.endsWith('_admin') ||
-                    r.includes('admin_dashboard')
-                );
-            });
+            //   #356 the sixth copy of the hand-written admin test. `moderator`
+            //        and `support` matched none of these branches, so both were
+            //        sent to the member dashboard instead of /admin at every
+            //        login — and `endsWith('_admin')` would have redirected any
+            //        future role sharing that suffix into the admin area.
+            //
+            //        isAdmin() is the fact. The two legacy spellings below are
+            //        KEPT rather than narrowed away: 'superadmin' without the
+            //        underscore is still honoured twenty lines down and in
+            //        api/admin/documents/[docId], so dropping it here would
+            //        strand whoever holds it.
+            const hasAdminRole = isAdmin(userRoles.map((role: string) => String(role).toLowerCase()))
+                || userRoles.some((role: string) => {
+                    const r = String(role).toLowerCase();
+                    return r === 'superadmin' || r.includes('admin_dashboard');
+                });
 
             // ── SECURITY GUARD: LEGACY PASSWORD RESET ──────────────────────
             // If the user was onboarded by an admin (legacy flow), 

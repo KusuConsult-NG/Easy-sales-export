@@ -13,6 +13,7 @@ import { logger } from "@/lib/logger";
 import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { createAdminAuditLog } from "@/lib/audit-log";
+import { isAdmin as isAdminRoles } from "@/lib/admin-permissions";
 import type { ActionResponse } from "@/lib/safe-action";
 
 export interface AIChatMessage {
@@ -55,7 +56,10 @@ You should provide helpful, concise, and accurate information. Always be profess
         contextPrompt = pageContext[context.currentPage as keyof typeof pageContext] || '';
     }
 
-    const isAdmin = verifiedRoles.some(r => r === "admin" || r === "super_admin" || r.endsWith("_admin"));
+    // #356 was the hand-written suffix test — see lib/require-admin.ts. It
+    // told a moderator or support account it was a "general participant", so
+    // the assistant declined to discuss the controls they hold.
+    const isAdmin = isAdminRoles(verifiedRoles);
     const isSeller = verifiedRoles.includes("seller");
 
     const rolePrompt = isAdmin

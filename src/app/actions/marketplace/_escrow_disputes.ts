@@ -532,7 +532,18 @@ async function _escalateDisputeAction(
     disputeId: string
 ): Promise<{ success: true; error: null; data: { message: string }; meta?: any }
     | { success: false; error: string; data?: null; meta?: any }
-> { const adminCheck = await requireAdmin();
+> {
+    /**
+     *   #356 ESCALATION MOVED A DISPUTE TO under_review AND NOTIFIED BOTH
+     *        PARTIES ON THE AUTHORITY OF ANY ADMIN ROLE.
+     *
+     *        Every other write on this dispute — status change, resolution,
+     *        the money — asks finance:resolve_disputes. This one asked only
+     *        "are you an admin at all", so an academy_admin could put a
+     *        marketplace dispute into senior review and send both the buyer
+     *        and the seller a notification saying so.
+     */
+    const adminCheck = await requireAdmin("finance:resolve_disputes");
     if ("error" in adminCheck) {
         return { success: false as const, error: adminCheck.error};
     }

@@ -13,7 +13,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Conversation, Message, UserSearchResult } from "@/lib/types/messages";
 import * as messagingService from "@/infrastructure/messaging/service";
-import { ALL_ADMIN_ROLES, MODULE_ADMIN_ROLE, hasAdminPermission } from "@/lib/admin-permissions";
+import { ALL_ADMIN_ROLES, MODULE_ADMIN_ROLE, hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
 
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 
@@ -205,7 +205,11 @@ export async function searchUsersAction(query: string) {
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userRoles: string[] = userDoc.data()?.roles ?? [];
-        const userIsAdmin = userRoles.some(r => r === "admin" || r === "super_admin" || r.endsWith("_admin"));
+        // #356 the same hand-written test as five other sites. It scoped a
+        // moderator's or support account's user search as if they were an
+        // ordinary member, so they could not find the person they were
+        // helping.
+        const userIsAdmin = isAdmin(userRoles);
 
         const ROLE_MODULE_KEYWORDS: Record<string, string> = {
             wave_participant: "wave",
