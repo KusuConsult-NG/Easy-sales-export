@@ -18,6 +18,32 @@ import { readCooperativeBalance } from "@/lib/cooperative-member-balance";
 /**
  * Submit loan application
  */
+/**
+ *   #370 NO REACHABLE CALLER. THE COOPERATIVE LOAN RULES ARE APPLIED BY
+ *        NOTHING.
+ *
+ *        This function is the whole cooperative loan policy: it recomputes the
+ *        member's tier from their RECORDED savings and refuses a submitted tier
+ *        that does not match, caps the amount at savings × the tier multiplier,
+ *        checks the duration against the tier maximum, applies the tier
+ *        interest rate, and builds the amortisation schedule in kobo.
+ *
+ *        Its only caller is components/LoanApplicationWizard.tsx, which nothing
+ *        imports. /loans/apply — "the only loan application page in the
+ *        product", per LoanWizard's own header — submits through
+ *        submitLoanApplication in loan-actions.ts, the BUSINESS loan, which has
+ *        no tier and no savings multiplier.
+ *
+ *        So the cooperative loan cannot be applied for, while everything after
+ *        the application is live: /cooperatives/my-loans, the repayment
+ *        schedule, RepayFromSavingsModal, the admin loan queue with
+ *        RecordRepaymentModal, and the loan-products screen #362 wired up.
+ *
+ *        Kept exactly as it is. See the note in
+ *        components/LoanApplicationWizard.tsx for the owner decision, and
+ *        src/__tests__/unit/cooperative-loan-has-no-application-path.test.ts
+ *        for the measurement.
+ */
 export async function submitLoanApplicationAction(formData: {
     userId: string;
     userEmail: string;

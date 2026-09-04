@@ -1,5 +1,49 @@
 "use client";
 
+/**
+ *   #370 THIS IS THE ONLY CALLER OF submitLoanApplicationAction, AND NOTHING
+ *        IMPORTS IT — SO THE COOPERATIVE LOAN PRODUCT CANNOT BE APPLIED FOR.
+ *
+ *        #287 already recorded that this file has no importer, in passing,
+ *        while explaining that the UNREFERENCED copy of the wizard handled a
+ *        refusal better than the wired one. What that note did not follow
+ *        through is the consequence.
+ *
+ *        submitLoanApplicationAction (app/actions/cooperative/_loans_applications.ts)
+ *        is where the cooperative loan rules live: it recomputes the member's
+ *        tier from their RECORDED savings and refuses a mismatch, caps the
+ *        amount at savings × the tier multiplier, checks the duration against
+ *        the tier maximum, applies the tier interest rate, and builds a full
+ *        amortisation schedule in kobo. Every one of those rules is applied by
+ *        nothing, because this component is its only caller.
+ *
+ *        /loans/apply — which LoanWizard's own header calls "the only loan
+ *        application page in the product" — submits through
+ *        submitLoanApplication in actions/loan-actions.ts instead. That is the
+ *        BUSINESS loan: a monthly rate and a term, no tier, no savings
+ *        multiplier. The other of the two products #70 recorded sharing
+ *        LOAN_APPLICATIONS.
+ *
+ *        EVERYTHING DOWNSTREAM IS LIVE. /cooperatives/my-loans reads the
+ *        applications and their schedules and offers RepayFromSavingsModal;
+ *        /admin/cooperatives/loans approves them and records repayments through
+ *        RecordRepaymentModal; /admin/cooperatives/loan-products was wired into
+ *        the admin sidebar by #362. Members can repay and admins can approve
+ *        cooperative loans that nothing in the product can create.
+ *
+ *        KEPT, NOT DELETED, AND NOT WIRED UP. #362's rule was to connect a
+ *        built screen where its placement is not a product question. Here it
+ *        is: the cooperative application would live either at /loans/apply —
+ *        which today means business loans — or at
+ *        /cooperative/loans/apply/[id], which #362 recorded as one of the ten
+ *        orphaned screens. Choosing between them, and whether the two products
+ *        share one entrance, is the owner's call.
+ *
+ *        OWNER DECISION: give the cooperative loan an application path, or
+ *        retire the product's application half and say so on the member
+ *        screens that currently imply it exists.
+ */
+
 import { useState } from "react";
 import { ArrowRight, ArrowLeft, Check, Calculator, FileText, Upload } from "lucide-react";
 import { calculateLoanCost, COOPERATIVE_TIERS, getTierInterestRate, type CooperativeTier } from "@/lib/cooperative-tiers";
