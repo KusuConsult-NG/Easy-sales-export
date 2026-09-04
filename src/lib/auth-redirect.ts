@@ -1,8 +1,38 @@
 /**
  * Module-Specific Auth Redirect Helper
- * 
+ *
  * Determines the correct auth page (login/register) based on the current pathname.
  * This ensures users see module-specific branding during authentication.
+ *
+ *   #367 NOTHING IMPORTS THIS FILE, AND NOTHING READS THE PARAMETER IT BUILDS.
+ *
+ *        Two independent facts, either of which makes the feature described
+ *        above absent from the product:
+ *
+ *          1. No file in src/ imports getModuleAuthUrl, getLoginUrl or
+ *             getRegisterUrl. middleware.ts builds its own login URL —
+ *             `new URL(targetPath, req.nextUrl.origin)` with a callbackUrl and
+ *             no module — and that is the redirect a signed-out visitor gets.
+ *
+ *          2. No file in src/ reads a `module` search parameter. Not
+ *             src/app/auth/login/page.tsx, not src/app/auth/register/page.tsx,
+ *             not a layout. So `?module=marketplace` would change nothing even
+ *             if something did call this.
+ *
+ *        The module-specific branding this file's own comment promises has
+ *        never appeared. That is the class this audit has hit repeatedly: a
+ *        module that names itself the authority for something the application
+ *        does not do (#355), and a value written that nothing reads (#335).
+ *
+ *        KEPT, NOT DELETED. The function is correct for the feature it
+ *        describes, and the feature is a reasonable one. What is missing is the
+ *        two halves that would make it real: a caller, and a login page that
+ *        reads the parameter.
+ *
+ *        OWNER DECISION: build module-branded auth — wire this into
+ *        middleware.ts's redirect and have the auth pages read `?module=` — or
+ *        retire it. src/__tests__/unit/dead-module-authority.test.ts holds both
+ *        facts so the answer stays visible.
  */
 
 /**
