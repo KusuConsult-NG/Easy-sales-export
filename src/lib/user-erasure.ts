@@ -56,6 +56,66 @@ import { FieldValue } from "@/lib/firestore-compat";
  * kept too — an account marked deleted and suspended is refused at login, and
  * dropping its roles would change what historical records mean without making
  * the person any less identifiable.
+ *
+ *   #371 #283's OWN DEFECT, STILL LIVE IN THIS FILE: THE LIST NAMES ONE
+ *        SPELLING OF FIELDS THIS CODEBASE GUARANTEES EXIST IN TWO.
+ *
+ *        #283's headline was "on the fields the codebase stores twice, erasure
+ *        removed the copy somebody thought of and left the copy added later".
+ *        It fixed the three duplications it could see by reading the User type.
+ *        It could not see the rest, and the rest are not a coincidence — a
+ *        module exists whose entire job is to create them.
+ *
+ *        THE NORMALISER MAKES THE SECOND COPY. Every write to the user document
+ *        goes through atomicUpdateUser, which calls normalizeUserUpdate. Three
+ *        of that function's four rules are aliases (verified by running it):
+ *
+ *            { phone }        -> { phone, phoneNumber }
+ *            { fullName }     -> { fullName, name }
+ *            { displayName }  -> { displayName, name, fullName }
+ *
+ *        The old list erased `phone` and replaced `fullName`. It named neither
+ *        `phoneNumber` nor `name` nor `displayName`. So a right-to-erasure
+ *        request set fullName to "Redacted User" and left `name` holding the
+ *        person's real name, and deleted `phone` while `phoneNumber` kept their
+ *        number — not by accident of drift, but because a normaliser had
+ *        guaranteed both were there.
+ *
+ *        AND FOUR NESTED ROOTS HELD A COMPLETE SECOND IDENTITY PROFILE.
+ *        saveKYCProfileAction fans one form into several roots of the user row
+ *        at once; verifyBVNAction / verifyNINAction / verifyVotersCardAction add
+ *        the identity numbers to the first of them:
+ *
+ *          kyc                 firstName, lastName, otherNames, fullName,
+ *                              dateOfBirth, phoneNumber, address, city, state,
+ *                              idType, idNumber — plus nin and bvn (hashed) and
+ *                              votersCard, which is stored in PLAINTEXT while
+ *                              its two siblings are hashed
+ *          verificationProfile firstName, lastName, fullName, dob, phone
+ *          farmNation          farmNation.profile, which carries the member's
+ *                              profile and full name (_fn_onboarding.ts)
+ *          city                a top-level field, written beside the flat
+ *                              `residentialAddress` the old list did erase
+ *
+ *        None was named. And the #283 ratchet could not raise any of it: it
+ *        checks ERASED_FIELDS against `interface User` in lib/types/shared.ts,
+ *        and that interface declares no `kyc`, no `verificationProfile`, no
+ *        `farmNation`, no `city`, no `phoneNumber`, no `name` and no
+ *        `displayName`. A ratchet that reads one type cannot see what a
+ *        normaliser and a dot-path write put on the row beside it.
+ *
+ *        Both halves are closed below, and the new ratchet in
+ *        erasure-covers-every-spelling.test.ts derives the aliases from
+ *        normalizeUserUpdate itself and sweeps the dotted write paths, so
+ *        neither shape can come back quietly.
+ *
+ *        RECORDED, NOT CHANGED: saveKYCProfileAction ALSO copies the member's
+ *        name, phone, state and address into academy_applications,
+ *        cooperative_members, wave_applications, seller_verifications and
+ *        export_onboarding_applications. This patch is a user-row patch and
+ *        does not reach them, and #300 settled that related rows are MARKED
+ *        rather than scrubbed. Which of those two an erasure request should do
+ *        to a module application is the owner's call.
  */
 
 /**
@@ -67,10 +127,17 @@ export const ERASED_FIELDS = [
     "firstName", "lastName", "otherName",
 
     // Contact and demography.
-    "phone", "gender", "dateOfBirth", "occupation",
+    //
+    // #371 `phoneNumber` is not a second guess at the field name — it is
+    // GUARANTEED to be on the row beside `phone`, because normalizeUserUpdate
+    // rule 3 mirrors the two on every write through atomicUpdateUser. Erasing
+    // one of a mirrored pair leaves the number intact under the other key.
+    "phone", "phoneNumber", "gender", "dateOfBirth", "occupation",
 
-    // Address, nested AND flat.
-    "address", "residentialAddress", "stateOfOrigin", "lga",
+    // Address, nested AND flat. #371 adds `city`, which saveKYCProfileAction
+    // writes at the top level right beside the `residentialAddress` that was
+    // already here.
+    "address", "residentialAddress", "stateOfOrigin", "lga", "city",
 
     // A third party's details.
     "nextOfKin",
@@ -119,6 +186,34 @@ export const ERASED_FIELDS = [
 
     // Per-module registration detail, which carries application ids and dates.
     "serviceRegistrations",
+
+    /**
+     *   #371 THE NESTED ROOTS, WHICH HELD A COMPLETE SECOND IDENTITY PROFILE.
+     *
+     *        None of these is declared on `interface User`, which is why the
+     *        #283 ratchet could not raise them. They are written by dot-path,
+     *        so the row carries them all the same.
+     *
+     *          kyc                  saveKYCProfileAction writes the whole form
+     *                               under it — name, date of birth, phone,
+     *                               address, city, state, ID type and number —
+     *                               and verifyBVNAction / verifyNINAction /
+     *                               verifyVotersCardAction add the identity
+     *                               numbers. nin and bvn are hashed; votersCard
+     *                               is stored in PLAINTEXT.
+     *          verificationProfile  the same action's "Canonical Profile Sync":
+     *                               firstName, lastName, fullName, dob, phone.
+     *          farmNation           farmNation.profile, from _fn_onboarding.ts,
+     *                               carries the member's profile and full name.
+     *
+     *        Deleting the root removes the whole object, which is what is
+     *        wanted: every reader of these reaches them through optional
+     *        chaining (`data.kyc?.…`), so an absent object is the shape they
+     *        already handle. The record that the person WAS verified survives
+     *        where #300 put it — the kyc_verifications rows, marked with
+     *        erasedOwnerMarker rather than deleted.
+     */
+    "kyc", "verificationProfile", "farmNation",
 ] as const;
 
 /**
@@ -127,10 +222,23 @@ export const ERASED_FIELDS = [
  * `fullName` and `email` are REPLACED rather than deleted: several screens read
  * them unconditionally and would render "undefined", and the email placeholder
  * is what lib/auth.ts is handed when the credential is revoked.
+ *
+ *   #371 `name` AND `displayName` GET THE SAME TREATMENT, BECAUSE THEY ARE THE
+ *        SAME VALUE. normalizeUserUpdate rule 4 writes `name` from `fullName`
+ *        and writes BOTH from `displayName`. So redacting fullName alone left
+ *        the person's real name on the row under `name` — the exact shape #283
+ *        was opened for, on the field #283 chose as its example.
+ *
+ *        They are replaced rather than deleted for fullName's own reason: the
+ *        normaliser treats the three as one value, and leaving two of them
+ *        absent while the third says "Redacted User" would put the aliases back
+ *        into disagreement on the very next write.
  */
 export function userErasurePatch(userId: string): Record<string, unknown> {
     const patch: Record<string, unknown> = {
         fullName: "Redacted User",
+        name: "Redacted User",
+        displayName: "Redacted User",
         email: erasedEmailFor(userId),
         mfaEnabled: false,
     };
