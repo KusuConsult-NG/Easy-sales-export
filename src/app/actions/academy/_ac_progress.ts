@@ -34,8 +34,56 @@ async function _completeLessonAction(
             return { success: false as const, error: "Not enrolled in this course", data: null };
         }
 
-        // 🔒 SECURITY FIX: Enforce "Watch to Complete" logic
-        // 1. Get the course/lesson details to see if it has a video
+        /**
+         *   #283 COMPLETION IS SELF-REPORTED, AND THIS FILE USED TO SAY THE
+         *        OPPOSITE.
+         *
+         *        A 24-line "watch to complete" gate sat here under a padlocked
+         *        SECURITY FIX banner — entirely inside a block comment,
+         *        disabled, annotated as bypassed for self-paced manual
+         *        completion, with three unresolved authoring questions left in
+         *        it. A reader saw a security banner and a check; neither ran.
+         *        That is #314's shape exactly: a file named for a control it
+         *        does not perform.
+         *
+         *        The banner and the refusal messages are DESCRIBED rather than
+         *        quoted here. Reproducing them would put the exact strings back
+         *        in the file, and the test that proves they are gone reads the
+         *        raw text — the tombstone trap, which this audit has now walked
+         *        into more than a dozen times.
+         *
+         *        AND IT IS NOT ENFORCED IN THE BROWSER EITHER. handleMarkComplete
+         *        in the lesson page calls this action unconditionally, with no
+         *        watch check of any kind. The rule is enforced NOWHERE, which is
+         *        a correction to how this was first recorded.
+         *
+         *   THE DECISION: SELF-PACED STAYS, AND THE EVIDENCE IS RECORDED.
+         *
+         *        Re-enabling the gate would refuse completion to every learner
+         *        whose video-progress row is missing — every lesson completed
+         *        before that pipeline existed, anyone on a connection too poor
+         *        to stream, anyone whose heartbeat dropped. On a live platform
+         *        that is a lockout, and the bypass was a deliberate product
+         *        choice with a stated reason.
+         *
+         *        But a self-report presented as a verified fact is the defect
+         *        #321 fixed for certificate grades. So completion now CARRIES
+         *        the watch figure it was measured against: `watchedPercentAt
+         *        Completion` on the progress row, and `selfReported` when there
+         *        is no measurement at all. Nobody is refused, nothing is
+         *        pretended, and an admin can see a lesson completed on 4% watched.
+         *
+         *        This also stops the watch data being write-only.
+         *        updateLessonProgress already clamps it against a watch-rate
+         *        anomaly (2.0x playback + 10s grace) so a client cannot
+         *        fast-forward the counter — a real, working control whose output
+         *        nothing read.
+         *
+         *        WHAT WOULD BE NEEDED TO ENFORCE IT, stated so the next person
+         *        does not re-derive it: a per-course flag, so the rule applies
+         *        to courses authored under it rather than retroactively to
+         *        every learner mid-course.
+         */
         const courseDoc = await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId).get();
         if (!courseDoc.exists) return { success: false as const, error: "Course not found", data: null };
 
@@ -53,31 +101,30 @@ async function _completeLessonAction(
 
         if (!targetLesson) return { success: false as const, error: "Lesson not found", data: null };
 
-        // 2. If it has a video, verify progress (Bypassed to allow self-paced manual completion)
-        /*
+        /**
+         * #283 — what the learner had actually watched when they marked it
+         * complete. Read, never enforced; see the note above.
+         *
+         * A lesson with no video has nothing to measure, so it records nothing
+         * rather than a misleading 0. A read failure is left undefined for the
+         * same reason it is not a refusal here: "we could not measure" is not
+         * "they watched none of it" (#313).
+         */
+        let watchedPercent: number | undefined;
         if (targetLesson.videoUrl) {
-            const progressId = `${userId}_${lessonId}`;
-            const videoProgressDoc = await db.collection(COLLECTIONS.LESSON_VIDEO_PROGRESS).doc(progressId).get();
-
-            // Allow if admin (for testing) ?? No, enforce for everyone for now.
-            // Maybe allow if no progress doc exists BUT require it?
-            // "The Honor System" fix means we MUST require it.
-
-            if (!videoProgressDoc.exists) {
-                return { success: false as const, error: "Please start watching the video to track your progress.", data: null };
-            }
-
-            const videoData = videoProgressDoc.data();
-            if (!videoData || videoData.progressPercent < 90) { // 90% Threshold
-                const current = Math.round(videoData?.progressPercent || 0);
-                return {
-                    success: false as const,
-                    error: `You have only watched ${current}% of the video. Please watch at least 90% to complete.`,
-                    data: null
-                };
+            try {
+                const videoProgressDoc = await db
+                    .collection(COLLECTIONS.LESSON_VIDEO_PROGRESS)
+                    .doc(`${userId}_${lessonId}`)
+                    .get();
+                const percent = Number(videoProgressDoc.data()?.progressPercent);
+                if (Number.isFinite(percent)) watchedPercent = Math.round(percent);
+            } catch (readError) {
+                logger.warn("[completeLesson] could not read watch progress", {
+                    userId, lessonId, error: String(readError),
+                });
             }
         }
-        */
 
         // Use transaction to prevent concurrent lesson completions from overwriting each other
         await db.runTransaction(async (t) => {
@@ -93,6 +140,19 @@ async function _completeLessonAction(
 
                 progress.completedLessons.push(lessonId);
                 progress.lastAccessedAt = FieldValue.serverTimestamp();
+
+                /**
+                 * #283 — the completion carries what it was measured against.
+                 * `selfReported` when there was nothing to measure, so a reader
+                 * can tell an unmeasured completion from an unwatched one; the
+                 * two are different and collapsing them is what made this look
+                 * enforced in the first place.
+                 */
+                const evidence = (progress as any).lessonWatchEvidence ?? {};
+                evidence[lessonId] = watchedPercent === undefined
+                    ? { selfReported: true }
+                    : { selfReported: true, watchedPercentAtCompletion: watchedPercent };
+                (progress as any).lessonWatchEvidence = evidence;
 
                 // Calculate overall progress using weighted formula (70% Lessons, 30% Quizzes)
                 const totalLessons = course.modules.reduce((sum, mod) => sum + mod.lessons.length, 0);

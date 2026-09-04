@@ -281,8 +281,9 @@ export async function searchUsersAction(query: string) {
                  *        ordering by it gives the slice the meaning this line
                  *        always intended — most recently active first. It is
                  *        also exactly the fallback broadcast-logic.ts and
-                 *        sms-broadcast.ts already use for "recently active":
-                 *        `updatedAt || lastLoginAt || createdAt`.
+                 *        sms-broadcast.ts already use for "recently active" —
+                 *        `updatedAt || createdAt` since #273 dropped the dead
+                 *        `lastLoginAt` term from both chains.
                  *
                  *        The cap is still a cap. Searching by FULL email is
                  *        unaffected either way — that is the third query below,

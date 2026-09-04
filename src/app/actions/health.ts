@@ -83,49 +83,51 @@ export async function runSystemHealthDiagnostic(limit: number = 2000): Promise<
                  }
             }
 
-            // 3. Stale JWT Session Risk (Proxy check)
-            //
-            //   #335 RECORDED, NOT REPAIRED: THIS CHECK HAS NEVER RUN.
-            //
-            //        It is guarded on `untypedData.lastLoginAt`, and NOTHING IN
-            //        src/ WRITES lastLoginAt — not the login path, not the JIT
-            //        migration, not any profile write. So the condition below
-            //        is false for every user, and this branch has never
-            //        executed once. Same shape as #331: a check that cannot
-            //        find anything, contributing a clean result to a report.
-            //
-            //        It is left guarded rather than made to fire on a
-            //        substitute. The obvious substitute is `updatedAt`, which
-            //        IS written — but the comparison below is
-            //        `lastUpdated > lastLogin + 24h`, so feeding updatedAt in
-            //        as the login time compares a value against itself and the
-            //        branch still never fires. That would only move the defect
-            //        somewhere harder to see, which is the failure this audit
-            //        keeps finding.
-            //
-            //        Making it work needs a real last-login timestamp stamped
-            //        at sign-in. That is one extra write per login on the auth
-            //        path and a schema addition, so it is the owner's call, not
-            //        an audit's. Recorded alongside the two other consumers of
-            //        the same absent field.
-            //
-            // If the user's document was updated recently, but no active login within the last 2 hours.
-            const untypedData = data as any;
-            if (untypedData.updatedAt && untypedData.lastLoginAt) { const lastLogin = (untypedData.lastLoginAt)?.toDate ? (untypedData.lastLoginAt).toDate().getTime() : new Date(untypedData.lastLoginAt).getTime();
-                 const lastUpdated = (untypedData.updatedAt)?.toDate ? (untypedData.updatedAt).toDate().getTime() : new Date(untypedData.updatedAt).getTime();
-                 // If document was mutated after their last login, their current JWT might be stale.
-                 // This isn't inherently corruption, but raises a flag in health checks.
-                 if (lastUpdated > (lastLogin + 86400000)) { // 24 hours drift
-                      issues.push({
-                          id: uid,
-                          email: data.email,
-                          issueType: "High Stale JWT Risk",
-                          expectedState: "System state in sync with Client Auth",
-                          actualState: "Firestore Profile > Last Auth Token issue time",
-                          description: "User's data was modified significantly after their last known login, meaning active JWTs may lack new roles/permissions."
-                      });
-                 }
-            }
+            /**
+             * 3. STALE JWT SESSION RISK — REMOVED. #273 (from #335).
+             *
+             *    It read:
+             *
+             *      if (untypedData.updatedAt && untypedData.lastLoginAt) {
+             *          ... if (lastUpdated > lastLogin + 86400000) {
+             *              issues.push({ issueType: "High Stale JWT Risk", ...
+             *                  "active JWTs may lack new roles/permissions" })
+             *
+             *    #335 established that it had NEVER RUN — nothing in src/ writes
+             *    `lastLoginAt`, not the login path, not the JIT migration, not
+             *    any profile write — and left "stamp it at sign-in, or drop the
+             *    consumers" as an owner decision.
+             *
+             *    DROPPED, on three measurements rather than on taste:
+             *
+             *    1. STAMPING IT WOULD NOT MAKE THE CHECK CORRECT, ONLY LOUD.
+             *       The session is `maxAge: 8 * 60 * 60` (lib/auth.ts). The
+             *       condition is "the profile changed more than 24 HOURS after
+             *       the last login", which selects accounts whose session
+             *       expired at least sixteen hours before the change. It cannot
+             *       describe a live JWT; it can only describe an absent one.
+             *
+             *    2. ITS PREMISE IS FALSE ANYWAY. A JWT does not carry stale
+             *       roles: the jwt callback re-reads the profile every
+             *       SYNC_INTERVAL — two minutes — and rewrites roles, ban state
+             *       and the revocation flag from it. The window this check
+             *       imagines is 24 hours; the real one is two minutes.
+             *
+             *    3. THE RISK IT NAMES IS ALREADY CONTROLLED, PROPERLY. Sessions
+             *       minted before `sessionsValidFrom` are revoked server-side
+             *       (#306/#343). That is an enforcement, not a report, and it is
+             *       the thing this check was gesturing at.
+             *
+             *    So the field is NOT stamped. Adding a write to every login for
+             *    a consumer that would emit false alarms is a cost with a
+             *    negative return, and a report full of false alarms is one
+             *    nobody reads — the inverse of #331 and just as useless.
+             *
+             *    The other two readers of `lastLoginAt` were `||` fallbacks in
+             *    broadcast-logic.ts and sms-broadcast.ts; the dead middle term
+             *    is gone from both, so no code in this repository now reads a
+             *    field nothing writes.
+             */
         });
 
         // 4. Service Health

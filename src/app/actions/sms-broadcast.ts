@@ -23,6 +23,7 @@ import { logger } from "@/lib/logger";
 import { categorizeUser } from "@/lib/broadcast-logic";
 import { isMarketplaceBuyer, isApprovedModuleStatus } from "@/lib/broadcast-audience";
 import { recordAdminAction } from "@/lib/audit-log";
+import { isRecentlyActive } from "@/lib/recent-activity";
 
 function isStateMatch(dbState: any, filterState: string | undefined): boolean { if (!filterState) return true;
     if (!dbState || typeof dbState !== 'string') return false;
@@ -677,15 +678,17 @@ async function collectSmsRecipients(
             const thirtyDaysAgo = new Date();
             thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
             const stream = db.collection(COLLECTIONS.USERS)
-                .select("phone", "phoneNumber", "kyc", "fullName", "name", "stateOfOrigin", "state", "address", "updatedAt", "lastLoginAt", "createdAt")
+                .select("phone", "phoneNumber", "kyc", "fullName", "name", "stateOfOrigin", "state", "address", "updatedAt", "createdAt")
                 .stream();
             for await (const chunk of stream) {
                 const d: any = chunk;
                 const u: any = d.data();
-                const lastActiveRaw = u.updatedAt || u.lastLoginAt || u.createdAt;
-                if (!lastActiveRaw) continue;
-                const lastActive = lastActiveRaw.toDate ? lastActiveRaw.toDate() : new Date(lastActiveRaw);
-                if (isNaN(lastActive.getTime()) || lastActive < thirtyDaysAgo) continue;
+                // #273 — `lastLoginAt` dropped from this chain and from the
+                // select above: nothing writes it, so it never contributed, and
+                // naming it implied a fact the platform does not record. The
+                // rule is shared with broadcast-logic.ts now — one expression
+                // at six sites is what let the odd copy drift unnoticed.
+                if (!isRecentlyActive(u)) continue;
 
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;

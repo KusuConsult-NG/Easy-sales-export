@@ -528,13 +528,31 @@ describe('active_last_30_days', () => {
         store.seedAll(COLLECTIONS.USERS, {
             recent: { email: 'recent@example.com', updatedAt: iso(3) },
             old: { email: 'old@example.com', updatedAt: iso(90) },
-            byLogin: { email: 'login@example.com', lastLoginAt: iso(10) },
             byCreated: { email: 'created@example.com', createdAt: iso(5) },
             noDates: { email: 'nodates@example.com' },
         });
 
         const got = emails(await resolve({ audience: 'active_last_30_days' }));
-        expect(got).toEqual(['created@example.com', 'login@example.com', 'recent@example.com']);
+        expect(got).toEqual(['created@example.com', 'recent@example.com']);
+    });
+
+    it('#273 — a row whose ONLY activity marker is lastLoginAt is not counted', async () => {
+        //   #273 The chain was `updatedAt || lastLoginAt || createdAt` and the
+        //        middle term is gone: nothing in this repository writes
+        //        lastLoginAt, so it never contributed for a real row.
+        //
+        //        THIS TEST USED TO SEED SUCH A ROW AND EXPECT IT COUNTED. That
+        //        shape cannot exist. A login ten days ago runs the JIT
+        //        migration, which writes, and `updatedAt` is a native column
+        //        every write touches — so a ten-day-old login implies a
+        //        ten-day-old updatedAt. A row carrying a recent lastLoginAt and
+        //        no updatedAt is self-contradictory, and counting it was the
+        //        fixture asserting a fact the platform does not produce.
+        store.seedAll(COLLECTIONS.USERS, {
+            impossible: { email: 'login@example.com', lastLoginAt: iso(10) },
+        });
+
+        expect(emails(await resolve({ audience: 'active_last_30_days' }))).toEqual([]);
     });
 
     it('and an unparseable date is dropped rather than treated as now', async () => {

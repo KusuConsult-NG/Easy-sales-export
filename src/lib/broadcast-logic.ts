@@ -4,6 +4,7 @@ import { logger } from './logger';
 import { User } from './types/firestore';
 import { dateRangeStart, dateRangeEnd } from './date-utils';
 import { isMarketplaceBuyer } from "./broadcast-audience";
+import { isRecentlyActive } from "@/lib/recent-activity";
 
 /**
  * High-Precision Mutually Exclusive Segmenter
@@ -878,13 +879,23 @@ async function getCleanBroadcastListInternal(filters?: BroadcastFilters) {
                         }
                         matchesAudience = true;
                     } else if (filters?.audience === "active_last_30_days") {
-                        // Match users whose updatedAt or lastLoginAt is within last 30 days
-                        const thirtyDaysAgo = new Date();
-                        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-                        const lastActiveRaw = data.updatedAt || data.lastLoginAt || data.createdAt;
-                        if (!lastActiveRaw) return;
-                        const lastActive = lastActiveRaw.toDate ? lastActiveRaw.toDate() : new Date(lastActiveRaw);
-                        if (isNaN(lastActive.getTime()) || lastActive < thirtyDaysAgo) return;
+                        // Match users active within the last 30 days.
+                        //
+                        // #273 — this chain read `updatedAt || lastLoginAt ||
+                        // createdAt` and nothing in this repository writes
+                        // lastLoginAt, so the middle term never contributed; it
+                        // only made the line read as though the platform
+                        // records a last-login time. It does not, and #273
+                        // decided it will not.
+                        //
+                        // The rule is now lib/recent-activity.ts, because this
+                        // expression existed at six sites and THIS was the one
+                        // that had drifted. Only the two DECISION sites call it
+                        // — the four that build a `lastActive` field for a
+                        // resolved recipient default to now on an absent value,
+                        // which is display, not a filter, and folding those in
+                        // would change what they emit.
+                        if (!isRecentlyActive(data)) return;
                         matchesAudience = true;
                     } else if (!filters || filters.audience === "all") {
                         matchesAudience = true;

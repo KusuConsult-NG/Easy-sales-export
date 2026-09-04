@@ -327,13 +327,29 @@ describe('active_last_30_days', () => {
     const iso = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
 
     it('keeps recent activity and drops the stale', async () => {
+        //   #273 `byLogin: { lastLoginAt: iso(7) }` was seeded here and counted.
+        //        The middle term of the chain is gone — nothing writes
+        //        lastLoginAt — and that row could not exist anyway: a login
+        //        seven days ago writes, and updatedAt is a native column every
+        //        write touches. Kept below as the negative case rather than
+        //        deleted, so the change is visible rather than quietly dropped.
         store.seedAll(COLLECTIONS.USERS, {
             recent: { phone: '08031111111', updatedAt: iso(2) },
             stale: { phone: '08032222222', updatedAt: iso(90) },
             byLogin: { phone: '08033333333', lastLoginAt: iso(7) },
             undated: { phone: '08034444444' },
         });
-        expect((await preview({ audience: 'active_last_30_days' })).data?.count).toBe(2);
+        expect((await preview({ audience: 'active_last_30_days' })).data?.count).toBe(1);
+    });
+
+    it('#273 — and createdAt still carries a row with no updatedAt', async () => {
+        // Vacuity guard on the change above: the chain lost its dead middle
+        // term, not its fallback. A row created recently and never written
+        // again is still recently active.
+        store.seedAll(COLLECTIONS.USERS, {
+            fresh: { phone: '08035555555', createdAt: iso(3) },
+        });
+        expect((await preview({ audience: 'active_last_30_days' })).data?.count).toBe(1);
     });
 });
 
