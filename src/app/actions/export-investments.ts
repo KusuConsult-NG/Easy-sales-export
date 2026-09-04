@@ -1,6 +1,7 @@
 "use server";
 
 import { supabaseDb as db } from "@/lib/supabase-db";
+import { exportWindowHasExpired } from "@/lib/export-window-status";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { COLLECTIONS, type ExportWindow } from "@/lib/types/firestore";
@@ -79,7 +80,26 @@ const getCachedExportOpportunities = (limit: number = 12, lastId?: string) => un
             query = query.limit(limit);
             const snapshot = await query.get();
 
-            const opportunities = snapshot.docs.map(doc => { const data = doc.data() as ExportWindow;
+            // #196 — an ENDED window is not an opportunity.
+            //
+            // The filter was `status in ["open", "active"]`, and nothing ever
+            // moved a window off "open", so this listed windows whose period
+            // closed months ago — with their own past closeDate printed on the
+            // card — and all three investment doors then refused whoever
+            // clicked. #275 made the refusal correct; this stops the offer.
+            //
+            // FILTERED AFTER THE FETCH, NOT IN THE QUERY, and the cursor is
+            // still taken from the RAW page below. endDate is a JSONB value
+            // stored as both a Timestamp and an ISO string (see
+            // exportWindowEndDate), so a `where` on it is the comparison #220
+            // found returning nothing at all. Paging therefore still advances
+            // one full page at a time; a page may simply render fewer cards
+            // than it fetched, which is honest.
+            const live = snapshot.docs.filter(
+                (doc) => !exportWindowHasExpired(doc.data() as { endDate?: unknown }),
+            );
+
+            const opportunities = live.map(doc => { const data = doc.data() as ExportWindow;
                 return {
                     id: doc.id,
                     commodity: data.commodity,
@@ -174,6 +194,18 @@ const getCachedExportOpportunityById = (id: string) => unstable_cache(
             const investable = data.status === "open" || data.status === "active";
             if (!investable) {
                 return { success: false as const, error: "This export opportunity is no longer open", meta: null };
+            }
+
+            // #196 — AND ITS PERIOD MUST NOT HAVE ENDED.
+            //
+            // The status check alone was the whole guard here, and nothing ever
+            // moved a window off "open", so a bookmarked link to a window that
+            // closed months ago still rendered a live opportunity page — with
+            // its own past closeDate on it and an Invest button that all three
+            // money doors would refuse. Same shared predicate as the list above
+            // and the closing cron.
+            if (exportWindowHasExpired(data as { endDate?: unknown })) {
+                return { success: false as const, error: "This export opportunity has closed", meta: null };
             }
 
             const opportunity: ExportOpportunity = { id: snapshot.id,

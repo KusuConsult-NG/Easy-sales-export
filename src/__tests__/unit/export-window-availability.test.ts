@@ -64,7 +64,12 @@ beforeEach(() => {
     jest.clearAllMocks();
     windowData = {
         commodity: 'Sesame', status: 'open', amount: 50_000, roi: '18%',
-        startDate: '2026-01-01', endDate: '2026-06-01',
+        // #196 gave both mappers a deadline filter, so this fixture's window
+        // has to be LIVE for the availability assertions below to reach it.
+        // It was endDate '2026-06-01' — a date now in the past, which the new
+        // filter correctly removed from the list. Expiry is exercised in
+        // export-window-expiry.test.ts and, for these two mappers, below.
+        startDate: '2026-01-01', endDate: '2099-06-01',
         fundingGoal: 1_000_000, fundedAmount: 250_000,
         spotsFilled: 3,           // written on every investment...
         // ...and totalSpots is absent, because nothing writes it.

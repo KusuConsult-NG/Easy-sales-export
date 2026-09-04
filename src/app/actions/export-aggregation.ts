@@ -2,7 +2,7 @@
 
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { exportWindowAcceptsInvestment } from "@/lib/export-window-status";
+import { exportWindowAcceptsInvestment, exportWindowHasExpired } from "@/lib/export-window-status";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
@@ -141,7 +141,20 @@ export async function getActiveExportWindowsAction() { try {
 
         const snapshot = await q.get();
 
-        const windows = serializeDocs(snapshot.docs) as unknown as ExportWindow[];
+        // #196 — an ENDED window is not an active one.
+        //
+        // `status == "open"` was the whole filter, and nothing ever moved a
+        // window off "open", so this listed every window ever created as a live
+        // opportunity — including ones whose close date, printed on the card
+        // beside them, was months in the past. bookExportSlotAction then
+        // refused whoever clicked. Offering something the next step will refuse
+        // is the defect; the refusal was already right.
+        //
+        // Filtered here as well as closed by the cron, because a window that
+        // ended one minute ago must not be offered while the job waits to run.
+        const windows = (serializeDocs(snapshot.docs) as unknown as ExportWindow[])
+            .filter((w) => !exportWindowHasExpired(w as unknown as { endDate?: unknown }));
+
         return { error: null, success: true as const, data: windows, meta: null };
     } catch (error) { logger.error("Failed to fetch export windows:", error);
         return { success: false as const, data: [], meta: null, error: "Failed to fetch" };

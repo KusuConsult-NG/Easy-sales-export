@@ -400,7 +400,7 @@ export type ExportInvestmentVerdict =
     | { ok: true }
     | { ok: false; reason: "not_open" | "expired"; message: string };
 
-function endDateOf(value: unknown): Date | null {
+export function exportWindowEndDate(value: unknown): Date | null {
     if (!value) return null;
     // export_windows rows carry both a Firestore Timestamp and an ISO string;
     // getExportOpportunities branches on .toDate?.() for the same reason.
@@ -411,6 +411,42 @@ function endDateOf(value: unknown): Date | null {
     const d = new Date(raw as string);
     return Number.isNaN(d.getTime()) ? null : d;
 }
+
+/**
+ * Has this window's investment period ended?
+ *
+ *   #196 THE DEADLINE WAS CHECKED WHERE MONEY ENTERED AND NOWHERE ELSE.
+ *
+ *        #275 made all three investment doors refuse an expired window, which
+ *        stopped the platform taking money for one. It left the other half of
+ *        the finding open, and this is it: NOTHING EVER CLOSED THE WINDOW, and
+ *        nothing filtered the lists.
+ *
+ *        So a window whose period ended months ago is still `status: "open"`,
+ *        and the three screens that list opportunities — /export,
+ *        /export/opportunities and /export/windows — all offer it. A member
+ *        browses a page of live-looking opportunities, sees a close date in the
+ *        past printed on the card, clicks Invest, and is refused. The refusal
+ *        is correct and the offer should never have been made.
+ *
+ *        Extracted here so the lists, the cron that closes them, and the money
+ *        guard below all ask the same question. A second copy of "is it past
+ *        endDate" is how the three doors came to disagree in the first place.
+ *
+ * AN ABSENT OR UNREADABLE endDate IS NOT A DEADLINE — the same rule the money
+ * guard already applied, and the reason a window nobody set a date on is left
+ * alone rather than closed by the cron.
+ */
+export function exportWindowHasExpired(
+    windowData: { endDate?: unknown } | null | undefined,
+    now: Date = new Date(),
+): boolean {
+    const endDate = exportWindowEndDate(windowData?.endDate);
+    return endDate !== null && now > endDate;
+}
+
+/** What an investable window becomes when its period ends. */
+export const EXPORT_WINDOW_CLOSED_STATUS = "closed";
 
 export function exportWindowAcceptsInvestment(
     windowData: { status?: unknown; endDate?: unknown } | null | undefined,
@@ -429,8 +465,8 @@ export function exportWindowAcceptsInvestment(
         };
     }
 
-    const endDate = endDateOf(windowData?.endDate);
-    if (endDate && now > endDate) {
+    // One deadline rule, shared with the lists and the closing cron (#196).
+    if (exportWindowHasExpired(windowData, now)) {
         return {
             ok: false,
             reason: "expired",
