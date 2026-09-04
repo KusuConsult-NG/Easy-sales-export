@@ -7,6 +7,7 @@ import { canReadWaveProgramme } from "@/lib/wave-access";
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
+import { mintClassroomRoomKey } from "@/lib/classroom-room-key";
 
 /**
  * GET /api/wave/training-sessions
@@ -136,6 +137,12 @@ export async function GET(request: NextRequest) {
                 description: data.description ?? "",
                 durationMinutes: data.durationMinutes ?? null,
                 roomName: data.roomName ?? null,
+                // #188 — the built-in classroom. `roomName` is derived from the
+                // event id and is only the row's correlation key; `roomKey` is
+                // the server-minted secret that actually opens the room. This
+                // route is behind canReadWaveProgramme, so it reaches members of
+                // the programme and nobody else.
+                roomKey: data.roomKey ?? null,
                 customMeetingLink: data.customMeetingLink ?? null,
                 isActive: data.isActive ?? false,
                 scheduledAt: data.scheduledAt?.toDate?.()?.toISOString() ?? data.scheduledAt,
@@ -203,6 +210,10 @@ export async function POST(req: Request) {
             scheduledAt: new Date(scheduledAt),
             durationMinutes: Number(durationMinutes),
             roomName: roomName || `wave-training-${Date.now()}`,
+            // #188. A session scheduled through this route needs a classroom
+            // too, and it must be minted here rather than derived: the row
+            // above is the correlation key, this is the credential.
+            roomKey: mintClassroomRoomKey(),
             isActive: true,
             createdAt: new Date(),
             createdBy: session.user.id,

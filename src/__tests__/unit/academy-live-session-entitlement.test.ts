@@ -45,15 +45,24 @@
  *        the point of the schedule page — it is the padlock, not the content.
  *        Same choice stripLockedContent makes in the catalogue.
  *
- * A SEPARATE FINDING THIS DOES NOT FIX, RECORDED SO IT IS NOT LOST
- * ----------------------------------------------------------------
- * When a session has no customMeetingLink the learner page falls back to
- * <VideoClassroom roomName={`academy-${courseId}`} />, which loads a PUBLIC
- * meet.jit.si room named `EasySalesExport-academy-<courseId>` with no JWT. That
- * room is joinable by anyone who can guess the course id, from meet.jit.si
- * directly, with no account at all. Closing it needs a JWT-gated deployment
- * (JaaS) or a moderator lobby — a hosting decision, not a code change, so it is
- * the owner's call rather than something to patch quietly here.
+ * THE SEPARATE FINDING THIS RECORDED — NOW CLOSED AS #188
+ * -------------------------------------------------------
+ * When a session had no customMeetingLink the learner page fell back to
+ * <VideoClassroom roomName={`academy-${courseId}`} />, which loaded a PUBLIC
+ * meet.jit.si room named `EasySalesExport-academy-<courseId>` with no JWT — so
+ * the room went around this strip entirely: it needed no link, because the
+ * browser could COMPUTE it from a course id that is on every catalogue link.
+ *
+ * #188 made the room name a server-minted 128-bit secret carried on the
+ * session row, and this strip removes it with the rest (`delete row.roomKey`
+ * below). The moderator now turns the Jitsi lobby ON, where the component used
+ * to explicitly turn it off.
+ *
+ * What is still open, and is a hosting decision: meet.jit.si does not
+ * authenticate participants, so somebody GIVEN the key can reach the lobby.
+ * Only a JWT tenant binds a participant to an account. See
+ * classroom-room-is-not-guessable.test.ts and CLASSROOM_JWT_IS_NOT_CONFIGURED
+ * in lib/classroom-room.ts.
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';

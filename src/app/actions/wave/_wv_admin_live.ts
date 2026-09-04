@@ -9,6 +9,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
+import { roomKeyFor } from "@/lib/classroom-room-key";
 
 async function _startWaveLiveSessionAction(
     eventId: string,
@@ -50,6 +51,20 @@ async function _startWaveLiveSessionAction(
             }
         }
 
+        /**
+         * #188. `roomName` STAYS, and it is no longer what opens the classroom.
+         *
+         * It is derived from the event id, which is exactly why it could not go
+         * on being the video room: anybody who knew an event id could type
+         * `EasySalesExport-wave-training-<eventId>` into meet.jit.si and be in
+         * a women's-programme session with no account at all.
+         *
+         * It is still the correlation key for the session ROW — the lookup
+         * below finds the row for this event by it — and that is a legitimate
+         * use for a derived identifier. What opens the room is `roomKey`, a
+         * 128-bit secret minted on the server and handed out only through the
+         * entitlement-gated reader.
+         */
         const roomName = `wave-training-${eventId}`;
         const finalMeetingLink = customMeetingLink || `/wave/live-training`;
 
@@ -112,13 +127,17 @@ async function _startWaveLiveSessionAction(
             .where("roomName", "==", roomName)
             .get();
 
+        let roomKey: string;
+
         if (sessionQuery.empty) {
+            roomKey = roomKeyFor(null);
             await db.collection(COLLECTIONS.WAVE_TRAINING_SESSIONS).add({
                 title: eventData.title,
                 description: eventData.description || "",
                 scheduledAt: new Date(),
                 durationMinutes,
                 roomName,
+                roomKey,
                 isActive: true,
                 customMeetingLink: customMeetingLink || null,
                 createdAt: new Date(),
@@ -127,10 +146,14 @@ async function _startWaveLiveSessionAction(
         } else {
             // Update existing to make it active now
             const docId = sessionQuery.docs[0].id;
+            // A row written before #188 has no roomKey; an existing minted one
+            // is kept, so re-starting does not eject whoever is already in.
+            roomKey = roomKeyFor(sessionQuery.docs[0].data()?.roomKey);
             await db.collection(COLLECTIONS.WAVE_TRAINING_SESSIONS).doc(docId).update({
                 scheduledAt: new Date(),
                 isActive: true,
                 durationMinutes,
+                roomKey,
                 customMeetingLink: customMeetingLink || null,
                 updatedAt: new Date(),
             });
@@ -145,10 +168,13 @@ async function _startWaveLiveSessionAction(
             // the log could not distinguish "went live" from "ended the session"
             // from "edited the title" — which is what you need it for when a
             // member disputes whether a session ran.
+            // roomName and the meeting link, NOT roomKey: the audit log is read
+            // by every admin role, and the key is the credential that opens the
+            // room. What is needed here is which session ran, not how to join it.
             metadata: { phase: "start", roomName, meetingLink: finalMeetingLink },
         });
 
-        return { error: null, success: true as const, data: { roomName } };
+        return { error: null, success: true as const, data: { roomName, roomKey } };
     } catch (error) {
         logger.error("Start live session error:", {
             userId: sessionResult?.session?.user?.id,
@@ -248,4 +274,66 @@ async function _endWaveLiveSessionAction(
 
 export async function endWaveLiveSessionAction(...args: Parameters<typeof _endWaveLiveSessionAction>) {
     return withFlexibleSafeAction("endWaveLiveSessionAction", _endWaveLiveSessionAction)(...args);
+}
+
+
+/**
+ * The room key for an event's live classroom — #188.
+ *
+ * The admin classroom page used to build its room name in the browser:
+ *
+ *     const roomName = `wave-training-${eventId}`;
+ *
+ * which is the guessable name the finding is about, so it cannot go on doing
+ * that. The key lives on the session row and is read HERE, behind the same
+ * `wave:manage_training` permission that starts the session, rather than being
+ * derived from the id on the URL.
+ *
+ * It returns null rather than minting: only starting the session mints, so a
+ * null answer means the class is not running and the page must say so instead
+ * of opening a room.
+ */
+async function _getWaveLiveRoomKeyAction(
+    eventId: string
+): Promise<
+    | { success: true; error: null; data: { roomKey: string | null }; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> {
+    let sessionResult;
+    try {
+        sessionResult = await requireSession();
+        if (!sessionResult.session?.user?.id) {
+            return { success: false as const, error: "Not authenticated", data: null };
+        }
+        if (!hasAdminPermission(sessionResult.session.user.roles, "wave:manage_training")) {
+            return { success: false as const, error: "Unauthorized", data: null };
+        }
+
+        const snapshot = await db.collection(COLLECTIONS.WAVE_TRAINING_SESSIONS)
+            .where("roomName", "==", `wave-training-${eventId}`)
+            .limit(5)
+            .get();
+
+        if (snapshot.empty) {
+            return { error: null, success: true as const, data: { roomKey: null } };
+        }
+
+        const roomKey = snapshot.docs[0].data()?.roomKey;
+        return {
+            error: null,
+            success: true as const,
+            data: { roomKey: typeof roomKey === "string" && roomKey ? roomKey : null },
+        };
+    } catch (error) {
+        logger.error("Get live room key error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error),
+        });
+        // A failed read is a failure, not "no classroom". #313's lesson.
+        return { success: false as const, error: "Failed to load the classroom", data: null };
+    }
+}
+
+export async function getWaveLiveRoomKeyAction(...args: Parameters<typeof _getWaveLiveRoomKeyAction>) {
+    return withFlexibleSafeAction("getWaveLiveRoomKeyAction", _getWaveLiveRoomKeyAction)(...args);
 }

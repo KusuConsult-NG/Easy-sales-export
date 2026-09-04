@@ -9,6 +9,7 @@ import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { checkCourseAccess } from "@/lib/academy-plan";
 import { isAdmin } from "@/lib/admin-permissions";
 import type { Course, LiveSession } from "@/lib/types/academy-actions";
+import { roomKeyFor } from "@/lib/classroom-room-key";
 
 /**
  * The tier a session gets when its course cannot be read.
@@ -106,6 +107,12 @@ async function _getLiveSessionsAction(courseId?: string): Promise<ActionResponse
             if (!viewerIsAdmin && !opensThisTier) {
                 delete row.meetingLink;
                 delete row.customMeetingLink;
+                // #188. `roomKey` is the built-in classroom, and it is the
+                // same bearer credential by another route. Before it existed
+                // the browser could COMPUTE the room from the course id, so
+                // this strip had nothing to remove and the classroom was open
+                // to anyone who had seen a catalogue link.
+                delete row.roomKey;
                 // The recording is the same paid artefact by another route:
                 // /academy/live lists it as `status === "ended" && recordingUrl`.
                 delete row.recordingUrl;
@@ -178,6 +185,10 @@ async function _startAcademyLiveSessionAction(
                 duration: "2 hours",
                 meetingLink,
                 customMeetingLink: customMeetingLink || null,
+                // #188 — a 128-bit secret, minted here on the server. The room
+                // used to be `academy-<courseId>`, which every catalogue link
+                // spells out.
+                roomKey: roomKeyFor(null),
                 maxParticipants: 100,
                 currentParticipants: 0,
                 status: "live",
@@ -192,6 +203,11 @@ async function _startAcademyLiveSessionAction(
                 scheduledAt: new Date(),
                 meetingLink,
                 customMeetingLink: customMeetingLink || null,
+                // #188. A row written before this finding has no roomKey, or
+                // carries the derived name that was the defect; either way it
+                // gets a real one here. An existing MINTED key is kept, so
+                // re-starting a class does not eject the people already in it.
+                roomKey: roomKeyFor(snapshot.docs[0].data()?.roomKey),
             });
         }
 

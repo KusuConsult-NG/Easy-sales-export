@@ -103,6 +103,7 @@ export {
 export {
     startWaveLiveSessionAction,
     endWaveLiveSessionAction,
+    getWaveLiveRoomKeyAction,
 } from "./_wv_admin_live";
 
 // ─── Admin: applications (_wv_admin_applications.ts) ────────────────────────

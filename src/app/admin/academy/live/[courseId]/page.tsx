@@ -363,7 +363,11 @@ export default function AdminAcademyLivePage({ params }: Props) {
         );
     }
  
-    const roomName = `academy-${courseId}`;
+    // #188. This was `academy-${courseId}` — the course id is on every
+    // catalogue link, so the room was `EasySalesExport-academy-<courseId>` and
+    // anybody could walk into it from meet.jit.si. The key is minted on the
+    // server when the class is started and read off the live-session row.
+    const roomKey = liveSession?.roomKey ?? "";
     const userName = session?.user?.name || session?.user?.email || "Instructor";
     const userEmail = session?.user?.email || undefined;
  
@@ -471,7 +475,7 @@ export default function AdminAcademyLivePage({ params }: Props) {
                         </div>
                     ) : (
                         <VideoClassroom
-                            roomName={roomName}
+                            roomKey={roomKey}
                             userName={userName}
                             userEmail={userEmail}
                             isModerator={true}

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import VideoClassroom from "@/components/VideoClassroom";
 import { Video, ArrowLeft, Users, Clock, PhoneOff, Loader2, AlertCircle, CloudUpload, Square } from "lucide-react";
-import { getWaveTrainingEventsAction, endWaveLiveSessionAction, updateTrainingEventAction } from "@/app/actions/wave";
+import { getWaveTrainingEventsAction, endWaveLiveSessionAction, updateTrainingEventAction, getWaveLiveRoomKeyAction } from "@/app/actions/wave";
 import { useToast } from "@/contexts/ToastContext";
 
 interface Props {
@@ -19,6 +19,13 @@ export default function AdminWaveLivePage({ params }: Props) {
     const { showToast } = useToast();
 
     const [event, setEvent] = useState<any>(null);
+    /**
+     * #188. The room used to be computed here as `wave-training-${eventId}`,
+     * which anybody could reconstruct from a URL and type into meet.jit.si.
+     * The key is a server-minted secret read off the session row, behind the
+     * same wave:manage_training permission that starts the class.
+     */
+    const [roomKey, setRoomKey] = useState<string>("");
     const [isLoading, setIsLoading] = useState(true);
     const [isEnding, setIsEnding] = useState(false);
     const [ended, setEnded] = useState(false);
@@ -287,6 +294,14 @@ export default function AdminWaveLivePage({ params }: Props) {
                     const found = (result.data as any[]).find((e: any) => e.id === eventId);
                     setEvent(found || null);
                 }
+
+                const keyResult = await getWaveLiveRoomKeyAction(eventId);
+                // A failed read leaves the key empty, and VideoClassroom shows
+                // the closed-classroom notice rather than opening a room under
+                // a name it invented.
+                if (keyResult.success && keyResult.data?.roomKey) {
+                    setRoomKey(keyResult.data.roomKey);
+                }
             } catch (err) {
                 // Fallback: render the room with minimal info
                 setEvent({ id: eventId, title: "WAVE Live Training", instructor: "Admin" });
@@ -358,7 +373,7 @@ export default function AdminWaveLivePage({ params }: Props) {
         );
     }
 
-    const roomName = `wave-training-${eventId}`;
+
     const userName = session?.user?.name || session?.user?.email || "Admin";
     const userEmail = session?.user?.email || undefined;
 
@@ -468,7 +483,7 @@ export default function AdminWaveLivePage({ params }: Props) {
                         </div>
                     ) : (
                         <VideoClassroom
-                            roomName={roomName}
+                            roomKey={roomKey}
                             userName={userName}
                             userEmail={userEmail}
                             isModerator={true}

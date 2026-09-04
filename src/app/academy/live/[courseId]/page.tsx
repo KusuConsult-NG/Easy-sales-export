@@ -159,7 +159,15 @@ export default function AcademyLiveClassPage(props: AcademyLiveClassPageProps) {
                         </div>
                     ) : (
                         <VideoClassroom
-                            roomName={`academy-${courseId}`}
+                            // #188. This was `academy-${courseId}`, computed
+                            // in the BROWSER from an id on the URL, so the room
+                            // was reachable from meet.jit.si with no account.
+                            // The key comes off the live-session row, which
+                            // _ac_live strips for a learner whose plan does not
+                            // open this tier (#267) — so the classroom is now
+                            // behind the same gate as the meeting link. An
+                            // empty key renders the closed-classroom notice.
+                            roomKey={liveSession?.roomKey ?? ""}
                             userName={user.name || user.email || "Student"}
                             userEmail={user.email}
                             isModerator={isInstructor}

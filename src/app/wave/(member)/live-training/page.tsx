@@ -14,6 +14,13 @@ interface TrainingSession {
     scheduledAt: string; // ISO date string
     durationMinutes: number;
     roomName: string;
+    /**
+     * #188 — the server-minted classroom key. `roomName` is derived from the
+     * event id and is only the row's correlation key; this is what opens the
+     * room, and /api/wave/training-sessions serves it behind
+     * canReadWaveProgramme.
+     */
+    roomKey?: string | null;
     isActive: boolean;
     customMeetingLink?: string;
 }
@@ -124,7 +131,7 @@ export default function WAVELiveTrainingPage() {
                         ) : (
                             <div className="h-[calc(100vh-300px)] min-h-[500px]">
                                 <VideoClassroom
-                                    roomName={activeSession.roomName}
+                                    roomKey={activeSession.roomKey ?? ""}
                                     userName={session?.user?.name || session?.user?.email || "WAVE Member"}
                                     userEmail={session?.user?.email || ""}
                                     isModerator={isTrainer}
