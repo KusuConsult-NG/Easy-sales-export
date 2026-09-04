@@ -35,19 +35,19 @@ import {
 import { useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useFeatureToggles } from "@/hooks/useFeatureToggle";
-import { canAccessAdminRoute } from "@/lib/admin-permissions";
+import { canAccessAdminRoute, hasAdminPermission, type AdminPermission } from "@/lib/admin-permissions";
 
 
 const NAV_ITEMS = [
     // ── Core Platform ───────────────────────────────────────────────────────
     { label: "Dashboard", href: "/admin", icon: LayoutDashboard, section: "platform" },
     { label: "Analytics", href: "/admin/analytics", icon: TrendingUp, section: "platform" },
-    { label: "User Management", href: "/admin/users", icon: Users, section: "platform" },
+    { label: "User Management", href: "/admin/users", icon: Users, section: "platform", permission: "users:read" as AdminPermission },
     { label: "Content Approval", href: "/admin/content-approval", icon: ClipboardCheck, section: "platform" },
     { label: "Communications", href: "/admin/communications", icon: MessageSquare, section: "platform" },
     { label: "Support Inbox", href: "/admin/messages", icon: Headphones, section: "platform" },
-    { label: "Disputes", href: "/admin/disputes", icon: ShieldAlert, section: "platform" },
-    { label: "Audit Logs", href: "/admin/audit-logs", icon: ScrollText, section: "platform" },
+    { label: "Disputes", href: "/admin/disputes", icon: ShieldAlert, section: "platform", permission: "finance:resolve_disputes" as AdminPermission },
+    { label: "Audit Logs", href: "/admin/audit-logs", icon: ScrollText, section: "platform", permission: "audit:read" as AdminPermission },
     { label: "Orphaned Users", href: "/admin/orphaned-users", icon: UserX, section: "platform" },
 
     { label: "Feature Toggles", href: "/admin/feature-toggles", icon: ToggleLeft, section: "platform" },
@@ -66,10 +66,10 @@ const NAV_ITEMS = [
     // Announcements and banners render site-wide via AnnouncementBanner.tsx.
     // The actions existed and the page did not, so the only way to publish was
     // to write to the database by hand.
-    { label: "Announcements", href: "/admin/cms", icon: Megaphone, section: "platform" },
+    { label: "Announcements", href: "/admin/cms", icon: Megaphone, section: "platform", permission: "announcements:manage" as AdminPermission },
     // ── Modules ─────────────────────────────────────────────────────────────
     { label: "WAVE Program", href: "/admin/wave", icon: Waves, section: "modules", featureToggle: "wave_program" },
-    { label: "WAVE Shipments", href: "/admin/wave/shipments", icon: Truck, section: "modules", featureToggle: "wave_program" },
+    { label: "WAVE Shipments", href: "/admin/wave/shipments", icon: Truck, section: "modules", permission: "wave:manage_training" as AdminPermission, featureToggle: "wave_program" },
     { label: "Cooperatives", href: "/admin/cooperatives", icon: Building2, section: "modules", featureToggle: "cooperative_loans" },
     /**
      *   #362 THREE MORE BUILT ADMIN SCREENS THAT NO RENDERED NAV REACHED.
@@ -85,21 +85,21 @@ const NAV_ITEMS = [
      *        way in. See the recorded list in
      *        src/__tests__/unit/every-screen-has-a-way-in.test.ts.
      */
-    { label: "Loan Products", href: "/admin/cooperatives/loan-products", icon: ScrollText, section: "modules", featureToggle: "cooperative_loans" },
+    { label: "Loan Products", href: "/admin/cooperatives/loan-products", icon: ScrollText, section: "modules", permission: "cooperatives:approve_loans" as AdminPermission, featureToggle: "cooperative_loans" },
     { label: "Marketplace", href: "/admin/marketplace", icon: ShoppingBag, section: "modules" },
     { label: "Escrow Management", href: "/admin/marketplace/escrow", icon: ShieldCheck, section: "modules", featureToggle: "escrow_messaging" },
-    { label: "Export Windows", href: "/admin/export", icon: Container, section: "modules" },
-    { label: "Export Applications", href: "/admin/export/applications", icon: FileText, section: "modules" },
+    { label: "Export Windows", href: "/admin/export", icon: Container, section: "modules", permission: "export:approve_applications" as AdminPermission },
+    { label: "Export Applications", href: "/admin/export/applications", icon: FileText, section: "modules", permission: "export:approve_applications" as AdminPermission },
     /**
      * #380 — the way in for the bookings screen. A booking holds volume against
      * a window and nothing could confirm or cancel it, so the capacity was
      * consumed permanently. The screen exists now; #362's ratchet is what makes
      * it have to be linked here rather than becoming the eleventh orphan.
      */
-    { label: "Export Bookings", href: "/admin/export/bookings", icon: Container, section: "modules" },
-    { label: "Export Catalog", href: "/admin/export/catalog", icon: Package, section: "modules" },
+    { label: "Export Bookings", href: "/admin/export/bookings", icon: Container, section: "modules", permission: "export:approve_applications" as AdminPermission },
+    { label: "Export Catalog", href: "/admin/export/catalog", icon: Package, section: "modules", permission: "export:approve_applications" as AdminPermission },
     { label: "Farm Nation", href: "/admin/farm-nation", icon: Tractor, section: "modules", featureToggle: "farm_nation_purchases" },
-    { label: "Academy", href: "/admin/academy", icon: GraduationCap, section: "modules", featureToggle: "academy_courses" },
+    { label: "Academy", href: "/admin/academy", icon: GraduationCap, section: "modules", permission: "academy:manage_courses" as AdminPermission, featureToggle: "academy_courses" },
     // ── Finance & Settings ───────────────────────────────────────────────────
     { label: "Finance", href: "/admin/finance", icon: Wallet, section: "finance" },
     { label: "Settings", href: "/admin/settings", icon: Settings, section: "finance" },
@@ -113,22 +113,39 @@ export default function AdminSidebar() {
     
     // Role-based UI filtering
     const roles: string[] = (session?.user as any)?.roles || [];
+    /**
+     *   #382 THIS BLOCK CALLED ITSELF A PERMISSIONS CHECK AND CHECKED NOTHING.
+     *
+     *        It read:
+     *
+     *            // Permissions check for specific sections
+     *            const canSeeFinance   = isFullAdmin || isMktAdmin || ...
+     *            const canSeeAnalytics = isFullAdmin || isModuleAdmin;
+     *            const canSeeUsers     = isFullAdmin || isCoopAdmin || ...
+     *
+     *        All three, and the `isModuleAdmin` they were built from, were
+     *        COMPUTED AND READ BY NOTHING — each name appeared exactly once in
+     *        the file, at its own declaration. The whole role model existed to
+     *        produce the DISPLAY LABEL below, and the real gate was, and is,
+     *        the per-item filter in the nav.
+     *
+     *        Security-shaped config that gates nothing is #72's defect
+     *        (GATED_SEGMENTS: 22 entries and a matcher nothing imported), and
+     *        it is worse than no config: `canSeeFinance` reads as a decision
+     *        that marketplace, WAVE and cooperative admins may see Finance,
+     *        and the live rule refuses all three.
+     *
+     *        What is left is what the label needs, named for that.
+     */
     const isSuperAdmin = roles.includes("super_admin");
     const isFullAdmin = isSuperAdmin || roles.includes("admin");
-    
+
     const isWaveAdmin = roles.includes("wave_admin");
     const isCoopAdmin = roles.includes("cooperative_admin");
     const isMktAdmin = roles.includes("marketplace_admin");
     const isExportAdmin = roles.includes("export_admin");
     const isFarmAdmin = roles.includes("farm_nation_admin");
     const isAcadAdmin = roles.includes("academy_admin");
-
-    const isModuleAdmin = isWaveAdmin || isCoopAdmin || isMktAdmin || isExportAdmin || isFarmAdmin || isAcadAdmin;
-
-    // Permissions check for specific sections
-    const canSeeFinance = isFullAdmin || isMktAdmin || isWaveAdmin || isCoopAdmin;
-    const canSeeAnalytics = isFullAdmin || isModuleAdmin;
-    const canSeeUsers = isFullAdmin || isCoopAdmin || isWaveAdmin; // Needed for membership review
 
     return (
         <>
@@ -177,8 +194,37 @@ export default function AdminSidebar() {
                                                 return null;
                                             }
 
-                                            // Granular role-based UI filtering
-                                            if (!canAccessAdminRoute(roles, item.href)) {
+                                            /**
+                                             *   #382 A LINK IS SHOWN WHEN THE
+                                             *        CALLER CAN ACTUALLY USE IT.
+                                             *
+                                             *        This asked canAccessAdminRoute alone — a
+                                             *        route-PREFIX and role-NAME rule that had
+                                             *        drifted from the permission matrix the
+                                             *        actions behind these screens enforce:
+                                             *
+                                             *          /admin/export was SHOWN to export_admin
+                                             *            and its list action refused them;
+                                             *          /admin/audit-logs and /admin/users were
+                                             *            HIDDEN from roles their actions serve,
+                                             *            making the navigation the only gate.
+                                             *
+                                             *        Where an item names the permission its own
+                                             *        actions require, that permission decides —
+                                             *        so the sidebar cannot offer what the next
+                                             *        screen refuses, or hide what it would serve.
+                                             *        It is also the better silo rule: the export
+                                             *        queue's permission is exactly the three
+                                             *        roles that may work it, which a "/admin/export"
+                                             *        prefix cannot express.
+                                             *
+                                             *        Items with no named permission keep the
+                                             *        route rule, unchanged.
+                                             */
+                                            const mayUse = item.permission
+                                                ? hasAdminPermission(roles, item.permission)
+                                                : canAccessAdminRoute(roles, item.href);
+                                            if (!mayUse) {
                                                 return null;
                                             }
 

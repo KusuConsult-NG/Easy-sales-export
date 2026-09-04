@@ -33,8 +33,47 @@ async function _getAllExportRequestsAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "finance:read")) {
-            return { error: "Unauthorized: Permission required - finance:read", success: false as const, data: null };
+        /**
+         *   #382 THE EXPORT ADMIN COULD NOT READ THEIR OWN PRIMARY SCREEN.
+         *
+         *        This is the list behind /admin/export — Export Windows, the
+         *        first item in the export section of the admin sidebar. It
+         *        asked for `finance:read`, whose holders are super_admin,
+         *        admin, support, cooperative_admin and marketplace_admin.
+         *
+         *        `export_admin` is NOT among them. So:
+         *
+         *          the sidebar SHOWED them the link (canAccessAdminRoute lets a
+         *            module admin into their own "/admin/export" silo);
+         *          the status WRITE admitted them (EXPORT_ADMIN_ROLES in
+         *            lib/export-window-status is admin/super_admin/export_admin,
+         *            and #275 made that the one rule both update paths use);
+         *          and this read refused them.
+         *
+         *        An export administrator opened the screen their sidebar
+         *        offered and got "Unauthorized: Permission required -
+         *        finance:read" — on the module they administer. Meanwhile
+         *        cooperative_admin and marketplace_admin, who cannot change a
+         *        single one of these rows, could read them all.
+         *
+         *        That is #374's asymmetry — two doors onto one workflow, gated
+         *        differently — with the tighter gate on the READ this time, and
+         *        #265's shape (a module admin locked out of their own surface).
+         *
+         *        `export:approve_applications` is the export queue's own
+         *        permission: exactly {super_admin, admin, export_admin}, which
+         *        is the same set the write already admits, and the permission
+         *        #375 gave the rest of the export queue and #380 gave the
+         *        booking screen. One rule for the module.
+         *
+         *        THIS NARROWS THREE ROLES, DELIBERATELY. support,
+         *        cooperative_admin and marketplace_admin lose a read they could
+         *        never act on, of a queue belonging to another module. A screen
+         *        somebody can read but not use is not their job, and the write
+         *        path had already decided that.
+         */
+        if (!session?.user || !hasAdminPermission(session.user.roles, "export:approve_applications")) {
+            return { error: "Unauthorized: Permission required - export:approve_applications", success: false as const, data: null };
         }
 
         let query: any = db.collection(COLLECTIONS.EXPORT_WINDOWS);

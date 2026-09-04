@@ -371,6 +371,22 @@ describe('#364 — RECORDED, NOT REPAIRED: the same shape outside src/app/api', 
      *                              restriction. Same owner decision.
      *   the seven components       decide what to draw, not what to allow.
      *
+     * #382 CLOSED THE OWNER DECISION FOR THE ONE THAT DID BOTH.
+     *
+     *   AdminSidebar.tsx is still here, and now for a narrower reason: its
+     *   remaining role checks feed a DISPLAY LABEL ("Super Admin",
+     *   "Export Admin", ...) and nothing else. What used to sit beside them —
+     *   canSeeFinance / canSeeAnalytics / canSeeUsers, under the comment
+     *   "Permissions check for specific sections" — was computed and read by
+     *   nothing, and is gone. The nav's actual visibility rule now follows the
+     *   permission each screen's own actions enforce; see
+     *   admin-nav-follows-the-permission.test.ts.
+     *
+     *   The rest of the list stands as triaged: a deliberate three-role gate, a
+     *   check of the TARGET user's roles, a display mapping, and the components
+     *   that decide what to draw. Each was examined and each is a different
+     *   question from "who may do this".
+     *
      * The list may shrink; it may not grow. A file that leaves it must be
      * deleted from here, which is the only way the decision gets closed.
      */
