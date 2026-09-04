@@ -7,7 +7,6 @@ import { ToastProvider } from "@/contexts/ToastContext";
 import { Toaster } from "sonner";
 
 import SessionActivityTracker from "@/components/auth/SessionActivityTracker";
-import SessionGuard from "@/components/auth/SessionGuard";
 import { ModuleSidebar } from "@/components/layout/ModuleSidebar";
 import { FirebaseAuthProvider } from "@/components/providers/FirebaseAuthProvider";
 import { useFCMRegistration } from "@/hooks/useFCMRegistration";
@@ -128,8 +127,14 @@ function LayoutContent({ children }: ClientLayoutProps) {
 
     return (
         <ToastProvider>
+            {/*
+              * SessionGuard used to be mounted here beside the tracker. It wrote
+              * one sessionStorage key that nothing read, and was named for a
+              * volatile-session control it did not perform — #314. #240 settled
+              * that the control cannot be built at this layer and removed it;
+              * the reasoning is in volatile-session-control-decided.render.test.tsx.
+              */}
             {status === "authenticated" && <SessionActivityTracker />}
-            <SessionGuard />
 
             <>
                 {awaitingSessionForModulePage ? (

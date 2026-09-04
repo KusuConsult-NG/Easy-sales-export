@@ -124,15 +124,18 @@ export default function LoginForm({ defaultCallbackUrl = "/dashboard" }: { defau
             // 2. Success! Cookie is set. Now get redirect URL from server.
 
 
-            // Was: "Register session as active in this tab to satisfy
-            // SessionGuard" — #314. SessionGuard reads no flag and enforces
-            // nothing, so there was nothing here to satisfy. The write is kept
-            // because the key is the only trace of the intended
-            // volatile-session control, and SessionGuard sets it too; the
-            // claim that it is required is what was wrong.
-            if (typeof window !== 'undefined') {
-                sessionStorage.setItem("ese_session_active", "true");
-            }
+            // Was: `sessionStorage.setItem("ese_session_active", "true")` under
+            // the comment "Register session as active in this tab to satisfy
+            // SessionGuard". SessionGuard read no flag and enforced nothing
+            // (#314), so there was nothing here to satisfy; #240 then settled
+            // that the volatile-session control cannot be built from a per-tab
+            // key at all and removed both writers. Nothing reads the key, so
+            // nothing is lost by not writing it.
+            //
+            // Nothing is written in its place either. The idle clock keys on
+            // this session's own authAt (SessionActivityTracker), so a stale
+            // timestamp from a previous session is ignored without any login
+            // path having to remember to clear it.
 
             // Force session update to be absolutely sure client state matches server
             showToast("Login successful!", "success");

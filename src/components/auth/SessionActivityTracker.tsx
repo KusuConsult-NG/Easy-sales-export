@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import { AlertTriangle, X } from "lucide-react";
 
 /**
@@ -28,6 +28,45 @@ import { AlertTriangle, X } from "lucide-react";
  *        hours whatever happens here, and nothing server-side consults
  *        `lastActivity`. Stated so nobody mistakes it for the enforcement it
  *        resembles — the same correction #314 made to SessionGuard.
+ *
+ *   #240 CLOSING THE BROWSER DID NOT END THE SESSION, AND THIS COMPONENT ERASED
+ *        THE EVIDENCE THAT IT HAD BEEN CLOSED.
+ *
+ *        @auth/core writes the session cookie with `expires = now + maxAge`
+ *        unconditionally (lib/actions/callback/index.js), so it is a PERSISTENT
+ *        cookie: closing the browser leaves a member signed in for up to eight
+ *        hours. On a shared computer the next person to open the browser is
+ *        signed in as them.
+ *
+ *        The mount effect used to run `writeLastActivity(Date.now())`
+ *        unconditionally, so reopening the browser two hours later restarted
+ *        the ten-minute clock instead of ending the session. The stored
+ *        timestamp already said the member had been away far longer than the
+ *        timeout, and this threw it away before the first tick could read it.
+ *
+ *        A stored timestamp is now HONOURED when it belongs to the session we
+ *        are standing in, and the existing `remaining <= 0` branch signs the
+ *        member out on the first tick. Nothing else changes.
+ *
+ *        WHY authAt AND NOT "CLEAR IT AT LOGIN". A stale timestamp signing
+ *        somebody out immediately after they log in is a real loop —
+ *        HardLogoutButton exists partly because of it — and clearing the key on
+ *        the login path would only close it for the login paths somebody
+ *        remembered. `session.user.authAt` is when THIS session was minted
+ *        (#306), so a timestamp older than it belongs to a previous session and
+ *        is ignored. That holds for every way in, including ones added later.
+ *
+ *        FAIL TOWARD THE MEMBER. No stored timestamp, an unreadable one, or a
+ *        session with no authAt (minted before #306) all seed a fresh clock
+ *        rather than signing anybody out — so deploying this cannot eject
+ *        anybody who is mid-session.
+ *
+ *        WHAT THIS IS STILL NOT. It is the browser acting on its own state. The
+ *        cookie is unchanged and remains valid for its eight hours; a client
+ *        that never runs this component is not bound by it. The correct fix is
+ *        a session-scoped cookie, which @auth/core 5.0.0-beta.32 does not let
+ *        this app ask for — `expires` is applied after the spread of
+ *        `cookies.sessionToken.options`, so it cannot be suppressed from config.
  */
 
 const SESSION_TIMEOUT_MS = 10 * 60 * 1000;  // 10 minutes
@@ -63,7 +102,27 @@ function clearLastActivity(): void {
     try { localStorage.removeItem("lastActivity"); } catch { /* no store */ }
 }
 
+/**
+ * #240 — does this stored timestamp belong to the session we are standing in?
+ *
+ * Exported because it is the whole of the decision and deserves to be tested as
+ * a value rather than through a rendered component. `authAt` is when THIS
+ * session was minted; anything recorded before that was recorded by a previous
+ * one and must not be allowed to sign the current member out.
+ *
+ * Everything unknown answers false, which seeds a fresh clock: no stored value,
+ * an unreadable one, or a session minted before authAt existed.
+ */
+export function belongsToThisSession(stored: number, authAt: unknown): boolean {
+    return Number.isFinite(stored)
+        && typeof authAt === "number"
+        && Number.isFinite(authAt)
+        && stored >= authAt;
+}
+
 export default function SessionActivityTracker() {
+    const { data: session, status } = useSession();
+    const authAt = session?.user?.authAt;
     const [showWarning, setShowWarning] = useState(false);
     const [timeRemaining, setTimeRemaining] = useState(0);
     const [lastActivityTime, setLastActivityTime] = useState(() => Date.now());
@@ -108,6 +167,17 @@ export default function SessionActivityTracker() {
 
     // Check session timeout
     useEffect(() => {
+        /**
+         *   #240 NOTHING IS SEEDED OR RESUMED UNTIL THE SESSION HAS RESOLVED.
+         *
+         *        The decision below needs `authAt`, and running it while the
+         *        session is still loading would seed a fresh timestamp with no
+         *        authAt to compare against — which is exactly the unconditional
+         *        write this replaced. A cold entry would then look identical to
+         *        a live one and the sign-out would never happen.
+         */
+        if (status === "loading") return;
+
         function checkTimeout() {
             /**
              *   #350 AN UNREADABLE TIMESTAMP DISARMED THE WHOLE CONTROL.
@@ -156,22 +226,37 @@ export default function SessionActivityTracker() {
             }
         };
 
-        // Always reset lastActivity on mount — prevents stale timestamps from
-        // a previous session triggering an immediate warning for a new login.
-        //
-        // #350 The cost, stated rather than left to be rediscovered: a full
-        // page load restarts the idle clock, so a member who reloads is never
-        // timed out. Logout already clears the key (see handleLogout and the
-        // hard-logout suite), so the stale-timestamp case this guards is a
-        // session that ended without a clean sign-out.
-        writeLastActivity(Date.now());
-        setTimeout(() => setLastActivityTime(Date.now()), 0);
+        /**
+         *   #240 THIS USED TO BE AN UNCONDITIONAL `writeLastActivity(Date.now())`.
+         *
+         *        Its comment said it "prevents stale timestamps from a previous
+         *        session triggering an immediate warning for a new login" —
+         *        a real hazard, and HardLogoutButton's note describes the loop
+         *        it causes. But it also erased the ONE case the timeout should
+         *        act on: the member closed the browser, the session cookie
+         *        outlived it, and the stored timestamp is the only record that
+         *        they were away longer than the timeout.
+         *
+         *        Both are handled by asking whose timestamp it is rather than
+         *        how old it is. A timestamp recorded during THIS session is
+         *        honoured — including one that is already past the timeout, so
+         *        the tick below signs the member out. Anything else seeds a
+         *        fresh clock.
+         *
+         *        #350's cost note still holds for the honoured case and is now
+         *        the point rather than a cost: a full page load no longer
+         *        restarts the idle clock.
+         */
+        const stored = readLastActivity();
+        const resume = belongsToThisSession(stored, authAt);
+        if (!resume) writeLastActivity(Date.now());
+        setTimeout(() => setLastActivityTime(resume ? stored : Date.now()), 0);
 
         // Check every second
         const interval = setInterval(checkTimeout, 1000);
 
         return () => clearInterval(interval);
-    }, []);
+    }, [status, authAt]);
 
     // Activity event listeners
     useEffect(() => {

@@ -69,7 +69,9 @@ jest.mock('next/navigation', () => ({
 // unrelated reason.
 jest.mock('@/components/layout/ModuleSidebar', () => ({ ModuleSidebar: () => <nav data-testid="sidebar" /> }));
 jest.mock('@/components/auth/SessionActivityTracker', () => ({ __esModule: true, default: () => null }));
-jest.mock('@/components/auth/SessionGuard', () => ({ __esModule: true, default: () => null }));
+// SessionGuard was mocked here. #240 removed the component — it wrote one
+// sessionStorage key that nothing read and was named for a control it did not
+// perform. See volatile-session-control-decided.render.test.tsx.
 jest.mock('@/components/providers/FirebaseAuthProvider', () => ({ FirebaseAuthProvider: ({ children }: any) => <>{children}</> }));
 jest.mock('@/components/notifications/PushNotificationBanner', () => ({ PushNotificationBanner: () => null }));
 jest.mock('@/components/ai/AiChatWidget', () => ({ AiChatWidget: () => null }));
