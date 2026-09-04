@@ -43,6 +43,19 @@
  * hazard that made the WAVE payout rollback a defect (#34), so it stays a manual
  * settlement with a log that carries everything needed for one.
  *
+ * THE SECOND SITE, ADDED BY #380, WHICH IS NOT MONEY AT ALL
+ * ---------------------------------------------------------
+ * decideExportBookingAction (actions/export-booking.ts) calls the same helper,
+ * but the field is `currentVolume` on an export window — kilograms of capacity,
+ * not a member's balance — and the call IS ITSELF THE COMPENSATION. The booking
+ * reserved that volume through incrementWithinCeiling in the same file; the
+ * cancel gives it back.
+ *
+ * Compensating it would re-reserve capacity for a booking that has just been
+ * cancelled, which is the defect #380 was written to fix, not a safeguard. So
+ * the exclusion here rests on a different fact from the repayment one, and the
+ * tests below check that fact rather than accepting the file name.
+ *
  * This suite scans for the rule rather than listing the sites, so a tenth debit
  * added later cannot quietly skip it.
  */
@@ -54,8 +67,14 @@ import { join, relative } from 'path';
 const ROOTS = ['src/app/actions', 'src/app/api'];
 const DEBITS = ['debitJsonbBalance(', 'debitJsonbBalanceWithFloor('];
 
-/** The one site where compensation would be wrong, and why. */
+/** The one MONEY site where compensation would be wrong, and why. */
 const DELIBERATELY_MANUAL = 'src/app/actions/cooperative/_loans_repayments.ts';
+
+/** #380 — not money: the debit gives capacity back, so it IS the compensation. */
+const IS_ITSELF_A_COMPENSATION = 'src/app/actions/export-booking.ts';
+
+/** Both exclusions, in the order the scan finds them. */
+const NOT_COMPENSATED = [DELIBERATELY_MANUAL, IS_ITSELF_A_COMPENSATION].sort();
 
 function walk(dir: string, out: string[] = []): string[] {
     for (const entry of readdirSync(dir)) {
@@ -145,14 +164,14 @@ describe('every debit site', () => {
         expect(sites.length).toBeGreaterThanOrEqual(7);
     });
 
-    it('either compensates, or is the one that deliberately does not', () => {
+    it('either compensates, or is one of the two that deliberately do not', () => {
         // THE test.
-        const uncompensated = sites.filter((s) => !s.compensates).map((s) => s.file);
+        const uncompensated = sites.filter((s) => !s.compensates).map((s) => s.file).sort();
 
-        expect(uncompensated).toEqual([DELIBERATELY_MANUAL]);
+        expect(uncompensated).toEqual(NOT_COMPENSATED);
     });
 
-    it('and that one says why, so it is not "fixed" later', () => {
+    it('and the repayment one says why, so it is not "fixed" later', () => {
         const src = readFileSync(join(process.cwd(), DELIBERATELY_MANUAL), 'utf-8');
 
         expect(src).toContain('DELIBERATELY NOT COMPENSATED');
@@ -170,6 +189,40 @@ describe('every debit site', () => {
             const src = stripComments(readFileSync(join(process.cwd(), site.file), 'utf-8'));
             expect(src).not.toContain('claimPaymentOnce(');
         }
+    });
+
+    it('and the export one says why, on its own separate ground', () => {
+        // Two exclusions with one shared excuse would be a rule with a hole in
+        // it. This one's reason is stated in its own words, and #380 names it.
+        const src = readFileSync(join(process.cwd(), IS_ITSELF_A_COMPENSATION), 'utf-8');
+
+        expect(src).toContain('THIS DEBIT IS THE COMPENSATION');
+        expect(src).toContain('#380');
+    });
+
+    it('which is true of it: the debit is the reverse of a reservation in the same file', () => {
+        // THE vacuity guard on that exclusion. The claim is that the release
+        // undoes incrementWithinCeiling on the same collection and field, so
+        // both halves have to be here, on `currentVolume`, and the balance
+        // helpers that move a member's money must not be.
+        const src = stripComments(readFileSync(join(process.cwd(), IS_ITSELF_A_COMPENSATION), 'utf-8'));
+
+        expect(src).toContain('incrementWithinCeiling({');
+        expect(src).toContain('debitJsonbBalanceWithFloor({');
+        expect((src.match(/field: "currentVolume"/g) ?? []).length).toBe(2);
+
+        // Not a wallet, not a savings balance — nothing a member is owed.
+        expect(src).not.toContain('creditWalletOnce(');
+        expect(src).not.toContain('claimPaymentOnce(');
+        expect(src).not.toContain('lockedBalance');
+    });
+
+    it('and it is floored, because a hand-repaired window must not go negative', () => {
+        const src = stripComments(readFileSync(join(process.cwd(), IS_ITSELF_A_COMPENSATION), 'utf-8'));
+
+        // WithFloor, not the unfloored debit — the distinction is the point.
+        expect(src).toContain('floor: 0,');
+        expect(src).not.toContain('debitJsonbBalance({');
     });
 });
 

@@ -90,6 +90,13 @@ const NAV_ITEMS = [
     { label: "Escrow Management", href: "/admin/marketplace/escrow", icon: ShieldCheck, section: "modules", featureToggle: "escrow_messaging" },
     { label: "Export Windows", href: "/admin/export", icon: Container, section: "modules" },
     { label: "Export Applications", href: "/admin/export/applications", icon: FileText, section: "modules" },
+    /**
+     * #380 — the way in for the bookings screen. A booking holds volume against
+     * a window and nothing could confirm or cancel it, so the capacity was
+     * consumed permanently. The screen exists now; #362's ratchet is what makes
+     * it have to be linked here rather than becoming the eleventh orphan.
+     */
+    { label: "Export Bookings", href: "/admin/export/bookings", icon: Container, section: "modules" },
     { label: "Export Catalog", href: "/admin/export/catalog", icon: Package, section: "modules" },
     { label: "Farm Nation", href: "/admin/farm-nation", icon: Tractor, section: "modules", featureToggle: "farm_nation_purchases" },
     { label: "Academy", href: "/admin/academy", icon: GraduationCap, section: "modules", featureToggle: "academy_courses" },

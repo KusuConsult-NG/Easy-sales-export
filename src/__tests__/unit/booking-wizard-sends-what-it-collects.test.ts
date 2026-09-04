@@ -232,14 +232,38 @@ describe('#348 — and the second email promise in the file #311 fixed', () => {
         expect(code).not.toMatch(/receive an email/i);
     });
 
-    it('and the claim it rests on is still true — nothing sends one', () => {
+    it('and the claim it rests on is still true — CONFIRMING sends nothing', () => {
         // Pinned against the action rather than remembered, exactly as #311
-        // does. If a notification is ever added, this fails and the copy can
-        // go back.
-        const action = source(ACTION);
+        // does. If a notification is ever added AT BOOKING TIME, this fails and
+        // the copy can go back.
+        //
+        // #380 narrowed this from the file to the function. The file now also
+        // holds decideExportBookingAction, which DOES notify the member when
+        // the export team confirms or cancels — but that happens later, is not
+        // an email, and is not what the review screen was claiming. A file-wide
+        // assertion would have to be deleted here; a function-scoped one keeps
+        // the guarantee the copy actually depends on.
+        const src = source(ACTION);
+        const a = src.indexOf('export async function createBookingAction');
+        const b = src.indexOf('export async function getUserBookingsAction', a + 1);
+        expect({ start: a > -1, end: b > a }).toEqual({ start: true, end: true });
 
-        expect(action).not.toMatch(/sendEmail|EmailNotification|resend|Resend/);
-        expect(action).not.toMatch(/createNotification|notifyUser/);
+        const creator = src.slice(a, b);
+        expect(creator).not.toMatch(/sendEmail|EmailNotification|resend|Resend/);
+        expect(creator).not.toMatch(/createNotification|notifyUser/);
+    });
+
+    it('and what the decision sends instead is a notification, not an email', () => {
+        // #380. The member IS told now — through the in-app notification
+        // centre, linked to a screen that exists. Naming the mechanism here
+        // stops the wizard copy drifting back to promising mail.
+        const src = source(ACTION);
+        const decide = src.slice(src.indexOf('export async function decideExportBookingAction'));
+
+        expect(decide.length).toBeGreaterThan(200);
+        expect(decide).toContain('createNotification({');
+        expect(decide).toContain('link: "/export/bookings"');
+        expect(decide).not.toMatch(/sendEmail|EmailNotification|resend|Resend/);
     });
 
     it('the raw file still quotes the old wording, so the record survives', () => {

@@ -266,6 +266,10 @@ describe('#375 — every gate names its permission, and the exception is stated'
 
         // Module queues — the permission deliberately includes the module admin.
         'src/app/actions/export-aggregation.ts': ['export:approve_applications'],
+        // #380's two: the booking queue and the confirm/cancel decision. Same
+        // permission as the rest of the export queue, held by super_admin,
+        // admin and export_admin.
+        'src/app/actions/export-booking.ts': Array(2).fill('export:approve_applications'),
         'src/app/actions/admin/_land.ts': ['land:verify_listings'],
 
         // Reads. All ten roles hold these, so behaviour is unchanged — named so
@@ -344,7 +348,7 @@ describe('#375 — every gate names its permission, and the exception is stated'
     });
 
     it('the sweep is not vacuous — it finds the call sites at all', () => {
-        expect(callSites().length).toBe(30);
+        expect(callSites().length).toBe(32);
         expect(SRC.length).toBeGreaterThan(400);
     });
 

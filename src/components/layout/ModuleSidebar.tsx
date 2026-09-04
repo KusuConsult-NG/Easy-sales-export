@@ -129,6 +129,11 @@ const MARKETPLACE_NAV: NavItem[] = [
 const EXPORT_NAV: NavItem[] = [
     { name: "Dashboard",       href: "/export/dashboard",      icon: LayoutDashboard },
     { name: "Opportunities",   href: "/export/opportunities",  icon: Briefcase },
+    // #380 — the member's own bookings. getUserBookingsAction existed with zero
+    // callers, so somebody who had volume reserved in their name had nowhere to
+    // see whether it was still pending, and the decision notification had no
+    // route to point at.
+    { name: "My Bookings",     href: "/export/bookings",       icon: Container },
     { name: "Portfolio",       href: "/export/portfolio",      icon: TrendingUp },
     { name: "Transactions",    href: "/export/transactions",   icon: FileText },
     { name: "Browse Windows",  href: "/export/windows",        icon: Container },
