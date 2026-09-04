@@ -334,6 +334,37 @@ describe('#382 — and the build is a step somebody actually runs', () => {
 
         expect(pkg.scripts.verify).toContain('npm run build');
         expect(pkg.scripts.verify).toContain('npm run typecheck');
+        expect(pkg.scripts.verify).toContain('npm run lint');
         expect(pkg.scripts.verify).toContain('npm run test');
+    });
+
+    it('AND THE LINT SCRIPT ACTUALLY FAILS ON A WARNING — #383', () => {
+        // `lint` was a bare `eslint`, which exits 0 with any number of warnings.
+        // CI ran it, the pre-commit hook passed --max-warnings=0 to the staged
+        // files, and the repository as a whole was never held to it: 35 warnings
+        // had accumulated where nobody looked. A check that cannot fail is the
+        // defect class this audit keeps finding, applied to the checker itself.
+        const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf-8'));
+
+        expect(pkg.scripts.lint).toContain('--max-warnings=0');
+    });
+
+    it('and every raw <img> in the app says why it is not next/image — #383', () => {
+        // Two remain and only one is legitimate: a blob: preview the image
+        // optimiser cannot resolve. Requiring the disable comment means the
+        // next one has to be argued for rather than merely tolerated.
+        const offenders = FILES
+            .filter((p) => p.endsWith('.tsx'))
+            .filter((p) => {
+                const src = code(p);
+                const at = src.indexOf('<img');
+                if (at === -1) return false;
+                // The raw text, not the stripped source: the justification IS a
+                // comment, so it only exists before stripping.
+                return !/eslint-disable(-next-line)?\s+@next\/next\/no-img-element/.test(text(p));
+            })
+            .map(rel);
+
+        expect(offenders).toEqual([]);
     });
 });

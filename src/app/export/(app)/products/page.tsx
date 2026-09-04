@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { Package, Plus, Clock, CheckCircle2, XCircle, Trash2, Loader2 } from "lucide-react";
 import { getUserExportProductsAction, deleteExportProductAction } from "@/app/actions/export-products";
 import { useToast } from "@/contexts/ToastContext";
@@ -106,12 +107,31 @@ export default function MyExportProductsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {products.map((product) => (
                         <div key={product.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col hover:shadow-md transition-shadow duration-300">
-                            {product.images && product.images.length > 0 && (
+                            {/*
+                              * #383: this was one of only two raw image
+                              * elements left in the app — the other is a
+                              * blob-preview that has to stay — and it was the
+                              * odd copy of the marketplace's own tile. (The
+                              * element name is described rather than written
+                              * out: a ratchet greps for it, and a comment
+                              * quoting it would trip that gate on itself.)
+                              * The http(s)
+                              * guard is that tile's, and it is load-bearing:
+                              * next/image THROWS on a src that is not an
+                              * absolute URL or a leading-slash path, so a row
+                              * carrying a bare storage key would have broken
+                              * the whole grid rather than showing one gap.
+                              */}
+                            {product.images?.[0]
+                                && (product.images[0].startsWith("http://") || product.images[0].startsWith("https://")) && (
                                 <div className="relative h-48 w-full bg-slate-50 overflow-hidden border-b border-slate-100 shrink-0">
-                                    <img
+                                    <Image
                                         src={product.images[0]}
                                         alt={product.name}
-                                        className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+                                        fill
+                                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                                        className="object-cover hover:scale-105 transition-transform duration-500"
+                                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                                     />
                                     {product.isActive && (
                                         <span className="absolute top-3 left-3 text-[10px] font-bold bg-green-500 text-white px-2 py-0.5 rounded-full shadow-sm uppercase tracking-wider">

@@ -22,6 +22,14 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // GENERATED, AND IT WAS BEING LINTED — #383.
+    //
+    // `jest --coverage` writes an HTML report here containing three vendored
+    // scripts (block-navigation.js, prettify.js, sorter.js). Linting somebody
+    // else's minified reporter tells us nothing and, because the report only
+    // exists after a coverage run, made `eslint .` give different answers on
+    // different machines. .gitignore already excludes it.
+    "coverage/**",
     // `scripts/**` USED TO BE IGNORED HERE — #328.
     //
     // The rationale was "One-off admin/maintenance scripts — not app code".

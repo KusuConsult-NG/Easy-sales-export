@@ -252,6 +252,22 @@ export default function CreateExportProductPage() {
                                     const previewUrl = URL.createObjectURL(file);
                                     return (
                                         <div key={idx} className="relative aspect-square bg-slate-50 border border-slate-200 rounded-xl overflow-hidden group shadow-xs">
+                                            {/*
+                                              * A RAW <img> ON PURPOSE — #383.
+                                              *
+                                              * previewUrl is a blob: URL from
+                                              * URL.createObjectURL, pointing at
+                                              * a File the browser is holding
+                                              * before upload. next/image sends
+                                              * the src to the server-side
+                                              * optimiser, which cannot resolve
+                                              * a blob: URL that exists only in
+                                              * this tab — every preview would
+                                              * be broken. There is nothing to
+                                              * optimise here anyway: the bytes
+                                              * are already local.
+                                              */}
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
                                             <img
                                                 src={previewUrl}
                                                 alt={file.name}
