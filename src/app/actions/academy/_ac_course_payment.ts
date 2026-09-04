@@ -17,6 +17,16 @@ import type { Course, UserProgress } from "@/lib/types/academy-actions";
 /**
  * Initialize Payment for a Course
  */
+/**
+ *   #368 THE BETTER OF THE TWO PER-COURSE INITIATORS, AND ALSO UNREACHABLE.
+ *
+ *        It takes only a courseId and derives the price from the course
+ *        document, so the browser cannot name the amount — the shape
+ *        _payment.ts's initializeEnrollmentPaymentAction should have had. No
+ *        component calls either of them. See the #368 note in
+ *        src/app/actions/academy/_payment.ts for the whole picture and the
+ *        owner decision.
+ */
 async function _initializeCoursePaymentAction(courseId: string): Promise<ActionResponse<any>> {
     try {
         const sessionResult = await requireSession();

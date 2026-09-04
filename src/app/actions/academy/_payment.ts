@@ -78,6 +78,45 @@ export type PaymentInitState =
 /**
  * Initialize Paystack Payment for Course Enrollment
  * Creates a payment session and returns authorization URL
+ *
+ *   #368 NO COMPONENT CALLS THIS, AND THE AMOUNT IT CHARGES COMES FROM THE
+ *        BROWSER.
+ *
+ *        Two facts, and the second only matters because of the first.
+ *
+ *        UNREACHABLE. Nothing under src/app or src/components calls
+ *        initializeEnrollmentPaymentAction — the only mentions outside this
+ *        file are the academy barrel and a comment in the payment callback
+ *        page. Its sibling initializeCoursePaymentAction
+ *        (_ac_course_payment.ts) is unreachable too. So there is no way, in
+ *        the product, to start a per-course payment; the live enrolment path
+ *        is enrollInCourseAction, which grants access from the learner's
+ *        academy PLAN against the course TIER and never looks at
+ *        `course.price` at all.
+ *
+ *        Both VERIFIERS are reachable: verifyEnrollmentPaymentAction from
+ *        /api/academy/verify-payment, and verifyCoursePaymentAction from
+ *        /academy/payment/callback. Two doors stand open to verify a payment
+ *        nothing can start.
+ *
+ *        THE AMOUNT IS THE CALLER'S. `amount` is a parameter, validated only
+ *        as `>= 1000`. The course price is read at VERIFICATION — after the
+ *        charge — and a mismatch is refused there. So the shape is: charge
+ *        whatever the browser said, then decline to enrol if it was wrong.
+ *        That refuses a tampering caller correctly, and it also refuses the
+ *        honest learner whose page was rendered before an admin edited the
+ *        price. Either way the platform holds money it will not act on, and
+ *        no refund is issued on that path.
+ *
+ *        _ac_course_payment.ts's initiator takes only a courseId and derives
+ *        the price server-side, which is the right shape. Left as it is
+ *        rather than repaired, because repairing an unreachable initiator
+ *        would be guessing at which of the two the product means to keep.
+ *
+ *        OWNER DECISION: per-course purchase is half-built. Either wire ONE
+ *        initiator to the course page and retire the other, or retire the
+ *        pair — and with them the `price` field, which today is charged by
+ *        nothing a learner can reach.
  */
 export async function initializeEnrollmentPaymentAction(
     courseId: string,

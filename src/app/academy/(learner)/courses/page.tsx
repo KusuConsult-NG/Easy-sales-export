@@ -23,6 +23,7 @@ import { getCoursesAction, getEnrolledCoursesWithDetailsAction, enrollInCourseAc
 import { useToast } from "@/contexts/ToastContext";
 import BackButton from "@/components/ui/BackButton";
 import { checkCourseAccess } from "@/lib/academy-plan";
+import { formatCurrency } from "@/lib/utils";
 
 
 
@@ -379,7 +380,17 @@ export default function CourseCatalogPage() {
                                                 <span>Instructor: {course.instructor}</span>
                                                 {course.price > 0 && (
                                                     <span className="text-slate-900 font-bold text-sm">
-                                                        ${course.price} Value
+                                                        {/*
+                                                          * #368. This read `${course.price} Value` — a literal dollar
+                                                          * sign in front of a number the platform charges as NAIRA.
+                                                          * _ac_course_payment.ts sends Math.round(course.price * 100)
+                                                          * to Paystack as kobo, so the same figure is billed in ₦ and
+                                                          * shown in $. The export module's `$` really is USD and is
+                                                          * converted at usdToNgn (export-payment.ts); academy has no
+                                                          * such conversion, and its own application page already
+                                                          * writes plan fees as ₦.
+                                                          */}
+                                                        {formatCurrency(course.price)} Value
                                                     </span>
                                                 )}
                                             </div>
