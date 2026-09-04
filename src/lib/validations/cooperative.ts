@@ -17,6 +17,15 @@ import { dateSchema, addressSchema, bankDetailsSchema } from "./shared";
  *
  * This file is kept for legacy Firestore document validation only (data scrubbing).
  * If you need to validate form input, import from src/lib/types/cooperative.ts.
+ *
+ *   #369 MEASURED: NOTHING IMPORTS THIS FILE — not for data scrubbing, not for
+ *        anything. The note above says what it is "kept for"; the reachability
+ *        walk says nothing does that with it. It is one of three orphaned
+ *        schema modules, alongside validations/escrow.ts and types/db-schemas.ts,
+ *        both of which contradicted the live rule they duplicate. This one does
+ *        not contradict anything — its nested shape is documented as
+ *        deliberately different — so it is left exactly as it is, with the
+ *        reachability fact added so "kept for X" is not read as "used for X".
  */
 
 export const CooperativeOnboardingSchema = z.object({

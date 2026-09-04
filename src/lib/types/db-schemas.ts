@@ -2,6 +2,35 @@ import { z } from 'zod';
 import { PAYMENT_STATUS } from './firestore';
 
 /**
+ *   #369 NOTHING IMPORTS THIS FILE. It is a THIRD statement of the user
+ *        document shape, after lib/schemas.ts (the live one, imported by the
+ *        auth and action layers) and lib/canonical/schemas.ts (recorded as dead
+ *        by #355).
+ *
+ *        Two of its statements already disagree with the live ones:
+ *
+ *          parseUserDoc            its refusal path returned the unvalidated
+ *                                  input — see the note on the function.
+ *          membershipStatus        enumerates pending|active|approved|rejected|
+ *                                  suspended. The live union in
+ *                                  lib/types/firestore.ts line 133 also has
+ *                                  "under_review", which the cooperative
+ *                                  application flow writes. A member sitting in
+ *                                  review would fail this schema.
+ *
+ *        The membershipStatus list is NOT derived here, because there is no
+ *        runtime constant to derive it from: firestore.ts states it as a
+ *        TypeScript union, which does not exist at run time. Adding the missing
+ *        value would leave two hand-written lists agreeing by luck. Recorded
+ *        instead.
+ *
+ *        OWNER DECISION: adopt these schemas at the read boundary — which means
+ *        first promoting the cooperative membership statuses to a runtime
+ *        constant, the way ESCROW_STATUSES and ORDER_STATUSES already are — or
+ *        retire the file.
+ */
+
+/**
  * Zod schema for canonical User document stored in `users` table or `raw_data`
  */
 export const UserDocumentSchema = z.object({
@@ -79,6 +108,30 @@ export type WalletDocument = z.infer<typeof WalletDocumentSchema>;
 /**
  * Type-safe user document parser
  * Safely parses raw database JSONB output into a typed UserDocument.
+ *
+ *   #369 ITS FAILURE PATH RETURNED THE UNVALIDATED INPUT.
+ *
+ *        The rejected branch built a "sanitized object with defaults" and then
+ *        ended with
+ *
+ *            ...(raw as object),
+ *
+ *        which spreads the raw input back OVER those defaults. So every field
+ *        the schema had just refused — including whichever one caused the
+ *        failure — was reinstated, and the caller received it typed as a
+ *        validated UserDocument. A parser named "type-safe" whose refusal path
+ *        hands back exactly what it refused.
+ *
+ *        Same family as #245 (a kill switch that failed OPEN on a database
+ *        error), #112 (an amount check that failed open when the amount was
+ *        unreadable) and #365 (a permission whose refusal a role literal
+ *        forgave): a control whose refusal leads somewhere other than a
+ *        refusal.
+ *
+ *        It THROWS now, which is what the function's own first branch already
+ *        does for a non-object, and the only behaviour that makes the name
+ *        true. Nothing imports this file, so nothing changes today — which is
+ *        precisely why it is worth fixing before something does.
  */
 export function parseUserDoc(raw: unknown): UserDocument {
     if (!raw || typeof raw !== 'object') {
@@ -88,14 +141,9 @@ export function parseUserDoc(raw: unknown): UserDocument {
     if (result.success) {
         return result.data;
     }
-    // Return sanitized object with defaults if parse contains unexpected types
-    const fallbackId = (raw as any).id || (raw as any).uid || 'unknown';
-    return {
-        id: String(fallbackId),
-        email: String((raw as any).email || ''),
-        roles: Array.isArray((raw as any).roles) ? (raw as any).roles : ['general_user'],
-        isVerified: Boolean((raw as any).isVerified || (raw as any).verified),
-        onboardingCompleted: Boolean((raw as any).onboardingCompleted),
-        ...(raw as object),
-    };
+    throw new TypeError(
+        `[db-schemas] Document does not match UserDocumentSchema: ${result.error.issues
+            .map((i) => `${i.path.join('.') || '(root)'} ${i.message}`)
+            .join('; ')}`,
+    );
 }
