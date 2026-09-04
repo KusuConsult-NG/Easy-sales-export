@@ -3,6 +3,7 @@
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { hashData } from "@/lib/security";
 import { resolveBankAccount } from "@/lib/bank-account-resolve";
+import { bankAccountResolutionStamp } from "@/lib/bank-account-provenance";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
@@ -95,6 +96,10 @@ export async function submitExportOnboardingAction(
             ...validatedData.bank,
             accountName: bankResolution.accountName ?? "",
             verified: true,
+            // #208. `verified: true` is what the SIMULATED flow wrote too, so
+            // it cannot be the evidence. The stamp records that the name came
+            // from the bank, and it is what the payout path checks.
+            ...bankAccountResolutionStamp(),
         };
 
         const idDocument = formData.get("idDocument");
@@ -657,6 +662,10 @@ export async function resubmitExportApplicationAction(
             ...validatedData.bank,
             accountName: bankResolution.accountName ?? "",
             verified: true,
+            // #208. `verified: true` is what the SIMULATED flow wrote too, so
+            // it cannot be the evidence. The stamp records that the name came
+            // from the bank, and it is what the payout path checks.
+            ...bankAccountResolutionStamp(),
         };
 
         const batch = db.batch();

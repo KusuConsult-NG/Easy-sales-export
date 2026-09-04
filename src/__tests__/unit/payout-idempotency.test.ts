@@ -28,6 +28,20 @@ jest.mock('@/lib/logger', () => ({
 
 const ACCOUNT = { accountNumber: '0123456789', bankCode: '058', accountName: 'A Member' };
 
+/**
+ * The stored record the account came from — #208's fifth parameter.
+ *
+ * paystackPayout refuses a payout to an account this codebase never resolved
+ * against the bank, because a record from before #284 stores whatever the
+ * applicant typed as the confirmed holder name. Every call in THIS suite is
+ * about idempotency and indeterminacy, so it passes a CONFIRMED record; the
+ * refusal itself is pinned in bank-account-provenance-gates-payouts.test.ts.
+ */
+const CONFIRMED: Record<string, unknown> = {
+    accountNameSource: 'bank_resolve',
+    accountResolvedAt: '2026-01-01T00:00:00.000Z',
+};
+
 let calls: Array<{ url: string; body: any }>;
 let realFetch: typeof globalThis.fetch;
 
@@ -90,7 +104,7 @@ describe('#249 — the reference is the idempotency key', () => {
         happyPath();
         const { paystackPayout } = await transfers();
 
-        const res = await paystackPayout(ACCOUNT, 5000, 'Wallet withdrawal', 'WALLET-txn-1');
+        const res = await paystackPayout(ACCOUNT, 5000, 'Wallet withdrawal', 'WALLET-txn-1', CONFIRMED);
 
         expect(res.success).toBe(true);
         expect(transferBody().reference).toBe('WALLET-txn-1');
@@ -103,12 +117,12 @@ describe('#249 — the reference is the idempotency key', () => {
         const { paystackPayout } = await transfers();
 
         happyPath();
-        await paystackPayout(ACCOUNT, 5000, 'Wallet withdrawal', 'WALLET-txn-1');
+        await paystackPayout(ACCOUNT, 5000, 'Wallet withdrawal', 'WALLET-txn-1', CONFIRMED);
         const first = transferBody().reference;
 
         calls = [];
         happyPath();
-        await paystackPayout(ACCOUNT, 5000, 'Wallet withdrawal', 'WALLET-txn-1');
+        await paystackPayout(ACCOUNT, 5000, 'Wallet withdrawal', 'WALLET-txn-1', CONFIRMED);
 
         expect(transferBody().reference).toBe(first);
     });
@@ -121,7 +135,7 @@ describe('#249 — the reference is the idempotency key', () => {
         queue.push(refused('Transfer reference must be unique'));
 
         const { paystackPayout } = await transfers();
-        const res = await paystackPayout(ACCOUNT, 5000, 'Wallet withdrawal', 'WALLET-txn-1');
+        const res = await paystackPayout(ACCOUNT, 5000, 'Wallet withdrawal', 'WALLET-txn-1', CONFIRMED);
 
         expect(res.success).toBe(false);
         expect(res.duplicate).toBe(true);
@@ -130,7 +144,7 @@ describe('#249 — the reference is the idempotency key', () => {
 
     it('refuses an empty reference rather than inventing one', async () => {
         const { paystackPayout } = await transfers();
-        const res = await paystackPayout(ACCOUNT, 5000, 'Wallet withdrawal', '   ');
+        const res = await paystackPayout(ACCOUNT, 5000, 'Wallet withdrawal', '   ', CONFIRMED);
 
         expect(res.success).toBe(false);
         expect(calls).toHaveLength(0);   // no money left the building
@@ -172,7 +186,7 @@ describe('#250 — "it failed" versus "we do not know"', () => {
         queue.push(new Error('ECONNRESET: socket hang up'));
 
         const { paystackPayout } = await transfers();
-        const res = await paystackPayout(ACCOUNT, 5000, 'Wallet withdrawal', 'WALLET-txn-1');
+        const res = await paystackPayout(ACCOUNT, 5000, 'Wallet withdrawal', 'WALLET-txn-1', CONFIRMED);
 
         expect(res.success).toBe(false);
         expect(res.indeterminate).toBe(true);
@@ -183,7 +197,7 @@ describe('#250 — "it failed" versus "we do not know"', () => {
         queue.push({ ok: false, status: 503, json: async () => ({ status: false, message: 'Service unavailable' }) });
 
         const { paystackPayout } = await transfers();
-        const res = await paystackPayout(ACCOUNT, 5000, 'Wallet withdrawal', 'WALLET-txn-1');
+        const res = await paystackPayout(ACCOUNT, 5000, 'Wallet withdrawal', 'WALLET-txn-1', CONFIRMED);
 
         expect(res.indeterminate).toBe(true);
     });
@@ -193,7 +207,7 @@ describe('#250 — "it failed" versus "we do not know"', () => {
         queue.push(refused('Your balance is not enough to fulfil this request'));
 
         const { paystackPayout } = await transfers();
-        const res = await paystackPayout(ACCOUNT, 5000, 'Wallet withdrawal', 'WALLET-txn-1');
+        const res = await paystackPayout(ACCOUNT, 5000, 'Wallet withdrawal', 'WALLET-txn-1', CONFIRMED);
 
         expect(res.success).toBe(false);
         expect(res.indeterminate).toBeFalsy();
@@ -204,7 +218,7 @@ describe('#250 — "it failed" versus "we do not know"', () => {
         queue.push(refused('Invalid account number'));
 
         const { paystackPayout } = await transfers();
-        const res = await paystackPayout(ACCOUNT, 5000, 'Wallet withdrawal', 'WALLET-txn-1');
+        const res = await paystackPayout(ACCOUNT, 5000, 'Wallet withdrawal', 'WALLET-txn-1', CONFIRMED);
 
         expect(res.success).toBe(false);
         expect(res.indeterminate).toBeFalsy();
@@ -215,7 +229,7 @@ describe('#250 — "it failed" versus "we do not know"', () => {
         queue.push(new Error('ETIMEDOUT'));
 
         const { paystackPayout } = await transfers();
-        const res = await paystackPayout(ACCOUNT, 5000, 'Wallet withdrawal', 'WALLET-txn-1');
+        const res = await paystackPayout(ACCOUNT, 5000, 'Wallet withdrawal', 'WALLET-txn-1', CONFIRMED);
 
         expect(res.success).toBe(false);
         expect(calls.some(c => c.url.endsWith('/transfer'))).toBe(false);
@@ -245,7 +259,7 @@ describe('#251 — the amount, before it is sent', () => {
         ['sub-kobo', 0.001],
     ])('REFUSES %s WITHOUT CALLING PAYSTACK', async (_label, amount) => {
         const { paystackPayout } = await transfers();
-        const res = await paystackPayout(ACCOUNT, amount as number, 'Wallet withdrawal', 'WALLET-txn-1');
+        const res = await paystackPayout(ACCOUNT, amount as number, 'Wallet withdrawal', 'WALLET-txn-1', CONFIRMED);
 
         expect(res.success).toBe(false);
         expect(res.error).toMatch(/amount/i);
@@ -255,7 +269,7 @@ describe('#251 — the amount, before it is sent', () => {
     it('still converts a valid amount to kobo', async () => {
         happyPath();
         const { paystackPayout } = await transfers();
-        await paystackPayout(ACCOUNT, 1234.56, 'Wallet withdrawal', 'WALLET-txn-1');
+        await paystackPayout(ACCOUNT, 1234.56, 'Wallet withdrawal', 'WALLET-txn-1', CONFIRMED);
 
         expect(transferBody().amount).toBe(123456);
     });
@@ -267,7 +281,7 @@ describe('the ordinary payout still works', () => {
         happyPath();
         const { paystackPayout } = await transfers();
 
-        const res = await paystackPayout(ACCOUNT, 5000, 'Escrow release for order ORD-1', 'ESCROW-ORD-1');
+        const res = await paystackPayout(ACCOUNT, 5000, 'Escrow release for order ORD-1', 'ESCROW-ORD-1', CONFIRMED);
 
         expect(res).toMatchObject({ success: true, transferCode: 'TRF_1', reference: 'ESCROW-ORD-1' });
         expect(calls[0].url).toMatch(/\/transferrecipient$/);
@@ -280,7 +294,7 @@ describe('the ordinary payout still works', () => {
     it('falls back to a placeholder name when the account has none', async () => {
         happyPath();
         const { paystackPayout } = await transfers();
-        await paystackPayout({ ...ACCOUNT, accountName: '' }, 5000, 'x', 'REF-1');
+        await paystackPayout({ ...ACCOUNT, accountName: '' }, 5000, 'x', 'REF-1', CONFIRMED);
 
         expect(calls[0].body.name).toBe('Recipient');
     });
@@ -289,7 +303,7 @@ describe('the ordinary payout still works', () => {
         delete process.env.PAYSTACK_SECRET_KEY;
         const { paystackPayout } = await transfers();
 
-        const res = await paystackPayout(ACCOUNT, 5000, 'x', 'REF-1');
+        const res = await paystackPayout(ACCOUNT, 5000, 'x', 'REF-1', CONFIRMED);
         expect(res.success).toBe(false);
         expect(calls).toHaveLength(0);
     });

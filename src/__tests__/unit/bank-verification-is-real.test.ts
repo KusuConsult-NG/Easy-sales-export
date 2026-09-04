@@ -72,6 +72,7 @@
 import { describe, it, expect } from '@jest/globals';
 import { readdirSync, statSync, readFileSync } from 'fs';
 import { join } from 'path';
+import { stripComments } from '@/lib/testing/strip-comments';
 
 const SHARED = 'src/components/shared/BankAccountVerification.tsx';
 const STEP = 'src/app/marketplace/onboarding/steps/BankAccountStep.tsx';
@@ -203,6 +204,18 @@ describe('#284 — the step still cannot continue without a resolved name', () =
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+/**
+ * The signature the sweep looks for, in ONE place.
+ *
+ * #208. The sweep used this expression inline and its self-check below used a
+ * COPY of it, so weakening the sweep's regex left the self-check passing — the
+ * check asserting a copy rather than the thing, which is the trap that makes a
+ * vacuity guard itself vacuous.
+ */
+function looksSimulated(line: string): boolean {
+    return /simulat/i.test(line);
+}
+
 describe('#284 — nothing else in the app simulates a verification', () => {
     /**
      * Derived, because the defect was a demo shortcut left in production and
@@ -218,37 +231,62 @@ describe('#284 — nothing else in the app simulates a verification', () => {
     });
 
     it('NO FILE FAKES A VERIFICATION OR RESOLUTION RESULT', () => {
+        /**
+         * #208 THIS SWEEP SCANS CODE, NOT PROSE — and it did not, twice.
+         *
+         * It read the RAW file, so every write-up describing the defect was an
+         * offender. The two exemptions it grew were both that: lib/logistics.ts
+         * (a header saying "Simulates carrier updates", which is a declared
+         * placeholder, not a fake result) and a "finding marker near the line"
+         * heuristic added by #346 after the scan hit lib/bank-account-resolve.ts
+         * quoting what #284 removed. #208's own comments then tripped it a third
+         * time, because the marker list knew about #284 and #346 and not #208 —
+         * a sweep chasing finding numbers is a sweep that fails on the next one.
+         *
+         * The target was always a simulated verification IN CODE, and stripping
+         * comments states that directly. THE ORIGINAL DEFECT IS STILL CAUGHT:
+         *
+         *     const simulatedName = "SIMULATED ACCOUNT NAME";
+         *     const newAccountName = accountName || "SIMULATED ACCOUNT NAME";
+         *
+         * the identifier and the string literal both survive the strip. What
+         * does not survive is a paragraph explaining that they used to be here,
+         * which is the tombstone trap and never was the thing to catch.
+         */
         const offenders: string[] = [];
 
         for (const f of files) {
-            raw(f).split('\n').forEach((line, i) => {
-                if (!/simulat/i.test(line)) return;
-                // This file's own write-up quotes the old code verbatim.
-                if (f.endsWith('bank-verification-is-real.test.ts')) return;
+            // This file's own write-up quotes the old code verbatim, in code
+            // position — the sample assignments above are inside a string in
+            // the surrounding comment, but the file also carries them in
+            // assertions. Kept as the one exemption.
+            if (f.endsWith('bank-verification-is-real.test.ts')) continue;
 
-                // lib/logistics.ts is a DECLARED placeholder: there is no
-                // carrier integration, and it says so in its own header rather
-                // than presenting invented tracking as a verification result.
-                // A missing feature that admits it is not this defect — this
-                // defect is a check that claims to have happened. Exempted
-                // explicitly rather than by loosening the pattern, so if it
-                // ever starts feeding a decision the exemption is visible.
-                if (f === 'src/lib/logistics.ts') return;
-                // The record of the defect, in the component that had it.
-                // #346 widened from /#284/ and made to consider the line
-                // itself: the scan hit this file's own successor module,
-                // lib/bank-account-resolve.ts, whose header quotes what #284
-                // removed. A finding marker near a "simulat" mention is the
-                // signature of a tombstone, not of a live simulation.
-                const before = raw(f).slice(0, raw(f).indexOf(line)).slice(-1200);
-                if (/#(284|346)/.test(before) || /#(284|346)/.test(line)) return;
+            codeOnly(f).split('\n').forEach((line, i) => {
+                if (!looksSimulated(line)) return;
                 offenders.push(`${f}:${i + 1}  ${line.trim().slice(0, 80)}`);
             });
         }
 
         // Was: shared/BankAccountVerification.tsx, "SIMULATED VERIFICATION
-        // (Requested for demo/testing)".
+        // (Requested for demo/testing)" over `const simulatedName = ...`.
         expect(offenders).toEqual([]);
+    });
+
+    it('AND THE SWEEP CAN STILL SEE THE DEFECT IT EXISTS FOR', () => {
+        // A comment-stripping sweep that had stopped matching anything at all
+        // would pass this suite for ever while catching nothing — the vacuity
+        // this whole file is built to avoid. Both forms #284 removed are
+        // checked against the same predicate the sweep uses.
+        const both = [
+            'const simulatedName = "SIMULATED ACCOUNT NAME";',
+            'const newAccountName = accountName || "SIMULATED ACCOUNT NAME";',
+        ];
+        for (const line of both) {
+            expect(looksSimulated(line)).toBe(true);
+        }
+        // ...and a comment describing them is NOT an offender.
+        expect(looksSimulated(stripComments('// the simulated flow wrote this'))).toBe(false);
     });
 });
 

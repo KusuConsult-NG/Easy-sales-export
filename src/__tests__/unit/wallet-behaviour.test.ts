@@ -93,6 +93,21 @@ jest.mock('@/lib/paystack-transfer', () => ({
 
 const smsWithdrawalApproved = jest.fn(async () => undefined);
 const smsWithdrawalRejected = jest.fn(async () => undefined);
+/**
+ * #208. The withdrawal REQUEST resolves its destination now.
+ *
+ * `bankDetails` is a parameter, and the action used to store it verbatim — so
+ * the money went to an account named in the request rather than one confirmed
+ * against the bank. The resolver is mocked to succeed here because these tests
+ * are about reservation and notification; the refusal path and the reversal it
+ * triggers are pinned in bank-account-provenance-gates-payouts.test.ts.
+ */
+const mockResolveBank = jest.fn() as jest.Mock<any>;
+jest.mock('@/lib/bank-account-resolve', () => ({
+    resolveBankAccount: (...a: any[]) => mockResolveBank(...a),
+    isPlausibleAccountNumber: () => true,
+}));
+
 jest.mock('@/lib/africastalking', () => ({
     smsWithdrawalApproved: (...a: unknown[]) => smsWithdrawalApproved(...(a as [])),
     smsWithdrawalRejected: (...a: unknown[]) => smsWithdrawalRejected(...(a as [])),
@@ -139,6 +154,8 @@ beforeEach(() => {
     debitWalletOnce.mockImplementation(async () => ({ ok: true, balance: 40_000 }));
     debitWalletLocked.mockImplementation(async () => ({ ok: true, balance: 45_000 }));
     claimStatusTransition.mockImplementation(async () => ({ claimed: true, status: null }));
+    // #208 — the withdrawal request resolves its destination now.
+    mockResolveBank.mockResolvedValue({ ok: true, accountName: 'A MEMBER' });
     paystackPayout.mockImplementation(async () => ({
         success: true, transferCode: 'TRF_1', reference: 'PAYOUT-REF-1',
     }));
@@ -452,6 +469,56 @@ describe('withdrawFromWalletAction', () => {
         expect(await withdraw()).toMatchObject({ success: false });
     });
 
+    it('#208 — REFUSES A DESTINATION THE BANK DOES NOT CONFIRM', async () => {
+        /**
+         * `bankDetails` is a PARAMETER. It was stored verbatim, so a wallet
+         * withdrawal went to an account named in the request and resolved by
+         * nobody — #284's defect on a third door, and a worse form of it.
+         */
+        mockResolveBank.mockResolvedValue({ ok: false, reason: 'Account not found' });
+
+        const res = await withdraw();
+
+        expect(res).toMatchObject({ success: false });
+        expect((res as any).error).toMatch(/account not found/i);
+        // Nothing was written: no withdrawal row for an account nobody confirmed.
+        expect(store.size(TXNS)).toBe(0);
+    });
+
+    it('#208 — AND GIVES THE MONEY BACK, because the debit already happened', async () => {
+        /**
+         * The reservation is taken BEFORE the resolve, so a refusal that simply
+         * returned would leave a member down the money with no withdrawal row —
+         * #299's shape, a failed step reporting over a wrong balance.
+         */
+        mockResolveBank.mockResolvedValue({ ok: false, reason: 'Account not found' });
+
+        await withdraw();
+
+        expect(debitWalletLocked).toHaveBeenCalledWith({ userId: BUYER, amount: 10_000 });
+        expect(creditWalletOnce).toHaveBeenCalledWith(
+            expect.objectContaining({ userId: BUYER, amount: 10_000 }),
+        );
+        // The reversal reference is derived from the request, not random, so a
+        // retry cannot refund twice (#249's rule).
+        const [{ reference }] = (creditWalletOnce.mock.calls as any[]).at(-1) as any[];
+        expect(String(reference)).toContain('WITHDRAW-REVERSAL-');
+    });
+
+    it('#208 — a reversal that does not apply is REPORTED, not swallowed', async () => {
+        // The member is down the money and there is no withdrawal row. Saying
+        // only "we could not confirm that account" would send them to check a
+        // balance that is quietly wrong.
+        mockResolveBank.mockResolvedValue({ ok: false, reason: 'Account not found' });
+        creditWalletOnce.mockImplementation(async () => ({ claimed: false, balance: 35_000 }));
+
+        const res = await withdraw();
+
+        expect(res).toMatchObject({ success: false });
+        expect((res as any).error).toMatch(/could not return the funds/i);
+        expect((res as any).error).toMatch(/support/i);
+    });
+
     it('RESERVES the money at request time, not at approval', async () => {
         // Otherwise the balance could be spent twice: once at checkout and again
         // when the withdrawal is approved.
@@ -459,10 +526,26 @@ describe('withdrawFromWalletAction', () => {
 
         expect(debitWalletLocked).toHaveBeenCalledWith({ userId: BUYER, amount: 10_000 });
         const [, txn] = store.all(TXNS)[0];
+        /**
+         * #208. `bankDetails: BANK` — the object the CALLER passed — is no
+         * longer what is stored, and that is the finding. The destination is
+         * resolved against the bank and the BANK'S holder name is recorded, so
+         * the fixture's "Ada Obi" is replaced by the resolver's answer. The
+         * number, code and bank name are the caller's and stay theirs; only the
+         * name they could invent is overwritten.
+         */
         expect(txn).toMatchObject({
             userId: BUYER, type: 'withdrawal', amount: -10_000,
-            status: 'pending', bankDetails: BANK,
+            status: 'pending',
+            bankDetails: {
+                accountNumber: BANK.accountNumber,
+                bankCode: BANK.bankCode,
+                bankName: BANK.bankName,
+                accountName: 'A MEMBER',
+                accountNameSource: 'bank_resolve',
+            },
         });
+        expect((txn as any).bankDetails.accountName).not.toBe(BANK.accountName);
     });
 
     it('records nothing when the balance does not cover it', async () => {

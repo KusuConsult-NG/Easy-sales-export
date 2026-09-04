@@ -193,6 +193,10 @@ async function _processWithdrawalAction(
                         // Stable across retries of THIS withdrawal (#249), so a
                         // manual re-run cannot become a second transfer.
                         payoutReference("WITHDRAW", withdrawalId),
+                        // #208 — the stored record, so its resolution stamp is
+                        // checked. A member onboarded through the simulated
+                        // verification has an account nobody confirmed.
+                        userData,
                     );
                     payoutSuccess = payoutResult.success;
                     payoutError = payoutResult.error;

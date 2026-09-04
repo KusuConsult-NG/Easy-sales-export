@@ -351,6 +351,8 @@ async function _approveLoanApplication(
                     // is disbursed once, and the reference is what enforces it
                     // at Paystack rather than only in our own records.
                     payoutReference("LOAN", applicationId),
+                    // #208 — the stored record, so its resolution stamp is checked.
+                    borrowerData,
                 );
 
                 if (disbResult.success) {

@@ -104,6 +104,16 @@ const NOT_A_LIST = [
 
     // A member writing their OWN bank details, on their own application or
     // withdrawal request. Nobody else's data is in scope.
+    //
+    // #208's re-verification action is the same shape and is triaged here
+    // deliberately rather than by loosening the scan. Every action in it is
+    // scoped to the session user and NONE takes a userId, so there is no
+    // argument through which another person's row could arrive; and the status
+    // read returns the last FOUR DIGITS of the account number, never the whole
+    // one — the member needs to recognise which account is on file, not to read
+    // it back. It exists because a held payout has to point somewhere (#362's
+    // shape), and it is a member's own record, not a list of other people's.
+    'src/app/actions/bank-account.ts',
     'src/app/actions/user.ts',                              // GDPR erase — FieldValue.delete()
     'src/app/actions/export/_ex_onboarding.ts',
     'src/app/actions/marketplace/_mp_onboarding.ts',

@@ -97,6 +97,11 @@ function setDocs({
                 totalAmount: 100_000,
                 roles: ['wave_participant'],
                 bankAccountNumber: '0123456789',
+                // #208 — the seller's account was confirmed against the bank.
+                // Without the stamp paystackPayout refuses the release, which
+                // is the point of that finding and not of this one.
+                accountNameSource: 'bank_resolve',
+                accountResolvedAt: '2026-01-01T00:00:00.000Z',
                 bankCode: '058',
                 bankAccountName: 'A Seller',
                 // Escrow-shaped fields. Only the escrow read uses them.
@@ -216,7 +221,10 @@ describe('_confirmDeliveryAction — releasing an escrow the admin already relea
         // The escrow's own netAmount — 95,000, seeded above — and a reference
         // derived from the order rather than a random one (#249).
         expect(mockPayout).toHaveBeenCalledWith(
-            expect.anything(), 95_000, expect.anything(), 'ESCROW-ord-1');
+            expect.anything(), 95_000, expect.anything(), 'ESCROW-ord-1',
+            // #208's fifth argument: the stored seller record whose
+            // resolution stamp paystackPayout checks before sending.
+            expect.anything());
     });
 });
 
@@ -266,7 +274,10 @@ describe('#254 — the payout figure comes from the escrow, not a literal', () =
         await confirm();
 
         expect(mockPayout).toHaveBeenCalledWith(
-            expect.anything(), 88_123, expect.anything(), 'ESCROW-ord-1');
+            expect.anything(), 88_123, expect.anything(), 'ESCROW-ord-1',
+            // #208's fifth argument: the stored seller record whose
+            // resolution stamp paystackPayout checks before sending.
+            expect.anything());
     });
 
     it('AND ON A MULTI-SELLER ORDER PAYS ONLY THIS SELLER\'S SHARE', async () => {

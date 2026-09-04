@@ -3,6 +3,7 @@
 import { requireSession } from "@/lib/session-guard";
 import { checkModuleAccess } from "@/lib/module-access-check";
 import { resolveBankAccount } from "@/lib/bank-account-resolve";
+import { bankAccountResolutionStamp } from "@/lib/bank-account-provenance";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { supabaseDb as db } from "@/lib/supabase-db";
@@ -300,7 +301,11 @@ async function _submitMarketplaceOnboardingAction(
         // submitted one is never stored. A buyer has no payout account, so
         // there is nothing to resolve and nothing here to be wrong.
         const bankAccountRecord = isSeller
-            ? { ...bankAccount, accountName: resolvedAccountName, verified: true }
+            // #208. The stamp, not `verified: true` — the simulated flow wrote
+            // that too, so a record carrying it proves nothing. This records
+            // that the name came from the BANK, and it is what the payout path
+            // checks before money moves.
+            ? { ...bankAccount, accountName: resolvedAccountName, verified: true, ...bankAccountResolutionStamp() }
             : bankAccount;
 
         const categoriesParsed = parseJsonField<string[]>("sellerCategories", []);

@@ -6,9 +6,10 @@ import { motion } from "framer-motion";
 import {
     User, Mail, Phone, MapPin, Shield, Bell,
     LogOut, Camera, Save, Lock, CheckCircle, Upload, FileText,
-    AlertCircle, Loader2
+    AlertCircle, Loader2, Landmark
 } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 import { useToast } from "@/contexts/ToastContext";
 
 import { getUserProfileAction, updateUserProfileAction, updateNotificationPreferencesAction } from "@/app/actions/profile";
@@ -563,6 +564,20 @@ export default function ProfilePage() {
                                 <Bell className="w-4 h-4" />
                                 Preferences
                             </button>
+                            {/*
+                              * #208. The payout account lives on its own screen
+                              * rather than as a fourth tab: it is the one thing
+                              * here a held payout links a member TO, and a
+                              * deep-linkable URL is what makes that instruction
+                              * followable.
+                              */}
+                            <Link
+                                href="/profile/bank-account"
+                                className="w-full flex items-center gap-3 px-6 py-4 text-sm font-medium transition-colors text-slate-600 hover:bg-slate-50 border-l-4 border-transparent"
+                            >
+                                <Landmark className="w-4 h-4" />
+                                Payout Bank Account
+                            </Link>
                         </div>
                     </div>
 

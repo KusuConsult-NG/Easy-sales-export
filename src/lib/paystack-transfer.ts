@@ -8,6 +8,11 @@
  */
 
 import { logger } from "@/lib/logger";
+import {
+    isResolvedBankAccount,
+    UNRESOLVED_ACCOUNT_REFUSAL,
+    type MaybeResolvedBankAccount,
+} from "@/lib/bank-account-provenance";
 
 const PAYSTACK_BASE = paystackBaseUrl();
 
@@ -244,15 +249,32 @@ export async function initiateTransfer(
  *                     this used to be absent, and a random one was invented per
  *                     attempt, so a retry paid the payee a second time.
  *
+ * @param source       The STORED bank record the account was built from. Its
+ *                     resolution stamp is checked before anything is sent —
+ *                     see #208 below.
+ *
  * On failure, read `indeterminate` before deciding what to do. `false` means
  * nothing was sent and the record may safely be reopened; `true` means the
- * money may already have moved and it MUST NOT be.
+ * money may already have moved and it MUST NOT be. A refusal for an
+ * unconfirmed account is never indeterminate: it happens before any request.
  */
 export async function paystackPayout(
     account: BankAccount,
     amountNaira: number,
     reason: string,
-    reference: string
+    reference: string,
+    /**
+     * #208. The STORED bank record this `account` was built from, so the
+     * provenance of its holder name can be checked.
+     *
+     * REQUIRED, and required on purpose: a payout path that forgot it would be
+     * a payout path with no check, and this parameter makes that a compile
+     * error rather than a silent hole. It is the stored record rather than a
+     * boolean for the same reason — a boolean would be computed at five call
+     * sites, and five copies of one rule is the shape this codebase keeps
+     * having to unpick.
+     */
+    source: MaybeResolvedBankAccount,
 ): Promise<TransferResult> {
     // Checked before the recipient call, so an invalid amount costs no round
     // trip and creates no recipient — initiateTransfer checks it again because
@@ -264,6 +286,37 @@ export async function paystackPayout(
     }
     if (!String(reference ?? "").trim()) {
         return { success: false, error: "A payout reference is required" };
+    }
+
+    /**
+     * #208 THE ACCOUNT MUST HAVE BEEN CONFIRMED AGAINST THE BANK.
+     *
+     * AFTER the amount and reference checks and before anything is sent. Those
+     * two are caller bugs and deserve their own precise diagnostic (#249, #251
+     * pin the messages); this one is an operational state an admin must act on,
+     * and it is the last gate before the network.
+     *
+     * Both onboarding flows used to SIMULATE verification, storing whatever the
+     * applicant typed as the confirmed holder name over an account number
+     * nobody resolved (#284). A record from that era is byte-identical to a
+     * properly resolved one — both say `verified: true` — so the only honest
+     * test is the stamp lib/bank-account-provenance.ts writes when the
+     * resolution actually happens.
+     *
+     * Paystack will happily pay a real account number belonging to somebody
+     * else. That is exactly what the simulated flow allowed to be entered, and
+     * it is why this refuses rather than trying and hoping.
+     *
+     * THE CHECK IS HERE, NOT AT THE FIVE CALL SITES. Every payout in the
+     * platform — withdrawals, loan disbursement, order release, WAVE
+     * withdrawals, wallet — comes through this function, and a sixth one added
+     * later gets the check without anybody remembering to add it.
+     */
+    if (!isResolvedBankAccount(source)) {
+        logger.error(
+            `[PaystackTransfer] refusing a payout to an unconfirmed account (ref ${reference})`,
+        );
+        return { success: false, error: UNRESOLVED_ACCOUNT_REFUSAL };
     }
 
     // 1. Create recipient (Paystack deduplicates, so this is safe to call repeatedly)

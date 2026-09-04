@@ -508,6 +508,17 @@ async function _processWaveWithdrawalAction(data: {
                  // compare-and-swap above stops a double payout from OUR side;
                  // the reference is what stops one from Paystack's.
                  payoutReference("WAVE", withdrawalId),
+                 /**
+                  * #208 — the record the account was read from, so its
+                  * resolution stamp is checked.
+                  *
+                  * The stamp is written onto `bankDetails` by whichever flow
+                  * resolved the account, and extractCanonicalUser is what
+                  * knows where this module's bank block lives, so the check
+                  * must read the same object the account came from rather than
+                  * the raw user row.
+                  */
+                 canonical.bankDetails,
             );
 
             if (!payoutResult.success) {

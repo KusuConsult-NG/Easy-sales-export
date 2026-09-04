@@ -40,6 +40,11 @@ export const PUBLIC_PATHS = [
 // (dedicated domains, where the module prefix is stripped before matching).
 export const PROTECTED_PATHS = [
     "/dashboard",
+    // #208 — the payout-account screen. Its actions are scoped to the caller's
+    // own session, so this is not the access control; it is here so a member
+    // following a "confirm your bank account" instruction while signed out
+    // lands back on it rather than on /dashboard.
+    "/profile/bank-account",
     // Wave
     "/wave/briefing",
     "/wave/application",

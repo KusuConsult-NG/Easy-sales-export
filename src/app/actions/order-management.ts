@@ -569,6 +569,9 @@ async function _confirmDeliveryAction(orderId: string) { let sessionResult;
                     // released once; the reference is what makes Paystack refuse
                     // a second transfer rather than honouring it.
                     payoutReference("ESCROW", orderId),
+                    // #208 — the seller's stored record, so its resolution
+                    // stamp is checked before their escrow is released.
+                    bankDetails,
                 );
 
                 await orderRef.update({ escrowReleased: res.success,

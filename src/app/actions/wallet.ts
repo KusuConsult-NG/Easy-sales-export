@@ -19,6 +19,8 @@ import { recordAdminAction } from "@/lib/audit-log";
 import { getBaseUrl } from "@/lib/server-utils";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { creditWalletOnce, debitWalletOnce, debitWalletLocked } from "@/lib/wallet-ledger";
+import { resolveBankAccount } from "@/lib/bank-account-resolve";
+import { bankAccountResolutionStamp } from "@/lib/bank-account-provenance";
 import { claimStatusTransition } from "@/lib/status-transition";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import type { Wallet, WalletTransaction } from "@/lib/types/marketplace";
@@ -535,7 +537,67 @@ async function _withdrawFromWalletAction(
         return { success: false as const, error: "Insufficient balance for withdrawal", data: null };
     }
 
-    const txnRef = db.collection(TXN_COLLECTION).doc();
+    // Minted before the resolve, so the reversal below and the row written
+    // afterwards share one id — the reversal reference is then stable across
+    // retries of THIS request rather than random (#249's rule).
+    const txnRefId = db.collection(TXN_COLLECTION).doc().id;
+
+    /**
+     *   #208 THE DESTINATION WAS WHATEVER THE CALLER SENT.
+     *
+     *        `bankDetails` is a PARAMETER. It was validated for shape and
+     *        stored verbatim onto the transaction, and the admin payout reads
+     *        it back and pays it — so a wallet withdrawal went to an account
+     *        named in the request, never to one confirmed against the bank.
+     *        That is #284's defect on a third door, and a worse form of it:
+     *        onboarding at least intended to verify.
+     *
+     *        The account is resolved here, the BANK'S name is what gets stored,
+     *        and the stamp goes on the snapshot so the payout can check it. The
+     *        debit above has already happened, so a refusal must give the money
+     *        back — see the reversal below.
+     */
+    const resolution = await resolveBankAccount(bankDetails.accountNumber, bankDetails.bankCode);
+    if (!resolution.ok) {
+        // The wallet was already debited. Put it back, or a member loses the
+        // money to a typo — #299's shape, where a failed step left a balance
+        // wrong and reported success.
+        const refund = await creditWalletOnce({
+            userId,
+            amount: amountNGN,
+            reference: `WITHDRAW-REVERSAL-${txnRefId}`,
+        });
+        // `claimed: false` means the credit was NOT applied by this call. For a
+        // fresh reversal reference that can only mean the write did not happen,
+        // so the member is down the money and there is no withdrawal row.
+        if (!refund.claimed) {
+            logger.error(
+                `[Wallet] withdrawal refused for ${userId} AND the reversal did not apply — `
+                + `₦${amountNGN} is debited with no withdrawal row.`,
+            );
+            return {
+                success: false as const,
+                error: "We could not confirm that bank account, and could not return the funds automatically. "
+                    + "Please contact support quoting your wallet balance.",
+                data: null,
+            };
+        }
+        return {
+            success: false as const,
+            error: resolution.reason
+                || "We could not confirm that bank account. Check the number and bank and try again.",
+            data: null,
+        };
+    }
+
+    const confirmedBankDetails = {
+        ...bankDetails,
+        // The bank's answer, never the caller's.
+        accountName: resolution.accountName ?? "",
+        ...bankAccountResolutionStamp(),
+    };
+
+    const txnRef = db.collection(TXN_COLLECTION).doc(txnRefId);
     await txnRef.set({
         walletId: userId,
         userId,
@@ -544,7 +606,7 @@ async function _withdrawFromWalletAction(
         balanceAfter: newBalance,
         description: `Withdrawal request — ₦${amountNGN.toLocaleString()} to ${bankDetails.bankName}`,
         status: "pending",          // Pending admin processing
-        bankDetails,
+        bankDetails: confirmedBankDetails,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
     });
@@ -803,6 +865,8 @@ async function _processWalletWithdrawalAction(
             // The same reference on every attempt at THIS withdrawal (#249), so
             // Paystack itself refuses a second transfer rather than honouring it.
             payoutReference("WALLET", transactionId),
+            // #208 — the stored bank block, so its resolution stamp is checked.
+            bankDetails,
         );
 
         if (!payoutRes.success) {
