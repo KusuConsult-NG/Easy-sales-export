@@ -10,6 +10,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { EXPORT_WINDOW_INVESTABLE_STATUSES } from "@/lib/export-window-status";
 import { checkCourseAccess } from "@/lib/academy-plan";
 import { isPlatformAdmin } from "@/lib/admin-permissions";
+import { normalisePhone } from "@/lib/phone";
 
 /**
  * Forensic data-integrity scan.
@@ -32,6 +33,16 @@ import { isPlatformAdmin } from "@/lib/admin-permissions";
  *
  * A fraud check that cannot fail is worse than no check: it produces a green
  * line in a report that an operator reads as assurance.
+ *
+ * A THIRD ONE — #372.
+ *
+ *   Marketplace "Phone Data Drift (Profile vs Verified)"
+ *       read `phoneNumber` on a seller_verifications row. Of the FOUR places
+ *       that create such a row, three write `phone`. So the value was undefined
+ *       and the row was skipped, then counted as agreement. And on the rows it
+ *       COULD read it compared raw strings, on a platform whose own lib/phone.ts
+ *       exists because the same number is stored in three formats. See the note
+ *       at the check itself.
  *
  * NOBODY CALLS THIS FILE
  * ----------------------
@@ -161,34 +172,93 @@ export async function runForensicScanAction(): Promise<
         } catch (e: any) { results.push({ module: "Marketplace", check: "Orphaned Product Scan", status: "fail", details: e.message, affectedIds: [] });
         }
 
-        // CHECK: Contact Drift (Profile Phone vs Verified Phone)
+        /**
+         * CHECK: Contact Drift (Profile Phone vs Verified Phone)
+         *
+         *   #372 THE THIRD CHECK IN THIS FILE THAT COULD NEVER FIND ANYTHING —
+         *        AND IT WOULD HAVE BEEN WRONG TWICE OVER IF IT HAD.
+         *
+         *        #331 found two. This is the third, and it fails in both of the
+         *        ways this audit keeps recording.
+         *
+         *        (a) IT READ A FIELD THREE OF THE FOUR CREATORS NEVER WRITE.
+         *            Four places create a seller_verifications row, and they
+         *            disagree about what the phone field is called:
+         *
+         *              api/marketplace/submit-verification/route.ts    phone
+         *              actions/marketplace/_mp_onboarding.ts           phone
+         *              actions/admin/_legacy.ts                        phone
+         *              actions/marketplace/_mp_seller_verification.ts  phoneNumber
+         *
+         *            This read `data.phoneNumber` alone — the spelling used by
+         *            exactly ONE of the four, and that one carries its own
+         *            comment saying "Form sends 'phone' (not 'phoneNumber')".
+         *            For a row from any of the other three — every seller who
+         *            submitted through the API route or the onboarding action,
+         *            and every legacy import — `verifiedPhone` was undefined,
+         *            the guarding `if` skipped the row, and it was silently
+         *            counted as no drift.
+         *
+         *        (b) AND IT COMPARED RAW STRINGS. `userPhone !== verifiedPhone`,
+         *            with no normalisation, on a platform where lib/phone.ts
+         *            exists precisely because the same number is stored as
+         *            `08012345678`, `2348012345678` and `+2348012345678` — its
+         *            own header says "registerAction normalises before it
+         *            writes... several OTHER writers put the raw value on the
+         *            same field". So on the rows it DID read, it would have
+         *            reported drift for a format difference, which is the
+         *            opposite error: #80's defect, inverted.
+         *
+         *            Either fault alone makes the answer meaningless. Together
+         *            they guarantee it: the rows it could read are the ones it
+         *            would misjudge.
+         *
+         *        Both spellings are read now, on both sides, through
+         *        normalisePhone. And a row with no comparable number on one
+         *        side is counted as UNREADABLE rather than as agreement —
+         *        #331's "inconclusive" exists for exactly this: a tool that
+         *        cannot tell "I looked and found nothing" from "I could not
+         *        look" is worse than no tool.
+         */
         try { const verifiedSellersSnapshot = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
                 .where("status", "==", "approved")
                 .limit(100)
                 .get();
 
             const driftedIds: string[] = [];
+            let comparable = 0;
+            let unreadable = 0;
 
             for (const doc of verifiedSellersSnapshot.docs) {
                 const data = doc.data();
                 const userId = data.userId;
-                const verifiedPhone = data.phoneNumber;
+                const verifiedPhone = normalisePhone(data.phoneNumber ?? data.phone);
 
-                if (userId && verifiedPhone) {
-                    const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-                    const userPhone = userDoc.data()?.phone;
+                if (!userId) { unreadable++; continue; }
 
-                    if (userPhone !== verifiedPhone) {
-                        driftedIds.push(userId);
-                    }
+                const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+                const u = userDoc.data();
+                // The same three spellings on the user row — see #371 on why
+                // `phoneNumber` and `kyc.phoneNumber` are both really there.
+                const userPhone = normalisePhone(u?.phone ?? u?.phoneNumber ?? u?.kyc?.phoneNumber);
+
+                if (!verifiedPhone || !userPhone) { unreadable++; continue; }
+
+                comparable++;
+                if (userPhone !== verifiedPhone) {
+                    driftedIds.push(userId);
                 }
             }
 
             results.push({
                 module: "Marketplace",
                 check: "Phone Data Drift (Profile vs Verified)",
-                status: driftedIds.length > 0 ? "warning" : "pass",
-                details: `Scanned ${verifiedSellersSnapshot.size} verifications. Found ${driftedIds.length} mismatches.`,
+                status: driftedIds.length > 0
+                    ? "warning"
+                    : (comparable === 0 && verifiedSellersSnapshot.size > 0 ? "inconclusive" : "pass"),
+                details: `Scanned ${verifiedSellersSnapshot.size} verifications: `
+                    + `${comparable} comparable, ${unreadable} with no usable number on one side. `
+                    + `Found ${driftedIds.length} mismatches.`,
                 affectedIds: driftedIds
             });
 
