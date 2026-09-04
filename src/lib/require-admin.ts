@@ -39,68 +39,63 @@ import { isAdmin, hasAdminPermission, type AdminPermission } from "@/lib/admin-p
  *        was one of five more copies of the same test. isAdmin() is now asked
  *        here, exactly as it is there.
  *
- *   #374 THE `permission` PARAMETER IS USED BY THREE OF THIRTY CALL SITES.
+ *   #374/#375 EVERY GATE NAMES ITS PERMISSION NOW — ONE EXCEPTION, STATED.
  *
  *        The docstring above says "Pass a permission to require more than 'is
- *        an admin at all'". Measured across the repository, two call sites did.
- *        #374 fixed two more, because in each case the SAME FILE already named
- *        the permission for the same workflow:
+ *        an admin at all'". #374 measured it: TWO of thirty call sites did. The
+ *        other twenty-eight admitted all ten admin roles, including the
+ *        withdrawal queue, legacy onboarding, land verification, export window
+ *        creation, every broadcast, all of maintenance and the hard-reset route.
  *
- *          _escrow_disputes.ts   _resolveDisputeAction released and refunded
- *                                ESCROW MONEY on requireAdmin(), while
- *                                _escalateDisputeAction — which only flags a
- *                                case for review — required
- *                                finance:resolve_disputes. The weaker gate was
- *                                on the action that moves the money, and the
- *                                live resolver in actions/disputes.ts had
- *                                already been fixed to demand the permission.
- *        AND ONE THAT LOOKED IDENTICAL AND WAS NOT. escalation-notes.ts reads a
- *        dispute's internal notes on a bare gate while its writer demands the
- *        permission — the same asymmetry. #374's first draft changed it, and
- *        #356's ratchet failed: #356 had already decided that one deliberately,
- *        because "narrowing the read alone would show a moderator the dispute
- *        with a hole in it". Reverted. An asymmetry between two gates is
- *        evidence, not a verdict.
+ *        #374 fixed the one that was not a judgement call — _resolveDisputeAction
+ *        released escrow money on a bare gate while its own file's escalate path
+ *        demanded finance:resolve_disputes — and RECORDED the rest, because
+ *        narrowing a live gate can lock out a role that is doing that work today.
  *
- *        THE OTHER TWENTY-SEVEN ARE RECORDED, NOT CHANGED. Every one of them
- *        currently admits all ten admin roles:
+ *        #375 TAKES THAT DECISION. Each gate now names the permission that
+ *        matches what the action does, chosen so the module admin who
+ *        legitimately runs a queue keeps running it:
  *
- *          admin-communications.ts  sendBulkEmail, createAnnouncement,
- *                                   getEmailHistory
- * *          sms-broadcast.ts         preview, send
- *          in-app-broadcast.ts      collectRecipientUserIds, preview, send
- *          diagnose-broadcast.ts    diagnoseBroadcastAction
- *          maintenance.ts           repairData, runConsistencyCheck,
- *                                   hardResetCache, cleanupAbandonedDrafts
- *          api/admin/maintenance/hard-reset  GET
- *          global-aggregation.ts    five metric readers
- *          admin-users.ts           getAdminUsers, assignDispute
- *          escalation-notes.ts      getEscalationNotes (deliberate — see above)
- *          export-aggregation.ts    createExportWindow
- *          admin/_land.ts           _verifyLandListing
- *          admin/_legacy.ts         _onboardLegacyMemberAction
- *          admin/_withdrawals.ts    _processWithdrawalAction
- *          marketplace/_escrow_lifecycle.ts  _releaseEscrowAction
+ *          announcements:manage         every broadcast surface — bulk email,
+ *          (admin, super_admin)         announcements, SMS, in-app, and the
+ *                                       broadcast diagnostic. These reach every
+ *                                       member; #202 already established that a
+ *                                       demoted admin must not.
+ *          config:update                maintenance's four repair/reset/cleanup
+ *          (admin, super_admin)         actions and the hard-reset route.
+ *          finance:process_withdrawals  _processWithdrawalAction. Money out.
+ *          (admin, super_admin)
+ *          finance:resolve_disputes     _releaseEscrowAction and
+ *          (admin, super_admin)         assignDisputeAction. Money out, and the
+ *                                       assignment of the case that moves it.
+ *          users:create                 _onboardLegacyMemberAction. It creates
+ *          (admin, super_admin)         accounts; #62 settled that admin holds
+ *                                       this.
+ *          export:approve_applications  createExportWindowAction. Deliberately
+ *          (+ export_admin)             includes export_admin — it is their
+ *                                       queue.
+ *          land:verify_listings         _verifyLandListing. Deliberately
+ *          (+ farm_nation_admin)        includes farm_nation_admin — theirs.
+ *          users:read                   getAdminUsersAction, which populates the
+ *          (all ten)                    dispute-assignee picker.
+ *          audit:read                   global-aggregation's five metric
+ *          (all ten)                    readers.
  *
- *        The matrix has a plausible permission for nearly all of them —
- *        land:verify_listings, finance:process_withdrawals, users:create,
- *        announcements:manage, config:update, export:approve_applications.
- *        They are NOT applied here because narrowing a live gate can lock out a
- *        role that is doing that work today, and which roles actually operate
- *        each queue is not something this codebase records. The one above was
- *        safe precisely because its own file had already answered.
+ *        The last two hold all ten roles, so they change no behaviour. They are
+ *        named anyway: an explicit, matrix-backed rule follows the matrix if it
+ *        is ever narrowed, where a bare gate would not.
  *
- *        NOT IN THAT LIST, THOUGH MY FIRST MEASUREMENT PUT IT THERE:
- *        actions/cms.ts. It declares its OWN local requireAdmin() returning
- *        `{id} | null` — live-role checked and failing closed on a read error —
- *        so its five calls never reach this module. Counting them here was a
- *        name-matched sweep reporting a reference that does not exist, which is
- *        the mistake #370's importer sweep exists to avoid.
+ *        THE ONE REMAINING BARE GATE IS DELIBERATE.
+ *        escalation-notes.ts::getEscalationNotesAction stays on requireAdmin().
+ *        #356 decided that, and recorded why: "narrowing the read alone would
+ *        show a moderator the dispute with a hole in it". getDisputeByIdAction
+ *        uses `isResolver` to decide HOW MUCH of a dispute to show rather than
+ *        whether to show it, so a moderator can legitimately open the screen.
+ *        #374's first draft "fixed" it and #356's ratchet caught the regression.
  *
- *        OWNER DECISION: assign a permission to each of the twenty-seven, or say
- *        that "any admin" is the intended rule for them. Related to the open
- *        decision from #364/#365 about the files that still state the admin
- *        rule by hand — same question, asked of the shared gate instead.
+ *        require-admin-names-its-permission.test.ts pins the count at 29 named
+ *        and exactly 1 bare, with that one named, so a new bare gate fails the
+ *        build.
  */
 export async function requireAdmin(permission?: AdminPermission): Promise<
     { userId: string } | { error: string }

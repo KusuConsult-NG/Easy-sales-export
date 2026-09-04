@@ -10,7 +10,7 @@ import { invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
  * across the entire administrative suite.
  */
 export async function GET() {
-    const authCheck = await requireAdmin();
+    const authCheck = await requireAdmin("config:update");
     if ("error" in authCheck) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

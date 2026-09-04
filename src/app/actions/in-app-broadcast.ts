@@ -98,7 +98,7 @@ async function resolveUsers(db: any, userIds: string[]) {
 
 export async function collectRecipientUserIds(
     filters: InAppBroadcastFilters
-): Promise<{ userId: string; name: string }[]> { const authCheck = await requireAdmin();
+): Promise<{ userId: string; name: string }[]> { const authCheck = await requireAdmin("announcements:manage");
     if ("error" in authCheck) throw new Error("Unauthorized: admin role required");
     const db = getAdminDb();
     const recipients: Map<string, { userId: string; name: string }> = new Map();
@@ -484,7 +484,7 @@ export async function collectRecipientUserIds(
  */
 export async function previewInAppBroadcastAction(
     filters: InAppBroadcastFilters
-): Promise<InAppBroadcastPreview> { const authCheck = await requireAdmin();
+): Promise<InAppBroadcastPreview> { const authCheck = await requireAdmin("announcements:manage");
     if ("error" in authCheck) return { success: false, error: "Unauthorized: admin role required", data: null };
     try { const recipients = await collectRecipientUserIds(filters);
         return {
@@ -510,7 +510,7 @@ export async function sendInAppBroadcastAction(
     type: NotificationType = "info",
     link?: string,
     linkText?: string
-): Promise<InAppBroadcastResult> { const authCheck = await requireAdmin();
+): Promise<InAppBroadcastResult> { const authCheck = await requireAdmin("announcements:manage");
     if ("error" in authCheck) return { success: false, error: "Unauthorized: admin role required", data: null };
     try { const db = getAdminDb();
         const recipients = await collectRecipientUserIds(filters);

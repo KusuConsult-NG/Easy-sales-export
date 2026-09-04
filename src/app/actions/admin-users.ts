@@ -21,7 +21,7 @@ export async function getAdminUsersAction(): Promise<ActionResponse<any[]>> { tr
         if (!sessionResult.session) return { success: false as const, error: "Unauthenticated", data: null };
 
         // Must be an admin to list other admins
-        const adminCheck = await requireAdmin();
+        const adminCheck = await requireAdmin("users:read");
         if ("error" in adminCheck) return { success: false as const, error: adminCheck.error, data: null };
 
         // Query users who have admin or super_admin in their roles array
@@ -57,7 +57,7 @@ export async function assignDisputeAction(
     assigneeId: string,
     assigneeName: string
 ): Promise<ActionResponse<null>> { try {
-        const adminCheck = await requireAdmin();
+        const adminCheck = await requireAdmin("finance:resolve_disputes");
         if ("error" in adminCheck) return { success: false as const, error: adminCheck.error, data: null };
 
         const adminId = (adminCheck as { userId: string }).userId;

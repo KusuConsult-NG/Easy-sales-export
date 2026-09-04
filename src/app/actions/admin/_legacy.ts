@@ -198,7 +198,7 @@ async function _onboardLegacyMemberAction(
     formData: any
 ): Promise<LegacyOnboardingState> {
     try {
-        const adminCheck = await requireAdmin();
+        const adminCheck = await requireAdmin("users:create");
         if ("error" in adminCheck) return { error: adminCheck.error, success: false as const };
 
         const sessionResult = await requireSession();

@@ -62,7 +62,7 @@ export async function createExportWindowAction(data: { title: string;
     endDate: string;
     destination: string;
     adminId: string; }) { try {
-        const sessionResult = await requireAdmin();
+        const sessionResult = await requireAdmin("export:approve_applications");
         if ('error' in sessionResult) return { success: false as const, error: sessionResult.error, data: null };
 
         // The creator is who called, not who the call says.

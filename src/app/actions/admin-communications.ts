@@ -28,7 +28,7 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
  * Send bulk email to users
  * Accepts recipients segment, subject, and HTML body
  */
-export async function sendBulkEmailAction(prevState: ActionResponse<unknown>, formData: FormData): Promise<ActionResponse<{ recipientCount: number; attemptedCount: number }>> { const adminCheck = await requireAdmin();
+export async function sendBulkEmailAction(prevState: ActionResponse<unknown>, formData: FormData): Promise<ActionResponse<{ recipientCount: number; attemptedCount: number }>> { const adminCheck = await requireAdmin("announcements:manage");
     if ("error" in adminCheck) return { success: false as const, error: "Unauthorized: admin role required", data: null };
     try {
         const recipients = (formData.get('recipients') as string | null)?.trim() ?? "";
@@ -142,7 +142,7 @@ export async function sendBulkEmailAction(prevState: ActionResponse<unknown>, fo
  * Create platform announcement
  * Displayed on user dashboards
  */
-export async function createAnnouncementAction(prevState: ActionResponse<unknown>, formData: FormData): Promise<ActionResponse<{ id: string }>> { const adminCheck = await requireAdmin();
+export async function createAnnouncementAction(prevState: ActionResponse<unknown>, formData: FormData): Promise<ActionResponse<{ id: string }>> { const adminCheck = await requireAdmin("announcements:manage");
     if ("error" in adminCheck) return { success: false as const, error: "Unauthorized: admin role required", data: null };
     try { const title = (formData.get('title') as string | null)?.trim() ?? "";
         const message = (formData.get('message') as string | null)?.trim() ?? "";
@@ -199,7 +199,7 @@ export async function createAnnouncementAction(prevState: ActionResponse<unknown
 /**
  * Fetch admin email send history from Firestore (email_history collection)
  */
-export async function getEmailHistoryAction(): Promise<ActionResponse<{ history: any[] }>> { const adminCheck = await requireAdmin();
+export async function getEmailHistoryAction(): Promise<ActionResponse<{ history: any[] }>> { const adminCheck = await requireAdmin("announcements:manage");
     if ("error" in adminCheck) return { success: false as const, error: "Unauthorized: admin role required", data: null };
     try { const snapshot = await db.collection(COLLECTIONS.EMAIL_HISTORY)
             .orderBy('sentAt', 'desc')

@@ -14,7 +14,7 @@ import { AWAITING_REVIEW_STATUSES } from "@/lib/land-listing-status";
  * single-source-of-truth TRANSACTIONS collection and aggregated pending applications.
  */
 export async function getPlatformMetricsAction() { try {
-        const sessionResult = await requireAdmin();
+        const sessionResult = await requireAdmin("audit:read");
         if ('error' in sessionResult) return { success: false as const, error: sessionResult.error, data: null };
 
         // Revenue is summed in the database, not by fetching rows.
@@ -66,7 +66,7 @@ export async function getPlatformMetricsAction() { try {
  * Ensures Analytics, Dashboard, and Modules ALWAYS hit the exact same number.
  */
 export async function getGlobalPendingApprovalsAction() { try {
-        const sessionResult = await requireAdmin();
+        const sessionResult = await requireAdmin("audit:read");
         if ('error' in sessionResult) return { success: false as const, error: sessionResult.error, data: null };
 
         const [
@@ -132,7 +132,7 @@ export async function getGlobalPendingApprovalsAction() { try {
  */
 export async function getUserMetricsAction() {
     try {
-        const sessionResult = await requireAdmin();
+        const sessionResult = await requireAdmin("audit:read");
         if ('error' in sessionResult) return { success: false as const, error: sessionResult.error, data: null };
 
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -168,7 +168,7 @@ export async function getUserMetricsAction() {
  */
 export async function getMarketplaceMetricsAction() {
     try {
-        const sessionResult = await requireAdmin();
+        const sessionResult = await requireAdmin("audit:read");
         if ('error' in sessionResult) return { success: false as const, error: sessionResult.error, data: null };
 
         const [
@@ -220,7 +220,7 @@ export async function getMarketplaceMetricsAction() {
  */
 export async function getCommunicationsMetricsAction() {
     try {
-        const sessionResult = await requireAdmin();
+        const sessionResult = await requireAdmin("audit:read");
         if ('error' in sessionResult) return { success: false as const, error: sessionResult.error, data: null };
 
         const [totalDisputesSnap, openDisputesSnap, resolvedDisputesSnap] = await Promise.all([

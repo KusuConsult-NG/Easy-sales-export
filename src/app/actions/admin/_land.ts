@@ -122,7 +122,7 @@ async function _verifyLandListing(
 ): Promise<ActionState> {
     try {
         // Live role re-validation — bypasses stale JWT
-        const adminCheck = await requireAdmin();
+        const adminCheck = await requireAdmin("land:verify_listings");
         if ("error" in adminCheck) return { error: adminCheck.error, success: false as const };
 
         const sessionResult = await requireSession();

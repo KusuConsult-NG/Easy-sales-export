@@ -12,7 +12,7 @@ import { recordAdminAction } from "@/lib/audit-log";
  * 
  * Heals records missing createdAt or updatedAt to prevent dashboard crashes.
  */
-export async function repairDataAction() { const authCheck = await requireAdmin();
+export async function repairDataAction() { const authCheck = await requireAdmin("config:update");
     if ("error" in authCheck) return { success: false as const, error: "Unauthorized", data: null };
 
     try { const db = getAdminDb();
@@ -90,7 +90,7 @@ export async function repairDataAction() { const authCheck = await requireAdmin(
  * Compares Users vs Memberships and reports discrepancies.
  */
 export async function runConsistencyCheckAction() {
-    const authCheck = await requireAdmin();
+    const authCheck = await requireAdmin("config:update");
     if ("error" in authCheck) return { success: false as const, error: "Unauthorized", data: null };
 
     try {
@@ -135,7 +135,7 @@ export async function runConsistencyCheckAction() {
  * 
  * Purges Next.js cache across the entire Hub.
  */
-export async function hardResetCacheAction() { const authCheck = await requireAdmin();
+export async function hardResetCacheAction() { const authCheck = await requireAdmin("config:update");
     if ("error" in authCheck) return { success: false as const, error: "Unauthorized", data: null };
 
     try { revalidatePath("/", "layout");
@@ -153,7 +153,7 @@ export async function hardResetCacheAction() { const authCheck = await requireAd
  * 4. Cleanup Abandoned Drafts
  * (Required by Maintenance UI)
  */
-export async function cleanupAbandonedDraftsAction() { const authCheck = await requireAdmin();
+export async function cleanupAbandonedDraftsAction() { const authCheck = await requireAdmin("config:update");
     if ("error" in authCheck) return { success: false as const, error: "Unauthorized", data: null };
 
     try { const db = getAdminDb();

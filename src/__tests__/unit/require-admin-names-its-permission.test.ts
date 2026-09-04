@@ -114,6 +114,17 @@ function callSites(): Array<{ file: string; arg: string }> {
     return out;
 }
 
+/** The whole body of one function, anchor to anchor — for claims that have to
+ *  hold across a couple of hundred lines rather than inside a window. */
+function fn(file: string, start: string, end: string): string {
+    const s = source(file);
+    const a = s.indexOf(start);
+    const b = s.indexOf(end, a + 1);
+
+    expect({ file, start, end, found: a > -1 && b > a }).toEqual({ file, start, end, found: true });
+    return s.slice(a, b);
+}
+
 /** The slice of a file between one anchor and the next, so a gate can be read
  *  against the function it actually guards. */
 function block(file: string, anchor: string, len = 900): string {
@@ -224,32 +235,90 @@ describe('#374 — the escalation-notes asymmetry is #356\'s decision, not a gap
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('#374 — RECORDED: the twenty-seven gates that still admit any admin', () => {
+describe('#375 — every gate names its permission, and the exception is stated', () => {
     /**
-     * Pinned as a COUNT and a file list, so the number cannot drift in either
-     * direction unnoticed: a new bare requireAdmin() fails here, and so does
-     * hardening one without updating the record the owner is deciding from.
+     * #374 recorded twenty-seven gates admitting all ten admin roles and left
+     * the choice open. #375 takes it: each now names the permission that
+     * matches what the action does, chosen so the module admin who legitimately
+     * runs a queue keeps running it.
+     *
+     * Pinned per file AND per permission, so neither a new bare gate nor a
+     * silently retargeted one can pass.
      */
-    const RECORDED: Record<string, number> = {
-        'src/app/actions/admin-communications.ts': 3,
-        'src/app/actions/maintenance.ts': 4,
-        'src/app/actions/in-app-broadcast.ts': 3,
-        'src/app/actions/admin-users.ts': 2,
-        'src/app/actions/escalation-notes.ts': 1,
-        'src/app/actions/sms-broadcast.ts': 2,
-        'src/app/actions/diagnose-broadcast.ts': 1,
-        'src/app/actions/export-aggregation.ts': 1,
-        'src/app/actions/global-aggregation.ts': 5,
-        'src/app/actions/admin/_land.ts': 1,
-        'src/app/actions/admin/_legacy.ts': 1,
-        'src/app/actions/admin/_withdrawals.ts': 1,
-        'src/app/actions/marketplace/_escrow_lifecycle.ts': 1,
-        'src/app/api/admin/maintenance/hard-reset/route.ts': 1,
+    const EXPECTED: Record<string, string[]> = {
+        // Broadcast surfaces — these reach every member.
+        'src/app/actions/admin-communications.ts': Array(3).fill('announcements:manage'),
+        'src/app/actions/sms-broadcast.ts': Array(2).fill('announcements:manage'),
+        'src/app/actions/in-app-broadcast.ts': Array(3).fill('announcements:manage'),
+        'src/app/actions/diagnose-broadcast.ts': ['announcements:manage'],
+
+        // Platform operations.
+        'src/app/actions/maintenance.ts': Array(4).fill('config:update'),
+        'src/app/api/admin/maintenance/hard-reset/route.ts': ['config:update'],
+
+        // Money out, and the assignment of the case that moves it.
+        'src/app/actions/admin/_withdrawals.ts': ['finance:process_withdrawals'],
+        'src/app/actions/marketplace/_escrow_lifecycle.ts': ['finance:resolve_disputes'],
+        'src/app/actions/marketplace/_escrow_disputes.ts': Array(2).fill('finance:resolve_disputes'),
+
+        // Account creation.
+        'src/app/actions/admin/_legacy.ts': ['users:create'],
+
+        // Module queues — the permission deliberately includes the module admin.
+        'src/app/actions/export-aggregation.ts': ['export:approve_applications'],
+        'src/app/actions/admin/_land.ts': ['land:verify_listings'],
+
+        // Reads. All ten roles hold these, so behaviour is unchanged — named so
+        // the rule follows the matrix if it is ever narrowed.
+        'src/app/actions/global-aggregation.ts': Array(5).fill('audit:read'),
+
+        // Two different permissions in one file: the user list is a read, the
+        // dispute assignment is dispute work.
+        'src/app/actions/admin-users.ts': ['users:read', 'finance:resolve_disputes'],
+
+        // The deliberate exception, plus its writer.
+        'src/app/actions/escalation-notes.ts': ['finance:resolve_disputes'],
     };
 
+    it('EVERY GATE NAMES THE PERMISSION ITS ACTION NEEDS', () => {
+        const actual: Record<string, string[]> = {};
+        for (const c of callSites()) {
+            if (c.arg === '') continue;
+            (actual[c.file] ??= []).push(c.arg.replace(/"/g, ''));
+        }
+
+        expect(actual).toEqual(EXPECTED);
+    });
+
+    it('AND EXACTLY ONE BARE GATE REMAINS — the one #356 decided', () => {
+        const bare = callSites().filter((c) => c.arg === '');
+
+        expect(bare).toEqual([{ file: NOTES, arg: '' }]);
+    });
+
+    it('the narrowing ones really do narrow', () => {
+        // Without this the sweep would pass for a set of permissions every role
+        // holds. These four are the ones that take a queue from ten roles to two.
+        for (const p of ['announcements:manage', 'config:update',
+                         'finance:process_withdrawals', 'users:create']) {
+            expect({ p, holders: [...rolesWithPermission(p as any)].sort() })
+                .toEqual({ p, holders: ['admin', 'super_admin'] });
+        }
+    });
+
+    it('and the module queues deliberately keep their module admin', () => {
+        expect([...rolesWithPermission('export:approve_applications' as any)]).toContain('export_admin');
+        expect([...rolesWithPermission('land:verify_listings' as any)]).toContain('farm_nation_admin');
+    });
+
+    it('the two read permissions are held by all ten, which is why they change nothing', () => {
+        // Stated so "named" is not mistaken for "narrowed" on these two.
+        expect([...rolesWithPermission('users:read' as any)]).toHaveLength(10);
+        expect([...rolesWithPermission('audit:read' as any)]).toHaveLength(10);
+    });
+
     it('THE GATE ITSELF STILL MAKES THE PERMISSION OPTIONAL', () => {
-        // If this ever becomes required, the whole finding is closed by the
-        // type system and this describe block should go.
+        // One caller legitimately omits it, so the parameter stays optional.
         expect(source(GATE)).toContain('requireAdmin(permission?: AdminPermission)');
     });
 
@@ -258,39 +327,13 @@ describe('#374 — RECORDED: the twenty-seven gates that still admit any admin',
         expect(source(GATE)).toContain('isAdmin(roles)');
     });
 
-    it('EXACTLY TWENTY-SEVEN CALL SITES STILL NAME NO PERMISSION', () => {
-        const bare = callSites().filter((c) => c.arg === '');
-        const byFile: Record<string, number> = {};
-        for (const c of bare) byFile[c.file] = (byFile[c.file] ?? 0) + 1;
-
-        expect(byFile).toEqual(RECORDED);
-        expect(bare.length).toBe(27);
-    });
-
-    it('and three now name one — the one #374 fixed and the two that already did', () => {
-        const named = callSites().filter((c) => c.arg !== '');
-
-        expect(named.map((c) => c.file).sort()).toEqual([
-            // The escalation-notes WRITER, which already named it before #374.
-            'src/app/actions/escalation-notes.ts',
-            // Both dispute paths: escalate already did, resolve now does.
-            'src/app/actions/marketplace/_escrow_disputes.ts',
-            'src/app/actions/marketplace/_escrow_disputes.ts',
-        ]);
-        expect([...new Set(named.map((c) => c.arg))]).toEqual([`"${RESOLVE}"`]);
-    });
-
     it('AND cms.ts IS NOT AMONG THEM — it has its own gate', () => {
         /**
-         * The correction, pinned. actions/cms.ts declares a local
+         * #374's correction, kept. actions/cms.ts declares a local
          * `requireAdmin(): Promise<{id} | null>` and never imports this module,
-         * so its five calls are not bare uses of the shared gate. My first
-         * measurement counted them, because it matched the NAME rather than
-         * resolving the import — and shipped a record that was five too long.
-         *
-         * The local gate is also correctly built, which is why this is a
-         * miscount and not a second finding: it reads live roles and returns
-         * null when the read fails, following #245's rule.
+         * so its calls are not uses of the shared gate. My first measurement
+         * counted them, because it matched the NAME rather than resolving the
+         * import.
          */
         const cms = 'src/app/actions/cms.ts';
 
@@ -305,19 +348,93 @@ describe('#374 — RECORDED: the twenty-seven gates that still admit any admin',
         expect(SRC.length).toBeGreaterThan(400);
     });
 
-    it('and the record lives where the parameter is defined', () => {
-        // So somebody reading the gate sees who is not using it.
-        expect(readFileSync(GATE, 'utf-8')).toContain('#374');
-        expect(readFileSync(GATE, 'utf-8')).toContain('OWNER DECISION');
+    it('and the decision is recorded where the parameter is defined', () => {
+        expect(readFileSync(GATE, 'utf-8')).toContain('#375');
+        expect(readFileSync(GATE, 'utf-8')).toContain('THE ONE REMAINING BARE GATE IS DELIBERATE');
     });
 
     it('measured on code, not on prose', () => {
-        // The #374 note in require-admin.ts lists the thirty-one files by name
-        // and quotes requireAdmin() itself. A raw-text sweep would count the
-        // tombstone as call sites — the trap has fired twelve times here.
+        // The record in require-admin.ts names the permissions and the actions.
+        // A raw-text sweep would count the tombstone as call sites.
         const raw = readFileSync(GATE, 'utf-8');
 
         expect(raw).toContain('_processWithdrawalAction');
         expect(source(GATE)).not.toContain('_processWithdrawalAction');
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#375 — the escrow release records the admin who called it', () => {
+    /**
+     * The gate above was only half of this file's defect. `_releaseEscrowAction`
+     * takes `adminId` as a PARAMETER and wrote it straight onto the disbursement
+     * and into the financial audit trail:
+     *
+     *     patch: { releasedBy: adminId, ... }
+     *     logAdminFinancialAction("escrow_released", adminId, ...)
+     *
+     * while requireAdmin() on the line above had already returned the signed-in
+     * caller. So "who released this money" answered with whatever the caller
+     * passed — #129 and #282's shape, on the money path, on the copy those two
+     * fixes missed. Its own sibling in _escrow_disputes.ts already derives the
+     * acting id from the session.
+     */
+    const LIFECYCLE = 'src/app/actions/marketplace/_escrow_lifecycle.ts';
+    const BODY = () => fn(LIFECYCLE,
+        'async function _releaseEscrowAction',
+        'export const releaseEscrowAction');
+
+    it('THE ACTING ADMIN COMES FROM THE SESSION, AND THE PARAMETER IS ONLY A FALLBACK', () => {
+        const body = BODY();
+
+        expect(body).toContain(
+            'const actingAdminId = (adminCheck as { userId: string }).userId || adminId;');
+        // Order is the whole claim: `adminId || session` would restore the
+        // defect while still mentioning both, so it is asserted as absent.
+        expect(body).not.toMatch(/adminId\s*\|\|\s*\(adminCheck/);
+    });
+
+    it('the released escrow row names the acting admin', () => {
+        expect(BODY()).toContain('patch: { releasedBy: actingAdminId,');
+    });
+
+    it('AND SO DOES THE FINANCIAL AUDIT ROW', () => {
+        // The row that exists to answer "who disbursed this". Anchored on the
+        // action name and the argument together — `toContain('actingAdminId')`
+        // would pass on any one of the three sites being right.
+        expect(BODY()).toMatch(
+            /logAdminFinancialAction\(\s*"escrow_released",\s*actingAdminId,/);
+    });
+
+    it('THE CALLER-SUPPLIED ID REACHES NO WRITE SITE AT ALL', () => {
+        // Counted, not sampled. `adminId` used as a VALUE — excluding the
+        // `adminId:` key in the signature and in the error logger's object —
+        // must occur exactly once in the whole function: the fallback above.
+        const uses = [...BODY().matchAll(/\badminId\b(?!\s*:)/g)];
+
+        expect(uses.length).toBe(1);
+    });
+
+    it('the parameter is kept on purpose, and the reason is written down', () => {
+        // Deleting it would silently shift `resolution` into its slot at any
+        // call site built against the old positional shape, so it stays.
+        const raw = readFileSync(LIFECYCLE, 'utf-8');
+
+        expect(BODY()).toContain('adminId: string');
+        expect(raw).toContain('#375');
+        expect(raw).toContain('THE ESCROW RELEASE RECORDED WHICHEVER ADMIN THE CALLER NAMED');
+    });
+
+    it('and the sibling this fix was copied from still does it that way', () => {
+        // The evidence that this was drift between two copies rather than a
+        // design choice — _escrow_disputes.ts derives the acting id already.
+        expect(source(DISPUTES)).toMatch(/actingAdminId\s*=\s*\(adminCheck/);
+    });
+
+    it('the slice is not vacuous — it really is the release function', () => {
+        const body = BODY();
+
+        expect(body).toContain('requireAdmin("finance:resolve_disputes")');
+        expect(body.length).toBeGreaterThan(2000);
     });
 });

@@ -12,7 +12,7 @@ export async function diagnoseBroadcastAction(): Promise<
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
-        const sessionResult = await requireAdmin();
+        const sessionResult = await requireAdmin("announcements:manage");
         if ('error' in sessionResult) return { success: false as const, usersCollectionName: COLLECTIONS.USERS, totalUserDocs: 0, usersWithEmail: 0, sampleFields: [], error: sessionResult.error, data: null };
 
         const db = getAdminDb();

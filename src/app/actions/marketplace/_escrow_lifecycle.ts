@@ -467,10 +467,40 @@ async function _releaseEscrowAction(
     adminId: string
 ): Promise<{ success: true; error: null; data: { message: string }; meta?: any }
     | { success: false; error: string; data?: null; meta?: any }
-> { const adminCheck = await requireAdmin();
+> {
+    /**
+     *   #375 THE ESCROW RELEASE RECORDED WHICHEVER ADMIN THE CALLER NAMED.
+     *
+     *        `adminId` is a PARAMETER, and it was written straight onto the
+     *        record and into the financial audit trail:
+     *
+     *            patch: { releasedBy: adminId, ... }
+     *            logAdminFinancialAction("escrow_released", adminId, ...)
+     *
+     *        — while requireAdmin() on the line below had already returned the
+     *        signed-in caller's real id. So the attribution on a disbursement,
+     *        and the financial audit row that is supposed to answer "who
+     *        released this money", were both whatever the caller passed.
+     *
+     *        Exactly #129 (the dispute audit row) and #282 (the two land
+     *        decision paths), on the escrow release. Its own sibling in
+     *        _escrow_disputes.ts already does the right thing —
+     *        `const actingAdminId = adminCheck.userId || adminId` — so this is
+     *        the same fix landing on the copy it missed.
+     *
+     *        The parameter is KEPT rather than removed: it is a "use server"
+     *        export, callers pass it positionally, and dropping an argument
+     *        would silently shift `resolution` into `adminId` at any call site
+     *        built against the old shape. It is now a fallback that is only
+     *        reached if the session somehow carries no id, which requireAdmin
+     *        has already refused.
+     */
+    const adminCheck = await requireAdmin("finance:resolve_disputes");
     if ("error" in adminCheck) {
         return { success: false as const, error: adminCheck.error};
     }
+
+    const actingAdminId = (adminCheck as { userId: string }).userId || adminId;
 
     try {
         const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId);
@@ -506,7 +536,7 @@ async function _releaseEscrowAction(
             id: escrowId,
             fromAny: [...ESCROW_RELEASABLE_FROM],
             to: "released",
-            patch: { releasedBy: adminId, releasedAt: new Date().toISOString() },
+            patch: { releasedBy: actingAdminId, releasedAt: new Date().toISOString() },
         });
 
         if (!claim.claimed) {
@@ -616,7 +646,7 @@ async function _releaseEscrowAction(
              */
             await logAdminFinancialAction(
                 "escrow_released",
-                adminId,
+                actingAdminId,
                 sellerPayout,
                 escrowId,
                 {
@@ -658,7 +688,7 @@ async function _releaseEscrowAction(
         return { error: null, success: true as const, data: { message: "Escrow released" } };
     } catch (error) { logger.error("Escrow release error:", {
             escrowId,
-            adminId,
+            adminId: actingAdminId,
             error: error instanceof Error ? error.message : String(error)
         });
         return { success: false as const, error: error instanceof Error ? error.message : "Failed to release escrow"};

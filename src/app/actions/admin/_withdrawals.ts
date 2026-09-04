@@ -46,7 +46,7 @@ async function _processWithdrawalAction(
 ): Promise<ActionState> {
     try {
         // Live role re-validation — bypasses stale JWT
-        const adminCheck = await requireAdmin();
+        const adminCheck = await requireAdmin("finance:process_withdrawals");
         if ("error" in adminCheck) return { error: adminCheck.error, success: false as const };
 
         const sessionResult = await requireSession();

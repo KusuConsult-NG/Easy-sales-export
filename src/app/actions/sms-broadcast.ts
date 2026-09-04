@@ -753,7 +753,7 @@ async function collectSmsRecipients(
  */
 export async function previewSmsBroadcastAction(
     filters: SmsFilters
-): Promise<SmsBroadcastPreview> { const authCheck = await requireAdmin();
+): Promise<SmsBroadcastPreview> { const authCheck = await requireAdmin("announcements:manage");
     if ("error" in authCheck) return { success: false, error: "Unauthorized: admin role required", data: null };
     try { const recipients = await collectSmsRecipients(filters);
         return {
@@ -776,7 +776,7 @@ export async function sendSmsBroadcastAction(
     filters: SmsFilters,
     message: string
 ): Promise<SmsBroadcastResult> {
-    const authCheck = await requireAdmin();
+    const authCheck = await requireAdmin("announcements:manage");
     if ("error" in authCheck) return { success: false, error: "Unauthorized: admin role required", data: null };
 
     // FIX: Warn loudly if AT_USERNAME is "sandbox" — SMS won't reach real phones
