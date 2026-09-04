@@ -392,8 +392,14 @@ describe('a repayment is bound to the loan it claims to pay', () => {
     });
 
     it('before it credits anything', () => {
+        // #212 made the credit per LINE — one transfer may now be allocated
+        // across instalments — so the amount credited is `line.amount` rather
+        // than the whole transfer. The guarantee is unchanged and, because both
+        // bindings and the credit sit in the same per-line loop, it now runs
+        // for every line rather than once; that is pinned behaviourally in
+        // one-transfer-across-two-instalments.test.ts.
         const guard = submit.indexOf('if (installmentData.loanId !== data.loanId)');
-        const credit = submit.indexOf('paidAmount: FieldValue.increment(data.amount)');
+        const credit = submit.indexOf('paidAmount: FieldValue.increment(line.amount)');
 
         expect(guard).toBeGreaterThan(-1);
         expect(credit).toBeGreaterThan(guard);

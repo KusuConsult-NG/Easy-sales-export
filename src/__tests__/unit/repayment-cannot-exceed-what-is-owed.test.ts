@@ -46,20 +46,25 @@
  * path the caller has to know the figure before any money moves. The refusal
  * names the outstanding amount.
  *
- * WHAT THIS DOES NOT SOLVE, AND IS PRE-EXISTING
- * ---------------------------------------------
- * A single bank transfer covering TWO instalments still cannot be recorded as
- * two rows, because claimPaymentOnce is keyed on the reference alone and the
- * second recording would be seen as a duplicate. That was true before this
- * change and is not made worse by it — before, such a transfer was recorded
- * against one instalment and the remainder was destroyed. Noted rather than
- * fixed, because splitting a payment is a product decision.
+ * WHAT THIS DID NOT SOLVE — AND #212 DID
+ * --------------------------------------
+ * This fix left a single bank transfer covering TWO instalments unrecordable:
+ * claimPaymentOnce is keyed on the reference alone, so the second recording
+ * would be seen as a duplicate. That was not made worse here — before, such a
+ * transfer was recorded against one instalment and the remainder was destroyed —
+ * but it did leave the admin with no move at all.
+ *
+ * #212 closed it by changing the UNIT rather than the guarantee: the reference
+ * is claimed ONCE for the whole transfer and an ALLOCATION splits it across
+ * instalments inside that claim. Each line is bounded by THIS module's rule, so
+ * nothing below is weakened; see one-transfer-across-two-instalments.test.ts.
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { amountOwedOn, checkRepaymentAmount } from '@/lib/loan-repayment-amount';
+import { checkRepaymentAllocations } from '@/lib/repayment-allocation';
 
 const BORROWER = 'member-1';
 
@@ -407,22 +412,46 @@ describe('#286 — both server paths ask the same module', () => {
     });
 
     it('and the bank-transfer path checks it before it claims the reference', () => {
+        // #212 CHANGED THE SPELLING AND NOT THE GUARANTEE. The pre-flight is
+        // now checkRepaymentAllocations, because that path records a transfer
+        // split across instalments and every line of it has to be bounded
+        // before the reference is spent. It applies THIS rule per line — proved
+        // by identity of the refusal in the test below, not by its name.
         const start = src.indexOf('export async function submitRepaymentAction');
         const body = src.slice(start, src.indexOf('\nexport async function', start + 10));
 
-        expect(body.indexOf('checkRepaymentAmount('))
+        expect(body.indexOf('checkRepaymentAllocations('))
+            .toBeGreaterThan(-1);
+        expect(body.indexOf('checkRepaymentAllocations('))
             .toBeLessThan(body.indexOf('claimPaymentOnce('));
     });
 
+    it('and the pre-flight applies THIS bound, not a second one beside it', () => {
+        // What stops #212's wrapper from becoming the drift this module exists
+        // to prevent. The message a refused line carries is the one
+        // checkRepaymentAmount produces for that line, so weakening either
+        // makes them differ and this notices.
+        const installment = { totalAmount: 10_000, paidAmount: 0, dueDate: new Date(Date.now() + 864e5) };
+        const line = { installmentId: 'i1', amount: 50_000 };
+
+        const viaAllocation = checkRepaymentAllocations([line], { i1: { id: 'i1', ...installment } }, 50_000);
+        const direct = checkRepaymentAmount(line.amount, installment);
+
+        expect(viaAllocation.ok).toBe(false);
+        expect(direct.ok).toBe(false);
+        expect(viaAllocation.ok === false && viaAllocation.message)
+            .toBe(direct.ok === false && direct.message);
+    });
+
     it('while keeping the authoritative check on the read the credit uses', () => {
-        // Two calls, not one. The pre-flight is friendly; the one inside the
+        // Two checks, not one. The pre-flight is friendly; the one inside the
         // credit block is the guard, because claimPaymentOnce serialises on the
         // REFERENCE rather than the instalment, so two references against one
         // instalment could both clear a single up-front check.
         const start = src.indexOf('export async function submitRepaymentAction');
         const body = src.slice(start, src.indexOf('\nexport async function', start + 10));
 
-        expect((body.match(/checkRepaymentAmount\(/g) ?? []).length).toBe(2);
+        expect((body.match(/checkRepaymentAmount\(/g) ?? []).length).toBe(1);
         expect(body.lastIndexOf('checkRepaymentAmount('))
             .toBeGreaterThan(body.indexOf('claimPaymentOnce('));
     });
@@ -433,7 +462,13 @@ describe('#286 — the screen that displayed the figure it was not enforcing', (
     const src = codeOnly(ADMIN_MODAL);
 
     it('RecordRepaymentModal ENFORCES the outstanding amount it prints', () => {
-        expect(src).toContain('checkRepaymentAmount(amount, selected)');
+        // #212 widened this screen from one instalment to an allocation, so the
+        // call it makes is checkRepaymentAllocations — which applies THIS bound
+        // per line (pinned by the refusal-identity test above). What matters and
+        // has not changed: the screen refuses on a verdict rather than printing
+        // a figure it does not enforce.
+        expect(src).toContain('checkRepaymentAllocations(');
+        expect(src).toMatch(/if \(!verdict\.ok\) return showToast\(verdict\.message/);
     });
 
     it('and the figure it prints comes from the same expression the server uses', () => {
@@ -441,19 +476,22 @@ describe('#286 — the screen that displayed the figure it was not enforcing', (
         // `Math.max(0, (selected.totalAmount || 0) - (selected.paidAmount || 0))`
         // — which omits the penalty, so on an overdue instalment the screen
         // understated what was owed and would now refuse a valid settlement.
-        expect(src).toContain('amountOwedOn(selected)');
+        expect(src).toContain('amountOwedOn(');
         expect(src).not.toMatch(/totalAmount \|\| 0\) - \(/);
+        expect(src).not.toMatch(/totalAmount\s*-\s*\(?\s*\w*[Pp]aidAmount/);
     });
 
-    it('the instalment list and the prefill use it too', () => {
-        // Three places in one file printed the same wrong subtraction. Counted,
-        // so a fourth cannot quietly go back to arithmetic.
-        expect((src.match(/amountOwedOn\(/g) ?? []).length).toBe(3);
+    it('the instalment list, the prefill and every allocation line use it too', () => {
+        // Three places in one file printed the same wrong subtraction; #212's
+        // per-line select made it four. Counted, so a fifth cannot quietly go
+        // back to arithmetic.
+        expect((src.match(/amountOwedOn\(/g) ?? []).length).toBe(4);
     });
 
-    it('and the input carries the ceiling as well as the floor', () => {
-        // `min="1"` was there from the start; the ceiling never was.
-        expect(src).toMatch(/max=\{outstanding/);
+    it('and the amount inputs carry the ceiling as well as the floor', () => {
+        // `min="1"` was there from the start; the ceiling never was. Per LINE
+        // now, bounded by what that line's instalment owes.
+        expect(src).toMatch(/max=\{owed \|\| undefined\}/);
     });
 });
 

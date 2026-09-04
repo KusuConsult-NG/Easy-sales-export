@@ -18,6 +18,7 @@ import { serializeDocs } from "@/lib/firestore-serialize";
 import { withSafeAction, type ActionResponse } from "@/lib/safe-action";
 import { isAdmin } from "@/lib/admin-permissions";
 import { checkRepaymentAmount } from "@/lib/loan-repayment-amount";
+import { checkRepaymentAllocations, singleAllocation } from "@/lib/repayment-allocation";
 import { calculatePenalty } from "@/lib/calculatePenalty";
 import type { LoanApplication, RepaymentInstallment } from "@/lib/types/cooperative-loans";
 import { resolveLoanApplication, normaliseLoanApplication } from "@/lib/loan-application-location";
@@ -191,14 +192,40 @@ export const getRepaymentScheduleAction = withSafeAction("getRepaymentScheduleAc
 // than invented.
 
 /**
- * Submit loan repayment
+ * Record a loan repayment that arrived as a bank transfer.
+ *
+ *   #212 (from #286) ONE TRANSFER COVERING TWO INSTALMENTS COULD NOT BE
+ *        RECORDED AT ALL.
+ *
+ *        claimPaymentOnce is keyed on the bank reference ALONE, so a transfer
+ *        of ₦120,000 covering instalment 3 (₦100,000) and part of instalment 4
+ *        (₦20,000) could be recorded exactly once. Before #286 the admin's only
+ *        move was to record the whole ₦120,000 against instalment 3, which
+ *        marked it paid with ₦20,000 above what it owed and destroyed the
+ *        excess. #286 refuses that — correctly — and left the transfer
+ *        unrecordable.
+ *
+ *        THE UNIT WAS WRONG, NOT THE GUARANTEE. The operation is "reconcile a
+ *        transfer, allocating it across instalments", so the reference is
+ *        claimed ONCE for the WHOLE transfer and the split happens inside that
+ *        claim. Nothing about claimPaymentOnce changes: one reference, one
+ *        claim, ever. See lib/repayment-allocation.ts for why a suffixed
+ *        reference was the wrong answer.
+ *
+ *        `amount` is the TRANSFER total. With no `allocations` it is also the
+ *        single line, which is the shape every existing caller sends and why
+ *        their behaviour is unchanged.
  */
 export async function submitRepaymentAction(data: {
     loanId: string;
-    installmentId: string;
+    /** The single-line case. Ignored when `allocations` is given. */
+    installmentId?: string;
     userId: string;
+    /** The amount of the BANK TRANSFER, which the allocations must sum to. */
     amount: number;
     paymentReference: string;
+    /** How the transfer is split. Omit for a one-instalment repayment. */
+    allocations?: Array<{ installmentId: string; amount: number }>;
 }): Promise<
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
@@ -227,36 +254,63 @@ export async function submitRepaymentAction(data: {
             return { success: false as const, error: "Invalid repayment amount", data: null };
         }
 
-        const installmentRef = db.collection(COLLECTIONS.LOAN_REPAYMENTS).doc(data.installmentId);
+        /**
+         * #212. The transfer, as lines. A caller sending the original
+         * single-instalment shape produces one line whose amount IS the
+         * transfer, so the sum check below holds trivially for them and their
+         * behaviour is unchanged.
+         */
+        const allocations = data.allocations && data.allocations.length > 0
+            ? data.allocations
+            : (data.installmentId ? singleAllocation(data.installmentId, data.amount) : []);
+
+        // NO SECOND STATEMENT OF "AT LEAST ONE LINE" HERE. There was one, and
+        // mutation testing showed it could be deleted without a test noticing —
+        // because checkRepaymentAllocations below already refuses an empty
+        // allocation, with a message that tells the admin what to do. Two
+        // statements of one rule is what this codebase keeps having to unpick,
+        // and the redundant one is the copy that drifts.
 
         /**
-         *   #286 BOUNDED BEFORE THE REFERENCE IS CLAIMED.
+         *   #286 BOUNDED BEFORE THE REFERENCE IS CLAIMED, and #212 makes that
+         *        structural rather than a convenience.
          *
-         *        This is the FAST PATH, not the guard — the authoritative check
-         *        is the identical call inside the credit block below, on the
-         *        read that the credit itself is computed from. Both are the same
-         *        expression from lib/loan-repayment-amount.ts, so they cannot
-         *        disagree.
+         * Every line is read and the WHOLE allocation is checked here, before
+         * claimPaymentOnce. #286 put a fast path here for one reason and #212
+         * makes it structural:
          *
-         *        It exists here because claimPaymentOnce runs a few lines down,
-         *        and a refusal after the claim BURNS THE BANK REFERENCE: the
-         *        admin correcting a mistyped amount would resubmit the real
-         *        reference, hit the duplicate branch, and be told the repayment
-         *        succeeded when nothing was credited. Mistyping an amount is the
-         *        ordinary case this refusal is for, so it has to happen before
-         *        the reference is spent.
+         *   A REFUSAL AFTER THE CLAIM BURNS THE BANK REFERENCE. The admin
+         *   correcting a mistyped figure would resubmit the real reference, hit
+         *   the duplicate branch, and be told the repayment succeeded when
+         *   nothing was credited.
          *
-         *        A read that misses is left to the block below, which already
-         *        reports "Installment not found" — refusing here on a failed
-         *        read would duplicate that message in two places.
+         * With a split it is worse than a burnt reference: crediting line one
+         * and refusing line two would leave a HALF-APPLIED transfer that no
+         * second attempt can finish. So the set is validated together and
+         * nothing is written until all of it passes.
+         *
+         * This is not the only check. The authoritative per-line bound runs
+         * again below on the read the credit itself is computed from, because
+         * claimPaymentOnce serialises on the REFERENCE and not on the
+         * instalment — two different references against one instalment could
+         * both clear this.
          */
+        const preflightRows: Record<string, Record<string, any> | undefined> = {};
+        for (const line of allocations) {
+            const snap = await db.collection(COLLECTIONS.LOAN_REPAYMENTS).doc(line.installmentId).get();
+            preflightRows[line.installmentId] = snap.exists
+                ? { id: line.installmentId, ...(snap.data() as Record<string, any>) }
+                : undefined;
+        }
+
         {
-            const preflight = await installmentRef.get();
-            if (preflight.exists) {
-                const bound = checkRepaymentAmount(data.amount, preflight.data() as Record<string, any>);
-                if (!bound.ok) {
-                    return { success: false as const, error: bound.message, data: null };
-                }
+            const verdict = checkRepaymentAllocations(
+                allocations,
+                preflightRows as Record<string, any>,
+                data.amount,
+            );
+            if (!verdict.ok) {
+                return { success: false as const, error: verdict.message, data: null };
             }
         }
 
@@ -271,9 +325,14 @@ export async function submitRepaymentAction(data: {
 
         const loanRef = resolvedLoan.ref;
 
+        // Summed across the allocated lines (#212).
         let calculatedPenalty = 0;
         let calculatedStatus: "pending" | "paid" | "overdue" | "partial" = "pending";
         let finalInstallmentData: any = null;
+        // #212 — what the transfer actually paid, line by line. The audit log
+        // used to name ONE instalment number; with a split, naming the last one
+        // it happened to process would describe the transfer wrongly.
+        const credited: Array<{ installmentId: string; installmentNumber: any; amount: number }> = [];
 
         // WHAT WAS WRONG HERE
         // -------------------
@@ -304,7 +363,15 @@ export async function submitRepaymentAction(data: {
             // as completed would change reported revenue as a side effect of an
             // idempotency fix, which is not this change's business.
             status: "loan_repayment",
-            metadata: { loanId: data.loanId, installmentId: data.installmentId },
+            // #212 — the allocation is derived, not `data.installmentId`, which
+            // is undefined whenever the caller sent a split. A claim whose
+            // metadata named no instalment would be the one record of a
+            // reference that cannot be traced back to what it paid.
+            metadata: {
+                loanId: data.loanId,
+                installmentId: allocations[0].installmentId,
+                installmentIds: allocations.map((line) => line.installmentId),
+            },
         });
 
         if (!claim.claimed) {
@@ -317,7 +384,15 @@ export async function submitRepaymentAction(data: {
             return { error: null, success: true as const, penalty: 0, data: null };
         }
 
-        {
+        /**
+         * #212. One pass per allocated line. Everything the single-instalment
+         * version did — the two ownership bindings, the authoritative bound,
+         * the penalty, the increment, the LOAN_PAYMENTS row — happens per line,
+         * because a line IS a repayment and splitting a transfer does not make
+         * any part of it exempt.
+         */
+        for (const line of allocations) {
+            const installmentRef = db.collection(COLLECTIONS.LOAN_REPAYMENTS).doc(line.installmentId);
             const installmentDoc = await installmentRef.get();
             if (!installmentDoc.exists) {
                 throw new Error("Installment not found");
@@ -346,7 +421,7 @@ export async function submitRepaymentAction(data: {
             // this caller's to pay.
             if (installmentData.loanId !== data.loanId) {
                 logger.error("[submitRepaymentAction] installment does not belong to the loan", {
-                    installmentId: data.installmentId,
+                    installmentId: line.installmentId,
                     claimedLoanId: data.loanId,
                     actualLoanId: installmentData.loanId,
                 });
@@ -355,7 +430,7 @@ export async function submitRepaymentAction(data: {
 
             if (installmentData.userId && installmentData.userId !== data.userId) {
                 logger.error("[submitRepaymentAction] installment belongs to another borrower", {
-                    installmentId: data.installmentId,
+                    installmentId: line.installmentId,
                     claimedUserId: data.userId,
                 });
                 throw new Error("That instalment does not belong to this borrower");
@@ -379,16 +454,16 @@ export async function submitRepaymentAction(data: {
              *
              *        THIS IS THE AUTHORITATIVE CHECK, on the same read the
              *        credit below is computed from. The identical call before
-             *        claimPaymentOnce is a fast path that keeps a mistyped
-             *        amount from spending the bank reference; it cannot be the
-             *        guard, because claimPaymentOnce serialises on the
-             *        REFERENCE and not on the instalment, so two different
+             *        claimPaymentOnce is a whole-allocation preflight that keeps
+             *        a mistyped amount from spending the bank reference; it
+             *        cannot be the guard, because claimPaymentOnce serialises on
+             *        the REFERENCE and not on the instalment, so two different
              *        references against one instalment could both clear it.
              *        Failing here throws into the catch, which calls
              *        markFulfilmentFailed — a claimed payment that was not
              *        credited is recorded rather than lost.
              */
-            const bound = checkRepaymentAmount(data.amount, installmentData);
+            const bound = checkRepaymentAmount(line.amount, installmentData);
             if (!bound.ok) {
                 throw new Error(bound.message);
             }
@@ -399,24 +474,26 @@ export async function submitRepaymentAction(data: {
 
             // Calculate penalty if overdue
             const { penalty, daysOverdue } = calculatePenalty(dueDate, installmentData.totalAmount);
-            calculatedPenalty = penalty;
+            calculatedPenalty += penalty;
 
             const totalDue = installmentData.totalAmount + penalty;
-            const newPaidAmount = (installmentData.paidAmount || 0) + data.amount;
+            const newPaidAmount = (installmentData.paidAmount || 0) + line.amount;
 
             // Determine new status
+            let lineStatus: "pending" | "paid" | "overdue" | "partial" = "pending";
             if (newPaidAmount >= totalDue) {
-                calculatedStatus = "paid";
+                lineStatus = "paid";
             } else if (newPaidAmount > 0) {
-                calculatedStatus = "partial";
+                lineStatus = "partial";
             } else if (new Date() > dueDate) {
-                calculatedStatus = "overdue";
+                lineStatus = "overdue";
             }
+            calculatedStatus = lineStatus;
 
             finalInstallmentData = {
                 ...installmentData,
                 paidAmount: newPaidAmount,
-                status: calculatedStatus,
+                status: lineStatus,
                 penaltyAmount: penalty,
                 daysOverdue
             };
@@ -428,9 +505,9 @@ export async function submitRepaymentAction(data: {
             // payment or the sweep below corrects the label. Money first,
             // labels best-effort: the reverse is what lost the payment.
             await installmentRef.update({
-                paidAmount: FieldValue.increment(data.amount),
-                status: calculatedStatus,
-                paidAt: calculatedStatus === "paid" ? FieldValue.serverTimestamp() : installmentData.paidAt || null,
+                paidAmount: FieldValue.increment(line.amount),
+                status: lineStatus,
+                paidAt: lineStatus === "paid" ? FieldValue.serverTimestamp() : installmentData.paidAt || null,
                 penaltyAmount: penalty,
                 daysOverdue: daysOverdue,
             });
@@ -439,12 +516,24 @@ export async function submitRepaymentAction(data: {
             const paymentRef = db.collection(COLLECTIONS.LOAN_PAYMENTS).doc();
             await paymentRef.set({
                 loanId: data.loanId,
-                installmentId: data.installmentId,
+                installmentId: line.installmentId,
                 userId: data.userId,
-                amount: data.amount,
+                amount: line.amount,
                 paymentReference: data.paymentReference,
-                penaltyPaid: penalty > 0 ? Math.min(data.amount, penalty) : 0,
+                // #212 — which part of the transfer this row is. One reference
+                // now produces more than one LOAN_PAYMENTS row, and a reader
+                // reconciling against a bank statement needs to be able to tell
+                // that they are parts of one transfer rather than duplicates.
+                transferAmount: data.amount,
+                allocationCount: allocations.length,
+                penaltyPaid: penalty > 0 ? Math.min(line.amount, penalty) : 0,
                 paidAt: FieldValue.serverTimestamp(),
+            });
+
+            credited.push({
+                installmentId: line.installmentId,
+                installmentNumber: installmentData.installmentNumber,
+                amount: line.amount,
             });
         }
 
@@ -478,6 +567,9 @@ export async function submitRepaymentAction(data: {
                 amount: data.amount,
                 penalty: calculatedPenalty,
                 status: calculatedStatus,
+                // #212 — the whole split, so a reader of the log can see which
+                // instalments one transfer settled and by how much.
+                allocations: credited,
             },
         });
 
