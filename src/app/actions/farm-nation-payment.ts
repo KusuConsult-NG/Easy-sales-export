@@ -1,6 +1,7 @@
 "use server";
 
 import { requireSession } from "@/lib/session-guard";
+import { releasedReservationFields } from "@/lib/land-reservation-expiry";
 import { logger } from '@/lib/logger';
 import { initializePaystackPayment, verifyPaystackPayment } from "@/lib/paystack-server";
 import { supabaseDb as db } from "@/lib/supabase-db";
@@ -182,8 +183,8 @@ async function _initializePropertyPaymentAction(
                 // not come back as "available" and drop out of the land view.
                 await propertyRef.update({
                     status: statusAfterCancellation(propertyData.status),
-                    pendingBuyerId: null,
-                    previousStatus: null,
+                    // #140 — one definition of what leaving a hold clears.
+                    ...releasedReservationFields(),
                     updatedAt: FieldValue.serverTimestamp(),
                 });
             } catch (releaseError) {

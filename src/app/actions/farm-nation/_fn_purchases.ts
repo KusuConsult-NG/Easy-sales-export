@@ -1,6 +1,7 @@
 "use server";
 
 import { requireSession } from "@/lib/session-guard";
+import { releasedReservationFields } from "@/lib/land-reservation-expiry";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
@@ -148,8 +149,9 @@ async function _initiatePropertyPurchaseAction(
             try {
                 await propertyRef.update({
                     status: statusAfterCancellation(propData.status),
-                    pendingBuyerId: null,
-                    previousStatus: null,
+                    // #140 — one definition, so `pendingSince` cannot outlive
+                    // the hold it dates and mislead the sweep that reads it.
+                    ...releasedReservationFields(),
                     updatedAt: FieldValue.serverTimestamp(),
                 });
             } catch (releaseError) {
@@ -326,8 +328,10 @@ async function _cancelPurchaseRequestAction(requestId: string): Promise<ActionRe
             if (heldByThisBuyer) {
                 await listingRef.update({
                     status: statusAfterCancellation(listing.previousStatus),
-                    pendingBuyerId: null,
-                    previousStatus: null,
+                    // #140 — see releasedReservationFields: `pendingSince` was
+                    // left behind here, so a released listing kept the
+                    // timestamp of a hold it no longer had.
+                    ...releasedReservationFields(),
                     updatedAt: FieldValue.serverTimestamp(),
                 });
             } else if (listing.pendingBuyerId) {

@@ -395,11 +395,23 @@ describe('#196 — the premise, re-measured', () => {
         expect(writers).toEqual([CRON]);
     });
 
-    it('and it is a real cron route beside the other five', () => {
+    it('and it is a real cron route beside the others', () => {
+        // NAMED, not counted. My first draft asserted `length === 6`, which
+        // #140 broke by adding a seventh job — a count fails on any addition,
+        // including a correct one, while saying nothing about WHICH job went
+        // missing. The set is the useful claim: losing one still fails here,
+        // and adding one is a deliberate edit to this list.
         const crons = readdirSync(join(ROOT, 'src/app/api/cron')).sort();
 
-        expect(crons).toContain('close-export-windows');
-        expect(crons.length).toBe(6);
+        expect(crons).toEqual([
+            'close-export-windows',
+            'gdpr-purge',
+            'process-email-queue',
+            'reconcile-fulfilment',
+            'reconcile-paystack',
+            'release-escrow',
+            'release-stale-reservations',
+        ]);
     });
 
     it('and these sweeps read CODE, not the prose above it', () => {
