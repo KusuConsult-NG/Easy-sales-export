@@ -198,8 +198,31 @@ export async function invalidateMultipleUsers(userIds: string[]): Promise<void> 
 }
 
 /**
+ * Drop the cached platform fees, exchange rate and WAVE commission.
+ *
+ *   #381 WITHOUT THIS, A SAVE REPORTS SUCCESS AND CHANGES NOTHING FOR AN HOUR.
+ *
+ *        The three getters in lib/system-settings are `unstable_cache` with
+ *        `revalidate: 3600`. An admin who corrects the USD→NGN rate because the
+ *        naira moved would see "Settings saved", and export buyers would keep
+ *        being charged at the old rate for up to an hour with nothing on the
+ *        screen saying so. That is the report-success-on-no-effect shape this
+ *        audit keeps finding (#188, #246, #296, #337).
+ *
+ *        The tag names come from SYSTEM_SETTINGS_TAGS rather than being typed
+ *        again here, so a getter registered under a new tag cannot be missed by
+ *        a hand-written list — the defect #189 found in the audit sweep.
+ */
+export async function invalidateSystemSettingsCache(): Promise<void> {
+    const { SYSTEM_SETTINGS_TAGS } = await import("./system-settings");
+    for (const tag of Object.values(SYSTEM_SETTINGS_TAGS)) {
+        safeRevalidateTag(tag);
+    }
+}
+
+/**
  * USAGE EXAMPLES:
- * 
+ *
  * // After admin approves seller:
  * await invalidateSellerCache(userId);
  * 

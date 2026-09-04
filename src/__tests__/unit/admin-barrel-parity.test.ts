@@ -97,10 +97,20 @@ const EXPECTED_ACTIONS = [
  *     places produced listings no buyer could see and no admin could release.
  *     admin-content.ts counted the backlog without offering any way to clear it.
  *     See lib/product-status.ts.
+ *
+ *   getSystemSettingsAction, saveSystemSettingsAction
+ *     #381. `system_settings` — the marketplace platform fee, the order floor
+ *     and ceiling, the delivery fee, the USD→NGN rate an export buyer is
+ *     charged at, and the WAVE commission — had three readers and NO WRITER,
+ *     so every one of those numbers was permanently the constant in
+ *     lib/system-settings and moving any of them meant a deploy. These are that
+ *     writer and its matching read, gated on config:update and config:read.
  */
 const ADDED_SINCE_SPLIT = [
     'getAdminProductsAction',
     'reviewProductAction',
+    'getSystemSettingsAction',
+    'saveSystemSettingsAction',
 ].sort();
 
 const ALL_EXPECTED = [...EXPECTED_ACTIONS, ...ADDED_SINCE_SPLIT].sort();

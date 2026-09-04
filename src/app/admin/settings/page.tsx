@@ -1,6 +1,6 @@
 "use client";
 
-import { Settings, Shield, Globe, Bell, Database, Wrench, KeyRound } from "lucide-react";
+import { Settings, Shield, Globe, Bell, Database, Wrench, KeyRound, Coins } from "lucide-react";
 import Link from "next/link";
 
 export default function AdminSettingsPage() {
@@ -12,6 +12,16 @@ export default function AdminSettingsPage() {
             href: "/admin/settings/general",
             color: "text-slate-600",
             bg: "bg-slate-100"
+        },
+        {
+            // #381 — the fees, order bounds, exchange rate and WAVE commission
+            // had no writer at all until this screen existed.
+            title: "Fees & Rates",
+            description: "Delivery fees, platform commission, order limits and the USD rate",
+            icon: Coins,
+            href: "/admin/settings/fees",
+            color: "text-emerald-600",
+            bg: "bg-emerald-100"
         },
         {
             title: "Security & Access",

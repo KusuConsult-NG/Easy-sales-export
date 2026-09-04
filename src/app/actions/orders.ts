@@ -10,6 +10,7 @@ import { decrementManyOrFail } from "@/lib/wallet-ledger";
 import type { Order, Product } from "@/lib/types/marketplace";
 
 import { getPlatformFees } from "@/lib/system-settings";
+import { deliveryFeeFor } from "@/lib/delivery-fee";
 import { withOptimisticLock } from "@/lib/data-integrity";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { pickOrderEscrow } from "@/lib/escrow-status";
@@ -174,9 +175,21 @@ async function _createOrderAction(
             }
 
             const orderIds: string[] = [];
-            const deliveryFeePerSeller = fees.baseDeliveryFee;
 
             for (const [sellerId, data] of sellerOrders.entries()) {
+                // #381 — was `fees.baseDeliveryFee`, a flat charge with no
+                // surcharges, which made this the SECOND delivery rule on the
+                // platform and the one that disagreed. The live checkout
+                // charges lib/delivery-fee's rule; this one now states the same
+                // rule, per seller, so the two cannot drift again.
+                //
+                // No location is available here — this action takes a delivery
+                // ADDRESS, not a measured distance or weight — so the base fee
+                // and the per-item fee apply and the surcharges do not. That is
+                // what the flat charge was already doing, said explicitly.
+                const deliveryFeePerSeller = deliveryFeeFor(
+                    fees, {}, data.items.length, 0,
+                );
                 const total = data.subtotal + deliveryFeePerSeller;
                 
                 const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc();

@@ -34,6 +34,7 @@
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { CartItem } from "@/lib/types/marketplace";
+import { deliveryFeeFor, type DeliveryFees } from "@/lib/delivery-fee";
 
 // Helper function to convert Naira to Kobo (Paystack uses kobo)
 export function nairaToKobo(naira: number): number { 
@@ -170,24 +171,34 @@ export function estimateCartWeight(items: CartItem[]): number {
 }
 
 
-// Helper to calculate delivery fee server-side
-export function calculateDeliveryFee(items: CartItem[], location: any, _fees: any): number { 
-    const isWithinCityCenter = location?.isWithinCityCenter !== false; // defaults to true
-    const baseFee = isWithinCityCenter ? 2000 : 3000; // 2k flat rate for city center, 3k outside
-    const distance = typeof location?.distance === "number" ? location.distance : 10; // default to 10KM (within flat rate)
-    const weight = typeof location?.weight === "number" ? location.weight : estimateCartWeight(items); // default to estimated cart weight
+/**
+ * The delivery fee for a cart, server-side.
+ *
+ *   #381 THIS TOOK THE CONFIGURED FEES AND THREW THEM AWAY.
+ *
+ *        The third parameter was `_fees: any` — accepted, underscore-prefixed
+ *        so lint would not object, and never read. Every figure in the body was
+ *        a literal: 2000 inside the city, 3000 outside, 20 per kilometre past
+ *        10, 500 per 5kg past 5.
+ *
+ *        This is the rule the LIVE checkout uses (/marketplace/checkout calls
+ *        calculateDeliveryAction, and the Paystack door calls it directly), so
+ *        the platform's own delivery settings applied to nothing a buyer paid,
+ *        while a second rule in actions/orders.ts charged a flat ₦2,500 from an
+ *        action no screen calls.
+ *
+ *        The rule now lives once, in lib/delivery-fee.ts, and reads the fees it
+ *        is handed. Its defaults are these exact literals, so nothing a buyer
+ *        pays changed — see the note there and in system-settings.ts.
+ */
+export function calculateDeliveryFee(
+    items: CartItem[],
+    location: any,
+    fees: DeliveryFees | null | undefined,
+): number {
+    const weight = typeof location?.weight === "number"
+        ? location.weight
+        : estimateCartWeight(items);
 
-    let fee = baseFee;
-
-    // 1. Distance surcharge: 20 naira for every additional KM above 10KM
-    if (distance > 10) {
-        fee += (distance - 10) * 20;
-    }
-
-    // 2. Weight surcharge: 500 naira for every additional 5kg above 5kg
-    if (weight > 5) {
-        fee += Math.ceil((weight - 5) / 5) * 500;
-    }
-
-    return Math.round(fee); 
+    return deliveryFeeFor(fees, location, items.length, weight);
 }

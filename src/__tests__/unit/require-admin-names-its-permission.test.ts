@@ -263,6 +263,10 @@ describe('#375 — every gate names its permission, and the exception is stated'
 
         // Account creation.
         'src/app/actions/admin/_legacy.ts': ['users:create'],
+        // #381's pair: the money knobs — fees, order bounds, USD→NGN and the
+        // WAVE commission. Read is separate from update because seeing what
+        // the platform charges is not the same right as changing it.
+        'src/app/actions/admin/_settings.ts': ['config:read', 'config:update'],
 
         // Module queues — the permission deliberately includes the module admin.
         'src/app/actions/export-aggregation.ts': ['export:approve_applications'],
@@ -348,7 +352,7 @@ describe('#375 — every gate names its permission, and the exception is stated'
     });
 
     it('the sweep is not vacuous — it finds the call sites at all', () => {
-        expect(callSites().length).toBe(32);
+        expect(callSites().length).toBe(34);
         expect(SRC.length).toBeGreaterThan(400);
     });
 
