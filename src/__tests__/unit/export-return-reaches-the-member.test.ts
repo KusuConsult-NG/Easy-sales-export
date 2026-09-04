@@ -16,11 +16,14 @@
  *     if (cooperativeId) { ...credit the nested member... }
  *
  * dashboard.ts already established — in a comment it still carries — that
- * NOTHING on the server writes `cooperativeId` onto a USER document. It lives
- * on the membership record and on withdrawal rows. The only writer anywhere is
- * JoinCooperativeModal, a client-side Firebase-SDK file left over from before
- * the Supabase migration. For every member created by any current path that
- * gate was shut, and the whole payout block was skipped.
+ * NOTHING writes `cooperativeId` onto a USER document. It lives on the
+ * membership record and on withdrawal rows. For every member created by any
+ * current path that gate was shut, and the whole payout block was skipped.
+ *
+ * (#380 corrected this paragraph. It used to name JoinCooperativeModal as the
+ * one writer and describe it as a client-side Firebase-SDK file predating the
+ * Supabase migration — wrong in all three parts, and copied between four files
+ * before anyone read the file. That write is gone; there are none.)
  *
  * WHY IT IS WORSE THAN THE DASHBOARD VERSION OF THE SAME BUG
  * ----------------------------------------------------------

@@ -173,11 +173,15 @@ async function processExportWindows(now: Timestamp) {
         //     if (cooperativeId) { ...credit the nested member... }
         //
         // dashboard.ts already established — in a comment it still carries —
-        // that NOTHING on the server writes `cooperativeId` onto a USER
-        // document. It lives on the membership record and on withdrawal rows.
-        // The only writer anywhere is JoinCooperativeModal, a client-side
-        // Firebase-SDK file from before the Supabase migration. So for every
-        // member created by any current path, this gate was shut.
+        // that NOTHING writes `cooperativeId` onto a USER document. It lives on
+        // the membership record and on withdrawal rows. So for every member
+        // created by any current path, this gate was shut.
+        //
+        // (#380: this used to name JoinCooperativeModal as the one writer and
+        // call it "a client-side Firebase-SDK file from before the Supabase
+        // migration" — wrong in all three parts, and repeated from here into
+        // three other files before anyone read the file. That write is gone
+        // now; there are no writers at all.)
         //
         // The dashboard's version of that bug showed a member ₦0 savings.
         // THIS one is worse in every direction:

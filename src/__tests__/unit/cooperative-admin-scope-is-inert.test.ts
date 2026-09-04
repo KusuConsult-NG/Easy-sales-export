@@ -12,12 +12,20 @@
  *     const adminScope = await getAdminScope(session.user.id, roles);
  *     if (adminScope) { q = q.where("cooperativeId", "==", adminScope); }
  *
- * It reads `cooperativeId` off the caller's USER document. Nothing on the
- * server writes that field. dashboard.ts established it for its own read of it,
- * #319 for cron/release-escrow's, and the sweep below re-establishes it here
- * rather than trusting either. The only writer in the tree is
- * JoinCooperativeModal, a client-side Firebase-SDK component from before the
- * Supabase migration.
+ * It reads `cooperativeId` off the caller's USER document. Nothing writes that
+ * field. dashboard.ts established it for its own read of it, #319 for
+ * cron/release-escrow's, and the sweep below re-establishes it here rather than
+ * trusting either.
+ *
+ * #380 CORRECTED THIS PARAGRAPH AND STRENGTHENED THE SWEEP BELOW. It used to
+ * name one writer — JoinCooperativeModal — and describe it as "a client-side
+ * Firebase-SDK component from before the Supabase migration", a phrase copied
+ * between four files, two of them by this audit, before anybody opened the
+ * file. It was wrong in all three parts: the write went through the Supabase
+ * adapter, inside a server function, in a file whose git history has never at
+ * any commit contained a firebase import. The modal has since been fixed — it
+ * opened a membership with a savings balance nobody had paid — so the writer
+ * count is now ZERO, and the sweep asserts zero rather than listing one.
  *
  * So the function returns null for every caller, null means unrestricted, and
  * all ten guards are skipped — including the one at
@@ -96,6 +104,47 @@ jest.mock('@/lib/supabase-db', () => ({
 
 function source(rel: string): string {
     return stripComments(readFileSync(join(process.cwd(), rel), 'utf-8'), { label: rel });
+}
+
+/**
+ * Every place in src/ that writes `field` onto a USER document — #380.
+ *
+ * Parameterised on the field so the same detector can be pointed at a field
+ * that IS written, as a positive control. An empty answer from an unparameterised
+ * sweep proves nothing: it reads identically whether the field has no writers or
+ * the sweep has stopped working.
+ *
+ * Comments are not writers. This file's own explanation names cooperativeId
+ * repeatedly, and so do #319's and dashboard.ts's, so each candidate line is
+ * re-read from the comment-stripped source. That trap has cost this audit four
+ * separate gates now.
+ */
+function usersDocWritersOf(field: string): string[] {
+    const candidates = execSync(`grep -rn "${field}" src || true`, {
+        encoding: 'utf-8', cwd: process.cwd(),
+    })
+        .split('\n')
+        .filter((l) => l.trim())
+        .filter((l) => !l.includes('__tests__'));
+
+    return candidates.filter((line) => {
+        const rel = line.split(':')[0];
+        const lineno = Number(line.split(':')[1]);
+        if (!rel || !Number.isFinite(lineno)) return false;
+
+        const stripped = source(rel).split('\n');
+        const text = stripped[lineno - 1] ?? '';
+        if (!text.includes(field)) return false;
+
+        // A write onto a USER document specifically. cooperativeId is written
+        // freely onto membership records, withdrawals and ledger rows — those
+        // are not what getAdminScope reads.
+        const window = stripped.slice(Math.max(0, lineno - 12), lineno).join('\n');
+        const targetsUsers = /COLLECTIONS\.USERS|["']users["']/.test(window);
+        const isWrite = /\.(set|update)\s*\(|updateDoc\s*\(|setDoc\s*\(/.test(window);
+
+        return targetsUsers && isWrite;
+    }).map((l) => l.split(':')[0]);
 }
 
 const CONSUMERS = [
@@ -241,39 +290,17 @@ describe('the claim matches reality, in both directions', () => {
         // and so do #319's and dashboard.ts's, so each candidate is re-checked
         // against its source with comments removed. That trap has now cost this
         // audit three separate gates.
-        const candidates = execSync('grep -rn "cooperativeId" src || true', {
-            encoding: 'utf-8', cwd: process.cwd(),
-        })
-            .split('\n')
-            .filter((l) => l.trim())
-            .filter((l) => !l.includes('__tests__'));
+        // #380: THE POSITIVE CONTROL COMES FIRST, because the answer is now an
+        // EMPTY LIST. "No writers found" and "the detector finds nothing at
+        // all" are the same assertion result and different facts — a broken
+        // grep, a renamed collection constant or a widened comment-stripper
+        // would each turn this green while measuring nothing. So the same
+        // detector is first pointed at a field this codebase demonstrably DOES
+        // write onto user documents, and must find it.
+        const control = usersDocWritersOf('sessionsValidFrom');
+        expect(control.length).toBeGreaterThan(0);
 
-        const writers = candidates.filter((line) => {
-            const rel = line.split(':')[0];
-            const lineno = Number(line.split(':')[1]);
-            if (!rel || !Number.isFinite(lineno)) return false;
-
-            const stripped = source(rel).split('\n');
-            const text = stripped[lineno - 1] ?? '';
-            if (!text.includes('cooperativeId')) return false;
-
-            // A write onto a USER document specifically. The field is written
-            // freely onto membership records, withdrawals and ledger rows —
-            // those are not what getAdminScope reads.
-            const window = stripped.slice(Math.max(0, lineno - 12), lineno).join('\n');
-            const targetsUsers = /COLLECTIONS\.USERS|["']users["']/.test(window);
-            const isWrite = /\.(set|update)\s*\(|updateDoc\s*\(|setDoc\s*\(/.test(window);
-
-            return targetsUsers && isWrite;
-        });
-
-        // JoinCooperativeModal is the one writer, and it is a client-side
-        // Firebase-SDK component from before the Supabase migration — listed
-        // explicitly so that a NEW writer appearing fails this test rather than
-        // slipping in beside it.
-        expect(writers.map((l) => l.split(':')[0])).toEqual([
-            'src/components/modals/JoinCooperativeModal.tsx',
-        ]);
+        expect(usersDocWritersOf('cooperativeId')).toEqual([]);
     });
 
     it('#248 REASON 1 — nothing creates a cooperative, so there is an estate of one', () => {

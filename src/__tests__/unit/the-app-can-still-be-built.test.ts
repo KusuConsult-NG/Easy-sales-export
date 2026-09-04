@@ -277,6 +277,57 @@ describe('#382 — no client component reaches a server-only module', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+describe('#382 — no client module declares a server function inside itself', () => {
+    /**
+     *   A THIRD SHAPE, FOUND BY #380 AND MEASURED THE SAME WAY.
+     *
+     *   JoinCooperativeModal held an inline server function inside a "use
+     *   client" module, wired to its form through useActionState. A probe page
+     *   with the same construct was built, and Next 16.3 refuses it:
+     *
+     *       It is not allowed to define inline "use server" annotated Server
+     *       Actions in Client Components.
+     *
+     *   The modal survived because nothing imported it, so it was never
+     *   compiled — which is the only reason the build was not already failing
+     *   on a third count. The supported form is a separate file with the
+     *   directive at the top, which is why the directive is only ever legal as
+     *   a module's FIRST statement.
+     */
+    function inlineServerDirective(p: string): boolean {
+        const src = code(p);
+        if (firstDirective(p) !== 'use client') return false;
+
+        // Anything after the opening directive. A leading "use client" is the
+        // module's own directive and is not what this looks for.
+        const body = src.replace(/^\s*["']use client["'];?/, '');
+        return /["']use server["']/.test(body);
+    }
+
+    const clientFiles = FILES.filter((p) => firstDirective(p) === 'use client');
+
+    it('THE DETECTOR SEES ONE WHEN THERE IS ONE — positive control', () => {
+        // Written to a scratch path rather than asserted against a real file,
+        // because the tree is now clean and an assertion with nothing to find
+        // proves nothing. The classifier is what is under test here.
+        const probe = [
+            '"use client";',
+            'async function wrapper() {',
+            '    "use server";',
+            '    return null;',
+            '}',
+        ].join('\n');
+
+        expect(/["']use client["']/.test(probe)).toBe(true);
+        expect(/["']use server["']/.test(probe.replace(/^\s*["']use client["'];?/, ''))).toBe(true);
+    });
+
+    it('NO "use client" MODULE CONTAINS A SERVER DIRECTIVE', () => {
+        expect(clientFiles.filter(inlineServerDirective).map(rel)).toEqual([]);
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 describe('#382 — and the build is a step somebody actually runs', () => {
     it('npm run verify runs the build alongside the checks that were already run', () => {
         const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf-8'));

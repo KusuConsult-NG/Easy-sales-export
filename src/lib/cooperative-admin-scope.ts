@@ -25,12 +25,21 @@
  *
  *     // We assume admins with a 'cooperativeId' in their profile are scoped.
  *
- * That assumption is not met by anything. NOTHING on the server writes
+ * That assumption is not met by anything. NOTHING anywhere writes
  * `cooperativeId` onto a USER document — dashboard.ts established the same
  * thing for its own read of the same field, and #319 for cron/release-escrow's.
- * The only writer anywhere in the tree is JoinCooperativeModal, a client-side
- * Firebase-SDK component from before the Supabase migration. A member's
- * cooperative lives on their COOPERATIVE_MEMBERS record, not on their user row.
+ * A member's cooperative lives on their COOPERATIVE_MEMBERS record, not on
+ * their user row.
+ *
+ * #380 CORRECTS WHAT THIS COMMENT USED TO SAY. It named one writer —
+ * JoinCooperativeModal — and described it as "a client-side Firebase-SDK
+ * component from before the Supabase migration". Every part of that was wrong:
+ * the write went through the Supabase adapter, it ran inside a server function,
+ * and `git log -S` shows the file never at any commit imported firebase. I
+ * repeated the description in the #248 pass instead of reading the file. That
+ * modal has since been fixed — it wrote a savings balance nobody had paid — and
+ * with it gone the count of writers is ZERO, which the ratchet in
+ * cooperative-admin-scope-is-inert.test.ts now pins.
  *
  * So `data?.cooperativeId` is undefined, this returns null, and null means
  * unrestricted at every call site. TEN of them, across three files:
