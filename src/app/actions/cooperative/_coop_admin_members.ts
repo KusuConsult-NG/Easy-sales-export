@@ -250,8 +250,27 @@ async function _updateMemberStatusAction(
         //
         // So an administrator scoped to one cooperative could activate, approve
         // or suspend a member of any other.
+        //   #248 THE GUARD WAS WRITTEN TO FAIL OPEN ON AN UNLABELLED ROW.
+        //
+        //        It read `memberScope && memberData.cooperativeId && ...`, so a
+        //        membership row carrying NO cooperativeId passed it — and rows
+        //        like that are the ordinary case, not an edge: two of the three
+        //        doors that create a cooperative withdrawal write no
+        //        cooperativeId at all, and autoProvisionZereCooperative writes a
+        //        membership without one. A partition that admits every
+        //        unattributable row is not a partition.
+        //
+        //        A scoped admin now refuses a row it cannot attribute. Platform
+        //        admins are unaffected — isPlatformAdmin short-circuits
+        //        getAdminScope to null — so nothing becomes unactionable.
+        //
+        //        This changes NOTHING today: getAdminScope returns null for
+        //        every caller (#320), so the guard short-circuits before reaching
+        //        the comparison. It is here so that whoever wires the scoping up
+        //        is not handed a trap. See lib/cooperative-admin-scope.ts for why
+        //        it is not being wired up.
         const memberScope = await getAdminScope(session.user.id, roles);
-        if (memberScope && memberData.cooperativeId && memberData.cooperativeId !== memberScope) {
+        if (memberScope && memberData.cooperativeId !== memberScope) {
             return {
                 success: false as const,
                 error: "Unauthorized: Cannot change membership status for another cooperative",

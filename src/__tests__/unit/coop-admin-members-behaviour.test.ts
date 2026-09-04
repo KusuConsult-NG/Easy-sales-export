@@ -286,11 +286,47 @@ describe('a scoped administrator', () => {
         expect((await updateStatus(MEMBER, 'active')).success).toBe(true);
     });
 
-    it('and a member with no cooperativeId is not blocked by a scope', async () => {
-        // Most legacy memberships carry no cooperativeId. Treating an absent one
-        // as "belongs to somebody else" would lock a scoped admin out of their own
-        // records.
+    it('and a member with no cooperativeId is REFUSED to a scoped admin', async () => {
+        //   #248 THIS EXPECTATION WAS FLIPPED, DELIBERATELY.
+        //
+        //        It read "is not blocked by a scope", on the reasoning that most
+        //        legacy memberships carry no cooperativeId and treating an
+        //        absent one as somebody else's would lock a scoped admin out of
+        //        their own records.
+        //
+        //        The direction is wrong, and the two failure modes are not
+        //        symmetric. Fail-open means a scoped admin can act on EVERY
+        //        unlabelled row — including another cooperative's — silently,
+        //        which defeats the partition entirely and gives nobody a signal.
+        //        Fail-closed means those rows escalate to a platform admin,
+        //        who is unscoped by construction (isPlatformAdmin short-circuits
+        //        getAdminScope), so nothing becomes unactionable and the missing
+        //        label produces a refusal somebody can see and fix.
+        //
+        //        THE COST, STATED: if the scoping is ever switched on, legacy
+        //        memberships written before a cooperativeId was recorded need a
+        //        platform admin until they are labelled. That is bounded — both
+        //        withdrawal doors now label their rows (#248) — and it is the
+        //        price of the partition meaning anything.
+        //
+        //        None of this is live today: getAdminScope returns null for
+        //        every caller (#320), and #248 decided it stays that way.
         getAdminScope.mockImplementation(async () => 'coop-A');
+        store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, MEMBER,
+            { userId: TARGET, membershipStatus: 'pending' });
+
+        const result = await updateStatus(MEMBER, 'active');
+
+        expect(result.success).toBe(false);
+        expect(String(result.error)).toMatch(/another cooperative/i);
+        // And nothing was written on the way to refusing.
+        expect(store.get(COLLECTIONS.COOPERATIVE_MEMBERS, MEMBER)?.membershipStatus).toBe('pending');
+    });
+
+    it('while an unscoped administrator still reaches that same unlabelled row', async () => {
+        // The other half of the trade-off above, so "refused" is never read as
+        // "unactionable". A platform admin is unscoped and takes the row.
+        getAdminScope.mockImplementation(async () => null);
         store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, MEMBER,
             { userId: TARGET, membershipStatus: 'pending' });
 

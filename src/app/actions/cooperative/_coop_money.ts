@@ -408,6 +408,14 @@ async function _submitWithdrawalAction(
         // its audit entry.
         const withdrawalRef = db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).doc();
         await withdrawalRef.set({ userId,
+            // #248 — this door wrote no cooperativeId, and the admin approve and
+            // reject paths both check the row's cooperativeId against a scoped
+            // admin's. An unlabelled row was waved through that check. Taken
+            // from the MEMBERSHIP, never from the form: the third door
+            // (_withdrawal.ts) already does it this way, and a caller-supplied
+            // value would let a member choose which admin may act on their
+            // withdrawal.
+            cooperativeId: membershipSnap.data()?.cooperativeId || "default",
             amount,
             reason: reason || "Standard Withdrawal",
             bankAccount,

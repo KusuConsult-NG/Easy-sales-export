@@ -65,14 +65,65 @@
  * fail-closed on a running system is not an audit's call to make silently.
  *
  * What is needed is a fact nobody has yet recorded: which cooperative each
- * cooperative_admin administers, written by a screen that does not exist. That
- * is an owner decision, raised as one. Same disposition as #167's MFA
- * enforcement and #314's session control: the false claim is corrected, the
- * inert state is pinned by a test, and the control is not invented.
+ * cooperative_admin administers, written by a screen that does not exist.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * #248 — THE DECISION: COOPERATIVE ADMINS ARE NOT SCOPED
+ * ─────────────────────────────────────────────────────────────────────────────
+ * #320 raised "should they be, and by what fact?" as an owner decision. Taken,
+ * and the answer is no. Three measurements, each checkable:
+ *
+ * 1. THERE IS ONE COOPERATIVE AND NO WAY TO CREATE A SECOND. Nothing in src
+ *    writes to COLLECTIONS.COOPERATIVES — no add, no set, anywhere. Every read
+ *    of that collection is the LEGACY nested Firebase-era path
+ *    (cooperatives/{id}/members/{uid}), kept for members whose records predate
+ *    the root collection. joinCooperativeAction, the one action that requires a
+ *    cooperative document to exist, has no caller: every mention of it in the
+ *    tree is a comment about the row shape it produces. What the live flow
+ *    actually uses is a constant — _dashboard.ts synthesises
+ *    `cooperativeId: "easy-sales-cooperative"`, and four other sites fall back
+ *    to the literal "default". Scoping partitions an estate of one.
+ *
+ * 2. THE ROLE IS A MODULE ROLE, NOT A TENANT ROLE. types/roles.ts defines
+ *    cooperative_admin as "Manages the cooperative module", beside nine
+ *    siblings — marketplace_admin, export_admin, academy_admin, wave_admin,
+ *    farm_nation_admin and the rest — not one of which is scoped to a
+ *    sub-entity. Per-cooperative administration is not a concept this platform
+ *    has anywhere else.
+ *
+ * 3. SWITCHING IT ON AS IT STOOD WOULD HAVE BEEN UNSAFE, NOT MERELY NARROWING.
+ *    The two withdrawal guards read
+ *
+ *        if (adminScope && withdrawalData?.cooperativeId && ... !== adminScope)
+ *
+ *    and TWO OF THE THREE doors that create a cooperative withdrawal wrote no
+ *    cooperativeId at all (_coop_money.ts and api/cooperative/withdraw). So a
+ *    scoped admin could approve or reject every withdrawal from those doors,
+ *    whatever their scope. A partition that admits a whole class of row is
+ *    security-shaped and gates nothing.
+ *
+ * WHAT WAS DONE INSTEAD OF BUILDING IT
+ * ------------------------------------
+ * The mechanism is kept — nothing is deleted — and the trap in it is removed,
+ * so it is safe to switch on if a second cooperative is ever created. Both
+ * withdrawal doors now record the cooperativeId from the MEMBERSHIP (never from
+ * the caller — platform.ts takes that field from a form, and a caller-supplied
+ * value would let a member choose which admin may act on their money), and the
+ * three guards refuse a row they cannot attribute instead of waving it through.
+ * None of that changes any behaviour today, because getAdminScope still returns
+ * null for every caller and the guards short-circuit.
+ *
+ * WHAT IS DELIBERATELY NOT DONE. The read below is not repointed at
+ * COOPERATIVE_MEMBERS. Membership is not administration, and on a live platform
+ * making the lookup succeed would take the estate away from admins who
+ * administer it today. No tenancy screen is built either: recording which
+ * cooperative an admin runs, for a platform with one cooperative and no way to
+ * make another, is a screen announcing something the product does not have.
  *
  * The pin is src/__tests__/unit/cooperative-admin-scope-is-inert.test.ts, and
- * it fails in BOTH directions — if a writer for the scoping fact appears, it
- * tells whoever added it to come back and re-check these ten guards.
+ * it fails in BOTH directions — if a writer for the scoping fact appears, or a
+ * writer for COOPERATIVES, it tells whoever added it to come back and re-check
+ * these ten guards and this decision.
  */
 
 import { supabaseDb as db } from "@/lib/supabase-db";

@@ -193,22 +193,21 @@ const result = await submitQuizAction({
 ## Cooperatives API
 
 ### Join Cooperative
-```typescript
-import { joinCooperativeAction } from "@/app/actions/cooperatives";
 
-const result = await joinCooperativeAction({
-  cooperativeId: string;
-  memberInfo: {
-    fullName: string;
-    phone: string;
-    address: string;
-  };
-});
-```
+**Not currently available.** This section used to show a call to
+`joinCooperativeAction`, and it was wrong three ways: it imported from a module
+path that does not resolve (the actions live under `cooperative`, singular), the
+argument shape shown was not the one the action takes, and the action refuses
+unless a document already exists in the `cooperatives` collection — which
+nothing in the platform creates.
+
+The platform runs one cooperative, and members are registered through
+`/cooperatives/register` rather than by joining one by id. See
+`src/lib/cooperative-admin-scope.ts` (#248) for the measurement.
 
 ### Apply for Loan
 ```typescript
-import { applyForLoanAction } from "@/app/actions/cooperatives";
+import { applyForLoanAction } from "@/app/actions/cooperative";
 
 const result = await applyForLoanAction({
   cooperativeId: string;

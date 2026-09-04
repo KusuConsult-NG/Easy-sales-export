@@ -307,6 +307,69 @@ describe('#276 — the other two doors, executed', () => {
 
     const REFUSAL = 'Your cooperative membership must be active before you can do this.';
 
+    /**
+     *   #248 EVERY DOOR LABELS ITS ROW WITH THE COOPERATIVE, FROM THE MEMBERSHIP.
+     *
+     *        Two of the three wrote no cooperativeId at all, and the admin
+     *        approve and reject paths compare a scoped admin's cooperative
+     *        against exactly that field. An unlabelled row was waved through.
+     *
+     *        EXECUTED RATHER THAN GREPPED, because the first version of this was
+     *        a source scan for `cooperativeId:` anywhere in the door's file —
+     *        and _coop_money.ts mentions the field in another function, so
+     *        deleting the label from the withdrawal write left the scan passing.
+     *        Mutation testing caught it. Same lesson as the block header above.
+     *
+     *        The form and the request body both carry a cooperativeId the caller
+     *        chose; each case below sends a DIFFERENT one, so a door that took
+     *        the caller's value fails here.
+     */
+    describe('#248 — the row says which cooperative it belongs to', () => {
+        it('_coop_money.ts submitWithdrawalAction labels it from the membership', async () => {
+            const store = await withMember('active');
+            const { COLLECTIONS } = await import('@/lib/types/firestore');
+            const { submitWithdrawalAction } = await import('@/app/actions/cooperative/_coop_money');
+
+            const fd = new FormData();
+            fd.set('amount', '50000');
+            fd.set('reason', 'School fees');
+            fd.set('bankAccount', JSON.stringify({ accountNumber: '0123456789', bankName: 'Test Bank' }));
+            // What the caller says. It must not reach the row.
+            fd.set('cooperativeId', 'coop-ATTACKER');
+
+            const res: any = await submitWithdrawalAction({ success: false, error: null } as any, fd);
+            expect(res.success).toBe(true);
+
+            const rows = store.all(COLLECTIONS.COOPERATIVE_WITHDRAWALS).map(([, doc]) => doc as any);
+            expect(rows).toHaveLength(1);
+            expect(rows[0].cooperativeId).toBe('coop-1');
+        });
+
+        it('and so does _withdrawal.ts, which already did', async () => {
+            // Vacuity guard on the pair above: the door that was already correct
+            // stays correct, so the assertion is about the field and not about
+            // one file.
+            const store = await withMember('active');
+            const { COLLECTIONS } = await import('@/lib/types/firestore');
+            const { submitWithdrawalRequestAction } =
+                await import('@/app/actions/cooperative/_withdrawal');
+
+            const res: any = await submitWithdrawalRequestAction({
+                amount: 50_000,
+                accountNumber: '0123456789',
+                accountName: 'A Member',
+                bankName: 'Test Bank',
+                reason: 'School fees',
+                cooperativeId: 'coop-ATTACKER',
+            } as any);
+            expect(res.success).toBe(true);
+
+            const rows = store.all(COLLECTIONS.COOPERATIVE_WITHDRAWALS).map(([, doc]) => doc as any);
+            expect(rows).toHaveLength(1);
+            expect(rows[0].cooperativeId).toBe('coop-1');
+        });
+    });
+
     describe('_withdrawal.ts submitWithdrawalRequestAction', () => {
         async function request(membershipStatus: string) {
             await withMember(membershipStatus);

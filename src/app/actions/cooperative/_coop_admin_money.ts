@@ -304,7 +304,16 @@ export async function approveWithdrawalAction(
             }
 
             // 🔒 Prevent IDOR on Approval
-            if (adminScope && withdrawalData?.cooperativeId && withdrawalData.cooperativeId !== adminScope) {
+            //
+            //   #248 The `&& withdrawalData?.cooperativeId` clause was removed:
+            //        it let a scoped admin approve any withdrawal that carried
+            //        no cooperativeId, and TWO OF THE THREE doors that create a
+            //        cooperative withdrawal write none (_coop_money.ts and
+            //        api/cooperative/withdraw). Both now write it, and a row
+            //        that still cannot be attributed is refused rather than
+            //        waved through. No change today — getAdminScope returns null
+            //        for every caller (#320).
+            if (adminScope && withdrawalData.cooperativeId !== adminScope) {
                 throw new Error("Unauthorized: Cannot approve withdrawal for another cooperative");
             }
 
@@ -539,7 +548,11 @@ export async function rejectWithdrawalAction(
             }
 
             // 🔒 Prevent IDOR on Rejection
-            if (adminScope && withdrawalData?.cooperativeId && withdrawalData.cooperativeId !== adminScope) {
+            //
+            //   #248 Same fail-open clause removed as on the approval path
+            //        above. Rejection moves money too — it puts the locked
+            //        balance back — so it is not the milder of the pair.
+            if (adminScope && withdrawalData.cooperativeId !== adminScope) {
                 throw new Error("Unauthorized: Cannot reject withdrawal for another cooperative");
             }
 

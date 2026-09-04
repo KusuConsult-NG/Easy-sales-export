@@ -206,6 +206,12 @@ export async function POST(request: NextRequest) {
             userId,
             userEmail: session.user.email,
             userName: membershipData.firstName + ' ' + membershipData.lastName,
+            // #248 — the second of the two doors that wrote no cooperativeId,
+            // so the admin approve/reject scope check had nothing to compare
+            // and waved the row through. From the MEMBERSHIP, as the other two
+            // doors do; a request-body value would let a member choose which
+            // admin may act on their withdrawal.
+            cooperativeId: membershipData.cooperativeId || "default",
             amount,
             reason: reason || 'Savings withdrawal',
             bankDetails: {

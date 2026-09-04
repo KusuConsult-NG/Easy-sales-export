@@ -34,13 +34,45 @@
  * COOPERATIVE_MEMBERS — the fix #319 and dashboard.ts both used — would read
  * the wrong fact (membership is not administration) and would turn a fail-open
  * into a fail-closed on a live platform, taking access away from admins who
- * have it today. Which cooperative each cooperative_admin administers is a fact
- * nobody has recorded, and recording it is an owner decision.
+ * have it today.
  *
- * The last test couples the claim to reality in BOTH directions, the way
+ * ─────────────────────────────────────────────────────────────────────────────
+ *   #248 THE DECISION: COOPERATIVE ADMINS ARE NOT SCOPED.
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ *        #320 raised "should they be, and by what fact?". Taken, and the answer
+ *        is no, on three measurements — each of them asserted below rather than
+ *        stated:
+ *
+ *        1. THERE IS ONE COOPERATIVE AND NO WAY TO CREATE A SECOND. Nothing in
+ *           src writes to COLLECTIONS.COOPERATIVES. Every read of it is the
+ *           legacy nested Firebase-era path. joinCooperativeAction, the one
+ *           action needing a cooperative document, has no caller. The live flow
+ *           uses a constant — "easy-sales-cooperative" — with "default" as the
+ *           fallback elsewhere. Scoping partitions an estate of one.
+ *
+ *        2. THE ROLE IS A MODULE ROLE. types/roles.ts calls cooperative_admin
+ *           "Manages the cooperative module", beside nine siblings, not one of
+ *           which is scoped to a sub-entity.
+ *
+ *        3. SWITCHING IT ON WOULD HAVE BEEN UNSAFE, NOT MERELY NARROWING. The
+ *           two withdrawal guards read `adminScope && row?.cooperativeId && …`,
+ *           and TWO OF THE THREE doors that create a cooperative withdrawal
+ *           wrote no cooperativeId at all. A scoped admin could approve or
+ *           reject every withdrawal from those doors, whatever their scope.
+ *
+ *        WHAT WAS DONE INSTEAD OF BUILDING IT. Nothing is deleted; the trap is
+ *        removed. Both doors now record the cooperativeId from the MEMBERSHIP
+ *        (never the caller — platform.ts takes that field from a form), and the
+ *        three guards refuse a row they cannot attribute. None of it changes
+ *        behaviour today: getAdminScope still returns null for every caller, so
+ *        every guard short-circuits before the comparison.
+ *
+ * The last tests couple the claims to reality in BOTH directions, the way
  * security-settings-claims.test.ts does for MFA: the day a writer for the
- * scoping fact appears, it fails and tells whoever added it to come back and
- * re-check these ten guards.
+ * scoping fact appears — or a writer for COOPERATIVES — they fail and tell
+ * whoever added it to come back and re-check these ten guards and this
+ * decision.
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
@@ -154,6 +186,12 @@ describe('the guards that depend on it', () => {
         // `cooperative_member` role and sets isVerified. Its cross-cooperative
         // check is correct and currently unreachable; it must not be removed as
         // "dead code" on that basis.
+        //
+        //   #248 The middle clause is GONE. It read
+        //        `memberScope && memberData.cooperativeId && … !== memberScope`,
+        //        so a membership row with no cooperativeId passed — and those
+        //        are the ordinary case, not an edge (autoProvisionZereCooperative
+        //        writes one). The guard now refuses a row it cannot attribute.
         const src = source('src/app/actions/cooperative/_coop_admin_members.ts');
 
         // The WHOLE condition, `memberScope &&` included. Matching only the
@@ -161,9 +199,38 @@ describe('the guards that depend on it', () => {
         // through — the substring survives inside a gutted guard, which is the
         // membership-versus-meaning trap this audit has now hit four times.
         expect(src).toContain(
-            'if (memberScope && memberData.cooperativeId && memberData.cooperativeId !== memberScope) {',
+            'if (memberScope && memberData.cooperativeId !== memberScope) {',
         );
         expect(src).toContain('Cannot change membership status for another cooperative');
+    });
+
+    it('AND NONE OF THE THREE STILL FAILS OPEN ON AN UNATTRIBUTABLE ROW', () => {
+        //   #248 The shape, swept rather than listed, because the three were
+        //        written at different times and a fourth will be too. Any guard
+        //        of the form `scope && row.cooperativeId && …` waves through
+        //        every row that carries no cooperativeId — which was two of the
+        //        three withdrawal doors and every auto-provisioned membership.
+        const offenders: string[] = [];
+
+        for (const rel of CONSUMERS) {
+            for (const line of source(rel).split('\n')) {
+                if (/\b(adminScope|memberScope)\s*&&\s*\w*[Dd]ata\??\.cooperativeId\s*&&/.test(line)) {
+                    offenders.push(`${rel}: ${line.trim()}`);
+                }
+            }
+        }
+
+        expect(offenders).toEqual([]);
+    });
+
+    it('and all three still compare against the scope, so they were not just emptied', () => {
+        // Vacuity guard on the sweep above: deleting the guards entirely would
+        // satisfy it.
+        const comparisons = CONSUMERS.reduce(
+            (n, rel) => n + (source(rel).match(/!==\s*(adminScope|memberScope)/g) ?? []).length, 0,
+        );
+
+        expect(comparisons).toBe(3);
     });
 });
 
@@ -209,6 +276,117 @@ describe('the claim matches reality, in both directions', () => {
         ]);
     });
 
+    it('#248 REASON 1 — nothing creates a cooperative, so there is an estate of one', () => {
+        // The measurement the decision rests on. Every reference to
+        // COLLECTIONS.COOPERATIVES is a READ — the legacy nested
+        // cooperatives/{id}/members/{uid} path. If a writer ever appears, this
+        // fails and the decision has to be retaken.
+        const lines = execSync('grep -rn "COLLECTIONS.COOPERATIVES)" src || true', {
+            encoding: 'utf-8', cwd: process.cwd(),
+        })
+            .split('\n')
+            .filter((l) => l.trim() && !l.includes('__tests__'));
+
+        expect(lines.length).toBeGreaterThan(0);   // vacuity guard on the grep
+
+        const writers = lines.filter((line) => {
+            const rel = line.split(':')[0];
+            const lineno = Number(line.split(':')[1]);
+            if (!rel || !Number.isFinite(lineno)) return false;
+
+            // The write, if there were one, follows the collection reference
+            // within a few lines — `.doc(x).set(...)`, `.add(...)`.
+            const after = source(rel).split('\n').slice(lineno - 1, lineno + 4).join('\n');
+            return /\.(set|add)\s*\(/.test(after);
+        });
+
+        expect(writers).toEqual([]);
+    });
+
+    it('#248 REASON 1 — and the one action that needs a cooperative document has no caller', () => {
+        // joinCooperativeAction requires `cooperatives/{id}` to exist. Every
+        // mention of it outside its own module is a comment about the row shape
+        // it produces, which is why the check is on stripped source.
+        //
+        // Scoped to executable source. The one non-source hit was the help
+        // centre's API docs, which told a developer to import it from a module
+        // path that does not exist and call it with a shape it does not take —
+        // corrected in the same change, and asserted separately below rather
+        // than exempted here.
+        const callers = execSync(
+            'grep -rln --include=*.ts --include=*.tsx "joinCooperativeAction" src || true',
+            { encoding: 'utf-8', cwd: process.cwd() },
+        )
+            .split('\n')
+            .filter((f) => f.trim() && !f.includes('__tests__'))
+            .filter((f) => !f.endsWith('_coop_registration.ts'))
+            .filter((f) => !f.endsWith('cooperative/index.ts'))
+            .filter((f) => /\bjoinCooperativeAction\s*\(/.test(source(f)));
+
+        expect(callers).toEqual([]);
+    });
+
+    it('#248 — and the API docs no longer tell a developer to call it', () => {
+        // #362's shape in documentation: instructions for an action that cannot
+        // succeed, with an import path that does not resolve.
+        const docs = readFileSync(
+            join(process.cwd(), 'src/app/help/api-docs/page.mdx'), 'utf-8',
+        );
+
+        expect(docs).toContain('**Not currently available.**');
+        expect(docs).not.toMatch(/^import \{ joinCooperativeAction \} from "@\/app\/actions\/cooperatives";$/m);
+        // The sibling example was importing from the same wrong path.
+        expect(docs).not.toMatch(/@\/app\/actions\/cooperatives"/);
+    });
+
+    it('#248 REASON 2 — cooperative_admin is a module role, like its nine siblings', () => {
+        // If per-cooperative administration were a concept here, it would show
+        // up in the role vocabulary. It does not: the role sits in the same list
+        // as marketplace_admin and export_admin, described the same way.
+        const roles = readFileSync(join(process.cwd(), 'src/lib/types/roles.ts'), 'utf-8');
+
+        expect(roles).toMatch(/"cooperative_admin"\s*\/\/ Manages the cooperative module/);
+    });
+
+    it('#248 REASON 3 — every door that files a cooperative withdrawal now labels the row', () => {
+        // The trap that made switching the scoping on unsafe. Two of these three
+        // wrote no cooperativeId, so the approve and reject guards had nothing
+        // to compare and let the row through. Derived from the writers rather
+        // than a hand-written list, so a fourth door has to label its rows too.
+        const doors = execSync(
+            'grep -rln "COLLECTIONS.COOPERATIVE_WITHDRAWALS).doc()" src || true',
+            { encoding: 'utf-8', cwd: process.cwd() },
+        ).split('\n').filter((f) => f.trim() && !f.includes('__tests__'));
+
+        expect(doors.length).toBe(3);
+
+        for (const rel of doors) {
+            // WINDOWED, not file-wide. The first version of this asked whether
+            // `cooperativeId:` appeared anywhere in the door's file, and
+            // _coop_money.ts mentions the field in a different function — so
+            // deleting the label from the withdrawal write left it passing.
+            // Mutation testing caught that; the assertion now looks only at the
+            // rows written after the request document is created.
+            const lines = source(rel).split('\n');
+            const start = lines.findIndex((l) => l.includes('COOPERATIVE_WITHDRAWALS).doc()'));
+            const window = lines.slice(start, start + 30).join('\n');
+
+            expect({ rel, found: start > -1 }).toEqual({ rel, found: true });
+            expect({ rel, labels: /cooperativeId:/.test(window) }).toEqual({ rel, labels: true });
+            // And from the membership, never from what the caller sent. A
+            // caller-supplied value would let a member choose which admin may
+            // act on their withdrawal.
+            const label = window.split('\n').find((l) => l.includes('cooperativeId:')) ?? '';
+            expect({ rel, fromCaller: /formData|body\.|req\.|request\./.test(label) })
+                .toEqual({ rel, fromCaller: false });
+        }
+
+        // What actually proves the values, rather than the spelling:
+        // cooperative-withdrawal-doors.test.ts executes two of these doors and
+        // asserts the stored row carries the MEMBERSHIP's cooperative even when
+        // the caller sent a different one.
+    });
+
     it('the module says so, rather than claiming the mechanism works', () => {
         // The comment that used to sit on the read asserted the opposite: that
         // admins carrying the field are scoped. A reader checking whether
@@ -227,5 +405,8 @@ describe('the claim matches reality, in both directions', () => {
 
         expect(raw).toContain('RETURNS null FOR EVERY CALLER');
         expect(raw).toContain('is not met by anything');
+        // #248 — and it records the decision rather than leaving it open, so a
+        // reader does not go and build the tenancy screen.
+        expect(raw).toContain('COOPERATIVE ADMINS ARE NOT SCOPED');
     });
 });

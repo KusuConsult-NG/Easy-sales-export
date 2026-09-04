@@ -133,8 +133,13 @@ describe('a cooperative-scoped admin', () => {
 
     it('cannot change a member of another cooperative', () => {
         // THE test.
+        //
+        //   #248 The `memberData.cooperativeId &&` clause is gone. It meant a
+        //        membership row with no cooperativeId passed the guard, and
+        //        unlabelled rows are the ordinary case here — so the partition
+        //        admitted most of what it was meant to divide.
         expect(update).toContain('const memberScope = await getAdminScope(session.user.id, roles);');
-        expect(update).toContain('memberScope && memberData.cooperativeId && memberData.cooperativeId !== memberScope');
+        expect(update).toContain('memberScope && memberData.cooperativeId !== memberScope');
         expect(update).toContain('Cannot change membership status for another cooperative');
     });
 
