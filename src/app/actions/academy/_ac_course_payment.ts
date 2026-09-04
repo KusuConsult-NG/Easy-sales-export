@@ -13,6 +13,7 @@ import { checkOrderPaymentAmount } from "@/lib/order-payment-amount";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { getBaseUrl } from "@/lib/server-utils";
 import type { Course, UserProgress } from "@/lib/types/academy-actions";
+import { COURSE_PURCHASE_FLOW, coursePurchaseStamp, isForeignPaymentFlow } from "@/lib/academy-purchase-flow";
 
 /**
  * Initialize Payment for a Course
@@ -23,9 +24,27 @@ import type { Course, UserProgress } from "@/lib/types/academy-actions";
  *        It takes only a courseId and derives the price from the course
  *        document, so the browser cannot name the amount — the shape
  *        _payment.ts's initializeEnrollmentPaymentAction should have had. No
- *        component calls either of them. See the #368 note in
- *        src/app/actions/academy/_payment.ts for the whole picture and the
- *        owner decision.
+ *        component calls either of them.
+ *
+ *   #378 WIRED. THIS IS THE ONE THE PRODUCT SELLS A COURSE WITH.
+ *
+ *        academy/[courseId]/page.tsx calls it: a learner whose plan does not
+ *        cover the course's tier is now shown the price and a Buy button
+ *        instead of being redirected to the whole-plan upgrade, and the
+ *        catalogue offers the same course rather than filtering it out of the
+ *        list entirely.
+ *
+ *        Chosen over the sibling for exactly the reason above — the amount is
+ *        derived here and passed in there — so the shape "charge whatever the
+ *        browser said, then decline to enrol if it was wrong" never reaches a
+ *        learner. The sibling is superseded and kept; see the #378 note in
+ *        _payment.ts.
+ *
+ *        Two things had to follow, or wiring it would have sold nothing:
+ *        the verifier stamps the purchase where the ACCESS rule can see it
+ *        (checkCourseAccess decides from the plan, and it runs before the
+ *        progress row is read), and the payment names its flow so the sibling
+ *        verifier cannot fulfil it into the wrong record.
  */
 async function _initializeCoursePaymentAction(courseId: string): Promise<ActionResponse<any>> {
     try {
@@ -70,6 +89,31 @@ async function _initializeCoursePaymentAction(courseId: string): Promise<ActionR
             Math.round(course.price * 100), // Kobo
             {
                 type: "academy_enrollment",
+                /**
+                 *   #378 WHICH FULFILMENT THIS PAYMENT IS FOR.
+                 *
+                 *        Two verifiers accept `type: "academy_enrollment"` —
+                 *        this file's and verifyEnrollmentPaymentAction — and
+                 *        they fulfil into DIFFERENT shapes: this one writes the
+                 *        progress row a learner's access is read from, the other
+                 *        writes an ENROLLMENTS row the admin report is read
+                 *        from. claimPaymentOnce means only one of them can ever
+                 *        run for a given reference.
+                 *
+                 *        While both initiators were unreachable that was
+                 *        harmless. Wiring this one puts real references in the
+                 *        wild, and /api/academy/verify-payment is reachable — so
+                 *        a course purchase verified through the wrong door would
+                 *        leave the learner enrolled in the admin's report and
+                 *        locked out of the course, permanently, because the
+                 *        payment is claimed.
+                 *
+                 *        The marker travels on the payment itself, and each
+                 *        verifier refuses the other's. A reference with NO
+                 *        marker is accepted by both exactly as before, so
+                 *        nothing already in flight is stranded.
+                 */
+                flow: COURSE_PURCHASE_FLOW,
                 courseId,
                 userId: session.user.id,
                 email: session.user.email,
@@ -114,6 +158,13 @@ async function _verifyCoursePaymentAction(reference: string): Promise<ActionResp
         const metadata = verify.data.metadata;
         if (metadata.type !== "academy_enrollment") {
             return { success: false as const, error: "Invalid payment type", data: null };
+        }
+
+        // #378 And not somebody else's fulfilment. See lib/academy-purchase-flow.ts:
+        // the two verifiers of this payment type write different records, and
+        // claimPaymentOnce lets only one of them ever run.
+        if (isForeignPaymentFlow(metadata.flow, COURSE_PURCHASE_FLOW)) {
+            return { success: false as const, error: "This payment is not a course purchase", data: null };
         }
 
         // The buyer is the session, not the metadata.
@@ -233,8 +284,48 @@ async function _verifyCoursePaymentAction(reference: string): Promise<ActionResp
                     startedAt: FieldValue.serverTimestamp(),
                     lastAccessedAt: FieldValue.serverTimestamp(),
                 };
-                t.set(progressRef, progress);
+                /**
+                 *   #378 THE ROW HAS TO SAY IT WAS BOUGHT, OR THE PURCHASE
+                 *        BUYS NOTHING.
+                 *
+                 *        Creating the progress row was taken to BE the
+                 *        enrolment. It is not what grants access:
+                 *        checkCourseAccess decides that from the learner's PLAN
+                 *        against the course TIER, and the course page runs it
+                 *        before the progress row is consulted at all. So a
+                 *        learner who bought one elite course on a foundation
+                 *        plan was charged, enrolled, and then redirected off the
+                 *        course's own page on their next visit.
+                 *
+                 *        The flag is written explicitly rather than inferred
+                 *        from the row existing, because enrollInCourseAction
+                 *        writes the same row for plan-granted access — reading
+                 *        the row as proof of purchase would open every course a
+                 *        learner had ever been enrolled on, including after a
+                 *        plan downgrade.
+                 */
+                t.set(progressRef, { ...progress, ...coursePurchaseStamp(reference, amountPaid) });
                 enrolledNow = true;
+            } else if (tProgressDoc.data()?.purchased !== true) {
+                /**
+                 *   #378 THE ROW EXISTED BUT DID NOT SAY IT WAS BOUGHT.
+                 *
+                 *        Two ways to arrive here, and the flag is right in both:
+                 *
+                 *        A learner already enrolled on their plan, who then buys
+                 *        the course outright — a downgrade would otherwise take
+                 *        away what they had just paid for.
+                 *
+                 *        And #258's repair path: the payment was claimed, the
+                 *        enrolment write failed, a retry arrives. That case
+                 *        falls through to here deliberately, and the stamp has
+                 *        to be part of what it repairs — otherwise the retry
+                 *        confirms an enrolment that still cannot be opened.
+                 *
+                 *        A merge, not a set: nothing about the learner's
+                 *        progress is touched.
+                 */
+                t.set(progressRef, coursePurchaseStamp(reference, amountPaid), { merge: true });
             }
 
             // 2. (The processed_payments row is written by claimPaymentOnce

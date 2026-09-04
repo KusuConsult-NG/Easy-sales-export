@@ -93,10 +93,30 @@ export default function CourseCatalogPage() {
         const matchesLevel = selectedLevel === "all" || course.level === selectedLevel;
         const matchesTier = selectedTier === "all" || (course.tier || "free") === selectedTier;
 
-        // Only show courses that are accessible under the user's active tier
+        /**
+         *   #378 A COURSE THAT CAN BE BOUGHT IS NOT HIDDEN.
+         *
+         *        This filtered the catalogue down to what the learner's plan
+         *        already opens, so a course carrying a `price` — one the
+         *        product can now sell on its own — was not merely locked, it
+         *        was absent. Nothing on this screen could lead a learner to a
+         *        purchase they were entitled to make.
+         *
+         *        Enrolled courses stay listed whatever the plan says, which is
+         *        what keeps a course bought outright visible after the fact,
+         *        and what stops a plan downgrade erasing a learner's own
+         *        courses from their catalogue.
+         *
+         *        A course they cannot reach AND cannot buy is still hidden:
+         *        showing a lock with no way past it is the "control whose
+         *        refusal path leads nowhere" shape.
+         */
+        const isEnrolled = enrolledIds.has(course.id!);
         const hasAccess = checkCourseAccess(userPlan, course.tier || "free");
+        const purchasable = Number(course.price ?? 0) > 0;
+        const visible = hasAccess || isEnrolled || purchasable;
 
-        return matchesSearch && matchesLevel && matchesTier && hasAccess;
+        return matchesSearch && matchesLevel && matchesTier && visible;
     }).sort((a, b) => {
         if (sortBy === "a-z") {
             return a.title.localeCompare(b.title);
@@ -320,6 +340,10 @@ export default function CourseCatalogPage() {
                             const id = course.id!;
                             const isEnrolled = enrolledIds.has(id);
                             const hasAccess = checkCourseAccess(userPlan, course.tier || "free");
+                            // #378 A locked course the learner can buy sends them
+                            // to the course page, where the price and the Buy
+                            // button are — not to the whole-plan upgrade.
+                            const purchasable = Number(course.price ?? 0) > 0;
                             const tConfig = getTierConfig(course.tier);
 
                             return (
@@ -411,6 +435,14 @@ export default function CourseCatalogPage() {
                                                 >
                                                     <Play className="w-4 h-4 fill-white text-white" />
                                                     Start Course
+                                                </Link>
+                                            ) : purchasable ? (
+                                                <Link
+                                                    href={`/academy/${id}`}
+                                                    className="inline-flex items-center justify-center gap-2 w-full py-3 bg-white border border-blue-200 text-blue-700 hover:bg-blue-50 font-bold rounded-xl transition shadow-xs"
+                                                >
+                                                    <Lock className="w-4 h-4 shrink-0" />
+                                                    Buy for {formatCurrency(Number(course.price ?? 0))}
                                                 </Link>
                                             ) : (
                                                 <Link

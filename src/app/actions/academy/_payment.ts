@@ -16,6 +16,7 @@ import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { getBaseUrl } from "@/lib/server-utils";
 import { checkOrderPaymentAmount } from "@/lib/order-payment-amount";
 import { isDecidedAgainst } from "@/lib/registration-progress";
+import { isForeignPaymentFlow, ENROLLMENT_FLOW } from "@/lib/academy-purchase-flow";
 import {
     checkAcademyPayment,
     normaliseAcademyPlan,
@@ -113,10 +114,26 @@ export type PaymentInitState =
  *        rather than repaired, because repairing an unreachable initiator
  *        would be guessing at which of the two the product means to keep.
  *
- *        OWNER DECISION: per-course purchase is half-built. Either wire ONE
- *        initiator to the course page and retire the other, or retire the
- *        pair — and with them the `price` field, which today is charged by
- *        nothing a learner can reach.
+ *   #378 DECISION TAKEN: THE OTHER ONE IS WIRED, AND THIS ONE IS SUPERSEDED.
+ *
+ *        initializeCoursePaymentAction (_ac_course_payment.ts) is the initiator
+ *        the course page calls now. It was chosen for the reason recorded above
+ *        — it takes only a courseId and reads the price from the course
+ *        document, so nothing the browser sends decides what a learner is
+ *        charged. This one's `amount` parameter is the defect, and it is not
+ *        repairable into the other without becoming the other.
+ *
+ *        SUPERSEDED, NOT DELETED. Removing a "use server" export is a decision
+ *        for the owner rather than a side effect of a fix — the same call as
+ *        /vendor and the loan wizard — and this one has a second reason to
+ *        stay: its VERIFIER is the only reader of the ENROLLMENTS rows already
+ *        in production, which the admin enrolment report is built from.
+ *
+ *        WHAT DID CHANGE IS THE VERIFIER BELOW. With the other initiator live,
+ *        real references now exist carrying `type: "academy_enrollment"`, and
+ *        both verifiers accept that type while fulfilling it into different
+ *        records. See the #378 note on the flow check in
+ *        verifyEnrollmentPaymentAction and lib/academy-purchase-flow.ts.
  */
 export async function initializeEnrollmentPaymentAction(
     courseId: string,
@@ -235,6 +252,33 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
 
         // Verify user match
         if (metadata.userId !== session.user.id) { return { error: "Payment verification failed: User mismatch", success: false as const, data: null };
+        }
+
+        /**
+         *   #378 AND NOT A PER-COURSE PURCHASE, WHICH THIS DOOR FULFILS WRONGLY.
+         *
+         *        Both verifiers of `type: "academy_enrollment"` are reachable and
+         *        they write different records: this one an ENROLLMENTS row, which
+         *        the admin report reads, and verifyCoursePaymentAction the
+         *        user_progress row, which a learner's ACCESS is read from.
+         *        claimPaymentOnce lets only one of them run for a reference.
+         *
+         *        While both initiators were unreachable (#368) that never
+         *        mattered. #378 wires the course one, so the wrong door here
+         *        would leave a paying learner listed as enrolled and locked out
+         *        of the course — permanently, since the payment is claimed and
+         *        cannot be claimed again.
+         *
+         *        Only a payment that NAMES the other flow is refused. One with no
+         *        marker is accepted exactly as before, so nothing already in
+         *        flight is stranded by this.
+         */
+        if (isForeignPaymentFlow(metadata.flow, ENROLLMENT_FLOW)) {
+            return {
+                error: "This payment is a single-course purchase. Please complete it from the course page.",
+                success: false as const,
+                data: null,
+            };
         }
 
         // 🔒 SECURITY FIX #3: Amount re-validation against REAL course price

@@ -12,11 +12,13 @@ import {
     getCourseByIdAction,
     enrollInCourseAction,
     getUserProgressAction,
+    initializeCoursePaymentAction,
     type Course,
     type UserProgress
 } from "@/app/actions/academy";
 import { useToast } from "@/contexts/ToastContext";
-import { checkCourseAccess } from "@/lib/academy-plan";
+import { checkCourseAccess, isPurchasedCourse } from "@/lib/academy-plan";
+import { formatCurrency } from "@/lib/utils";
 
 
 
@@ -38,6 +40,12 @@ export default function CourseDetailPage(props: CourseDetailPageProps) {
     const [enrolling, setEnrolling] = useState(false);
     /** #315 — the course could not be READ, which is not the same as absent. */
     const [loadFailed, setLoadFailed] = useState(false);
+    /**
+     * #378 — the learner's plan does not open this course, and it has a price,
+     * so it can be bought on its own instead of them being sent away.
+     */
+    const [mustPurchase, setMustPurchase] = useState(false);
+    const [purchasing, setPurchasing] = useState(false);
 
     useEffect(() => {
         if (status === "unauthenticated") {
@@ -62,14 +70,42 @@ export default function CourseDetailPage(props: CourseDetailPageProps) {
                 if (mounted) {
                     if (courseReq.data) {
                         const userPlan = (session.user as any)?.serviceRegistrations?.academy?.plan || "free";
-                        const hasAccess = checkCourseAccess(userPlan, courseReq.data.tier || "free");
+                        // #378 A course bought outright opens on the strength of
+                        // that, not of the plan. The flag lives on the progress
+                        // row, which is already loaded above.
+                        const purchased = isPurchasedCourse(progressReq.data);
+                        const hasAccess = checkCourseAccess(userPlan, courseReq.data.tier || "free", purchased);
+                        const price = Number(courseReq.data.price ?? 0);
 
                         if (!hasAccess) {
+                            /**
+                             *   #378 A PRICED COURSE OFFERS ITSELF INSTEAD OF
+                             *        EJECTING THE LEARNER.
+                             *
+                             *        This redirected everyone whose plan did not
+                             *        cover the tier to /academy/application — the
+                             *        whole-plan upgrade — including for courses
+                             *        carrying a `price`, which #368 recorded as
+                             *        "charged by nothing a learner can reach".
+                             *        The initiator that charges it correctly
+                             *        existed all along and had no caller.
+                             *
+                             *        A course with no price still redirects: there
+                             *        is nothing to offer, and upgrading the plan
+                             *        really is the only way in.
+                             */
+                            if (price > 0) {
+                                setCourse(courseReq.data);
+                                setProgress(progressReq.data || null);
+                                setMustPurchase(true);
+                                return;
+                            }
                             showToast("Upgrade your subscription to access this course", "error");
                             router.push("/academy/application");
                             return;
                         }
 
+                        setMustPurchase(false);
                         setCourse(courseReq.data);
 
                         if (!progressReq.data) {
@@ -162,6 +198,39 @@ export default function CourseDetailPage(props: CourseDetailPageProps) {
         }
 
         setEnrolling(false);
+    }
+
+    /**
+     *   #378 THE BUTTON THAT CHARGES FOR ONE COURSE.
+     *
+     *        initializeCoursePaymentAction has existed all along and had no
+     *        caller (#368). It takes only the courseId and reads the price from
+     *        the course document, so nothing the browser sends can decide what
+     *        the learner is charged — which is why it is the one of the two
+     *        initiators that gets wired.
+     */
+    async function handlePurchase() {
+        if (!course) return;
+
+        setPurchasing(true);
+        try {
+            const result = await initializeCoursePaymentAction(courseId);
+            const authorizationUrl = (result as any)?.data?.authorizationUrl;
+
+            if (result.success && authorizationUrl) {
+                window.location.href = authorizationUrl;
+                return;
+            }
+
+            // Said out loud rather than swallowed — #315's class. A learner
+            // left on a button that did nothing has no way to tell a refusal
+            // from a dead control.
+            showToast(result.error || "Could not start the payment. Please try again.", "error");
+        } catch {
+            showToast("Could not reach the payment service. Please try again.", "error");
+        } finally {
+            setPurchasing(false);
+        }
     }
 
     function handleStartLearning() {
@@ -257,7 +326,58 @@ export default function CourseDetailPage(props: CourseDetailPageProps) {
 
                     {/* Enrollment/Progress Section */}
                     <div className="p-8 border-t border-slate-200">
-                        {isEnrolled ? (
+                        {/*
+                          *   #378 THE PER-COURSE PURCHASE, WHICH THE PRODUCT
+                          *        HAD NO WAY TO OFFER.
+                          *
+                          *        `course.price` was charged by nothing a learner
+                          *        could reach (#368), and this screen redirected
+                          *        anyone whose plan did not cover the tier to the
+                          *        whole-plan upgrade. The learner now sees the
+                          *        price and can buy this one course.
+                          */}
+                        {mustPurchase ? (
+                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                                <div>
+                                    <h3 className="font-semibold text-slate-900 mb-1">
+                                        Buy this course
+                                    </h3>
+                                    <p className="text-sm text-slate-600">
+                                        Your current package does not include this course. Buy it on its own
+                                        for lifetime access, or upgrade your package to open every course at
+                                        this tier.
+                                    </p>
+                                </div>
+                                <div className="flex flex-col items-stretch md:items-end gap-2 shrink-0">
+                                    <span className="text-2xl font-bold text-slate-900 md:text-right">
+                                        {formatCurrency(Number(course.price ?? 0))}
+                                    </span>
+                                    <button
+                                        onClick={handlePurchase}
+                                        disabled={purchasing}
+                                        className="px-8 py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-semibold rounded-xl transition flex items-center justify-center gap-2"
+                                    >
+                                        {purchasing ? (
+                                            <>
+                                                <Loader2 className="w-5 h-5 animate-spin" />
+                                                <span>Starting payment...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Award className="w-5 h-5" />
+                                                <span>Buy this course</span>
+                                            </>
+                                        )}
+                                    </button>
+                                    <button
+                                        onClick={() => router.push("/academy/application")}
+                                        className="text-sm text-slate-600 hover:text-slate-900 underline underline-offset-2"
+                                    >
+                                        Upgrade my package instead
+                                    </button>
+                                </div>
+                            </div>
+                        ) : isEnrolled ? (
                             <div>
                                 <div className="mb-4">
                                     <div className="flex items-center justify-between mb-2">

@@ -128,11 +128,41 @@ export const ACADEMY_TIERS_OPENED: Readonly<Record<AcademyPlan, readonly string[
     foundation: ["foundation"],
 };
 
-export function checkCourseAccess(userPlan: unknown, courseTier: unknown): boolean {
+/**
+ *   #378 A COURSE CAN NOW BE BOUGHT ON ITS OWN, SO THE RULE HAS A SECOND WAY
+ *        IN.
+ *
+ *        #368 recorded that per-course purchase was half-built: two initiators,
+ *        neither reachable, both verifiers live. Wiring one of them is only
+ *        half a fix, because this rule — the ONE rule, with three call sites —
+ *        knew about plans and nothing else. A learner who paid for a single
+ *        course would have been bounced off its page by the same check on their
+ *        next visit, and the catalogue would have gone on filtering it out.
+ *
+ *        `purchased` is the fact that this learner bought THIS course, recorded
+ *        on their progress row by the payment verifier. It is passed by the
+ *        caller rather than read here because two of the three call sites are
+ *        client components with the progress row already in hand, and this
+ *        module must stay importable from the browser — the reason it exists at
+ *        all (see the header above).
+ *
+ *        Defaulting to false keeps every existing call site's behaviour
+ *        unchanged, which is what makes this safe to add to a rule that decides
+ *        who sees paid content.
+ */
+export function checkCourseAccess(
+    userPlan: unknown,
+    courseTier: unknown,
+    purchased: unknown = false,
+): boolean {
     const tier = String(courseTier ?? "").trim().toLowerCase();
 
     // An absent or free tier is open to everybody, signed in or not.
     if (!tier || tier === "free") return true;
+
+    // Bought outright. Strictly `true`, not truthy: a progress row carrying a
+    // stray non-empty string under this key must not open a paid course.
+    if (purchased === true) return true;
 
     const plan = normaliseAcademyPlan(userPlan);
     // Default deny. "Registered, no tier bought" is a real state — registration
@@ -140,6 +170,16 @@ export function checkCourseAccess(userPlan: unknown, courseTier: unknown): boole
     if (!plan) return false;
 
     return ACADEMY_TIERS_OPENED[plan].includes(tier);
+}
+
+/**
+ * Was this course bought outright by the learner whose progress row this is?
+ *
+ * One reader for the flag, so the three call sites cannot disagree about what
+ * counts — the drift this module's header was written about.
+ */
+export function isPurchasedCourse(progress: { purchased?: unknown } | null | undefined): boolean {
+    return progress?.purchased === true;
 }
 
 /** Naira of rounding slack, matching what the webhook already allowed. */

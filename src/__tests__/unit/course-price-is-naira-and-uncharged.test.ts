@@ -138,9 +138,25 @@ describe('#368 — the course price is shown in the currency it is charged in', 
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#368 — per-course purchase is half-built', () => {
-    it('NEITHER INITIATOR IS REACHABLE FROM ANY COMPONENT', () => {
+    it('ONE INITIATOR IS WIRED NOW, AND IT IS THE ONE THAT DERIVES THE PRICE', () => {
+        /**
+         *   #378 THIS USED TO ASSERT THAT NEITHER WAS REACHABLE.
+         *
+         *        That was the finding, and the decision it asked for has been
+         *        taken: initializeCoursePaymentAction is called by the course
+         *        page, chosen because it takes only a courseId and reads the
+         *        price server-side. The sibling — whose `amount` is a parameter
+         *        — stays unreachable and superseded, kept rather than deleted
+         *        because its verifier is the only reader of the ENROLLMENTS
+         *        rows already in production.
+         *
+         *        Both halves are pinned: one reachable, one not. Asserting only
+         *        the first would let the caller-named-amount initiator be wired
+         *        later without anything failing.
+         */
+        expect(componentCallers('initializeCoursePaymentAction'))
+            .toContain('src/app/academy/[courseId]/page.tsx');
         expect(componentCallers('initializeEnrollmentPaymentAction')).toEqual([]);
-        expect(componentCallers('initializeCoursePaymentAction')).toEqual([]);
     });
 
     it('while BOTH verifiers are', () => {

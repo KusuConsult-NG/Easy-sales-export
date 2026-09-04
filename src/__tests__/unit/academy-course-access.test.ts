@@ -124,7 +124,11 @@ describe('there is one copy of it', () => {
     ])('%s imports it rather than defining its own', (_label: string, rel: string) => {
         const src = source(rel);
 
-        expect(src).toContain('checkCourseAccess } from "@/lib/academy-plan"');
+        // #378 widened the import list on two of the three (isPurchasedCourse
+        // travels with it), so the anchor is the NAME inside an import from
+        // that module rather than the exact closing brace.
+        expect(src).toMatch(
+            /import\s*\{[^}]*\bcheckCourseAccess\b[^}]*\}\s*from\s*"@\/lib\/academy-plan"/);
         expect(src).not.toContain('function checkCourseAccess(');
     });
 
