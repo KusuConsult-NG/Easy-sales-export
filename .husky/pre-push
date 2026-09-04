@@ -28,6 +28,25 @@
 # The unit suite is kept because it is fast (about 15 seconds for ~1,600 tests)
 # and because a failing test is worth knowing about before it is on the remote,
 # where it is somebody else's problem too.
+#
+# WHAT NEITHER THIS HOOK NOR THE SUITE CAN SEE — #382
+#
+# Jest resolves modules; it never bundles and never applies the server-action
+# transform. So a client component importing a server-only module, and a
+# "use server" module exporting a value, both pass every test and both stop
+# `next build` dead. Three of those shipped to this branch before anyone ran a
+# build. CI does run one — but only on pull requests to main and on main, so a
+# long-lived branch with no PR open is unchecked.
+#
+# The build is NOT added here: it takes minutes, and a push-time gate that slow
+# gets bypassed. Two things cover it instead:
+#
+#   npm run verify                          typecheck, lint, build, tests — run
+#                                           it before pushing a branch that has
+#                                           no PR open yet.
+#   the-app-can-still-be-built.test.ts      catches both of the shapes that
+#                                           actually broke it, in seconds, and
+#                                           does run here.
 echo "🧪 Running Jest unit tests..."
 npm run test
 if [ $? -ne 0 ]; then

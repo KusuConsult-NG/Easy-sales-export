@@ -22,11 +22,17 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { Coins, Save, Loader2, AlertCircle } from "lucide-react";
 import { getSystemSettingsAction, saveSystemSettingsAction } from "@/app/actions/admin";
+// FROM THE SCHEMA MODULE, NOT lib/system-settings — #382.
+//
+// This is a browser component. lib/system-settings also holds the three
+// database readers, so importing these definitions from there pulled the
+// Supabase adapter and next/cache into the client bundle and failed the build.
+// The schema module holds the definitions alone.
 import {
     SYSTEM_SETTINGS_DOCS,
     systemSettingsFieldsFor,
     type SystemSettingsDoc,
-} from "@/lib/system-settings";
+} from "@/lib/system-settings-schema";
 import { logger } from "@/lib/logger";
 
 const GROUP_TITLES: Record<SystemSettingsDoc, { title: string; blurb: string }> = {

@@ -588,10 +588,17 @@ describe('#380 — the reserve and the release stay together', () => {
     });
 
     it('the decision vocabulary is one list, used by the validator and the type', () => {
+        // #382 moved the list to lib/server-action-values: a "use server" module
+        // may only export async functions, so an exported array in the action
+        // file failed the production build outright. The assertion follows it
+        // rather than being deleted — the point is still one list, and the
+        // action still validating against that same list.
+        const shared = source('src/lib/server-action-values.ts');
         const src = source(ACTION);
 
-        expect(src).toContain('export const EXPORT_BOOKING_DECISIONS = ["confirmed", "cancelled"] as const;');
-        expect(src).toContain('typeof EXPORT_BOOKING_DECISIONS)[number]');
+        expect(shared).toContain('export const EXPORT_BOOKING_DECISIONS = ["confirmed", "cancelled"] as const;');
+        expect(shared).toContain('typeof EXPORT_BOOKING_DECISIONS)[number]');
+        expect(src).toContain('from "@/lib/server-action-values"');
         expect(src).toContain('EXPORT_BOOKING_DECISIONS.includes(decision)');
     });
 });

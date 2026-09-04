@@ -250,9 +250,10 @@ export const initiateCooperativePaymentAction = withFlexibleSafeAction("initiate
  *        that already exists at /cooperatives/(member)/contribute. That is a
  *        product decision, not an audit's.
  */
-export const UNPAID_CONTRIBUTION_MESSAGE =
-    "Contributions must be paid for. Please use the Contribute page so your "
-    + "payment can be verified before your savings are credited.";
+// THE SENTENCE LIVES IN lib/server-action-values — #382. A "use server" module
+// may only export async functions; this string export failed the build with
+// "A \"use server\" file can only export async functions, found string."
+import { UNPAID_CONTRIBUTION_MESSAGE } from "@/lib/server-action-values";
 
 async function _makeContributionAction(
     _prevState: MakeContributionState,

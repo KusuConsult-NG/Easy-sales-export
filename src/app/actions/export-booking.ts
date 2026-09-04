@@ -252,8 +252,10 @@ export async function getUserBookingsAction() { try {
  */
 
 /** What an export officer may set a pending booking to. */
-export const EXPORT_BOOKING_DECISIONS = ["confirmed", "cancelled"] as const;
-export type ExportBookingDecision = (typeof EXPORT_BOOKING_DECISIONS)[number];
+// THE SET LIVES IN lib/server-action-values — #382. A "use server" module may
+// only export async functions; an array export failed the build. Imported and
+// NOT re-exported: a re-export is still a value export from this module.
+import { EXPORT_BOOKING_DECISIONS, type ExportBookingDecision } from "@/lib/server-action-values";
 
 /**
  * The bookings an export officer works from, newest first.

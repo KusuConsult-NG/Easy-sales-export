@@ -95,6 +95,11 @@ jest.mock('@/lib/cache-invalidation', () => ({
 
 const ROOT = process.cwd();
 const SETTINGS_LIB = 'src/lib/system-settings.ts';
+// #382 split the pure definitions out of SETTINGS_LIB: the fees screen is a
+// browser component, and importing them from a module that also holds the
+// three database readers dragged the Supabase adapter into the client bundle
+// and failed `npm run build` outright.
+const SETTINGS_SCHEMA = 'src/lib/system-settings-schema.ts';
 const DELIVERY = 'src/lib/delivery-fee.ts';
 const CART = 'src/lib/marketplace-cart.ts';
 const ACTION = 'src/app/actions/admin/_settings.ts';
@@ -287,7 +292,9 @@ describe('#381 — the rule now honours the fees it is handed', () => {
         // round: the rule and its declaration, and nowhere else.
         const owners = sourceFiles().filter((f) => /weightSurchargeAmount|weightSurchargeStepKg/.test(source(f)));
 
-        expect(owners).toEqual([DELIVERY, SETTINGS_LIB].sort());
+        // SETTINGS_SCHEMA, not SETTINGS_LIB: #382 moved the field definitions
+        // there. Still exactly two owners — the rule and the settings schema.
+        expect(owners).toEqual([DELIVERY, SETTINGS_SCHEMA].sort());
     });
 });
 
@@ -687,7 +694,18 @@ describe('#381 — the premise, re-measured', () => {
         expect(source(DELIVERY)).not.toMatch(/^import /m);
     });
 
-    it('and system-settings takes its delivery defaults from there, not a second copy', () => {
-        expect(source(SETTINGS_LIB)).toContain('...DEFAULT_DELIVERY_FEES,');
+    it('and the settings defaults take the delivery half from there, not a second copy', () => {
+        // The spread moved with the definitions in #382; the point is unchanged.
+        expect(source(SETTINGS_SCHEMA)).toContain('...DEFAULT_DELIVERY_FEES,');
+    });
+
+    it('#382 — and the definitions the SCREEN needs import no database at all', () => {
+        // The fix itself. The schema module is what a browser component may
+        // import; if it ever grows an adapter import the build breaks again.
+        const schema = source(SETTINGS_SCHEMA);
+
+        expect(schema).toContain('SYSTEM_SETTINGS_FIELDS');       // vacuity guard
+        expect(schema).not.toMatch(/supabase-db|next\/cache|firebase-admin/);
+        expect(source(SCREEN)).toContain('from "@/lib/system-settings-schema"');
     });
 });

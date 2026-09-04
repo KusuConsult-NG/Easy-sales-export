@@ -69,7 +69,9 @@ import { join } from 'path';
 import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
 import { stripComments } from '@/lib/testing/strip-comments';
 import { COLLECTIONS } from '@/lib/types/firestore';
-import { EXPORTABLE_DATASETS } from '@/app/actions/data-export-audit';
+// #382: the list moved to lib/server-action-values. A "use server" module
+// may only export async functions, so it could not stay in the action file.
+import { EXPORTABLE_DATASETS } from '@/lib/server-action-values';
 
 /**
  * The setup file's mocks, not local ones.

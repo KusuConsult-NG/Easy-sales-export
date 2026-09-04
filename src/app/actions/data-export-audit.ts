@@ -59,24 +59,14 @@ import { withFlexibleSafeAction, type ActionResponse } from "@/lib/safe-action";
  * the set below rather than written through, so a caller cannot invent a
  * target to file a misleading row under.
  */
-export const EXPORTABLE_DATASETS = [
-    "academy_applications",
-    "audit_logs",
-    "cooperative_loans",
-    "cooperative_transactions",
-    "export_applications",
-    "farm_nation_applications",
-    "farm_nation_land_verification",
-    "finance_report",
-    "marketplace_buyers",
-    "marketplace_sellers",
-    "wave_applications",
-    "wave_compliance",
-    "wave_members",
-    "wave_registrations",
-] as const;
-
-export type ExportableDataset = (typeof EXPORTABLE_DATASETS)[number];
+// THE LIST LIVES IN lib/server-action-values — #382.
+//
+// A "use server" module may only export async functions: every export is
+// registered as a server action, and an array is not callable, so the build
+// refused the module. It is imported here and NOT re-exported — a re-export is
+// still an export of a value from this module, so it would fail the same way.
+// Callers import it from lib/server-action-values.
+import { EXPORTABLE_DATASETS } from "@/lib/server-action-values";
 
 async function _recordDataExportAction(
     dataset: string,
