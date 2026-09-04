@@ -11,7 +11,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logAuditAction } from "./audit";
 import { hasAdminPermission, isSuperAdmin } from "@/lib/admin-permissions";
 import { userErasurePatch, erasedEmailFor, erasureRetentionRecord } from "@/lib/user-erasure";
-import { eraseModuleApplications } from "@/lib/module-application-erasure";
+import { softDeleteUserRecord, SOFT_DELETE_STAGE_MESSAGE } from "@/lib/user-soft-delete";
 
 type ActionState = 
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
@@ -107,70 +107,24 @@ export async function softDeleteUserAction(targetUserId: string): Promise<Action
          *        with the row's copy of them. Owner's instruction, applied on
          *        both deletion paths rather than one.
          */
-        const scrubbedEmail = erasedEmailFor(targetUserId);
-
-
-        await db.collection(COLLECTIONS.ERASURE_RETENTION).doc(targetUserId).set(
-            erasureRetentionRecord(targetUserId, userData),
-            { merge: true },
-        );
-        // 1. Update Firestore Doc (Soft Delete)
-        await userRef.update({
-            // The shared definition, checked against the User type.
-
-            ...userErasurePatch(targetUserId),
-            deleted: true,
-            deletedAt: FieldValue.serverTimestamp(),
-            deletedBy: session.user.id,
-
-            // Deactivate Roles
-            roles: ["deleted"],
-            isActive: false,
-            suspended: true,
-            // The field lib/auth.ts actually refuses to log in. roles and
-            // isActive are read by nothing in the sign-in path.
-
-            updatedAt: FieldValue.serverTimestamp() });
-
         /**
-         *   #376 AND THE MODULE ROWS, WHICH THIS DOOR REACHED NO MORE THAN THE
-         *        MEMBER'S OWN DID.
+         *   #206 THE SAME OPERATION THE BULK DOOR NOW RUNS.
          *
-         *        #305's lesson was that a hand-written list in one file is how
-         *        an omission happens, and it moved the USER row's list to
-         *        lib/user-erasure.ts. The same argument applies one level up:
-         *        the member's identity is copied onto eight module rows, and
-         *        neither deletion door touched any of them. Shared definition,
-         *        both doors, in lib/module-application-erasure.ts.
+         *        The four steps below used to live here and only here — retain
+         *        first so nothing is destroyed, scrub the row, scrub the eight
+         *        module rows, revoke sign-in against the scrubbed address —
+         *        while bulkDeleteUsersAction, gated on the same permission and
+         *        described in its own file as the same job in bulk, wrote five
+         *        bookkeeping fields and scrubbed nothing.
+         *
+         *        Five successive fixes (#283, #300, #305, #371, #376) all
+         *        landed here. Moving the operation to lib/user-soft-delete.ts
+         *        is what stops the sixth doing the same.
          */
-        const moduleErasure = await eraseModuleApplications(targetUserId);
-        if (!moduleErasure.ok) {
-            logger.error(`[delete] module rows could not be scrubbed for ${targetUserId}`, {
-                failures: moduleErasure.failures,
-            });
+        const outcome = await softDeleteUserRecord(targetUserId, session.user.id);
+        if (!outcome.ok) {
             return {
-                error: "Account data was scrubbed but some module records could not be reached. Please retry.",
-                success: false as const,
-                data: null,
-            };
-        }
-
-        // 2. Actually prevent login.
-        //
-        // This disabled the FIREBASE auth user, and lib/auth.ts authenticates
-        // against SUPABASE first — the disabled record was never consulted. The
-        // profile write above sets roles: ["deleted"] and isActive: false, and
-        // login checks neither; it refuses on isBanned, status === 'banned' or
-        // suspended. So a deleted user kept their original email and password
-        // and could still sign in, to a scrubbed account.
-        //
-        // revokeAuthAccess moves the account to the scrubbed address and a
-        // random password in Supabase, and disables Firebase as well.
-        const revocation = await revokeAuthAccess(targetUserId, scrubbedEmail);
-        if (!revocation.primaryRevoked) {
-            logger.error(`[delete] auth revocation failed for ${targetUserId}: ${revocation.error}`);
-            return {
-                error: "Account data was scrubbed but sign-in could not be revoked. Please retry.",
+                error: `Deletion incomplete: ${SOFT_DELETE_STAGE_MESSAGE[outcome.stage]}. Please retry.`,
                 success: false as const,
                 data: null,
             };

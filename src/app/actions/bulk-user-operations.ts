@@ -7,6 +7,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { softDeleteUserRecord, SOFT_DELETE_STAGE_MESSAGE } from "@/lib/user-soft-delete";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
@@ -332,7 +333,7 @@ export async function bulkAssignRolesAction(
 export async function bulkDeleteUsersAction(
     userIds: string[],
     reason: string
-): Promise<ActionResponse<{ deleted: number; failed: string[] }>> { 
+): Promise<ActionResponse<{ deleted: number; failed: string[]; failures: Array<{ userId: string; because: string }> }>> { 
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
@@ -358,40 +359,83 @@ export async function bulkDeleteUsersAction(
             return { success: false, error: "Cannot delete your own account", data: null };
         }
 
+        /**
+         *   #206 THIS SCRUBBED NO PERSONAL DATA AT ALL.
+         *
+         *        It wrote five fields — deleted, deletedAt, deletedBy,
+         *        deletionReason, suspended — and nothing else. Name, email,
+         *        phone, BVN, NIN, next of kin, bank account and
+         *        identity-document URLs all remained, on the user row and on
+         *        every module row, for up to fifty people at a time.
+         *
+         *        The account was refused at login, because `suspended` is the
+         *        field lib/auth.ts actually reads, so this was never an access
+         *        defect. It was a retention one — the same compliance failure
+         *        #283 opened — and the fixes for it (#283, #300, #305, #371,
+         *        #376) all landed on softDeleteUserAction, the OTHER door onto
+         *        the same operation. lib/user-erasure.ts even says there is
+         *        more than one deletion path, and names this file.
+         *
+         *        Sharing the field LISTS was not enough, because what was
+         *        missing here was never a field: it was the four STEPS — retain,
+         *        scrub the row, scrub the module rows, revoke sign-in. The
+         *        operation lives in lib/user-soft-delete.ts now and both doors
+         *        call it.
+         *
+         *        THE BATCH IS GONE, DELIBERATELY. Scrubbing correctly means a
+         *        retention write, a row update, eight module sweeps and an auth
+         *        revocation per user — none of which belong in, or survive, a
+         *        single batched update. Fifty at a time is the existing cap.
+         */
         let deletedCount = 0;
         const failedIds: string[] = [];
-        const batch = db.batch();
+        /** Reported per user, so a partial failure is not a silent one. */
+        const failures: Array<{ userId: string; because: string }> = [];
 
-        for (const userId of userIds) { try {
-                const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
-                const userDoc = await userRef.get();
+        for (const userId of userIds) {
+            try {
+                const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
 
                 if (!userDoc.exists) {
                     failedIds.push(userId);
+                    failures.push({ userId, because: "no such account" });
                     continue;
                 }
-
-                const userData = userDoc.data();
 
                 // Prevent deleting admins (unless you're super_admin)
-                const userRoles = userData?.roles || [];
-                if (userRoles.includes("admin") && !isSuperAdmin(session.user.roles)) { failedIds.push(userId);
+                const userRoles = (userDoc.data()?.roles as string[] | undefined) || [];
+                if (userRoles.includes("admin") && !isSuperAdmin(session.user.roles)) {
+                    failedIds.push(userId);
+                    failures.push({ userId, because: "target is an admin" });
                     continue;
                 }
 
-                // Soft delete: mark as deleted instead of removing document
-                batch.update(userRef, { deleted: true,
-                    deletedAt: FieldValue.serverTimestamp(),
-                    deletedBy: session.user.id,
+                const outcome = await softDeleteUserRecord(userId, session.user.id || "", {
                     deletionReason: reason,
-                    suspended: true });
+                });
+
+                if (!outcome.ok) {
+                    // NOT counted as deleted. A scrub that half-ran is a row an
+                    // operator has to finish, and reporting it as done is how
+                    // personal data survives a deletion nobody looks at again.
+                    failedIds.push(userId);
+                    failures.push({ userId, because: SOFT_DELETE_STAGE_MESSAGE[outcome.stage] });
+                    continue;
+                }
 
                 deletedCount++;
-            } catch (error) { failedIds.push(userId);
+            } catch (error: any) {
+                failedIds.push(userId);
+                failures.push({ userId, because: error?.message ?? "unknown error" });
             }
         }
 
-        await batch.commit();
+        if (failures.length > 0) {
+            logger.error(
+                `[bulkDeleteUsersAction] ${failures.length} of ${userIds.length} not deleted: `
+                + failures.map((f) => `${f.userId} (${f.because})`).join("; "),
+            );
+        }
 
         // 🚀 POST-COMMIT SIDE EFFECTS (Non-blocking)
         try {
@@ -416,7 +460,13 @@ export async function bulkDeleteUsersAction(
         } catch (sideEffectError) { logger.error("[bulkDeleteUsersAction] Post-commit side effects failed:", sideEffectError);
         }
 
-        return { success: true, error: null, data: { deleted: deletedCount, failed: failedIds } };
+        // `failures` names WHY, beside the ids that only say WHICH — an admin
+        // told "3 failed" and nothing else cannot act on it.
+        return {
+            success: true,
+            error: null,
+            data: { deleted: deletedCount, failed: failedIds, failures },
+        };
     } catch (error: any) { 
         logger.error("Failed to bulk delete users:", error);
         return { success: false, error: error.message || "Failed to delete users", data: null };

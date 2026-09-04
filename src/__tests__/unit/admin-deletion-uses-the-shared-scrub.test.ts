@@ -112,6 +112,9 @@ function code(rel: string): string {
 }
 
 const EXT = 'src/app/actions/admin_extensions.ts';
+/** #206 — the one implementation both admin doors now call. */
+const OPERATION = 'src/lib/user-soft-delete.ts';
+const BULK = 'src/app/actions/bulk-user-operations.ts';
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#305 — the admin deletion, executed', () => {
@@ -205,17 +208,22 @@ describe('#305 — the definition lives in one place', () => {
         expect(src).not.toMatch(/@deleted\.com/);
     });
 
-    it('and the shared one is used instead', () => {
-        const src = code(EXT);
-
-        expect(src).toMatch(/\.\.\.userErasurePatch\(targetUserId\)/);
-        expect(src).toMatch(/erasedEmailFor\(targetUserId\)/);
+    it('and the shared one is used instead — now through the shared OPERATION', () => {
+        // #206 moved the four steps out of this file into
+        // lib/user-soft-delete.ts, because the omission that mattered was never
+        // a field: the bulk door had the same permission, the same job, and
+        // none of the steps. The patch is still the shared one; it is applied
+        // one level down, where both doors reach it.
+        expect(code(EXT)).toMatch(/softDeleteUserRecord\(targetUserId/);
+        expect(code(OPERATION)).toMatch(/\.\.\.userErasurePatch\(targetUserId\)/);
+        expect(code(OPERATION)).toMatch(/erasedEmailFor\(targetUserId\)/);
     });
 
     it('THE RETENTION RECORD IS WRITTEN BEFORE THE SCRUB', () => {
         // userErasurePatch deletes `documents`; reading it afterwards reads
-        // nothing. Both paths take the same care.
-        const src = code(EXT);
+        // nothing. Asserted where the order now lives, and it is one order for
+        // every door rather than one per door.
+        const src = code(OPERATION);
         const retained = src.indexOf('erasureRetentionRecord(');
         const scrubbed = src.indexOf('userErasurePatch(targetUserId)');
 
@@ -223,36 +231,77 @@ describe('#305 — the definition lives in one place', () => {
         expect(scrubbed).toBeGreaterThan(retained);
     });
 
-    it('BOTH deletion paths now build their patch from lib/user-erasure', () => {
-        // The member's own path and the admin's. If a third appears, it should
-        // fail this rather than grow a fourth list.
-        for (const path of ['src/app/actions/user.ts', EXT]) {
-            expect({ path, shared: code(path).includes('userErasurePatch(') })
-                .toEqual({ path, shared: true });
+    it('and a FAILED retention write scrubs nothing at all', () => {
+        // The no-destruction rule, as control flow: losing the
+        // identity-document references is the one outcome the owner ruled out,
+        // so the scrub does not begin if they could not be kept.
+        const src = code(OPERATION);
+        const guard = src.indexOf('stage: "retention"');
+        const scrubbed = src.indexOf('userErasurePatch(targetUserId)');
+
+        expect(guard).toBeGreaterThan(-1);
+        expect(scrubbed).toBeGreaterThan(guard);
+    });
+
+    it('ALL THREE deletion paths now build their patch from lib/user-erasure', () => {
+        // The member's own path, and the two admin doors through the shared
+        // operation. If a fourth appears, it should fail this rather than grow
+        // a second implementation.
+        expect(code('src/app/actions/user.ts')).toContain('userErasurePatch(');
+        expect(code(OPERATION)).toContain('userErasurePatch(');
+
+        for (const door of [EXT, BULK]) {
+            expect({ door, callsOperation: code(door).includes('softDeleteUserRecord(') })
+                .toEqual({ door, callsOperation: true });
         }
     });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('#305 — what is left for the owner (#206), recorded not hidden', () => {
+describe('#206 — the bulk door scrubs, and it is the same scrub', () => {
     /**
-     * bulkDeleteUsersAction scrubs nothing. That is deliberate for now and
-     * belongs to the owner, so this pins the CURRENT behaviour rather than
-     * asserting it is right — if somebody changes it, they change this test and
-     * see the decision they are taking.
+     * WAS RECORDED AS OPEN HERE, in these words: "bulkDeleteUsersAction scrubs
+     * nothing. That is deliberate for now and belongs to the owner."
+     *
+     * It is taken. The bulk door wrote five bookkeeping fields — deleted,
+     * deletedAt, deletedBy, deletionReason, suspended — and nothing else, for
+     * up to fifty people at a time, while five successive fixes (#283, #300,
+     * #305, #371, #376) all landed on its sibling. The account was refused at
+     * login, so this was never an access defect; it was a retention one.
+     *
+     * The assertions below are the opposite of the ones they replace, and are
+     * pinned as tightly.
      */
-    const BULK = 'src/app/actions/bulk-user-operations.ts';
 
-    it('the bulk door marks the account and does not scrub', () => {
+    it('THE BULK DOOR RUNS THE SHARED OPERATION', () => {
         const src = code(BULK);
 
-        expect(src).toMatch(/deleted: true/);
-        expect(src).toMatch(/suspended: true/);
+        expect(src).toContain('softDeleteUserRecord(userId');
+        // And keeps no second implementation beside it.
         expect(src).not.toMatch(/userErasurePatch\(/);
+        expect(src).not.toMatch(/erasureRetentionRecord\(/);
     });
 
-    it('and it destroys nothing either — it was always a mark', () => {
+    it('and a user whose scrub did not finish is NOT counted as deleted', () => {
+        // The half-scrubbed account reported as done is how personal data
+        // survives a deletion nobody looks at again — #298/#299's rule.
+        const src = code(BULK);
+
+        expect(src).toMatch(/if\s*\(!outcome\.ok\)/);
+        expect(src).toContain('failedIds.push(userId);');
+        expect(src).toContain('SOFT_DELETE_STAGE_MESSAGE[outcome.stage]');
+    });
+
+    it('and the report says WHY, not only how many', () => {
+        const src = code(BULK);
+
+        expect(src).toContain('failures');
+        expect(src).toMatch(/because:/);
+    });
+
+    it('and it destroys nothing — it was always a mark, and still is', () => {
         expect(code(BULK)).not.toMatch(/userRef\.delete\(\)/);
+        expect(code(OPERATION)).not.toMatch(/\.delete\(\)/);
     });
 
     it('it still refuses more than 50 at once, and refuses self-deletion', () => {

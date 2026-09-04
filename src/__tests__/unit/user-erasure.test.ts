@@ -67,6 +67,8 @@ import { ERASED_FIELDS, userErasurePatch, erasedEmailFor } from '@/lib/user-eras
 const SHARED_TYPES = 'src/lib/types/shared.ts';
 const USER_ACTIONS = 'src/app/actions/user.ts';
 const BULK = 'src/app/actions/bulk-user-operations.ts';
+/** #206 — the one implementation both admin doors call. */
+const OPERATION = 'src/lib/user-soft-delete.ts';
 
 function codeOnly(rel: string): string {
     return readFileSync(join(process.cwd(), rel), 'utf-8')
@@ -233,17 +235,29 @@ describe('#283 — the admin deletion path, pinned as OPEN', () => {
      * Pinned so it stays a decision. When the owner says which it should be,
      * this test fails and gets replaced.
      */
-    it('the admin bulk delete still retains every personal field — owner decision', () => {
-        // Anchored on CODE, not on the "Soft delete" comment above it —
-        // codeOnly strips comments, so that anchor found nothing and the
-        // assertion compared against an empty string, passing or failing for
-        // reasons unrelated to the file.
+    it('#206 — THE ADMIN BULK DELETE SCRUBS NOW, and through the same operation', () => {
+        // WAS: "the admin bulk delete still retains every personal field —
+        // owner decision", pinning the defect so it stayed a decision rather
+        // than a habit. The decision is taken.
+        //
+        // The bulk door wrote five bookkeeping fields and nothing else, for up
+        // to fifty people at a time, while five successive fixes all landed on
+        // its sibling. Both now call softDeleteUserRecord, so there is one
+        // implementation of "delete a user" rather than two that agree today.
         const src = codeOnly(BULK);
-        const start = src.indexOf('deletionReason: reason');
-        expect(start).toBeGreaterThan(-1);
-        const block = src.slice(Math.max(0, start - 400), start + 200);
 
-        expect(block).toContain('deleted: true');
-        expect(block).not.toContain('userErasurePatch');
+        expect(src).toContain('softDeleteUserRecord(userId');
+        // The bookkeeping it always did is still there — the reason and the
+        // mark are what an operator reads afterwards.
+        expect(src).toContain('deletionReason: reason');
+        // And it does NOT keep its own copy of the scrub.
+        expect(src).not.toContain('userErasurePatch');
+    });
+
+    it('and the scrub it runs is the one this module defines', () => {
+        // The link between the two, so "calls the operation" cannot become
+        // true of an operation that scrubs nothing.
+        expect(codeOnly(OPERATION)).toContain('userErasurePatch(targetUserId)');
+        expect(codeOnly(OPERATION)).toContain('eraseModuleApplications(targetUserId)');
     });
 });

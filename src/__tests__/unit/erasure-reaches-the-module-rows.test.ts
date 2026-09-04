@@ -529,11 +529,30 @@ describe('#376 — the sweep, end to end', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('#376 — all three erasure doors use it, and none keeps its own list', () => {
+describe('#376 — every erasure door uses it, and none keeps its own list', () => {
+    /**
+     * WAS THREE DOORS, EACH CALLING eraseModuleApplications DIRECTLY.
+     *
+     * #206 found a FOURTH — bulkDeleteUsersAction — which called it not at
+     * all, and scrubbed nothing whatever. Rather than adding a fourth direct
+     * caller, the two ADMIN doors now share one operation
+     * (lib/user-soft-delete.ts), which is what makes a fifth impossible to get
+     * wrong: there is one implementation of "delete a user", not two that
+     * happen to agree.
+     *
+     * So the doors below are the ones that call the sweep directly, and the two
+     * admin doors are checked through the operation they share.
+     */
     const DOORS = [
         'src/app/actions/user.ts',                    // the member's own request
-        'src/app/actions/admin_extensions.ts',        // the admin deletion
+        'src/lib/user-soft-delete.ts',                // BOTH admin deletions
         'src/app/api/cron/gdpr-purge/route.ts',       // the 30-day sweep
+    ];
+
+    /** The two admin doors, which reach the sweep through the shared operation. */
+    const ADMIN_DOORS = [
+        'src/app/actions/admin_extensions.ts',        // one user
+        'src/app/actions/bulk-user-operations.ts',    // up to fifty
     ];
 
     it('EACH DOOR CALLS THE SHARED SWEEP', () => {
@@ -546,6 +565,19 @@ describe('#376 — all three erasure doors use it, and none keeps its own list',
         }
     });
 
+    it('AND BOTH ADMIN DOORS REACH IT THROUGH THE ONE SHARED OPERATION', () => {
+        // #206. The bulk door wrote five bookkeeping fields and scrubbed
+        // nothing; five successive fixes had all landed on its sibling.
+        for (const door of ADMIN_DOORS) {
+            const s = source(door);
+            expect({ door, calls: /softDeleteUserRecord\(/.test(s) })
+                .toEqual({ door, calls: true });
+            // And neither keeps a second implementation beside it.
+            expect({ door, ownPatch: /userErasurePatch\(/.test(s) })
+                .toEqual({ door, ownPatch: false });
+        }
+    });
+
     it('AND ACTS ON A FAILURE RATHER THAN CONTINUING', () => {
         // #305's shape: a door that scrubs and reports success regardless is
         // the defect, not the absence of the call.
@@ -553,6 +585,14 @@ describe('#376 — all three erasure doors use it, and none keeps its own list',
         // `moduleErasure.failures` in the body reads as handled and is not.
         for (const door of DOORS) {
             expect({ door, checked: /if\s*\(!moduleErasure\.ok\)/.test(source(door)) })
+                .toEqual({ door, checked: true });
+        }
+
+        // And the admin doors act on the shared operation's verdict the same
+        // way — a half-scrubbed account reported as deleted is how personal
+        // data survives a deletion nobody looks at again.
+        for (const door of ADMIN_DOORS) {
+            expect({ door, checked: /if\s*\(!outcome\.ok\)/.test(source(door)) })
                 .toEqual({ door, checked: true });
         }
     });
@@ -584,6 +624,8 @@ describe('#376 — all three erasure doors use it, and none keeps its own list',
 
         const callers = files.filter((f) => /eraseModuleApplications\(/.test(source(f)));
 
+        // The shared operation is among the direct callers; the two admin doors
+        // are deliberately NOT, because they go through it.
         expect(callers.sort()).toEqual([...DOORS, 'src/lib/module-application-erasure.ts'].sort());
         expect(files.length).toBeGreaterThan(400);
     });
