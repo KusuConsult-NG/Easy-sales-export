@@ -36,18 +36,34 @@
  *        and the same sentence as #242, which was "suspending a seller
  *        suspended nothing", said about an admin instead.
  *
- * WHAT WAS DELIBERATELY NOT CHANGED
- * ---------------------------------
- * lib/require-admin.ts's role test is `admin | super_admin | *_admin`, while
- * isAdmin() ALSO accepts `moderator` and `support`. Swapping cms.ts onto the
- * shared helper would have silently taken the announcements screen away from
- * two roles that have it today — #265's lockout, which this audit caused once
- * already and now checks for every time.
+ * WHAT #281 DELIBERATELY LEFT, AND WHAT #203 THEN DECIDED
+ * -------------------------------------------------------
+ * #281 changed only the SOURCE of the roles — token to live document, plus the
+ * banned check — and left the BREADTH alone, because lib/require-admin.ts's
+ * role test is `admin | super_admin | *_admin` while isAdmin() also accepts
+ * `moderator` and `support`. Swapping wholesale would have taken the
+ * announcements screen away from roles that had it: #265's lockout, which this
+ * audit caused once already.
  *
- * So the PREDICATE is untouched; only the SOURCE of the roles moved, from token
- * to live document, plus the banned check. Whether moderator and support should
- * reach a platform-wide announcement at all is a real question — the two doors
- * disagree — but it is a policy decision and it is the owner's.
+ * #203 TOOK THAT DECISION, AND THE QUESTION WAS WIDER THAN RECORDED. isAdmin()
+ * is a role-SHAPE test that returns true for all TEN admin roles, so the door
+ * accepted not only moderator and support but wave_admin, academy_admin,
+ * cooperative_admin, marketplace_admin, export_admin and farm_nation_admin —
+ * any of whom could publish a notice, or a banner, to every visitor.
+ *
+ * PERMISSION_MATRIX holds `announcements:manage` for super_admin and admin, and
+ * says what the others are for in its own words: moderator is "Content
+ * moderation only" — approving and rejecting what other people wrote — and
+ * support is "Read-only + basic user assistance". The platform had already
+ * taken the same decision on the other side of this screen: AdminSidebar gates
+ * /admin/cms on `announcements:manage` (#382), so the link was already hidden
+ * from those eight roles while the server still accepted them. The nav said one
+ * thing and the action another.
+ *
+ * So the matrix decides now, on both doors, and cms.ts's hand-written guard is
+ * gone: lib/require-admin.ts does everything it did AND asks the matrix. The
+ * breadth is no longer a property of a guard, it is a row of the matrix, and
+ * changing who may post is a one-line change there.
  *
  * A NOTE ON HOW THIS WAS FOUND, BECAUSE THE FIRST DIAGNOSIS WAS WRONG
  * ------------------------------------------------------------------
@@ -101,12 +117,17 @@ describe('#281 — the CMS admin check reads the live record', () => {
         live?: Record<string, unknown>;
         seedUser?: boolean;
     }) {
+        const jwtSession = { user: { id: 'u1', email: 'u@e.test', roles: opts.jwtRoles } };
         jest.doMock('@/lib/session-guard', () => ({
-            requireSession: async () => ({
-                session: { user: { id: 'u1', email: 'u@e.test', roles: opts.jwtRoles } },
-                error: null,
-            }),
+            requireSession: async () => ({ session: jwtSession, error: null }),
         }));
+        /**
+         * #203. The write is gated on lib/require-admin.ts now, which reads
+         * auth() rather than requireSession. Left at jest.setup's default of
+         * null it refuses EVERYBODY — and every refusal case below would then
+         * pass for a reason that has nothing to do with the finding.
+         */
+        jest.doMock('@/lib/auth', () => ({ auth: async () => jwtSession }));
 
         const { installFakeDb } = await import('@/lib/testing/fake-db');
         const { COLLECTIONS } = await import('@/lib/types/firestore');
@@ -157,13 +178,30 @@ describe('#281 — the CMS admin check reads the live record', () => {
         expect(rows).toBe(1);
     });
 
-    it('AND MODERATOR AND SUPPORT KEEP THE ACCESS THEY HAVE TODAY', async () => {
-        // #265's lockout, checked rather than assumed. isAdmin() accepts these
-        // two and lib/require-admin.ts does not, so moving to the shared helper
-        // would have removed the announcements screen from them silently.
-        for (const role of ['moderator', 'support']) {
-            const { res } = await post({ jwtRoles: [role] });
-            expect({ role, ok: res.success }).toEqual({ role, ok: true });
+    it('#203 — AND EVERY ROLE WITHOUT announcements:manage IS REFUSED', async () => {
+        /**
+         * The decision, measured. isAdmin() accepted all TEN admin roles, so
+         * eight of them could publish to every visitor of the platform. The
+         * matrix holds `announcements:manage` for two, and the sidebar already
+         * hid the screen from the rest — the server is what disagreed.
+         *
+         * Asserted against the matrix rather than a copy of it, so adding the
+         * permission to a role is one change in one place and this test follows
+         * it. That is the whole point of moving off isAdmin().
+         */
+        const { ALL_ADMIN_ROLES, rolesWithPermission } =
+            await import('@/lib/admin-permissions');
+        const allowed = new Set(rolesWithPermission('announcements:manage'));
+
+        // Guard the premise: this must be a PROPER subset, or the test below
+        // is comparing every role with every role and proves nothing.
+        expect(allowed.size).toBeGreaterThan(0);
+        expect(allowed.size).toBeLessThan(ALL_ADMIN_ROLES.length);
+
+        for (const role of ALL_ADMIN_ROLES) {
+            const { res, rows } = await post({ jwtRoles: [role] });
+            expect({ role, ok: res.success, rows })
+                .toEqual({ role, ok: allowed.has(role), rows: allowed.has(role) ? 1 : 0 });
         }
     });
 
@@ -194,12 +232,11 @@ describe('#281 — the CMS admin check reads the live record', () => {
          * the whole suite until this test existed, which is exactly the shape
          * #245 found in the feature-toggle kill switch.
          */
+        const adminSession = { user: { id: 'u1', email: 'u@e.test', roles: ['admin'] } };
         jest.doMock('@/lib/session-guard', () => ({
-            requireSession: async () => ({
-                session: { user: { id: 'u1', email: 'u@e.test', roles: ['admin'] } },
-                error: null,
-            }),
+            requireSession: async () => ({ session: adminSession, error: null }),
         }));
+        jest.doMock('@/lib/auth', () => ({ auth: async () => adminSession }));
         jest.doMock('@/lib/supabase-db', () => ({
             supabaseDb: {
                 collection: () => ({
@@ -220,27 +257,43 @@ describe('#281 — the CMS admin check reads the live record', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#281 — the guard cannot go back to the token', () => {
-    it('THE LOCAL requireAdmin READS THE USERS COLLECTION', () => {
+    it('#203 — THERE IS NO LOCAL GUARD LEFT; THE SHARED ONE DECIDES', () => {
+        /**
+         * #281 hardened a hand-written requireAdmin in this file. #203 removed
+         * it: lib/require-admin.ts already read the live document, already
+         * checked banned/suspended, already failed closed on a throw — and it
+         * asks PERMISSION_MATRIX for a NAMED permission, which is what the
+         * hand-written one could not do.
+         *
+         * The two assertions this replaces pinned the hand-written body. What
+         * has to hold now is that the body is GONE and the shared gate is what
+         * every write calls, which is a stronger statement: it cannot drift.
+         */
         const src = codeOnly(CMS);
-        const fn = src.slice(
-            src.indexOf('async function requireAdmin'),
-            src.indexOf('async function requireAdmin') + 1400,
-        );
 
-        expect(fn).toContain('COLLECTIONS.USERS');
-        expect(fn).toMatch(/isBanned|suspended/);
+        expect(src).not.toMatch(/async function requireAdmin/);
+        expect(src).toContain('from "@/lib/require-admin"');
     });
 
-    it('and does not decide from session.user.roles', () => {
-        // The exact line that was there. Pinned because the fix is one word
-        // away from being undone by somebody simplifying it.
+    it('and no write decides from session.user.roles', () => {
+        // The exact expression that was the defect. Pinned because the fix is
+        // one word away from being undone by somebody simplifying it.
         const src = codeOnly(CMS);
-        const fn = src.slice(
-            src.indexOf('async function requireAdmin'),
-            src.indexOf('async function requireAdmin') + 1400,
-        );
+        expect(src).not.toMatch(/isAdmin\(session\.user\.roles\)/);
+    });
 
-        expect(fn).not.toMatch(/isAdmin\(session\.user\.roles\)/);
+    it('EVERY WRITE IN THE FILE NAMES THE SAME PERMISSION', () => {
+        // Four of them — create and deactivate, announcement and banner. A
+        // banner is an announcement in another shape: same screen, same
+        // audience, same component renders it across the site.
+        const src = codeOnly(CMS);
+        // The literal is at each call site rather than behind a constant,
+        // because #375's sweep reads the ARGUMENT: a constant would satisfy
+        // "names a permission" while hiding which one from the check.
+        const gates = src.match(/requireAdmin\("announcements:manage"\)/g) ?? [];
+        expect(gates.length).toBe(4);
+        // ...and no write slips through on a bare gate.
+        expect(src).not.toMatch(/requireAdmin\(\s*\)/);
     });
 
     it('the CMS screen still calls this file, which is why it had to be fixed here', () => {

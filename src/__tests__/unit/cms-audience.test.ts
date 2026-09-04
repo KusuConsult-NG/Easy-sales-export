@@ -81,11 +81,23 @@ let currentUser: { id: string | null; roles: string[] } = { id: null, roles: [] 
 
 function setSession(id: string | null, roles: string[] = []) {
     currentUser = { id, roles };
+    const session = id === null
+        ? null
+        : { user: { id, email: `${id}@e.com`, name: id, roles } };
+
     (global as any).mockRequireSession.mockImplementation(() => Promise.resolve(
-        id === null
+        session === null
             ? { session: null, error: { error: 'Authentication required' } }
-            : { session: { user: { id, email: `${id}@e.com`, name: id, roles } }, error: null }
+            : { session, error: null }
     ));
+
+    // #203. cms.ts's writes are gated on lib/require-admin.ts now, which reads
+    // auth() directly rather than through requireSession. Driving only the
+    // latter left auth() at jest.setup's default of null, which refuses
+    // EVERYBODY — and a suite whose refusal cases all pass for that reason is
+    // asserting nothing at all.
+    const { auth } = jest.requireMock('@/lib/auth') as { auth: jest.Mock };
+    auth.mockImplementation(() => Promise.resolve(session));
 }
 
 const ROWS = [

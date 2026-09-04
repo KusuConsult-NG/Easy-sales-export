@@ -8,81 +8,65 @@ import { requireSession } from "@/lib/session-guard";
 import { FieldValue } from "@/lib/firestore-compat";
 import { createAdminAuditLog, logAdminAction } from "@/lib/audit-log";
 import { isAdmin } from "@/lib/admin-permissions";
+import { requireAdmin } from "@/lib/require-admin";
 
 /**
- * Helper: verify admin session.
+ *   #203 THE TWO ANNOUNCEMENT DOORS DISAGREED ABOUT WHO, AND THE MATRIX HAD
+ *        ALREADY SAID.
  *
- *   #281 A DEMOTED OR SUSPENDED ADMIN COULD STILL POST A PLATFORM-WIDE
- *        ANNOUNCEMENT OR BANNER, AND TAKE DOWN A REAL ONE.
+ *        There are two createAnnouncementActions:
  *
- *        This read `isAdmin(session.user.roles)` — the roles carried in the
- *        JWT — and nothing else. So it decided on a snapshot taken when the
- *        token was minted:
+ *          cms.ts                  what the CMS screen calls. Gated on the
+ *                                  hand-written guard that used to live here,
+ *                                  whose test was isAdmin(liveRoles).
+ *          admin-communications.ts unreferenced by any screen. Gated on
+ *                                  requireAdmin("announcements:manage").
  *
- *          revoke somebody's admin role   they keep CMS write access until
- *                                         their token refreshes
- *          suspend or ban the account     the guard never looks, so the ban
- *                                         changes nothing here at all
+ *        #281 hardened the guard here — live roles instead of the stale JWT,
+ *        plus a banned check — and deliberately left the BREADTH alone, because
+ *        swapping wholesale to lib/require-admin.ts would have narrowed it and
+ *        #265's lockout had already been caused once by this audit. It recorded
+ *        the disagreement and left the policy question open.
  *
- *        Measured, not inferred. With a JWT saying "admin" over a live record
- *        saying "general_user", createAnnouncementAction returned
- *        `{"success":true,"announcementId":"..."}` and wrote the row. With
- *        `isBanned: true` on the live record, the same.
+ *        THE QUESTION WAS WIDER THAN RECORDED. isAdmin() is a role-SHAPE test:
+ *        it returns true for all TEN admin roles. So the door the CMS screen
+ *        uses accepted not only moderator and support but wave_admin,
+ *        academy_admin, cooperative_admin, marketplace_admin, export_admin and
+ *        farm_nation_admin — any of whom could publish a notice, or a banner,
+ *        to every visitor of the platform.
  *
- *        THERE ARE TWO createAnnouncementActions AND THE OTHER ONE WAS RIGHT.
- *        admin-communications.ts uses lib/require-admin.ts, which exists for
- *        precisely this and says so in its own comments — "Re-fetch roles live
- *        from Firestore (bypasses the stale JWT)" and a banned/suspended check
- *        while it has the document. The admin CMS page imports from THIS file.
- *        Same shape as #276 and #277: the hardened implementation is not the
- *        wired one.
+ *   THE DECISION, AND WHY IT IS NOT A NEW POLICY
  *
- *        It is also #242 from the other side. That finding was "suspending a
- *        seller suspended nothing"; this is the same sentence about an admin.
+ *        PERMISSION_MATRIX holds `announcements:manage` for super_admin and
+ *        admin, and says in its own words what the others are for: moderator is
+ *        "Content moderation only" — approving and rejecting what other people
+ *        wrote — and support is "Read-only + basic user assistance". Authoring
+ *        a message that reaches everybody is neither.
  *
- * WHY NOT JUST CALL lib/require-admin.ts
- * --------------------------------------
- * Its role test is `admin | super_admin | *_admin`. isAdmin() ALSO accepts
- * `moderator` and `support`, and this file is what the CMS screen calls — so
- * swapping wholesale would silently take the announcements screen away from
- * two roles that have it today. That is #265's lockout, which this audit
- * caused once already.
+ *        The platform had ALREADY taken this decision on the other side of the
+ *        same screen: AdminSidebar gates /admin/cms on `announcements:manage`
+ *        (#382), so the link is already hidden from those eight roles. The nav
+ *        said one thing and the server accepted another — the browser was the
+ *        whole gate, which is the shape #339, #364 and #365 each closed
+ *        elsewhere.
  *
- * So the PREDICATE is unchanged and only the SOURCE of the roles moves: live
- * document instead of JWT, plus the banned check. Nobody who can post today
- * stops being able to; people who should have stopped, stop.
+ *        So the matrix decides, on both doors, and the hand-written guard is
+ *        gone: lib/require-admin.ts already does everything it did — live roles
+ *        rather than the stale JWT, the banned/suspended check while it has the
+ *        document, and a fail-closed catch — AND asks the matrix for the named
+ *        permission. #281's reason for not calling it ("its role test is
+ *        narrower than isAdmin") was answered by the permission argument: the
+ *        breadth is no longer a property of the guard, it is a row of the
+ *        matrix, and changing who may post is now a one-line change there.
  *
- * Whether moderator and support ought to reach a platform-wide announcement at
- * all is a real question — the two doors disagree about it — but it is a policy
- * decision and belongs to the owner, not to a security fix. Recorded rather
- * than taken.
+ *   BANNERS TOO, ON THE SAME PERMISSION
+ *
+ *        A banner is an announcement in another shape: same screen, same
+ *        audience, rendered by the same AnnouncementBanner component across the
+ *        site. There is no `banners:manage` in the vocabulary and inventing one
+ *        would be adding vocabulary to answer a question the existing word
+ *        already answers.
  */
-async function requireAdmin(): Promise<{ id: string } | null> {
-    const sessionResult = await requireSession();
-    if (!sessionResult.session) return null;
-    const { session } = sessionResult;
-    if (!session?.user?.id) return null;
-
-    // The live record decides, not the token.
-    let liveRoles: string[] | undefined;
-    let banned = false;
-    try {
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists) return null;
-        const data = userDoc.data();
-        liveRoles = data?.roles;
-        banned = data?.isBanned === true || data?.status === "banned" || data?.suspended === true;
-    } catch (error) {
-        // #245's rule: a guard that cannot evaluate refuses. Failing open here
-        // would make a database blip an authorisation bypass.
-        logger.error("[cms] admin check failed to read the live user record", { error });
-        return null;
-    }
-
-    if (banned || !isAdmin(liveRoles)) return null;
-
-    return { id: session.user.id };
-}
 
 /**
  * Content Management System (CMS)
@@ -154,8 +138,8 @@ export async function createAnnouncementAction(data: { title: string;
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
-        const admin = await requireAdmin();
-        if (!admin) return { success: false as const, error: "Unauthorized: Admin access required", data: null };
+        const admin = await requireAdmin("announcements:manage");
+        if ("error" in admin) return { success: false as const, error: admin.error, data: null };
 
         // These are TypeScript unions on a server action, which means they are
         // erased before the request arrives — the parameter types constrain the
@@ -179,7 +163,7 @@ export async function createAnnouncementAction(data: { title: string;
             priority: data.priority,
             publishedAt: FieldValue.serverTimestamp(),
             expiresAt: data.expiresAt ? new Date(data.expiresAt) : undefined,
-            createdBy: admin.id,
+            createdBy: admin.userId,
             createdAt: FieldValue.serverTimestamp(),
             active: true };
 
@@ -187,7 +171,7 @@ export async function createAnnouncementAction(data: { title: string;
 
         await logAdminAction(
             "announcement_created",
-            admin.id,
+            admin.userId,
             docRef.id,
             "announcement"
         );
@@ -287,8 +271,8 @@ export async function deactivateAnnouncementAction(
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
-        const admin = await requireAdmin();
-        if (!admin) return { success: false as const, error: "Unauthorized: Admin access required", data: null };
+        const admin = await requireAdmin("announcements:manage");
+        if ("error" in admin) return { success: false as const, error: admin.error, data: null };
         const announcementRef = db.collection(COLLECTIONS.ANNOUNCEMENTS).doc(announcementId);
 
         await announcementRef.update({ active: false,
@@ -296,7 +280,7 @@ export async function deactivateAnnouncementAction(
 
         await logAdminAction(
             "announcement_deactivated",
-            admin.id,
+            admin.userId,
             announcementId,
             "announcement"
         );
@@ -323,8 +307,8 @@ export async function createBannerAction(data: { title: string;
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
-        const admin = await requireAdmin();
-        if (!admin) return { success: false as const, error: "Unauthorized: Admin access required", data: null };
+        const admin = await requireAdmin("announcements:manage");
+        if ("error" in admin) return { success: false as const, error: admin.error, data: null };
 
         // A banner is shown by `now >= startDate && now <= endDate`, evaluated
         // in getActiveBannersAction. An unparseable date becomes Invalid Date,
@@ -351,7 +335,7 @@ export async function createBannerAction(data: { title: string;
             startDate,
             endDate,
             position: data.position,
-            createdBy: admin.id,
+            createdBy: admin.userId,
             createdAt: FieldValue.serverTimestamp(),
             active: true };
 
@@ -359,7 +343,7 @@ export async function createBannerAction(data: { title: string;
 
         await logAdminAction(
             "banner_created",
-            admin.id,
+            admin.userId,
             docRef.id,
             "banner"
         );
@@ -417,8 +401,8 @@ export async function deactivateBannerAction(
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
-        const admin = await requireAdmin();
-        if (!admin) return { success: false as const, error: "Unauthorized: Admin access required", data: null };
+        const admin = await requireAdmin("announcements:manage");
+        if ("error" in admin) return { success: false as const, error: admin.error, data: null };
         const bannerRef = db.collection(COLLECTIONS.BANNERS).doc(bannerId);
 
         await bannerRef.update({ active: false,
@@ -426,7 +410,7 @@ export async function deactivateBannerAction(
 
         await logAdminAction(
             "banner_deactivated",
-            admin.id,
+            admin.userId,
             bannerId,
             "banner"
         );

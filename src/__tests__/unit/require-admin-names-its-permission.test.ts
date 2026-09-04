@@ -286,6 +286,22 @@ describe('#375 — every gate names its permission, and the exception is stated'
 
         // The deliberate exception, plus its writer.
         'src/app/actions/escalation-notes.ts': ['finance:resolve_disputes'],
+
+        /**
+         * #203. cms.ts joined the shared gate. It had a hand-written
+         * requireAdmin whose test was isAdmin(liveRoles) — a role-SHAPE test
+         * that returns true for all TEN admin roles — so any of them could
+         * publish an announcement or a banner to every visitor, while
+         * AdminSidebar had already hidden /admin/cms from eight of them on
+         * `announcements:manage` (#382). The nav said one thing and the server
+         * accepted another.
+         *
+         * Four gates, one permission: create and deactivate, announcement and
+         * banner. A banner is an announcement in another shape — same screen,
+         * same audience, same component renders it site-wide — and there is no
+         * `banners:manage` in the vocabulary to invent.
+         */
+        'src/app/actions/cms.ts': Array(4).fill('announcements:manage'),
     };
 
     it('EVERY GATE NAMES THE PERMISSION ITS ACTION NEEDS', () => {
@@ -335,24 +351,29 @@ describe('#375 — every gate names its permission, and the exception is stated'
         expect(source(GATE)).toContain('isAdmin(roles)');
     });
 
-    it('AND cms.ts IS NOT AMONG THEM — it has its own gate', () => {
+    it('#203 — AND cms.ts IS AMONG THEM NOW; its local gate is gone', () => {
         /**
-         * #374's correction, kept. actions/cms.ts declares a local
-         * `requireAdmin(): Promise<{id} | null>` and never imports this module,
-         * so its calls are not uses of the shared gate. My first measurement
-         * counted them, because it matched the NAME rather than resolving the
-         * import.
+         * This assertion used to read "cms.ts IS NOT among them — it has its
+         * own gate", recording #374's correction: the file declared a local
+         * `requireAdmin(): Promise<{id} | null>` and never imported this
+         * module, so matching the NAME had over-counted.
+         *
+         * #203 removed that local gate. lib/require-admin.ts already did
+         * everything it did — live roles rather than the stale JWT, the
+         * banned/suspended check, a fail-closed catch — and it asks
+         * PERMISSION_MATRIX for a named permission, which the hand-written one
+         * could not. The import is real now, so the count above is a real use.
          */
         const cms = 'src/app/actions/cms.ts';
 
-        expect(importsGate(cms)).toBe(false);
-        expect(source(cms)).toContain('async function requireAdmin(): Promise<{ id: string } | null>');
-        expect(source(cms)).toContain('return null;');
-        expect(callSites().map((c) => c.file)).not.toContain(cms);
+        expect(importsGate(cms)).toBe(true);
+        expect(source(cms)).not.toContain('async function requireAdmin(');
+        expect(callSites().map((c) => c.file)).toContain(cms);
     });
 
     it('the sweep is not vacuous — it finds the call sites at all', () => {
-        expect(callSites().length).toBe(34);
+        // 34 → 38: cms.ts's four writes joined the shared gate (#203).
+        expect(callSites().length).toBe(38);
         expect(SRC.length).toBeGreaterThan(400);
     });
 
