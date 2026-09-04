@@ -5,14 +5,14 @@
 /**
  *   #374 SECURITY: ESCALATING A DISPUTE WAS GATED TIGHTER THAN RESOLVING ONE,
  *        AND THE SHARED GATE'S `permission` PARAMETER WAS USED BY TWO OF
- *        THIRTY-FIVE CALL SITES.
+ *        THIRTY CALL SITES.
  *
  *        lib/require-admin.ts takes an optional permission, and says so in its
  *        own docstring: "Pass a permission to require more than 'is an admin at
  *        all'". Measured across the repository, two call sites did. The other
- *        thirty-three admitted every one of the ten admin roles.
+ *        twenty-eight admitted every one of the ten admin roles.
  *
- *        ONE OF THOSE THIRTY-THREE IS NOT A JUDGEMENT CALL, BECAUSE ITS OWN
+ *        ONE OF THOSE TWENTY-EIGHT IS NOT A JUDGEMENT CALL, BECAUSE ITS OWN
  *        FILE HAD ALREADY ANSWERED:
  *
  *        _escrow_disputes.ts. _resolveDisputeAction RELEASES OR REFUNDS
@@ -52,13 +52,13 @@
  *        reads it before acting. An asymmetry between two gates is EVIDENCE, not
  *        a verdict; establishing which of the two it is, is the work.
  *
- *        THE OTHER THIRTY-TWO ARE RECORDED, NOT CHANGED, and listed in
+ *        THE OTHER TWENTY-SEVEN ARE RECORDED, NOT CHANGED, and listed in
  *        lib/require-admin.ts. Narrowing a live gate can lock out a role that is
  *        doing that work today, and which roles actually operate each queue is
  *        not something this codebase records. The one above was safe precisely
  *        because its own file had already decided.
  *
- *        OWNER DECISION: assign a permission to each of the thirty-two, or say
+ *        OWNER DECISION: assign a permission to each of the twenty-seven, or say
  *        that "any admin" is the intended rule for them.
  */
 
@@ -88,11 +88,25 @@ function walk(dir: string, out: string[] = []): string[] {
 
 const SRC = walk('src');
 
-/** Every requireAdmin(...) call outside the gate itself, with its argument. */
+/**
+ * Every call to the SHARED gate, with its argument.
+ *
+ * A CORRECTION TO MY OWN FIRST DRAFT, which matched `requireAdmin(` in any
+ * file. actions/cms.ts declares its OWN local `requireAdmin(): Promise<{id} |
+ * null>` — correctly built, failing closed on a read error — and five of its
+ * calls were counted as bare uses of this module's gate. They never reach it.
+ *
+ * Resolved by IMPORT now, which is the same lesson as #370's importer sweep:
+ * a name is not a reference.
+ */
+function importsGate(file: string): boolean {
+    return /from\s+["']@\/lib\/require-admin["']/.test(source(file));
+}
+
 function callSites(): Array<{ file: string; arg: string }> {
     const out: Array<{ file: string; arg: string }> = [];
     for (const f of SRC) {
-        if (f === GATE) continue;
+        if (f === GATE || !importsGate(f)) continue;
         for (const m of source(f).matchAll(/requireAdmin\(([^)]*)\)/g)) {
             out.push({ file: f, arg: m[1].trim() });
         }
@@ -210,7 +224,7 @@ describe('#374 — the escalation-notes asymmetry is #356\'s decision, not a gap
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('#374 — RECORDED: the thirty-one gates that still admit any admin', () => {
+describe('#374 — RECORDED: the twenty-seven gates that still admit any admin', () => {
     /**
      * Pinned as a COUNT and a file list, so the number cannot drift in either
      * direction unnoticed: a new bare requireAdmin() fails here, and so does
@@ -218,7 +232,6 @@ describe('#374 — RECORDED: the thirty-one gates that still admit any admin', (
      */
     const RECORDED: Record<string, number> = {
         'src/app/actions/admin-communications.ts': 3,
-        'src/app/actions/cms.ts': 5,
         'src/app/actions/maintenance.ts': 4,
         'src/app/actions/in-app-broadcast.ts': 3,
         'src/app/actions/admin-users.ts': 2,
@@ -245,13 +258,13 @@ describe('#374 — RECORDED: the thirty-one gates that still admit any admin', (
         expect(source(GATE)).toContain('isAdmin(roles)');
     });
 
-    it('EXACTLY THIRTY-TWO CALL SITES STILL NAME NO PERMISSION', () => {
+    it('EXACTLY TWENTY-SEVEN CALL SITES STILL NAME NO PERMISSION', () => {
         const bare = callSites().filter((c) => c.arg === '');
         const byFile: Record<string, number> = {};
         for (const c of bare) byFile[c.file] = (byFile[c.file] ?? 0) + 1;
 
         expect(byFile).toEqual(RECORDED);
-        expect(bare.length).toBe(32);
+        expect(bare.length).toBe(27);
     });
 
     it('and three now name one — the one #374 fixed and the two that already did', () => {
@@ -267,8 +280,28 @@ describe('#374 — RECORDED: the thirty-one gates that still admit any admin', (
         expect([...new Set(named.map((c) => c.arg))]).toEqual([`"${RESOLVE}"`]);
     });
 
+    it('AND cms.ts IS NOT AMONG THEM — it has its own gate', () => {
+        /**
+         * The correction, pinned. actions/cms.ts declares a local
+         * `requireAdmin(): Promise<{id} | null>` and never imports this module,
+         * so its five calls are not bare uses of the shared gate. My first
+         * measurement counted them, because it matched the NAME rather than
+         * resolving the import — and shipped a record that was five too long.
+         *
+         * The local gate is also correctly built, which is why this is a
+         * miscount and not a second finding: it reads live roles and returns
+         * null when the read fails, following #245's rule.
+         */
+        const cms = 'src/app/actions/cms.ts';
+
+        expect(importsGate(cms)).toBe(false);
+        expect(source(cms)).toContain('async function requireAdmin(): Promise<{ id: string } | null>');
+        expect(source(cms)).toContain('return null;');
+        expect(callSites().map((c) => c.file)).not.toContain(cms);
+    });
+
     it('the sweep is not vacuous — it finds the call sites at all', () => {
-        expect(callSites().length).toBe(35);
+        expect(callSites().length).toBe(30);
         expect(SRC.length).toBeGreaterThan(400);
     });
 

@@ -39,7 +39,7 @@ import { isAdmin, hasAdminPermission, type AdminPermission } from "@/lib/admin-p
  *        was one of five more copies of the same test. isAdmin() is now asked
  *        here, exactly as it is there.
  *
- *   #374 THE `permission` PARAMETER IS USED BY THREE OF THIRTY-FIVE CALL SITES.
+ *   #374 THE `permission` PARAMETER IS USED BY THREE OF THIRTY CALL SITES.
  *
  *        The docstring above says "Pass a permission to require more than 'is
  *        an admin at all'". Measured across the repository, two call sites did.
@@ -62,14 +62,12 @@ import { isAdmin, hasAdminPermission, type AdminPermission } from "@/lib/admin-p
  *        with a hole in it". Reverted. An asymmetry between two gates is
  *        evidence, not a verdict.
  *
- *        THE OTHER THIRTY-TWO ARE RECORDED, NOT CHANGED. Every one of them
+ *        THE OTHER TWENTY-SEVEN ARE RECORDED, NOT CHANGED. Every one of them
  *        currently admits all ten admin roles:
  *
  *          admin-communications.ts  sendBulkEmail, createAnnouncement,
  *                                   getEmailHistory
- *          cms.ts                   createAnnouncement, deactivateAnnouncement,
- *                                   createBanner, deactivateBanner (+1)
- *          sms-broadcast.ts         preview, send
+ * *          sms-broadcast.ts         preview, send
  *          in-app-broadcast.ts      collectRecipientUserIds, preview, send
  *          diagnose-broadcast.ts    diagnoseBroadcastAction
  *          maintenance.ts           repairData, runConsistencyCheck,
@@ -92,7 +90,14 @@ import { isAdmin, hasAdminPermission, type AdminPermission } from "@/lib/admin-p
  *        each queue is not something this codebase records. The one above was
  *        safe precisely because its own file had already answered.
  *
- *        OWNER DECISION: assign a permission to each of the thirty-two, or say
+ *        NOT IN THAT LIST, THOUGH MY FIRST MEASUREMENT PUT IT THERE:
+ *        actions/cms.ts. It declares its OWN local requireAdmin() returning
+ *        `{id} | null` — live-role checked and failing closed on a read error —
+ *        so its five calls never reach this module. Counting them here was a
+ *        name-matched sweep reporting a reference that does not exist, which is
+ *        the mistake #370's importer sweep exists to avoid.
+ *
+ *        OWNER DECISION: assign a permission to each of the twenty-seven, or say
  *        that "any admin" is the intended rule for them. Related to the open
  *        decision from #364/#365 about the files that still state the admin
  *        rule by hand — same question, asked of the shared gate instead.
