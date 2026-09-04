@@ -258,8 +258,37 @@ async function _resolveDisputeAction(
     outcome: "release_seller" | "refund_buyer"  // matches DisputeResolution type in marketplace.ts
 ): Promise<{ success: true; error: null; data: { message: string }; meta?: any }
     | { success: false; error: string; data?: null; meta?: any }
-> { // Live role re-validation — bypasses the stale JWT
-    const adminCheck = await requireAdmin();
+> {
+    /**
+     *   #374 ESCALATING A DISPUTE WAS GATED TIGHTER THAN RESOLVING ONE.
+     *
+     *        This said `requireAdmin()` — any of the ten admin roles — on the
+     *        action that RELEASES OR REFUNDS ESCROW MONEY. Sixty lines below,
+     *        _escalateDisputeAction, which only flags a dispute for senior
+     *        review, says `requireAdmin("finance:resolve_disputes")`. Two doors
+     *        onto one workflow in one file, and the weaker gate was on the one
+     *        that moves the money.
+     *
+     *        Only `admin` and `super_admin` hold finance:resolve_disputes. So
+     *        this admitted EIGHT roles its own file already refuses: moderator,
+     *        support, wave_admin, cooperative_admin, marketplace_admin,
+     *        export_admin, farm_nation_admin and academy_admin.
+     *
+     *        THE LIVE RESOLVER HAD ALREADY BEEN FIXED. actions/disputes.ts —
+     *        the one the admin screen calls — asks
+     *        hasAdminPermission(callerRoles, "finance:resolve_disputes") and
+     *        carries a note saying it was "deliberately NOT switched to
+     *        isAdmin(), which also admits moderator". This is the second copy,
+     *        and the header above says exactly why that matters: "a copy nobody
+     *        runs is a copy nobody notices drifting". It is a registered server
+     *        action re-exported through index.ts, so the weak gate is reachable
+     *        over the wire whether or not a screen calls it.
+     *
+     *        Same permission as the live resolver and as this file's own
+     *        escalate path, so the three cannot disagree again.
+     */
+    // Live role re-validation — bypasses the stale JWT
+    const adminCheck = await requireAdmin("finance:resolve_disputes");
     if ("error" in adminCheck) {
         return { success: false as const, error: adminCheck.error};
     }

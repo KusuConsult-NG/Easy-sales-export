@@ -77,6 +77,24 @@ export async function addEscalationNoteAction(
 
 /**
  * Fetch all escalation notes for a dispute, ordered by time ascending.
+ *
+ *   #374 THE BARE requireAdmin() HERE IS #356's DELIBERATE DECISION, NOT A GAP.
+ *
+ *        #374 swept every requireAdmin() call site and found this one reading
+ *        internal notes on a money dispute while the writer forty lines above
+ *        demands finance:resolve_disputes. In marketplace/_escrow_disputes.ts
+ *        that same asymmetry WAS a defect. Here it is not, and the reason is
+ *        already recorded in one-admin-test-not-six.test.ts: "narrowing the read
+ *        alone would show a moderator the dispute with a hole in it".
+ *
+ *        The reason holds. getDisputeByIdAction uses `isResolver` to decide HOW
+ *        MUCH of a dispute to show, not whether to show it at all, so a
+ *        moderator can legitimately open the screen. Refusing them the notes
+ *        would render it broken rather than restricted.
+ *
+ *        Left as it is, and noted here so the next sweep does not read the
+ *        asymmetry as an oversight and "fix" it — which is exactly what the
+ *        first draft of #374 did, until the #356 ratchet caught it.
  */
 export async function getEscalationNotesAction(
     disputeId: string
