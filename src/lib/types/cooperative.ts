@@ -183,6 +183,38 @@ export const loanApplicationSchema = z.object({
     // cooperative loan failed on every attempt.
     amount: z.coerce.number().positive("Loan amount is required"),
     purpose: z.string().min(10, "Please describe the purpose"),
+
+    /**
+     *   #377 THE GUARANTOR, ON THE DOOR MEMBERS ACTUALLY USE.
+     *
+     *        lib/loan-approval-policy.ts records four writers of a cooperative
+     *        loan application and what each one puts on the row. Three collect
+     *        a guarantor and stamp `guarantorVerified: false`; the fourth —
+     *        _applyForLoanAction, behind /cooperatives/loans, the ONLY member
+     *        entrance in the product — "collects no guarantor at all".
+     *
+     *        That policy module then had to accommodate the gap: its rule is
+     *        "an application that RECORDED a guarantor must have that guarantor
+     *        verified before approval. One that recorded none has nothing to
+     *        verify." Read the other way round, every loan a member can
+     *        actually apply for was exempt from the verification control, and
+     *        the control applied only to the applications no screen can create.
+     *
+     *        The recurring shape, on the money path: N doors, and the hardened
+     *        one is not the wired one (#276, #339, #374).
+     *
+     *        Name and phone are required, matching the wizard's own validation
+     *        and the /api/cooperative/apply-loan handler's. Email and
+     *        relationship stay optional there too. Nothing downstream changes:
+     *        recordsAGuarantor() then sees a guarantor on these rows, so
+     *        requiresGuarantorVerification() starts holding for them, and
+     *        /api/admin/cooperative/verify-guarantor already resolves
+     *        cooperative_loans.
+     */
+    guarantorName: z.string().trim().min(2, "Guarantor full name is required"),
+    guarantorPhone: z.string().trim().min(10, "Guarantor phone number is required"),
+    guarantorEmail: z.string().trim().email("Enter a valid guarantor email").or(z.literal("")).optional(),
+    guarantorRelationship: z.string().trim().optional(),
 });
 
 export type LoanApplicationFormData = z.infer<typeof loanApplicationSchema>;

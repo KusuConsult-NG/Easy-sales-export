@@ -119,6 +119,12 @@ async function apply(amount: number) {
     fd.set('productId', 'prod-1');
     fd.set('amount', String(amount));
     fd.set('purpose', 'Working capital for the next planting season');
+    // #377 The member form collects a guarantor now, and the schema requires
+    // the same two fields the other three application writers require. A form
+    // without them is refused before the limit is ever consulted, so these
+    // belong in the fixture rather than in the assertions.
+    fd.set('guarantorName', 'Ada Obi');
+    fd.set('guarantorPhone', '08031234567');
     return applyForLoanAction({ success: false, error: null } as any, fd);
 }
 

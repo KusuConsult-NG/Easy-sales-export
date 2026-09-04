@@ -176,6 +176,10 @@ describe('cooperative/_actions — _applyForLoanAction', () => {
         fd.set('productId', 'prod-1');
         fd.set('amount', String(amount));
         fd.set('purpose', 'Stock purchase for my business');
+        // #377 Required by the schema now — the member form collects a
+        // guarantor, as the other three application writers already did.
+        fd.set('guarantorName', 'Ada Obi');
+        fd.set('guarantorPhone', '08031234567');
         return fd;
     }
 
@@ -211,5 +215,78 @@ describe('cooperative/_actions — _applyForLoanAction', () => {
 
         expect(result.success).toBe(false);
         expect(mockClaimLoanApp).not.toHaveBeenCalled();
+    });
+
+    /**
+     *   #377 THE GUARANTOR, ON THE DOOR MEMBERS ACTUALLY USE.
+     *
+     *        lib/loan-approval-policy.ts lists four writers of a loan
+     *        application. Three record a guarantor and stamp
+     *        guarantorVerified: false; this one — the ONLY member entrance in
+     *        the product — recorded none, so its rule ("an application that
+     *        recorded a guarantor must have that guarantor verified before
+     *        approval") was satisfied vacuously by every application anyone
+     *        could actually file.
+     */
+    it('RECORDS THE GUARANTOR ON THE ROW, UNVERIFIED', async () => {
+        await apply();
+
+        const [args] = mockClaimLoanApp.mock.calls[0] as [any];
+
+        expect(args.row.guarantorName).toBe('Ada Obi');
+        expect(args.row.guarantorPhone).toBe('08031234567');
+        // Unverified on arrival. An application that asserted its own
+        // guarantor verified would be #285's shape on a different form.
+        expect(args.row.guarantorVerified).toBe(false);
+    });
+
+    it('and the optional two default to empty rather than undefined', async () => {
+        // undefined in a JSONB row is dropped, so `guarantorEmail` would be
+        // absent rather than blank — a difference the admin screen renders.
+        await apply();
+
+        const [args] = mockClaimLoanApp.mock.calls[0] as [any];
+        expect(args.row.guarantorEmail).toBe('');
+        expect(args.row.guarantorRelationship).toBe('');
+    });
+
+    it('REFUSES AN APPLICATION WITH NO GUARANTOR, BEFORE CLAIMING ANYTHING', async () => {
+        const { applyForLoanAction } = await import('@/app/actions/cooperative/_coop_money');
+        const fd = loanForm();
+        fd.delete('guarantorName');
+
+        const result: any = await applyForLoanAction({} as any, fd);
+
+        expect(result.success).toBe(false);
+        expect(mockClaimLoanApp).not.toHaveBeenCalled();
+    });
+
+    it('and refuses one with a name but no phone', async () => {
+        // Both are required, matching the wizard and /api/cooperative/apply-loan.
+        // Asserted separately because a single missing-field test passes even
+        // if only one of the two is actually validated.
+        const { applyForLoanAction } = await import('@/app/actions/cooperative/_coop_money');
+        const fd = loanForm();
+        fd.delete('guarantorPhone');
+
+        const result: any = await applyForLoanAction({} as any, fd);
+
+        expect(result.success).toBe(false);
+        expect(mockClaimLoanApp).not.toHaveBeenCalled();
+    });
+
+    it('SO THE APPROVAL CONTROL NOW APPLIES TO THESE ROWS', async () => {
+        // The end of the chain, through the real policy function rather than a
+        // restatement of it: the row this action writes is one that blocks
+        // approval until an admin verifies the guarantor.
+        const { guarantorBlocksApproval } = await import('@/lib/loan-approval-policy');
+        await apply();
+
+        const [args] = mockClaimLoanApp.mock.calls[0] as [any];
+
+        expect(guarantorBlocksApproval(args.row)).toBe(true);
+        expect(guarantorBlocksApproval({ ...args.row, guarantorVerified: true })).toBe(false);
+        // And the vacuity this closes: a row without the field blocks nothing.
+        expect(guarantorBlocksApproval({ ...args.row, guarantorName: undefined })).toBe(false);
     });
 });

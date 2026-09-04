@@ -28,20 +28,46 @@
  *        applications and their schedules and offers RepayFromSavingsModal;
  *        /admin/cooperatives/loans approves them and records repayments through
  *        RecordRepaymentModal; /admin/cooperatives/loan-products was wired into
- *        the admin sidebar by #362. Members can repay and admins can approve
- *        cooperative loans that nothing in the product can create.
+ *        the admin sidebar by #362.
  *
- *        KEPT, NOT DELETED, AND NOT WIRED UP. #362's rule was to connect a
- *        built screen where its placement is not a product question. Here it
- *        is: the cooperative application would live either at /loans/apply —
- *        which today means business loans — or at
- *        /cooperative/loans/apply/[id], which #362 recorded as one of the ten
- *        orphaned screens. Choosing between them, and whether the two products
- *        share one entrance, is the owner's call.
+ *   #377 CORRECTION: #370 THEN CONCLUDED "MEMBERS CAN REPAY AND ADMINS CAN
+ *        APPROVE COOPERATIVE LOANS THAT NOTHING IN THE PRODUCT CAN CREATE".
+ *        THAT WAS WRONG.
  *
- *        OWNER DECISION: give the cooperative loan an application path, or
- *        retire the product's application half and say so on the member
- *        screens that currently imply it exists.
+ *        /cooperatives/loans is a live member screen. It lists the loan
+ *        products and submits through _applyForLoanAction in
+ *        actions/cooperative/_coop_money.ts, which files into
+ *        COLLECTIONS.COOPERATIVE_LOANS — and lib/loan-application-location.ts,
+ *        written before #370, already says in its own header that this is "the
+ *        ONLY path the member loan page at /cooperatives/loans submits
+ *        through". Both the member's my-loans screen and the admin queue
+ *        resolve that collection.
+ *
+ *        #370's measurement — that THIS component has no importer — holds. The
+ *        conclusion drawn from it did not, because reachability was checked one
+ *        level too low: it asked who calls this action rather than whether the
+ *        PRODUCT has an application path.
+ *
+ *        WHAT IS TRUE: there are two cooperative loan pricing models, and only
+ *        one has a screen. This one is TIER-based — the member's savings tier
+ *        sets the rate and the maximum duration. The live one is PRODUCT-based
+ *        — an admin-configured loan product sets them.
+ *
+ *        STILL NOT WIRED UP, AND NOW FOR A STATED REASON RATHER THAN A PENDING
+ *        DECISION. A second member entrance offering "a cooperative loan" on
+ *        different terms would be worse than none: the one-open-application
+ *        claim spans both collections, so a member who used one door would be
+ *        refused at the other with no way to see why.
+ *
+ *        THE ONE REAL GAP THIS LEFT IS FIXED. The thing this wizard collects
+ *        that the live door did not is the GUARANTOR — and
+ *        lib/loan-approval-policy.ts had already had to write its verification
+ *        rule around that absence, which meant the control applied to every
+ *        application except the ones a member can actually file.
+ *        _applyForLoanAction records a guarantor now, and /cooperatives/loans
+ *        collects one, with the same two fields required as here.
+ *
+ *        KEPT, NOT DELETED.
  */
 
 import { useState } from "react";

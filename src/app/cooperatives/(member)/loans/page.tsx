@@ -512,6 +512,91 @@ function LoanApplicationModal({
                                 />
                             </div>
 
+                            {/*
+                              *   #377 THE GUARANTOR, COLLECTED ON THE DOOR
+                              *        MEMBERS ACTUALLY USE.
+                              *
+                              *        Three of the four writers of a loan
+                              *        application record a guarantor and stamp
+                              *        guarantorVerified: false; this screen —
+                              *        the only member entrance in the product —
+                              *        collected none, so the verification an
+                              *        admin must perform before approval had
+                              *        nothing to attach to on every application
+                              *        anyone could actually file.
+                              *
+                              *        Same four fields, same two required, as
+                              *        the unwired wizard and the API route.
+                              */}
+                            <div className="border-t border-slate-200 pt-4 space-y-4">
+                                <div>
+                                    <h4 className="text-sm font-semibold text-slate-900">Guarantor</h4>
+                                    <p className="text-xs text-slate-500 mt-1">
+                                        An admin will contact your guarantor to verify these details before
+                                        your loan can be approved.
+                                    </p>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-900 mb-1">
+                                        Guarantor Full Name
+                                    </label>
+                                    <input
+                                        name="guarantorName"
+                                        type="text"
+                                        required
+                                        minLength={2}
+                                        placeholder="Enter your guarantor's full name"
+                                        className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-900 mb-1">
+                                        Guarantor Phone Number
+                                    </label>
+                                    <input
+                                        name="guarantorPhone"
+                                        type="tel"
+                                        required
+                                        minLength={10}
+                                        placeholder="e.g. 08012345678"
+                                        className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-900 mb-1">
+                                        Guarantor Email (optional)
+                                    </label>
+                                    <input
+                                        name="guarantorEmail"
+                                        type="email"
+                                        placeholder="guarantor@example.com"
+                                        className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-900 mb-1">
+                                        Relationship to You (optional)
+                                    </label>
+                                    <select
+                                        name="guarantorRelationship"
+                                        defaultValue=""
+                                        className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-blue-500"
+                                    >
+                                        <option value="">Select relationship</option>
+                                        <option value="Employer">Employer</option>
+                                        <option value="Business Partner">Business Partner</option>
+                                        <option value="Colleague">Colleague</option>
+                                        <option value="Family Member">Family Member</option>
+                                        <option value="Spouse">Spouse</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                            </div>
+
                             <div className="bg-blue-50 p-4 rounded-xl space-y-2">
                                 <div className="flex justify-between text-sm">
                                     <span className="text-slate-600">Interest Rate</span>

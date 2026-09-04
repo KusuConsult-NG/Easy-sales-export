@@ -502,7 +502,10 @@ async function _applyForLoanAction(
         if (!parsed.success) {
             return { error: parsed.error ?? "Validation failed", success: false as const, data: null };
         }
-        const { productId, amount, purpose } = parsed.data;
+        const {
+            productId, amount, purpose,
+            guarantorName, guarantorPhone, guarantorEmail, guarantorRelationship,
+        } = parsed.data;
 
         // The double-lending guard is now the insert itself — see the claim at
         // the end of this function.
@@ -680,6 +683,40 @@ async function _applyForLoanAction(
                 totalRepayment,
                 monthlyPayment,
                 durationMonths,
+                /**
+                 *   #377 THE GUARANTOR VERIFICATION CONTROL APPLIED TO EVERY
+                 *        APPLICATION EXCEPT THE ONES A MEMBER CAN FILE.
+                 *
+                 *        lib/loan-approval-policy.ts lists four writers of a
+                 *        loan application and states that this one — the only
+                 *        member entrance in the product — "collects no
+                 *        guarantor at all". Its rule then had to be written
+                 *        around that: an application that RECORDED a guarantor
+                 *        must have it verified before approval, one that
+                 *        recorded none has nothing to verify. So the control
+                 *        was live on the wizard's rows (which no screen can
+                 *        create) and absent on these (which are all of them).
+                 *
+                 *        Recorded now, unverified, exactly as the other three
+                 *        writers do it. recordsAGuarantor() sees these rows
+                 *        from here on, so requiresGuarantorVerification()
+                 *        starts holding for them; the verify route already
+                 *        resolves cooperative_loans, so the admin side needed
+                 *        no change.
+                 *
+                 *        Rows filed BEFORE this stay exempt, and that is
+                 *        correct rather than a gap: the policy asks whether a
+                 *        guarantor was recorded, and on those none ever was.
+                 *        Demanding verification of details that do not exist
+                 *        would strand every pending application permanently —
+                 *        the mistake the policy module's own header describes
+                 *        the action making in the other direction.
+                 */
+                guarantorName,
+                guarantorPhone,
+                guarantorEmail: guarantorEmail || "",
+                guarantorRelationship: guarantorRelationship || "",
+                guarantorVerified: false,
                 status: "pending",
                 appliedAt: nowIso,
                 createdAt: nowIso,

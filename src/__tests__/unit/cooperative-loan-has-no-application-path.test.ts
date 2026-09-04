@@ -117,9 +117,14 @@ describe('#370 — the cooperative loan application has no way in', () => {
             .toEqual([COOP_ACTION, WIZARD].sort());
     });
 
-    it('so no reachable code can create a cooperative loan application', () => {
-        // The two facts together. Stated as one assertion because either alone
-        // is only half the finding.
+    it('so no reachable code applies the TIER-based cooperative loan rules', () => {
+        /**
+         * #377 narrowed this claim. It used to read "no reachable code can
+         * create a cooperative loan application", which was false —
+         * /cooperatives/loans creates them through _applyForLoanAction. What
+         * the two facts below actually establish is that this ACTION, and the
+         * tier pricing it implements, are unreachable. See the #377 describe.
+         */
         const callers = callersOf('submitLoanApplicationAction')
             .filter((f) => f !== COOP_ACTION);
 
@@ -242,5 +247,141 @@ describe('#370 — the sweeps are not vacuous', () => {
             expect({ file, labelled: readFileSync(join(ROOT, file), 'utf-8').includes('#370') })
                 .toEqual({ file, labelled: true });
         }
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+const LIVE_ACTION = 'src/app/actions/cooperative/_coop_money.ts';
+const LIVE_PAGE = 'src/app/cooperatives/(member)/loans/page.tsx';
+
+describe('#377 — the correction: the cooperative loan DOES have a way in', () => {
+    /**
+     *   #377 #370 CONCLUDED "MEMBERS CAN REPAY AND ADMINS CAN APPROVE
+     *        COOPERATIVE LOANS THAT NOTHING IN THE PRODUCT CAN CREATE".
+     *        THAT WAS WRONG, AND a recorded finding that is wrong is worse than
+     *        no finding: the next sweep acts on it.
+     *
+     *        /cooperatives/loans is a live member screen. It submits through
+     *        _applyForLoanAction, which files into COLLECTIONS.COOPERATIVE_LOANS
+     *        — and lib/loan-application-location.ts, written BEFORE #370, states
+     *        in its own header that this is "the ONLY path the member loan page
+     *        at /cooperatives/loans submits through".
+     *
+     *        #370's MEASUREMENT holds: this component has no importer, and the
+     *        tier-based action has no reachable caller. The CONCLUSION did not,
+     *        because reachability was checked one level too low — it asked who
+     *        calls the action rather than whether the product has an
+     *        application path. The lesson is CHECK REACHABILITY OF THE FLOW,
+     *        not of the function you happened to start from.
+     */
+    it('THE MEMBER LOAN PAGE SUBMITS A COOPERATIVE LOAN APPLICATION', () => {
+        const page = code(LIVE_PAGE);
+
+        expect(page).toMatch(/\bapplyForLoanAction\b/);
+        expect(page).toMatch(/["']@\/app\/actions\/cooperative["']/);
+        // Not the tier action, and not the business one.
+        expect(page).not.toContain('submitLoanApplicationAction');
+    });
+
+    it('and it writes to the collection the readers resolve', () => {
+        expect(code(LIVE_ACTION)).toMatch(/COLLECTIONS\.COOPERATIVE_LOANS\b/);
+        expect(code('src/lib/loan-application-location.ts'))
+            .toMatch(/COLLECTIONS\.COOPERATIVE_LOANS\b/);
+    });
+
+    it('THE TWO ARE DIFFERENT PRICING MODELS, WHICH IS WHY ONE ENTRANCE IS RIGHT', () => {
+        // Tier-based here, product-based there. A second member entrance
+        // offering "a cooperative loan" on other terms would collide with the
+        // one-open-application claim, which spans both collections.
+        const tier = code(COOP_ACTION);
+        const product = code(LIVE_ACTION);
+
+        expect(tier).toMatch(/\bcalculateUserTier\b/);
+        expect(tier).toMatch(/\bgetTierInterestRate\b/);
+        expect(product).toMatch(/\bLOAN_PRODUCTS\b/);
+        expect(product).toMatch(/\bcalculateRepaymentTerms\b/);
+        expect(product).not.toMatch(/\bcalculateUserTier\b/);
+
+        // And the one-open-application rule really does span both collections,
+        // so two member entrances would lock each other out. They enforce it
+        // differently — the live door claims it under an advisory lock, the
+        // tier door reads both collections — but both refuse with the same
+        // sentence, which is what a member would see.
+        expect(tier).toMatch(/\bONE_OPEN_LOAN_APPLICATION_MESSAGE\b/);
+        expect(product).toMatch(/\bONE_OPEN_LOAN_APPLICATION_MESSAGE\b/);
+        expect(tier).toMatch(/COLLECTIONS\.COOPERATIVE_LOANS\b/);
+        expect(product).toMatch(/\bclaimSingleOpenLoanApplication\b/);
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#377 — the real residue: the guarantor, on the door members use', () => {
+    /**
+     * lib/loan-approval-policy.ts lists four writers of a loan application and
+     * what each records. Three collect a guarantor and stamp
+     * guarantorVerified: false. The fourth — _applyForLoanAction, the ONLY
+     * member entrance — "collects no guarantor at all", so the policy's rule had
+     * to be written around it: verification is required only where a guarantor
+     * was recorded. Read the other way, the control was live on applications no
+     * screen can create and absent on all the rest.
+     */
+    it('THE LIVE ACTION NOW RECORDS A GUARANTOR', () => {
+        const action = code(LIVE_ACTION);
+
+        for (const field of ['guarantorName', 'guarantorPhone', 'guarantorEmail',
+                             'guarantorRelationship', 'guarantorVerified']) {
+            expect({ field, present: new RegExp(`\\b${field}\\b`).test(action) })
+                .toEqual({ field, present: true });
+        }
+        // Unverified on arrival, like the other three writers — not asserted true.
+        expect(action).toMatch(/guarantorVerified:\s*false/);
+        expect(action).not.toMatch(/guarantorVerified:\s*true/);
+    });
+
+    it('AND THE MEMBER FORM COLLECTS ONE, WITH THE SAME TWO REQUIRED', () => {
+        const page = code(LIVE_PAGE);
+
+        expect(page).toMatch(/name="guarantorName"/);
+        expect(page).toMatch(/name="guarantorPhone"/);
+        expect(page).toMatch(/name="guarantorEmail"/);
+        expect(page).toMatch(/name="guarantorRelationship"/);
+    });
+
+    it('the schema demands the two the other writers demand', () => {
+        const schema = code('src/lib/types/cooperative.ts');
+        const start = schema.indexOf('export const loanApplicationSchema');
+        const block = schema.slice(start, schema.indexOf('export type LoanApplicationFormData', start));
+
+        expect({ found: start > -1 }).toEqual({ found: true });
+        expect(block).toMatch(/guarantorName:\s*z\.string\(\)\.trim\(\)\.min\(/);
+        expect(block).toMatch(/guarantorPhone:\s*z\.string\(\)\.trim\(\)\.min\(/);
+        // Optional, as they are in the wizard and the API route.
+        expect(block).toMatch(/guarantorEmail[^\n]*optional\(\)/);
+        expect(block).toMatch(/guarantorRelationship[^\n]*optional\(\)/);
+    });
+
+    it('SO THE VERIFICATION CONTROL NOW REACHES THESE APPLICATIONS', () => {
+        // The policy is unchanged — it did not need changing. What changed is
+        // that the rows it asks about finally carry the field it asks for.
+        const policy = code('src/lib/loan-approval-policy.ts');
+
+        expect(policy).toMatch(/export function recordsAGuarantor\b/);
+        expect(policy).toMatch(/export function guarantorBlocksApproval\b/);
+        // The rule itself: recorded AND not verified is what blocks. Before
+        // this fix the first half was false for every application a member
+        // could file, so the second half never ran.
+        expect(policy).toMatch(/recordsAGuarantor\(app\)\s*&&\s*app\?\.guarantorVerified\s*!==\s*true/);
+        // And the admin side already resolved the member collection.
+        expect(code('src/app/api/admin/cooperative/verify-guarantor/route.ts'))
+            .toMatch(/\bresolveLoanApplication\b/);
+    });
+
+    it('and the correction is written where the next sweep will read it', () => {
+        for (const file of [WIZARD, COOP_ACTION]) {
+            const raw = readFileSync(join(ROOT, file), 'utf-8');
+            expect({ file, corrected: raw.includes('#377') }).toEqual({ file, corrected: true });
+        }
+        expect(readFileSync(join(ROOT, WIZARD), 'utf-8'))
+            .toContain('THAT WAS WRONG');
     });
 });

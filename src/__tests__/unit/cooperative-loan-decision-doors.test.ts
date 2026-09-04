@@ -97,12 +97,29 @@ function fn(rel: string, name: string): string {
 }
 
 describe('the two document shapes, which is the whole premise', () => {
-    it('the member loan page files into cooperative_loans and records no guarantor', () => {
+    it('the member loan page files into cooperative_loans, and NOW records a guarantor', () => {
+        /**
+         *   #377 THIS USED TO ASSERT `not.toContain('guarantorName')`.
+         *
+         *        That was a faithful description of the code and, read back, a
+         *        statement of the defect: the ONLY member entrance in the
+         *        product recorded no guarantor, so this file's own rule —
+         *        "an application that recorded a guarantor must have that
+         *        guarantor verified before approval" — was satisfied vacuously
+         *        by every application anyone could actually file. The control
+         *        was live on the wizard's rows, which no screen can create.
+         *
+         *        The guarantor is collected now, unverified on arrival, exactly
+         *        as the other three writers do it. What has NOT changed is the
+         *        premise this describe block exists for: this row still carries
+         *        no `tier`, which is why keying the gate on `tier` was a hole.
+         */
         const apply = fn(COOP_MONEY, '_applyForLoanAction');
 
         expect(apply).toContain('table: "cooperative_loans"');
         expect(apply).toContain('memberId: userId');
-        expect(apply).not.toContain('guarantorName');
+        expect(apply).toMatch(/guarantorVerified:\s*false/);
+        expect(apply).toMatch(/\bguarantorName\b/);
         expect(apply).not.toMatch(/\btier:/);
     });
 

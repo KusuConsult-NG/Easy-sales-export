@@ -34,15 +34,48 @@ import { readCooperativeBalance } from "@/lib/cooperative-member-balance";
  *        submitLoanApplication in loan-actions.ts, the BUSINESS loan, which has
  *        no tier and no savings multiplier.
  *
- *        So the cooperative loan cannot be applied for, while everything after
- *        the application is live: /cooperatives/my-loans, the repayment
- *        schedule, RepayFromSavingsModal, the admin loan queue with
- *        RecordRepaymentModal, and the loan-products screen #362 wired up.
+ *   #377 CORRECTION TO #370, WHICH OVERSTATED THIS.
  *
- *        Kept exactly as it is. See the note in
- *        components/LoanApplicationWizard.tsx for the owner decision, and
+ *        #370 concluded from the above that "the cooperative loan cannot be
+ *        applied for" and that members "can repay, and admins can approve,
+ *        cooperative loans that nothing in the product can create". THAT IS
+ *        WRONG, and it is worth correcting rather than leaving for the next
+ *        sweep to act on.
+ *
+ *        /cooperatives/loans is a live member screen that lists the loan
+ *        products and submits through _applyForLoanAction in _coop_money.ts,
+ *        which files into COLLECTIONS.COOPERATIVE_LOANS. That is the second of
+ *        the two collections lib/loan-application-location.ts exists to
+ *        reconcile, and its header — written before #370 — says so plainly:
+ *        cooperative_loans is "the ONLY path the member loan page at
+ *        /cooperatives/loans submits through". The my-loans screen and the
+ *        admin queue resolve both collections, so those rows are visible and
+ *        actionable.
+ *
+ *        #370's measurement was of THIS function's importers, and that part
+ *        holds. The conclusion drawn from it did not, because the sweep looked
+ *        for callers of this action rather than asking whether the PRODUCT had
+ *        an application path. Reachability was checked one level too low.
+ *
+ *        WHAT IS ACTUALLY TRUE: there are two cooperative loan pricing models —
+ *        tier-based (here: savings tier sets the rate and the maximum duration)
+ *        and product-based (there: the admin-configured loan product sets them)
+ *        — and only the product-based one has a screen. This one is unreachable
+ *        and stays that way. A second member entrance offering "a cooperative
+ *        loan" on different terms would be worse than no entrance: the
+ *        one-open-application claim spans both collections, so a member who
+ *        used one door would be locked out of the other with no way to see why.
+ *
+ *        THE RESIDUE THIS LEFT WAS REAL, AND IS FIXED. The one thing this
+ *        function collects that the live door did not is the GUARANTOR — and
+ *        lib/loan-approval-policy.ts had already had to write its rule around
+ *        that absence, so the verification control applied to every application
+ *        except the ones a member can file. _applyForLoanAction records a
+ *        guarantor now. See #377 there.
+ *
+ *        Kept exactly as it is, not deleted. See
  *        src/__tests__/unit/cooperative-loan-has-no-application-path.test.ts
- *        for the measurement.
+ *        for both the measurement and the correction.
  */
 export async function submitLoanApplicationAction(formData: {
     userId: string;
