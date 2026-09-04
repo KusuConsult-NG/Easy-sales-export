@@ -55,17 +55,42 @@ import { normalisePhone } from "@/lib/phone";
  *       exists because the same number is stored in three formats. See the note
  *       at the check itself.
  *
- * NOBODY CALLS THIS FILE
- * ----------------------
- * `runForensicScanAction` has no caller in application code — only tests
- * import it. There is no admin screen that runs the scan, so the false passes
- * above were not being read by anyone; that is why they survived. The checks
- * are repaired here because they are wrong and would ship wrong the moment a
- * screen is built. WHETHER to build that screen is an owner decision, recorded
- * rather than taken — the same treatment as #314 and #320.
+ * NOBODY CALLED THIS FILE — UNTIL #266
+ * ------------------------------------
+ * `runForensicScanAction` had no caller in application code; only tests
+ * imported it. There was no admin screen that ran the scan, so the false passes
+ * above were not being read by anyone — that is why they survived. The checks
+ * were repaired anyway, because they were wrong and would have shipped wrong
+ * the moment a screen was built.
+ *
+ *   #266 THE DECISION: THE SCREEN IS BUILT. /admin/forensics.
+ *
+ *        #331 recorded "build it or drop it" as an owner decision. Dropping it
+ *        would mean deleting eight integrity checks that four separate findings
+ *        in this audit (#331, #372, #373 and the phone-drift one) repaired and
+ *        that four suites execute — on a platform whose owner's complaint is
+ *        that it keeps breaking. Reachability was the only thing missing, and
+ *        that is #362's shape: a built, guarded, working capability with no way
+ *        in.
+ *
+ *        SAFE TO EXPOSE, MEASURED RATHER THAN ASSUMED. This action performs NO
+ *        WRITES — every mutation-looking call in it is a JavaScript Set or Map,
+ *        not a document write — and every query it makes is bounded by an
+ *        explicit `.limit()` or `listUsers(100)`. So the worst a scan can do is
+ *        cost reads.
+ *
+ *        THE GATE IS UNCHANGED. isPlatformAdmin, i.e. super_admin and admin
+ *        only — not the ten roles the admin layout admits. The screen's nav
+ *        entry asks the SAME function, so the sidebar cannot offer a link the
+ *        action refuses (#382).
+ *
+ *        RUN ON DEMAND, NOT ON LOAD. The scan reads across eight collections;
+ *        making it fire on navigation would turn every visit to the admin area
+ *        into that cost. The screen has a button.
  */
 
-interface ScanResult { module: string;
+/** Exported for the screen at /admin/forensics — #266. */
+export interface ScanResult { module: string;
     check: string;
     /**
      * "inconclusive" exists because two checks in this file reported "pass"

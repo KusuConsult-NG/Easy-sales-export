@@ -336,14 +336,26 @@ describe('#331 — a check that cannot run must not report a pass', () => {
         expect(src).toMatch(/"pass" \| "fail" \| "warning" \| "inconclusive"/);
     });
 
-    it('and the file records that nothing calls this scan', () => {
-        // The reason the false passes survived: there is no screen. Recorded
-        // rather than repaired by building one — an owner decision.
+    it('and the file records WHY the false passes survived so long', () => {
+        //   #266 THE OWNER DECISION WAS TAKEN: THE SCREEN IS BUILT.
+        //
+        //        This used to assert "has no caller in application code" and
+        //        that nothing imported the module — the reason the false passes
+        //        went unnoticed. Both are now false, deliberately: dropping
+        //        eight repaired integrity checks would have been the wrong half
+        //        of "build it or drop it".
+        //
+        //        The history is still recorded, because it is the explanation
+        //        for how a check that could never fail lived here for so long.
         const raw = readFileSync('src/app/actions/forensics.ts', 'utf-8');
-        expect(raw).toMatch(/has no caller in application code/);
+        expect(raw).toMatch(/NOBODY CALLED THIS FILE — UNTIL #266/);
+        expect(raw).toMatch(/THE SCREEN IS BUILT/);
     });
 
-    it('which is still true — no production code imports it', () => {
+    it('and the ONE production caller is that screen', () => {
+        // Counted rather than "at least one". A second importer appearing is
+        // worth looking at: this action is platform-admin-only and reads across
+        // eight collections, so it should have exactly one way in.
         const { execSync } = require('child_process');
         const hits = execSync(
             "grep -rln 'actions/forensics' src --include=*.ts --include=*.tsx || true",
@@ -352,6 +364,28 @@ describe('#331 — a check that cannot run must not report a pass', () => {
             .split('\n')
             .filter(Boolean)
             .filter((f: string) => !f.includes('__tests__') && f !== 'src/app/actions/forensics.ts');
-        expect(hits).toEqual([]);
+
+        expect(hits).toEqual(['src/app/admin/forensics/page.tsx']);
+    });
+
+    it('and it is still gated on isPlatformAdmin, not on being any admin', () => {
+        // Building a way in must not have widened the audience. The admin
+        // layout admits all ten admin roles; this action admits two.
+        const src = source('src/app/actions/forensics.ts');
+
+        expect(src).toContain('if (!isPlatformAdmin(session?.user?.roles))');
+        expect(src).toContain('Unauthorized: Admin access required');
+    });
+
+    it('and the scan still writes nothing, which is what makes it safe to expose', () => {
+        // The measurement behind #266's decision. Every mutation-looking call
+        // in the file is a JavaScript Set or Map; a document write would show
+        // up as one of these on a `db` reference.
+        const src = source('src/app/actions/forensics.ts');
+
+        expect(src).not.toMatch(/\bRef\.(set|update|delete)\s*\(/);
+        expect(src).not.toMatch(/\.collection\([^)]*\)\.(add|doc)\([^)]*\)\.(set|update|delete)\s*\(/);
+        expect(src).not.toMatch(/FieldValue\./);
+        expect(src).not.toMatch(/db\.batch\(/);
     });
 });

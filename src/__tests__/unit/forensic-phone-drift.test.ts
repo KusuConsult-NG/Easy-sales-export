@@ -370,22 +370,45 @@ describe('#372 — the reader covers what the writers actually write', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('#372 — RECORDED: the scan still has no way in', () => {
-    it('runForensicScanAction has no caller outside tests', () => {
-        // #331's owner decision, unchanged. Repaired because it is wrong, not
-        // because anybody is reading it.
+describe('#266 — the scan now HAS a way in', () => {
+    it('runForensicScanAction is called by exactly one screen', () => {
+        //   #266 WAS "RECORDED: the scan still has no way in", asserting that
+        //        `callers` was empty and that the file said NOBODY CALLS THIS
+        //        FILE. #331 left "build the screen or drop it" open; it is
+        //        decided, and the screen is built.
         //
-        // The reachability claim is measured; the file's own statement of it is
-        // PROSE, so it is asserted on the raw text. Asserting it on the
-        // comment-stripped source is the tombstone trap pointed the other way,
-        // and that is exactly how my first draft of this test failed.
+        //        The claim is still MEASURED rather than trusted, and it is
+        //        still the raw text that carries the file's own prose — the
+        //        tombstone trap pointed the other way, which is exactly how the
+        //        first draft of this test failed.
         expect(source(FORENSICS)).toContain('export async function runForensicScanAction');
-        expect(readFileSync(FORENSICS, 'utf-8')).toContain('NOBODY CALLS THIS FILE');
+        expect(readFileSync(FORENSICS, 'utf-8')).toContain('NOBODY CALLED THIS FILE — UNTIL #266');
 
         const callers = walk('src').filter((f) =>
             f !== FORENSICS && /\brunForensicScanAction\s*\(/.test(source(f)));
 
-        expect(callers).toEqual([]);
+        expect(callers).toEqual(['src/app/admin/forensics/page.tsx']);
+    });
+
+    it('and that screen is reachable from the rendered admin nav', () => {
+        // #362's shape is what this whole finding was. A screen nothing links
+        // to is the same defect one layer up, so the link is pinned in the nav
+        // table the admin layout actually renders.
+        const sidebar = source('src/components/admin/AdminSidebar.tsx');
+
+        expect(sidebar).toContain('href: "/admin/forensics"');
+        expect(sidebar).toContain('platformOnly: true');
+    });
+
+    it('and the nav asks the SAME predicate the action does', () => {
+        // Not a route-prefix rule that agrees today. The action gates on
+        // isPlatformAdmin and no permission-matrix entry means that, so the nav
+        // calls the same function rather than restating the audience — #382.
+        const sidebar = source('src/components/admin/AdminSidebar.tsx');
+
+        expect(sidebar).toMatch(/item\.platformOnly[\s\S]{0,200}isPlatformAdmin\(roles\)/);
+        expect(sidebar).toContain('isPlatformAdmin');
+        expect(source(FORENSICS)).toContain('isPlatformAdmin(session?.user?.roles)');
     });
 
     it('and the file records this as its third false pass', () => {

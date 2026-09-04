@@ -163,6 +163,10 @@ const WIRED = [
     '/admin/cooperatives/loan-products',
     '/admin/system-health/diagnostics',
     '/admin/academy/create',
+    // #266 — built for the forensic scan, which was 747 lines of integrity
+    // checking with no caller. Listed here so it is held to the same rule as
+    // the five above rather than becoming the next orphan.
+    '/admin/forensics',
 ];
 
 /** Screens left for the owner — recorded so they are not rediscovered. */

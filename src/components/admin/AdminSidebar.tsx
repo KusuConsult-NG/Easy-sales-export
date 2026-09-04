@@ -31,11 +31,12 @@ import {
     Megaphone,
     ShieldCheck,
     Headphones,
+    Stethoscope,
 } from "lucide-react";
 import { useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useFeatureToggles } from "@/hooks/useFeatureToggle";
-import { canAccessAdminRoute, hasAdminPermission, type AdminPermission } from "@/lib/admin-permissions";
+import { canAccessAdminRoute, hasAdminPermission, isPlatformAdmin, type AdminPermission } from "@/lib/admin-permissions";
 
 
 const NAV_ITEMS = [
@@ -63,6 +64,21 @@ const NAV_ITEMS = [
      *        This is the nav table /admin/layout.tsx actually renders.
      */
     { label: "System Health", href: "/admin/system-health", icon: Activity, section: "platform" },
+    /**
+     *   #266 THE WAY IN FOR THE FORENSIC SCAN.
+     *
+     *        747 lines of cross-module integrity checking that nothing called.
+     *        Four findings in this audit repaired checks inside it that could
+     *        never fail (#331, #372, #373, and the phone drift) — repairs no
+     *        operator could read, because there was no screen.
+     *
+     *        `platformOnly` rather than a permission: runForensicScanAction
+     *        gates on isPlatformAdmin, and no entry in the permission matrix
+     *        means that. The filter below asks THE SAME FUNCTION, so the nav
+     *        cannot offer a link the action refuses — #382's rule, applied to
+     *        the one audience the matrix does not spell.
+     */
+    { label: "Forensic Scan", href: "/admin/forensics", icon: Stethoscope, section: "platform", platformOnly: true },
     // Announcements and banners render site-wide via AnnouncementBanner.tsx.
     // The actions existed and the page did not, so the only way to publish was
     // to write to the database by hand.
@@ -221,9 +237,14 @@ export default function AdminSidebar() {
                                              *        Items with no named permission keep the
                                              *        route rule, unchanged.
                                              */
-                                            const mayUse = item.permission
-                                                ? hasAdminPermission(roles, item.permission)
-                                                : canAccessAdminRoute(roles, item.href);
+                                            const mayUse = item.platformOnly
+                                                // #266 — the same predicate the action behind it
+                                                // asks, for the one audience the permission
+                                                // matrix has no entry for.
+                                                ? isPlatformAdmin(roles)
+                                                : item.permission
+                                                    ? hasAdminPermission(roles, item.permission)
+                                                    : canAccessAdminRoute(roles, item.href);
                                             if (!mayUse) {
                                                 return null;
                                             }
