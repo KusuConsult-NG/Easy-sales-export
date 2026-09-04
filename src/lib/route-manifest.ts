@@ -85,6 +85,11 @@ export const PROTECTED_PATHS = [
     "/farm-nation/onboarding",
     "/farm-nation/checkout",
     "/farm-nation/list-land",
+    // #105 — the saved-properties list. Every action behind it is scoped to the
+    // caller's own session, so this is not the access control; it is here so
+    // the middleware attaches ?callbackUrl and a signed-out visitor following a
+    // link lands back on the list rather than on /dashboard.
+    "/farm-nation/saved",
     // Export
     "/export/onboarding",
     "/export/buyer",

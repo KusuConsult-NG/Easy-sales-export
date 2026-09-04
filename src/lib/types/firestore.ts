@@ -578,6 +578,19 @@ export const COLLECTIONS = {
     // Admin Communications
     BROADCAST_LOGS: "broadcast_logs",
 
+    /**
+     * What one person has saved for later — see lib/saved-items.ts.
+     *
+     * #105. Two controls offered this and neither wrote anything: the buyer
+     * dashboard's "Saved Sellers" tile read `users.savedSellersCount`, which
+     * nothing had ever written, and the heart on a Farm Nation property was
+     * component state that died on navigation. Both write here now.
+     *
+     * The document id is derived from (userId, itemType, targetId), so one
+     * person saving one thing is one row however many times they click.
+     */
+    SAVED_ITEMS: "saved_items",
+
     // Bounced Email Tracking
     BOUNCED_EMAILS: "bounced_emails",
 

@@ -167,7 +167,18 @@ export default function BuyerDashboard() {
                             <div className="text-sm text-slate-600">Total Spent</div>
                         </div>
 
-                        <div className="bg-white rounded-xl p-6 border border-slate-200">
+                        {/*
+                          * #105. This tile read users.savedSellersCount — a key
+                          * written by nothing anywhere in the app — so it was
+                          * structurally 0 for every buyer, and there was no
+                          * screen behind it and no control anywhere that could
+                          * save a seller. The count is real now, and the tile
+                          * is a link to the list.
+                          */}
+                        <Link
+                            href="/marketplace/buyer/saved"
+                            className="bg-white rounded-xl p-6 border border-slate-200 hover:shadow-md transition-shadow block"
+                        >
                             <div className="flex items-center justify-between mb-4">
                                 <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
                                     <Star className="w-6 h-6 text-purple-600" />
@@ -177,7 +188,7 @@ export default function BuyerDashboard() {
                                 {stats.savedSellers}
                             </div>
                             <div className="text-sm text-slate-600">Saved Sellers</div>
-                        </div>
+                        </Link>
                     </div>
 
                     {/* Quick Actions */}

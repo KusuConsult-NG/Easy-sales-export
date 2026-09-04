@@ -3,6 +3,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { toMillis } from "@/lib/firestore-serialize";
+import { publicSellerSummary } from "@/lib/public-seller-summary";
 
 export const dynamic = "force-dynamic";
 
@@ -104,17 +105,12 @@ export async function GET(
         }
 
         return NextResponse.json({
-            seller: {
-                id: verDoc.id,
-                userId: sellerId,
-                businessName: verData.businessName ?? "",
-                businessDescription: verData.businessDescription ?? verData.bio ?? "",
-                businessType: verData.businessType ?? "",
-                state: verData.state ?? verData.location ?? "",
-                isVerifiedBadge: verData.isVerifiedBadge ?? false,
-                logoUrl: verData.logoUrl ?? verData.businessLogo ?? null,
-                approvedAt: verData.approvedAt?.toDate?.()?.toISOString() ?? null,
-            },
+            // #105. This was the object literal itself, and the buyer's
+            // saved-sellers list needed the same nine fields. Two copies of a
+            // projection over a document that also holds the seller's bank
+            // details and identity-document URLs is how a field ends up
+            // published on the door nobody was looking at, so there is one.
+            seller: publicSellerSummary(verDoc.id, sellerId, verData as Record<string, unknown>),
             products,
             reviews: { avgRating, reviewCount },
         });

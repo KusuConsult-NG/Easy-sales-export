@@ -5,9 +5,10 @@ import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
 import {
-    ArrowLeft, MapPin, Maximize, DollarSign, Calendar, Heart, Share2,
-    CheckCircle, AlertCircle, Lock, Loader2, Mail, User
+    ArrowLeft, MapPin, Maximize, DollarSign, Calendar, Share2,
+    CheckCircle, AlertCircle, Lock, Loader2, User
 } from "lucide-react";
+import { SaveItemButton } from "@/components/saved/SaveItemButton";
 import { getPropertyByIdAction, type LandListing } from "@/app/actions/land-listings";
 import { getUserTierAction } from "@/app/actions/cooperative";
 import { useToast } from "@/contexts/ToastContext";
@@ -22,7 +23,6 @@ export default function PropertyDetailsPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
-    const [isFavorite, setIsFavorite] = useState(false);
     const { showToast } = useToast();
 
     async function loadProperty() {
@@ -101,15 +101,18 @@ export default function PropertyDetailsPage() {
                         Back to Marketplace
                     </button>
                     <div className="flex items-center gap-3">
-                        <button
-                            onClick={() => setIsFavorite(!isFavorite)}
-                            className={`p-2 rounded-lg transition ${isFavorite
-                                ? "bg-red-100 text-red-600"
-                                : "bg-slate-100 text-slate-600 hover:text-red-600"
-                                }`}
-                        >
-                            <Heart className={`w-5 h-5 ${isFavorite ? "fill-current" : ""}`} />
-                        </button>
+                        {/*
+                          * #105. This was a <button> over useState(false): the
+                          * heart filled on click and the state died with the
+                          * component, so nothing was persisted and
+                          * `favoriteCount` — which _fn_listings.ts initialises
+                          * to 0 on every listing — was moved by nothing.
+                          *
+                          * SaveItemButton writes a saved_items row, renders
+                          * what the server says rather than what the browser
+                          * assumed, and steps favoriteCount in the database.
+                          */}
+                        <SaveItemButton itemType="land_listing" targetId={propertyId} />
                         <button
                             onClick={handleShare}
                             className="p-2 bg-slate-100 text-slate-600 hover:text-blue-600 rounded-lg transition"

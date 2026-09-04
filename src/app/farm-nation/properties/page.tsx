@@ -221,9 +221,16 @@ function PropertiesContent() {
                     <p className="text-slate-600">
                         Showing <span className="font-bold text-slate-900">{properties.length}</span> verified farms
                     </p>
-                    <Link href="/farm-nation/list-land" className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
-                        + List Your Land
-                    </Link>
+                    <div className="flex items-center gap-3">
+                        {/* #105 — the heart on a property page persists now, so
+                            there is a list to reach. */}
+                        <Link href="/farm-nation/saved" className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition">
+                            Saved Properties
+                        </Link>
+                        <Link href="/farm-nation/list-land" className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
+                            + List Your Land
+                        </Link>
+                    </div>
                 </div>
 
                 {error && (

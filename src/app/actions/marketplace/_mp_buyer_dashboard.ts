@@ -12,6 +12,7 @@ import { serializeDocs } from "@/lib/firestore-serialize";
 import { OrderSchema } from "@/lib/validations/marketplace";
 import { withSafeAction, ActionResponse } from "@/lib/safe-action";
 import { isActiveOrderStatus, isPaidByBuyer, sumOrders } from "@/lib/order-status";
+import { countSavedItems } from "@/lib/saved-items-store";
 
 /**
  * The most orders a single stats query will read.
@@ -130,8 +131,20 @@ async function _getBuyerStatsAction(): Promise<ActionResponse<{ stats: { activeO
         // The figure did not look broken; it looked like nothing had been spent.
         const totalSpent = sumOrders(orders, isPaidByBuyer);
 
-        const buyerDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        const savedSellers: number = buyerDoc.data()?.savedSellersCount ?? 0;
+        // #105. This was:
+        //
+        //     const buyerDoc = await db.collection(COLLECTIONS.USERS).doc(...).get();
+        //     const savedSellers = buyerDoc.data()?.savedSellersCount ?? 0;
+        //
+        // `savedSellersCount` was read HERE and written NOWHERE — there was no
+        // save-a-seller action, no collection and no control anywhere in the
+        // app that could have produced the number, so the tile was
+        // structurally 0 for every buyer. The same shape as #100, where Active
+        // Orders read a field nothing wrote.
+        //
+        // Sellers can be saved now, and the figure is counted from the rows
+        // rather than from a denormalised copy that could drift from them.
+        const savedSellers = await countSavedItems(session.user.id, "marketplace_seller");
 
         const stats = { activeOrders, completedOrders, totalSpent, savedSellers };
         return { error: null, success: true as const, data: { stats } };

@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { BadgeCheck, Store, MapPin, Star, Package, ArrowLeft, ShoppingCart } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { SaveItemButton } from "@/components/saved/SaveItemButton";
 
 interface SellerPageProps {
     params: Promise<{ sellerId: string }>;
@@ -109,6 +110,20 @@ export default async function SellerStorefrontPage({ params }: SellerPageProps) 
 
                         {/* Stats */}
                         <div className="flex gap-4 md:flex-col md:text-right">
+                            {/*
+                              * #105. The buyer dashboard has always shown a
+                              * "Saved Sellers" count, read from a field nothing
+                              * wrote — and there was no control anywhere in the
+                              * app through which a seller could be saved. This
+                              * is it.
+                              */}
+                            <div className="md:flex md:justify-end">
+                                <SaveItemButton
+                                    itemType="marketplace_seller"
+                                    targetId={sellerId}
+                                    variant="labelled"
+                                />
+                            </div>
                             <div className="bg-white/10 backdrop-blur rounded-xl px-4 py-3 text-center">
                                 <p className="text-2xl font-bold">{products.length}</p>
                                 <p className="text-white/70 text-xs">Products</p>
