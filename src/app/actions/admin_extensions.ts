@@ -11,6 +11,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logAuditAction } from "./audit";
 import { hasAdminPermission, isSuperAdmin } from "@/lib/admin-permissions";
 import { userErasurePatch, erasedEmailFor, erasureRetentionRecord } from "@/lib/user-erasure";
+import { eraseModuleApplications } from "@/lib/module-application-erasure";
 
 type ActionState = 
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
@@ -130,6 +131,29 @@ export async function softDeleteUserAction(targetUserId: string): Promise<Action
             // isActive are read by nothing in the sign-in path.
 
             updatedAt: FieldValue.serverTimestamp() });
+
+        /**
+         *   #376 AND THE MODULE ROWS, WHICH THIS DOOR REACHED NO MORE THAN THE
+         *        MEMBER'S OWN DID.
+         *
+         *        #305's lesson was that a hand-written list in one file is how
+         *        an omission happens, and it moved the USER row's list to
+         *        lib/user-erasure.ts. The same argument applies one level up:
+         *        the member's identity is copied onto eight module rows, and
+         *        neither deletion door touched any of them. Shared definition,
+         *        both doors, in lib/module-application-erasure.ts.
+         */
+        const moduleErasure = await eraseModuleApplications(targetUserId);
+        if (!moduleErasure.ok) {
+            logger.error(`[delete] module rows could not be scrubbed for ${targetUserId}`, {
+                failures: moduleErasure.failures,
+            });
+            return {
+                error: "Account data was scrubbed but some module records could not be reached. Please retry.",
+                success: false as const,
+                data: null,
+            };
+        }
 
         // 2. Actually prevent login.
         //

@@ -3,6 +3,7 @@ import { requireSession } from "@/lib/session-guard";
 
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { userErasurePatch, erasedEmailFor, erasureRetentionRecord, erasedOwnerMarker } from "@/lib/user-erasure";
+import { eraseModuleApplications } from "@/lib/module-application-erasure";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
 import { revokeAuthAccess } from "@/lib/auth-revocation";
@@ -194,6 +195,42 @@ async function _deleteUserAccountAction(): Promise<ActionResponse<null>> { try {
         });
 
         await batch.commit();
+
+        /**
+         *   #376 THE SCRUB ABOVE REACHES ONE ROW. THE MEMBER'S IDENTITY IS ON
+         *        EIGHT MORE.
+         *
+         *        The batch above marks the KYC verifications, the seller
+         *        verification and the wallet, and scrubs the user document. It
+         *        does not touch the module rows, and every module writes its own
+         *        full copy at onboarding: cooperative_members holds the next of
+         *        kin, the BVN and the ID-document links; seller_verifications
+         *        holds the NIN, BVN and CAC in CLEAR; the export application
+         *        holds kyc.nin and kyc.bvn in clear too.
+         *
+         *        Nothing is deleted — the rows keep their status, dates and
+         *        balances and gain erasedOwnerMarker, and their document
+         *        references are copied into the retention record first. See
+         *        lib/module-application-erasure.ts, which owns the field lists
+         *        so this is not a fourth hand-written one.
+         *
+         *        Reported rather than swallowed, for the same reason the auth
+         *        revocation below is: telling somebody their data is gone while
+         *        a collection could not be reached is the outcome this function
+         *        exists to avoid.
+         */
+        const moduleErasure = await eraseModuleApplications(userId);
+        if (!moduleErasure.ok) {
+            logger.error("[NDPR Compliance] module rows could not be scrubbed", {
+                userId,
+                failures: moduleErasure.failures,
+            });
+            return {
+                success: false as const,
+                error: "Your profile was removed but some module records could not be reached. Please contact support.",
+                data: null,
+            };
+        }
 
         // Take away the password as well as the data.
         //

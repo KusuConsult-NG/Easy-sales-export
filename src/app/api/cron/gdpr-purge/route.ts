@@ -7,6 +7,7 @@ import { logger } from "@/lib/logger";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { Timestamp, FieldValue } from "@/lib/firestore-compat";
 import { userErasurePatch, erasureRetentionRecord, erasedOwnerMarker } from "@/lib/user-erasure";
+import { eraseModuleApplications } from "@/lib/module-application-erasure";
 import { purgeChatbotDataOlderThan } from "@/lib/chatbot-db";
 
 // The maximum number of accounts scrubbed in one invocation. Each account
@@ -168,6 +169,41 @@ export async function GET(request: NextRequest) {
         // Execute Firestore Batch Delete
         await batch.commit();
 
+        /**
+         *   #376 THE COOPERATIVE ROW WAS THE ONLY MODULE ROW THIS SWEEP KNEW
+         *        ABOUT, AND IT SCRUBBED IT WITH THE USER ROW'S FIELD LIST.
+         *
+         *        userErasurePatch is built against `interface User`, so applying
+         *        it to a cooperative member removes the names it happens to
+         *        share and leaves what only that row has — the flat
+         *        nextOfKinName/Phone/Address the resubmission path writes, the
+         *        ward, the bank name, the state. And the other seven module
+         *        collections were reached by nothing at all.
+         *
+         *        The per-collection lists live in
+         *        lib/module-application-erasure.ts and this sweep now uses them,
+         *        so all three erasure doors scrub the same rows the same way.
+         *        The cooperative marker above is kept: it is idempotent, and
+         *        this sweep must still work if the module pass below fails.
+         *
+         *        A failure is COUNTED AND REPORTED, not swallowed — a sweep that
+         *        returns HTTP 200 while a collection kept the member's bank
+         *        details is the shape #327 was opened for.
+         */
+        const moduleFailures: string[] = [];
+        for (const uid of deletedUids) {
+            const moduleErasure = await eraseModuleApplications(uid);
+            if (!moduleErasure.ok) {
+                moduleFailures.push(`${uid}: ${moduleErasure.failures.join(", ")}`);
+            }
+        }
+        if (moduleFailures.length > 0) {
+            logger.error(
+                `GDPR Sweep: module rows could not be scrubbed for ${moduleFailures.length} user(s): ` +
+                moduleFailures.join(" | ")
+            );
+        }
+
         // Pass 2: Destroy Authentication Identities.
         //
         // This previously called auth() from firebase-admin, which resolves to
@@ -226,7 +262,10 @@ export async function GET(request: NextRequest) {
             // believe records were removed when they were retained.
             erasedCount: deletedUids.length,
             authDeletionEnabled,
-            authFailures: failedAuthDeletions
+            authFailures: failedAuthDeletions,
+            // #376 Reported, so a run that left a module row holding the
+            // member's bank details cannot read as a clean sweep.
+            moduleScrubFailures: moduleFailures.length
         });
 
     } catch (error: any) {
