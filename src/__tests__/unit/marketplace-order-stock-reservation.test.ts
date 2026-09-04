@@ -36,7 +36,7 @@
  * See docs/audit/integrity-sweep-2026-08-10.md (F5).
  */
 
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 
 const mockDecrementMany = jest.fn() as jest.Mock<any>;
 
@@ -128,11 +128,36 @@ function orderWrites() {
 }
 
 describe('createBankTransferOrderAction', () => {
+    /**
+     *   #379 THIS PATH IS RETIRED AND REFUSES BY DEFAULT.
+     *
+     *        #334's owner decision was taken: bank transfer writes a
+     *        paymentStatus nothing reads, so it is gated behind
+     *        MARKETPLACE_OFFLINE_CHECKOUT and off unless somebody turns it on.
+     *
+     *        These tests turn it on DELIBERATELY, because what they cover — the
+     *        all-or-nothing stock reservation — is the half that has to keep
+     *        working for whoever finishes the feature. A suite that stopped
+     *        exercising it would let that reservation rot behind the flag,
+     *        which is how the retired copy of a path drifts from the live one
+     *        (#374's "a copy nobody runs is a copy nobody notices drifting").
+     *
+     *        The refusal itself is asserted in
+     *        offline-checkout-is-retired.test.ts.
+     */
+    const originalFlag = process.env.MARKETPLACE_OFFLINE_CHECKOUT;
+
     beforeEach(() => {
         jest.clearAllMocks();
+        process.env.MARKETPLACE_OFFLINE_CHECKOUT = 'enabled';
         setSession('buyer-1');
         setDocs();
         mockDecrementMany.mockResolvedValue({ ok: true, failedId: null, reason: null });
+    });
+
+    afterEach(() => {
+        if (originalFlag === undefined) delete process.env.MARKETPLACE_OFFLINE_CHECKOUT;
+        else process.env.MARKETPLACE_OFFLINE_CHECKOUT = originalFlag;
     });
 
     async function order() {
@@ -203,11 +228,25 @@ describe('createBankTransferOrderAction', () => {
 });
 
 describe('createPaymentOnDeliveryOrderAction', () => {
+    /**
+     *   #379 RETIRED TOO, AND ENABLED HERE FOR THE SAME REASON as the bank
+     *        transfer describe above: the stock reservation is the half that
+     *        must keep working, and the refusal is asserted in
+     *        offline-checkout-is-retired.test.ts.
+     */
+    const originalFlag = process.env.MARKETPLACE_OFFLINE_CHECKOUT;
+
     beforeEach(() => {
         jest.clearAllMocks();
+        process.env.MARKETPLACE_OFFLINE_CHECKOUT = 'enabled';
         setSession('buyer-1');
         setDocs();
         mockDecrementMany.mockResolvedValue({ ok: true, failedId: null, reason: null });
+    });
+
+    afterEach(() => {
+        if (originalFlag === undefined) delete process.env.MARKETPLACE_OFFLINE_CHECKOUT;
+        else process.env.MARKETPLACE_OFFLINE_CHECKOUT = originalFlag;
     });
 
     async function order() {

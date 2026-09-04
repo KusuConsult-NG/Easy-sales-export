@@ -65,6 +65,7 @@
 import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { stripComments } from '@/lib/testing/strip-comments';
+import { OFFLINE_CHECKOUT_METHODS } from '@/lib/offline-checkout';
 
 const source = (rel: string) => stripComments(readFileSync(rel, 'utf-8'));
 
@@ -207,11 +208,28 @@ describe('#334 — the facts the corrected copy rests on', () => {
         expect(screens.length).toBeGreaterThan(0);
     });
 
-    it('the three layers disagree on the vocabulary, which is why this drifted', () => {
+    it('the three layers no longer disagree on the vocabulary — #379', () => {
+        /**
+         *   #379 THIS USED TO ASSERT THE DISAGREEMENT.
+         *
+         *        The order schema listed "payment_on_delivery" and not
+         *        "bank_transfer", while _payment_orders.ts writes both — which
+         *        is the drift #334 recorded as the reason the help copy looked
+         *        plausible. It never bit, because the live order writer sets no
+         *        paymentMethod at all and takes the schema's default; but both
+         *        dashboards parse inside a try/catch that falls back to the RAW
+         *        document, so a bank-transfer order would have skipped
+         *        validation silently rather than failing visibly.
+         *
+         *        The read side is now spread from OFFLINE_CHECKOUT_METHODS, so
+         *        it cannot drift from the write side again.
+         */
         const validations = source('src/lib/validations/marketplace.ts');
-        // The checkout schema accepts one of the two and not the other.
-        expect(validations).toMatch(/"payment_on_delivery"/);
-        expect(validations).not.toMatch(/"bank_transfer"/);
+
+        expect(validations).toMatch(/z\.enum\(\["escrow", "wallet", \.\.\.OFFLINE_CHECKOUT_METHODS\]\)/);
+        expect(validations).toMatch(/from "@\/lib\/offline-checkout"/);
+        // And the shared list really is the two the creators write.
+        expect(OFFLINE_CHECKOUT_METHODS).toEqual(['bank_transfer', 'payment_on_delivery']);
     });
 
     it('the platform default pass mark is 95, not the 70 the page claimed', () => {

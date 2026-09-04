@@ -19,6 +19,7 @@ import { createNotification } from "@/infrastructure/notifications/service";
 import { validateCartItems, calculateDeliveryFee, estimateCartWeight, nairaToKobo } from "@/lib/marketplace-cart";
 import { checkOrderAmountBounds } from "@/lib/order-payment-amount";
 import { escrowIdFor } from "@/lib/escrow-status";
+import { isOfflineCheckoutEnabled, offlineCheckoutRefusal } from "@/lib/offline-checkout";
 
 /**
  * Initialize Paystack Payment for Marketplace Order
@@ -236,6 +237,27 @@ async function _createBankTransferOrderAction(
 ): Promise<ActionResponse<null>> { 
     let sessionResult;
     try {
+        /**
+         *   #379 RETIRED. #334's OWNER DECISION, TAKEN: THIS DOES NOT RUN.
+         *
+         *        The reasoning is in lib/offline-checkout.ts. The short of it:
+         *        this writes `paymentStatus: "pending_verification"`, a value
+         *        nothing on a marketplace order reads — no screen, route or
+         *        action can advance it — so a wired bank-transfer checkout
+         *        would reserve the stock and strand the order. And Paystack's
+         *        own page already accepts bank transfer and confirms it
+         *        automatically, so this replaces a working channel with a
+         *        broken one.
+         *
+         *        REFUSED RATHER THAN NOTED, because index.ts re-exports this
+         *        module and a "use server" export is reachable over the wire
+         *        whether or not a screen calls it — #374's lesson. Refused
+         *        FIRST, before the cart is read or any stock is touched.
+         */
+        if (!isOfflineCheckoutEnabled()) {
+            return { success: false as const, error: offlineCheckoutRefusal("bank_transfer"), data: null };
+        }
+
         sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
         const { session } = sessionResult;
@@ -421,6 +443,29 @@ async function _createPaymentOnDeliveryOrderAction(
 ): Promise<ActionResponse<null>> { 
     let sessionResult;
     try {
+        /**
+         *   #379 RETIRED. #334's OWNER DECISION, TAKEN: THIS DOES NOT RUN.
+         *
+         *        This writes an order with NO ESCROW ROW, and escrow is what
+         *        the marketplace is built on. Two things follow from code that
+         *        already exists: confirmReceipt marks the order delivered and
+         *        then loops over an empty set of escrows, so no money moves
+         *        because none was held; and the platform fee is computed and
+         *        stored ON the escrow row (#109, #271), so an order without one
+         *        earns the platform nothing and leaves nothing to reconcile.
+         *        Every dispute resolution path acts on an escrow too.
+         *
+         *        Cash on delivery is a real commercial model. This platform is
+         *        not currently built for it, and wiring the creator would not
+         *        make it so. See lib/offline-checkout.ts.
+         *
+         *        Refused FIRST, before the cart is read or any stock is
+         *        reserved — this action decrements inventory.
+         */
+        if (!isOfflineCheckoutEnabled()) {
+            return { success: false as const, error: offlineCheckoutRefusal("payment_on_delivery"), data: null };
+        }
+
         sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
         const { session } = sessionResult;

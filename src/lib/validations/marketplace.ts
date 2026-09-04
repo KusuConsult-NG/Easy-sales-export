@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { OFFLINE_CHECKOUT_METHODS } from "@/lib/offline-checkout";
 
 /**
  * Marketplace Zod Schemas
@@ -117,7 +118,25 @@ export const OrderSchema = z.object({
     deliveryFee: z.number().default(0),
     serviceFee: z.number().default(0),
     totalAmount: z.number().default(0),
-    paymentMethod: z.enum(["escrow", "wallet", "payment_on_delivery"]).default("escrow"),
+    /**
+     *   #379 THE VALUES THE WRITERS ACTUALLY WRITE, DERIVED RATHER THAN
+     *        RESTATED.
+     *
+     *        This listed "payment_on_delivery" and NOT "bank_transfer", while
+     *        _payment_orders.ts writes both. #334 recorded the disagreement:
+     *        three layers, three vocabularies. It has never bitten, because the
+     *        live order writer sets no paymentMethod at all and takes the
+     *        default below — but both dashboards parse through this schema
+     *        inside a try/catch that falls back to the RAW document, so a
+     *        bank-transfer order would have skipped validation silently rather
+     *        than failing visibly.
+     *
+     *        Spread from OFFLINE_CHECKOUT_METHODS so the read side cannot drift
+     *        from the write side again. Those two are refused at the door today
+     *        (#379); rows written before that, and any written if an owner
+     *        enables them, still parse.
+     */
+    paymentMethod: z.enum(["escrow", "wallet", ...OFFLINE_CHECKOUT_METHODS]).default("escrow"),
     status: z.enum([
         "pending_payment",
         "payment_received",
