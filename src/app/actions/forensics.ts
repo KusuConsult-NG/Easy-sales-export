@@ -36,6 +36,17 @@ import { normalisePhone } from "@/lib/phone";
  *
  * A THIRD ONE — #372.
  *
+ * A FOURTH — #373, and the only one of the four guarding money.
+ *
+ *   Export "Investment Cap Breach"
+ *       compared `totalInvested` against `investmentCap` on an export window.
+ *       `investmentCap` appears twice in this repository: its type declaration
+ *       and that line. `totalInvested` is written only onto investor_portfolios.
+ *       Both operands were therefore 0 on every window, and the check reported
+ *       "pass" every time. The window's real pair is `fundedAmount` against
+ *       `fundingGoal` — the two fields all three fulfilment paths hand to
+ *       incrementWithinCeiling. See the note at the check itself.
+ *
  *   Marketplace "Phone Data Drift (Profile vs Verified)"
  *       read `phoneNumber` on a seller_verifications row. Of the FOUR places
  *       that create such a row, three write `phone`. So the value was undefined
@@ -550,25 +561,77 @@ export async function runForensicScanAction(): Promise<
                 logger.error("[Forensics] export window sweep truncated — the cap-breach check below is incomplete.");
             }
 
+            /**
+             *   #373 AND IT READ TWO FIELDS AN EXPORT WINDOW DOES NOT HAVE.
+             *
+             *        The status query was repaired above. The comparison under
+             *        it was still asking about fields nothing writes:
+             *
+             *          investmentCap   appears TWICE in this repository — its
+             *                          optional declaration in types/index.ts,
+             *                          and the line that read it here. No
+             *                          writer, no other reader.
+             *          totalInvested   IS written, by export-payment.ts and
+             *                          infrastructure/payments/service.ts — onto
+             *                          INVESTOR_PORTFOLIOS, never onto a window.
+             *
+             *        So both operands were 0 on every window and `0 > 0 * 1.05`
+             *        is false. The check reported "pass" for every window ever
+             *        scanned — the fourth in this file that could not fail,
+             *        after #331's two and #372's one, and the only one of the
+             *        four guarding a MONEY ceiling.
+             *
+             *        THE WINDOW DOES CARRY THIS PAIR, UNDER THE NAMES THE
+             *        FULFILMENT PATHS USE. All three of them — export-payment.ts,
+             *        _ex_investments.ts and payments/service.ts — call
+             *        incrementWithinCeiling with `field: "fundedAmount"` and a
+             *        ceiling of `fundingGoal`, falling back to the legacy `goal`.
+             *        That is the invariant a Postgres row lock enforces on the
+             *        way in; this is the check that it held. Same field names,
+             *        same fallback, so the forensic and the enforcement cannot
+             *        drift apart.
+             *
+             *        A WINDOW WITH NO RECORDED CEILING IS INCONCLUSIVE, NOT A
+             *        PASS. fundingGoal was added to the creator by an earlier
+             *        finding; windows created before that carry neither name, and
+             *        incrementWithinCeiling treats a missing ceiling as
+             *        UNBOUNDED. So those windows are genuinely uncapped, and
+             *        saying "no breach" about them is the false green line this
+             *        whole file keeps producing. #55 is the open owner decision
+             *        behind that gap.
+             */
             const breachedIds: string[] = [];
+            const uncappedIds: string[] = [];
 
             for (const doc of activeWindows.docs) {
                 const data = doc.data();
-                const cap = data.investmentCap || 0;
-                const totalInvested = data.totalInvested || 0;
+                const cap = Number(data.fundingGoal ?? data.goal);
+                const raised = Number(data.fundedAmount ?? 0);
 
-                // Small tolerance
-                if (totalInvested > (cap * 1.05)) { // 5% buffer overrun is suspicious but maybe allowed? Let's flag strict.
-                    breachedIds.push(`${doc.id} (Inv: ${totalInvested}, Cap: ${cap})`);
+                if (!Number.isFinite(cap) || cap <= 0) {
+                    uncappedIds.push(`${doc.id} (no funding goal recorded — uncapped)`);
+                    continue;
+                }
+
+                // The 5% tolerance is kept: incrementWithinCeiling refuses at
+                // the ceiling, so anything above it arrived by another route and
+                // a small overshoot is worth seeing before it is called a breach.
+                if (raised > cap * 1.05) {
+                    breachedIds.push(`${doc.id} (raised: ${raised}, goal: ${cap})`);
                 }
             }
 
             results.push({
                 module: "Export",
                 check: "Investment Cap Breach",
-                status: breachedIds.length > 0 ? "warning" : "pass",
-                details: `Scanned ${activeWindows.size} active windows. Found ${breachedIds.length} over-funded.`,
-                affectedIds: breachedIds
+                status: breachedIds.length > 0
+                    ? "warning"
+                    : (uncappedIds.length > 0 ? "inconclusive" : "pass"),
+                details: `Scanned ${activeWindows.size} investable windows: `
+                    + `${activeWindows.size - uncappedIds.length} with a funding goal, `
+                    + `${uncappedIds.length} without one (uncapped, not checkable). `
+                    + `Found ${breachedIds.length} over-funded.`,
+                affectedIds: [...breachedIds, ...uncappedIds]
             });
         } catch (e: any) { results.push({ module: "Export", check: "Cap Scan", status: "fail", details: e.message, affectedIds: [] });
         }
