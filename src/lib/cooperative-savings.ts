@@ -119,3 +119,79 @@ export function validateFixedSavingsPlan(
 export function fixedSavingsMaturityDate(durationMonths: number, from: Date = new Date()): Date {
     return new Date(from.getTime() + durationMonths * 30 * 24 * 60 * 60 * 1000);
 }
+
+/**
+ *   #419 A PLAN MATURES AND NOTHING NOTICES.
+ *
+ *   THE VOCABULARY WAS "active" | "matured" | "withdrawn", AND TWO OF THE THREE
+ *   WERE UNREACHABLE. Five files touch FIXED_SAVINGS_PLANS: two creators, one
+ *   reader, one integrity check, one type. Not one of them ever UPDATES a plan.
+ *   `"matured"` and `"withdrawn"` appear only in type unions and in the member
+ *   screen's filter — nothing in this codebase writes either.
+ *
+ *   WHAT THE MEMBER SAW. The savings screen renders a "Matured Plans" section
+ *   keyed on `status === "matured"`. It could never appear, so a plan whose
+ *   term ended kept displaying as active with a countdown that had run out.
+ *
+ *   WHAT MATTERED MORE. Creating a plan DEBITS savingsBalance — that is the
+ *   lock, and the ledger rows record it. With no maturity and no release, the
+ *   money left the member's spendable savings and had no way back: no action,
+ *   no route, no admin screen, no cron. #319's shape (an export return released
+ *   to nobody) and #141's (a payout queue nothing reads), on a member's own
+ *   savings.
+ *
+ *   MATURITY IS DERIVED, NOT SCHEDULED. There is no job to add and no backfill
+ *   to run: a plan is matured when its maturityDate has passed and it has not
+ *   been withdrawn, and that is knowable from the row itself. Deriving it makes
+ *   every plan already in the database correct at the next read, which a status
+ *   backfill would not — it would have to guess for rows written while it ran.
+ *   Same reasoning as #275, where the expiry answer was derived rather than
+ *   swept.
+ *
+ *   A STORED "withdrawn" IS TERMINAL AND WINS. The release claims that
+ *   transition, so it is the record that money moved, and no date arithmetic
+ *   may override it.
+ */
+export type FixedSavingsPlanStatus = "active" | "matured" | "withdrawn";
+
+/** Millis for a maturity date in any shape the adapter hands back, or NaN. */
+function maturityMillis(value: unknown): number {
+    if (value instanceof Date) return value.getTime();
+    if (typeof value === "number") return value;
+    if (typeof value === "string") return new Date(value).getTime();
+    const v = value as any;
+    if (v && typeof v.toDate === "function") {
+        const d = v.toDate();
+        return d instanceof Date ? d.getTime() : NaN;
+    }
+    if (v && typeof v.seconds === "number") return v.seconds * 1000;
+    if (v && typeof v._seconds === "number") return v._seconds * 1000;
+    return NaN;
+}
+
+/**
+ * The status of a fixed savings plan, from the row and the clock.
+ *
+ * An unreadable maturityDate answers "active": a plan whose term cannot be read
+ * must not be presented as releasable, because releasing is what moves money.
+ */
+export function fixedSavingsPlanStatus(
+    plan: { status?: string | null; maturityDate?: unknown } | null | undefined,
+    now: Date = new Date(),
+): FixedSavingsPlanStatus {
+    if (!plan) return "active";
+    if (plan.status === "withdrawn") return "withdrawn";
+
+    const maturity = maturityMillis(plan.maturityDate);
+    if (!Number.isFinite(maturity)) return "active";
+
+    return now.getTime() >= maturity ? "matured" : "active";
+}
+
+/** Principal plus the interest the plan promised — what a release pays out. */
+export function fixedSavingsPayout(plan: { amount?: unknown; projectedProfit?: unknown }): number {
+    const amount = Number(plan?.amount);
+    const profit = Number(plan?.projectedProfit);
+    if (!Number.isFinite(amount) || amount <= 0) return NaN;
+    return amount + (Number.isFinite(profit) && profit > 0 ? profit : 0);
+}

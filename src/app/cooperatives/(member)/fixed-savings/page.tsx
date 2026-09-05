@@ -17,7 +17,9 @@ import {
     FIXED_SAVINGS_MAX_MONTHS,
     formatFixedSavingsRate,
     validateFixedSavingsPlan,
+    fixedSavingsPlanStatus,
 } from "@/lib/cooperative-savings";
+import { withdrawMaturedFixedSavingsAction } from "@/app/actions/cooperative";
 import OnboardingGuide from "@/components/onboarding/OnboardingGuide";
 import { useToast } from "@/contexts/ToastContext";
 
@@ -145,7 +147,37 @@ export default function FixedSavingsPage() {
     };
 
     const activePlans = plans.filter(p => p.status === "active");
-    const maturedPlans = plans.filter(p => p.status === "matured");
+    /**
+     *   #419 The reader derives this now, so the section below can appear at
+     *   all. Derived again here as a belt: a plan whose maturity passes while
+     *   the page is open becomes withdrawable without a reload.
+     */
+    const maturedPlans = plans.filter(p => fixedSavingsPlanStatus(p) === "matured");
+
+    const [releasingId, setReleasingId] = useState<string | null>(null);
+
+    const handleWithdraw = async (planId: string) => {
+        setReleasingId(planId);
+        try {
+            const result = await withdrawMaturedFixedSavingsAction(planId);
+            if (result?.success) {
+                showToast(
+                    `Paid out to your savings: ${formatCurrency((result as any).data?.amount ?? 0)}`,
+                    "success",
+                );
+                await fetchPlans();
+            } else {
+                // #406/#337: the refusal is an ordinary resolved result, not a
+                // throw, so it has to be read rather than caught.
+                showToast(result?.error || "The payout could not be completed.", "error");
+            }
+        } catch (err) {
+            logger.error("[fixed-savings] withdrawal request failed", err);
+            showToast("Could not reach the server. Check your savings before retrying.", "error");
+        } finally {
+            setReleasingId(null);
+        }
+    };
     const totalInvested = activePlans.reduce((sum, p) => sum + p.amount, 0);
     const totalProjectedReturns = activePlans.reduce((sum, p) => sum + p.amount + p.projectedProfit, 0);
 
@@ -554,6 +586,18 @@ export default function FixedSavingsPage() {
                                             <p className="text-sm text-slate-500">
                                                 Matured on {new Date(plan.maturityDate).toLocaleDateString()}
                                             </p>
+                                            {/* #419 — the release. Before this there was no way, anywhere,
+                                                to get a matured plan's money back into savings. */}
+                                            <button
+                                                type="button"
+                                                onClick={() => handleWithdraw(plan.id)}
+                                                disabled={releasingId === plan.id}
+                                                className="mt-4 w-full px-4 py-3 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed transition"
+                                            >
+                                                {releasingId === plan.id
+                                                    ? "Paying out…"
+                                                    : `Withdraw ${formatCurrency(plan.amount + plan.projectedProfit)} to savings`}
+                                            </button>
                                         </div>
                                     ))}
                                 </div>

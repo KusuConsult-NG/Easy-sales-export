@@ -45,6 +45,7 @@ export {
     submitWithdrawalAction,
     applyForLoanAction,
     createFixedSavingsAction,
+    withdrawMaturedFixedSavingsAction,
     getTransactionsAction,
 } from "./_coop_money";
 

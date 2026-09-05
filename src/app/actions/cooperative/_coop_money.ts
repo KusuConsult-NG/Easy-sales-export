@@ -14,6 +14,7 @@ import { invalidateCooperativeCache, invalidateAdminGlobalStats } from "@/lib/ca
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { debitJsonbBalance, debitJsonbBalanceWithFloor, claimSingleOpenLoanApplication, compensateJsonbDebit } from "@/lib/wallet-ledger";
 import { canTransactAsMember, NOT_A_TRANSACTING_MEMBER_MESSAGE } from "@/lib/cooperative-membership-status";
+import { claimStatusTransition } from "@/lib/status-transition";
 import { ONE_OPEN_LOAN_APPLICATION_MESSAGE } from "@/lib/loan-application-location";
 import {
     COOPERATIVE_MINIMUM_BALANCE,
@@ -27,7 +28,7 @@ import { COOPERATIVE_CONFIG } from "@/lib/constants";
 // no longer reads its input at all (#333, below). The schema itself stays in
 // lib/types/cooperative.ts — it is the shape a paid contribution form submits.
 import { loanApplicationSchema, fixedSavingsSchema, type MembershipRegistrationState, type LoanApplicationState, type FixedSavingsState, type WithdrawalActionState } from "@/lib/types/cooperative";
-import { withFlexibleSafeAction } from "@/lib/safe-action";
+import { withFlexibleSafeAction, type ActionResponse } from "@/lib/safe-action";
 import { parseFormData } from "@/lib/form-validation";
 import type { CooperativeTransaction, MakeContributionState, GetTransactionsState } from "@/lib/types/cooperative";
 import { serializeDocs } from "@/lib/firestore-serialize";
@@ -38,6 +39,8 @@ import {
     FIXED_SAVINGS_ANNUAL_RATE,
     projectedFixedSavingsProfit,
     fixedSavingsMaturityDate,
+    fixedSavingsPlanStatus,
+    fixedSavingsPayout,
 } from "@/lib/cooperative-savings";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
 import { isRetired } from "@/lib/record-retirement";
@@ -925,3 +928,178 @@ async function _createFixedSavingsAction(
 }
 
 export const createFixedSavingsAction = withFlexibleSafeAction("createFixedSavingsAction", _createFixedSavingsAction);
+
+/**
+ *   #419 THE RELEASE THAT DID NOT EXIST.
+ *
+ *   Creating a plan debits savingsBalance. Nothing put it back — no action, no
+ *   route, no admin screen, no job. A member's money went in and stayed there.
+ *
+ *   THE CLAIM IS THE IDEMPOTENCY, AND IT COMES FIRST. `active -> withdrawn`
+ *   through claimStatusTransition, before a naira moves: two clicks, two tabs
+ *   or a retried request all race on the same CAS and exactly one wins. This is
+ *   the order #249-#251 established for every automated payout here — claim,
+ *   then pay — and the inverse of the read-check-write that let #135 charge two
+ *   buyers for one property.
+ *
+ *   MATURITY IS CHECKED AGAINST THE STORED DATE, not against a status field,
+ *   because nothing writes that field (see lib/cooperative-savings.ts). The
+ *   derived rule is the same one the screen and the reader use, stated once.
+ *
+ *   IT PAYS PRINCIPAL PLUS THE PROMISED INTEREST, from projectedProfit — the
+ *   figure written at creation and shown to the member ever since. Recomputing
+ *   it here would risk paying a different number from the one they were told,
+ *   which is #113's and #324's shape.
+ *
+ *   ON A FAILED CREDIT THE CLAIM IS RELEASED. The plan goes back to "active" so
+ *   the member can try again, rather than being left withdrawn with no money —
+ *   the compensation the creation path already does for its own debit.
+ */
+async function _withdrawMaturedFixedSavingsAction(planId: string): Promise<ActionResponse<{ amount: number }>> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) {
+            return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
+        }
+        const userId = sessionResult.session.user.id;
+
+        if (!planId || typeof planId !== "string") {
+            return { success: false as const, error: "Which plan?", data: null };
+        }
+
+        const planSnap = await db.collection(COLLECTIONS.FIXED_SAVINGS_PLANS).doc(planId).get();
+        if (!planSnap.exists) {
+            return { success: false as const, error: "Fixed savings plan not found", data: null };
+        }
+        const plan = planSnap.data() ?? {};
+
+        // Ownership. Reporting "not found" rather than "not yours" keeps this
+        // from being an existence oracle, as deleteMyNotification does.
+        if (plan.memberId !== userId) {
+            logger.warn("[fixed-savings] rejected a cross-member withdrawal", { userId, planId });
+            return { success: false as const, error: "Fixed savings plan not found", data: null };
+        }
+
+        const derived = fixedSavingsPlanStatus(plan);
+        if (derived === "withdrawn") {
+            return { success: false as const, error: "This plan has already been paid out.", data: null };
+        }
+        if (derived !== "matured") {
+            return {
+                success: false as const,
+                error: "This plan has not matured yet. It can be withdrawn on its maturity date.",
+                data: null,
+            };
+        }
+
+        const payout = fixedSavingsPayout(plan);
+        if (!Number.isFinite(payout) || payout <= 0) {
+            // #409's rule: refuse rather than move an amount nobody can read.
+            logger.error("[fixed-savings] refusing a payout that cannot be computed", {
+                planId, amount: plan.amount, projectedProfit: plan.projectedProfit,
+            });
+            return {
+                success: false as const,
+                error: "This plan's payout could not be calculated. Please contact support.",
+                data: null,
+            };
+        }
+
+        // The helper takes the COLLECTION, not the db handle — `db` alone has no
+        // .doc(). Matching the sibling call above.
+        const membership = await findCooperativeMemberRow(
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS),
+            userId,
+        );
+        if (!membership) {
+            return { success: false as const, error: "Membership record not found", data: null };
+        }
+
+        // Claim BEFORE the money moves.
+        const claim = await claimStatusTransition({
+            collection: COLLECTIONS.FIXED_SAVINGS_PLANS,
+            id: planId,
+            from: "active",
+            to: "withdrawn",
+            patch: { withdrawnAt: new Date().toISOString(), payoutAmount: payout },
+        });
+
+        if (!claim.claimed) {
+            return {
+                success: false as const,
+                error: claim.status === "withdrawn"
+                    ? "This plan has already been paid out."
+                    : "This plan could not be withdrawn just now. Please try again.",
+                data: null,
+            };
+        }
+
+        const reference = `fixsav_release_${planId}`;
+
+        try {
+            await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(membership.id).update({
+                savingsBalance: FieldValue.increment(payout),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+
+            // Both ledgers, mirroring the pair the funding path writes, so
+            // forensics reconciles the release the same way it reconciles the lock.
+            await db.collection(COLLECTIONS.TRANSACTIONS).doc(reference).set({
+                id: reference,
+                userId,
+                type: "fixed_savings_release",
+                module: "cooperative",
+                amount: payout,
+                currency: "NGN",
+                reference,
+                description: `Matured ${plan.durationMonths}-month fixed savings plan paid out`,
+                status: "completed",
+                date: FieldValue.serverTimestamp(),
+            });
+
+            await db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc(reference).set({
+                id: reference,
+                userId,
+                cooperativeId: membership.data?.cooperativeId || "default",
+                type: "fixed_savings_release",
+                amount: payout,
+                currency: "NGN",
+                reference,
+                description: `Released from a ${plan.durationMonths}-month fixed savings plan at maturity`,
+                status: "completed",
+                date: FieldValue.serverTimestamp(),
+            });
+        } catch (releaseError) {
+            // Hand the plan back rather than leaving it withdrawn and unpaid.
+            await claimStatusTransition({
+                collection: COLLECTIONS.FIXED_SAVINGS_PLANS,
+                id: planId,
+                from: "withdrawn",
+                to: "active",
+                patch: { withdrawalFailedAt: new Date().toISOString() },
+            }).catch(() => undefined);
+
+            logger.error("[fixed-savings] release failed after the claim; plan returned to active", {
+                planId, userId, error: releaseError instanceof Error ? releaseError.message : String(releaseError),
+            });
+            return {
+                success: false as const,
+                error: "We could not complete the payout. Your plan is unchanged — please try again.",
+                data: null,
+            };
+        }
+
+        revalidatePath("/cooperatives/fixed-savings");
+        return { error: null, success: true as const, data: { amount: payout } };
+    } catch (error) {
+        logger.error("[fixed-savings] withdrawal failed:", {
+            error: error instanceof Error ? error.message : String(error),
+        });
+        return { success: false as const, error: "Failed to withdraw the fixed savings plan", data: null };
+    }
+}
+
+export const withdrawMaturedFixedSavingsAction = withFlexibleSafeAction(
+    "withdrawMaturedFixedSavingsAction",
+    _withdrawMaturedFixedSavingsAction,
+);
