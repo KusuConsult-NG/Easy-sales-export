@@ -15,6 +15,23 @@ import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import type { Property, PropertyListingInput } from "@/lib/types/farm-nation-actions";
 
 /**
+ * #432 — the retirement of _listPropertyAction. See the note on its write.
+ *
+ * Local and not exported, because a "use server" module may only export async
+ * functions — the same shape #426 used for the retired dashboard layer. Read at
+ * call time, not at module load, so reviving it needs no redeploy and a test can
+ * set it per case.
+ */
+function legacyFarmNationListingEnabled(): boolean {
+    return process.env.LEGACY_FARM_NATION_LISTING === "enabled";
+}
+
+const LEGACY_LISTING_RETIRED_MESSAGE =
+    "This listing endpoint is retired (#432): it accepts no land title or survey "
+    + "plan, so it cannot create a listing that can be verified. Submit through "
+    + "/farm-nation/list-land, which uploads the documents.";
+
+/**
  * Get all properties with optional filters
  */
 async function _getPropertiesAction(filters?: { 
@@ -212,6 +229,28 @@ async function _listPropertyAction(input: PropertyListingInput): Promise<ActionR
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
+        /**
+         * #432 — RETIRED. See the note on the write below.
+         *
+         * The live path is /farm-nation/list-land, which uploads every image and
+         * document and calls submitLandListingAction. This action takes no files
+         * at all, so a listing created here can never carry the title deed the
+         * product requires. Retired rather than completed: giving it its own
+         * upload path would be a second copy of the rule, which is the root
+         * defect this audit keeps finding.
+         *
+         * FIRST, after the session check and before any read. A retirement that
+         * runs after the user lookup answers "User not found" to a caller whose
+         * real answer is "this endpoint is gone" — which is what the first draft
+         * of this guard did, and the behaviour suite caught it.
+         *
+         * Resolves with success:false rather than throwing — the contract every
+         * caller in this codebase reads (#406).
+         */
+        if (!legacyFarmNationListingEnabled()) {
+            return { success: false as const, error: LEGACY_LISTING_RETIRED_MESSAGE, data: null, meta: null };
+        }
+
         // Check user tier (Premium required)
         const userRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
         const userDoc = await userRef.get();
@@ -257,13 +296,45 @@ async function _listPropertyAction(input: PropertyListingInput): Promise<ActionR
             category: validatedData.category,
             features: validatedData.features,
             leaseDuration: validatedData.leaseDuration || null,
-            images: [], // Will be uploaded separately
+            /**
+             *   #432 — THIS CREATED A PURCHASABLE LISTING WITH NO EVIDENCE.
+             *
+             *   Three things wrong, and they compounded:
+             *
+             *     status: "available"    isPurchasable("available") is TRUE, and
+             *                            the Farm Nation card renders "Verified
+             *                            Land" for any purchasable status. So a
+             *                            listing created here was labelled
+             *                            verified.
+             *     verified: false        …while recording that it was not. The
+             *                            comment beside it said "Requires admin
+             *                            verification" — and `available` is not
+             *                            what the review queue reads
+             *                            (`pending_verification` is), so no
+             *                            admin would ever see it.
+             *     documents: {}          no title deed, no survey plan, nothing
+             *                            to verify even if one did.
+             *
+             *   `images: []` carried "Will be uploaded separately"; nothing
+             *   uploads them separately. The other two writers of this
+             *   collection both take the files.
+             *
+             *   No screen calls this. It is exported through the module's
+             *   "use server" barrel, which makes it an independently
+             *   addressable endpoint regardless — the property that made
+             *   autoEnrollPaidUser a paid-content bypass. So it is retired
+             *   rather than left, and the status is corrected so reviving it
+             *   cannot put unverified land on sale.
+             */
+            images: [],
             ownerId: session.user.id,
             ownerName: userData.name || "Unknown",
             ownerEmail: userData.email || "",
             ownerPhone: userData.phone || "",
-            status: "available",
-            verified: false, // Requires admin verification
+            // The status the review queue actually reads, and the one the live
+            // form path writes. `available` put it on sale unreviewed.
+            status: "pending_verification",
+            verified: false,
             documents: {},
             viewCount: 0,
             favoriteCount: 0,

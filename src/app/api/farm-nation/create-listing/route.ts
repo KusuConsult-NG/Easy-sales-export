@@ -10,8 +10,56 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
 
 /**
- * API Route: Create Land Listing
+ * API Route: Create Land Listing — RETIRED. It could not store a title deed.
+ *
+ * #432. This is the second of three writers of LAND_LISTINGS, and the only one
+ * that RECEIVES the files. It demanded a land title and a survey plan:
+ *
+ *     if (!documents.landTitle || !documents.surveyPlan) -> 400
+ *
+ * and then stored, for all eight images, the video, and all three legal
+ * documents:
+ *
+ *     `placeholder_${file.name}`
+ *
+ * Nothing was ever uploaded — the comment above the block said so outright
+ * ("placeholder for cloud storage upload"). The bytes arrived in the request
+ * and were dropped, and the listing went to `pending_verification` for an
+ * admin to review. /admin/farm-nation/land-verification renders those values
+ * as links, so the reviewer approving a LAND SALE saw `placeholder_title.pdf`
+ * pointing at nothing. This is #431's shape — a KYC document demanded,
+ * discarded, and reviewed as a filename — on land title deeds.
+ *
+ * THE LIVE PATH IS COMPLETE AND CORRECT. /farm-nation/list-land uploads every
+ * image and document to storage itself and calls submitLandListingAction, which
+ * stores the returned URLs. Nothing in this repository calls this route.
+ *
+ * RETIRED RATHER THAN COMPLETED, and that is the point. Making it work means
+ * building a SECOND upload path beside the one the form already has — a second
+ * copy of the rule, which is the root defect this audit keeps finding (#425,
+ * #426, #429, #430, #431). One door.
+ *
+ * It is retired rather than left alone because an API route is reachable by URL
+ * whether or not a screen calls it: unlike a dead module, this one answers.
+ *
+ * Set LEGACY_LAND_LISTING_API=enabled to revive it. The placeholder writes are
+ * corrected below regardless, so reviving it does not revive the defect — it
+ * refuses a listing whose files it cannot store, rather than recording one it
+ * cannot evidence.
  */
+
+const LEGACY_FLAG = "LEGACY_LAND_LISTING_API";
+const ENABLED_VALUE = "enabled";
+
+/** Read at call time, not module load, so reviving it needs no redeploy. */
+export function legacyLandListingApiEnabled(): boolean {
+    return process.env[LEGACY_FLAG] === ENABLED_VALUE;
+}
+
+export const RETIRED_MESSAGE =
+    "This endpoint is retired: it could not store the land title or survey plan "
+    + "it required. Submit through /farm-nation/list-land, which uploads them.";
+
 export async function POST(request: NextRequest) {
     try {
         const session = (await requireSession()).session;
@@ -19,6 +67,15 @@ export async function POST(request: NextRequest) {
             return NextResponse.json(
                 { success: false, data: null, meta: null, error: "Unauthorized" },
                 { status: 401 }
+            );
+        }
+
+        // After the session check, so the refusal does not tell an
+        // unauthenticated caller anything about this endpoint.
+        if (!legacyLandListingApiEnabled()) {
+            return NextResponse.json(
+                { success: false, data: null, meta: null, error: RETIRED_MESSAGE },
+                { status: 410 }
             );
         }
 
@@ -61,31 +118,56 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Extract media files (placeholder for cloud storage upload)
+        /**
+         * #432 — THE FILES ARE STORED, OR THE LISTING IS REFUSED.
+         *
+         * This block read every file out of the form and wrote
+         * `placeholder_<filename>` for each. Nothing was uploaded. A land title
+         * deed recorded as the string "placeholder_title.pdf" is not a record of
+         * a title deed, and the admin verification screen turned it into a link.
+         *
+         * Corrected even though the route is retired above: a retirement is one
+         * environment variable from being live, and reviving this must not
+         * revive the defect.
+         */
+        const timestamp = Date.now();
+        const store = (file: File, label: string) => {
+            const extension = file.name.split(".").pop() || "bin";
+            return import("@/lib/storage-admin").then(({ uploadFileToStorage }) =>
+                uploadFileToStorage(file, `farm-nation/${userId}/${timestamp}_${label}.${extension}`));
+        };
+
         const images: string[] = [];
         let videoUrl = "";
-
-        for (let i = 0; i < 8; i++) {
-            const image = formData.get(`image${i}`) as File;
-            if (image) {
-                images.push(`placeholder_${image.name}`);
-            }
-        }
-
-        const video = formData.get("video") as File;
-        if (video) {
-            videoUrl = `placeholder_${video.name}`;
-        }
-
-        // Process documents
         const documents: any = {};
         const landTitle = formData.get("landTitle") as File;
         const surveyPlan = formData.get("surveyPlan") as File;
         const taxClearance = formData.get("taxClearance") as File;
 
-        if (landTitle) documents.landTitle = `placeholder_${landTitle.name}`;
-        if (surveyPlan) documents.surveyPlan = `placeholder_${surveyPlan.name}`;
-        if (taxClearance) documents.taxClearance = `placeholder_${taxClearance.name}`;
+        try {
+            for (let i = 0; i < 8; i++) {
+                const image = formData.get(`image${i}`) as File;
+                if (image) images.push(await store(image, `image${i}`));
+            }
+
+            const video = formData.get("video") as File;
+            if (video) videoUrl = await store(video, "video");
+
+            if (landTitle) documents.landTitle = await store(landTitle, "title");
+            if (surveyPlan) documents.surveyPlan = await store(surveyPlan, "survey");
+            if (taxClearance) documents.taxClearance = await store(taxClearance, "tax");
+        } catch (uploadError) {
+            // A listing whose evidence could not be stored is not a listing.
+            // Recording it anyway is how the placeholder version looked like
+            // working software.
+            logger.error("[create-listing] could not store the files", {
+                userId, error: uploadError instanceof Error ? uploadError.message : String(uploadError),
+            });
+            return NextResponse.json(
+                { success: false, data: null, meta: null, error: "Your files could not be uploaded. Please try again." },
+                { status: 502 }
+            );
+        }
 
         if (!documents.landTitle || !documents.surveyPlan) {
             return NextResponse.json(

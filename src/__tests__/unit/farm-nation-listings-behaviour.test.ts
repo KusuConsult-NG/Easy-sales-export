@@ -313,6 +313,43 @@ describe('getPropertyByIdAction', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('listPropertyAction', () => {
+    /**
+     *   #432 — THIS ACTION IS RETIRED, AND THESE CASES REVIVE IT DELIBERATELY.
+     *
+     *   It wrote `status: "available"` — which isPurchasable() returns true for
+     *   and the Farm Nation card labels "Verified Land" — beside
+     *   `verified: false`, with `documents: {}` and `images: []`. It takes no
+     *   files, so a listing created through it could never carry the title deed
+     *   the product requires, and `available` is not the status the review queue
+     *   reads, so no admin would ever have corrected it.
+     *
+     *   No screen calls it; it is reachable as a "use server" export regardless.
+     *   Retired behind LEGACY_FARM_NATION_LISTING, with the status corrected to
+     *   `pending_verification` so reviving it cannot put unverified land on sale.
+     *
+     *   The flag is set here rather than the cases deleted, for the reason #426
+     *   established: the preserved implementation stays covered, and these
+     *   assertions are what prove it still works when revived.
+     */
+    const PRIOR_FLAG = process.env.LEGACY_FARM_NATION_LISTING;
+    beforeAll(() => { process.env.LEGACY_FARM_NATION_LISTING = 'enabled'; });
+    afterAll(() => {
+        if (PRIOR_FLAG === undefined) delete process.env.LEGACY_FARM_NATION_LISTING;
+        else process.env.LEGACY_FARM_NATION_LISTING = PRIOR_FLAG;
+    });
+
+    it('REFUSES BY DEFAULT — the retirement, checked from the other side', async () => {
+        // Without the flag it must not write at all, whatever else is true.
+        delete process.env.LEGACY_FARM_NATION_LISTING;
+        const { listPropertyAction } = await actions();
+        const result: any = await listPropertyAction(listingInput());
+        process.env.LEGACY_FARM_NATION_LISTING = 'enabled';
+
+        expect(result.success).toBe(false);
+        expect(String(result.error)).toMatch(/retired/i);
+        expect(store.all(COLLECTIONS.LAND_LISTINGS).length).toBe(0);
+    });
+
     it('refuses a caller with no session', async () => {
         actAs(null);
         const { listPropertyAction } = await actions();
@@ -375,6 +412,20 @@ describe('listPropertyAction', () => {
     });
 
     it('creates the listing unverified, owned by the caller', async () => {
+        /**
+         *   #432 CORRECTION: "unverified" AND `status: 'available'` WERE NOT
+         *   THE SAME THING, AND THIS PINNED BOTH.
+         *
+         *   The test name says unverified and the assertion said `available`.
+         *   isPurchasable('available') is TRUE and the Farm Nation card renders
+         *   "Verified Land" for any purchasable status — so the row said
+         *   verified:false while the product treated it as on sale and
+         *   verified. And `available` is not the status the review queue reads,
+         *   so no admin would ever have resolved the contradiction.
+         *
+         *   The name was right and the value was wrong. `pending_verification`
+         *   is what the live form path writes and what the queue reads.
+         */
         seedCoopMember();
         const { listPropertyAction } = await actions();
         expect(await listPropertyAction(listingInput())).toMatchObject({ success: true });
@@ -385,12 +436,25 @@ describe('listPropertyAction', () => {
             ownerName: 'Ada Obi',
             ownerEmail: 'ada@example.com',
             ownerPhone: '08012345678',
-            status: 'available',
+            status: 'pending_verification',
             verified: false,
             viewCount: 0,
             favoriteCount: 0,
         });
         expect(listing.images).toEqual([]);
+    });
+
+    it('and the status it writes is NOT one a buyer can purchase', async () => {
+        // The assertion the case above was missing: "unverified" has to mean
+        // something the product acts on, not just a flag beside a purchasable
+        // status.
+        const { isPurchasable } = await import('@/lib/land-listing-status');
+        seedCoopMember();
+        const { listPropertyAction } = await actions();
+        await listPropertyAction(listingInput());
+
+        const [, listing] = store.all(LISTINGS)[0] as [string, Record<string, any>];
+        expect(isPurchasable(listing.status)).toBe(false);
     });
 
     it('does not let the caller choose the owner, the status or the verified flag', async () => {
@@ -402,7 +466,7 @@ describe('listPropertyAction', () => {
 
         const [, listing] = store.all(LISTINGS)[0] as [string, Record<string, any>];
         expect(listing).toMatchObject({
-            ownerId: OWNER, status: 'available', verified: false, viewCount: 0,
+            ownerId: OWNER, status: 'pending_verification', verified: false, viewCount: 0,
         });
     });
 
