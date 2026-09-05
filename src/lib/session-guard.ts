@@ -303,11 +303,10 @@ export async function requireSession(): Promise<
     return { session: session as ValidSession, error: null };
 }
 
-export function isSessionExpired(result: unknown): result is SessionExpiredResult {
-    return (
-        typeof result === "object" &&
-        result !== null &&
-        (result as any).success === false &&
-        (result as any).code === SESSION_EXPIRED_CODE
-    );
-}
+/**
+ * #411. Re-exported rather than redefined. This was a second copy of the same
+ * three lines, and the client-safe file's copy had drifted from it while its
+ * comment claimed they were identical. One definition now, in the module both
+ * sides can import.
+ */
+export { isSessionExpired } from "@/lib/session-expiry-code";

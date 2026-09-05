@@ -19,16 +19,15 @@
 import { useCallback } from "react";
 import { signOut } from "next-auth/react";
 // ⚠️ Import ONLY from the client-safe constants file — never from session-guard.ts
-import { SESSION_EXPIRED_CODE } from "@/lib/session-expiry-code";
+import { isSessionExpired } from "@/lib/session-expiry-code";
 
-function isSessionExpiredResult(result: unknown): boolean {
-    return (
-        typeof result === "object" &&
-        result !== null &&
-        (result as any).success === false &&
-        (result as any).code === SESSION_EXPIRED_CODE
-    );
-}
+/**
+ * #411. This hook carried a THIRD copy of the session-expired test, written out
+ * by hand next to an import of the module that already exported one — and the
+ * exported one had drifted, so the two disagreed while a comment claimed
+ * otherwise. The hook that signs a user out is the last place to keep a private
+ * copy of the rule for when to do it.
+ */
 
 export function useSessionExpiry() {
     const handleExpiry = useCallback(() => {
@@ -61,7 +60,7 @@ export function useSessionExpiry() {
         async <T>(promise: Promise<T>): Promise<T> => {
             try {
                 const result = await promise;
-                if (isSessionExpiredResult(result)) {
+                if (isSessionExpired(result)) {
                     handleExpiry();
                 }
                 return result;
