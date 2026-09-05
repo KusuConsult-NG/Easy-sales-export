@@ -24,15 +24,45 @@ export default function LandVerificationPage() {
     const [listings, setListings] = useState<LandListing[]>([]);
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
+    // #408. Added so a failed read can be told apart from an empty queue.
+    const [error, setError] = useState<string | null>(null);
     const [selectedListing, setSelectedListing] = useState<LandListing | null>(null);
 
     async function loadListings() {
         setLoading(true);
-        const result = await getLandListings({ status: 'pending_verification' });
-        if (result.success && result.data) {
-            setListings(result.data);
+        setError(null);
+        /**
+         *   #408 A REFUSED READ RENDERED AS "ALL CAUGHT UP".
+         *
+         *   This was `if (result.success && result.data) setListings(...)` with
+         *   NO else and no try. A refusal — or a rejected promise — left the
+         *   list empty and fell through to the empty state below:
+         *
+         *       "All Caught Up! — No pending land listings to review"
+         *
+         *   On a queue of parcels waiting for verification that is the worst
+         *   available wrong answer: it tells the admin the work is done. #384
+         *   fixed exactly this, in exactly these words, on the LOANS approval
+         *   queue — and did not reach here. #297's class again, across two
+         *   screens instead of two functions.
+         *
+         *   Three states now, distinguishable: loading, failed (with the
+         *   reason), and genuinely empty.
+         */
+        try {
+            const result = await getLandListings({ status: 'pending_verification' });
+            if (result.success && result.data) {
+                setListings(result.data);
+            } else {
+                setListings([]);
+                setError(result.error || "Could not load land listings");
+            }
+        } catch {
+            setListings([]);
+            setError("Could not reach the server. This is not an empty queue — reload before assuming there is nothing to verify.");
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     }
 
     useEffect(() => {
@@ -169,8 +199,20 @@ export default function LandVerificationPage() {
                     </div>
                 )}
 
+                {/* Failed read — #408. Must come BEFORE the empty state and
+                    must exclude it, or a refusal renders as "All Caught Up!" */}
+                {!loading && error && (
+                    <div className="bg-white rounded-2xl p-12 text-center border border-red-200">
+                        <XCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
+                        <h3 className="text-xl font-bold text-slate-900 mb-2">
+                            Could not load the verification queue
+                        </h3>
+                        <p className="text-slate-600">{error}</p>
+                    </div>
+                )}
+
                 {/* Empty State */}
-                {!loading && listings.length === 0 && (
+                {!loading && !error && listings.length === 0 && (
                     <div className="bg-white rounded-2xl p-12 text-center">
                         <CheckCircle className="w-16 h-16 text-green-300 mx-auto mb-4" />
                         <h3 className="text-xl font-bold text-slate-900 mb-2">

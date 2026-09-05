@@ -18,14 +18,44 @@ import { type LoanApplication, LoanStatus } from "@/types/strict";
 export default function MyLoansPage() {
     const [loans, setLoans] = useState<LoanApplication[]>([]);
     const [loading, setLoading] = useState(true);
+    // #408. Without this, a failed read renders "No Loan Applications Yet" to a
+    // borrower who has one.
+    const [error, setError] = useState<string | null>(null);
 
     async function loadLoans() {
         setLoading(true);
-        const result = await getUserLoanApplications();
-        if (result.success && result.data) {
-            setLoans(result.data);
+        setError(null);
+        /**
+         *   #408 A FAILED READ TOLD A BORROWER THEY HAVE NO LOAN.
+         *
+         *   `if (result.success && result.data)` with no else and no try. A
+         *   refusal or a rejected promise left `loans` empty and the screen
+         *   rendered its empty state:
+         *
+         *       "No Loan Applications Yet — Get started by applying for your
+         *        first loan"
+         *
+         *   to somebody who has an outstanding loan. That is #384's defect on
+         *   the borrower's side of the same product: the approver's queue was
+         *   taught to tell a refusal from an empty list, and this was not.
+         *
+         *   Nothing here is a guess about the data — on failure the screen says
+         *   it could not load, and offers nothing else.
+         */
+        try {
+            const result = await getUserLoanApplications();
+            if (result.success && result.data) {
+                setLoans(result.data);
+            } else {
+                setLoans([]);
+                setError(result.error || "Could not load your loan applications");
+            }
+        } catch {
+            setLoans([]);
+            setError("Could not reach the server. This is not a statement that you have no loans — please reload.");
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     }
 
     useEffect(() => {
@@ -89,8 +119,21 @@ export default function MyLoansPage() {
                     </div>
                 )}
 
+                {/* Failed read — #408. Before the empty state, and excluding it:
+                    "No Loan Applications Yet" must never be shown to a borrower
+                    whose list simply could not be fetched. */}
+                {!loading && error && (
+                    <div className="bg-white rounded-2xl p-12 text-center border border-red-200">
+                        <XCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
+                        <h3 className="text-xl font-bold text-slate-900 mb-2">
+                            Could not load your loans
+                        </h3>
+                        <p className="text-slate-600">{error}</p>
+                    </div>
+                )}
+
                 {/* Empty State */}
-                {!loading && loans.length === 0 && (
+                {!loading && !error && loans.length === 0 && (
                     <motion.div
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}

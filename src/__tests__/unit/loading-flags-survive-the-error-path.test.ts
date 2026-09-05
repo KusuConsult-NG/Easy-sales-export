@@ -341,9 +341,15 @@ describe('#407 — the shape #405 could not see: an await with no try at all', (
          * which is a change to what those screens render, not a wrapper.
          */
         const found = SCREENS.flatMap((p) => unguardedAwaits(readFileSync(p, 'utf-8'), relative(ROOT, p)));
-        // 41 measured, 8 fixed above, 33 remaining. The number is asserted so a
-        // 34th cannot appear without somebody deciding it should.
-        expect(found.length).toBe(33);
+        /**
+         * 41 measured. 8 fixed by #407 (the money and decision handlers), then
+         * 3 more by #408 (loadLoans on both loan screens and loadListings on the
+         * land queue — where the stuck spinner turned out to be the lesser
+         * defect: those loaders rendered "no loans" and "All Caught Up!" after a
+         * failed read). 30 remain, and the number is asserted so a 31st cannot
+         * appear without somebody deciding it should.
+         */
+        expect(found.length).toBe(30);
         // And every handler fixed above is genuinely out of the population.
         for (const [rel, fn] of FIXED) expect(found).not.toContain(`${rel}:${fn}`);
     });

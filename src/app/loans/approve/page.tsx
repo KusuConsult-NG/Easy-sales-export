@@ -52,14 +52,32 @@ export default function LoanApprovalPage() {
     async function loadLoans() {
         setLoading(true);
         setError(null);
-        const result = await getPendingLoanApplications();
-        if (result.success && result.data) {
-            setLoans(result.data);
-        } else {
+        /**
+         * #408. #384 taught this loader to distinguish a refusal from an empty
+         * queue, which is why the else-branch below exists. It did not give it a
+         * try: a REJECTED promise — a dropped connection, a 500 — skipped both
+         * branches, so `loading` stayed true and the screen span forever with no
+         * error and no queue.
+         *
+         * A stopped spinner is not a better answer than a wrong one, it is the
+         * same answer with no way to act on it. The catch reuses the error state
+         * #384 built, so a network failure and a refusal now look alike to the
+         * approver: a message, and the reason.
+         */
+        try {
+            const result = await getPendingLoanApplications();
+            if (result.success && result.data) {
+                setLoans(result.data);
+            } else {
+                setLoans([]);
+                setError(result.error || "Could not load loan applications");
+            }
+        } catch {
             setLoans([]);
-            setError(result.error || "Could not load loan applications");
+            setError("Could not reach the server. The queue below is not the full list — reload before deciding.");
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     }
 
     useEffect(() => {
