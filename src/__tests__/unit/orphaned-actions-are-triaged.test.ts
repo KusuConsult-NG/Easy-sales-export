@@ -100,33 +100,64 @@ const FILES = walk(SRC);
 const isTest = (p: string) => p.includes('__tests__') || /\.test\.tsx?$/.test(p);
 const PROD = FILES.filter((p) => !isTest(p));
 
-/** Every exported name ending in "Action", and the file that defines it. */
-function definitions(): Map<string, string> {
-    const out = new Map<string, string>();
+/**
+ * Every exported name ending in "Action", and EVERY file that defines it.
+ *
+ *   #401 THIS RETURNED ONE FILE PER NAME, AND THAT MADE THE GATE LIE.
+ *
+ *   The old version kept the FIRST definition and dropped the rest
+ *   (`if (!out.has(name))`). Eighteen action names in this codebase are exported
+ *   from more than one file — moderateReviewAction, getSellerOrdersAction,
+ *   createDisputeAction, submitWithdrawalAction and fifteen others. For each of
+ *   those, the second definer MENTIONS the name, and the reachability check
+ *   excluded only the one recorded owner — so the duplicate counted as a caller
+ *   of itself, and BOTH definitions were scored "reached".
+ *
+ *   Duplicate names are not an edge case here; they are the defect class that
+ *   produced #276, #297, #384 and #397 — two doors, and the wired one is not
+ *   the hardened one. The gate built to catch that shape was blind to exactly
+ *   it.
+ */
+function definitions(): Map<string, string[]> {
+    const out = new Map<string, string[]>();
     for (const p of PROD) {
         const src = code(p);
         for (const re of [
             /export\s+(?:async\s+)?function\s+(\w*Action)\b/g,
             /export\s+const\s+(\w*Action)\b/g,
         ]) {
-            for (const m of src.matchAll(re)) if (!out.has(m[1])) out.set(m[1], p);
+            for (const m of src.matchAll(re)) {
+                const files = out.get(m[1]) ?? [];
+                if (!files.includes(p)) files.push(p);
+                out.set(m[1], files);
+            }
         }
     }
     return out;
 }
 
-/** Names with no mention outside their defining file, comments not counted. */
+/**
+ * Names with no mention outside ANY file that defines them, comments not counted.
+ *
+ * #401: "any file that defines them" is the correction. Excluding only one owner
+ * let a second definition of the same name stand in as that name's caller.
+ */
 function unreached(): string[] {
     const defs = definitions();
     const idents = new Map<string, Set<string>>();
     for (const p of PROD) idents.set(p, new Set(code(p).match(/[A-Za-z_$][\w$]*/g) ?? []));
 
     const out: string[] = [];
-    for (const [name, owner] of defs) {
-        const reached = PROD.some((p) => p !== owner && idents.get(p)!.has(name));
+    for (const [name, owners] of defs) {
+        const reached = PROD.some((p) => !owners.includes(p) && idents.get(p)!.has(name));
         if (!reached) out.push(name);
     }
     return out.sort();
+}
+
+/** Action names exported from more than one file. */
+function duplicateNames(): string[] {
+    return [...definitions()].filter(([, files]) => files.length > 1).map(([n]) => n).sort();
 }
 
 /**
@@ -286,6 +317,61 @@ describe('#399 — the queue is closed and pinned', () => {
         const defs = definitions();
         expect(defs.has('toggleVerifiedBadgeAction')).toBe(true);
         expect(unreached()).not.toContain('toggleVerifiedBadgeAction');
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#401 — one name, two definitions: the shape this gate exists to catch', () => {
+    /**
+     * Eighteen exported action names are defined in more than one file. For each,
+     * consumers import ONE of them; the others are shadowed and never run.
+     *
+     * That is the shape behind #276 (the withdrawal door the UI used applied
+     * neither guard), #297 (a fix landing on one of three copies), #384 and #397
+     * (the screen reaching the unhardened twin). It was not pinned anywhere, so a
+     * NINETEENTH could appear silently.
+     *
+     * WHAT THE #401 COUNTER FIX DID AND DID NOT FIND. definitions() used to keep
+     * the first file per name and drop the rest, and the reachability check
+     * excluded only that one file — so a second definition counted as a caller of
+     * its own name and both scored "reached". Corrected to exclude every defining
+     * file. Re-measured across all 476 definitions, the corrected counter returns
+     * the SAME 69 names: every duplicate here has a real external caller besides
+     * its twin, so the hole was latent rather than active. Recorded that way
+     * rather than dressed up as a find.
+     */
+    it('THE DUPLICATE SET IS EXACTLY THE RECORDED ONE', () => {
+        expect(duplicateNames()).toEqual([
+            'approveAcademyApplicationAction',
+            'createAnnouncementAction',
+            'createDisputeAction',
+            'createExportWindowAction',
+            'deleteResourceAction',
+            'getAuditLogsAction',
+            'getBuyerOrdersAction',
+            'getDashboardStatsAction',
+            'getProductReviewsAction',
+            'getPropertyByIdAction',
+            'getRecentActivityAction',
+            'getSellerOrdersAction',
+            'logAuditAction',
+            'moderateReviewAction',
+            'rejectAcademyApplicationAction',
+            'submitWithdrawalAction',
+            'updateExportStatusAction',
+            'updateResourceAction',
+        ]);
+    });
+
+    it('and the counter no longer treats a duplicate as its own caller', () => {
+        // The correction, asserted directly: every file defining a name is
+        // excluded from that name's reachability check, not just the first.
+        const defs = definitions();
+        const dupes = duplicateNames();
+        expect(dupes.length).toBeGreaterThan(0);
+        for (const name of dupes) {
+            expect({ name, files: defs.get(name)!.length > 1 }).toEqual({ name, files: true });
+        }
     });
 });
 
