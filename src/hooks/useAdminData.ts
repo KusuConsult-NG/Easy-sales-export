@@ -124,10 +124,31 @@ export function useAdminData<T>({ fetchAction, limit = 20, dependencies = [] }: 
                 }
 
                 // 3. Extract hasMore
-                const more = result.hasMore ?? 
-                             result.data?.hasMore ?? 
-                             result.meta?.hasMore ?? 
-                             (items.length === lim);
+                //
+                //   #413 A FULL PAGE IS NOT A NEXT PAGE.
+                //
+                //   The last clause used to be `(items.length === lim)` alone.
+                //   That is an INFERENCE the hook makes for itself when the
+                //   action states nothing — and it was inferring a next page
+                //   the hook has no way to fetch. `onNextPage` reads
+                //   `cursorStack.current[page]`, so with no cursor extracted
+                //   above it re-sends the page-0 request: the same rows come
+                //   back, the page counter says 2, and the operator concludes
+                //   the queue is stuck.
+                //
+                //   That is #192–#195's shape ("a null cursor next to
+                //   hasMore: true is a load-more button that reloads page
+                //   one") — the wording is _wv_resources.ts's own. Those were
+                //   fixed in the ACTIONS; this is the one remaining place that
+                //   could still manufacture the pair, for any action that
+                //   states neither.
+                //
+                //   An explicit answer from the action is still honoured in
+                //   both directions — this only constrains the guess.
+                const more = result.hasMore ??
+                             result.data?.hasMore ??
+                             result.meta?.hasMore ??
+                             (items.length === lim && !!extractedCursor);
                 setHasMore(more);
 
                 logger.debug('[useAdminData] Page loaded', { page, count: items.length, hasMore: more });
@@ -157,7 +178,10 @@ export function useAdminData<T>({ fetchAction, limit = 20, dependencies = [] }: 
     const depsKey = JSON.stringify(dependencies);
 
     useEffect(() => {
-        console.log("useAdminData: useEffect triggered to reset pagination. Dependencies:", { searchKey, filtersKey, depsKey });
+        // #413. Was console.log. Three lines above this hook's own
+        // logger.debug, printing every admin's live filter values into the
+        // browser console on each keystroke-debounce and each filter change.
+        logger.debug('[useAdminData] Resetting pagination', { searchKey, filtersKey, depsKey });
         cursorStack.current = [undefined];
         setPageIndex(0);
         fetchData(0, true, searchKey, filters);
@@ -184,11 +208,28 @@ export function useAdminData<T>({ fetchAction, limit = 20, dependencies = [] }: 
     }, [pageIndex]);
 
     const onNextPage = () => {
-        if (hasMore) {
-            const nextPage = pageIndex + 1;
-            setPageIndex(nextPage);
-            fetchData(nextPage);
+        if (!hasMore) return;
+
+        const nextPage = pageIndex + 1;
+
+        //   #413 …and the second half of the same guard.
+        //
+        //   The inference above is now cursor-aware, but an action can still
+        //   SAY `hasMore: true` while returning no cursor, and that answer is
+        //   honoured on purpose. Advancing on it would re-request page 0 and
+        //   present it as the next page — showing the operator the same rows
+        //   under a higher page number, which is worse than not advancing.
+        if (cursorStack.current[nextPage] === undefined) {
+            logger.warn('[useAdminData] Refusing to advance: no cursor for the next page', {
+                from: pageIndex,
+                hasMore,
+            });
+            setHasMore(false);
+            return;
         }
+
+        setPageIndex(nextPage);
+        fetchData(nextPage);
     };
 
     const onPrevPage = () => {
@@ -202,7 +243,7 @@ export function useAdminData<T>({ fetchAction, limit = 20, dependencies = [] }: 
     const refresh = useCallback((reset?: boolean | any) => {
         // Strict boolean check to prevent Event objects from triggering reset
         const shouldReset = reset === true;
-        console.log("useAdminData: refresh called. shouldReset:", shouldReset, "pageIndex:", pageIndexRef.current);
+        logger.debug('[useAdminData] refresh', { shouldReset, pageIndex: pageIndexRef.current });
         
         if (shouldReset) {
             cursorStack.current = [undefined];
