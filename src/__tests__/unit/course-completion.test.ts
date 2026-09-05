@@ -94,7 +94,32 @@ function setWorld(opts: {
         data: () => ({ userId: LEARNER, courseId: COURSE, lessonId: id, completed: true }),
     }));
 
-    (global as any).mockFirestoreGet.mockImplementation((id: string) => {
+    (global as any).mockFirestoreGet.mockImplementation((id: string, collection?: string) => {
+        /**
+         *   #430 — THE COLLECTION IS PART OF THE KEY NOW.
+         *
+         *   course_progress and certificates are BOTH keyed
+         *   `{userId}_{courseId}`, so this fixture — which matched on the id
+         *   prefix alone — answered the certificate read with the progress row.
+         *   The issuer then saw a credential that did not exist, returned
+         *   "already held", and wrote nothing, so three assertions below failed
+         *   for a reason that had nothing to do with the code under test.
+         *
+         *   The mock passes the collection as a second argument for exactly
+         *   this. Certificates are absent unless the case says otherwise.
+         */
+        if (collection === 'certificates') {
+            return Promise.resolve({
+                exists: !!opts.certificateExists, empty: !opts.certificateExists, docs: [],
+                data: () => (opts.certificateExists ? { certificateNumber: 'EXISTING' } : undefined),
+            });
+        }
+        if (collection === 'users') {
+            return Promise.resolve({
+                exists: true, empty: false, docs: [],
+                data: () => ({ name: 'A Learner', email: `${LEARNER}@e.com` }),
+            });
+        }
         // The course-progress record uses a composite id.
         if (typeof id === 'string' && id.startsWith(`${LEARNER}_`)) {
             return Promise.resolve({
@@ -125,6 +150,19 @@ function setWorld(opts: {
         exists: true, empty: false, docs: [],
         data: () => ({ completed: opts.progressCompleted ?? false }),
     }));
+}
+
+/**
+ * The issued certificate row, told apart from the stamp that points at it.
+ *
+ * #430: the progress record is stamped with `certificateId` AND
+ * `certificateNumber`, so "the write carrying a certificateNumber" now matches
+ * two payloads — and allWrites() lists updates before sets, so a bare find()
+ * returned the STAMP and every field assertion read undefined. An issued
+ * certificate always carries courseId and userId; the stamp carries neither.
+ */
+function issuedCertificate(): Record<string, any> | undefined {
+    return allWrites().find((p) => p && 'certificateNumber' in p && 'courseId' in p);
 }
 
 function allWrites(): Record<string, any>[] {
@@ -222,7 +260,7 @@ describe('generateCourseCertificate — the certificate says what the course is 
         const r: any = await certify('Doctor of Everything');
 
         expect(r.success).toBe(true);
-        const cert = allWrites().find((p) => p && 'certificateNumber' in p);
+        const cert = issuedCertificate();
         expect(cert?.courseTitle).toBe('Export Documentation Fundamentals');
         expect(cert?.courseTitle).not.toBe('Doctor of Everything');
     });
@@ -234,7 +272,16 @@ describe('generateCourseCertificate — the certificate says what the course is 
         const r: any = await certify();
 
         expect(r.success).toBe(false);
-        expect(String(r.error)).toMatch(/not completed/i);
+        /**
+         *   #430: ONE REFUSAL, ONE WORDING.
+         *
+         *   The two doors had drifted to two strings for the same refusal —
+         *   this action said "Course not completed yet", the route said "Course
+         *   not yet completed" — and each was pinned by its own test, so no
+         *   single message could satisfy both. The route's is kept: it is an
+         *   asserted public response body, the stronger contract of the two.
+         */
+        expect(String(r.error)).toMatch(/not yet completed/i);
         expect(allWrites().filter((p) => p && 'certificateNumber' in p)).toEqual([]);
     });
 
@@ -252,7 +299,7 @@ describe('generateCourseCertificate — the certificate says what the course is 
 
         await certify();
 
-        const cert = allWrites().find((p) => p && 'certificateNumber' in p);
+        const cert = issuedCertificate();
         expect(cert?.userId).toBe(LEARNER);
     });
 });

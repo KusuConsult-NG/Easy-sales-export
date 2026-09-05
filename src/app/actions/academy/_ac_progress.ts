@@ -6,6 +6,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { gradeModuleQuiz } from "@/lib/academy-grading";
+import { isIssuedCertificate } from "@/lib/certificate-kind";
 import { serializeValue } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import type { Course, Lesson, Quiz, UserProgress } from "@/lib/types/academy-actions";
@@ -430,14 +431,80 @@ async function _getUserAggregateProgressAction(userId: string): Promise<ActionRe
 
         const overallProgress = totalLessons > 0 ? Math.round((totalCompletedLessons / totalLessons) * 100) : 0;
 
+        /**
+         *   #430 — TWO FIGURES ON THIS SCREEN WERE INVENTED, NOT MEASURED.
+         *
+         *   CERTIFICATES. This read `certificatesEarned: completedCourses`,
+         *   commented "One certificate per completed course". That is a fourth
+         *   reader of "earned", and the only one that never looks at a
+         *   certificate: /api/academy/dashboard counts issued rows, the public
+         *   verifier resolves them, and certificate-kind exists precisely to
+         *   say which rows may be COUNTED AS EARNED. That rule named three
+         *   readers and this was not one of them — the fix reaching all but one
+         *   copy, again.
+         *
+         *   The two screens therefore disagreed under one label: /academy/
+         *   dashboard said 0 for everybody (nothing issued certificates until
+         *   #430), and this screen said "however many courses you finished".
+         *
+         *   LEARNING TIME. `totalCompletedLessons * 0.5`, commented "Estimate 30
+         *   min per lesson", rendered as a bold "12h" under a clock icon
+         *   labelled "Learning Time". A learner who spent forty hours and one
+         *   who skimmed saw the same number, and neither number came from
+         *   anything either of them did.
+         *
+         *   The real measurement was already there and already defended:
+         *   updateLessonProgress records lastWatchedSecond per lesson and
+         *   CLAMPS anything faster than 2x playback as a watch-rate anomaly.
+         *   Somebody took care that watch time cannot be inflated, and the
+         *   screen reporting watch time ignored it. #283's shape — a figure
+         *   presented as measured that nothing measures.
+         *
+         *   Both now come from stored records, and both fail to 0 rather than
+         *   to a guess when they cannot be read: "we could not measure" must
+         *   not be dressed up as a measurement (#313).
+         */
+        let certificatesEarned = 0;
+        try {
+            const certSnapshot = await db.collection(COLLECTIONS.CERTIFICATES)
+                .where("userId", "==", userId)
+                .get();
+            // Only credentials the platform issued. A file the learner attached
+            // to their own profile lives in this collection too, and counting
+            // it would let anybody inflate their own figure by uploading a PDF.
+            certificatesEarned = certSnapshot.docs.filter((d) => isIssuedCertificate(d.data())).length;
+        } catch (certError) {
+            logger.warn("[aggregateProgress] could not count certificates", {
+                userId, error: String(certError),
+            });
+        }
+
+        let totalHoursLearned = 0;
+        try {
+            const watchSnapshot = await db.collection(COLLECTIONS.LESSON_VIDEO_PROGRESS)
+                .where("userId", "==", userId)
+                .get();
+            const seconds = watchSnapshot.docs.reduce((sum, d) => {
+                const watched = Number(d.data()?.lastWatchedSecond);
+                // A row whose figure is unreadable contributes nothing rather
+                // than NaN, which would render as "NaNh".
+                return sum + (Number.isFinite(watched) && watched > 0 ? watched : 0);
+            }, 0);
+            totalHoursLearned = seconds / 3600;
+        } catch (watchError) {
+            logger.warn("[aggregateProgress] could not total watch time", {
+                userId, error: String(watchError),
+            });
+        }
+
         return {
             error: null, success: true as const,
             data: {
                 totalCourses: enrolledCourses.length,
                 completedCourses,
                 inProgressCourses,
-                totalHoursLearned: totalCompletedLessons * 0.5, // Estimate 30 min per lesson
-                certificatesEarned: completedCourses, // One certificate per completed course
+                totalHoursLearned,
+                certificatesEarned,
                 totalLessons,
                 completedLessons: totalCompletedLessons,
                 overallProgress,

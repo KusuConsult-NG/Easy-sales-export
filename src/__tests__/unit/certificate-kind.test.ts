@@ -150,10 +150,22 @@ describe('the readers that treated every row as a credential', () => {
         expect(src).toMatch(/\.filter\(doc => isIssuedCertificate\(doc\.data\(\)\)\)/);
     });
 
-    it('the generate route stamps the issued kind', async () => {
-        const src = await source('src/app/api/academy/certificate/generate/route.ts');
+    it('the issuer stamps the issued kind', async () => {
+        // #430 moved the write out of /api/academy/certificate/generate, which
+        // had no caller, into the one issuer that course completion now calls.
+        // The stamp is what this rule is about; where it is written is not.
+        const src = await source('src/lib/academy-certificate-issue.ts');
 
         expect(src).toContain('recordType: ACADEMY_CERTIFICATE');
+    });
+
+    it('and the route it moved out of does not stamp a second row', async () => {
+        // Two issuers would mean the next change to this rule reaches one of
+        // them — the failure #430 is about.
+        const src = await source('src/app/api/academy/certificate/generate/route.ts');
+
+        expect(src).not.toContain('recordType:');
+        expect(src).toContain('issueAcademyCertificate');
     });
 
     it('the upload action stamps the uploaded kind', async () => {

@@ -247,20 +247,52 @@ describe('generateCourseCertificate', () => {
     });
 
     it('records the number it actually issued', () => {
+        /**
+         *   #430 CORRECTION: THE NUMBER WAS BUILT TWICE AND IS NOW BUILT ONCE,
+         *   SOMEWHERE ELSE.
+         *
+         *   The original defect was `CERT-${Date.now()}-{uid8}` computed twice
+         *   from two separate Date.now() calls — one onto the certificate, one
+         *   into the audit log — so the two disagreed by however many
+         *   milliseconds separated them.
+         *
+         *   That scheme is gone entirely. It never reached a reader: this
+         *   function's only caller was an orphaned component, it wrote a
+         *   collection nothing reads, and the number a learner is actually
+         *   shown is `ACAD-{year}-{course}-{user}`. There is now one number,
+         *   computed in the issuer, written onto the row and carried into the
+         *   audit entry — which is what "records the number it actually issued"
+         *   was always asking for.
+         */
         const src = code(COURSE_ACTIONS);
         const fn = src.slice(src.indexOf('export async function generateCourseCertificate'));
 
-        // Computed once, used twice — not built twice from two Date.now() calls.
-        const built = fn.match(/`CERT-\$\{Date\.now\(\)\}/g) || [];
+        // The ad-hoc scheme is gone, not merely deduplicated.
+        expect(fn).not.toMatch(/`CERT-\$\{Date\.now\(\)\}/);
+        // And the audit entry carries the issuer's number, so it can be matched
+        // to the document it records.
+        expect(fn).toContain('certificateNumber: result.certificateNumber');
+
+        // Built once, in the issuer, from the completion date.
+        const issuer = code('src/lib/academy-certificate-issue.ts');
+        const built = issuer.match(/academyCertificateNumber\(/g) || [];
         expect(built.length).toBe(1);
-        expect(fn).toContain('const certificateNumber = ');
     });
 
     it('and returns the certificate the learner already holds', () => {
-        const src = code(COURSE_ACTIONS);
-        const branch = src.slice(src.indexOf('if (!certSnapshot.empty)'));
+        // The branch moved into the issuer with the rest of the body. What it
+        // guarantees is unchanged: a learner who already holds a certificate
+        // gets its id back, not success with nothing to link to.
+        const issuer = code('src/lib/academy-certificate-issue.ts');
+        const branch = issuer.slice(issuer.indexOf('if (progress.certificateId)'));
 
-        expect(branch.slice(0, 500)).toContain('certificateId: existingCert.id');
-        expect(branch.slice(0, 500)).not.toContain('data: null');
+        expect(branch.slice(0, 400)).toContain('status: "already"');
+        expect(branch.slice(0, 400)).toContain('String(progress.certificateId)');
+
+        // And the caller passes it on rather than dropping it.
+        const src = code(COURSE_ACTIONS);
+        const fn = src.slice(src.indexOf('export async function generateCourseCertificate'));
+        expect(fn).toContain('certificateId: result.certificateId');
+        expect(fn).toContain('Certificate already issued');
     });
 });

@@ -197,7 +197,20 @@ function createMockDb() {
             id,
             __collection: collection,
             path: `${collection}/${id}`,
-            get: () => withAccess(descriptor, () => global.mockFirestoreGet(id)),
+            /**
+             * The COLLECTION is passed as a second argument.
+             *
+             * Two collections in this schema legitimately share a document id:
+             * course_progress and certificates are both keyed `{userId}_{courseId}`.
+             * A fixture keyed on the id alone cannot tell them apart, so it
+             * answers the certificate read with the progress row — and any
+             * assertion about one of them silently measures the other. Found
+             * when #430 made course completion read both in one call.
+             *
+             * Existing fixtures take one parameter and ignore the second, so
+             * this is additive.
+             */
+            get: () => withAccess(descriptor, () => global.mockFirestoreGet(id, collection)),
             update: (fields) => withAccess(descriptor, () => global.mockFirestoreUpdate(id, fields)),
             set: (data, options) => withAccess(
                 Object.assign({}, descriptor, { merge: options && options.merge }),

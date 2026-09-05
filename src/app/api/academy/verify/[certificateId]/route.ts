@@ -38,6 +38,60 @@ export async function GET(
             waveDoc = await db.collection(COLLECTIONS.WAVE_CERTIFICATES).doc(certificateId).get();
         }
 
+        /**
+         *   #430 — RESOLVE BY THE NUMBER THE HOLDER WAS ACTUALLY GIVEN.
+         *
+         *   This looked up by DOCUMENT ID only. An academy certificate's
+         *   document id is `{userId}_{courseId}`, and what the learner is shown
+         *   — on the page, on the PDF and in the LinkedIn entry — is
+         *   `ACAD-{year}-{course}-{user}`. So the one string a third party ever
+         *   holds was the one string this endpoint could not resolve.
+         *
+         *   Issuing certificates (#430) without this would have fixed the count
+         *   and left the verify link answering "Certificate not found" exactly
+         *   as before — the fix reaching one of the places that needed it,
+         *   which is the failure this whole finding is about.
+         *
+         *   Tried last, so an id lookup keeps its single read.
+         */
+        let byNumberId: string | null = null;
+        let byNumberData: Record<string, any> | null = null;
+        if (!certificateDoc.exists && !waveDoc?.exists) {
+            const numbered = await db.collection(COLLECTIONS.CERTIFICATES)
+                .where("certificateNumber", "==", certificateId)
+                .limit(1)
+                .get();
+            if (!numbered.empty) {
+                byNumberId = numbered.docs[0].id;
+                byNumberData = numbered.docs[0].data();
+            }
+        }
+
+        if (byNumberData) {
+            const numberedData = byNumberData;
+            // The same issued-vs-attached rule as the id path below. A row
+            // found by number is no more trusted than one found by id.
+            if (!isIssuedCertificate(numberedData)) {
+                return NextResponse.json(
+                    { success: false, message: "Certificate not found or invalid" },
+                    { status: 404 }
+                );
+            }
+            return NextResponse.json({
+                success: true,
+                certificate: {
+                    id: byNumberId,
+                    userName: numberedData.userName,
+                    courseTitle: numberedData.courseTitle,
+                    completionDate: numberedData.completionDate?.toDate?.() || new Date(),
+                    grade: numberedData.grade,
+                    certificateNumber: numberedData.certificateNumber || certificateId,
+                    programme: "academy",
+                    isValid: true,
+                },
+            });
+        }
+
         if (!certificateDoc.exists && !waveDoc?.exists) {
             return NextResponse.json(
                 { success: false, message: "Certificate not found or invalid" },

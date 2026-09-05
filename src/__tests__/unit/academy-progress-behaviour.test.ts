@@ -718,22 +718,88 @@ describe('getUserAggregateProgressAction', () => {
         });
     });
 
-    it('issues one certificate per completed course', async () => {
+    /**
+     *   #430 CORRECTION: THESE TWO PINNED THE DEFECTS.
+     *
+     *   They were accurate about what the code did, and what it did was invent
+     *   both figures:
+     *
+     *     certificatesEarned: completedCourses      "One certificate per completed course"
+     *     totalHoursLearned:  completedLessons*0.5  "Estimate 30 min per lesson"
+     *
+     *   The first is a fourth reader of "earned" and the only one that never
+     *   looks at a certificate — so this screen and /academy/dashboard reported
+     *   different numbers under one label. The second rendered as a bold "12h"
+     *   under a clock icon labelled "Learning Time", identical for a learner who
+     *   spent forty hours and one who skimmed.
+     *
+     *   Corrected in place rather than deleted: both figures still need tests,
+     *   and what changes is what they are allowed to be derived from.
+     */
+    it('COUNTS CERTIFICATES THAT EXIST, not courses that were finished', async () => {
         seedCourse({ id: 'c1', modules: [{ id: 'm1', lessons: ['a'] }] });
         seedCourse({ id: 'c2', modules: [{ id: 'm1', lessons: ['a'] }] });
         seedProgress({ completedLessons: ['a'], completedAt: '2026-02-01T00:00:00.000Z' }, 'c1');
         seedProgress({ completedLessons: ['a'], completedAt: '2026-03-01T00:00:00.000Z' }, 'c2');
+        // Two courses finished, one credential actually issued.
+        store.seed(COLLECTIONS.CERTIFICATES, `${LEARNER}_c1`, {
+            userId: LEARNER, courseId: 'c1', recordType: 'academy_certificate',
+        });
 
         const { getUserAggregateProgressAction } = await actions();
-        expect(((await getUserAggregateProgressAction(LEARNER)) as any).data.certificatesEarned).toBe(2);
+        expect(((await getUserAggregateProgressAction(LEARNER)) as any).data.certificatesEarned).toBe(1);
     });
 
-    it('estimates half an hour per completed lesson', async () => {
+    it('and a file the learner uploaded is not a certificate they earned', async () => {
+        // COLLECTIONS.CERTIFICATES holds both kinds. Counting rows blindly
+        // would let anybody inflate their own figure by attaching PDFs.
+        seedCourse({ id: 'c1', modules: [{ id: 'm1', lessons: ['a'] }] });
+        seedProgress({ completedLessons: ['a'], completedAt: '2026-02-01T00:00:00.000Z' }, 'c1');
+        store.seed(COLLECTIONS.CERTIFICATES, 'uploaded-1', {
+            userId: LEARNER, recordType: 'user_upload', fileName: 'anything.pdf',
+        });
+
+        const { getUserAggregateProgressAction } = await actions();
+        expect(((await getUserAggregateProgressAction(LEARNER)) as any).data.certificatesEarned).toBe(0);
+    });
+
+    it('MEASURES LEARNING TIME FROM RECORDED WATCH SECONDS', async () => {
+        seedCourse({ id: 'c1', modules: [{ id: 'm1', lessons: ['a', 'b', 'c'] }] });
+        seedProgress({ completedLessons: ['a', 'b', 'c'] }, 'c1');
+        // 30 + 60 + 90 minutes actually watched = 3h, which the old rule would
+        // have called 1.5h on the same three completed lessons.
+        for (const [lesson, seconds] of [['a', 1800], ['b', 3600], ['c', 5400]] as const) {
+            store.seed(COLLECTIONS.LESSON_VIDEO_PROGRESS, `${LEARNER}_${lesson}`, {
+                userId: LEARNER, courseId: 'c1', lessonId: lesson, lastWatchedSecond: seconds,
+            });
+        }
+
+        const { getUserAggregateProgressAction } = await actions();
+        expect(((await getUserAggregateProgressAction(LEARNER)) as any).data.totalHoursLearned).toBe(3);
+    });
+
+    it('and a learner with no watch records is shown 0, not an estimate', async () => {
+        // The honest answer when nothing was measured. The old rule reported
+        // 1.5 hours for exactly this learner.
         seedCourse({ id: 'c1', modules: [{ id: 'm1', lessons: ['a', 'b', 'c'] }] });
         seedProgress({ completedLessons: ['a', 'b', 'c'] }, 'c1');
 
         const { getUserAggregateProgressAction } = await actions();
-        expect(((await getUserAggregateProgressAction(LEARNER)) as any).data.totalHoursLearned).toBe(1.5);
+        expect(((await getUserAggregateProgressAction(LEARNER)) as any).data.totalHoursLearned).toBe(0);
+    });
+
+    it('and an unreadable watch figure contributes nothing rather than NaN', async () => {
+        seedCourse({ id: 'c1', modules: [{ id: 'm1', lessons: ['a', 'b'] }] });
+        seedProgress({ completedLessons: ['a', 'b'] }, 'c1');
+        store.seed(COLLECTIONS.LESSON_VIDEO_PROGRESS, `${LEARNER}_a`, {
+            userId: LEARNER, lastWatchedSecond: 'not-a-number',
+        });
+        store.seed(COLLECTIONS.LESSON_VIDEO_PROGRESS, `${LEARNER}_b`, {
+            userId: LEARNER, lastWatchedSecond: 3600,
+        });
+
+        const { getUserAggregateProgressAction } = await actions();
+        expect(((await getUserAggregateProgressAction(LEARNER)) as any).data.totalHoursLearned).toBe(1);
     });
 
     it('sums lessons across every module of every enrolled course', async () => {

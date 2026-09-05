@@ -163,7 +163,24 @@ describe('the grade comes from the record, not the request', () => {
         // body ever yielding a grade.
         expect(src).toContain('const { courseId } = await request.json();');
         expect(src).not.toMatch(/\bquizScore\b/);
-        expect(src).toContain('courseGradeFromQuizScores(progressData.quizScores)');
+
+        /**
+         *   #430 MOVED THE GRADE COMPUTATION, IT DID NOT REMOVE IT.
+         *
+         *   This route had NO CALLER, so none of #321's correctness ever ran.
+         *   The body now lives in lib/academy-certificate-issue and course
+         *   completion calls it. The property this test exists for — the grade
+         *   comes from the stored per-module scores, never from the request —
+         *   is asserted where it now lives, and the route is asserted to hold
+         *   no second copy of it.
+         */
+        const issuerRel = 'src/lib/academy-certificate-issue.ts';
+        const issuer = stripComments(readFileSync(join(process.cwd(), issuerRel), 'utf-8'), { label: issuerRel });
+        expect(issuer).toContain('courseGradeFromQuizScores(progress.quizScores)');
+        expect(issuer).not.toMatch(/\bquizScore\b(?!s)/);
+        // And the route delegates rather than keeping its own copy.
+        expect(src).toContain('issueAcademyCertificate(session.user.id, courseId)');
+        expect(src).not.toContain('courseGradeFromQuizScores');
     });
 
     it('an ungraded completion records no grade rather than a zero', async () => {

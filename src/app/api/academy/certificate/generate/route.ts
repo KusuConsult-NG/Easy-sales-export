@@ -3,14 +3,28 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
-import { supabaseDb as db } from "@/lib/supabase-db";
-import { COLLECTIONS } from "@/lib/types/firestore";
-import { ACADEMY_CERTIFICATE } from "@/lib/certificate-kind";
-import { courseGradeFromQuizScores } from "@/lib/academy-grading";
-import { FieldValue } from "@/lib/firestore-compat";
+import { issueAcademyCertificate } from "@/lib/academy-certificate-issue";
 
 /**
  * API Route: Generate Certificate on Course Completion
+ *
+ * #430 — THE BODY OF THIS ROUTE MOVED, AND THAT IS THE POINT.
+ *
+ * Everything this endpoint did correctly — verifying completion from the stored
+ * progress record rather than the request, computing the grade from the
+ * recorded per-module scores (#321), marking the row as issued rather than
+ * attached (certificate-kind), and keying the document on (userId, courseId) so
+ * a concurrent second call is idempotent instead of minting a duplicate
+ * credential — now lives in lib/academy-certificate-issue.
+ *
+ * It moved because this route HAD NO CALLER, so none of that correctness ever
+ * ran. Course completion issues the certificate now. Had the logic been copied
+ * into the completion path instead of shared, this repository's signature
+ * failure would have followed: two issuers, and the next fix reaching one.
+ *
+ * The endpoint is kept and still works. It is the repair door — a learner whose
+ * completion predates this change, or whose issue failed at the time, gets
+ * their certificate by asking for it, and asking twice returns the same one.
  */
 export async function POST(request: NextRequest) {
     try {
@@ -23,9 +37,8 @@ export async function POST(request: NextRequest) {
         }
 
         // `quizScore` was destructured here and written onto the certificate —
-        // #321. It is gone: the grade is computed from the progress record
-        // below, and this endpoint now takes nothing from the caller but which
-        // course they are claiming.
+        // #321. This endpoint takes nothing from the caller but which course
+        // they are claiming; everything else is read from the stored record.
         const { courseId } = await request.json();
 
         if (!courseId) {
@@ -35,121 +48,33 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const userId = session.user.id;
+        const result = await issueAcademyCertificate(session.user.id, courseId);
 
-        // Get user details (Admin SDK)
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-        if (!userDoc.exists) {
+        // "Not yet completed" is the caller's mistake (400); a progress record
+        // or user that is not there is the record's (404). The split is kept
+        // exactly as this route already answered it — a refactor must not
+        // quietly renumber an endpoint's responses.
+        if (result.status === "missing") {
             return NextResponse.json(
-                { success: false, message: "User not found" },
+                { success: false, message: result.reason },
                 { status: 404 }
             );
         }
 
-        // Get course progress (Admin SDK)
-        const progressRef = db.collection(COLLECTIONS.COURSE_PROGRESS).doc(`${userId}_${courseId}`);
-        const progressDoc = await progressRef.get();
-
-        if (!progressDoc.exists) {
+        if (result.status === "refused") {
             return NextResponse.json(
-                { success: false, message: "Course progress not found" },
-                { status: 404 }
-            );
-        }
-
-        const progressData = progressDoc.data();
-        if (!progressData) {
-            return NextResponse.json(
-                { success: false, message: "Course progress data is corrupted" },
-                { status: 500 }
-            );
-        }
-
-        // Validate course completion
-        if (progressData.completionPercentage < 100 || !progressData.completed) {
-            return NextResponse.json(
-                { success: false, message: "Course not yet completed" },
+                { success: false, message: result.reason },
                 { status: 400 }
             );
         }
 
-        // Check if certificate already exists
-        if (progressData.certificateId) {
-            return NextResponse.json({
-                success: true,
-                message: "Certificate already exists",
-                certificateId: progressData.certificateId
-            });
-        }
-
-        // Get course details (Admin SDK)
-        // ✅ FIX: Query from active 'ACADEMY_COURSES' collection instead of legacy 'COURSES'.
-        // Previously, the query failed silently, causing all certificates to be printed
-        // with the generic title "Course Completion" instead of the actual course name.
-        const courseDoc = await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId).get();
-        const courseData = courseDoc.data();
-        const courseTitle = courseDoc.exists && courseData ? courseData.title : "Course Completion";
-
-        // Create certificate (Admin SDK)
-        //
-        // A DETERMINISTIC ID, NOT AN AUTO ONE — #321.
-        //
-        // The duplicate check above reads progressData.certificateId and the
-        // write that sets it happens after this one, with nothing in between
-        // holding a lock — supabaseDb.runTransaction does not take one either.
-        // Two concurrent POSTs both saw no certificateId and both minted a row,
-        // so one completion produced two certificates with two different
-        // numbers, and the progress record pointed at whichever landed last.
-        // The other became an orphan that /api/academy/verify would still
-        // resolve. #249–#251's lockless-claim shape, on a credential.
-        //
-        // One learner completing one course is one certificate, which the
-        // certificateId check already assumes. Keying the document on that pair
-        // makes the second write idempotent instead of duplicating: no lock
-        // needed, and nothing is deleted to achieve it.
-        const certificateRef = db.collection(COLLECTIONS.CERTIFICATES).doc(`${userId}_${courseId}`);
-        const userData = userDoc.data();
-        if (!userData) {
-            return NextResponse.json(
-                { success: false, message: "User data is corrupted" },
-                { status: 500 }
-            );
-        }
-
-        const certificateData = {
-            // Distinguishes this from a file the user attached to their own
-            // profile. Both live in this collection; only this kind may be
-            // publicly verified or counted as earned. See lib/certificate-kind.
-            recordType: ACADEMY_CERTIFICATE,
-            userId,
-            userName: userData.name || userData.email,
-            courseId,
-            courseTitle,
-            completionDate: progressData.completedAt || FieldValue.serverTimestamp(),
-            // Was `quizScore || progressData.quizScores?.[0]?.bestScore` —
-            // #321. The first half was the caller's own figure; the second
-            // indexed the quizScores map at a key no module has and then read a
-            // property off a number, so it was always undefined. The grade is
-            // now computed from the recorded per-module scores, in the module
-            // that decides what a score means. See lib/academy-grading.ts.
-            grade: courseGradeFromQuizScores(progressData.quizScores),
-            issuedAt: FieldValue.serverTimestamp(),
-            qrCodeUrl: "",
-            pdfUrl: "",
-        };
-
-        await certificateRef.set(certificateData);
-
-        // Update course progress with certificate ID
-        await progressRef.update({
-            certificateId: certificateRef.id,
-            updatedAt: FieldValue.serverTimestamp(),
-        });
-
         return NextResponse.json({
             success: true,
-            message: "Certificate generated successfully",
-            certificateId: certificateRef.id
+            message: result.status === "already"
+                ? "Certificate already exists"
+                : "Certificate generated successfully",
+            certificateId: result.certificateId,
+            certificateNumber: result.certificateNumber,
         });
     } catch (error) {
         logger.error("Failed to generate certificate:", error);

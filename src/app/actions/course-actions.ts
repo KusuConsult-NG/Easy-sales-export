@@ -308,6 +308,35 @@ export async function completeCourse(courseId: string) { const sessionResult = a
                 updatedAt: FieldValue.serverTimestamp() });
         });
 
+        /**
+         *   #430 — THE COMPLETION ISSUES THE CERTIFICATE.
+         *
+         *   Nothing did. /api/academy/certificate/generate had no caller and
+         *   the other issuer's only caller was an orphaned component, so
+         *   finishing a course produced no credential anywhere — and the
+         *   learner was still shown a number and a "verify" link for it.
+         *
+         *   OUTSIDE the transaction above, and non-fatal. A completion this
+         *   learner has earned — every lesson verified against the per-lesson
+         *   watch records — must not be rolled back because a certificate row
+         *   could not be written. The issuer is idempotent on (userId,
+         *   courseId), so the repair door re-issues rather than duplicating,
+         *   which is the same reasoning as #424's access records.
+         */
+        try {
+            const { issueAcademyCertificate } = await import('@/lib/academy-certificate-issue');
+            const issued = await issueAcademyCertificate(session.user.id, courseId);
+            if (issued.status === "refused") {
+                logger.warn("[completeCourse] certificate not issued", {
+                    userId: session.user.id, courseId, reason: issued.reason,
+                });
+            }
+        } catch (certificateError) {
+            logger.error("[completeCourse] certificate issue failed", {
+                userId: session.user.id, courseId, error: String(certificateError),
+            });
+        }
+
         // Audit log
         await createAdminAuditLog({ userId: session.user.id,
             action: 'course_completed',
@@ -325,81 +354,73 @@ export async function completeCourse(courseId: string) { const sessionResult = a
 }
 
 /**
- * Generate certificate for completed course
- * Called automatically when progress reaches 100%
+ * Issue the certificate for a completed course.
+ *
+ * #430 — THIS WROTE INTO A COLLECTION NOTHING READS, THROUGH A DOOR NOTHING
+ * OPENS.
+ *
+ * The academy had three certificate systems and no certificate:
+ *
+ *   COLLECTIONS.CERTIFICATES        written by /api/academy/certificate/generate,
+ *                                   read by the PUBLIC VERIFIER and counted by
+ *                                   /api/academy/dashboard. The route had NO
+ *                                   CALLER.
+ *   COLLECTIONS.COURSE_CERTIFICATES written here and read by
+ *                                   getCourseCertificate below. This function's
+ *                                   only caller was CourseProgressCard, which
+ *                                   #428 registered as an orphan; that reader
+ *                                   has no caller at all. So both ends of this
+ *                                   system were unreachable.
+ *   the number on the page          academyCertificateNumber(...), computed at
+ *                                   render time and stored nowhere.
+ *
+ * And the two numbering schemes disagreed: `CERT-{Date.now()}-{uid8}` here
+ * versus `ACAD-{year}-{course}-{user}` on the page the learner actually sees.
+ *
+ * So a learner who finished a course was shown a certificate number that
+ * resolved nowhere, offered an "Add to LinkedIn" button whose verification link
+ * answered "Certificate not found", and counted as holding zero certificates on
+ * one screen and one on another.
+ *
+ * There is one issuer now — lib/academy-certificate-issue — and this delegates
+ * to it, so the credential lands in the collection the verifier reads. The
+ * notification is kept: it is the one part of this path that was always right.
+ *
+ * NOTHING IS DELETED. Rows already in COURSE_CERTIFICATES stay where they are
+ * and getCourseCertificate still finds them; it just looks at the live
+ * credential first.
  */
 export async function generateCourseCertificate(courseId: string, _courseTitle?: string) { const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
-    try { // Verify course is completed using composite ID
-        const progressRef = db.collection(COLLECTIONS.COURSE_PROGRESS).doc(`${session.user.id}_${courseId}`);
-        const progressDoc = await progressRef.get();
-
-        if (!progressDoc.exists || !progressDoc.data()?.completed) {
-            return { success: false as const, error: "Course not completed yet"};
-        }
-
-        const progressData = progressDoc.data()!;
-
-        // The certificate says what the COURSE is called, not what the holder
-        // asked it to say.
-        //
+    try {
         // `courseTitle` arrived as a parameter and was written onto the
         // certificate, into the notification and into the audit log. A learner
-        // could mint themselves a credential reading anything at all — and these
-        // are issued with a certificateNumber and stored to be looked up later,
-        // so it is a document meant to be shown to somebody else.
-        //
-        // The parameter is kept so existing callers still compile, and ignored.
-        const courseRecord = await loadCourseForCompletion(courseId);
-        if (!courseRecord.found || !courseRecord.title) {
-            return { success: false as const, error: "Course not found", data: null };
+        // could mint themselves a credential reading anything at all. The
+        // parameter is kept so existing callers still compile, and ignored —
+        // the issuer takes the title from the course record.
+        const { issueAcademyCertificate } = await import('@/lib/academy-certificate-issue');
+        const result = await issueAcademyCertificate(session.user.id, courseId);
+
+        if (result.status === "refused" || result.status === "missing") {
+            return { success: false as const, error: result.reason, data: null };
         }
-        const verifiedCourseTitle = courseRecord.title;
 
-        // Check if certificate already exists
-        const certSnapshot = await db.collection(COLLECTIONS.COURSE_CERTIFICATES)
-            .where('userId', '==', session.user.id)
-            .where('courseId', '==', courseId)
-            .get();
-
-        if (!certSnapshot.empty) {
-            // Return the certificate that already exists.
-            //
-            // `existingCert` was assigned and then thrown away — the branch
-            // returned `data: null`, so a caller asking for a certificate the
-            // learner already holds got success and nothing to link to. The
-            // success shape below carries certificateId; this one now matches it.
-            const existingCert = certSnapshot.docs[0];
+        if (result.status === "already") {
+            // Return the certificate that already exists. This branch used to
+            // assign the row and then return `data: null`, so a caller asking
+            // for a certificate the learner already held got success and
+            // nothing to link to.
             return {
                 error: null,
                 success: true as const,
-                data: { certificateId: existingCert.id, message: "Certificate already issued" },
+                data: { certificateId: result.certificateId, message: "Certificate already issued" },
             };
         }
 
-        // One certificate number, computed once.
-        //
-        // It was built twice from two separate Date.now() calls — once onto the
-        // certificate and once into the audit log — so the two disagreed by
-        // however many milliseconds separated them. The audit entry could not be
-        // matched to the document it records, which is the only reason to record
-        // the number there.
-        const certificateNumber = `CERT-${Date.now()}-${session.user.id?.substring(0, 8)}`;
-
-        // Generate certificate
-        const certificateRef = await db.collection(COLLECTIONS.COURSE_CERTIFICATES).add({
-            userId: session.user.id,
-            userName: session.user.name || "Unknown",
-            userEmail: session.user.email,
-            courseId,
-            courseTitle: verifiedCourseTitle,
-            completedAt: progressData.completedAt || FieldValue.serverTimestamp(),
-            issuedAt: FieldValue.serverTimestamp(),
-            certificateNumber,
-            createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp() });
+        const courseRecord = await loadCourseForCompletion(courseId);
+        const verifiedCourseTitle = courseRecord.title || "your course";
 
         // Create notification
         const { createNotificationAction } = await import('./notifications');
@@ -419,14 +440,18 @@ export async function generateCourseCertificate(courseId: string, _courseTitle?:
         await createAdminAuditLog({
             userId: session.user.id || "",
             action: 'course_completed',
-            targetId: certificateRef.id,
+            targetId: result.certificateId,
             targetType: 'certificate',
             metadata: {
                 courseId,
                 courseTitle: verifiedCourseTitle,
-                certificateNumber } });
+                // The number the holder is shown and the verifier resolves —
+                // one string, so the audit entry can be matched to the document
+                // it records. It used to be built from a second Date.now(), so
+                // the two disagreed by however many milliseconds separated them.
+                certificateNumber: result.certificateNumber } });
 
-        return { error: null, success: true as const, data: { certificateId: certificateRef.id, message: "Certificate generated successfully" } };
+        return { error: null, success: true as const, data: { certificateId: result.certificateId, message: "Certificate generated successfully" } };
     } catch (error) { logger.error("Certificate generation error:", error);
         return { success: false as const, error: "Failed to generate certificate", data: null };
     }
