@@ -32,6 +32,7 @@ import { serializeDoc, serializeDocs, toMillis } from "@/lib/firestore-serialize
 import { toDate } from "@/lib/date-utils";
 import { isActiveOrderStatus } from "@/lib/order-status";
 import { logger } from "@/lib/logger";
+import { isNotificationVisible, NOTIFICATION_BADGE_WINDOW } from "@/lib/notification-filter";
 
 /** The signed-in user's id, or null when unauthenticated. */
 async function currentUserId(): Promise<string | null> {
@@ -131,9 +132,41 @@ export async function getMyNotifications(max = 200): Promise<any[]> {
     }
 }
 
-/** Count of the caller's unread notifications. */
+/**
+ * Count of the caller's unread notifications — the ones they can actually see.
+ *
+ *   #416 TWO BADGES FOR ONE FACT, COUNTED DIFFERENTLY.
+ *
+ *   This was a server-side `.count()` over every unread row for the user.
+ *   NotificationCenter, meanwhile, computes the number on its bell from the 50
+ *   notifications it fetched, AFTER `isNotificationVisible` has removed the
+ *   ones belonging to modules the user is not subscribed to.
+ *
+ *   Both badges are on the dashboard at once — the bell in the layout header,
+ *   and DashboardNav's, through useUnreadNotifications. So a member subscribed
+ *   to one module with unread rows from another saw two different numbers side
+ *   by side, and the larger one could not be cleared: opening the panel shows
+ *   only the visible ones, so the nav badge never came down. A badge counting
+ *   things the panel will not show is a badge with no way out.
+ *
+ *   #390's class, with a symptom you can see: one rule stated twice, the copies
+ *   differing in both the filter and the window.
+ *
+ *   The rule is stated once now — the same window, the same
+ *   isNotificationVisible, against the same registrations and roles the panel
+ *   reads off the session. Both badges agree by construction, and both cap at
+ *   the same 50.
+ */
 export async function getMyUnreadNotificationCount(): Promise<number> {
-    const userId = await currentUserId();
+    let session: Awaited<ReturnType<typeof requireSession>>["session"] = null;
+    try {
+        session = (await requireSession()).session;
+    } catch (error) {
+        logger.error("[my-data] session lookup failed", { error });
+        return 0;
+    }
+
+    const userId = session?.user?.id;
     if (!userId) return 0;
 
     try {
@@ -141,9 +174,16 @@ export async function getMyUnreadNotificationCount(): Promise<number> {
             .collection(COLLECTIONS.NOTIFICATIONS)
             .where("userId", "==", userId)
             .where("read", "==", false)
-            .count()
+            .orderBy("createdAt", "desc")
+            .limit(NOTIFICATION_BADGE_WINDOW)
             .get();
-        return snap.data().count ?? 0;
+
+        const registrations = (session!.user as any).serviceRegistrations ?? null;
+        const roles = (session!.user as any).roles ?? null;
+
+        return snap.docs.filter((doc) =>
+            isNotificationVisible(String(doc.data()?.type ?? ""), registrations, roles)
+        ).length;
     } catch (error) {
         logger.error("[my-data] getMyUnreadNotificationCount failed", { userId, error });
         return 0;

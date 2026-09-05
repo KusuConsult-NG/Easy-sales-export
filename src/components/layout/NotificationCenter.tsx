@@ -8,7 +8,7 @@ import { formatDistanceToNow } from "date-fns";
 import { useSession } from "next-auth/react";
 import { getMyNotifications } from "@/app/actions/my-data";
 import { markNotificationAsReadAction, markAllAsReadAction } from "@/app/actions/notifications";
-import { isNotificationVisible } from "@/lib/notification-filter";
+import { isNotificationVisible, NOTIFICATION_BADGE_WINDOW } from "@/lib/notification-filter";
 import { toDate } from "@/lib/date-utils";
 
 import type { Notification as FirestoreNotification } from "@/lib/types/firestore";
@@ -23,6 +23,8 @@ export default function NotificationCenter() {
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [isOpen, setIsOpen] = useState(false);
     const [loading, setLoading] = useState(true);
+    /** #416 — the last poll could not be read. Distinct from "there are none". */
+    const [loadFailed, setLoadFailed] = useState(false);
     // Track IDs we've already queued for mark-as-read to avoid duplicate writes
     const pendingReadRef = useRef<Set<string>>(new Set());
 
@@ -44,10 +46,25 @@ export default function NotificationCenter() {
         // Supabase directly from the browser with the public anon key.
         async function fetchNotifications() {
             try {
-                const notifs = await getMyNotifications(50);
-                if (isMounted) setNotifications(notifs as any);
+                const notifs = await getMyNotifications(NOTIFICATION_BADGE_WINDOW);
+                if (isMounted) {
+                    setNotifications(notifs as any);
+                    setLoadFailed(false);
+                }
             } catch (err) {
+                //   #416 A FAILED READ WAS SHOWN AS "NO NOTIFICATIONS".
+                //
+                //   This was a bare console.error. The list stayed empty, the
+                //   panel rendered its empty state, and the bell showed no
+                //   count — so a member with unread notifications was told, in
+                //   as many words, that they had none. #307/#408's class, in
+                //   the notification centre itself.
+                //
+                //   The rows already fetched are kept: a poll that fails ten
+                //   minutes in should not blank a panel that is showing real
+                //   notifications.
                 console.error("Failed to fetch notifications:", err);
+                if (isMounted) setLoadFailed(true);
             } finally {
                 if (isMounted) setLoading(false);
             }
@@ -287,6 +304,18 @@ export default function NotificationCenter() {
                                         <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
                                         <p className="text-sm text-slate-500">
                                             Loading notifications...
+                                        </p>
+                                    </div>
+                                ) : loadFailed && visibleNotifications.length === 0 ? (
+                                    /* #416 — a failed read is not an empty inbox. */
+                                    <div className="px-6 py-8 text-center">
+                                        <Bell className="w-12 h-12 mx-auto text-amber-300 mb-3" />
+                                        <p className="text-sm font-semibold text-slate-700">
+                                            We could not load your notifications
+                                        </p>
+                                        <p className="mt-1 text-sm text-slate-500">
+                                            This list is not empty — we just could not reach it. We are
+                                            still trying.
                                         </p>
                                     </div>
                                 ) : visibleNotifications.length === 0 ? (

@@ -91,12 +91,41 @@ export function isNotificationVisible(
     // Universal types always show
     if (UNIVERSAL_TYPES.has(type)) return true;
 
-    // No subscriptions? hide all module-specific notifications
-    if (!serviceRegistrations) return false;
-
-    // Look up which module(s) this type belongs to
+    /**
+     *   #417 THE "FUTURE-PROOF" CLAUSE COULD NOT BE REACHED BY THE PEOPLE IT
+     *   WAS WRITTEN FOR.
+     *
+     *   These three tests used to run in the other order:
+     *
+     *       if (!serviceRegistrations) return false;   // "hide all
+     *                                                  //  module-specific"
+     *       const requiredKeys = MODULE_TYPE_MAP[type];
+     *       if (!requiredKeys) return true;            // "unknown type — show
+     *                                                  //  it (future-proof)"
+     *
+     *   The early return does not do what its comment says. It hides every
+     *   non-universal type, INCLUDING the ones that are not module-specific at
+     *   all — so for anyone with no serviceRegistrations, which is every
+     *   account before it joins a module, an unclassifiable notification was
+     *   dropped without trace. The line three below, stating the opposite
+     *   policy, could never run for them.
+     *
+     *   Deciding what a type belongs to does not depend on the subscriptions,
+     *   so it is decided first. A type nothing recognises is shown — which is
+     *   what the comment always claimed, and is the same principle as #307/#408:
+     *   when we cannot classify something, do not silently answer "nothing".
+     *
+     *   LATENT, AND SAYING SO. Every type this codebase writes today is in one
+     *   of the two sets — checked against the union in createNotificationAction
+     *   and against notificationService — so nothing produced now reaches the
+     *   clause either way. What DOES reach it is a row with no `type` at all
+     *   (legacy or imported), which used to vanish from the panel entirely.
+     */
     const requiredKeys = MODULE_TYPE_MAP[type];
-    if (!requiredKeys) return true; // unknown type — show it (future-proof)
+    if (!requiredKeys) return true; // unknown or unclassifiable type — show it
+
+    // A module-specific type, and nothing to check it against.
+    if (!serviceRegistrations) return false;
 
     return isSubscribed(serviceRegistrations, requiredKeys);
 }
@@ -136,3 +165,17 @@ export function getVisibleFilterTabs(
     }
     return visible;
 }
+
+/**
+ *   #416 THE WINDOW BOTH NOTIFICATION BADGES READ.
+ *
+ *   NotificationCenter fetches this many and counts the unread visible ones for
+ *   its bell; getMyUnreadNotificationCount reads the same many for the nav
+ *   badge. Two numbers describing the same fact have to describe the same set,
+ *   so the number lives here rather than in either of them.
+ *
+ *   It is NOT in my-data.ts because that module carries "use server", and a
+ *   "use server" module may export only async functions — a plain const there
+ *   fails the build.
+ */
+export const NOTIFICATION_BADGE_WINDOW = 50;

@@ -5,6 +5,38 @@ import { useState, useEffect, useCallback } from "react";
 const DISMISSED_KEY = "push_banner_dismissed_v1";
 
 /**
+ *   #416 A HOOK FOR A FEATURE THIS PLATFORM DOES NOT HAVE.
+ *
+ *   NOT WIRED, AND NOTHING TO WIRE IT TO. Nothing imports this hook. More to
+ *   the point, the browser push feature it front-ends does not exist anywhere
+ *   in this repository:
+ *
+ *     - no service worker (no `navigator.serviceWorker`, no sw.js in public/)
+ *     - no `pushManager` / `PushSubscription` anywhere
+ *     - no collection or column storing a push subscription
+ *     - no web-push dependency and no sender
+ *
+ *   This file is the ONLY mention of the Notification API in src.
+ *
+ *   WHY THAT MATTERS RATHER THAN BEING HARMLESS. Wiring the banner alone is a
+ *   one-line change, and it would ask every member for browser notification
+ *   permission that the platform can then never use — and a permission prompt
+ *   dismissed or denied is not re-askable. It looks finished, which is what
+ *   makes it worth a note rather than silence. #384's class: scaffolding that
+ *   reads as a feature.
+ *
+ *   KEPT, NOT DELETED — the standing rule on this codebase. It is a correct
+ *   reader of Notification.permission and is the right starting point the day
+ *   push is actually built. What it needs first is the other half: a service
+ *   worker, a subscription store, and something that sends.
+ *
+ *   ONE THING TO FIX WHEN IT IS BUILT. `dismiss()` records the dismissal as
+ *   `"denied"`, which is the browser's word for "the user blocked us". They are
+ *   not the same state and a screen that explains one will mis-explain the
+ *   other — and the localStorage key is permanent, so a member who waves the
+ *   banner away once can never be offered push again from that browser.
+ *
+ *
  * usePushPermissionState — reads the current Notification.permission without
  * prompting the user. Returns one of:
  *   'default'     — user hasn't been asked yet   → show the banner
