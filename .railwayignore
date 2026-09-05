@@ -11,8 +11,16 @@ test-results
 tmp
 npm-debug.log
 tests
-e2e
-scripts
+*.tsbuildinfo
+
+# e2e and scripts are NOT excluded — #402. This file runs BEFORE .dockerignore:
+# the Railway CLI uploads the directory, and whatever it drops here never
+# reaches the Docker build context at all. The builder's `npx tsc --noEmit`
+# compiles src/scripts/*.ts, playwright.config.ts and src/__tests__/**, all of
+# which import from those two directories, so removing them fails the build with
+# thirteen TS2307s before a single type is checked. See .dockerignore for the
+# full account. Do not re-add them while tsconfig compiles them.
+
 *.txt
 *.py
 *.json

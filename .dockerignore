@@ -18,20 +18,54 @@ npm-debug.log*
 .node-version
 .npmrc
 *.md
-*.test.*
+*.tsbuildinfo
 __tests__
 coverage
 .nyc_output
+
+# ── WHAT THIS FILE MAY NOT REMOVE — #402 ─────────────────────────────────────
+#
+# The builder stage runs `npx tsc --noEmit` BEFORE `npm run build`, and that is
+# the type-check gate (tsconfig.json says so, and says why). A gate can only
+# check files that reached the build context. Anything this file excludes which
+# tsc still compiles — or which a compiled file imports — is not "excluded", it
+# is a build failure:
+#
+#   error TS2307: Cannot find module '../../scripts/_maintenance-guard'
+#
+# That is what `e2e` and `scripts` did here. #328 deliberately removed "scripts"
+# from tsconfig's exclude list, because those files import the same `db` the
+# application does and write to the live database by hand. From that moment the
+# type-check compiled them, while this file was still deleting them, and the
+# Docker build could not pass — thirteen TS2307s, none of them a type error.
+#
+# So `e2e` and `scripts` are NOT listed below, and must not be re-added while
+# tsconfig compiles them.
+#
+# `__tests__` above is kept and is NOT the same case: Docker matches these
+# patterns at the context root only, so it excludes the root __tests__/ — which
+# tsconfig excludes too — and has never touched src/__tests__. Those suites were
+# always copied and always type-checked, which is why three of them appeared in
+# the thirteen errors. `*.test.*` was dropped: it matched nothing (there are no
+# root-level test files), and had one ever been added, tsconfig would compile it
+# while this file deleted it — the same failure again, waiting.
+#
+# NONE OF THIS REACHES THE SHIPPED IMAGE. The runner stage copies exactly
+# .next/standalone, .next/static and public — so what the builder holds costs
+# build-context upload and nothing else: under 400 KB for both directories,
+# once *.tsbuildinfo above stops the 323 KB of stale compiler state travelling
+# with them.
+#
+# Pinned by src/__tests__/unit/docker-build-context-holds-what-tsc-checks.test.ts
+# ─────────────────────────────────────────────────────────────────────────────
 
 # Large directories not needed to build the app. These were being copied into
 # the build context, inflating the image and the builder's working set.
 artifacts
 screenshots
 exports
-e2e
 tests
 docs
-scripts
 .turbo
 playwright-report
 test-results
