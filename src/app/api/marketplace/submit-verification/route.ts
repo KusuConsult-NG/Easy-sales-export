@@ -97,6 +97,71 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        /**
+         *   #431 THE THREE DOCUMENTS THIS ROUTE DEMANDS WERE THROWN AWAY.
+         *
+         *   It refused the submission without all three files, read them out of
+         *   the form, and then stored:
+         *
+         *       documents: {
+         *           businessDoc:  `placeholder_${businessDoc.name}`,
+         *           idDoc:        `placeholder_${idDoc.name}`,
+         *           addressProof: `placeholder_${addressProof.name}`,
+         *       }
+         *
+         *   The bytes were never written anywhere. What the admin reviewer sees
+         *   on /admin/marketplace/sellers is a link built from that string —
+         *   /api/admin/documents/placeholder_passport.pdf — and that route reads
+         *   `_document_uploads`, a table with no writer anywhere in this
+         *   repository and no migration creating it. So the link 404s, and a
+         *   seller's identity document, business registration and proof of
+         *   address were approved or rejected on the strength of a FILENAME.
+         *
+         *   That is the same shape as #284 (bank verification simulated on both
+         *   onboarding paths) and #285 (typing a BVN marked it verified): a KYC
+         *   control that exists on screen and performs nothing.
+         *
+         *   They are uploaded now, through the same helper the other seller
+         *   onboarding path uses. A failure to store a document FAILS THE
+         *   SUBMISSION rather than recording it as received: a verification
+         *   request whose evidence is missing is not a verification request, and
+         *   silently keeping the row is how this defect looked like working
+         *   software for as long as it did.
+         *
+         *   NOT FIXED HERE, AND SAID PLAINLY: these land on public Cloudinary
+         *   URLs. #280 recorded that — "Use signed URLs (private/secure) for
+         *   verification docs" was a comment describing something that was never
+         *   built — and the owner closed it as fix-never-delete. Storing them
+         *   publicly is strictly better than discarding them, and the exposure
+         *   is the one already recorded rather than a new one.
+         */
+        const timestamp = Date.now();
+        const storeDocument = async (file: File, label: string): Promise<string> => {
+            const extension = file.name.split(".").pop() || "bin";
+            const fileName = `${timestamp}_${label}.${extension}`;
+            const { uploadFileToStorage } = await import("@/lib/storage-admin");
+            return await uploadFileToStorage(file, `seller_verification/${userId}/${fileName}`);
+        };
+
+        let businessDocUrl: string;
+        let idDocUrl: string;
+        let addressProofUrl: string;
+        try {
+            [businessDocUrl, idDocUrl, addressProofUrl] = await Promise.all([
+                storeDocument(businessDoc, "business"),
+                storeDocument(idDoc, "identity"),
+                storeDocument(addressProof, "address"),
+            ]);
+        } catch (uploadError) {
+            logger.error("[submit-verification] could not store the documents", {
+                userId, error: uploadError instanceof Error ? uploadError.message : String(uploadError),
+            });
+            return NextResponse.json(
+                { success: false, message: "Your documents could not be uploaded. Please try again." },
+                { status: 502 }
+            );
+        }
+
         // Create verification record (Admin SDK)
         await db.collection(COLLECTIONS.SELLER_VERIFICATIONS).doc(userId).set({
             userId,
@@ -109,9 +174,9 @@ export async function POST(request: NextRequest) {
             state,
             lga,
             documents: {
-                businessDoc: `placeholder_${businessDoc.name}`,
-                idDoc: `placeholder_${idDoc.name}`,
-                addressProof: `placeholder_${addressProof.name}`,
+                businessDoc: businessDocUrl,
+                idDoc: idDocUrl,
+                addressProof: addressProofUrl,
             },
             bankDetails: {
                 bankName,

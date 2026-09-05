@@ -259,9 +259,31 @@ describe('#356 — the other four copies', () => {
     });
 
     it("and 'superadmin' really is still honoured elsewhere, so keeping it is not cargo", () => {
-        // The reason the legacy branch stays. If these two go, it can go.
+        /**
+         *   #431 CORRECTION: ONE OF THE TWO REASONS IS GONE.
+         *
+         *   This asserted the legacy spelling was honoured in two places —
+         *   auth.ts's own later check and api/admin/documents/[docId] — and
+         *   said "if these two go, it can go".
+         *
+         *   The second has gone. That route stated the admin rule by hand,
+         *   ["admin", "super_admin", "cooperative_manager", "superadmin"], read
+         *   off the JWT claim; it is exactly the class #364 swept out of fifteen
+         *   API routes and #356 out of requireAdmin, and it was missed by both.
+         *   #431 found it while retiring the route (it reads a table nothing
+         *   writes) and replaced the list with requireAdmin.
+         *
+         *   So the branch in auth.ts now rests on ONE site, its own. That is
+         *   still a reason and it is still not cargo — a holder of the legacy
+         *   spelling would be locked out of the post-login admin redirect
+         *   without it — but the count is recorded honestly, because when that
+         *   last site goes the branch should go with it rather than being kept
+         *   by a comment nobody rechecks.
+         */
         expect(source('src/app/actions/auth.ts')).toContain("roleStrings.includes('superadmin')");
-        expect(source('src/app/api/admin/documents/[docId]/route.ts')).toContain('"superadmin"');
+
+        // And it is NOT honoured in the retired document viewer any more.
+        expect(source('src/app/api/admin/documents/[docId]/route.ts')).not.toContain('superadmin');
     });
 });
 

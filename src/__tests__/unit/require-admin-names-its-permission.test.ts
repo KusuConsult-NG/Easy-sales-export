@@ -263,6 +263,16 @@ describe('#375 — every gate names its permission, and the exception is stated'
 
         // Account creation.
         'src/app/actions/admin/_legacy.ts': ['users:create'],
+
+        // #431's addition. The retired document viewer stated the admin rule by
+        // hand — ["admin", "super_admin", "cooperative_manager", "superadmin"]
+        // read off the JWT claim — which is the class #364 swept out of fifteen
+        // API routes and #356 out of requireAdmin itself. This route was missed
+        // by both, and it is fixed rather than left in that state because a
+        // retirement behind a flag is one environment variable from being live.
+        // `users:read` because what it serves is a member's own uploaded
+        // identity document.
+        'src/app/api/admin/documents/[docId]/route.ts': ['users:read'],
         // #381's pair: the money knobs — fees, order bounds, USD→NGN and the
         // WAVE commission. Read is separate from update because seeing what
         // the platform charges is not the same right as changing it.
@@ -373,7 +383,9 @@ describe('#375 — every gate names its permission, and the exception is stated'
 
     it('the sweep is not vacuous — it finds the call sites at all', () => {
         // 34 → 38: cms.ts's four writes joined the shared gate (#203).
-        expect(callSites().length).toBe(38);
+        // 38 → 39: the retired document viewer's hand-written role list became
+        // a real gate (#431).
+        expect(callSites().length).toBe(39);
         expect(SRC.length).toBeGreaterThan(400);
     });
 

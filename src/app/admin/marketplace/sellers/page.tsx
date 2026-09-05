@@ -11,6 +11,7 @@ import { useToast } from "@/contexts/ToastContext";
 import RejectionModal from "@/components/admin/RejectionModal";
 import DynamicDetailModal from "@/components/admin/DynamicDetailModal";
 import { useAdminData } from "@/hooks/useAdminData";
+import { sellerDocumentState, UNSTORED_DOCUMENT_MESSAGE } from "@/lib/seller-verification-document";
 import { editApplicationAction, toggleVerifiedBadgeAction, getStandardSellerVerificationsAction, getAdminSellerStatsAction } from "@/app/actions/admin";
 import { formatLocalDate } from "@/lib/date-utils";
 
@@ -572,15 +573,48 @@ export default function AdminSellersPage() {
                                 <h3 className="text-lg font-bold text-slate-900 mb-3 flex items-center gap-2">
                                     <FileText className="w-5 h-5" /> Documents
                                 </h3>
-                                    <p className="flex items-center gap-2">
-                                        • Business: {selectedVerification.data.documents?.businessDoc ? <a href={`/api/admin/documents/${selectedVerification.data.documents.businessDoc}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1"><FileText className="w-3 h-3" /> View Document</a> : "Not uploaded"}
-                                    </p>
-                                    <p className="flex items-center gap-2">
-                                        • ID: {selectedVerification.data.documents?.idDoc ? <a href={`/api/admin/documents/${selectedVerification.data.documents.idDoc}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1"><FileText className="w-3 h-3" /> View Document</a> : "Not uploaded"}
-                                    </p>
-                                    <p className="flex items-center gap-2">
-                                        • Address Proof: {selectedVerification.data.documents?.addressProof ? <a href={`/api/admin/documents/${selectedVerification.data.documents.addressProof}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1"><FileText className="w-3 h-3" /> View Document</a> : "Not uploaded"}
-                                    </p>
+                                    {/*
+                                      *   #431 — THESE LINKS COULD NEVER RESOLVE.
+                                      *
+                                      *   Each built /api/admin/documents/{value}, where `value` was
+                                      *   `placeholder_<filename>`: the submit route demanded all three
+                                      *   documents and stored a filename instead of the file. That
+                                      *   route reads `_document_uploads`, a table with no writer in
+                                      *   this repository and no migration creating it, so every
+                                      *   "View Document" on this screen 404'd — and a seller's
+                                      *   identity, business registration and proof of address were
+                                      *   approved or rejected on the strength of a filename.
+                                      *
+                                      *   The submit route stores the files now. Rows written before
+                                      *   that carry a placeholder and the documents are NOT
+                                      *   recoverable, so those are named as such rather than rendered
+                                      *   as a link that fails — a reviewer has to be able to tell
+                                      *   "missing" from "viewer broken" to know to ask for a
+                                      *   resubmission.
+                                      *
+                                      *   One rule, three documents: lib/seller-verification-document.
+                                      */}
+                                    {([
+                                        ["Business", selectedVerification.data.documents?.businessDoc],
+                                        ["ID", selectedVerification.data.documents?.idDoc],
+                                        ["Address Proof", selectedVerification.data.documents?.addressProof],
+                                    ] as const).map(([label, value]) => {
+                                        const state = sellerDocumentState(value);
+                                        return (
+                                            <p key={label} className="flex items-center gap-2">
+                                                • {label}:{" "}
+                                                {state.kind === "stored" ? (
+                                                    <a href={state.href} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1">
+                                                        <FileText className="w-3 h-3" /> View Document
+                                                    </a>
+                                                ) : state.kind === "unstored" ? (
+                                                    <span className="text-amber-700">{UNSTORED_DOCUMENT_MESSAGE}</span>
+                                                ) : (
+                                                    "Not uploaded"
+                                                )}
+                                            </p>
+                                        );
+                                    })}
                             </div>
                             {selectedVerification.data.rejectionReason && (
                                 <div className="p-4 bg-red-50 rounded-lg">
