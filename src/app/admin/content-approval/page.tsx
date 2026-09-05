@@ -77,15 +77,23 @@ export default function ContentApprovalPage() {
         if (!confirm(`Are you sure you want to approve "${item.title}"?`)) return;
 
         setActionLoading(true);
-        const result = await approveContentAction(item.id, item.type);
-        if (result.success) {
-            toast.success("Content approved successfully");
-            setSelectedItem(null);
-            await loadContent();
-        } else {
-            toast.error(result.error || "Failed to approve content");
+        // #407. No try, reset after the await — a rejected promise left the
+        // approve and reject buttons dead on the queue that marks land VERIFIED
+        // and puts products live.
+        try {
+            const result = await approveContentAction(item.id, item.type);
+            if (result.success) {
+                toast.success("Content approved successfully");
+                setSelectedItem(null);
+                await loadContent();
+            } else {
+                toast.error(result.error || "Failed to approve content");
+            }
+        } catch {
+            toast.error("Could not confirm the approval. Reload the queue before approving again.");
+        } finally {
+            setActionLoading(false);
         }
-        setActionLoading(false);
     }
 
     async function handleReject(item: PendingContentItem) {
@@ -93,15 +101,21 @@ export default function ContentApprovalPage() {
         if (!reason) return;
 
         setActionLoading(true);
-        const result = await rejectContentAction(item.id, item.type, reason);
-        if (result.success) {
-            toast.success("Content rejected");
-            setSelectedItem(null);
-            await loadContent();
-        } else {
-            toast.error(result.error || "Failed to reject content");
+        // #407, the rejection half. Same shape, same screen.
+        try {
+            const result = await rejectContentAction(item.id, item.type, reason);
+            if (result.success) {
+                toast.success("Content rejected");
+                setSelectedItem(null);
+                await loadContent();
+            } else {
+                toast.error(result.error || "Failed to reject content");
+            }
+        } catch {
+            toast.error("Could not confirm the rejection. Reload the queue before rejecting again.");
+        } finally {
+            setActionLoading(false);
         }
-        setActionLoading(false);
     }
 
     const getIcon = (type: string) => {

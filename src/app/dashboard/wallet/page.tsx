@@ -245,12 +245,34 @@ export default function WalletPage() {
         const amount = Number(fundAmount);
         if (!amount || amount < 100) return showToast("Minimum ₦100", "error");
         setFundLoading(true);
-        const res = await fundWalletViaPaystackAction(amount);
-        if (res.success && res.data?.authorizationUrl) {
-            showToast("Redirecting to payment...", "success");
-            window.location.href = res.data.authorizationUrl;
-        } else {
-            showToast(res.error || "Funding failed", "error");
+        /**
+         *   #407 A REJECTED PROMISE LEFT THE MONEY BUTTONS DEAD.
+         *
+         *   There was no try here at all. Both branches below reset the flag (or
+         *   navigate away, where staying disabled is right), but a server action
+         *   can REJECT rather than resolve — a dropped connection, a 500, a
+         *   serialization error — and then neither branch runs. The button stays
+         *   disabled for as long as the page is open, with no message.
+         *
+         *   #405 swept this class and found it clean, because its checker only
+         *   examined handlers that HAD a try/catch. A handler with none was
+         *   invisible to it. This is the money screen, on the two controls that
+         *   move funds in and out.
+         *
+         *   The success path still leaves the button disabled ON PURPOSE: it is
+         *   navigating to Paystack, and re-enabling would invite a second charge.
+         */
+        try {
+            const res = await fundWalletViaPaystackAction(amount);
+            if (res.success && res.data?.authorizationUrl) {
+                showToast("Redirecting to payment...", "success");
+                window.location.href = res.data.authorizationUrl;
+            } else {
+                showToast(res.error || "Funding failed", "error");
+                setFundLoading(false);
+            }
+        } catch {
+            showToast("Could not reach the payment service. Please try again.", "error");
             setFundLoading(false);
         }
     };
@@ -261,16 +283,27 @@ export default function WalletPage() {
         if (!wdBank.accountNumber || !wdBank.bankName || !wdBank.accountName)
             return showToast("All bank details are required", "error");
         setWdLoading(true);
-        const res = await withdrawFromWalletAction(amount, wdBank);
-        setWdLoading(false);
-        if (res.success) {
-            showToast("Withdrawal request submitted. Admin will process it shortly.", "success");
-            setShowWithdraw(false);
-            setWdAmount("");
-            loadWallet();
-            loadTransactions(true);
-        } else {
-            showToast(res.error || "Failed", "error");
+        // #407, the other half. `setWdLoading(false)` sat on the line after the
+        // await, so a rejection skipped it and the withdraw button died. The
+        // reset is in a `finally` now: this path does not navigate away, so the
+        // control must always come back.
+        try {
+            const res = await withdrawFromWalletAction(amount, wdBank);
+            if (res.success) {
+                showToast("Withdrawal request submitted. Admin will process it shortly.", "success");
+                setShowWithdraw(false);
+                setWdAmount("");
+                loadWallet();
+                loadTransactions(true);
+            } else {
+                showToast(res.error || "Failed", "error");
+            }
+        } catch {
+            // Never claim the request was submitted: this path cannot tell
+            // whether the server received it, so it says exactly that.
+            showToast("Could not confirm the withdrawal request. Check your wallet before retrying.", "error");
+        } finally {
+            setWdLoading(false);
         }
     };
 

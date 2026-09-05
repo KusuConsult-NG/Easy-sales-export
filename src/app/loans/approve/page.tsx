@@ -13,9 +13,17 @@ import {
     Loader2
 } from "lucide-react";
 import { getPendingLoanApplications, approveLoanApplication } from "@/app/actions/loan-actions";
+import { useToast } from "@/contexts/ToastContext";
 import { type LoanApplication, LoanPurpose } from "@/types/strict";
 
 export default function LoanApprovalPage() {
+    /**
+     * #407. The `error` state below belongs to the LOAD path and renders in
+     * place of the queue, so it cannot carry a decision failure — using it
+     * would blank the list an approver is working through. A toast says what
+     * happened without taking the queue away.
+     */
+    const { showToast } = useToast();
     const [loans, setLoans] = useState<LoanApplication[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedLoan, setSelectedLoan] = useState<LoanApplication | null>(null);
@@ -61,20 +69,30 @@ export default function LoanApprovalPage() {
 
     async function handleApproval(loanId: string, approved: boolean, notes?: string, rejectionReason?: string) {
         setProcessing(true);
-        const result = await approveLoanApplication({
-            loanId,
-            approved,
-            notes,
-            rejectionReason,
-        });
+        // #407. There was no try, and setProcessing(false) sat after the await —
+        // so a rejected promise left the approve/reject controls disabled on the
+        // loan decision screen, with nothing said. A refusal was also silent:
+        // result.success === false did nothing at all.
+        try {
+            const result = await approveLoanApplication({
+                loanId,
+                approved,
+                notes,
+                rejectionReason,
+            });
 
-        if (result.success) {
-            // Refresh list
-            await loadLoans();
-            setSelectedLoan(null);
+            if (result.success) {
+                // Refresh list
+                await loadLoans();
+                setSelectedLoan(null);
+            } else {
+                showToast(result.error || "The decision was not recorded", "error");
+            }
+        } catch {
+            showToast("Could not confirm the decision. Reload before deciding again.", "error");
+        } finally {
+            setProcessing(false);
         }
-
-        setProcessing(false);
     }
 
     const getPurposeColor = (purpose: LoanPurpose) => {

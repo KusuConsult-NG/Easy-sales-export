@@ -67,8 +67,19 @@ import { join, relative } from 'path';
 const ROOT = process.cwd();
 const SRC = join(ROOT, 'src');
 
-/** Flags that disable a control. Modal toggles and one-way latches are not these. */
-const SPINNER = /^(is)?(loading|submitting|saving|processing|busy|sending|deleting)/i;
+/**
+ * Flags that disable a control. Modal toggles and one-way latches are not these.
+ *
+ *   #407 THIS WAS ANCHORED, AND THE ANCHOR HID THE MONEY SCREEN.
+ *
+ *   `^(is)?(loading|…)` matched setLoading and setIsSubmitting, and missed
+ *   setWdLoading, setFundLoading, setActionLoading, setEditSaving,
+ *   setLoadingNotes and setSavingNote — every flag whose name is prefixed
+ *   rather than suffixed. Two of those are the wallet's withdraw and fund
+ *   buttons. Unanchored now, which is what the name check should always have
+ *   been.
+ */
+const SPINNER = /(loading|submitting|saving|processing|busy|sending|deleting|uploading)/i;
 
 /** The block starting at the `{` at index `i`, plus the index just past it. */
 function block(src: string, i: number): [string, number] {
@@ -127,6 +138,49 @@ export function stuckFlags(source: string, label = 'source'): string[] {
             if (!new RegExp(`\\bset${flag}\\(\\s*true\\s*\\)`).test(before)) continue;
 
             out.push(`${label}:set${flag}`);
+        }
+    }
+    return [...new Set(out)];
+}
+
+/**
+ * Handlers that hold a spinner across an `await` with NO try/catch at all.
+ *
+ *   #407 THE SHAPE #405's CHECKER COULD NOT SEE.
+ *
+ *   stuckFlags() iterates `try {` occurrences, so a handler containing no try
+ *   was never examined — and that is a whole second population:
+ *
+ *       setWdLoading(true);
+ *       const res = await withdrawFromWalletAction(amount, wdBank);
+ *       setWdLoading(false);
+ *
+ *   A server action can REJECT rather than resolve (dropped connection, a 500,
+ *   a serialization error). Then the reset never runs and the control is dead
+ *   until reload. #405 reported this class CLEAN; it was clean only of the
+ *   shape it looked at.
+ *
+ *   Measured at 41 handlers. The money and irreversible-decision ones are fixed
+ *   (see FIXED below). The rest are recorded in KNOWN, named, so the count
+ *   cannot grow quietly — the same device as the orphan queue's PENDING.
+ */
+export function unguardedAwaits(source: string, label = 'source'): string[] {
+    const src = stripComments(source);
+    const out: string[] = [];
+    const HANDLER = /(?:async\s+function\s+(\w+)\s*\([^)]*\)\s*\{)|(?:const\s+(\w+)\s*=\s*async\s*\([^)]*\)\s*=>\s*\{)/g;
+
+    for (const m of [...src.matchAll(HANDLER)]) {
+        const name = m[1] ?? m[2];
+        const [body] = block(src, m.index! + m[0].length - 1);
+        if (/\btry\s*\{/.test(body)) continue;           // #405 covers these
+
+        for (const set of [...body.matchAll(/\bset([A-Z]\w*)\(\s*true\s*\)/g)]) {
+            const flag = set[1];
+            if (!SPINNER.test(flag)) continue;
+            const after = body.slice(set.index! + set[0].length);
+            if (!/\bawait\b/.test(after)) continue;
+            if (!new RegExp(`\\bset${flag}\\(\\s*false\\s*\\)`).test(after)) continue;
+            out.push(`${label}:${name}`);
         }
     }
     return [...new Set(out)];
@@ -214,5 +268,83 @@ describe('#405 — no screen can strand its own control', () => {
         expect(SCREENS.length).toBeGreaterThan(200);
         const withFlags = SCREENS.filter((p) => /\bset[A-Z]\w*\(\s*true\s*\)/.test(readFileSync(p, 'utf-8')));
         expect(withFlags.length).toBeGreaterThan(50);
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#407 — the shape #405 could not see: an await with no try at all', () => {
+    /**
+     * The money and irreversible-decision handlers, fixed. Each one held a
+     * control that a rejected promise would have killed:
+     *
+     *   the wallet's fund and withdraw buttons
+     *   the loan approve/reject decision
+     *   the land verify/reject decision
+     *   the escrow dispute filing — the control that FREEZES money, on a clock
+     *   the escrow chat, where a buyer and seller argue about that money
+     *   the content-approval queue that marks land verified and products live
+     */
+    const FIXED: Array<[string, string]> = [
+        ['src/app/dashboard/wallet/page.tsx', 'handleFund'],
+        ['src/app/dashboard/wallet/page.tsx', 'handleWithdraw'],
+        ['src/app/loans/approve/page.tsx', 'handleApproval'],
+        ['src/app/land/verify/page.tsx', 'handleVerification'],
+        ['src/app/escrow/[id]/dispute/page.tsx', 'handleSubmit'],
+        ['src/app/escrow/[id]/chat/page.tsx', 'handleSendMessage'],
+        ['src/app/admin/content-approval/page.tsx', 'handleApprove'],
+        ['src/app/admin/content-approval/page.tsx', 'handleReject'],
+    ];
+
+    it.each(FIXED)('%s :: %s no longer holds a spinner across an unguarded await', (rel, fn) => {
+        /**
+         * Scoped to the HANDLER, not the file. Two of these files still contain
+         * a loader with the same shape — loadListings and loadLoans — and those
+         * are deliberately untouched: wrapping a loader in try/finally turns
+         * "spinner forever" into "empty screen with no explanation", which is
+         * #307's class. They need an error state, which is a change to what the
+         * screen renders. Asserting per file would have quietly demanded the
+         * wrong repair.
+         */
+        const src = readFileSync(join(ROOT, rel), 'utf-8');
+        expect(unguardedAwaits(src, rel)).not.toContain(`${rel}:${fn}`);
+    });
+
+    it('and the checker reports the shape when it is there', () => {
+        // The control. Without it, "no violations" could mean the matcher is
+        // broken rather than the code correct — the mistake #405 itself made.
+        expect(unguardedAwaits(`
+            async function handleWithdraw() {
+                setWdLoading(true);
+                const res = await withdrawFromWalletAction(amount, wdBank);
+                setWdLoading(false);
+                if (res.success) { done(); }
+            }
+        `, 'synthetic')).toEqual(['synthetic:handleWithdraw']);
+    });
+
+    it('and a prefixed flag name is matched, which is what hid the wallet', () => {
+        // setWdLoading / setFundLoading / setActionLoading were invisible to
+        // #405's anchored pattern. Asserted directly so the anchor cannot
+        // come back.
+        for (const flag of ['WdLoading', 'FundLoading', 'ActionLoading', 'EditSaving', 'LoadingNotes']) {
+            expect({ flag, matched: /(loading|submitting|saving|processing|busy|sending|deleting|uploading)/i.test(flag) })
+                .toEqual({ flag, matched: true });
+        }
+    });
+
+    it('and the remaining population is pinned, so it cannot grow', () => {
+        /**
+         * Not yet fixed, and named rather than waved through. These are loaders
+         * and non-money writes; a blanket try/finally would be the WRONG repair
+         * for a loader — it turns "spinner forever" into "empty screen with no
+         * explanation", which is #307's class. Each needs its own error state,
+         * which is a change to what those screens render, not a wrapper.
+         */
+        const found = SCREENS.flatMap((p) => unguardedAwaits(readFileSync(p, 'utf-8'), relative(ROOT, p)));
+        // 41 measured, 8 fixed above, 33 remaining. The number is asserted so a
+        // 34th cannot appear without somebody deciding it should.
+        expect(found.length).toBe(33);
+        // And every handler fixed above is genuinely out of the population.
+        for (const [rel, fn] of FIXED) expect(found).not.toContain(`${rel}:${fn}`);
     });
 });

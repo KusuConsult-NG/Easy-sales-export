@@ -68,22 +68,32 @@ export default function CreateDisputePage(props: DisputePageProps) {
             return;
         }
 
-        const result = await createDisputeAction({
-            escrowId,
-            initiatedBy: isBuyer ? "buyer" : "seller",
-            initiatorId: session.user.id,
-            respondentId: isBuyer ? escrowData.sellerId : escrowData.buyerId,
-            reason: reason.trim(),
-        });
+        // #407. No try, and setSubmitting(false) after the await — a rejected
+        // promise left the button dead on the screen that FREEZES AN ESCROW. A
+        // buyer who cannot file is a buyer whose money releases to the seller on
+        // schedule, so this control failing quietly has a deadline attached.
+        try {
+            const result = await createDisputeAction({
+                escrowId,
+                initiatedBy: isBuyer ? "buyer" : "seller",
+                initiatorId: session.user.id,
+                respondentId: isBuyer ? escrowData.sellerId : escrowData.buyerId,
+                reason: reason.trim(),
+            });
 
-        if (result.success) {
-            showToast("Dispute created successfully! Our team will review it shortly.", "success");
-            router.push("/escrow");
-        } else {
-            showToast(result.error || "Failed to create dispute", "error");
+            if (result.success) {
+                showToast("Dispute created successfully! Our team will review it shortly.", "success");
+                router.push("/escrow");
+            } else {
+                showToast(result.error || "Failed to create dispute", "error");
+            }
+        } catch {
+            // Never say it was filed. The dispute may or may not exist, and the
+            // release clock is running either way.
+            showToast("Could not confirm the dispute was filed. Check /escrow before filing again.", "error");
+        } finally {
+            setSubmitting(false);
         }
-
-        setSubmitting(false);
     }
 
     if (loadingEscrow) {

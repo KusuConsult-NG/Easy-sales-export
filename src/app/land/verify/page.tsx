@@ -15,9 +15,12 @@ import {
     Eye
 } from "lucide-react";
 import { getLandListings, verifyLandListing } from "@/app/actions/land-actions";
+import { useToast } from "@/contexts/ToastContext";
 import { type LandListing, SoilQuality } from "@/types/strict";
 
 export default function LandVerificationPage() {
+    // #407. This screen had no way to report a failed decision at all.
+    const { showToast } = useToast();
     const [listings, setListings] = useState<LandListing[]>([]);
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
@@ -39,19 +42,33 @@ export default function LandVerificationPage() {
 
     async function handleVerification(listingId: string, verified: boolean, rejectionReason?: string) {
         setProcessing(true);
-        const result = await verifyLandListing({
-            listingId,
-            verified,
-            rejectionReason,
-            notes: verified ? "Verified by admin" : undefined,
-        });
+        /**
+         * #407. No try, and setProcessing(false) after the await — a rejected
+         * promise left the verify/reject buttons dead on the land decision
+         * screen. The refusal was silent too: #403 taught this action to refuse
+         * a listing that is mid-purchase, and that refusal arrived here as
+         * `success: false` and was dropped, so the admin saw nothing happen and
+         * no reason why.
+         */
+        try {
+            const result = await verifyLandListing({
+                listingId,
+                verified,
+                rejectionReason,
+                notes: verified ? "Verified by admin" : undefined,
+            });
 
-        if (result.success) {
-            await loadListings();
-            setSelectedListing(null);
+            if (result.success) {
+                await loadListings();
+                setSelectedListing(null);
+            } else {
+                showToast(result.error || "The decision was not recorded", "error");
+            }
+        } catch {
+            showToast("Could not confirm the decision. Reload before deciding again.", "error");
+        } finally {
+            setProcessing(false);
         }
-
-        setProcessing(false);
     }
 
     const getSoilQualityColor = (quality: SoilQuality) => {

@@ -107,21 +107,30 @@ export default function EscrowChatPage({ params }: EscrowChatPageProps) {
 
         setSending(true);
 
-        const result = await sendEscrowMessageAction({
-            escrowId,
-            senderId: session.user.id,
-            senderName: session.user.name || session.user.email || "Unknown",
-            message: newMessage.trim(),
-        });
+        // #407. setSending(false) sat after the await with no try, so a rejected
+        // promise left the send button dead in an escrow dispute conversation —
+        // the one channel where a buyer and seller argue about money.
+        try {
+            const result = await sendEscrowMessageAction({
+                escrowId,
+                senderId: session.user.id,
+                senderName: session.user.name || session.user.email || "Unknown",
+                message: newMessage.trim(),
+            });
 
-        if (result.success) {
-            setNewMessage("");
-            await loadMessages(); // Refresh messages
-        } else {
-            showToast(result.error || "Failed to send message", "error");
+            if (result.success) {
+                setNewMessage("");
+                await loadMessages(); // Refresh messages
+            } else {
+                showToast(result.error || "Failed to send message", "error");
+            }
+        } catch {
+            // The draft is deliberately NOT cleared here: the message may not
+            // have been delivered, and clearing it would lose what was typed.
+            showToast("Could not send the message. Check your connection and try again.", "error");
+        } finally {
+            setSending(false);
         }
-
-        setSending(false);
     }
 
 
