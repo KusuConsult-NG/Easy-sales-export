@@ -43,10 +43,44 @@
 
 set -uo pipefail
 
-PGBIN="${PGBIN:-/usr/local/opt/postgresql@16/bin}"
-[ -x "$PGBIN/psql" ] || PGBIN=/opt/homebrew/opt/postgresql@16/bin
-if [ ! -x "$PGBIN/psql" ]; then
-    echo "postgres not found. brew install postgresql@16, or set PGBIN." >&2
+# Finding the binaries.
+#
+# This looked in two Homebrew prefixes and nowhere else, so on Linux — which is
+# every CI runner and every container — it exited 1 with "brew install
+# postgresql@16" on a machine that had PostgreSQL 16 sitting in
+# /usr/lib/postgresql/16/bin. This script is the ONLY thing that checks the
+# migrations apply in the order build-deploy-sql.mjs defines, which is the order
+# used against production, so "cannot run here" meant that order was verified
+# nowhere automatic.
+if [ -n "${PGBIN:-}" ]; then
+    :
+else
+    for candidate in \
+        /usr/local/opt/postgresql@16/bin \
+        /opt/homebrew/opt/postgresql@16/bin \
+        /usr/lib/postgresql/16/bin \
+        /usr/pgsql-16/bin
+    do
+        [ -x "$candidate/psql" ] && PGBIN="$candidate" && break
+    done
+fi
+# Last resort: whatever is on PATH.
+if [ ! -x "${PGBIN:-}/psql" ] && command -v psql >/dev/null 2>&1; then
+    PGBIN="$(dirname "$(command -v psql)")"
+fi
+if [ ! -x "${PGBIN:-}/psql" ]; then
+    echo "postgres 16 not found. Set PGBIN, or install it:" >&2
+    echo "  macOS   brew install postgresql@16" >&2
+    echo "  Debian  apt-get install postgresql-16" >&2
+    exit 1
+fi
+
+# initdb refuses to run as root, and says so in a way that this script used to
+# swallow ("initdb failed"). Say what to do instead of what broke.
+if [ "$(id -u)" = "0" ]; then
+    echo "Refusing to run as root: initdb will not start a cluster as root." >&2
+    echo "Re-run as an unprivileged user, e.g." >&2
+    echo "  setpriv --reuid=postgres --regid=postgres --clear-groups $0" >&2
     exit 1
 fi
 

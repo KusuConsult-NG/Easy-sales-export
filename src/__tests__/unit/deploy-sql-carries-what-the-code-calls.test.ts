@@ -235,3 +235,101 @@ describe('#422 — and the verification step can actually fail', () => {
         expect(script).toMatch(/Expect \$\{shippedFunctions\.length\} rows/);
     });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ *   #423 THE ONLY CHECK OF THE PRODUCTION MIGRATION ORDER COULD NOT RUN ON
+ *   LINUX, AND NOTHING RAN IT.
+ *
+ *   scripts/test-migrations.sh initdb's a throwaway cluster and applies
+ *   schema.sql plus every migration IN THE ORDER build-deploy-sql.mjs DEFINES —
+ *   the order of the file that gets pasted into the Supabase SQL Editor. It is
+ *   the only thing that checks that ordering.
+ *
+ *   It looked for postgres in two Homebrew prefixes and nowhere else, so on any
+ *   Linux machine — every CI runner, every container — it exited 1 with "brew
+ *   install postgresql@16" while PostgreSQL 16 sat in /usr/lib/postgresql/16/bin.
+ *   And no workflow invoked it. The CI job that does touch migrations
+ *   (ci-integration-db.sh) globs the directory and applies in NUMERIC order,
+ *   which is a different order; its header claimed otherwise.
+ *
+ *   So the ordering used against production was verified on one developer's Mac,
+ *   by hand, or not at all — while #422 sat undetected in the manifest that
+ *   defines it.
+ *
+ *   FIXED: Linux and PATH lookup added, a root check that says what to do
+ *   instead of swallowing initdb's refusal, and a CI step that runs it. Executed
+ *   here against real PostgreSQL 16: 55 passed, 0 failed, all 24 migrations
+ *   including 025 and 026.
+ */
+describe('#423 — the production order is checked somewhere automatic', () => {
+    /**
+     * The EXECUTABLE lines of a shell script — comment lines dropped.
+     *
+     * Needed because the fix's own explanatory comment names
+     * /usr/lib/postgresql/16/bin, and asserting against the raw file therefore
+     * passed with the actual lookup path deleted. That is the tombstone trap
+     * this audit has now walked into four times: a negative or positive
+     * assertion satisfied by the prose describing the fix rather than by the
+     * fix. stripComments handles JS and TS; shell needs this.
+     */
+    const shellCode = (p: string) =>
+        readFileSync(join(ROOT, p), 'utf-8')
+            .split('\n')
+            .filter((l) => !/^\s*#/.test(l))
+            .join('\n');
+
+    const sh = () => shellCode('scripts/test-migrations.sh');
+    const ci = () => readFileSync(join(ROOT, '.github/workflows/ci.yml'), 'utf-8');
+
+    it('CI ACTUALLY RUNS IT', () => {
+        // Without `|| true` or a continue-on-error, which would make it a step
+        // that reports success for not running.
+        const wf = ci();
+        expect(wf).toMatch(/run:\s*\.\/scripts\/test-migrations\.sh/);
+        const step = wf.slice(wf.indexOf('Migrations apply in the production order'));
+        const firstStep = step.slice(0, step.indexOf('- name:', 10));
+        expect(firstStep).not.toMatch(/\|\|\s*true/);
+        expect(firstStep).not.toMatch(/continue-on-error/);
+    });
+
+    it('and it can find postgres on Linux, not only under Homebrew', () => {
+        const src = sh();
+        expect(src).toMatch(/\/usr\/lib\/postgresql\/16\/bin/);
+        // Plus a PATH fallback, so an unusual install still works. Asserted on
+        // the CONDITION, not on the words "command -v psql" — those also occur
+        // inside the block, so a check against them survived the guard being
+        // replaced by `if false`.
+        expect(src).toMatch(
+            /if \[ ! -x "\$\{PGBIN:-\}\/psql" \] && command -v psql[^\n]*; then/);
+    });
+
+    it('and it still honours an explicit PGBIN', () => {
+        expect(sh()).toMatch(/if \[ -n "\$\{PGBIN:-\}" \]/);
+    });
+
+    it('and running as root says what to do rather than "initdb failed"', () => {
+        const src = sh();
+        // On ONE line, and comparing to "0". Without the line anchor a lazy
+        // /id -u.*=.*"0"/s matched an unrelated "0" further down the file and
+        // survived the guard being disabled.
+        expect(src).toMatch(/^\s*if \[ "\$\(id -u\)" = "0" \]; then\s*$/m);
+        expect(src).toMatch(/Refusing to run as root/);
+        expect(src).toMatch(/setpriv/);
+    });
+
+    it('and it takes its order from build-deploy-sql, not a second copy', () => {
+        // The whole point: if this listed the order itself, it could agree with
+        // itself while disagreeing with what is deployed.
+        expect(sh()).toMatch(/build-deploy-sql\.mjs/);
+        expect(sh()).toMatch(/--order/);
+    });
+
+    it('and the integration script no longer claims to use that order', () => {
+        // It globs and sorts. Saying otherwise is what let the difference sit
+        // unnoticed while 025 and 026 were missing from the manifest.
+        const src = readFileSync(join(ROOT, 'scripts/ci-integration-db.sh'), 'utf-8');
+        expect(src).toMatch(/NOT THE SAME ORDER AS THE PRODUCTION DEPLOY/);
+        expect(src).not.toMatch(/the same order scripts\/test-migrations\.sh uses/);
+    });
+});

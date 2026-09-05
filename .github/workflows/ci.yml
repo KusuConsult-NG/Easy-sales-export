@@ -147,6 +147,25 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # THE ORDER THAT WILL BE APPLIED TO PRODUCTION, CHECKED.
+      #
+      # scripts/test-migrations.sh initdb's its own throwaway cluster on port
+      # 55432 and applies schema.sql plus every migration in the order
+      # build-deploy-sql.mjs defines — which is the order of the consolidated
+      # file pasted into the Supabase SQL Editor. It is the only thing that
+      # checks that ordering, and until now it ran nowhere: no workflow invoked
+      # it, and it looked for postgres in two Homebrew prefixes only, so on a
+      # Linux runner it exited 1 saying "brew install postgresql@16".
+      #
+      # The step below globs the directory and applies in numeric order instead,
+      # which is a different order and happens to satisfy the dependencies. That
+      # is not the same check, and it is not the order used on production.
+      #
+      # No `|| true` and no skip-when-absent: a check that passes by not running
+      # is the shape this audit keeps removing.
+      - name: Migrations apply in the production order
+        run: ./scripts/test-migrations.sh
+
       # Starts postgres + kong + postgrest + gotrue, applies supabase/schema.sql
       # and then the migrations, and exports the stack's URL and keys to
       # $GITHUB_ENV for the next step. It verifies GET /rest/v1/users returns 200

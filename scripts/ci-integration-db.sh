@@ -16,15 +16,28 @@
 #
 # WHY THE MIGRATIONS DIRECTORY IS MOVED ASIDE
 # -------------------------------------------
-# The schema is split: supabase/schema.sql creates the nine tables, and
-# supabase/migrations/002..024 alter them and add the money functions. Nothing
+# The schema is split: supabase/schema.sql creates the nine tables, and the
+# files in supabase/migrations alter them and add the money functions. Nothing
 # in migrations/ creates `users` or `document_collections`. `supabase start`
 # applies migrations/ automatically at boot and would run 002 against an empty
 # database.
 #
 # So migrations/ is moved out of the CLI's sight, the stack starts with an empty
-# database, and this script applies schema.sql first and the migrations after —
-# the same order scripts/test-migrations.sh uses, for the same reason.
+# database, and this script applies schema.sql first and the migrations after.
+#
+# IT IS NOT THE SAME ORDER AS THE PRODUCTION DEPLOY, and the header used to
+# claim it was. This globs the directory and applies in NUMERIC order; the
+# consolidated file pasted into the Supabase SQL Editor uses the order
+# build-deploy-sql.mjs defines, which differs — 018 ahead of 005, and 004 last.
+# Numeric order happens to satisfy the dependencies that matter (013 before 014,
+# 017 before 026), so this job is a valid check of the migrations; it is not a
+# check of the deploy ORDER. scripts/test-migrations.sh is that check, and it
+# runs as its own step in the same job.
+#
+# Globbing rather than listing is deliberate here: a migration added later is
+# picked up without editing this file. That is also why 025 and 026 were applied
+# by this script while being absent from the deploy manifest, which is how they
+# stayed missing without any test going red.
 #
 # 004 (ROW-LEVEL SECURITY) IS APPLIED HERE, AND IS NOT IN PRODUCTION
 # -----------------------------------------------------------------
