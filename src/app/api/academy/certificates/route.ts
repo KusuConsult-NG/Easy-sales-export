@@ -48,7 +48,79 @@ export async function GET(request: NextRequest) {
 
         const certificates: Certificate[] = [];
 
-        // 1. Academy course completions
+        /**
+         * 1. Academy course completions
+         *
+         *   #425 THIS ASKED FOR A STATUS NOTHING WRITES, SO THE ACADEMY HALF OF
+         *   EVERY LEARNER'S CERTIFICATE LIST WAS EMPTY.
+         *
+         *   It queried course_enrollments for `status == "completed"`. Both
+         *   writers of that collection — enrollInCourse and autoEnrollPaidUser —
+         *   write `status: 'active'`, and NOTHING anywhere moves it on. Checked
+         *   for every write shape across src.
+         *
+         *   Completion is not stored there at all. completeCourse writes it to
+         *   course_progress/{userId}_{courseId} as `completed: true` with a
+         *   `completedAt`, and generateCourseCertificate reads that same
+         *   document. So a learner could finish a course, be issued a
+         *   certificate, and open a certificates page that said they had none.
+         *
+         *   This is the SAME DEFECT the WAVE half of this file already carries a
+         *   note about — a query whose field names no writer produces. That one
+         *   was found and fixed; this one, thirty lines above it, was not.
+         *   #420's class: a reader keyed on a state nothing writes.
+         *
+         *   Read from where completion is written. The enrolment rows are still
+         *   consulted below for any that DO carry the old shape — legacy,
+         *   imported, or written by something added later — so nothing a learner
+         *   already has is dropped.
+         */
+        const progressSnap = await db
+            .collection(COLLECTIONS.COURSE_PROGRESS)
+            .where("userId", "==", userId)
+            .where("completed", "==", true)
+            .get();
+
+        /** Course titles, for rows that do not carry one. */
+        const titleFor = new Map<string, string>();
+        const courseIds = [...new Set(
+            progressSnap.docs.map((d) => String(d.data()?.courseId ?? "")).filter(Boolean),
+        )];
+        await Promise.all(courseIds.map(async (id) => {
+            try {
+                const c = await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(id).get();
+                const t = c.exists ? c.data()?.title : null;
+                if (t) titleFor.set(id, String(t));
+            } catch {
+                // A title we cannot read is not a reason to hide a certificate
+                // the learner earned. It falls back to the generic name below.
+            }
+        }));
+
+        const seenCourseIds = new Set<string>();
+
+        for (const doc of progressSnap.docs) {
+            const d = doc.data();
+            const courseId = String(d.courseId ?? "");
+            seenCourseIds.add(courseId);
+            certificates.push({
+                id: doc.id,
+                courseName: d.courseName || d.courseTitle || titleFor.get(courseId) || "Academy Course",
+                courseId,
+                issuedAt:
+                    d.certificateIssuedAt?.toDate?.()?.toISOString() ??
+                    d.completedAt?.toDate?.()?.toISOString() ??
+                    // Never "now": that dated every certificate today, which is
+                    // the fault the WAVE branch below records having had.
+                    new Date(0).toISOString(),
+                certificateUrl: d.certificateUrl || undefined,
+                grade: d.finalScore !== undefined ? `${d.finalScore}%` : d.grade || undefined,
+                source: "academy",
+            });
+        }
+
+        // And any enrolment row that really does carry the completed shape.
+        // Nothing writes it today; a row that has it is not discarded.
         const enrollSnap = await db
             .collection(COLLECTIONS.COURSE_ENROLLMENTS)
             .where("userId", "==", userId)
@@ -57,6 +129,8 @@ export async function GET(request: NextRequest) {
 
         for (const doc of enrollSnap.docs) {
             const d = doc.data();
+            // Not a second entry for a course the progress row already covered.
+            if (seenCourseIds.has(String(d.courseId ?? ""))) continue;
             if (d.certificateIssuedAt || d.completedAt) {
                 certificates.push({
                     id: doc.id,
@@ -65,7 +139,7 @@ export async function GET(request: NextRequest) {
                     issuedAt:
                         d.certificateIssuedAt?.toDate?.()?.toISOString() ??
                         d.completedAt?.toDate?.()?.toISOString() ??
-                        new Date().toISOString(),
+                        new Date(0).toISOString(),
                     certificateUrl: d.certificateUrl || undefined,
                     grade: d.finalScore !== undefined ? `${d.finalScore}%` : d.grade || undefined,
                     source: "academy",

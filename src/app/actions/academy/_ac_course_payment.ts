@@ -14,6 +14,7 @@ import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { getBaseUrl } from "@/lib/server-utils";
 import type { Course, UserProgress } from "@/lib/types/academy-actions";
 import { COURSE_PURCHASE_FLOW, coursePurchaseStamp, isForeignPaymentFlow } from "@/lib/academy-purchase-flow";
+import { ensureCourseAccessRecords } from "@/lib/academy-course-progress";
 
 /**
  * Initialize Payment for a Course
@@ -332,6 +333,40 @@ async function _verifyCoursePaymentAction(reference: string): Promise<ActionResp
             //     above. Writing it here as well is what put the marker AFTER
             //     the enrolment, so a duplicate delivery could enrol twice.)
         });
+
+        /**
+         *   #424 THE OTHER PROGRESS RECORD — THE ONE COMPLETION IS KEYED ON.
+         *
+         *   The transaction above writes user_progress/{userId}/courses/{id},
+         *   which carries the purchase stamp and is what OPENS the course. It is
+         *   not what FINISHES one: completeCourse and generateCourseCertificate
+         *   both address course_progress/{userId}_{courseId}, and completeCourse
+         *   refuses outright when that document does not exist.
+         *
+         *   Nothing else was going to create it for this learner.
+         *   autoEnrollPaidUser writes both records, but it enrols from the PLAN
+         *   against the course TIER — and somebody buying a single course their
+         *   plan does not cover fails that test by definition. So a bought
+         *   course opened, played to the last lesson, and then refused to
+         *   complete.
+         *
+         *   Outside the transaction on purpose: this is idempotent and
+         *   existence-checked, the money has already been claimed, and a failure
+         *   here must not roll back an enrolment the learner has paid for. It is
+         *   repaired on the next delivery or the next call, because both halves
+         *   check before they write.
+         */
+        const records = await ensureCourseAccessRecords(userId, courseId);
+        if (records.failed) {
+            // Not fatal to the purchase — but it must not vanish into the log
+            // either, because the learner is now enrolled and may be unable to
+            // complete. #259's reasoning: a half-delivered fulfilment belongs in
+            // reconciliation.
+            logger.warn(
+                `[verifyCoursePurchase] Access records incomplete for ${userId}/${courseId} ` +
+                `after reference ${reference} — the learner may be unable to complete the course.`,
+            );
+        }
 
         // Audit only a real enrolment.
         //
