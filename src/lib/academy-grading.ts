@@ -134,6 +134,17 @@ export function gradeStoredQuiz(
  * `answers` maps question id to the chosen option INDEX, which is what
  * QuizComponent already tracks in its own state.
  */
+/**
+ * The pass mark a module quiz is graded against when none is stored — #386.
+ *
+ * NOT a new number: it is what _ac_progress has always fallen back to in
+ * `courseModule?.quiz?.passingScore ?? 95`, so a quiz saved without one keeps
+ * being graded exactly as it was. It lives here, beside the rule that uses it,
+ * rather than in the action file — a "use server" module may only export async
+ * functions (#382), and both the action and the admin editor need this value.
+ */
+export const DEFAULT_QUIZ_PASSING_SCORE = 95;
+
 export function gradeModuleQuiz(
     questions: ModuleQuizQuestion[],
     answers: Record<string, unknown>,

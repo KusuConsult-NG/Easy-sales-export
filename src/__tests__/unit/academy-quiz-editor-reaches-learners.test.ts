@@ -163,8 +163,14 @@ describe('the editor now reaches the learner', () => {
 
         expect(src).toContain('typeof existing?.passingScore === "number"');
         // 95 is gradeModuleQuiz's own fallback, so a module that never had one
-        // keeps the mark it was already being graded against.
-        expect(src).toContain(': 95');
+        // keeps the mark it was already being graded against. #386 gave that
+        // number a name and moved it to lib/academy-grading, where both this
+        // action and the browser editor can reach it — an action file may not
+        // export a value (#382). The assertion follows the constant, and pins
+        // the value at its definition so the rename cannot hide a change.
+        expect(src).toContain('DEFAULT_QUIZ_PASSING_SCORE');
+        expect(source('src/lib/academy-grading.ts'))
+            .toContain('export const DEFAULT_QUIZ_PASSING_SCORE = 95;');
     });
 
     it('and a failure to sync does not lose the admin\'s work', () => {

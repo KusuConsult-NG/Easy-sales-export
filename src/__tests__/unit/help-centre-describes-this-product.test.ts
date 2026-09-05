@@ -235,6 +235,12 @@ describe('#334 — the facts the corrected copy rests on', () => {
     it('the platform default pass mark is 95, not the 70 the page claimed', () => {
         expect(source('src/app/actions/academy/_ac_progress.ts'))
             .toMatch(/passingScore\s*\?\?\s*95/);
-        expect(source('src/app/actions/academy/_ac_quiz.ts')).toMatch(/:\s*95,/);
+        // #386 named that literal DEFAULT_QUIZ_PASSING_SCORE and moved it beside
+        // the grading rule, so the check follows it to its definition rather
+        // than to a call site where a rename would silently satisfy it.
+        expect(source('src/lib/academy-grading.ts'))
+            .toContain('export const DEFAULT_QUIZ_PASSING_SCORE = 95;');
+        expect(source('src/app/actions/academy/_ac_quiz.ts'))
+            .toContain('DEFAULT_QUIZ_PASSING_SCORE');
     });
 });

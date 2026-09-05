@@ -213,35 +213,34 @@ const WIRED = [
  *              hardened, so this is a duplicate screen rather than a guard
  *              asymmetry. The order page is the right home: a review belongs to
  *              an order line, and that screen walks to the next unreviewed item.
- *        NOT RETIRED, AND THE FIRST READING WAS WRONG — the two quiz screens.
- *        They look like an older generation (they use /api/academy/quiz/*, the
- *        linked pair uses server actions), and retiring them was the first
- *        decision here. Measuring the two generations reversed it:
+ *        RETIRED TOO, BUT ONLY AFTER THE MEASUREMENT WAS FINISHED — #386.
  *
- *          - api/academy/quiz/submit ENFORCES maxAttempts and is the only writer
- *            of COLLECTIONS.QUIZ_ATTEMPTS. submitQuizScoreAction, which the
- *            LINKED learner quiz calls, enforces no limit and records no
- *            attempt.
- *          - the unlinked admin editor sets passingScore, timeLimit,
- *            maxAttempts, shuffleQuestions and shuffleAnswers. The linked one
- *            sets none of them.
+ *          /academy/courses/[courseId]/quiz       → /academy/[courseId]
+ *          /admin/academy/courses/[courseId]/quiz → /admin/academy/[courseId]
  *
- *        So the unwired pair is the COMPLETE pair, and an earlier pass's
- *        maxAttempts enforcement is unreachable because the screen that posts to
- *        it has no link. That is "N doors, and the wired one is not the hardened
- *        one" — the shape this audit keeps finding — on graded assessment, and
- *        it is too big to settle inside a navigation pass. #386.
+ *        This pass first decided to retire them, then reversed on finding that
+ *        the unlinked pair sets five settings the linked pair does not and that
+ *        only its submit route enforces maxAttempts — and recorded "the unwired
+ *        pair is the COMPLETE, enforcing pair".
+ *
+ *        #386 finished the measurement and that conclusion was half wrong.
+ *        COLLECTIONS.QUIZZES has one writer whose only caller is the unlinked
+ *        admin screen, so the store is EMPTY: the attempt limit has only ever
+ *        been enforced over nothing, and neither subsystem has applied a limit
+ *        to a real quiz. Retired behind ACADEMY_QUIZ_API, with the one setting
+ *        the live grading path reads — the pass mark — added to the editor that
+ *        admins can reach.
+ *
+ *        Left here as a sequence rather than a tidy answer, because the lesson
+ *        is the sequence: "which door is more featureful" is not the same
+ *        question as "which door has ever run", and answering the first one and
+ *        stopping produced a confident, wrong reversal.
  *
  *        NOT AN ORPHAN — corrected: /export/onboarding/rejected is reached from
  *        a rejection email's absolute URL, which #362's own prose already said
  *        while its list still counted it. It moves to EXCLUDED below.
  */
-const STILL_ORPHANED: string[] = [
-    // Both held open by #386, with the measurement above. Not a decision left to
-    // the owner — a decision that needs the two quiz subsystems reconciled first.
-    '/academy/courses/[courseId]/quiz',
-    '/admin/academy/courses/[courseId]/quiz',
-];
+const STILL_ORPHANED: string[] = [];
 
 /** Retired in #384: each still serves its URL, as a redirect to the live screen. */
 const RETIRED: Array<[string, string]> = [
@@ -255,6 +254,8 @@ const RETIRED: Array<[string, string]> = [
 /** Retired too, but their target is built from a route param. */
 const RETIRED_DYNAMIC: Array<[string, string]> = [
     ['/dashboard/reviews/new', '/marketplace/buyer/orders/'],
+    ['/academy/courses/[courseId]/quiz', '/academy/'],
+    ['/admin/academy/courses/[courseId]/quiz', '/admin/academy/'],
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -304,34 +305,12 @@ describe('#362 — the five this commit wired up', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#362 — the ones left for the owner, now none', () => {
-    it('NINE OF THE ELEVEN ARE SETTLED, AND THE OTHER TWO ARE NOT AN OWNER DECISION', () => {
-        // #384 wired two and retired six. The two quiz screens stay open under
-        // #386 — not because linking them is a product question, but because the
-        // measurement showed the LINKED pair is the thinner one, and swapping
-        // which quiz subsystem a learner is graded by is not a navigation edit.
-        expect(STILL_ORPHANED.sort()).toEqual([
-            '/academy/courses/[courseId]/quiz',
-            '/admin/academy/courses/[courseId]/quiz',
-        ]);
-        for (const route of STILL_ORPHANED) expect(hasWayIn(route)).toBe(false);
-    });
-
-    it('#386 — and the premise: the UNLINKED pair is the one that enforces', () => {
-        // The measurement that reversed the first decision. If either half of
-        // this stops being true, #386's framing has to be retaken.
-        const submitRoute = source('src/app/api/academy/quiz/submit/route.ts');
-        const linkedAction = source('src/app/actions/academy/_ac_quiz.ts');
-
-        expect(submitRoute).toContain('maxAttempts');
-        expect(submitRoute).toContain('COLLECTIONS.QUIZ_ATTEMPTS');
-        expect(linkedAction).not.toContain('maxAttempts');
-
-        const unlinkedEditor = source('src/app/admin/academy/courses/[courseId]/quiz/page.tsx');
-        const linkedEditor = source('src/app/admin/academy/[courseId]/quiz/[quizId]/page.tsx');
-        for (const field of ['maxAttempts', 'timeLimit', 'shuffleQuestions']) {
-            expect({ field, unlinked: unlinkedEditor.includes(field) }).toEqual({ field, unlinked: true });
-            expect({ field, linked: linkedEditor.includes(field) }).toEqual({ field, linked: false });
-        }
+    it('ALL ELEVEN ARE SETTLED — the orphan list is empty', () => {
+        // #384 wired two and retired six; #386 retired the last two once the
+        // measurement behind them was finished. Kept as a named constant rather
+        // than deleted so the ratchet has somewhere to put the next one, and so
+        // "there were eleven" stays in the record.
+        expect(STILL_ORPHANED).toEqual([]);
     });
 
     it('and every one of them WAS a real screen, not a stub — measured from git', () => {
@@ -440,7 +419,9 @@ describe('#384 — the eight that were retired, and what they point at', () => {
         for (const [route] of [...RETIRED, ...RETIRED_DYNAMIC]) {
             const raw = readFileSync(join(ROOT, `src/app${route}/page.tsx`), 'utf-8');
 
-            expect({ route, recorded: raw.includes('#384 RETIRED') }).toEqual({ route, recorded: true });
+            // #384 or #386 — the two quiz screens were retired by the later
+            // pass, once the measurement behind them was finished.
+            expect({ route, recorded: /#38[46] RETIRED/.test(raw) }).toEqual({ route, recorded: true });
         }
     });
 });

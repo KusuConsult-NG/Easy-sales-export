@@ -6,6 +6,9 @@ import { ArrowLeft, Plus, Save, Trash2, CheckCircle2, Loader2 } from "lucide-rea
 import Link from "next/link";
 import { toast } from "sonner";
 import { saveQuizAction, getQuizAction } from "@/app/actions/academy";
+// From the grading module, not the action barrel: a "use server" file may only
+// export async functions (#382), so the shared default lives beside the rule.
+import { DEFAULT_QUIZ_PASSING_SCORE } from "@/lib/academy-grading";
 
 type Question = {
     id: string;
@@ -25,6 +28,7 @@ export default function QuizEditorPage() {
 
     const [isLoading, setIsLoading] = useState(false);
     const [isFetching, setIsFetching] = useState(true);
+    const [passingScore, setPassingScore] = useState<number>(DEFAULT_QUIZ_PASSING_SCORE);
     const [quizTitle, setQuizTitle] = useState("Module Quiz");
     const [questions, setQuestions] = useState<Question[]>([]);
 
@@ -34,6 +38,15 @@ export default function QuizEditorPage() {
             const result = await getQuizAction(quizId);
             if (result.success) {
                 setQuizTitle(result.data?.title || "Module Quiz");
+                // #386 — the stored pass mark if there is one, else the figure
+                // _ac_progress has always graded against. Not left blank: an
+                // empty field would read as "no pass mark", and there is no such
+                // thing here — grading always compares against a number.
+                setPassingScore(
+                    typeof result.data?.passingScore === "number"
+                        ? result.data.passingScore
+                        : DEFAULT_QUIZ_PASSING_SCORE,
+                );
                 setQuestions((result.data?.questions || []) as any);
             } else {
                 toast.error(result.error || "Failed to load quiz");
@@ -110,7 +123,7 @@ export default function QuizEditorPage() {
 
     async function handleSave() {
         setIsLoading(true);
-        const result = await saveQuizAction(courseId, quizId, quizTitle, questions as any);
+        const result = await saveQuizAction(courseId, quizId, quizTitle, questions as any, passingScore);
         setIsLoading(false);
         if (result.success) {
             toast.success("Quiz saved successfully");
@@ -149,6 +162,30 @@ export default function QuizEditorPage() {
                             <p className="text-sm text-slate-500">Quiz Editor</p>
                         </div>
                     </div>
+                    {/*
+                      * #386 — THE PASS MARK, WHICH THIS EDITOR COULD NOT SET.
+                      *
+                      * _ac_progress grades a module quiz at
+                      * `courseModule?.quiz?.passingScore ?? 95`, and this is the
+                      * only quiz editor with a way in, so every quiz in the
+                      * product was graded at 95% with no way to change it. The
+                      * other editor collected this and four more settings and
+                      * was unreachable (see lib/academy-quiz-api.ts); this is
+                      * the one of the five the live grading path reads.
+                      */}
+                    <label className="flex items-center gap-2 text-sm text-slate-600">
+                        <span className="font-medium text-slate-900">Pass mark</span>
+                        <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={passingScore}
+                            onChange={(e) => setPassingScore(Number(e.target.value))}
+                            aria-label="Passing score percentage"
+                            className="w-20 px-3 py-2 rounded-lg border border-slate-300 text-slate-900 focus:ring-2 focus:ring-primary"
+                        />
+                        <span>%</span>
+                    </label>
                     <button
                         onClick={handleSave}
                         disabled={isLoading}
@@ -206,7 +243,27 @@ export default function QuizEditorPage() {
                                         />
                                         <button
                                             onClick={() => handleDeleteOption(q.id, opt.id)}
-                                            className="p-1 opacity-0 group-hover:opacity-100 hover:bg-red-50 text-red-500 rounded transition"
+                                            /*
+                                             * #386 — VISIBLE ON TOUCH.
+                                             *
+                                             * This was `opacity-0
+                                             * group-hover:opacity-100`, so on a
+                                             * device with no hover the delete
+                                             * control was invisible while still
+                                             * being tappable: an admin could not
+                                             * see it, and could hit it by
+                                             * accident. That is the defect an
+                                             * earlier pass repaired on the OTHER
+                                             * quiz editor's "Add Question" menu
+                                             * — the same shape, on the editor
+                                             * that is actually reachable.
+                                             *
+                                             * Shown outright below the `sm`
+                                             * breakpoint and hover-revealed above
+                                             * it, so the desktop behaviour an
+                                             * admin already had is unchanged.
+                                             */
+                                            className="p-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:bg-red-50 text-red-500 rounded transition"
                                         >
                                             <Trash2 className="w-3 h-3" />
                                         </button>

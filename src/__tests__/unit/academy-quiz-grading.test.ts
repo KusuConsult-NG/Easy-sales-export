@@ -318,10 +318,33 @@ describe('maxAttempts is enforced, having been enforced nowhere', () => {
         expect(route).toContain('maxAttempts > 0 &&');
     });
 
-    it('the admin editor and the learner screen both show the limit', () => {
-        // Recorded because it is why this looked enforced: the number was
-        // collected, stored and displayed.
-        expect(source('src/app/admin/academy/courses/[courseId]/quiz/page.tsx')).toContain('maxAttempts');
-        expect(source('src/app/academy/courses/[courseId]/quiz/page.tsx')).toContain('quiz.maxAttempts');
+    it('BUT OVER AN EMPTY STORE — #386, which corrects what this suite implied', () => {
+        // This asserted that the admin editor and the learner screen both showed
+        // the limit, "because it is why this looked enforced". #386 measured the
+        // rest of it: COLLECTIONS.QUIZZES has exactly one writer, that writer's
+        // only caller is an admin screen with no way in, so the store is empty
+        // and the enforcement above has never counted a real attempt.
+        //
+        // Both screens are retired to redirects now, and the route keeps its
+        // check for whoever migrates the quizzes and turns the flag on. The
+        // assertion follows the fact rather than being deleted.
+        for (const rel of [
+            'src/app/admin/academy/courses/[courseId]/quiz/page.tsx',
+            'src/app/academy/courses/[courseId]/quiz/page.tsx',
+        ]) {
+            expect({ rel, retired: source(rel).includes('redirect(') }).toEqual({ rel, retired: true });
+        }
+    });
+
+    it('and the LIVE path imposes no attempt limit at all — stated, not implied', () => {
+        // The true statement #386 arrived at: neither subsystem has ever applied
+        // a limit to a real quiz. The live one has no such code; this one has no
+        // data. Adding one to the live path would change what a learner may do,
+        // which is a product decision and not an audit's.
+        const learner = source('src/app/academy/[courseId]/quiz/[moduleId]/page.tsx');
+
+        expect(learner).not.toMatch(/maxAttempts/);
+        expect(readFileSync(join(process.cwd(), 'src/lib/academy-quiz-api.ts'), 'utf-8'))
+            .toContain('learner may retake a module quiz without limit');
     });
 });

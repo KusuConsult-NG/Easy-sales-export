@@ -8,12 +8,26 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { recordAdminAction } from "@/lib/audit-log";
+import { isAcademyQuizApiEnabled, ACADEMY_QUIZ_API_REFUSAL } from "@/lib/academy-quiz-api";
 
 /**
  * API Route: Create Quiz (Admin)
  */
 export async function POST(request: NextRequest) {
     try {
+        // RETIRED — #386. First statement, before a session is read.
+        //
+        // COLLECTIONS.QUIZZES has one writer and no data: the only screen that
+        // could author into it has no way in, so this whole subsystem has never
+        // held a quiz. See lib/academy-quiz-api.ts for the measurement and for
+        // what turning it back on would require.
+        if (!isAcademyQuizApiEnabled()) {
+            return NextResponse.json(
+                { success: false, message: ACADEMY_QUIZ_API_REFUSAL },
+                { status: 410 }
+            );
+        }
+
         const session = (await requireSession()).session;
         if (!session?.user) {
             return NextResponse.json(

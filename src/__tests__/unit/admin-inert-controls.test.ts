@@ -226,26 +226,53 @@ describe('the export applications row actions', () => {
 });
 
 describe('the quiz Add Question menu', () => {
-    const page = source(QUIZ);
+    /**
+     *   #386 RETIRED THE SCREEN THIS REPAIR LIVED ON.
+     *
+     *        The defect was real: "Add Question" opened its menu on CSS :hover
+     *        alone, so on a touch device the button did nothing while the empty
+     *        state below it said `Click "Add Question" to get started.` It was
+     *        repaired here, on /admin/academy/courses/[courseId]/quiz.
+     *
+     *        That screen is the only writer of COLLECTIONS.QUIZZES and has no way
+     *        in, so the store is empty and the repair was never reached. #386
+     *        retired the whole subsystem behind a flag.
+     *
+     *        The assertions move to the QUESTION THIS RAISES — does the editor
+     *        admins actually use have the same defect? — rather than being
+     *        deleted. It does not: its Add Question is a plain onClick button
+     *        with no hover menu, so there is nothing here to repair.
+     */
+    const LIVE_EDITOR = 'src/app/admin/academy/[courseId]/quiz/[quizId]/page.tsx';
 
-    it('opens on click, not on hover alone', () => {
-        // THE test. Hover is not available on a touch device.
-        expect(page).toContain('onClick={() => setIsQuestionMenuOpen((open) => !open)}');
-        expect(page).toContain('isQuestionMenuOpen ? "opacity-100 visible" : "opacity-0 invisible"');
+    it('THE LIVE EDITOR ADDS A QUESTION ON CLICK, WITH NO HOVER MENU', () => {
+        const live = source(LIVE_EDITOR);
+        // Windowed on the button itself. A file-wide scan for the hover class
+        // was the first draft and it was wrong twice over: it failed on an
+        // unrelated control, and it would have passed had the Add Question
+        // button grown a hover menu somewhere else in the file.
+        const button = live.slice(live.indexOf('onClick={handleAddQuestion}'));
+
+        expect(live).toContain('onClick={handleAddQuestion}');
+        expect(button.slice(0, 400)).not.toContain('group-hover:');
     });
 
-    it('keeping the hover behaviour a desktop admin already had', () => {
-        expect(page).toContain('group-hover:opacity-100 group-hover:visible');
+    it('and no control on it is hover-only, which a touch device cannot reach', () => {
+        // What the windowed check above found: the delete-option button WAS
+        // `opacity-0 group-hover:opacity-100`, invisible on touch while still
+        // tappable. Same defect as the retired screen's Add Question menu, on
+        // the editor admins actually use. Now shown outright below `sm`.
+        const live = source(LIVE_EDITOR);
+
+        expect(live).not.toContain('"p-1 opacity-0 group-hover:opacity-100');
+        expect(live).toContain('opacity-100 sm:opacity-0 sm:group-hover:opacity-100');
     });
 
-    it('and closes once a type is chosen', () => {
-        expect(page).toContain('onClick={() => { addQuestion(type.value); setIsQuestionMenuOpen(false); }}');
-    });
+    it('and the retired screen is a redirect now, not a hover menu', () => {
+        const retired = source(QUIZ);
 
-    it('which is what the page told the admin to do all along', () => {
-        // Vacuity guard on the diagnosis: the empty state names clicking, not
-        // hovering, as the way in.
-        expect(page).toContain('Click "Add Question" to get started');
+        expect(retired).toContain('redirect(');
+        expect(retired).not.toContain('isQuestionMenuOpen');
     });
 });
 

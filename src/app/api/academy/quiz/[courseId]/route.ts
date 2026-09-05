@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { isAcademyQuizApiEnabled, ACADEMY_QUIZ_API_REFUSAL } from "@/lib/academy-quiz-api";
 
 /**
  * API Route: Get Quiz for Student
@@ -14,6 +15,19 @@ export async function GET(
     { params }: { params: Promise<{ courseId: string }> }
 ) {
     try {
+        // RETIRED — #386. First statement, before a session is read.
+        //
+        // COLLECTIONS.QUIZZES has one writer and no data: the only screen that
+        // could author into it has no way in, so this whole subsystem has never
+        // held a quiz. See lib/academy-quiz-api.ts for the measurement and for
+        // what turning it back on would require.
+        if (!isAcademyQuizApiEnabled()) {
+            return NextResponse.json(
+                { success: false, message: ACADEMY_QUIZ_API_REFUSAL },
+                { status: 410 }
+            );
+        }
+
         const session = (await requireSession()).session;
         if (!session?.user) {
             return NextResponse.json(

@@ -8,7 +8,7 @@ import { hasAdminPermission } from "@/lib/admin-permissions";
 import { recordAdminAction } from "@/lib/audit-log";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
-import { editorQuestionsToModuleQuiz } from "@/lib/academy-grading";
+import { editorQuestionsToModuleQuiz, DEFAULT_QUIZ_PASSING_SCORE } from "@/lib/academy-grading";
 import type { Course, Quiz, QuizEditorQuestion } from "@/lib/types/academy-actions";
 
 /**
@@ -19,7 +19,29 @@ export async function saveQuizAction(
     courseId: string,
     quizId: string,
     title: string,
-    questions: QuizEditorQuestion[]
+    questions: QuizEditorQuestion[],
+    /**
+     *   #386 THE PASS MARK THE ONLY REACHABLE EDITOR COULD NOT SET.
+     *
+     *        _ac_progress grades a module quiz at
+     *        `courseModule?.quiz?.passingScore ?? 95`, and this action had no
+     *        parameter for it — it preserved a value if the module already
+     *        carried one and otherwise wrote 95. The quiz editor at
+     *        /admin/academy/[courseId]/quiz/[quizId] is the only quiz-authoring
+     *        screen with a way in, so in practice EVERY quiz in this product is
+     *        graded at 95% and no admin has ever been able to change it.
+     *
+     *        The unreachable editor #386 retired collected a passing score, a
+     *        time limit, an attempt limit and two shuffle flags. Of those five,
+     *        this is the only one the live grading path reads — so it is the one
+     *        carried across, and the other four are recorded in
+     *        lib/academy-quiz-api.ts rather than half-implemented here.
+     *
+     *        Optional, and undefined means "leave whatever the module has",
+     *        so an existing quiz re-saved by an editor that does not send one
+     *        does not silently move to the default.
+     */
+    passingScore?: number,
 ): Promise<ActionResponse<null>> {
     try {
         const sessionResult = await requireSession();
@@ -65,6 +87,22 @@ export async function saveQuizAction(
             }
         }
 
+        // The pass mark, checked rather than trusted — #386.
+        //
+        // A "use server" parameter is whatever the caller sent, whatever its
+        // declared type. A pass mark above 100 makes a quiz impossible to pass;
+        // a negative one makes it impossible to fail. Refused rather than
+        // clamped, for the reason lib/system-settings gives for the same choice:
+        // a silently clamped figure is a wrong setting reported as a saved one.
+        let checkedPassingScore: number | undefined;
+        if (passingScore !== undefined) {
+            const value = Number(passingScore);
+            if (!Number.isFinite(value) || value < 0 || value > 100) {
+                return { success: false as const, error: "Passing score must be between 0 and 100", data: null };
+            }
+            checkedPassingScore = Math.round(value);
+        }
+
         // createdAt only when there is nothing to preserve.
         //
         // This was an unconditional `createdAt: serverTimestamp()` inside a
@@ -83,7 +121,11 @@ export async function saveQuizAction(
             updatedBy: session.user.id,
             updatedAt: FieldValue.serverTimestamp(),
             createdAt: existingCreatedAt ?? FieldValue.serverTimestamp(),
-        }, { merge: true });
+            // #386 — mirrored so the editor reloads what the admin set. The
+            // course module stays authoritative for grading; saveQuizAction
+            // writes both in the same call, so the two cannot drift.
+            passingScore: checkedPassingScore ?? undefined,
+}, { merge: true });
 
         // And into the course document, which is where learners are graded.
         //
@@ -131,9 +173,19 @@ export async function saveQuizAction(
                                     // gradeModuleQuiz falls back to, so a module that
                                     // never had a pass mark keeps the same one it was
                                     // already being graded against.
-                                    passingScore: typeof existing?.passingScore === "number"
-                                        ? existing.passingScore
-                                        : 95,
+                                    // #386 — the editor's figure wins, then
+                                    // whatever the module already had, then the
+                                    // fallback _ac_progress has always used.
+                                    // Bounded here rather than trusted: this is
+                                    // a "use server" parameter, so it is
+                                    // whatever the caller sent, and a pass mark
+                                    // above 100 makes a quiz unpassable while a
+                                    // negative one makes it unfailable.
+                                    passingScore: checkedPassingScore ?? (
+                                        typeof existing?.passingScore === "number"
+                                            ? existing.passingScore
+                                            : DEFAULT_QUIZ_PASSING_SCORE
+                                    ),
                                 },
                             }
                             : m
@@ -230,6 +282,9 @@ async function _getQuizAction(
             data: {
                 title: data.title || "Module Quiz",
                 questions: data.questions || [],
+                // #386 — so the editor shows the pass mark that is stored
+                // rather than resetting it to the default on every reload.
+                passingScore: typeof data.passingScore === "number" ? data.passingScore : undefined,
             }
         };
     } catch (error) {

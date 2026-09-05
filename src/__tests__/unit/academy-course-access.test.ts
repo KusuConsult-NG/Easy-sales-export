@@ -172,23 +172,41 @@ describe('the links that went nowhere', () => {
         expect(existsSync(join(process.cwd(), 'src/app/academy/courses/[courseId]/page.tsx'))).toBe(false);
     });
 
-    it('and a graded quiz no longer pushes the learner to a 404', () => {
-        const src = source(QUIZ_PAGE);
+    /**
+     *   #386 MOVED THESE TWO TO THE SCREEN LEARNERS ACTUALLY USE.
+     *
+     *        Both repairs were made on /academy/courses/[courseId]/quiz, which
+     *        reads COLLECTIONS.QUIZZES — a store with one writer, whose only
+     *        caller is an admin screen with no way in. So the store is empty,
+     *        the screen showed nothing for every course, and neither repair was
+     *        ever reachable. That screen is retired to a redirect now.
+     *
+     *        The live quiz at /academy/[courseId]/quiz/[moduleId] independently
+     *        does both correct things, so the assertions follow it rather than
+     *        being deleted — which is the stronger position anyway: they now
+     *        guard the screen a learner is actually graded on.
+     */
+    const LIVE_QUIZ = 'src/app/academy/[courseId]/quiz/[moduleId]/page.tsx';
+
+    it('and a graded quiz does not push the learner to a 404', () => {
+        const src = source(LIVE_QUIZ);
 
         expect(src).not.toContain('/quiz/results?attemptId=');
-        expect(src).toContain('router.push(`/academy/${params.courseId}`)');
+        expect(src).toContain('router.push(`/academy/${courseId}`)');
     });
 
     it('showing the score the results page would have shown', () => {
         // Redirecting somewhere real while dropping the result would trade one
-        // broken outcome for another.
-        // Anchored inside submitQuiz — `if (data.success)` also appears in the
-        // quiz FETCH further up, and matching that would prove nothing.
-        const src = source(QUIZ_PAGE);
-        const submit = src.slice(src.indexOf('const submitQuiz ='));
+        // broken outcome for another. Anchored inside submitQuiz.
+        const src = source(LIVE_QUIZ);
+        const submit = src.slice(src.indexOf('async function submitQuiz'));
 
-        expect(submit.slice(0, 1600)).toContain('data.score');
-        expect(submit.slice(0, 1600)).toContain('data.passed');
+        expect(submit.length).toBeGreaterThan(200);        // vacuity guard on the slice
+        expect(submit.slice(0, 1600)).toContain('result.data.score');
+    });
+
+    it('and the retired one is a redirect, not a quiz — vacuity guard', () => {
+        expect(source(QUIZ_PAGE)).toContain('redirect(');
     });
 
     it('and the submit endpoint really does return those', () => {
