@@ -12,7 +12,7 @@ import { ORDER_CONFIRMABLE_FROM, hasReservedStock } from "@/lib/order-status";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import type { ActionResponse } from "@/lib/safe-action";
 import { ProductSchema } from "@/lib/validations/marketplace";
-import { notifyOrderCancelled } from "@/lib/marketplace-notifications";
+import { notifyOrderCancelled, notifyOrderDelivered } from "@/lib/marketplace-notifications";
 
 import { runQueryWithRetry } from "@/lib/firestore-utils";
 import { hydrateSellerTrust } from "@/lib/seller-trust";
@@ -352,6 +352,36 @@ async function _confirmOrderReceiptAction(orderId: string): Promise<ActionRespon
                 to: "delivered",
                 patch: { deliveredAt: new Date().toISOString() },
             });
+        }
+
+        // #391. Confirming receipt is the buyer-side half of the "delivered"
+        // transition, and notifyOrderDelivered had never been called from
+        // either half. The seller learned nothing when a buyer confirmed —
+        // even though that starts the clock on their payout — and the buyer
+        // got no record of the window they had just opened. Fire and forget:
+        // the transition is already claimed above and a failed notification
+        // must not undo it.
+        const sellerForNotice = orderData?.sellerId
+            || (Array.isArray(orderData?.sellerIds) ? orderData.sellerIds[0] : undefined);
+        //
+        // The try/catch is NOT redundant with the .catch. A .catch handles a
+        // REJECTED promise; it does nothing about a synchronous throw from the
+        // call itself, and that throw would land in this function's outer catch
+        // and turn an already-committed confirmation into "Failed to confirm
+        // receipt" — after which retrying says the order is already confirmed.
+        // The first run of this change did exactly that against a suite whose
+        // module mock had no notifyOrderDelivered on it.
+        if (orderData?.buyerId && sellerForNotice) {
+            try {
+                notifyOrderDelivered({
+                    buyerId: orderData.buyerId,
+                    sellerId: sellerForNotice,
+                    orderId,
+                    orderNumber: orderData.orderNumber || orderId,
+                })?.catch?.((e: unknown) => logger.error("[confirmOrderReceiptAction] Notification failed:", { orderId, error: e }));
+            } catch (e) {
+                logger.error("[confirmOrderReceiptAction] Notification threw:", { orderId, error: e });
+            }
         }
 
         return { error: null, success: true as const, data: { success: true } };

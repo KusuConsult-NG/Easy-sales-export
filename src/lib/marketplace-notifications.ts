@@ -106,7 +106,12 @@ export async function notifyOrderPlaced(params: {
         maximumFractionDigits: 0,
     }).format(amount);
 
-    const adminIds = await _getAdminUserIds();
+    // #391. `const adminIds = await _getAdminUserIds()` stood here and its
+    // only consumer is the _fanOut below, which is commented out — so every
+    // call ran two `array-contains` queries over the whole users collection
+    // and threw the answer away. On this path that is per order placed. The
+    // fan-out is left as it was found; re-enabling it means calling
+    // _getAdminUserIds() here again.
 
     await Promise.allSettled([
         // → Buyer
@@ -257,14 +262,15 @@ export async function notifyOrderDelivered(params: {
     orderNumber: string;
 }): Promise<void> {
     const { buyerId, sellerId, orderId, orderNumber } = params;
-    const adminIds = await _getAdminUserIds();
+    // #391. Same discarded admin query as notifyOrderPlaced — see the note
+    // there. Re-enabling the fan-out below means fetching the ids again.
 
     await Promise.allSettled([
         _writeNotification({
             userId: buyerId,
             type: "transaction",
             title: "Order Delivered 📦",
-            message: `Order #${orderNumber} has been delivered. Confirm receipt if it arrived — payment reaches the seller ${ESCROW_DELIVERED_AUTO_RELEASE_HOURS} hours after you confirm, so open a dispute before then if anything is wrong.`,
+            message: `Order #${orderNumber} has been marked delivered. Payment is released to the seller in ${ESCROW_DELIVERED_AUTO_RELEASE_HOURS} hours — if it has not arrived, or something is wrong with it, open a dispute before then.`,
             link: `/marketplace/buyer/orders/${orderId}`,
             linkText: "Confirm Delivery",
         }),
@@ -272,7 +278,7 @@ export async function notifyOrderDelivered(params: {
             userId: sellerId,
             type: "transaction",
             title: "Order Marked as Delivered",
-            message: `Order #${orderNumber} has been marked delivered. Payment is released to your wallet ${ESCROW_DELIVERED_AUTO_RELEASE_HOURS} hours after the buyer confirms receipt, unless a dispute is opened.`,
+            message: `Order #${orderNumber} has been marked delivered. Payment is released to your wallet in ${ESCROW_DELIVERED_AUTO_RELEASE_HOURS} hours, unless a dispute is opened.`,
             link: `/marketplace/seller/orders/${orderId}`,
             linkText: "View Order",
         }),
@@ -298,7 +304,8 @@ export async function notifyOrderCancelled(params: {
     cancelledBy?: "buyer" | "seller" | "admin";
 }): Promise<void> {
     const { buyerId, sellerId, orderId, orderNumber, reason, cancelledBy } = params;
-    const adminIds = await _getAdminUserIds();
+    // #391. Same discarded admin query as notifyOrderPlaced — see the note
+    // there. Re-enabling the fan-out below means fetching the ids again.
     const reasonNote = reason ? ` Reason: ${reason}` : "";
     const byLabel = cancelledBy ? ` (cancelled by ${cancelledBy})` : "";
 
@@ -332,6 +339,21 @@ export async function notifyOrderCancelled(params: {
 /**
  * Notify buyer when escrow funds are released to the seller.
  * Signals the final completion of a transaction.
+ *
+ * #391. THIS ONE HAS NO CALLER AND THAT IS CORRECT — recorded so the next
+ * person to notice it does not "fix" it into a duplicate.
+ *
+ * Unlike notifyOrderShipped and notifyOrderDelivered, which were unwired gaps,
+ * an escrow release IS announced today, twice over and by both live paths:
+ * releaseEscrowFunds writes an in-app notification to the seller and the buyer
+ * and follows it with an SMS and a push, and the cron's auto-release does the
+ * same through the notification service directly. Calling this as well would
+ * put two "your escrow was released" rows in each party's notification centre
+ * for one event.
+ *
+ * Kept rather than removed: it is the only version of this message that fans
+ * out to admins as well, if that is ever wanted. Wiring it means REPLACING the
+ * inline pair, not adding to them.
  */
 export async function notifyEscrowReleased(params: {
     buyerId: string;
@@ -377,7 +399,8 @@ export async function notifyVillageMarketCreated(params: {
     startTime: Date;
 }): Promise<void> {
     const { eventId, eventTitle, sellerIds = [], startTime } = params;
-    const adminIds = await _getAdminUserIds();
+    // #391. Same discarded admin query as notifyOrderPlaced — see the note
+    // there. Re-enabling the fan-out below means fetching the ids again.
     const dateStr = startTime.toLocaleDateString("en-NG", {
         weekday: "short",
         day: "numeric",

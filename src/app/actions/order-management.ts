@@ -21,6 +21,7 @@ import { ESCROW_RELEASABLE_FROM, pickOrderEscrow, escrowIdFor } from "@/lib/escr
 import { hasReservedStock } from "@/lib/order-status";
 import { canSetOrderStatus, orderStatusRefusal } from "@/lib/order-status-authority";
 import { scopeOrderToSeller } from "@/lib/order-scope";
+import { notifyOrderShipped, notifyOrderDelivered } from "@/lib/marketplace-notifications";
 
 /**
  * Get all orders for a seller
@@ -120,10 +121,15 @@ async function _updateOrderStatusAction(
             escrowDocs = escrowQuery.docs;
         }
 
+        // Captured out of the block below so the notifications after it can name
+        // the buyer and the order — #391.
+        let notifyOrder: Order | null = null;
+
         await (async () => {
             const currentOrderDoc = await orderRef.get();
             if (!currentOrderDoc.exists) throw new Error("Order not found");
             const currentOrder = currentOrderDoc.data() as Order;
+            notifyOrder = currentOrder;
 
             const isUserAdmin = hasRole(session.user.roles || [], "admin") || hasRole(session.user.roles || [], "super_admin");
             const isAuthorized = isUserAdmin || currentOrder.sellerId === userId || (Array.isArray(currentOrder.sellerIds) && currentOrder.sellerIds.includes(userId));
@@ -243,6 +249,61 @@ async function _updateOrderStatusAction(
 
             await orderRef.update(updateData);
         })();
+
+        /**
+         *   #391 THE TWO EVENTS A BUYER MOST WANTS TO HEAR ABOUT WERE THE TWO
+         *        THIS ACTION DID NOT ANNOUNCE.
+         *
+         *        lib/marketplace-notifications.ts has carried notifyOrderShipped
+         *        and notifyOrderDelivered since it was written, and NOTHING HAS
+         *        EVER CALLED EITHER. This is the only door that sets either
+         *        status, and it sent nothing at all — no in-app notification, no
+         *        SMS, no push. A buyer's order shipped, a tracking number was
+         *        created for it by the logistics provider three lines above, and
+         *        the buyer was told none of it.
+         *
+         *        Delivered matters more since #389: reaching that status starts
+         *        the clock on the seller's payout, and the buyer's window to
+         *        dispute runs against it. Announcing it silently was the same
+         *        defect as #390's copy — the product knowing something about
+         *        somebody's money that it never told them.
+         *
+         *   FIRE AND FORGET, deliberately. The status change is committed above.
+         *   A notification that cannot be written must not undo it, which is the
+         *   pattern every other caller of this module already uses.
+         */
+        const notified = notifyOrder as Order | null;
+        if (notified) {
+            const orderNumber = (notified as any).orderNumber || orderId;
+            const sellerOf = notified.sellerId
+                || (Array.isArray(notified.sellerIds) ? notified.sellerIds[0] : undefined);
+
+            // try/catch AND .catch: the second handles a rejected promise, the
+            // first a synchronous throw from the call, which would otherwise
+            // reach this function's outer catch and report a status change that
+            // has already been written as a failure.
+            try {
+                if (newStatus === "shipped" && notified.buyerId) {
+                    notifyOrderShipped({
+                        buyerId: notified.buyerId,
+                        orderId,
+                        orderNumber,
+                        trackingNumber: finalTrackingNumber,
+                    })?.catch?.((e: unknown) => logger.error("[updateOrderStatusAction] Shipped notification failed:", { orderId, error: e }));
+                }
+
+                if (newStatus === "delivered" && notified.buyerId && sellerOf) {
+                    notifyOrderDelivered({
+                        buyerId: notified.buyerId,
+                        sellerId: sellerOf,
+                        orderId,
+                        orderNumber,
+                    })?.catch?.((e: unknown) => logger.error("[updateOrderStatusAction] Delivered notification failed:", { orderId, error: e }));
+                }
+            } catch (e) {
+                logger.error("[updateOrderStatusAction] Notification threw:", { orderId, newStatus, error: e });
+            }
+        }
 
         return { error: null, success: true as const, data: { message: "Order status updated successfully" } };
     } catch (error) { logger.error("Update order status error:", { 

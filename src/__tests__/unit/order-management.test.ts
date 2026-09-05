@@ -2,9 +2,24 @@
  * @jest-environment node
  */
 
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+// `jest` is deliberately NOT imported from @jest/globals here — see #392.
+// jest.mock is hoisted above the imports only when `jest` is the GLOBAL; taking
+// it from @jest/globals defeats the hoist, the module under test is loaded
+// first, and the mock below silently does nothing. Measured, not assumed.
+import { describe, it, expect, beforeEach } from '@jest/globals';
 import { updateOrderStatusAction } from '@/app/actions/order-management';
 import { getLogisticsProvider } from '@/lib/logistics';
+
+/**
+ * #391. Mocked so the assertions below can ask whether the action ANNOUNCED
+ * the status change, which is the thing that was missing. Every export the
+ * action reaches for is listed: a partial module mock hands the caller
+ * `undefined`, and calling it throws.
+ */
+jest.mock('@/lib/marketplace-notifications', () => ({
+    notifyOrderShipped: jest.fn(async () => undefined),
+    notifyOrderDelivered: jest.fn(async () => undefined),
+}));
 
 describe('updateOrderStatusAction Unit Tests', () => {
     beforeEach(() => {
@@ -215,6 +230,71 @@ describe('updateOrderStatusAction Unit Tests', () => {
      * being right and the rule being APPLIED are different claims, and this
      * audit has repeatedly found the second one missing where the first held.
      */
+    /**
+     *   #391 A BUYER WAS NEVER TOLD THEIR ORDER HAD SHIPPED.
+     *
+     *   notifyOrderShipped has existed in lib/marketplace-notifications.ts
+     *   since it was written and nothing called it. This is the only door that
+     *   sets "shipped", and it sent nothing at all — while the logistics
+     *   provider minted a tracking number for the order a few lines earlier in
+     *   the same function.
+     */
+    it('#391 ANNOUNCES A SHIPMENT to the buyer, with the tracking number', async () => {
+        const { notifyOrderShipped } = jest.requireMock('@/lib/marketplace-notifications') as any;
+        notifyOrderShipped.mockClear();
+
+        (global as any).mockRequireSession.mockImplementation(() => Promise.resolve({
+            session: { user: { id: "seller-1", roles: ["seller"] } },
+            error: null
+        }));
+        const mockOrderData = {
+            id: "order-391",
+            sellerId: "seller-1",
+            sellerIds: ["seller-1"],
+            buyerId: "buyer-1",
+            status: "processing",
+        };
+        (global as any).mockFirestoreTxGet.mockImplementation(() => Promise.resolve({
+            exists: true, data: () => mockOrderData,
+        }));
+        (global as any).mockFirestoreGet.mockImplementation(() => Promise.resolve({
+            exists: true, data: () => mockOrderData, docs: [], empty: true,
+        }));
+
+        const result = await updateOrderStatusAction("order-391", "shipped", "TRK-999");
+
+        expect(result.success).toBe(true);
+        expect(notifyOrderShipped).toHaveBeenCalledWith(
+            expect.objectContaining({ buyerId: "buyer-1", orderId: "order-391", trackingNumber: "TRK-999" }),
+        );
+    });
+
+    it('#391 and a notification that throws does NOT undo a status already written', async () => {
+        // A .catch handles a rejected promise and does nothing about a
+        // synchronous throw, which would reach this action's outer catch and
+        // report a committed status change as a failure.
+        const { notifyOrderShipped } = jest.requireMock('@/lib/marketplace-notifications') as any;
+        notifyOrderShipped.mockImplementationOnce(() => { throw new Error('notifier is down'); });
+
+        (global as any).mockRequireSession.mockImplementation(() => Promise.resolve({
+            session: { user: { id: "seller-1", roles: ["seller"] } },
+            error: null
+        }));
+        const mockOrderData = {
+            id: "order-391b", sellerId: "seller-1", sellerIds: ["seller-1"],
+            buyerId: "buyer-1", status: "processing",
+        };
+        (global as any).mockFirestoreTxGet.mockImplementation(() => Promise.resolve({
+            exists: true, data: () => mockOrderData,
+        }));
+        (global as any).mockFirestoreGet.mockImplementation(() => Promise.resolve({
+            exists: true, data: () => mockOrderData, docs: [], empty: true,
+        }));
+
+        const result = await updateOrderStatusAction("order-391b", "shipped", "TRK-1");
+        expect(result.success).toBe(true);
+    });
+
     it('#389 SECURITY: refuses a SELLER marking their own order delivered', async () => {
         (global as any).mockRequireSession.mockImplementation(() => Promise.resolve({
             session: { user: { id: "seller-1", roles: ["seller"] } },

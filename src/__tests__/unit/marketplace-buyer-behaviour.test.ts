@@ -44,6 +44,14 @@ jest.mock('@/lib/auth', () => ({
 jest.mock('@/lib/marketplace-notifications', () => ({
     notifyOrderCancelled: jest.fn(async () => undefined),
     notifyPaymentReceived: jest.fn(async () => undefined),
+    // #391. Added when confirmOrderReceiptAction began announcing the
+    // delivery. A partial module mock is a real hazard here: the missing
+    // export was `undefined`, calling it threw, and the throw turned a
+    // COMMITTED confirmation into "Failed to confirm receipt". The action
+    // now guards against that too — see the note there — but the mock has
+    // to carry every export the file under test reaches for, or the suite
+    // tests a shape production never has.
+    notifyOrderDelivered: jest.fn(async () => undefined),
 }));
 
 /**
@@ -114,6 +122,40 @@ describe('confirmOrderReceiptAction', () => {
     beforeEach(() => {
         seedOrder('shipped');
         store.seed(ESCROWS, 'ESC-1', { orderId: ORDER, status: 'funded', amount: 3000 });
+    });
+
+    /**
+     *   #391. notifyOrderDelivered existed and NOTHING CALLED IT — not this
+     *   half of the transition and not the admin half. Confirming receipt
+     *   starts the clock on the seller's payout (#389/#390), and neither party
+     *   was told it had started.
+     *
+     *   Asserted on the module mock rather than on a notification row: the
+     *   claim under test is that this action reaches for the announcement, and
+     *   what the helper then writes is that module's business.
+     */
+    it('#391 ANNOUNCES THE DELIVERY to the buyer and the seller', async () => {
+        const { notifyOrderDelivered } = jest.requireMock('@/lib/marketplace-notifications') as any;
+        notifyOrderDelivered.mockClear();
+
+        expect(await confirm()).toMatchObject({ success: true });
+
+        expect(notifyOrderDelivered).toHaveBeenCalledTimes(1);
+        expect(notifyOrderDelivered).toHaveBeenCalledWith(
+            expect.objectContaining({ orderId: ORDER }),
+        );
+    });
+
+    it('#391 and a notification that throws does NOT undo a confirmation already written', async () => {
+        // The .catch alone would not have covered this: a synchronous throw
+        // from the call reaches the action's outer catch, and the buyer is
+        // told "Failed to confirm receipt" about a transition that has been
+        // claimed — after which retrying says it is already confirmed. Found
+        // by this suite's own module mock during #391.
+        const { notifyOrderDelivered } = jest.requireMock('@/lib/marketplace-notifications') as any;
+        notifyOrderDelivered.mockImplementationOnce(() => { throw new Error('notifier is down'); });
+
+        expect(await confirm()).toMatchObject({ success: true });
     });
 
     it('refuses a caller with no session', async () => {

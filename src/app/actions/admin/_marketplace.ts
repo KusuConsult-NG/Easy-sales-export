@@ -24,6 +24,7 @@ import {
     normaliseProductStatus,
 } from "@/lib/product-status";
 import { canSendEmail } from "@/lib/email-notifications";
+import { notifyBadgeUpdated } from "@/lib/marketplace-notifications";
 
 // ============================================
 // Seller Verification (Marketplace)
@@ -293,7 +294,25 @@ async function _toggleVerifiedBadgeAction(
             }
         });
 
+        /**
+         *   #391 THE IN-APP NOTIFICATION FOR THIS EXISTED AND WAS NEVER SENT.
+         *
+         *        lib/marketplace-notifications.ts has carried notifyBadgeUpdated
+         *        — a message for BOTH grant and revoke — since it was written,
+         *        and nothing called it. What this action actually did was send
+         *        an EMAIL, on grant only, and only when RESEND_API_KEY is set
+         *        and the verification row happens to carry an email. A revoked
+         *        badge told the seller nothing at all, on any channel, while
+         *        their listings quietly lost the mark buyers judge them by.
+         *
+         *        The in-app notification does not depend on a mail provider
+         *        being configured, which is why it goes first and unconditionally.
+         */
+        await notifyBadgeUpdated({ sellerId: data.userId, granted: newBadgeState })
+            .catch((e) => logger.error("[toggleVerifiedBadgeAction] Notification failed:", { verificationId, error: e }));
+
         // Optional email notification to seller
+        let emailSent = false;
         if (newBadgeState && data.email && process.env.RESEND_API_KEY) {
             try {
                 const { Resend } = await import("resend");
@@ -317,6 +336,8 @@ async function _toggleVerifiedBadgeAction(
                 });
                 if (error) {
                     logger.error("[toggleVerifiedBadgeAction] Resend API Error:", error);
+                } else {
+                    emailSent = true;
                 }
             } catch (emailErr: unknown) {
                 logger.warn("[toggleVerifiedBadgeAction] Email failed (non-fatal):", { error: String(emailErr) });
@@ -334,9 +355,18 @@ async function _toggleVerifiedBadgeAction(
         return {
             error: null,
             success: true as const,
+            // #391. This said "granted and seller notified" whether or not
+            // anything had been sent: the email is skipped entirely when
+            // RESEND_API_KEY is unset or the row carries no address, and its
+            // failure was logged and swallowed. The admin was told a seller
+            // had been told. It now reports what actually happened — and the
+            // in-app notification above means the answer is no longer "nothing"
+            // when the mail provider is not configured.
             message: newBadgeState
-                ? "Verified Badge granted and seller notified"
-                : "Verified Badge revoked",
+                ? (emailSent
+                    ? "Verified Badge granted. Seller notified in-app and by email."
+                    : "Verified Badge granted. Seller notified in-app; no email was sent.")
+                : "Verified Badge revoked. Seller notified in-app.",
         };
     } catch (error: any) {
         logger.error("toggleVerifiedBadgeAction error:", error);
