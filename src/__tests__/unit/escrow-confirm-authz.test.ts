@@ -87,6 +87,17 @@ async function confirm(escrowId = 'esc-1', ref = 'PAY-REF-1') {
 describe('_confirmEscrowPaymentAction', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        /**
+         * #398 retired this whole lifecycle behind a flag — none of its four
+         * actions has ever been reached, and its create writes a random escrow
+         * id that no release, refund or cron can address.
+         *
+         * The flag is ARMED here rather than these tests being deleted. What
+         * they assert is #111's payment-reference ownership check, and that has
+         * to hold if the lifecycle is ever brought back. A refusal in front of
+         * it would make them pass vacuously.
+         */
+        process.env.MARKETPLACE_ESCROW_LIFECYCLE_ACTIONS = 'enabled';
         setSession(BUYER);
         setEscrow();
         // The payment identifies the buyer. It carried no identity at all until

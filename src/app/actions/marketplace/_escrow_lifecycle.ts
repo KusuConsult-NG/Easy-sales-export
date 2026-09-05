@@ -16,6 +16,10 @@ import { smsEscrowReleased } from "@/lib/africastalking";
 import { pushEscrowReleased, pushDisputeResolved } from "@/lib/fcm";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import type { EscrowTransaction } from "@/lib/types/marketplace-escrow";
+import {
+    isMarketplaceEscrowLifecycleEnabled,
+    MARKETPLACE_ESCROW_LIFECYCLE_REFUSAL,
+} from "@/lib/marketplace-escrow-lifecycle";
 
 /**
  * Create escrow transaction
@@ -28,7 +32,12 @@ async function _createEscrowAction(data: { buyerId: string;
     productName: string;
     productDescription: string; }): Promise<{ success: true; error: null; data: { escrowId: string }; meta?: any }
     | { success: false; error: string; data?: null; meta?: any }
-> { let sessionResult;
+> {
+    if (!isMarketplaceEscrowLifecycleEnabled()) {
+        return { success: false as const, error: MARKETPLACE_ESCROW_LIFECYCLE_REFUSAL, data: null };
+    }
+
+    let sessionResult;
     try {
         sessionResult = await requireSession();
         if (!sessionResult.session) {
@@ -138,7 +147,12 @@ async function _confirmEscrowPaymentAction(
     paymentReference: string
 ): Promise<{ success: true; error: null; data: { message: string }; meta?: any }
     | { success: false; error: string; data?: null; meta?: any }
-> { let sessionResult;
+> {
+    if (!isMarketplaceEscrowLifecycleEnabled()) {
+        return { success: false as const, error: MARKETPLACE_ESCROW_LIFECYCLE_REFUSAL, data: null };
+    }
+
+    let sessionResult;
     try {
         // The session is REQUIRED, and its failure is no longer swallowed.
         //
@@ -396,7 +410,12 @@ async function _requestEscrowReleaseAction(
     sellerId: string
 ): Promise<{ success: true; error: null; data: { message: string }; meta?: any }
     | { success: false; error: string; data?: null; meta?: any }
-> { let sessionResult;
+> {
+    if (!isMarketplaceEscrowLifecycleEnabled()) {
+        return { success: false as const, error: MARKETPLACE_ESCROW_LIFECYCLE_REFUSAL, data: null };
+    }
+
+    let sessionResult;
     try {
         sessionResult = await requireSession();
         if (!sessionResult.session) {
@@ -468,6 +487,10 @@ async function _releaseEscrowAction(
 ): Promise<{ success: true; error: null; data: { message: string }; meta?: any }
     | { success: false; error: string; data?: null; meta?: any }
 > {
+    if (!isMarketplaceEscrowLifecycleEnabled()) {
+        return { success: false as const, error: MARKETPLACE_ESCROW_LIFECYCLE_REFUSAL, data: null };
+    }
+
     /**
      *   #375 THE ESCROW RELEASE RECORDED WHICHEVER ADMIN THE CALLER NAMED.
      *
@@ -708,5 +731,17 @@ async function _releaseEscrowAction(
  * call as the /vendor parallel. But a dead path that credits wallets is a
  * defect waiting to be re-wired, so it has been brought onto the same
  * primitives as the live one instead of being left as it was.
+ *
+ *   #398 SUPERSEDES THE PARAGRAPH ABOVE. It was right that this must not simply
+ *   be deleted, and right that a dead path which credits wallets is a defect
+ *   waiting to be re-wired. What it could not do at the time was stop the
+ *   re-wiring: there was no way to retire an action without removing it, so the
+ *   only protection was this comment.
+ *
+ *   There is a way now — #379/#386/#395/#396 — and #398 applies it to all four
+ *   actions in this file, none of which has ever been reached. The refusal at
+ *   the top of the function is the guard this note wanted. See
+ *   lib/marketplace-escrow-lifecycle.ts for the measurement and for what the
+ *   live lifecycle does instead.
  */
 export const releaseEscrowAction = withFlexibleSafeAction("releaseEscrowAction", _releaseEscrowAction);

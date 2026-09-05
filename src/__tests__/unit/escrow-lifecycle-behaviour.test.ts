@@ -146,6 +146,18 @@ const paystackOk = (over: Record<string, unknown> = {}) => ({
 
 beforeEach(() => {
     jest.clearAllMocks();
+    /**
+     * #398 retired this whole lifecycle behind a flag — none of its four
+     * actions has ever been reached, and its create writes a random escrow id
+     * that no release, refund or cron can address.
+     *
+     * The flag is ARMED here rather than these tests being deleted. They carry
+     * #90, #110, #112 and #113's repairs — the release claim, the amount check
+     * that no longer fails open, the net-vs-gross figure — and every one of
+     * those must still hold if the lifecycle is ever brought back. A refusal in
+     * front of them would make the whole suite pass vacuously.
+     */
+    process.env.MARKETPLACE_ESCROW_LIFECYCLE_ACTIONS = 'enabled';
     spent.clear();
     store = installFakeDb();
     actAs(BUYER);
