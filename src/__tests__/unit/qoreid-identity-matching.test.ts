@@ -43,7 +43,12 @@
  *        verification fail.
  */
 
-import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+// #392. `jest` is deliberately NOT taken from @jest/globals: jest.mock is
+// hoisted above the imports only when it is the GLOBAL, and importing it here
+// defeated the hoist — @/lib/qoreid loaded first and pulled in the real logger,
+// so the mock below did nothing. Harmless in effect (the logger only logs), but
+// a mock that does not mock is a claim the suite cannot back.
+import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { resolveMatch } from '@/lib/qoreid';
 
 const logged: Array<{ level: string; args: unknown[] }> = [];

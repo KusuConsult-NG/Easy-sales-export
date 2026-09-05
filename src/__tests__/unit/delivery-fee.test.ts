@@ -2,18 +2,63 @@
  * @jest-environment node
  */
 
-import { describe, it, expect, jest } from '@jest/globals';
+/**
+ *   #392 THIS SUITE'S MOCKS HAD NEVER TAKEN EFFECT.
+ *
+ *        Both jest.mock calls below sat under `import { ..., jest } from
+ *        '@jest/globals'`. jest.mock is hoisted above the imports only when
+ *        `jest` is the GLOBAL; taking it from @jest/globals defeats the hoist,
+ *        so @/app/actions/marketplace/_payment_orders was loaded first and
+ *        pulled in the REAL system-settings behind it. Measured with a pair of
+ *        one-line probes, not assumed.
+ *
+ *        So this suite has been asserting the PRODUCTION DEFAULT — 2000 —
+ *        while its own mock said 1500 and nobody noticed, because
+ *        DEFAULT_DELIVERY_FEES.baseDeliveryFee happens to be 2000. It proved
+ *        the formula against one hardcoded configuration, which is precisely
+ *        what it was written to avoid; #317 made the base fee editable from an
+ *        admin screen, so "whatever the default is" is not the number a buyer
+ *        pays.
+ *
+ *        The mock now applies, it supplies EVERY delivery field rather than
+ *        two, and every expectation below is derived from FEES rather than
+ *        typed as a literal — so a changed rule fails the suite and a changed
+ *        default does not.
+ */
+
+import { describe, it, expect } from '@jest/globals';
+
+/** The configured fees this suite tests the formula against. */
+const FEES = {
+    baseDeliveryFee: 1500,
+    outsideCityDeliveryFee: 2400,
+    additionalItemFee: 200,
+    freeDistanceKm: 10,
+    distanceSurchargePerKm: 20,
+    freeWeightKg: 5,
+    weightSurchargeStepKg: 5,
+    weightSurchargeAmount: 500,
+    minOrderAmount: 1000,
+    maxOrderAmount: 500000,
+};
 
 // Mock next/cache to bypass unstable_cache issues in Jest environment
 jest.mock('next/cache', () => ({
     unstable_cache: (fn: any) => fn,
 }));
 
-// Mock getPlatformFees
+// Deliberately NOT `jest.fn(() => ...)` closing over FEES: the hoisted factory
+// runs before this module's top-level const, so the object is inlined.
 jest.mock('@/lib/system-settings', () => ({
     getPlatformFees: jest.fn(() => Promise.resolve({
         baseDeliveryFee: 1500,
+        outsideCityDeliveryFee: 2400,
         additionalItemFee: 200,
+        freeDistanceKm: 10,
+        distanceSurchargePerKm: 20,
+        freeWeightKg: 5,
+        weightSurchargeStepKg: 5,
+        weightSurchargeAmount: 500,
         minOrderAmount: 1000,
         maxOrderAmount: 500000,
     })),
@@ -35,7 +80,7 @@ describe('calculateDeliveryAction Unit Tests', () => {
         }
     ];
 
-    it('calculates flat rate of 2000 for city center delivery under 10KM and under 5kg', async () => {
+    it('charges the configured base inside the city, under both free limits', async () => {
         const result = await calculateDeliveryAction(mockCartItems, {
             distance: 5,
             weight: 3,
@@ -44,7 +89,7 @@ describe('calculateDeliveryAction Unit Tests', () => {
 
         expect(result.success).toBe(true);
         if (result.success) {
-            expect(result.data.fee).toBe(2000);
+            expect(result.data.fee).toBe(FEES.baseDeliveryFee);
         }
     });
 
@@ -57,7 +102,10 @@ describe('calculateDeliveryAction Unit Tests', () => {
 
         expect(result.success).toBe(true);
         if (result.success) {
-            expect(result.data.fee).toBe(2100); // 2000 base + 5 * 20
+            // base + 5km over the free distance
+            expect(result.data.fee).toBe(
+                FEES.baseDeliveryFee + 5 * FEES.distanceSurchargePerKm,
+            );
         }
     });
 
@@ -70,20 +118,25 @@ describe('calculateDeliveryAction Unit Tests', () => {
 
         expect(result.success).toBe(true);
         if (result.success) {
-            expect(result.data.fee).toBe(3000); // 2000 base + 1000 weight surcharge
+            // base + ceil(7 / 5) = 2 weight blocks
+            expect(result.data.fee).toBe(
+                FEES.baseDeliveryFee + 2 * FEES.weightSurchargeAmount,
+            );
         }
     });
 
-    it('calculates outside city center surcharge: 3000 base fee instead of 2000', async () => {
+    it('charges outsideCityDeliveryFee, not baseDeliveryFee, outside the city', async () => {
         const result = await calculateDeliveryAction(mockCartItems, {
             distance: 5,
             weight: 3,
-            isWithinCityCenter: false, // 3000 base
+            isWithinCityCenter: false,
         });
 
         expect(result.success).toBe(true);
         if (result.success) {
-            expect(result.data.fee).toBe(3000);
+            // The whole point of the separate field: this must NOT be the base.
+            expect(result.data.fee).toBe(FEES.outsideCityDeliveryFee);
+            expect(result.data.fee).not.toBe(FEES.baseDeliveryFee);
         }
     });
 
@@ -91,12 +144,16 @@ describe('calculateDeliveryAction Unit Tests', () => {
         const result = await calculateDeliveryAction(mockCartItems, {
             distance: 15, // 5KM over -> +100
             weight: 12, // 7kg over -> +1000
-            isWithinCityCenter: false, // 3000 base
+            isWithinCityCenter: false,
         });
 
         expect(result.success).toBe(true);
         if (result.success) {
-            expect(result.data.fee).toBe(4100); // 3000 base + 100 distance + 1000 weight
+            expect(result.data.fee).toBe(
+                FEES.outsideCityDeliveryFee
+                + 5 * FEES.distanceSurchargePerKm
+                + 2 * FEES.weightSurchargeAmount,
+            );
         }
     });
 
@@ -109,7 +166,7 @@ describe('calculateDeliveryAction Unit Tests', () => {
 
         expect(result.success).toBe(true);
         if (result.success) {
-            expect(result.data.fee).toBe(2000);
+            expect(result.data.fee).toBe(FEES.baseDeliveryFee);
         }
     });
 });
