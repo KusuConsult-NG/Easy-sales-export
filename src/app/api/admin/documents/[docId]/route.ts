@@ -5,6 +5,10 @@ import { logger } from "@/lib/logger";
 import { requireAdmin } from "@/lib/require-admin";
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+// The flag and the refusal live in lib, NOT here: a route.ts may export only
+// its handlers and Next's config keys, and anything else fails the type Next
+// generates for the route. See lib/retired-endpoints.
+import { legacyDocumentFallbackEnabled, DOCUMENT_VIEWER_RETIRED_MESSAGE } from "@/lib/retired-endpoints";
 
 /**
  * GET /api/admin/documents/[docId] — RETIRED. It could never serve anything.
@@ -50,18 +54,6 @@ import { COLLECTIONS } from "@/lib/types/firestore";
  * something writes the collection.
  */
 
-const LEGACY_FLAG = "LEGACY_DOCUMENT_FALLBACK";
-const ENABLED_VALUE = "enabled";
-
-/** Read at call time, not module load, so reviving it needs no redeploy. */
-export function legacyDocumentFallbackEnabled(): boolean {
-    return process.env[LEGACY_FLAG] === ENABLED_VALUE;
-}
-
-export const RETIRED_MESSAGE =
-    "This document viewer is retired: nothing writes _document_uploads. "
-    + "Seller verification documents are stored on the verification record itself.";
-
 export async function GET(
     _req: Request,
     { params }: { params: Promise<{ docId: string }> }
@@ -78,7 +70,7 @@ export async function GET(
         }
 
         if (!legacyDocumentFallbackEnabled()) {
-            return NextResponse.json({ error: RETIRED_MESSAGE }, { status: 410 });
+            return NextResponse.json({ error: DOCUMENT_VIEWER_RETIRED_MESSAGE }, { status: 410 });
         }
 
         const db = getAdminDb();

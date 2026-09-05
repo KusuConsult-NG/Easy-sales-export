@@ -92,6 +92,27 @@ import { isPurchasable } from '@/lib/land-listing-status';
 const ROOT = process.cwd();
 const code = (p: string) => stripComments(readFileSync(join(ROOT, p), 'utf-8'), { label: relative(ROOT, p) });
 
+
+/**
+ * Every name a Next App Router route.ts exports.
+ *
+ * Next allows ONLY the HTTP method handlers and a fixed set of config keys; any
+ * other export fails the type it generates for the route, and `npx tsc
+ * --noEmit` cannot see that because the constraint lives in the .next/types
+ * tree a build produces. Asserting the allowed SET rather than blacklisting one
+ * name is what makes this catch the next one too.
+ */
+const NEXT_ROUTE_EXPORTS = new Set([
+    'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS',
+    'dynamic', 'dynamicParams', 'revalidate', 'fetchCache', 'runtime',
+    'preferredRegion', 'maxDuration', 'generateStaticParams',
+]);
+
+function exportedNames(rel: string): string[] {
+    return [...code(rel).matchAll(/export\s+(?:async\s+)?(?:function|const|let|var)\s+([A-Za-z0-9_$]+)/g)]
+        .map((m) => m[1]);
+}
+
 const ROUTE = 'src/app/api/farm-nation/create-listing/route.ts';
 const ACTION = 'src/app/actions/farm-nation/_fn_listings.ts';
 const LIVE = 'src/app/actions/land-listings.ts';
@@ -160,12 +181,22 @@ describe('#432 — the API route no longer records a deed it did not store', () 
         expect(src).toMatch(/status: 410/);
     });
 
-    it('and the flag is read at CALL time', () => {
-        expect(code(ROUTE)).toMatch(/return process\.env\[LEGACY_FLAG\] === ENABLED_VALUE;/);
+    it('and the flag is read at CALL time, from lib rather than the route', () => {
+        /**
+         * A route.ts may export only its handlers and Next's config keys. The
+         * first draft declared the flag beside the handler; that does not
+         * compile, and only the post-build typecheck can see it. See
+         * lib/retired-endpoints.
+         */
+        expect(code('src/lib/retired-endpoints.ts')).toMatch(
+            /export function legacyLandListingApiEnabled\(\): boolean \{\s*return process\.env\.LEGACY_LAND_LISTING_API === ENABLED;/);
+        expect(code(ROUTE)).toMatch(/from "@\/lib\/retired-endpoints"/);
+        const disallowed = exportedNames(ROUTE).filter((n) => !NEXT_ROUTE_EXPORTS.has(n));
+        expect({ disallowed }).toEqual({ disallowed: [] });
     });
 
     it('and the refusal names the path that works', () => {
-        expect(code(ROUTE)).toMatch(/\/farm-nation\/list-land/);
+        expect(code('src/lib/retired-endpoints.ts')).toMatch(/\/farm-nation\/list-land/);
     });
 
     it('and it still demands the title and survey plan', () => {

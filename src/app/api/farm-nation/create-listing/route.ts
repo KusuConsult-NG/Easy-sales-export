@@ -8,6 +8,9 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
 
 import { parseCurrencyStringToFloat } from "@/lib/utils";
+// The flag and the refusal live in lib, NOT here: a route.ts may export only
+// its handlers and Next's config keys. See lib/retired-endpoints.
+import { legacyLandListingApiEnabled, LAND_LISTING_API_RETIRED_MESSAGE } from "@/lib/retired-endpoints";
 
 /**
  * API Route: Create Land Listing — RETIRED. It could not store a title deed.
@@ -48,18 +51,6 @@ import { parseCurrencyStringToFloat } from "@/lib/utils";
  * cannot evidence.
  */
 
-const LEGACY_FLAG = "LEGACY_LAND_LISTING_API";
-const ENABLED_VALUE = "enabled";
-
-/** Read at call time, not module load, so reviving it needs no redeploy. */
-export function legacyLandListingApiEnabled(): boolean {
-    return process.env[LEGACY_FLAG] === ENABLED_VALUE;
-}
-
-export const RETIRED_MESSAGE =
-    "This endpoint is retired: it could not store the land title or survey plan "
-    + "it required. Submit through /farm-nation/list-land, which uploads them.";
-
 export async function POST(request: NextRequest) {
     try {
         const session = (await requireSession()).session;
@@ -74,7 +65,7 @@ export async function POST(request: NextRequest) {
         // unauthenticated caller anything about this endpoint.
         if (!legacyLandListingApiEnabled()) {
             return NextResponse.json(
-                { success: false, data: null, meta: null, error: RETIRED_MESSAGE },
+                { success: false, data: null, meta: null, error: LAND_LISTING_API_RETIRED_MESSAGE },
                 { status: 410 }
             );
         }

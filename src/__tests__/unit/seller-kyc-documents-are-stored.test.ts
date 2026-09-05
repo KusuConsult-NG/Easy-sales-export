@@ -115,6 +115,27 @@ import {
 const ROOT = process.cwd();
 const code = (p: string) => stripComments(readFileSync(join(ROOT, p), 'utf-8'), { label: relative(ROOT, p) });
 
+
+/**
+ * Every name a Next App Router route.ts exports.
+ *
+ * Next allows ONLY the HTTP method handlers and a fixed set of config keys; any
+ * other export fails the type it generates for the route, and `npx tsc
+ * --noEmit` cannot see that because the constraint lives in the .next/types
+ * tree a build produces. Asserting the allowed SET rather than blacklisting one
+ * name is what makes this catch the next one too.
+ */
+const NEXT_ROUTE_EXPORTS = new Set([
+    'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS',
+    'dynamic', 'dynamicParams', 'revalidate', 'fetchCache', 'runtime',
+    'preferredRegion', 'maxDuration', 'generateStaticParams',
+]);
+
+function exportedNames(rel: string): string[] {
+    return [...code(rel).matchAll(/export\s+(?:async\s+)?(?:function|const|let|var)\s+([A-Za-z0-9_$]+)/g)]
+        .map((m) => m[1]);
+}
+
 const SUBMIT = 'src/app/api/marketplace/submit-verification/route.ts';
 const SCREEN = 'src/app/admin/marketplace/sellers/page.tsx';
 const VIEWER = 'src/app/api/admin/documents/[docId]/route.ts';
@@ -241,8 +262,26 @@ describe('#431 — the viewer that could never serve anything is retired', () =>
     });
 
     it('and the flag is read at CALL time, so reviving it needs no redeploy', () => {
-        expect(code(VIEWER)).toMatch(
-            /return process\.env\[LEGACY_FLAG\] === ENABLED_VALUE;/);
+        /**
+         *   THE FLAG LIVES IN lib, NOT IN THE ROUTE — and that is not tidiness.
+         *
+         *   A Next App Router route.ts may export ONLY its handlers and Next's
+         *   config keys; anything else fails the type Next generates for the
+         *   route. My first draft exported the helper and the message beside the
+         *   handler, which reads naturally and does not compile. `npx tsc
+         *   --noEmit` cannot see it — the constraint lives in the generated
+         *   .next/types tree, which only exists after `next build` — so running
+         *   the suite before the build had #328's whole-program typecheck read
+         *   stale types and pass. CI builds first and caught it. The lesson is
+         *   gate ORDER: build, then test.
+         */
+        expect(code('src/lib/retired-endpoints.ts')).toMatch(
+            /export function legacyDocumentFallbackEnabled\(\): boolean \{\s*return process\.env\.LEGACY_DOCUMENT_FALLBACK === ENABLED;/);
+        // And the route imports it rather than declaring its own.
+        expect(code(VIEWER)).toMatch(/from "@\/lib\/retired-endpoints"/);
+        // And the route exports nothing Next disallows.
+        const disallowed = exportedNames(VIEWER).filter((n) => !NEXT_ROUTE_EXPORTS.has(n));
+        expect({ disallowed }).toEqual({ disallowed: [] });
     });
 
     it('and the permission gate runs BEFORE the retirement notice', () => {
