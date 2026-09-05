@@ -384,9 +384,43 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
                 }
             }
 
-            // 5. Calculate Financial Split
+            /**
+             *   #409 THE SPLIT COULD PRODUCE NaN, AND THE ESCROW WRITE BELOW
+             *   HAD NOTHING TO STOP IT.
+             *
+             *   This was:
+             *
+             *       const deliveryFeePerSeller = orderData.deliveryFee / uniqueSellers.length;
+             *
+             *   `orderData.deliveryFee` is read off a stored order. An order
+             *   written before the field existed, or by any path that omitted
+             *   it, yields `undefined / n` — NaN. Every sellerTotal then becomes
+             *   NaN, platformFeeFor and sellerNetFor propagate it, and the
+             *   escrow rows below are written with amount, grossAmount,
+             *   platformFee and netAmount all NaN. Nothing downstream tests for
+             *   that: the release path reads the stored amount and pays it.
+             *
+             *   THE GUARD EXISTS — ON THE DOOR THAT WAS RETIRED. #398 shut down
+             *   _escrow_lifecycle.ts because nothing ever called it, and its
+             *   create begins `if (!Number.isFinite(data.amount) || data.amount
+             *   <= 0)`. The dispute resolver has it too. The LIVE creation, the
+             *   one every Paystack checkout goes through, did not. That is #112
+             *   again — "the escrow amount check fails open when the amount is
+             *   unreadable" — on the path that actually runs.
+             *
+             *   FAILING CLOSED, CAREFULLY. A missing delivery fee is treated as
+             *   zero rather than as a reason to abort: the buyer has already
+             *   paid at this point, and refusing here would leave a verified
+             *   payment with no escrow at all, which is worse than a slightly
+             *   understated fee. What must never happen is a NaN reaching the
+             *   ledger, so the split is sanitised here and the amount is
+             *   asserted at the write.
+             */
             const sellerTotals: Record<string, number> = {};
-            const deliveryFeePerSeller = orderData.deliveryFee / uniqueSellers.length;
+            const storedDeliveryFee = Number(orderData.deliveryFee);
+            const deliveryFeePerSeller = Number.isFinite(storedDeliveryFee) && uniqueSellers.length > 0
+                ? storedDeliveryFee / uniqueSellers.length
+                : 0;
 
             items.forEach((item: any) => { 
                 const sellerId = item.sellerId;
@@ -400,6 +434,22 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
 
             // Create/Update Escrow Record for each seller to "funded"
             for (const [sellerId, grossAmount] of Object.entries(sellerTotals)) {
+                /**
+                 * #409. The same test _escrow_lifecycle.ts applies before it
+                 * creates an escrow, now applied on the live path. Reaching this
+                 * means an item price or quantity was unreadable, so the split
+                 * cannot be trusted — and a transaction that throws is retryable
+                 * and visible to the reconciliation jobs (#298/#299), whereas a
+                 * NaN written here is money the release path will happily pay.
+                 */
+                if (!Number.isFinite(grossAmount) || grossAmount <= 0) {
+                    throw new Error(
+                        `Refusing to create escrow for order ${orderData.orderId}, seller ${sellerId}: `
+                        + `computed amount is ${String(grossAmount)}. The order's item prices or delivery `
+                        + `fee are unreadable; no escrow row is written rather than one holding NaN.`
+                    );
+                }
+
                 const escrowId = escrowIdFor(orderData.orderId, sellerId, Object.keys(sellerTotals));
                 const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId);
 

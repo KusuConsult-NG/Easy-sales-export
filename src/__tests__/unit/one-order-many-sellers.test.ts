@@ -164,8 +164,30 @@ describe('#342 — the split, and where it comes from', () => {
         // their payout — which is the defect one level along.
         const creator = source('src/app/actions/marketplace/_payment_orders.ts');
 
-        expect(creator).toContain('const deliveryFeePerSeller = calculatedDeliveryFee / uniqueSellers.length');
+        /**
+         * #409 RELAXED FROM A LITERAL TO THE RULE, ON PURPOSE.
+         *
+         * This asserted the exact text
+         *
+         *     const deliveryFeePerSeller = calculatedDeliveryFee / uniqueSellers.length
+         *
+         * and #409 replaced that line: the raw divide produced NaN when the fee
+         * was unreadable or the seller list empty, and the escrow write below it
+         * had no amount check to stop the NaN reaching the ledger.
+         *
+         * What #342 actually needs is that the escrow row is sized by the SAME
+         * two-part rule this helper implements — each seller's items, plus an
+         * equal share of one delivery fee. That is what is pinned now. Pinning
+         * the sentence rather than the rule is how a correct repair gets read as
+         * a regression, and it nearly did here.
+         */
+        expect(creator).toMatch(/deliveryFeePerSeller\s*=[\s\S]{0,200}?uniqueSellers\.length/);
         expect(creator).toContain('sellerTotals[sellerId] = (sellerTotals[sellerId] || 0) + itemTotal');
+        expect(creator).toContain('sellerTotals[sellerId] = (sellerTotals[sellerId] || 0) + deliveryFeePerSeller');
+
+        // And the divide is guarded, so the share can never be NaN — the
+        // helper above returns numbers, and the escrow row must too.
+        expect(creator).toMatch(/Number\.isFinite\([\s\S]{0,40}?uniqueSellers\.length > 0/);
     });
 
     it('a single-seller order is returned untouched', () => {

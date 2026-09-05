@@ -13,10 +13,34 @@ interface RepaymentScheduleProps {
 export default function RepaymentSchedule({ loanId, loanAmount, monthlyPayment }: RepaymentScheduleProps) {
     const [schedule, setSchedule] = useState<RepaymentInstallment[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchSchedule = async () => {
             setLoading(true);
+            setError(null);
+            /**
+             *   #409 NOT IMPORTED ANYWHERE — AND ONE LINE FROM SHIPPING TWO
+             *   DEFECTS.
+             *
+             *   Nothing renders this component. The live repayment schedules are
+             *   drawn by /cooperatives/my-loans and RecordRepaymentModal, both of
+             *   which handle a failed read properly. This copy did not, and it
+             *   carried a second fault the live ones do not:
+             *
+             *     progressPercent = (paidCount / schedule.length) * 100
+             *
+             *   which is 0/0 = NaN on an empty schedule, rendered as `NaN%` and
+             *   as `style={{ width: "NaN%" }}`.
+             *
+             *   Both faults only appear together, and both appear the moment a
+             *   failed read leaves the schedule empty — so an importer would get
+             *   a borrower staring at "0 of 0 installments paid" and a broken
+             *   progress bar, on their loan. Fixed rather than left: a component
+             *   is one import away from live, which is #403's rule ("not reached
+             *   is not unreachable") in its cheapest form.
+             */
+            try {
             const result = await getRepaymentScheduleAction(loanId);
             if (result.success && result.data?.schedule) {
                 // Update status based on current date
@@ -34,8 +58,16 @@ export default function RepaymentSchedule({ loanId, loanAmount, monthlyPayment }
                 });
 
                 setSchedule(updatedSchedule);
+            } else {
+                setSchedule([]);
+                setError(result.error || "Could not load the repayment schedule");
             }
-            setLoading(false);
+            } catch {
+                setSchedule([]);
+                setError("Could not reach the server. This is not a statement that you owe nothing.");
+            } finally {
+                setLoading(false);
+            }
         };
 
         fetchSchedule();
@@ -56,9 +88,32 @@ export default function RepaymentSchedule({ loanId, loanAmount, monthlyPayment }
         );
     }
 
+    /**
+     * #409. Rendered, not merely stored — an error state nothing displays is a
+     * field written and never read (#100's class), and would leave this
+     * component showing "0 of 0 installments paid" exactly as before.
+     */
+    if (error) {
+        return (
+            <div className="bg-white rounded-xl p-6 shadow-lg border border-red-200">
+                <div className="flex items-start gap-3">
+                    <AlertCircle className="w-6 h-6 text-red-500 shrink-0" />
+                    <div>
+                        <h3 className="text-lg font-bold text-slate-900 mb-1">
+                            Repayment schedule unavailable
+                        </h3>
+                        <p className="text-sm text-slate-600">{error}</p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     const paidCount = schedule.filter((inst) => inst.status === "paid").length;
     const overdueCount = schedule.filter((inst) => inst.status === "overdue").length;
-    const progressPercent = (paidCount / schedule.length) * 100;
+    // #409. 0/0 is NaN, which React renders as "NaN%" and as
+    // style={{ width: "NaN%" }}. Zero instalments means zero progress.
+    const progressPercent = schedule.length > 0 ? (paidCount / schedule.length) * 100 : 0;
 
     return (
         <div className="bg-white rounded-xl p-6 shadow-lg border border-slate-200">

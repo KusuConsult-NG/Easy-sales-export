@@ -125,7 +125,18 @@ async function _initializeOrderPaymentAction(
         // Create Escrow Record for each seller with status: "pending"
         const sellerTotals: Record<string, number> = {};
         const uniqueSellers = Array.from(new Set(validatedItems.map((i: any) => i.sellerId))) as string[];
-        const deliveryFeePerSeller = calculatedDeliveryFee / uniqueSellers.length;
+        /**
+         * #409, the same split on the order-creation side. Here the fee is
+         * computed rather than read back, so it is one step closer to its
+         * source — but `calculatedDeliveryFee` comes out of a distance-and-
+         * weight estimate, and an unreadable input makes it NaN just the same.
+         * Sanitised identically to _payment_verify.ts so the two halves of one
+         * order cannot disagree about what a delivery fee is.
+         */
+        const perSellerFee = Number(calculatedDeliveryFee);
+        const deliveryFeePerSeller = Number.isFinite(perSellerFee) && uniqueSellers.length > 0
+            ? perSellerFee / uniqueSellers.length
+            : 0;
 
         validatedItems.forEach((item: any) => { 
             const sellerId = item.sellerId;
@@ -164,6 +175,20 @@ async function _initializeOrderPaymentAction(
         });
 
         for (const [sellerId, grossAmount] of Object.entries(sellerTotals)) {
+            /**
+             * #409. Refusing BEFORE the buyer is sent to Paystack, which is the
+             * better place to refuse: nobody has paid yet, so the order simply
+             * does not proceed. The verification side has the same test for the
+             * case where a stored order turns out to be unreadable later.
+             */
+            if (!Number.isFinite(grossAmount) || grossAmount <= 0) {
+                return {
+                    success: false as const,
+                    error: "This order's total could not be calculated. Please review your cart and try again.",
+                    data: null,
+                };
+            }
+
             const escrowId = escrowIdFor(orderId, sellerId, Object.keys(sellerTotals));
             const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId);
 

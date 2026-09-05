@@ -348,8 +348,12 @@ describe('#407 — the shape #405 could not see: an await with no try at all', (
          * defect: those loaders rendered "no loans" and "All Caught Up!" after a
          * failed read). 30 remain, and the number is asserted so a 31st cannot
          * appear without somebody deciding it should.
+         *
+         * #409 took one more — RepaymentSchedule's fetchSchedule, whose stuck
+         * spinner was the least of it: it also rendered NaN% and treated a
+         * failed read as an empty schedule. 29.
          */
-        expect(found.length).toBe(30);
+        expect(found.length).toBe(29);
         // And every handler fixed above is genuinely out of the population.
         for (const [rel, fn] of FIXED) expect(found).not.toContain(`${rel}:${fn}`);
     });
