@@ -6,7 +6,7 @@ import { logger } from '@/lib/logger';
 import { initializePaystackPayment, verifyPaystackPayment } from "@/lib/paystack-server";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { exportWindowAcceptsInvestment } from "@/lib/export-window-status";
+import { exportWindowAcceptsInvestment, exportWindowReturnMultiplier } from "@/lib/export-window-status";
 import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { getBaseUrl } from "@/lib/server-utils";
@@ -446,14 +446,64 @@ export async function initializeInvestmentPaymentAction(
         const investmentId = `${session.user.id}_${windowId}_${Date.now()}`;
         await db.collection(COLLECTIONS.EXPORT_INVESTMENTS).doc(investmentId).set({ investmentId,
             windowId,
-            windowTitle,
-            commodity,
+            /**
+             *   #429 THE STORED TITLE WAS THE COMMODITY, TWICE.
+             *
+             *   /export/windows/[id] calls this as
+             *
+             *       initializeInvestmentPaymentAction(
+             *           windowId,
+             *           windowData.commodity,   <- the windowTitle parameter
+             *           investmentAmount,
+             *           windowData.commodity,   <- the commodity parameter
+             *           ...)
+             *
+             *   so every investment record ever written stored the commodity in
+             *   both fields, and the Paystack description reads
+             *   "Export Investment - <commodity>". Taken from the window here,
+             *   with the caller's value ignored for the same reason as the ROI.
+             */
+            windowTitle: String(windowData.title ?? windowData.commodity ?? windowTitle ?? ""),
+            commodity: String(windowData.commodity ?? commodity ?? ""),
             investorId: session.user.id,
             investorEmail: session.user.email,
             investorName: session.user.name || session.user.email,
             amount: investmentAmount,
-            expectedROI,
-            expectedReturn: investmentAmount * (1 + expectedROI / 100),
+            /**
+             *   #429 THE EXPECTED RETURN WAS WHATEVER THE BROWSER SAID.
+             *
+             *   `expectedROI` and `windowTitle` are PARAMETERS. This is a
+             *   "use server" export, so it is an independently addressable
+             *   endpoint — the property that made autoEnrollPaidUser a
+             *   paid-content bypass — and it stored
+             *
+             *       expectedReturn: investmentAmount * (1 + expectedROI / 100)
+             *
+             *   from a number the caller supplied, while holding `windowData`,
+             *   the authoritative row, three lines above.
+             *
+             *   The MONEY was never at risk: the release
+             *   (api/cron/release-escrow) pays amount * exportWindowReturnMultiplier
+             *   read from the window, which is #324's fix. What was at risk is
+             *   the figure the investor is SHOWN and the platform aggregates —
+             *   the portfolio reads this field, and totalExpectedReturns is
+             *   incremented by it. A record could promise a return the payout
+             *   would never make, which is #113's and #324's own shape: the page
+             *   advertising one figure and the payout computing another.
+             *
+             *   TWO DOORS, ONE HARDENED. _ex_investments.ts's fulfilment path
+             *   already writes `amount * exportWindowReturnMultiplier(window)`.
+             *   #324 corrected the payout and that sibling; this initiator was
+             *   never adopted. Same helper on both now, so the stored
+             *   expectation and the eventual payout use one rule.
+             *
+             *   The parameter is kept so existing callers compile and is
+             *   deliberately ignored — /export/windows/[id] was already passing
+             *   exportWindowRoiPercent(windowData.projectedROI), a
+             *   window-derived value, so nothing legitimate changes.
+             */
+            expectedROI: (exportWindowReturnMultiplier(windowData) - 1) * 100,
+            expectedReturn: investmentAmount * exportWindowReturnMultiplier(windowData),
             paymentReference: reference,
             status: "pending_payment",
             createdAt: FieldValue.serverTimestamp(),
