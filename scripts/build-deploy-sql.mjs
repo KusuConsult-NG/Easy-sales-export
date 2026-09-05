@@ -75,6 +75,20 @@ const EXPECTED = [
              "excluded because until it runs, forensics.ts cannot age-check any " +
              "participant who enrolled before #157.",
     },
+    {
+        n: "025",
+        why: "claim_status_transition_in — the CAS that can reach the eight DEDICATED " +
+             "tables. MUST ship with the code that calls it: status-transition.ts " +
+             "routes marketplaceOrders and cooperative_loans through it, and without " +
+             "this function every order transition returns claimed=false, which the " +
+             "callers report as a conflict rather than as a missing function.",
+    },
+    {
+        n: "026",
+        why: "apply_document_patch mirroring the native typed columns — MUST come " +
+             "after 017, which it REPLACES. Applied in the other order, the mirroring " +
+             "disappears and a .where() list disagrees with the document it links to.",
+    },
     { n: "004", why: "row-level security — LAST, and in a low-traffic window" },
 ];
 
@@ -174,6 +188,33 @@ if (missing.length > 0) {
     process.exit(1);
 }
 
+/**
+ * Every function the chosen migrations actually create, READ OUT OF THEM.
+ *
+ * The verification list used to be typed by hand below, and it drifted three
+ * separate ways at once: the prose said "expect 19 rows" over a list of 20, the
+ * list was missing everything from 019 onward, and when 025 and 026 arrived it
+ * did not gain claim_status_transition_in — the one function whose absence
+ * makes every marketplace order transition report a conflict.
+ *
+ * A hand-kept list of what a generated file contains is a second statement of
+ * the same fact, and this repository's whole failure mode is two statements of
+ * one fact drifting apart. So it is derived, and the count is derived with it:
+ * neither can disagree with the file this script emits, because both are read
+ * from it.
+ */
+function functionsCreatedBy(files) {
+    const found = new Set();
+    for (const file of files) {
+        const body = readFileSync(join(MIGRATIONS_DIR, file), "utf8");
+        const re = /create\s+(?:or\s+replace\s+)?function\s+(?:public\.)?"?([a-z_]+)"?/gi;
+        for (const m of body.matchAll(re)) found.add(m[1]);
+    }
+    return [...found].sort();
+}
+
+const shippedFunctions = functionsCreatedBy(chosen.map((c) => c.file));
+
 const stamp = new Date().toISOString().slice(0, 19).replace("T", " ");
 
 const header = `-- ============================================================================
@@ -223,36 +264,31 @@ const verification = `
 -- VERIFICATION — run this after the statements above.
 -- ============================================================================
 
--- 1. Every function should be listed. Expect 19 rows.
+-- 1. Every function should be listed. Expect ${shippedFunctions.length} rows.
 --
---    The count said 9 while the list held 16, and the list itself was missing
---    everything from 019 onward — so a database lacking the functions the
---    application calls would still have "passed" this step.
+--    THIS LIST AND THIS COUNT ARE GENERATED from the migrations above, not
+--    typed. Both drifted before: the count said 9 over a list of 16, then 19
+--    over a list of 20, and the list was twice missing functions the deployed
+--    code calls — everything from 019 onward, and later
+--    claim_status_transition_in, whose absence makes every marketplace order
+--    transition report a conflict instead of an error. A verification step that
+--    can pass on a database missing the functions is not a verification step.
 SELECT proname
   FROM pg_proc
  WHERE proname IN (
-    'merge_raw_data',
-    'atomic_profile_sync',
-    'credit_wallet_once',
-    'debit_wallet_once',
-    'debit_wallet_locked',
-    'claim_status_transition',
-    'claim_payment_once',
-    'apply_increments',
-    'platform_revenue_totals',
-    'debit_jsonb_balance',
-    'decrement_many_or_fail',
-    'apply_array_ops',
-    'apply_document_patch',
-    'jsonb_set_deep',
-    'increment_within_ceiling',
-    'enforce_member_active_on_paid',
-    'claim_idempotency_key',
-    'debit_jsonb_balance_with_floor',
-    'claim_versioned_update',
-    'claim_single_open_loan_application'
+${shippedFunctions.map((f) => `    '${f}'`).join(",\n")}
  )
  ORDER BY proname;
+
+-- 1b. And nothing above should be MISSING. This returns the shortfall
+--     directly, so you do not have to count the rows yourself.
+SELECT unnest(ARRAY[
+${shippedFunctions.map((f) => `    '${f}'`).join(",\n")}
+ ]) AS expected_function
+EXCEPT
+SELECT proname FROM pg_proc;
+--     Expect ZERO rows. Any row is a function the application calls and this
+--     database does not have.
 
 -- 2. debit_jsonb_balance must be the NESTED-path version from 014.
 --    Expect: t, 4000  — if this errors or returns the wrong balance, 013 was
