@@ -11,6 +11,7 @@ import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { NIGERIAN_LOCATIONS } from "@/lib/locations";
 import { isDecidedAgainst } from "@/lib/registration-progress";
+import { sortApplicationsNewestFirst } from "@/lib/latest-application";
 import { revalidatePath } from "next/cache";
 import type { SupabaseDocumentSnapshot } from "@/lib/supabase-db";
 
@@ -61,16 +62,20 @@ export async function getCooperativeMemberIdCardAction(): Promise<
             .get();
 
 
-        // Sort in memory: most recent createdAt first (mirrors the removed .orderBy)
+        // Sort in memory: most recent first (mirrors the removed .orderBy)
         // Typed as the BASE snapshot: the fallbacks below push results of
         // docRef.get(), which is a DocumentSnapshot, into a list that
         // started out as query results. Both are read with .data()!, so the
         // runtime was always fine; the declared element type was not.
-        let sortedDocs: SupabaseDocumentSnapshot[] = memberSnapshot.docs.sort((a, b) => {
-            const aTs = a.data().createdAt?.toMillis?.() ?? 0;
-            const bTs = b.data().createdAt?.toMillis?.() ?? 0;
-            return bTs - aTs;
-        });
+        //
+        // #412. This was a hand-written copy of the rule lib/latest-application
+        // states — the third and fourth statements of "which of a member's
+        // records is the current one", reading the same collection Layer 2.6 of
+        // module-access-check reads through the shared one. It was also
+        // narrower: `createdAt?.toMillis?.()` scores 0 for a date-only string or
+        // an epoch number, where the shared reader handles both, and it had no
+        // tiebreak at all — and it sorted `memberSnapshot.docs` IN PLACE.
+        let sortedDocs: SupabaseDocumentSnapshot[] = sortApplicationsNewestFirst(memberSnapshot.docs);
 
         // ── FALLBACK 2: Direct document ID lookup ──────────────────────────────
         if (sortedDocs.length === 0) {
@@ -589,11 +594,9 @@ export async function updateMemberProfileDetailsAction(
             .limit(5)
             .get();
 
-        const sortedDocs = memberSnapshot.docs.sort((a, b) => {
-            const aTs = a.data().createdAt?.toMillis?.() ?? 0;
-            const bTs = b.data().createdAt?.toMillis?.() ?? 0;
-            return bTs - aTs;
-        });
+        // #412 — the fourth statement of the same rule. See the note on the
+        // first one, above.
+        const sortedDocs = sortApplicationsNewestFirst(memberSnapshot.docs);
 
         if (sortedDocs.length === 0) {
             // The second copy of the same fee bypass — see the note in
