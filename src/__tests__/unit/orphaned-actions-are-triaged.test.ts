@@ -48,17 +48,38 @@
  *   reachable by any authenticated owner the whole time. "No button" is not a
  *   guard, and an orphan is not automatically harmless.
  *
- *   TRIAGED, AND NOT YET TRIAGED
- *   -----------------------------
- *   44 names carry a verdict below. 25 do not: they are listed in PENDING,
- *   named, and explicitly NOT waved through. #400 took the nine money paths
- *   this list called out and gave each a verdict, and #403 took the three land
- *   ones; what remains is readers and admin/onboarding writes, none of which
- *   moves money.
+ *   THE QUEUE IS CLOSED: 69 TRIAGED, 0 PENDING — #404
+ *   ---------------------------------------------------
+ *   It ran at 45 (wrong), then 69 with 28 pending, then 25. #404 read the last
+ *   25 one at a time and every one carries a verdict now.
  *
- *   Recording them as pending is the honest state. Writing 25 verdicts I have
- *   not earned would make this file look finished while carrying guesses, which
- *   is exactly the failure the queue exists to catch.
+ *   WHAT THE LAST 25 TURNED OUT TO BE, and how that was established rather than
+ *   assumed: each was opened and its authorisation posture read. 22 are
+ *   session-guarded — several also permission-gated, and every one taking a
+ *   user id as a PARAMETER compares it to the session, which is #31's class and
+ *   the one most likely to be missed. 3 are public catalogue readers where
+ *   public is the right answer, and the ratings one still filters to approved
+ *   reviews (#99). None spreads a raw document, so #338/#341's class is absent.
+ *   The writers check ownership AND state, and neither "delete" among them
+ *   destroys anything: one soft-removes, the other refuses issued certificates.
+ *
+ *   So all 25 are correct, guarded and merely unwired — a gap in the product,
+ *   not a defect in the code.
+ *
+ *   TWO FALSE LEADS, RECORDED BECAUSE THEY WERE MINE. The first sweep of these
+ *   25 reported "no guard" for six actions and "never compares the parameter"
+ *   for two. Both were artefacts of the scanning script: its brace matcher
+ *   stopped inside a multi-line `Promise<{...}>` return type, so it only ever
+ *   read the signature, and its comparison check looked for the literal
+ *   `session.user.id` and missed `sessionResult.session?.user?.id`. Reading the
+ *   code corrected both. The lesson is #383's and #392's and #399's, now in a
+ *   third tool of my own: a measuring instrument gets audited before its
+ *   measurement is believed.
+ *
+ *   PENDING is kept, empty. The first case below still routes every unreached
+ *   action through "triaged OR pending", so tomorrow's orphan fails that
+ *   assertion and lands in a list that already exists. Deleting it would turn a
+ *   closed queue into no queue.
  *
  *   Where a verdict does say "left alone", it is because being unwired is a gap
  *   in the product rather than a defect in the code, and a flag in front of a
@@ -229,6 +250,46 @@ const TRIAGED: Record<string, string> = {
     getPaymentByReferenceAction: '#400 — payments.ts reader/writer trio, no screen',
     getUserPaymentHistoryAction: '#400 — payments.ts reader/writer trio, no screen',
 
+    /**
+     * #404 — THE LAST 25, READ ONE AT A TIME. The queue closes here.
+     *
+     * Every one was opened and its authorisation posture read, not inferred:
+     * 22 are session-guarded (several also permission-gated, and every one
+     * taking a user id as a parameter compares it to the session); 3 are
+     * public catalogue readers where public is correct. None spreads a raw
+     * document — #338/#341's class is absent. The writers check ownership AND
+     * state, and neither "delete" destroys anything.
+     *
+     * So the verdict for all 25 is the same: correct, guarded, merely unwired.
+     * That is a gap in the product, not a defect in the code, and a flag in
+     * front of a correct action would add friction and prevent nothing.
+     */
+    broadcastToCooperativeMembersAction: '#404 — session + hasAdminPermission (#97 repair present); no screen',
+    getApprovedCooperativeMembersAction: '#404 — session + hasAdminPermission (#97 repair present); reader, no screen',
+    getCleanBroadcastListAction: '#404 — session + hasAdminPermission; carries #307 failed-list-vs-empty-list repair',
+    createBulkNotificationsAction: '#404 — session-gated; the live writer is createNotificationAction',
+    getUnreadCountAction: '#404 — session, self-or-platform-admin',
+    getUserNotificationsAction: '#404 — session, self-or-platform-admin',
+    checkOnboardingStatusAction: '#404 — session, self-or-admin; reader',
+    completeOnboardingAction: '#404 — session, self-only; writes onboardingCompleted',
+    getUserCertificatesAction: '#404 — session, self-or-admin',
+    deleteCertificateAction: '#404 — #303 hardened: self-only, REFUSES issued certificates, storage object retained',
+    createReviewAction: '#404 — session + buyer ownership + the shared reviewable-status rule (#122/#123)',
+    getPendingReviewsAction: '#404 — session + hasAdminPermission (#124 repair present)',
+    getSellerReviewSummaryAction: '#404 — session-gated reader',
+    getSellerRatingAction: '#404 — public by design, and filters status == "approved" (#99 repair present)',
+    getFeaturedProductsAction: '#404 — public catalogue read; public is correct',
+    getProductsByCategoryAction: '#404 — public catalogue read; public is correct',
+    getBuyerDisputesAction: '#404 — session, scoped to the caller; no counterparty bank details (#95)',
+    getSellerDisputesAction: '#404 — session, scoped to the caller; no counterparty bank details (#95)',
+    getOrderDetailsAction: '#404 — session-gated',
+    getEscrowStatusAction: '#404 — session; queries only rows the caller participates in, returns aggregates',
+    getPendingContentAction: '#404 — delegates to getContentApprovalItemsAction, which re-reads roles from the DB',
+    getSavedItemCountAction: '#404 — session; counts the caller\'s own rows',
+    getUserExportSlotsAction: '#404 — session, self-or-export-admin; the #31-class fix is present',
+    removeFlashSaleProductAction: '#404 — session + seller ownership; SOFT-removes (status "removed"), destroys nothing',
+    softDeleteUserAction: '#404 — #305/#371/#376 hardened; soft, and scrubs via the shared PII definition',
+
     // #403 — the land names out of PENDING.
     submitForVerificationAction: '#403 FIXED — wrote status blind; the owner rule had reached two of three paths',
     createLandListingAction: '#403 — correct and guarded; the "draft" half of a draft→submit flow with no screen. '
@@ -251,32 +312,14 @@ const TRIAGED: Record<string, string> = {
  * the failure the whole queue exists to catch.
  */
 const PENDING: readonly string[] = [
-    'broadcastToCooperativeMembersAction',
-    'checkOnboardingStatusAction',
-    'completeOnboardingAction',
-    'createBulkNotificationsAction',
-    'createReviewAction',
-    'deleteCertificateAction',
-    'getApprovedCooperativeMembersAction',
-    'getBuyerDisputesAction',
-    'getCleanBroadcastListAction',
-    'getEscrowStatusAction',
-    'getFeaturedProductsAction',
-    'getOrderDetailsAction',
-    'getPendingContentAction',
-    'getPendingReviewsAction',
-    'getProductsByCategoryAction',
-    'getSavedItemCountAction',
-    'getSellerDisputesAction',
-    'getSellerRatingAction',
-    'getSellerReviewSummaryAction',
-    'getUnreadCountAction',
-    'getUserCertificatesAction',
-    'getUserExportSlotsAction',
-    'getUserNotificationsAction',
-    'removeFlashSaleProductAction',
-    'softDeleteUserAction',
-];
+    // EMPTY, AND THAT IS THE POINT — #404 closed the queue.
+    //
+    // It stays here rather than being deleted: the first case below still
+    // routes every unreached action through "triaged OR pending", so a new
+    // orphan appearing tomorrow fails that assertion and lands in a list that
+    // already exists, with a header explaining what a verdict has to answer.
+    // Removing the list would turn a closed queue into no queue.
+]
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#399 — the queue is closed and pinned', () => {
@@ -299,7 +342,24 @@ describe('#399 — the queue is closed and pinned', () => {
          * that "mostly" agrees is how #75 started.
          */
         expect(unreached().length).toBe(Object.keys(TRIAGED).length + PENDING.length);
-        expect(PENDING.length).toBeGreaterThan(0);
+        expect(unreached().length).toBe(69);
+    });
+
+    it('and the queue is CLOSED — every unreached action carries a verdict', () => {
+        /**
+         * #404. This replaced `expect(PENDING.length).toBeGreaterThan(0)`, which
+         * was right while the queue was still being worked and would now fail
+         * for the wrong reason: an empty PENDING is the finished state, not a
+         * dropped list.
+         *
+         * The assertion that matters is the one above it — every unreached name
+         * is accounted for — so this adds the second half: none of them is
+         * accounted for by being parked. A verdict is prose, and an empty one
+         * would be a name waved through, so the length is checked too.
+         */
+        expect(PENDING).toEqual([]);
+        const empty = Object.entries(TRIAGED).filter(([, verdict]) => verdict.trim().length < 20);
+        expect(empty).toEqual([]);
     });
 
     it('and nothing in the record has quietly been wired up', () => {
