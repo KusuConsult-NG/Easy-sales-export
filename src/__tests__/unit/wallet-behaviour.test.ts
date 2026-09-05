@@ -148,6 +148,18 @@ function paystackFetch(body: Record<string, unknown>): void {
 }
 
 beforeEach(() => {
+/**
+ * #400 retired walletCheckoutAction behind this flag: it debits the
+ * wallet and never completes the order — no status write, no escrow, no
+ * fee, no notification.
+ *
+ * ARMED here rather than these tests being deleted. They carry #91's
+ * repair — the caller's amount replaced by the order's own total, in the
+ * debit AND in both ledger rows — and that has to hold if the fulfilment
+ * half is ever written. A refusal in front of them would make the suite
+ * pass vacuously.
+ */
+process.env.MARKETPLACE_WALLET_CHECKOUT = 'enabled';
     jest.clearAllMocks();
     process.env.PAYSTACK_SECRET_KEY = 'sk_test_key';
     creditWalletOnce.mockImplementation(async () => ({ claimed: true, balance: 10_000 }));

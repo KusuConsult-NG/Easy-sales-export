@@ -33,16 +33,18 @@
  *     #399  the seller badge pair never called notifyBadgeUpdated, which #391
  *           had wired into the other badge door. FIXED — #297's class, a repair
  *           landing on one of several copies.
+ *     #400  walletCheckoutAction debits the wallet and never completes the
+ *           order — no status, no escrow, no fee, no notification. RETIRED
+ *           behind MARKETPLACE_WALLET_CHECKOUT.
  *
  *   TRIAGED, AND NOT YET TRIAGED
  *   -----------------------------
- *   32 names carry a verdict below. 37 do not: they are listed in PENDING,
- *   named, and explicitly NOT waved through. Several are money or user-flow
- *   paths where the answer matters — walletCheckoutAction,
- *   processLoanRepaymentAction, the two alternate order creators in
- *   _payment_orders.ts, uploadCertificateAction, bookExportSlotAction.
+ *   41 names carry a verdict below. 28 do not: they are listed in PENDING,
+ *   named, and explicitly NOT waved through. #400 took the nine money paths
+ *   this list called out and gave each a verdict; what remains is readers and
+ *   admin/onboarding writes, none of which moves money.
  *
- *   Recording them as pending is the honest state. Writing 37 verdicts I have
+ *   Recording them as pending is the honest state. Writing 28 verdicts I have
  *   not earned would make this file look finished while carrying guesses, which
  *   is exactly the failure the queue exists to catch.
  *
@@ -172,6 +174,17 @@ const TRIAGED: Record<string, string> = {
     getCommunicationsMetricsAction: 'global-aggregation; the dashboard uses admin-analytics',
     getGlobalPendingApprovalsAction: 'global-aggregation; the dashboard uses admin-analytics',
     createOrderAction: 'parallel of initializeOrderPaymentAction, which /marketplace/checkout uses',
+
+    // #400 — the money paths out of PENDING.
+    walletCheckoutAction: '#400 retired — debits the wallet, never completes the order',
+    processLoanRepaymentAction: '#400 — complete and correct after #212/#286 (debits AND updates the loan); no screen',
+    createBankTransferOrderAction: '#379 already retired behind MARKETPLACE_OFFLINE_CHECKOUT',
+    createPaymentOnDeliveryOrderAction: '#379 already retired behind MARKETPLACE_OFFLINE_CHECKOUT',
+    uploadCertificateAction: '#400 — parallel of /api/certificates/upload, which the screen uses',
+    bookExportSlotAction: '#400 — the booking #311 recorded; bookings reserve capacity nobody can act on (owner decision)',
+    createPaymentRecordAction: '#400 — payments.ts reader/writer trio, no screen',
+    getPaymentByReferenceAction: '#400 — payments.ts reader/writer trio, no screen',
+    getUserPaymentHistoryAction: '#400 — payments.ts reader/writer trio, no screen',
 };
 
 /**
@@ -188,15 +201,11 @@ const TRIAGED: Record<string, string> = {
  * the failure the whole queue exists to catch.
  */
 const PENDING: readonly string[] = [
-    'bookExportSlotAction',
     'broadcastToCooperativeMembersAction',
     'checkOnboardingStatusAction',
     'completeOnboardingAction',
-    'createBankTransferOrderAction',
     'createBulkNotificationsAction',
     'createLandListingAction',
-    'createPaymentOnDeliveryOrderAction',
-    'createPaymentRecordAction',
     'createReviewAction',
     'deleteCertificateAction',
     'getApprovedCooperativeMembersAction',
@@ -205,7 +214,6 @@ const PENDING: readonly string[] = [
     'getEscrowStatusAction',
     'getFeaturedProductsAction',
     'getOrderDetailsAction',
-    'getPaymentByReferenceAction',
     'getPendingContentAction',
     'getPendingReviewsAction',
     'getProductsByCategoryAction',
@@ -217,14 +225,10 @@ const PENDING: readonly string[] = [
     'getUserCertificatesAction',
     'getUserExportSlotsAction',
     'getUserNotificationsAction',
-    'getUserPaymentHistoryAction',
-    'processLoanRepaymentAction',
     'removeFlashSaleProductAction',
     'softDeleteUserAction',
     'submitForVerificationAction',
     'submitLandInquiryAction',
-    'uploadCertificateAction',
-    'walletCheckoutAction',
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────

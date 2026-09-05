@@ -31,6 +31,10 @@ import { ActionResponse, withSafeAction } from "@/lib/safe-action";
 import { getFeatureToggle } from "./feature-toggles";
 import { z } from "zod";
 import { paystackBaseUrl } from "@/lib/paystack-host";
+import {
+    isMarketplaceWalletCheckoutEnabled,
+    MARKETPLACE_WALLET_CHECKOUT_REFUSAL,
+} from "@/lib/marketplace-wallet-checkout";
 
 const MIN_WITHDRAWAL = 5000;   // ₦5,000 minimum withdrawal (NGN)
 const WALLET_COLLECTION = COLLECTIONS.WALLETS;
@@ -393,6 +397,32 @@ async function _walletCheckoutAction(
     orderId: string,
     amountNGN: number
 ): Promise<ActionResponse<{ newBalance: number }>> {
+    /**
+     *   #400 RETIRED. THIS TAKES THE MONEY AND LEAVES THE ORDER UNPAID.
+     *
+     *   It has no live caller — /marketplace/checkout offers one method, and its
+     *   own state says so: useState<"paystack">("paystack"), a type with a
+     *   single member.
+     *
+     *   The half below is careful: #91 replaced the caller's amount with the
+     *   order's own total, the debit is idempotent on `order:<id>`, ownership is
+     *   checked before money moves. What is missing is everything after. It
+     *   writes NO order status, creates NO escrow, computes NO platform fee and
+     *   notifies nobody — so a buyer paying this way would be charged, the two
+     *   ledger rows would say `status: "completed"`, and the order would sit
+     *   unpaid with nothing for the seller to be paid from. Reconciliation reads
+     *   exactly those rows, so the loss would be recorded as a success.
+     *
+     *   Refused as the FIRST statement, before the schema parse and the session
+     *   lookup, so no path reaches the debit while the flag is off. See
+     *   lib/marketplace-wallet-checkout.ts for what must be built before
+     *   MARKETPLACE_WALLET_CHECKOUT is set to "enabled" — the fulfilment half,
+     *   not the flag.
+     */
+    if (!isMarketplaceWalletCheckoutEnabled()) {
+        return { success: false as const, error: MARKETPLACE_WALLET_CHECKOUT_REFUSAL, data: null };
+    }
+
     WalletCheckoutSchema.parse({ orderId, amountNGN });
 
     const sessionResult = await requireSession();
