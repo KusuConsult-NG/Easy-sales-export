@@ -247,15 +247,18 @@ describe('#354 — the wiring, and the claim it rests on', () => {
 
         expect(direct).toEqual([
             /**
-             * NOT CONVERTED, AND NOT AN OVERSIGHT. This is a second BULK
-             * sender: it calls resend.batch.send with its own chunking and its
-             * own partial-failure count, which #187 and #219 both had to
-             * repair. lib/email-notifications.ts already has
-             * sendBatchEmailNotifications doing the same job, so these are two
-             * doors — but folding one into the other means re-deriving the
-             * delivered-vs-attempted counting that a previous finding got
-             * wrong, and that is its own piece of work rather than a rider on
-             * this one. Named here so it is a known item and not a gap.
+             * NOT CONVERTED, AND #395 CHANGED THE REASON.
+             *
+             * #394 recorded this as a second BULK sender worth folding into
+             * sendBatchEmailNotifications later. #395 counted its callers:
+             * sendBulkEmailAction has none, and neither does the
+             * getEmailHistoryAction that reads the collection it writes. There
+             * was no second door — only a complete, empty parallel — so it is
+             * RETIRED behind ADMIN_BULK_EMAIL_ACTION rather than converted.
+             *
+             * The Resend client stays in the file because the implementation
+             * stays whole behind that flag, which is why this entry is still
+             * in the list.
              */
             'src/app/actions/admin-communications.ts',
             // The sender itself, and the two halves of the queue it feeds.

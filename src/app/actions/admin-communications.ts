@@ -10,6 +10,7 @@ import { communicationsService } from '@/services';
 import { recordAdminAction } from '@/lib/audit-log';
 
 import { ActionResponse } from '@/lib/safe-action';
+import { isAdminBulkEmailEnabled, ADMIN_BULK_EMAIL_REFUSAL } from '@/lib/admin-bulk-email';
 
 /**
  * Get recipient emails based on segment
@@ -28,7 +29,14 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
  * Send bulk email to users
  * Accepts recipients segment, subject, and HTML body
  */
-export async function sendBulkEmailAction(prevState: ActionResponse<unknown>, formData: FormData): Promise<ActionResponse<{ recipientCount: number; attemptedCount: number }>> { const adminCheck = await requireAdmin("announcements:manage");
+export async function sendBulkEmailAction(prevState: ActionResponse<unknown>, formData: FormData): Promise<ActionResponse<{ recipientCount: number; attemptedCount: number }>> {
+    // #395. Retired — see lib/admin-bulk-email.ts. Refused BEFORE the admin
+    // check, so an enabled-by-accident deployment cannot reach the send at all.
+    if (!isAdminBulkEmailEnabled()) {
+        return { success: false as const, error: ADMIN_BULK_EMAIL_REFUSAL, data: null };
+    }
+
+    const adminCheck = await requireAdmin("announcements:manage");
     if ("error" in adminCheck) return { success: false as const, error: "Unauthorized: admin role required", data: null };
     try {
         const recipients = (formData.get('recipients') as string | null)?.trim() ?? "";
@@ -199,7 +207,16 @@ export async function createAnnouncementAction(prevState: ActionResponse<unknown
 /**
  * Fetch admin email send history from Firestore (email_history collection)
  */
-export async function getEmailHistoryAction(): Promise<ActionResponse<{ history: any[] }>> { const adminCheck = await requireAdmin("announcements:manage");
+export async function getEmailHistoryAction(): Promise<ActionResponse<{ history: any[] }>> {
+    // #395. Retired with its writer — EMAIL_HISTORY has one writer and one
+    // reader and neither is reachable, so this has never had a row to return.
+    // The history an admin looks at is BROADCAST_LOGS, at
+    // /admin/communications/history through getBroadcastHistoryAction.
+    if (!isAdminBulkEmailEnabled()) {
+        return { success: false as const, error: ADMIN_BULK_EMAIL_REFUSAL, data: null };
+    }
+
+    const adminCheck = await requireAdmin("announcements:manage");
     if ("error" in adminCheck) return { success: false as const, error: "Unauthorized: admin role required", data: null };
     try { const snapshot = await db.collection(COLLECTIONS.EMAIL_HISTORY)
             .orderBy('sentAt', 'desc')

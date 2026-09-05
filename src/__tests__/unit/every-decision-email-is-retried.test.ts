@@ -47,12 +47,14 @@
  *   WHAT IS DELIBERATELY STILL OUTSIDE
  *   ----------------------------------
  *   lib/mfa.ts — a ten-minute code against a ten-minute cron (#393).
- *   actions/admin-communications.ts — a second BULK sender using
- *   resend.batch.send with its own chunking and partial-failure counting, which
- *   #187 and #219 both had to repair. Folding it into
- *   sendBatchEmailNotifications means re-deriving that counting, and that is
- *   its own piece of work. Named in email-retry-queue-has-a-producer.test.ts
- *   so it is a known item rather than a gap.
+ *
+ *   actions/admin-communications.ts — recorded here as "a second BULK sender"
+ *   to be folded into sendBatchEmailNotifications later. #395 MEASURED IT AND
+ *   THAT WAS WRONG: sendBulkEmailAction has no live caller and never had one,
+ *   so there was nothing to fold and no second door to close by folding it.
+ *   It is retired behind a flag instead. The paragraph is left as written
+ *   because it is the record of what #394 believed; the correction belongs
+ *   beside it rather than in place of it.
  *
  *   MUTATION-TESTED, WITH A CONTROL. Against a green baseline:
  *

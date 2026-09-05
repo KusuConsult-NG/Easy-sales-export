@@ -40,7 +40,7 @@
  *        both halves are fixed together.
  */
 
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { installFakeDb, type FakeDbHandle } from '@/lib/testing/fake-db';
 import { COLLECTIONS } from '@/lib/types/firestore';
 
@@ -88,6 +88,50 @@ beforeEach(() => {
     getTargetedUsers.mockResolvedValue(['a@e.com', 'b@e.com']);
     delete process.env.EMAIL_FROM;
     delete process.env.RESEND_FROM_EMAIL;
+    /**
+     * #395 RETIRED THIS ACTION, AND THESE TESTS STAY.
+     *
+     * sendBulkEmailAction has no live caller and never had one; the live
+     * broadcast is POST /api/admin/broadcast/send. It is now refused at the
+     * door unless ADMIN_BULK_EMAIL_ACTION is the exact word "enabled", with
+     * the implementation kept whole behind that flag.
+     *
+     * The flag is armed here rather than the suite being deleted, because
+     * #187, #188 and #189 are real repairs to code that still exists: a From
+     * header that was a name wrapped around a name, a count that claimed
+     * delivery it had not achieved, and a broadcast that recorded nothing.
+     * Whoever turns the flag on inherits those fixes, and would inherit the
+     * defects again if the tests went with the wiring.
+     */
+    process.env.ADMIN_BULK_EMAIL_ACTION = 'enabled';
+});
+
+afterEach(() => {
+    delete process.env.ADMIN_BULK_EMAIL_ACTION;
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#395 — and it is refused unless that flag is set', () => {
+    it('REFUSES WITH THE FLAG OFF, AND SENDS NOTHING', async () => {
+        delete process.env.ADMIN_BULK_EMAIL_ACTION;
+
+        const res: any = await sendBulk();
+
+        expect(res.success).toBe(false);
+        expect(res.error).toContain('/api/admin/broadcast/send');
+        expect(batchSend).not.toHaveBeenCalled();
+        // And the admin check was never even reached — the refusal is first.
+        expect(mockRequireAdmin).not.toHaveBeenCalled();
+    });
+
+    it('and a truthy-looking value is not the word', async () => {
+        process.env.ADMIN_BULK_EMAIL_ACTION = 'true';
+
+        const res: any = await sendBulk();
+
+        expect(res.success).toBe(false);
+        expect(batchSend).not.toHaveBeenCalled();
+    });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
