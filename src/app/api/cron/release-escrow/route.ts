@@ -7,6 +7,7 @@ import { exportWindowReturnMultiplier } from "@/lib/export-window-status";
 import { Timestamp } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
+import { ESCROW_DELIVERED_AUTO_RELEASE_MS } from "@/lib/escrow-release-copy";
 import { claimStatusTransition } from "@/lib/status-transition";
 import { creditWalletOnce } from "@/lib/wallet-ledger";
 import { createAdminAuditLog } from "@/lib/audit-log";
@@ -519,7 +520,11 @@ async function processEscrowTransactions(now: Timestamp) {
 //   - updatedAt is <= 24 hours ago (meaning 24 hours without confirmation)
 // ─────────────────────────────────────────────────────────────────────────────
 async function processDeliveredEscrowTransactions(now: Timestamp) {
-    const thresholdMs = Date.now() - 24 * 60 * 60 * 1000;
+    // #390. Was a bare `24 * 60 * 60 * 1000` here and a window no screen
+    // mentioned at all, which is how six screens came to describe a release
+    // that waits for a person. The number and the sentences buyers and
+    // sellers read now come from the same constant.
+    const thresholdMs = Date.now() - ESCROW_DELIVERED_AUTO_RELEASE_MS;
     const thresholdTimestamp = Timestamp.fromMillis(thresholdMs);
 
     const snapshot = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)

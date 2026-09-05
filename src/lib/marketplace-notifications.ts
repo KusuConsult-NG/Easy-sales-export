@@ -17,6 +17,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { logger } from "@/lib/logger";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { ESCROW_DELIVERED_AUTO_RELEASE_HOURS } from "@/lib/escrow-release-copy";
 
 // ---------------------------------------------------------------------------
 // Internal: write a single notification document
@@ -238,6 +239,16 @@ export async function notifyOrderShipped(params: {
 
 /**
  * Notify buyer + seller + admins when an order is marked delivered.
+ *
+ * #390. THIS HAS NO CALLER. Nothing in the app sends an order-delivered
+ * notification, so neither message below has ever reached anybody. Both said
+ * the buyer's confirmation is what releases the money, which is not how the
+ * release works — the escrow is paid out automatically a fixed window after
+ * reaching "delivered", and confirming is what puts it there. The copy is
+ * corrected rather than left as it was, because the function is named exactly
+ * what somebody wiring this up would reach for, and they would have shipped
+ * the falsehood with it. That it is unreachable is recorded here rather than
+ * fixed: wiring a notification is a product decision, not an audit repair.
  */
 export async function notifyOrderDelivered(params: {
     buyerId: string;
@@ -253,7 +264,7 @@ export async function notifyOrderDelivered(params: {
             userId: buyerId,
             type: "transaction",
             title: "Order Delivered 📦",
-            message: `Order #${orderNumber} has been delivered. Please confirm receipt to release payment to the seller.`,
+            message: `Order #${orderNumber} has been delivered. Confirm receipt if it arrived — payment reaches the seller ${ESCROW_DELIVERED_AUTO_RELEASE_HOURS} hours after you confirm, so open a dispute before then if anything is wrong.`,
             link: `/marketplace/buyer/orders/${orderId}`,
             linkText: "Confirm Delivery",
         }),
@@ -261,7 +272,7 @@ export async function notifyOrderDelivered(params: {
             userId: sellerId,
             type: "transaction",
             title: "Order Marked as Delivered",
-            message: `Order #${orderNumber} has been marked delivered. Awaiting buyer confirmation to release funds.`,
+            message: `Order #${orderNumber} has been marked delivered. Payment is released to your wallet ${ESCROW_DELIVERED_AUTO_RELEASE_HOURS} hours after the buyer confirms receipt, unless a dispute is opened.`,
             link: `/marketplace/seller/orders/${orderId}`,
             linkText: "View Order",
         }),

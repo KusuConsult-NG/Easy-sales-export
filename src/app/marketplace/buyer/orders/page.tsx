@@ -10,6 +10,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Package, Clock, CheckCircle, XCircle, Search, Eye, AlertCircle, Loader2, ShieldCheck, Truck } from "lucide-react";
 import Link from "next/link";
 import { getBuyerOrdersAction, confirmOrderReceiptAction, cancelOrderAction } from "@/app/actions/marketplace";
+import { CONFIRM_RECEIPT_PROMPT, CONFIRM_RECEIPT_SUCCESS } from "@/lib/escrow-release-copy";
 import { useToast } from "@/contexts/ToastContext";
 import { formatCurrency } from "@/lib/utils";
 import { formatLocalDate } from "@/lib/date-utils";
@@ -74,13 +75,17 @@ export default function OrdersPage() {
     };
 
     async function handleConfirmReceipt(orderId: string) {
-        if (!confirm("Are you sure you have received this order? This will release funds to the seller.")) return;
+        // #390. Was "This will release funds to the seller." — the opposite
+        // error to the detail screen's: it said the release was immediate.
+        // The gap between confirming and releasing is exactly when a dispute
+        // still works, and neither screen mentioned it.
+        if (!confirm(CONFIRM_RECEIPT_PROMPT)) return;
 
         setProcessingId(orderId);
         try {
             const result = await confirmOrderReceiptAction(orderId);
             if (result.success) {
-                showToast("Order confirmed! Escrow pending admin release.", "success");
+                showToast(CONFIRM_RECEIPT_SUCCESS, "success");
                 // Update local status instead of full reload to save bandwidth
                 setOrders(prev => prev.map(o => o.orderId === orderId ? { ...o, status: 'delivered' } : o));
             } else {

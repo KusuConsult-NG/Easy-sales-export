@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { getOrderByIdForSellerAction } from "@/app/actions/order-management";
 import { updateOrderStatusAction, getTrackingUpdatesAction } from "@/app/actions/order-management";
+import { SELLER_AWAITING_AUTO_RELEASE, SELLER_COMPLETED_NOT_RELEASED } from "@/lib/escrow-release-copy";
 import type { TrackingUpdate } from "@/lib/logistics";
 import { useToast } from "@/contexts/ToastContext";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
@@ -210,9 +211,18 @@ export default function SellerOrderDetailPage() {
                         <div>
                             <p className="font-semibold text-green-900 text-sm">Order Completed</p>
                             <p className="text-green-700 text-xs mt-0.5">
+                                {/* #390. The false branch read "Awaiting buyer confirmation to
+                                    release payment." — but this panel renders on status
+                                    "delivered", which is set BY the buyer confirming. So the
+                                    seller was told they were waiting for the thing that had
+                                    already happened, on every order in that state. Split, so
+                                    a confirmed-but-unpaid order and a completed-but-unpaid
+                                    one each say what is actually true of them. */}
                                 {order.escrowReleased
                                     ? `Payment has been released to your account.${order.sellerAmountPaid ? ` You received ${formatCurrency(order.sellerAmountPaid)}.` : ""}`
-                                    : "Awaiting buyer confirmation to release payment."}
+                                    : order.status === "delivered"
+                                        ? SELLER_AWAITING_AUTO_RELEASE
+                                        : SELLER_COMPLETED_NOT_RELEASED}
                             </p>
                         </div>
                     </div>

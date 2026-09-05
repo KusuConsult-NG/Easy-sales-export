@@ -11,6 +11,7 @@ import { logger } from '@/lib/logger';
 import { Package, Search, Eye, Truck, CheckCircle, Clock, XCircle, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { getSellerOrdersAction } from "@/app/actions/marketplace";
+import { SELLER_COMPLETED_NOT_RELEASED } from "@/lib/escrow-release-copy";
 import type { Order } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
 import { formatLocalDate } from "@/lib/date-utils";
@@ -298,10 +299,18 @@ export default function SellerOrdersPage() {
                                         </div>
                                     )}
 
+                                    {/* #390. This asserted "Payment released to your account" on
+                                        every completed order, without reading escrowReleased —
+                                        which this list already carries. The order row and the
+                                        escrow row are separate and only one is claimed per path,
+                                        so a completed order whose escrow has not been released is
+                                        reachable, and the seller was told the money had arrived. */}
                                     {order.status === "completed" && (
-                                        <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                                            <p className="text-sm text-green-800">
-                                                ✓ Completed • Payment released to your account
+                                        <div className={`border rounded-lg p-3 ${order.escrowReleased ? "bg-green-50 border-green-200" : "bg-amber-50 border-amber-200"}`}>
+                                            <p className={`text-sm ${order.escrowReleased ? "text-green-800" : "text-amber-800"}`}>
+                                                {order.escrowReleased
+                                                    ? "✓ Completed • Payment released to your account"
+                                                    : `✓ Completed • ${SELLER_COMPLETED_NOT_RELEASED}`}
                                             </p>
                                         </div>
                                     )}

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { getOrderByIdAction } from "@/app/actions/orders";
 import { confirmOrderReceiptAction, cancelOrderAction } from "@/app/actions/marketplace";
+import { CONFIRM_RECEIPT_PROMPT, CONFIRM_RECEIPT_SUCCESS } from "@/lib/escrow-release-copy";
 import { getTrackingUpdatesAction } from "@/app/actions/order-management";
 import type { TrackingUpdate } from "@/lib/logistics";
 import { useToast } from "@/contexts/ToastContext";
@@ -63,12 +64,15 @@ export default function BuyerOrderDetailPage() {
     };
 
     async function handleConfirmReceipt() {
-        if (!confirm("Confirm you received this order? Escrow will be marked ready for admin release.")) return;
+        // #390. Was "Escrow will be marked ready for admin release." — there
+        // is no admin queue in this path: the cron releases the escrow a
+        // fixed window after confirmation, whether or not anybody acts.
+        if (!confirm(CONFIRM_RECEIPT_PROMPT)) return;
         setConfirming(true);
         try {
             const result = await confirmOrderReceiptAction(id as string);
             if (result.success) {
-                showToast("Order confirmed! Escrow pending admin release.", "success");
+                showToast(CONFIRM_RECEIPT_SUCCESS, "success");
                 setOrder(prev => prev ? { ...prev, status: "delivered" as OrderStatus, buyerConfirmed: true } : prev);
             } else {
                 showToast((result as any).error || "Failed to confirm", "error");
