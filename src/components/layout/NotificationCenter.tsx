@@ -69,31 +69,67 @@ export default function NotificationCenter() {
 
     const unreadCount = visibleNotifications.filter((n) => !n.read).length;
 
+    /**
+     *   #406 THE ROLLBACK WAS WRITTEN FOR A FAILURE THAT NEVER ARRIVES.
+     *
+     *   The revert below lived in the `catch` alone. Both notification actions
+     *   catch internally and RETURN `{ success: false, error }` — an
+     *   unauthenticated caller, a service failure, an ownership refusal, all of
+     *   them resolve rather than throw. So the branch that undoes the optimistic
+     *   write only ran for an exception, which is the rare case, and never for
+     *   the ordinary one.
+     *
+     *   The result of the await was not looked at at all, at any of the three
+     *   call sites in this file. A refused write left the row displayed as read
+     *   and the badge decremented, and nothing told the user or the code.
+     *
+     *   That is #331's shape — a check that cannot fail — sitting on top of
+     *   #337's: a control that reports success it did not obtain.
+     *
+     *   Rolled back per-id rather than by restoring a snapshot of the list,
+     *   because the poll on this component can deliver new notifications while
+     *   the write is in flight and a snapshot would drop them.
+     */
     const markAsRead = async (id: string) => {
         // Optimistic update — decrement immediately in local state
         setNotifications(prev =>
             prev.map(n => n.id === id ? { ...n, read: true } : n)
         );
+        const revert = () => setNotifications(prev =>
+            prev.map(n => n.id === id ? { ...n, read: false } : n)
+        );
         try {
-            await markNotificationAsReadAction(id);
-            // onSnapshot will confirm the persisted state
+            const result = await markNotificationAsReadAction(id);
+            if (!result?.success) {
+                console.error("Mark as read refused:", result?.error);
+                revert();
+            }
         } catch (error) {
             console.error("Mark as read error:", error);
-            // Revert optimistic update on failure
-            setNotifications(prev =>
-                prev.map(n => n.id === id ? { ...n, read: false } : n)
-            );
+            revert();
         }
     };
 
     async function markAllAsRead() {
         if (!session?.user?.id) return;
-        // Optimistic update
+        // The ids this call is actually changing. Anything already read stays
+        // read on a failure — reverting the whole list would mark them unread.
+        const changed = notifications.filter(n => !n.read).map(n => n.id);
+        if (changed.length === 0) return;
+
         setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+        const revert = () => setNotifications(prev =>
+            prev.map(n => changed.includes(n.id) ? { ...n, read: false } : n)
+        );
         try {
-            await markAllAsReadAction(session.user.id);
+            const result = await markAllAsReadAction(session.user.id);
+            if (!result?.success) {
+                console.error("Mark all as read refused:", result?.error);
+                revert();
+            }
         } catch (error) {
             console.error("Mark all as read error:", error);
+            revert();
         }
     }
 
@@ -115,10 +151,24 @@ export default function NotificationCenter() {
             prev.map(n => ids.includes(n.id) ? { ...n, read: true } : n)
         );
 
-        // Persist in the background — fire-and-forget
-        Promise.all(ids.map(id => markNotificationAsReadAction(id))).then(() => {
-            ids.forEach(id => pendingReadRef.current.delete(id));
-        }).catch(() => {
+        /**
+         * #406, third call site. This was Promise.all(...).then(...) with the
+         * results thrown away, so opening the panel marked everything read
+         * locally whether or not a single write landed — and `Promise.all`
+         * rejects on the FIRST throw, leaving the rest unaccounted for either
+         * way. allSettled reports on every id, and each one that was refused or
+         * threw goes back to unread.
+         */
+        Promise.allSettled(ids.map(id => markNotificationAsReadAction(id))).then(results => {
+            const failed = ids.filter((_, i) => {
+                const r = results[i];
+                return r.status === "rejected" || !r.value?.success;
+            });
+            if (failed.length > 0) {
+                setNotifications(prev =>
+                    prev.map(n => failed.includes(n.id) ? { ...n, read: false } : n)
+                );
+            }
             ids.forEach(id => pendingReadRef.current.delete(id));
         });
     // eslint-disable-next-line react-hooks/exhaustive-deps

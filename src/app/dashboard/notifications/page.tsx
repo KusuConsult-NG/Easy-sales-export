@@ -208,45 +208,86 @@ export default function NotificationsPage() {
     }, [notifications, userId]);
 
     /* ── Actions ── */
+    /**
+     *   #406 THE TOAST SAID "FAILED" AND THE ROW STAYED READ.
+     *
+     *   These three handlers write the optimistic change, then report a refusal
+     *   in a toast — and leave the change on screen. The user is told the write
+     *   failed while looking at the result of it. Deletion was the same: the row
+     *   vanished from the list and came back on the next load.
+     *
+     *   Each one now reverts exactly what it changed. The toast keeps its job of
+     *   saying what went wrong; the list keeps its job of showing what is true.
+     */
     async function handleMarkAsRead(id: string) {
         setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+        const revert = () => setNotifications(prev =>
+            prev.map(n => n.id === id ? { ...n, read: false } : n));
         try {
             const { markNotificationAsReadAction } = await import("@/app/actions/notifications");
             const result = await markNotificationAsReadAction(id);
             if (!result.success) {
                 showToast(result.error || "Failed to mark as read", "error");
+                revert();
             }
         } catch {
             showToast("Failed to mark as read", "error");
+            revert();
         }
     }
 
     async function handleMarkAllAsRead() {
         if (!userId) return;
+        // Only the ones this call changes. Reverting the whole list would turn
+        // already-read notifications back to unread.
+        const changed = notifications.filter(n => !n.read).map(n => n.id);
+        if (changed.length === 0) return;
+
         setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+        const revert = () => setNotifications(prev =>
+            prev.map(n => changed.includes(n.id) ? { ...n, read: false } : n));
         try {
             const { markAllAsReadAction } = await import("@/app/actions/notifications");
             const result = await markAllAsReadAction(userId);
             if (!result.success) {
                 showToast(result.error || "Failed to mark all as read", "error");
+                revert();
             }
         } catch {
             showToast("Failed to mark all as read", "error");
+            revert();
         }
     }
 
     async function handleDelete(id: string) {
         setDeletingId(id);
+        // #406. The row was removed optimistically and never put back, so a
+        // refused delete emptied it from the list while it still existed — and
+        // it reappeared on the next load. Restored at its original index so a
+        // failure does not silently reorder the list either.
+        const index = notifications.findIndex(n => n.id === id);
+        const removed = index > -1 ? notifications[index] : null;
         setNotifications(prev => prev.filter(n => n.id !== id));
+        const revert = () => {
+            if (!removed) return;
+            setNotifications(prev => {
+                if (prev.some(n => n.id === id)) return prev;
+                const next = [...prev];
+                next.splice(Math.min(index, next.length), 0, removed);
+                return next;
+            });
+        };
         try {
             // Ownership is verified server-side; the browser can no longer
             // delete an arbitrary notification id.
             const result = await deleteMyNotification(id);
             if (!result.success) {
                 showToast(result.error || "Failed to delete notification", "error");
+                revert();
             }
         } catch {
             showToast("Failed to delete notification", "error");
+            revert();
         } finally {
             setDeletingId(null);
         }
