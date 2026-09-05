@@ -269,14 +269,32 @@ export default function SellerOrdersPage() {
                                             <p className="text-sm text-blue-800 mb-2">
                                                 🚚 Tracking: {order.trackingNumber || "N/A"}
                                             </p>
-                                            <div className="flex gap-2">
-                                                <button className="flex-1 py-2 border-2 border-blue-600 text-blue-600 rounded-lg font-semibold hover:bg-blue-50">
-                                                    Update Tracking
-                                                </button>
-                                                <button className="flex-1 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700">
-                                                    Mark as Delivered
-                                                </button>
-                                            </div>
+                                            {/* #388. Two buttons stood here — "Update Tracking" and
+                                                "Mark as Delivered" — with no onClick, no type and no
+                                                enclosing form. Both were inert: a seller looking at a
+                                                shipped order was offered two controls that did nothing
+                                                at all, next to a card whose OTHER status branch (the
+                                                one above, for processing) correctly links through to
+                                                the order page where the work is done.
+
+                                                Updating a tracking number is real, and it lives on
+                                                that page — an input plus handleStatusUpdate("shipped").
+                                                So this now does what its working sibling does.
+
+                                                "Mark as Delivered" is deliberately NOT rebuilt here or
+                                                anywhere. Delivery is confirmed by the BUYER, through
+                                                confirmOrderReceiptAction, and moving an order to
+                                                "delivered" starts a 24-hour automatic payout to the
+                                                seller — so a seller-side control for it would have
+                                                been a self-payout button. That the action still
+                                                accepted it from a seller was a separate finding,
+                                                #389. */}
+                                            <Link
+                                                href={`/marketplace/seller/orders/${order.id}`}
+                                                className="block w-full py-2 border-2 border-blue-600 text-blue-600 text-center rounded-lg font-semibold hover:bg-blue-50"
+                                            >
+                                                Manage Shipment
+                                            </Link>
                                         </div>
                                     )}
 

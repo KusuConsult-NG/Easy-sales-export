@@ -19,6 +19,7 @@ import { getLogisticsProvider } from "@/lib/logistics";
 import { runQueryWithRetry } from "@/lib/firestore-utils";
 import { ESCROW_RELEASABLE_FROM, pickOrderEscrow, escrowIdFor } from "@/lib/escrow-status";
 import { hasReservedStock } from "@/lib/order-status";
+import { canSetOrderStatus, orderStatusRefusal } from "@/lib/order-status-authority";
 import { scopeOrderToSeller } from "@/lib/order-scope";
 
 /**
@@ -130,9 +131,24 @@ async function _updateOrderStatusAction(
                 throw new Error("Not authorized to update this order");
             }
 
-            const allowedStatuses: OrderStatus[] = ["processing", "shipped", "delivered", "cancelled"];
-            if (!allowedStatuses.includes(newStatus)) {
-                throw new Error(`Sellers cannot set status to '${newStatus}'`);
+            // #389 SECURITY. This was one flat list —
+            //
+            //     ["processing", "shipped", "delivered", "cancelled"]
+            //
+            // — applied identically to a seller and to an admin. "delivered" is
+            // not a label: the branch below writes it onto every escrow row for
+            // the order, and api/cron/release-escrow pays the seller 24 hours
+            // after an escrow row reaches that status. So a seller calling this
+            // action with "delivered" started the timer on their own payout,
+            // with no buyer confirmation and no admin release.
+            //
+            // The buyer's door is confirmOrderReceiptAction, gated on
+            // `orderData.buyerId !== userId`. That is where "delivered" is
+            // supposed to come from. See lib/order-status-authority.ts for the
+            // whole measurement; the rule lives there so this file and its
+            // tests read the same list.
+            if (!canSetOrderStatus(newStatus, { isAdmin: isUserAdmin })) {
+                throw new Error(orderStatusRefusal(newStatus, { isAdmin: isUserAdmin }));
             }
 
             const updateData: any = { status: newStatus,

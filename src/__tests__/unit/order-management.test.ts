@@ -200,4 +200,83 @@ describe('updateOrderStatusAction Unit Tests', () => {
             })
         );
     });
+
+    /**
+     * #389. "delivered" is not a label — it is the start of a payout.
+     *
+     * The branch above it writes "delivered" onto the order's escrow rows, and
+     * api/cron/release-escrow pays the seller 24 hours after an escrow row
+     * reaches that status. Delivery is confirmed by the BUYER, through
+     * confirmOrderReceiptAction; this action used to accept it from the seller
+     * as well, so a seller could start the clock on their own money.
+     *
+     * These two run through the ACTION rather than through canSetOrderStatus,
+     * which controls-that-persist-nothing.test.ts covers directly. The rule
+     * being right and the rule being APPLIED are different claims, and this
+     * audit has repeatedly found the second one missing where the first held.
+     */
+    it('#389 SECURITY: refuses a SELLER marking their own order delivered', async () => {
+        (global as any).mockRequireSession.mockImplementation(() => Promise.resolve({
+            session: { user: { id: "seller-1", roles: ["seller"] } },
+            error: null
+        }));
+
+        const mockOrderData = {
+            id: "order-389",
+            sellerId: "seller-1",
+            sellerIds: ["seller-1"],
+            buyerId: "buyer-1",
+            status: "shipped",
+        };
+        (global as any).mockFirestoreTxGet.mockImplementation(() => Promise.resolve({
+            exists: true, data: () => mockOrderData,
+        }));
+        (global as any).mockFirestoreGet.mockImplementation(() => Promise.resolve({
+            exists: true, data: () => mockOrderData,
+        }));
+        (global as any).mockFirestoreUpdate.mockClear();
+
+        const result = await updateOrderStatusAction("order-389", "delivered");
+
+        expect(result.success).toBe(false);
+        // The refusal names the buyer's door — #322: a bare "no" reads as a
+        // broken button to the person looking at the screen.
+        expect(result.error).toMatch(/buyer/i);
+        // And nothing was written. A refusal that still wrote would leave the
+        // escrow armed for the cron, which is the whole harm.
+        expect((global as any).mockFirestoreUpdate).not.toHaveBeenCalled();
+    });
+
+    it('#389: an ADMIN may still confirm delivery on the buyer\'s behalf', async () => {
+        (global as any).mockRequireSession.mockImplementation(() => Promise.resolve({
+            session: { user: { id: "admin-1", roles: ["admin"] } },
+            error: null
+        }));
+
+        const mockOrderData = {
+            id: "order-389-admin",
+            sellerId: "seller-1",
+            sellerIds: ["seller-1"],
+            buyerId: "buyer-1",
+            status: "shipped",
+        };
+        (global as any).mockFirestoreTxGet.mockImplementation(() => Promise.resolve({
+            exists: true, data: () => mockOrderData,
+        }));
+        // `docs`/`empty` as well as the document shape: the "delivered" branch
+        // reads this handle BOTH as a document (the order) and as a query
+        // result (the order's escrow rows). Without them escrowDocs is
+        // undefined and the action fails on "escrowDocs is not iterable" —
+        // which would have looked like the refusal this test is checking is
+        // absent, rather than like a gap in the harness.
+        (global as any).mockFirestoreGet.mockImplementation(() => Promise.resolve({
+            exists: true, data: () => mockOrderData, docs: [], empty: true,
+        }));
+
+        const result = await updateOrderStatusAction("order-389-admin", "delivered");
+
+        // Nothing was removed by the fix — support still needs this when a
+        // buyer will not confirm a delivery that plainly happened.
+        expect(result.success).toBe(true);
+    });
 });

@@ -428,9 +428,25 @@ export default function ExportWindowDetailPage() {
                                         "Invest Now"
                                     )}
                                 </button>
-                                <button className="w-full px-6 py-3 bg-slate-100 text-slate-900 font-semibold rounded-xl hover:bg-slate-200 transition">
-                                    Save for Later
-                                </button>
+                                {/* #388. A second button stood here, captioned "Save for
+                                    Later", with no onClick and no form — it was inert.
+
+                                    THIS ONE IS REMOVED RATHER THAN WIRED, and the difference
+                                    from #105 is worth stating. There, the Farm Nation heart
+                                    was wired up because everything behind it already existed:
+                                    a saved_items collection, a toggle action, and a
+                                    favouriteCount on the listing waiting to be moved.
+
+                                    Here nothing behind it exists. lib/saved-items.ts knows
+                                    two kinds of saveable thing — a marketplace seller and a
+                                    land listing — each with its own list screen
+                                    (/marketplace/buyer/saved, /farm-nation/saved) and its own
+                                    route entry. An export window is a third kind, and adding
+                                    it means a new type, a new list screen and a way into it.
+                                    That is a feature to build, not a defect to repair, and
+                                    leaving the control standing in the meantime is the thing
+                                    this finding is about. The investor keeps the control that
+                                    works. */}
                             </div>
                         </div>
 
