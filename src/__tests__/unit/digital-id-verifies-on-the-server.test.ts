@@ -46,12 +46,28 @@ afterEach(() => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#344 — the module refuses to run without its key', () => {
-    it('VERIFY THROWS, naming the variable, when QR_ENCRYPTION_KEY is unset', async () => {
-        // THE test. This used to fall back to a string in the source.
+    it('VERIFY FAILS CLOSED, DISTINGUISHABLY, when QR_ENCRYPTION_KEY is unset', async () => {
+        /**
+         * THE test. This used to fall back to a string in the source.
+         *
+         * It asserted a THROW until the merge with main. main (PR #221) fixed
+         * the same defect and made the verifier fail closed with a distinct
+         * error instead, and that is the better answer: /api/qr/verify calls
+         * this on a public page, so throwing turns a deployment mistake into a
+         * 500 the caller cannot interpret. The goal this test was written for —
+         * a config fault must not be folded into "Invalid QR code format" — is
+         * still met, and still asserted, by the error being its own string.
+         */
         delete process.env.QR_ENCRYPTION_KEY;
         const { verifyDigitalIDQR } = await import('@/lib/digital-id');
 
-        expect(() => verifyDigitalIDQR('anything')).toThrow(/QR_ENCRYPTION_KEY/);
+        const result = verifyDigitalIDQR('anything');
+
+        expect(result.valid).toBe(false);
+        expect(result.error).toBe('Service configuration error');
+        // And it is NOT the message a malformed or forged card gets, which is
+        // the separation the original assertion existed to protect.
+        expect(result.error).not.toMatch(/Invalid QR code|signature|expired/i);
     });
 
     it('and so does the generator', async () => {

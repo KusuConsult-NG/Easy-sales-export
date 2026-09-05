@@ -16,7 +16,7 @@
     "lint": "eslint --max-warnings=0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "verify": "npm run typecheck && npm run lint && npm run build && npm run test",
-    "test": "jest",
+    "test": "TZ=UTC jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:tz": "TZ=Africa/Lagos jest --testPathIgnorePatterns=/node_modules/ --testPathPatterns=src/__tests__/tz",

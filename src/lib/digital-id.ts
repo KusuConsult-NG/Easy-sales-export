@@ -26,7 +26,7 @@ import QRCode from 'qrcode';
 function requireQrKey(): string {
     const key = process.env.QR_ENCRYPTION_KEY;
     if (!key) {
-        throw new Error("QR_ENCRYPTION_KEY is not set; digital ID cards cannot be signed or verified without it");
+        throw new Error("QR_ENCRYPTION_KEY is not set. Digital ID cards cannot be signed or verified without it.");
     }
     return key;
 }
@@ -47,6 +47,45 @@ export interface QRVerificationResult {
     payload?: DigitalIDPayload;
     error?: string;
 }
+
+/**
+ * Both functions below used to fall back to the literal string
+ * 'default-qr-secret-change-in-production' whenever QR_ENCRYPTION_KEY was
+ * unset. That fallback is public — it is this file, in a public repository —
+ * so a QR code signed or checked against it carries no security value: anyone
+ * can compute the same signature offline.
+ *
+ * It also could not have been fixed by setting the env var everywhere it
+ * matters, because verifyDigitalIDQR was called directly from a Client
+ * Component (src/app/verify-id/page.tsx). Next.js does not expose
+ * non-NEXT_PUBLIC_ variables to client bundles, so `process.env.QR_ENCRYPTION_KEY`
+ * was `undefined` there unconditionally — every build shipped the fallback
+ * string itself into the browser bundle (confirmed by grepping
+ * .next/static/chunks/app/verify-id/page-*.js for it). That page now calls the
+ * server-side /api/qr/verify route instead, as its sibling
+ * verify-id/scan/page.tsx already did.
+ *
+ * Failing closed here, the way MFA_SECRET_KEY already does in
+ * api/auth/mfa/verify/route.ts, means a future direct import cannot silently
+ * regress to the same public secret.
+ *
+ *   MERGE NOTE. This branch and main (PR #221) found and fixed the same defect
+ *   independently, with differently-named helpers: requireQrKey here,
+ *   requireQrSecretKey there. Merging kept ONE, and kept this branch's, for two
+ *   reasons that are behavioural rather than stylistic:
+ *
+ *     - its message names the consequence ("digital ID cards cannot be signed or
+ *       verified without it") rather than only the missing variable;
+ *   The note originally written here also claimed this branch's placement of the
+ *   call — outside the try in verifyDigitalIDQR — was the better of the two.
+ *   THAT WAS WRONG, and the merge went main's way instead: see the correction at
+ *   verifyDigitalIDQR. Throwing out of a verifier that a public route calls
+ *   turns a config mistake into an uninterpretable 500, where main's fails
+ *   closed with an error a caller can tell apart from a bad card.
+ *
+ *   The reasoning main's version carried is preserved above; only the duplicate
+ *   implementation is gone.
+ */
 
 /**
  * Generate QR code data URL for user
@@ -102,9 +141,25 @@ export async function generateDigitalIDQR(
  * Verify and decode QR code
  */
 export function verifyDigitalIDQR(encryptedData: string): QRVerificationResult {
-    // Outside the try, on purpose: a missing key is a deployment fault and must
-    // surface as one, not be folded into "Invalid QR code format".
-    const secretKey = requireQrKey();
+    /**
+     *   MERGE CORRECTION. This branch put requireQrKey() OUTSIDE the try, so a
+     *   missing key threw out of the verifier. The reasoning was that a
+     *   deployment fault must surface as one rather than be folded into
+     *   "Invalid QR code format" — right about the goal, wrong about the means.
+     *
+     *   /api/qr/verify calls this on a PUBLIC page. Throwing turns a
+     *   configuration mistake into a 500 the caller cannot interpret, and main's
+     *   fix (PR #221) achieved the same separation better: fail closed, and
+     *   return an error string that is distinguishable from a bad card. That is
+     *   what is kept here, and its test pins it.
+     */
+    let secretKey: string;
+    try {
+        secretKey = requireQrKey();
+    } catch {
+        return { valid: false, error: 'Service configuration error' };
+    }
+
     try {
 
         // Decrypt payload
@@ -138,7 +193,9 @@ export function verifyDigitalIDQR(encryptedData: string): QRVerificationResult {
         console.error('QR verification error:', error);
         return {
             valid: false,
-            error: 'Invalid QR code format',
+            error: error instanceof Error && error.message === 'QR_ENCRYPTION_KEY is not set.'
+                ? 'Service configuration error'
+                : 'Invalid QR code format',
         };
     }
 }
