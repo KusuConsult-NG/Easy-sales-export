@@ -13,13 +13,14 @@ import { MARKETPLACE_CONFIG } from "@/lib/constants";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { usePendingApplicationStatus } from "@/hooks/usePendingApplicationStatus";
+import { StatusCheckNotice } from "@/components/application/StatusCheckNotice";
 import { COLLECTIONS } from "@/lib/client-collections";
 
 export default function MarketplacePendingPage() {
     const { data: session } = useSession();
     const router = useRouter();
 
-    const { status: applicationStatus } = usePendingApplicationStatus({
+    const { status: applicationStatus, checkFailed, sessionExpired } = usePendingApplicationStatus({
         collectionName: COLLECTIONS.SELLER_VERIFICATIONS,
         userId: session?.user?.id,
         statusField: "status",
@@ -36,6 +37,8 @@ export default function MarketplacePendingPage() {
     return (
         <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
             <div className="max-w-2xl w-full">
+                {/* #415 — the newest poll could not answer; say so. */}
+                <StatusCheckNotice checkFailed={checkFailed} sessionExpired={sessionExpired} />
                 {/* Card */}
                 <div className="bg-white rounded-xl border border-slate-200 p-8 text-center">
                     {/* Icon */}

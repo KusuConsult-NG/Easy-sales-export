@@ -42,14 +42,15 @@ describe("getMyApplicationStatus", () => {
     it("refuses a collection that is not on the allowlist, without querying", async () => {
         const result = await getMyApplicationStatus("users", "roles");
 
-        expect(result.status).toBe("pending");
+        // #415 — "unknown", not "pending". See the note below.
+        expect(result.status).toBe("unknown");
         expect(global.mockFirestoreCollection).not.toHaveBeenCalled();
     });
 
     it("refuses an allowlisted collection paired with an unlisted status field", async () => {
         const result = await getMyApplicationStatus(COLLECTIONS.WAVE_APPLICATIONS, "roles");
 
-        expect(result.status).toBe("pending");
+        expect(result.status).toBe("unknown");
         expect(global.mockFirestoreCollection).not.toHaveBeenCalled();
     });
 
@@ -58,7 +59,9 @@ describe("getMyApplicationStatus", () => {
 
         const result = await getMyApplicationStatus(COLLECTIONS.WAVE_APPLICATIONS, "status");
 
-        expect(result.status).toBe("pending");
+        // #415 — the same word its neighbour getMyMembershipStatus has always
+        // used for this, asserted twenty lines further down.
+        expect(result.status).toBe("unauthenticated");
         expect(global.mockFirestoreCollection).not.toHaveBeenCalled();
     });
 
@@ -85,12 +88,21 @@ describe("getMyApplicationStatus", () => {
         expect(global.mockFirestoreCollection).toHaveBeenCalledWith(COLLECTIONS.USERS);
     });
 
-    it("reports pending rather than throwing when the query fails", async () => {
+    it("reports UNKNOWN rather than pending when the query fails", async () => {
+        /**
+         *   #415. This test used to assert "pending", and that was the defect:
+         *   all five waiting screens leave the page on
+         *   `applicationStatus === "approved"`, so answering a failed read with
+         *   a definite "you are still waiting" held an approved applicant on a
+         *   page telling them to wait. The neighbouring describe block has
+         *   always asserted "unknown" and "unauthenticated" for exactly these
+         *   two cases in getMyMembershipStatus; the two agree now.
+         */
         global.mockFirestoreGet.mockRejectedValue(new Error("connection reset"));
 
         const result = await getMyApplicationStatus(COLLECTIONS.WAVE_APPLICATIONS, "status");
 
-        expect(result.status).toBe("pending");
+        expect(result.status).toBe("unknown");
     });
 });
 

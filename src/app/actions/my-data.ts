@@ -444,6 +444,38 @@ export interface MyApplicationStatus {
 const PENDING: MyApplicationStatus = { status: "pending", createdAt: null, rejectionReason: null };
 
 /**
+ *   #415 "I COULD NOT CHECK" WAS ANSWERED AS "YOU ARE STILL WAITING".
+ *
+ *   getMyApplicationStatus returned PENDING — a definite state — for four
+ *   different situations: a genuine pending row, no row at all, a lookup that
+ *   is not on the allowlist, NO SESSION, and a thrown query. The last two are
+ *   not statuses. They are the absence of an answer.
+ *
+ *   AND IT DECIDES A REDIRECT. All five pending screens (wave, academy,
+ *   export, marketplace, farm-nation) leave the "Application Under Review"
+ *   page on `applicationStatus === "approved"`. So while the read keeps
+ *   failing, an applicant who HAS been approved is held on a page telling them
+ *   to wait — and one whose session has expired is told the same thing instead
+ *   of being asked to sign in. #313's class ("MFA reported off when it could
+ *   not check"), #316's ("academy payment status answered unpaid"), #323's
+ *   ("a failed membership check ejected real WAVE members").
+ *
+ *   ITS OWN NEIGHBOUR ALREADY DISAGREED. getMyMembershipStatus, seventy lines
+ *   below in this same file, answers "unauthenticated" with no session and
+ *   "unknown" when it finds nothing — and both are asserted in
+ *   lib/__tests__/my-data-status.test.ts, in the describe block directly under
+ *   the one that asserted this function reports "pending" when the query
+ *   fails. Two answers to one question, tested side by side, and the
+ *   difference was never the subject of either test.
+ *
+ *   The two now agree. `snap.empty` still answers "pending": no application row
+ *   IS the pending state for a page you only reach by applying. What changed is
+ *   the three cases where nothing was actually read.
+ */
+const UNKNOWN: MyApplicationStatus = { status: "unknown", createdAt: null, rejectionReason: null };
+const UNAUTHENTICATED: MyApplicationStatus = { status: "unauthenticated", createdAt: null, rejectionReason: null };
+
+/**
  * Status of the caller's most recent application of one kind.
  *
  * The browser version selected the newest record by sorting in JavaScript
@@ -454,7 +486,7 @@ export async function getMyApplicationStatus(
     statusField: string
 ): Promise<MyApplicationStatus> {
     const userId = await currentUserId();
-    if (!userId) return PENDING;
+    if (!userId) return UNAUTHENTICATED;
 
     const spec = APPLICATION_QUERIES[`${collectionName}:${statusField}`];
     if (!spec) {
@@ -462,7 +494,7 @@ export async function getMyApplicationStatus(
             collectionName,
             statusField,
         });
-        return PENDING;
+        return UNKNOWN;
     }
 
     try {
@@ -498,7 +530,7 @@ export async function getMyApplicationStatus(
         };
     } catch (error) {
         logger.error("[my-data] getMyApplicationStatus failed", { userId, collectionName, error });
-        return PENDING;
+        return UNKNOWN;
     }
 }
 

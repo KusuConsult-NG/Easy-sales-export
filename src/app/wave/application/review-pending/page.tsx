@@ -12,13 +12,14 @@ import { Clock, Mail, Phone, ArrowLeft, FileText, CheckCircle, XCircle, Loader2 
 import { useSession } from "next-auth/react";
 import { COMPANY_INFO } from "@/lib/constants";
 import { usePendingApplicationStatus } from "@/hooks/usePendingApplicationStatus";
+import { StatusCheckNotice } from "@/components/application/StatusCheckNotice";
 import { COLLECTIONS } from "@/lib/client-collections";
 
 export default function ReviewPendingPage() {
     const { data: session } = useSession();
     const router = useRouter();
 
-    const { status: applicationStatus, createdAt, rejectionReason, isLoading } = usePendingApplicationStatus({
+    const { status: applicationStatus, createdAt, rejectionReason, isLoading, checkFailed, sessionExpired } = usePendingApplicationStatus({
         collectionName: COLLECTIONS.WAVE_APPLICATIONS,
         userId: session?.user?.id,
         statusField: "status",
@@ -99,6 +100,8 @@ export default function ReviewPendingPage() {
     return (
         <div className="min-h-screen bg-linear-to-br from-emerald-50 via-emerald-50 to-emerald-50 px-4 py-12">
             <div className="max-w-3xl mx-auto">
+                {/* #415 — the newest poll could not answer; say so. */}
+                <StatusCheckNotice checkFailed={checkFailed} sessionExpired={sessionExpired} />
                 {/* Top Navigation */}
                 <div className="flex items-center justify-between mb-8">
                     <Link

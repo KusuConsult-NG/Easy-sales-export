@@ -415,11 +415,15 @@ describe('getMyApplicationStatus', () => {
     it('refuses a lookup that is not on the allowlist', async () => {
         // Rule 2: the browser picks from a fixed list; the collection, the
         // status field and the ownership filter are all decided server-side.
+        //
+        // #415. The refusal answers "unknown", not "pending". Nothing was
+        // read, so there is no status to report — and "pending" is what the
+        // five waiting screens act on.
         store.seed(COLLECTIONS.USERS, ME, { roles: ['admin'] });
 
-        expect(await status('users')).toMatchObject({ status: 'pending' });
+        expect(await status('users')).toMatchObject({ status: 'unknown' });
         expect(await status(COLLECTIONS.WAVE_APPLICATIONS, 'somethingElse'))
-            .toMatchObject({ status: 'pending' });
+            .toMatchObject({ status: 'unknown' });
     });
 
     it('returns the NEWEST application of that kind', async () => {

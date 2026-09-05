@@ -13,13 +13,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { usePendingApplicationStatus } from "@/hooks/usePendingApplicationStatus";
+import { StatusCheckNotice } from "@/components/application/StatusCheckNotice";
 import { COLLECTIONS } from "@/lib/client-collections";
 
 export default function AcademyPendingPage() {
     const { data: session } = useSession();
     const router = useRouter();
 
-    const { status: applicationStatus } = usePendingApplicationStatus({
+    const { status: applicationStatus, checkFailed, sessionExpired } = usePendingApplicationStatus({
         collectionName: COLLECTIONS.ACADEMY_APPLICATIONS,
         userId: session?.user?.id,
         statusField: "status",
@@ -37,6 +38,8 @@ export default function AcademyPendingPage() {
     return (
         <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
             <div className="max-w-xl w-full">
+                {/* #415 — the newest poll could not answer; say so. */}
+                <StatusCheckNotice checkFailed={checkFailed} sessionExpired={sessionExpired} />
                 <div className="bg-white rounded-2xl shadow-xl p-8 text-center border border-slate-100">
                     <div className="w-20 h-20 mx-auto mb-6 bg-blue-100 rounded-full flex items-center justify-center">
                         <Clock className="w-10 h-10 text-blue-600" />

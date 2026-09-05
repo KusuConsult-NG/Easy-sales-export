@@ -13,13 +13,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { usePendingApplicationStatus } from "@/hooks/usePendingApplicationStatus";
+import { StatusCheckNotice } from "@/components/application/StatusCheckNotice";
 import { COLLECTIONS } from "@/lib/client-collections";
 
 export default function ExportOnboardingPendingPage() {
     const { data: session } = useSession();
     const router = useRouter();
 
-    const { status: applicationStatus } = usePendingApplicationStatus({
+    const { status: applicationStatus, checkFailed, sessionExpired } = usePendingApplicationStatus({
         collectionName: COLLECTIONS.EXPORT_APPLICATIONS,
         userId: session?.user?.id,
         statusField: "status",
@@ -37,6 +38,8 @@ export default function ExportOnboardingPendingPage() {
     return (
         <div className="min-h-screen bg-linear-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
             <div className="max-w-2xl w-full">
+                {/* #415 — the newest poll could not answer; say so. */}
+                <StatusCheckNotice checkFailed={checkFailed} sessionExpired={sessionExpired} />
                 {/* Status Card */}
                 <div className="bg-white rounded-2xl shadow-xl p-8 md:p-12 text-center">
                     {/* Icon */}
