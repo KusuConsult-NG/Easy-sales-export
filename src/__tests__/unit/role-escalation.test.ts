@@ -60,7 +60,7 @@
  *   exportUserDataAction      users:read
  */
 
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 
 const SUPER = 'super-1';
 const ADMIN = 'admin-1';
@@ -248,6 +248,22 @@ describe('updateUserRolesAction — the second path to the same place', () => {
 describe('the boundary the rest of the file already defended', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        /**
+         * #396 retired createImpersonationTokenAction behind this flag: the
+         * token it mints cannot be redeemed by anything, so it reported success
+         * for an operation that did not happen.
+         *
+         * The flag is ARMED here rather than these tests being deleted. What
+         * they assert is the privilege boundary — super_admin only, no admin
+         * target — and that boundary is exactly what must still hold if anybody
+         * ever builds the redemption half and turns the flag on. A refusal in
+         * front of it would make all three pass vacuously.
+         */
+        process.env.ADMIN_IMPERSONATION_ACTION = 'enabled';
+    });
+
+    afterEach(() => {
+        delete process.env.ADMIN_IMPERSONATION_ACTION;
     });
 
     it('bulkSuspendUsersAction skips an admin target when the caller is not super_admin', async () => {

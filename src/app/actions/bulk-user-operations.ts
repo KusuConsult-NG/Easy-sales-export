@@ -1,7 +1,40 @@
 /**
  * Bulk User Operations & Advanced Admin Actions
- * 
+ *
  * For admin productivity and user support
+ *
+ *   #396 NO PRODUCTION FILE IMPORTS THIS MODULE.
+ *
+ *   Counting importers across all of src/: every one is a test. The admin user
+ *   directory at /admin/users imports from "@/app/actions/admin" — a different
+ *   module — and there is no bulk toolbar on it. So all six exports here are
+ *   registered server actions with no screen and no route behind them.
+ *
+ *   Two of the six have no live equivalent ANYWHERE, which is worth stating
+ *   plainly so nobody assumes the capability exists:
+ *
+ *     bulkSuspendUsersAction / bulkActivateUsersAction
+ *         Nothing else suspends a PLATFORM user. The live suspend paths —
+ *         api/admin/marketplace/suspend-seller and the product moderation in
+ *         admin/_marketplace.ts — suspend a seller profile or a listing, not
+ *         an account.
+ *
+ *     exportUserDataAction
+ *         Nothing else assembles a per-user data export. The GDPR module
+ *         (lib/user-erasure.ts) erases; it does not export.
+ *
+ *   FIVE OF THE SIX ARE LEFT EXACTLY AS THEY ARE. They are correct, carefully
+ *   guarded implementations of operations an admin screen would legitimately
+ *   perform — #87's role-escalation boundary, #305's shared PII scrub and
+ *   #300's retire-don't-destroy rule all landed here — and none of them claims
+ *   to do something it does not do. Being unwired is a gap in the product, not
+ *   a defect in the code, and a flag in front of them would add friction
+ *   without preventing anything.
+ *
+ *   THE SIXTH IS DIFFERENT AND IS RETIRED. createImpersonationTokenAction
+ *   reports success and returns a token that nothing can redeem; see the
+ *   refusal at the call site and lib/admin-impersonation.ts for the
+ *   measurement.
  */
 
 "use server";
@@ -19,6 +52,7 @@ import { isUserRole } from "@/lib/types/roles";
 import { redis } from "@/lib/redis";
 import { invalidateUserCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { ActionResponse } from "@/lib/safe-action";
+import { isAdminImpersonationEnabled, ADMIN_IMPERSONATION_REFUSAL } from "@/lib/admin-impersonation";
 
 /**
  * Bulk suspend users (Admin only)
@@ -475,14 +509,38 @@ export async function bulkDeleteUsersAction(
 
 /**
  * Create impersonation token for support (Super Admin only)
- * 
+ *
  * SECURITY: Highly sensitive - creates time-limited token for admin to impersonate user
+ *
+ *   #396 RETIRED. THE TOKEN THIS RETURNS CANNOT BE REDEEMED BY ANYTHING.
+ *
+ *   `impersonation_tokens` has one writer — the add() below — and no reader
+ *   anywhere in src/. Nothing exchanges the returned id for a session, so this
+ *   reported success for an operation that did not happen.
+ *
+ *   The row's `active`, `expiresAt` and `usedAt` are the three fields a
+ *   redeemer would check to make the token single-use and time-limited. Nothing
+ *   reads them and nothing ever sets `usedAt`, so they are written and enforced
+ *   by nothing — which is the actual hazard, because the mint side looks
+ *   finished and a redeemer built on top of it would grant unlimited logins as
+ *   the target user, for ever.
+ *
+ *   Refused as the FIRST statement, before the session lookup, so no code path
+ *   reaches the write while the flag is off. The guards below are untouched and
+ *   still asserted by role-escalation.test.ts with the flag armed: super_admin
+ *   only, no admin target, a 20-character reason, 5–120 minutes.
+ *
+ *   See lib/admin-impersonation.ts for the measurement and for what must be
+ *   built before ADMIN_IMPERSONATION_ACTION is set to "enabled".
  */
 export async function createImpersonationTokenAction(
     targetUserId: string,
     reason: string,
     durationMinutes: number = 30
-): Promise<ActionResponse<{ token: string; expiresAt: string }>> { 
+): Promise<ActionResponse<{ token: string; expiresAt: string }>> {
+    if (!isAdminImpersonationEnabled()) {
+        return { success: false as const, error: ADMIN_IMPERSONATION_REFUSAL, data: null };
+    }
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };

@@ -20,6 +20,15 @@ export type AdminPermission =
     | "users:delete"
     | "users:suspend"
     | "users:assign_roles"
+    // #396 GRANTS NOTHING TODAY, AND THE MATRIX SHOULD NOT BE READ AS SAYING
+    // THE PLATFORM CAN IMPERSONATE A USER. The only action gated on this mints
+    // an impersonation_tokens row and returns its id; nothing reads that
+    // collection, so the token cannot be exchanged for a session. The action is
+    // retired behind ADMIN_IMPERSONATION_ACTION — see lib/admin-impersonation.ts.
+    // The permission is KEPT rather than removed: it is the boundary
+    // includesPrivilegedRole() and role-escalation.test.ts defend (an admin must
+    // not be able to grant it to themselves), and that boundary has to hold
+    // before a redemption path is built, not after.
     | "users:impersonate"
     // Bulk PII extraction. Separate from "users:read" on purpose: reading one
     // member's record to answer their support ticket and downloading every
