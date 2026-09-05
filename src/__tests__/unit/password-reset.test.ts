@@ -51,7 +51,7 @@
  * registered.
  */
 
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, beforeAll, afterAll, jest } from '@jest/globals';
 
 const EMAIL = 'person@example.com';
 const SUPABASE_ID = 'ab8f1c22-0000-4000-8000-000000000001';
@@ -281,12 +281,46 @@ describe('resetPasswordAction — the same policy as everywhere else', () => {
 });
 
 describe('sendResetEmailAction — somebody else\'s inbox is not a megaphone', () => {
+    /**
+     * #393. The key has to be set for these to exercise a send at all.
+     *
+     * This action used to construct its own Resend client and call it whatever
+     * the environment held; it now routes through sendEmailNotification, which
+     * refuses and logs when RESEND_API_KEY is absent — the #217 repair, where a
+     * missing key had been silent in production. So without this line the send
+     * is refused before the mocked client is reached, and "still sends a
+     * genuine reset email" fails for a reason that has nothing to do with the
+     * behaviour it names.
+     */
+    const KEY = process.env.RESEND_API_KEY;
+    beforeAll(() => { process.env.RESEND_API_KEY = 'test-key'; });
+    afterAll(() => {
+        if (KEY === undefined) delete process.env.RESEND_API_KEY;
+        else process.env.RESEND_API_KEY = KEY;
+    });
+
     beforeEach(() => {
         jest.clearAllMocks();
         setWorld();
         mockGetUserByEmail.mockResolvedValue({ uid: 'fb-uid-1' });
         mockSendEmail.mockResolvedValue({ data: {}, error: null });
         mockLimitCheck.mockResolvedValue({ success: true });
+    });
+
+    it('#393 reports failure rather than success when the mail provider is not configured', async () => {
+        // The behaviour the beforeAll above works around, asserted rather than
+        // only worked around. sendEmailNotification refuses outright with no
+        // key (#217), and the caller must surface that — a reset that reports
+        // success while sending nothing leaves somebody waiting for an email
+        // that will never come.
+        delete process.env.RESEND_API_KEY;
+        try {
+            const r: any = await send();
+            expect(r.success).toBe(false);
+            expect(mockSendEmail).not.toHaveBeenCalled();
+        } finally {
+            process.env.RESEND_API_KEY = 'test-key';
+        }
     });
 
     async function send(email = EMAIL) {

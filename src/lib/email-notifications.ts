@@ -249,8 +249,15 @@ export async function sendEmailNotification(data: EmailData): Promise<{ success:
  *        SCOPE, STATED. Eight files import Resend directly rather than coming
  *        through here, and sendBatchEmailNotifications is a separate path.
  *        Those are not covered by this repair — the queue is wired to the
- *        sender the typed helpers use, which is where a lost password-reset or
- *        approval notice actually comes from.
+ *        sender the typed helpers use.
+ *
+ *        #393 CORRECTS THE REST OF THAT SENTENCE. It went on to say the typed
+ *        senders are "where a lost password-reset or approval notice actually
+ *        comes from". They were not: actions/password-reset.ts was one of the
+ *        files importing Resend directly, so the email this paragraph used as
+ *        its example was the one the repair did not reach. It does now — the
+ *        reset routes through sendPasswordResetEmail below. The MFA code is
+ *        deliberately still outside; see the note there.
  *
  *        The two ends are connected now. Failures are queued and the cron
  *        retries them; a failure to QUEUE is swallowed, because the caller has
@@ -451,33 +458,76 @@ export async function sendWithdrawalConfirmationEmail(
 }
 
 /**
- * Send password reset email
+ *   #393 THE ONE EMAIL THE RETRY QUEUE WAS BUILT FOR DID NOT GO THROUGH IT.
+ *
+ *        #354 wired lib/email-queue to sendEmailNotification so a failed send
+ *        is queued and api/cron/process-email-queue retries it on its
+ *        ten-minute schedule. Its own scope note named the payoff:
+ *
+ *            "...a network blip while a password-reset link was going out,
+ *             lost that message with no second attempt."
+ *
+ *        THAT WAS WRONG ABOUT THIS EMAIL. This function had NO CALLER.
+ *        actions/password-reset.ts built its own Resend client and sent the
+ *        reset directly, so a Resend error was logged, returned as a failure,
+ *        and the message was gone — the exact loss the queue exists to prevent,
+ *        on the exact email that was cited as the reason to prevent it.
+ *
+ *        Two implementations of one email, and the one that ran was the one
+ *        outside the repair. The live path is now this function, so the send is
+ *        queued on failure like every other typed email.
+ *
+ *        THE MARKUP BELOW IS THE ONE USERS ALREADY RECEIVE — moved here from
+ *        actions/password-reset.ts rather than replaced, so nobody's inbox
+ *        changes. The old body of this function, which nobody ever received,
+ *        is not preserved: it said the same thing in a different template.
+ *
+ *        THE LINK IS SAFE TO RETRY. The token lives an hour (#261) and the
+ *        queue drains every ten minutes with at most five attempts, so a
+ *        retried reset arrives well inside the window. That is NOT true of the
+ *        MFA code — see the note at sendMFACode, which is deliberately left
+ *        un-queued for that reason.
  */
 export async function sendPasswordResetEmail(
     userEmail: string,
     resetLink: string
 ) {
+    // Escaped at each interpolation rather than once into a local: #218's
+    // ratchet reads the template and cannot follow a variable, and widening its
+    // allowlist to admit `href` would blunt it for every future template. Two
+    // calls are cheaper than a weaker gate.
     return sendEmailNotification({
         to: userEmail,
-        subject: 'Password Reset Request - Easy Sales Export',
+        subject: 'Reset Your Password - Easy Sales Export',
         message: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #333;">Password Reset Request</h2>
-                <p>We received a request to reset your password for your Easy Sales Export account.</p>
-                <p>Click the button below to reset your password:</p>
-                <div style="margin: 30px 0; text-align: center;">
-                    <a href="${escapeHtml(String(resetLink ?? ""))}" 
-                       style="background-color: #16a34a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
-                        Reset Password
-                    </a>
-                </div>
-                <p style="color: #ef4444; font-size: 14px; font-weight: bold; margin-top: 24px;">
-                    ⚠️ This link will expire in 1 hour. If it expires, please go to the login page and click "Forgot Password" to request a new one.
-                </p>
-                <p style="color: #666; font-size: 14px;">
-                    For security, never share this email or link with anyone.
-                </p>
-            </div>
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Password Reset</title></head>
+<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #f8fafc;">
+  <div style="background: white; border-radius: 16px; padding: 40px; border: 1px solid #e2e8f0;">
+    <div style="text-align: center; margin-bottom: 32px;">
+      <h1 style="color: #0f172a; font-size: 24px; margin: 0;">Password Reset Request</h1>
+      <p style="color: #64748b; margin-top: 8px;">Easy Sales Export</p>
+    </div>
+    <p style="color: #334155;">You requested a password reset for your Easy Sales Export account.
+      Click the button below to set a new password:</p>
+    <div style="text-align: center; margin: 32px 0;">
+      <a href="${escapeHtml(String(resetLink ?? ""))}"
+         style="background: #3b5bdb; color: white; padding: 14px 28px; border-radius: 10px;
+                text-decoration: none; font-weight: bold; font-size: 16px; display: inline-block;">
+        Reset My Password
+      </a>
+    </div>
+    <p style="color: #64748b; font-size: 14px;">
+      This link expires in <strong>1 hour</strong>. If you did not request this, you can safely ignore this email.
+    </p>
+    <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
+    <p style="color: #94a3b8; font-size: 12px; text-align: center;">
+      If the button doesn't work, copy this link: ${escapeHtml(String(resetLink ?? ""))}
+    </p>
+  </div>
+</body>
+</html>
         `,
         metadata: { type: 'password_reset' },
     });
@@ -676,6 +726,24 @@ export async function sendBriefingConfirmationEmail(
 
 /**
  * Send 24-Hour Briefing Reminder — "Tomorrow Changes Your Financial Direction"
+ *
+ *   #393 NO CALLER, AND THE CRON HALF OF THE COMMENT BELOW CANNOT BE BUILT
+ *        FROM WHAT IS STORED. Recorded with the measurement rather than left
+ *        as a to-do, because "24 hours before the briefing" needs a briefing
+ *        with a time, and there isn't one.
+ *
+ *        wave_briefing_registrations rows carry fullName, phone, email, state,
+ *        role, gender, status, createdAt — a registrant, not an event. There is
+ *        no briefing entity with a scheduled date anywhere in COLLECTIONS, so
+ *        nothing can compute "tomorrow". A scheduled job would have no key to
+ *        fire on, which is why one was never written.
+ *
+ *        The other half of the original note IS buildable: an ADMIN ACTION that
+ *        fans this out to every registration with status "registered", with the
+ *        admin choosing the day. That is a new control on the communications
+ *        screen — a feature, not a repair — so it is named here rather than
+ *        smuggled in.
+ *
  * Send to ALL registrants 24 hours before the briefing event.
  * Trigger from a scheduled cron job or admin action iterating over
  * all docs in `wave_briefing_registrations` where status === "registered".

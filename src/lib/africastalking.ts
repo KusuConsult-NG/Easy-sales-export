@@ -170,6 +170,22 @@ export async function smsDisputeResolved(phone: string, orderNumber: string, res
 }
 
 /** Notify a seller that they received a Verified Badge. */
+/**
+ * #393. NO CALLER, DELIBERATELY — the decision and its reason, so this is not
+ * re-found every sweep.
+ *
+ * The four other SMS helpers in this module are all wired, and all four mark
+ * MONEY MOVING: a withdrawal approved or rejected, a dispute resolved, escrow
+ * released. An SMS costs a message fee per recipient and interrupts somebody's
+ * phone, which those four earn.
+ *
+ * A verified badge does not move money. #391 gave the grant and the revoke an
+ * in-app notification — free, on a channel the seller already reads — beside
+ * the email that already went out on grant. Adding a paid third channel to a
+ * status change is a spend decision with no failure behind it, so it is not
+ * made here. Wiring it later means calling this from toggleVerifiedBadgeAction
+ * beside notifyBadgeUpdated.
+ */
 export async function smsBadgeGranted(phone: string) {
     return sendSMS(phone, "EasySales: Congratulations! Your seller account has been awarded a Verified Badge. It now appears on all your product listings.");
 }

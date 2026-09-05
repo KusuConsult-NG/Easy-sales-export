@@ -17,6 +17,20 @@ export interface EmailData {
  * If it fails (rate limit, network error, etc.), it saves the email
  * to the `email_queue` collection in Firestore for later processing.
  */
+/**
+ * #393. THIS EXPORT HAS NO CALLER, AND THAT IS THE OUTCOME OF #354 RATHER THAN
+ * AN OVERSIGHT — recorded so nobody wires it and ends up with two producers.
+ *
+ * #354 found this function unreferenced: "send now, and save to the queue if
+ * that fails", with nothing calling it, so EMAIL_QUEUE was never written while
+ * a cron drained it on a schedule. The repair did NOT wire this up. It wired
+ * saveToQueue — the private half — into sendEmailNotification, which is where
+ * the typed senders already funnel, so every one of them gained the retry at
+ * once instead of nineteen call sites being changed to use this.
+ *
+ * What is left here is the standalone form: useful to a caller that is not one
+ * of the typed senders and wants send-then-queue in one call. Nothing is today.
+ */
 export async function queueEmail(data: EmailData): Promise<{ success: boolean; queued: boolean; error?: string }> {
     try {
         // 1. Check Config

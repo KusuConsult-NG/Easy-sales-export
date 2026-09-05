@@ -104,7 +104,29 @@ export async function sendMFACode(email: string, userId: string): Promise<{ succ
             attempts: 0,
         });
 
-        // Send email via Resend
+        /**
+         *   #393 THIS ONE STAYS OFF THE RETRY QUEUE, DELIBERATELY.
+         *
+         *        The sweep that routed the password reset through
+         *        sendEmailNotification — so a failed send is queued and the
+         *        cron retries it — reached this send next and stopped.
+         *
+         *        The code above expires in MFA_OTP_EXPIRY_MINUTES, default 10.
+         *        api/cron/process-email-queue drains on a ten-minute schedule.
+         *        So a queued MFA code arrives at or after its own expiry: the
+         *        user reads a code that no longer works, or worse, reads a
+         *        stale one after already requesting a fresh one and cannot tell
+         *        which is live.
+         *
+         *        A second factor is a LIVE interaction. When the send fails the
+         *        right behaviour is the one below — tell the caller, who tells
+         *        the person waiting at the prompt, who asks for another. Not a
+         *        silent retry against a dead code.
+         *
+         *        Recorded here rather than left as an omission: "this send does
+         *        not use the queue" reads like something nobody got to, and it
+         *        is a decision with a number behind it.
+         */
         const senderEmail = process.env.EMAIL_FROM || 'Easy Sales Export <info@easysalesexport.com>';
         const { error } = await getResend().emails.send({
             from: senderEmail,
