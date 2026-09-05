@@ -12,6 +12,7 @@ import { getMyDisputes } from "@/app/actions/my-data";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { useFirebaseAuthed } from "@/hooks/useFirebaseAuthed";
 import { useToast } from "@/contexts/ToastContext";
+import { disputeStatusesForFilter } from "@/lib/dispute-status";
 import { startSupportConversationAction } from "@/app/actions/messages";
 
 interface Dispute {
@@ -110,7 +111,7 @@ export default function DisputesPage() {
     }
 
     const filtered = disputes.filter(d =>
-        filterStatus === "all" ? true : d.status === filterStatus
+        filterStatus === "all" ? true : disputeStatusesForFilter(filterStatus).includes(d.status)
     );
 
     if (loading || status === "loading") {
@@ -152,8 +153,11 @@ export default function DisputesPage() {
                             { key: "all", label: "All" },
                             { key: "open", label: "Open" },
                             { key: "under_review", label: "Under Review" },
+                            // #420 — one settled tab. "Closed" was a tab that could
+                            // never show a row: nothing writes that status, so a member
+                            // with a settled dispute saw an empty list and read it as
+                            // "I have none".
                             { key: "resolved", label: "Resolved" },
-                            { key: "closed", label: "Closed" },
                         ] as { key: "all" | Dispute["status"]; label: string }[]).map(f => (
                             <button
                                 key={f.key}

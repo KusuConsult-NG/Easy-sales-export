@@ -6,6 +6,7 @@
 
 import { requireSession, isAdmin } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
+import { disputeStatusesForFilter } from "@/lib/dispute-status";
 import { claimStatusTransition, claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { creditWalletOnce } from "@/lib/wallet-ledger";
 import { supabaseDb as db } from "@/lib/supabase-db";
@@ -396,7 +397,10 @@ async function _getAdminDisputesAction(options: { status?: "open" | "under_revie
         let queryRef = db.collection(COLLECTIONS.DISPUTES).orderBy("createdAt", sortDirection);
 
         if (options.status && options.status !== "all") { queryRef = db.collection(COLLECTIONS.DISPUTES)
-                .where("status", "==", options.status)
+                // #420 — "resolved" asks for the SETTLED set, so a row stored
+                // as "closed" is still found. Nothing writes "closed" today,
+                // which is exactly why a filter for it alone answered "none".
+                .where("status", "in", disputeStatusesForFilter(options.status))
                 .orderBy("createdAt", sortDirection);
         }
 

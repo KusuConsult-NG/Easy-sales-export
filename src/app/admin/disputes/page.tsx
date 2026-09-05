@@ -133,8 +133,10 @@ export default function AdminDisputesPage() {
                             <option value="all">All Status</option>
                             <option value="open">Open</option>
                             <option value="under_review">Under Review</option>
+                            {/* #420 — one settled choice, matching both "resolved" and the
+                                declared-but-unwritten "closed". A separate "Closed" option
+                                could only ever answer "none". */}
                             <option value="resolved">Resolved</option>
-                            <option value="closed">Closed</option>
                         </select>
                     </div>
                 </div>
