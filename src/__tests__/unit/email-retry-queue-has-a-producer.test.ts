@@ -226,15 +226,48 @@ describe('#354 — the wiring, and the claim it rests on', () => {
         expect(routed).toContain('sendPasswordResetEmail');
     });
 
-    it('RECORDED: eight files bypass this module and import Resend directly', () => {
-        // Scope, stated rather than implied. Those sends are not queued by
-        // this repair, and saying so is cheaper than someone assuming they are.
-        const direct: string = execSync(
+    it('#394 CLOSED the scope this test used to record', () => {
+        /**
+         * This read "RECORDED: eight files bypass this module and import Resend
+         * directly", and asserted there were at least five. That was the honest
+         * scope of #354 and it is no longer the state of the codebase: #393 moved
+         * the password reset onto this sender and #394 moved the other twelve,
+         * so the bypass list is down to the modules that must own their own
+         * client.
+         *
+         * The assertion is inverted rather than deleted. A number that could
+         * only be at least five is now a named, closed set — which is a
+         * stronger claim, and it fails if somebody adds a fourteenth bypass
+         * back.
+         */
+        const direct = execSync(
             "grep -rln \"await import('resend')\" --include='*.ts' src | grep -v __tests__ || true",
             { encoding: 'utf-8' },
-        );
+        ).split('\n').filter(Boolean).sort();
 
-        expect(direct.split('\n').filter(Boolean).length).toBeGreaterThanOrEqual(5);
-        expect(readFileSync(SENDER, 'utf-8')).toMatch(/import Resend directly rather than coming/);
+        expect(direct).toEqual([
+            /**
+             * NOT CONVERTED, AND NOT AN OVERSIGHT. This is a second BULK
+             * sender: it calls resend.batch.send with its own chunking and its
+             * own partial-failure count, which #187 and #219 both had to
+             * repair. lib/email-notifications.ts already has
+             * sendBatchEmailNotifications doing the same job, so these are two
+             * doors — but folding one into the other means re-deriving the
+             * delivered-vs-attempted counting that a previous finding got
+             * wrong, and that is its own piece of work rather than a rider on
+             * this one. Named here so it is a known item and not a gap.
+             */
+            'src/app/actions/admin-communications.ts',
+            // The sender itself, and the two halves of the queue it feeds.
+            'src/app/api/cron/process-email-queue/route.ts',
+            'src/lib/email-notifications.ts',
+            'src/lib/email-queue.ts',
+        ]);
+
+        // lib/mfa.ts holds a Resend client too, through a static import rather
+        // than this dynamic one. It is deliberately outside the queue — a code
+        // that expires in ten minutes must not be retried by a ten-minute cron
+        // (#393) — and its own file records that.
+        expect(readFileSync('src/lib/mfa.ts', 'utf-8')).toMatch(/#393/);
     });
 });

@@ -87,15 +87,25 @@ describe('the contact form limit', () => {
 
 describe('the route applies it', () => {
     it('checks the limit before parsing the body or sending anything', async () => {
-        // Order matters: a limit applied after resend.emails.send() throttles
-        // the response, not the email.
+        // Order matters: a limit applied after the send throttles the
+        // response, not the email.
+        //
+        // #394. The marker was `emails.send` — this route built its own Resend
+        // client. It now calls the shared sender, so the marker moved with it.
+        // Read with comments stripped: the route's own repair note names the
+        // old call, and a raw scan would find the tombstone rather than the
+        // send. Same trap as #383/#384/#392.
         const { readFileSync } = await import('fs');
         const { join } = await import('path');
-        const src = readFileSync(join(process.cwd(), 'src/app/api/contact/route.ts'), 'utf-8');
+        const { stripComments } = await import('@/lib/testing/strip-comments');
+        const src = stripComments(
+            readFileSync(join(process.cwd(), 'src/app/api/contact/route.ts'), 'utf-8'),
+            { label: 'contact route' },
+        );
 
         const limitAt = src.indexOf('contactLimiter.check(');
         const parseAt = src.indexOf('await request.json()');
-        const sendAt = src.indexOf('emails.send');
+        const sendAt = src.indexOf('sendEmailNotification(');
 
         expect(limitAt).toBeGreaterThan(-1);
         expect(limitAt).toBeLessThan(parseAt);

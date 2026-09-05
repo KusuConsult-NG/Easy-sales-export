@@ -23,7 +23,7 @@ import {
     PRODUCT_REJECTABLE_FROM,
     normaliseProductStatus,
 } from "@/lib/product-status";
-import { canSendEmail } from "@/lib/email-notifications";
+import { canSendEmail, sendEmailNotification } from "@/lib/email-notifications";
 import { notifyBadgeUpdated } from "@/lib/marketplace-notifications";
 
 // ============================================
@@ -164,14 +164,12 @@ async function _approveSellerVerificationAction(
         if (canSendEmail("seller approval email", userEmail)) {
             {
                 try {
-                    const { Resend } = await import("resend");
-                    const resend = new Resend(process.env.RESEND_API_KEY);
 
-                    const { error } = await resend.emails.send({
+                    const { error } = await sendEmailNotification({
                         from: process.env.EMAIL_FROM || "Easy Sales Export <info@easysalesexport.com>",
                         to: userEmail,
                         subject: "Seller Account Approved!",
-                        html: `
+                        message: `
                             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                                 <h2 style="color: #059669;">You are now a Seller!</h2>
                                 <p>Congratulations! Your seller verification has been approved.</p>
@@ -191,7 +189,8 @@ async function _approveSellerVerificationAction(
                                     <a href="https://easysalesexport.com/marketplace/seller/dashboard" style="background-color: #059669; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Go to Seller Dashboard</a>
                                 </div>
                             </div>
-                        `
+                        `,
+                        metadata: { type: "marketplace_decision" },
                     });
                     if (error) {
                         logger.error("Resend API Error (Seller approval email):", error);
@@ -315,13 +314,11 @@ async function _toggleVerifiedBadgeAction(
         let emailSent = false;
         if (newBadgeState && data.email && process.env.RESEND_API_KEY) {
             try {
-                const { Resend } = await import("resend");
-                const resend = new Resend(process.env.RESEND_API_KEY);
-                const { error } = await resend.emails.send({
+                const { error } = await sendEmailNotification({
                     from: process.env.EMAIL_FROM || "Easy Sales Export <info@easysalesexport.com>",
                     to: data.email,
                     subject: "🏅 You've earned a Verified Badge!",
-                    html: `
+                    message: `
                         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
                           <div style="background:#16a34a;padding:20px 28px">
                             <h1 style="color:#fff;margin:0;font-size:20px">Easy Sales Export</h1>
@@ -333,6 +330,7 @@ async function _toggleVerifiedBadgeAction(
                             <p style="color:#9ca3af;font-size:12px;margin-top:24px">Easy Sales Export · easysalesexport.com</p>
                           </div>
                         </div>`,
+                    metadata: { type: "marketplace_decision" },
                 });
                 if (error) {
                     logger.error("[toggleVerifiedBadgeAction] Resend API Error:", error);

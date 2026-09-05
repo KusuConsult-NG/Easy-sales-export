@@ -8,6 +8,14 @@ export interface EmailData {
     subject: string;
     message: string; // HTML content
     metadata?: Record<string, any>;
+    /**
+     * #394. The queue row carries the sender and the reply-to, so a retry
+     * delivers the same email that failed rather than a subtly different one:
+     * an academy decision retried as the platform default, or a contact-form
+     * reply that no longer goes back to the person who wrote in.
+     */
+    from?: string;
+    replyTo?: string;
 }
 
 /**
@@ -105,6 +113,8 @@ export async function saveToQueue(data: EmailData, lastError: string) {
             subject: data.subject,
             message: data.message,
             metadata: data.metadata || {},
+            from: data.from ?? null,
+            replyTo: data.replyTo ?? null,
             status: "pending",
             attempts: 1,
             lastError: lastError,

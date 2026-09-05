@@ -16,7 +16,7 @@ import { LandListingVerificationSchema } from "@/lib/schemas";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { requireAdmin } from "@/lib/require-admin";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
-import { canSendEmail } from "@/lib/email-notifications";
+import { canSendEmail, sendEmailNotification } from "@/lib/email-notifications";
 import {
     APPROVABLE_FROM_STATUSES,
     REJECTABLE_FROM_STATUSES,
@@ -224,8 +224,6 @@ async function _verifyLandListing(
             // second, narrower statement of the same thing rather than the only
             // one; it is kept because its message names the listing id.
             if (canSendEmail("land listing decision email", listingData.ownerEmail)) {
-                const { Resend } = await import("resend");
-                const resend = new Resend(process.env.RESEND_API_KEY);
 
                 const emailSubject = decision === "approved"
                     ? "Land Listing Approved"
@@ -257,11 +255,12 @@ async function _verifyLandListing(
                     logger.error(`Missing ownerEmail forland listing ${listingId}`);
                 } else {
                     try {
-                        const { error } = await resend.emails.send({
+                        const { error } = await sendEmailNotification({
                             from: process.env.EMAIL_FROM || "Easy Sales Export <info@easysalesexport.com>",
                             to: listingData.ownerEmail,
                             subject: emailSubject,
-                            html: emailContent,
+                            message: emailContent,
+                            metadata: { type: "land_decision" },
                         });
                         if (error) {
                             logger.error(`Resend API Error (Land listing ${decision} email):`, error);

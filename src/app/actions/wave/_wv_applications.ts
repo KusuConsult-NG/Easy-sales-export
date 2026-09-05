@@ -10,13 +10,13 @@ import { hasAdminPermission, isPlatformAdmin } from "@/lib/admin-permissions";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { z } from "zod";
 import { strictNameSchema, strictEmailSchema, strictPhoneSchema } from "@/lib/schemas";
-import { Resend } from "resend";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { hashData } from "@/lib/security";
 import { checkWaveEligibility } from "@/lib/wave-eligibility";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { toMillis } from "@/lib/firestore-serialize";
+import { sendEmailNotification } from "@/lib/email-notifications";
 
 // Validation Schema for WAVE Application (OFFICIAL BENEFICIARY APPLICATION FORM)
 const waveApplicationSchema = z.object({ // SECTION A: Personal Identification
@@ -443,17 +443,24 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
         }).catch(err => logger.error("Deferred audit log failed (WAVE):", err));
 
         try {
-            const resend = new Resend(process.env.RESEND_API_KEY);
             const applicantEmail = session.user.email || validatedData.email;
             const adminEmail = process.env.ADMIN_EMAIL || 'admin@easysalesexport.com';
             const applicantName = `${validatedData.firstName} ${validatedData.surname}`;
 
             if (applicantEmail) {
-                await resend.emails.send({
+                /**
+                 * #394. This was `await resend.emails.send({...})` with the
+                 * result thrown away. Resend RETURNS its errors rather than
+                 * throwing them, so the surrounding try/catch never fired and a
+                 * refused or rate-limited WAVE application email was invisible — not
+                 * logged, not retried, not noticed. Five sends across the
+                 * platform had that shape.
+                 */
+                const { error: sendError } = await sendEmailNotification({
                     from: process.env.EMAIL_FROM || 'RH-WAVE 774 <info@easysalesexport.com>',
                     to: applicantEmail,
                     subject: 'Your WAVE Application Has Been Received — RH-WAVE 774',
-                    html: `
+                    message: `
                         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
                             <div style="background:linear-gradient(135deg,#166534,#16a34a);padding:32px;border-radius:12px;text-align:center;margin-bottom:24px;">
                                 <h1 style="color:white;margin:0;font-size:24px;">RH-WAVE 774</h1>
@@ -470,8 +477,10 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
                             <p style="color:#374151;">Thank you for being part of this national movement.
                             <br/><br/><strong style="color:#166534;">RH-WAVE 774 Team</strong><br/>Easy Sales Export Nigeria Ltd</p>
                         </div>
-                    `
+                    `,
+                    metadata: { type: "wave_application" },
                 });
+                if (sendError) logger.error("[#394] email send failed", { error: sendError });
             }
 
             const { notifyAdmins } = await import("@/lib/admin-notifications");

@@ -15,10 +15,10 @@ import { paginatedOk, paginatedErr, PaginatedAdminResponse } from "@/lib/admin-a
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { getAdminScope } from "@/lib/cooperative-admin-scope";
 import { createAdminAuditLog } from "@/lib/audit-log";
-import { Resend } from "resend";
 import { deleteCache, invalidateCooperativeCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { extractCanonicalUser } from "@/lib/canonical/normalizer";
 import { recordAdminAction } from "@/lib/audit-log";
+import { sendEmailNotification } from "@/lib/email-notifications";
 
 // ============================================================================
 // MEMBER MANAGEMENT
@@ -437,12 +437,11 @@ async function _updateMemberStatusAction(
 
         if (status === "active" && notificationInfo && targetUserId) {
             try {
-                const resend = new Resend(process.env.RESEND_API_KEY);
-                const { error } = await resend.emails.send({
+                const { error } = await sendEmailNotification({
                     from: process.env.EMAIL_FROM || 'Easy Sales Export <info@easysalesexport.com>',
                     to: notificationInfo.email,
                     subject: '✅ Your Cooperative Membership Has Been Approved!',
-                    html: `
+                    message: `
                         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
                             <div style="background:linear-gradient(135deg,#7c3aed,#a855f7);padding:32px;border-radius:12px;text-align:center;margin-bottom:24px;">
                                 <h1 style="color:white;margin:0;">Welcome to the Cooperative!</h1>
@@ -456,6 +455,7 @@ async function _updateMemberStatusAction(
                             <p style="color:#6b7280;font-size:14px;">Easy Sales Export Cooperative Team</p>
                         </div>
                     `,
+                    metadata: { type: "cooperative_membership" },
                 });
                 if (error) {
                     logger.error("Resend API Error (Cooperative approval email):", error);
@@ -553,12 +553,11 @@ export async function requestCooperativeRevisionAction(
         // Send revision requested email (non-blocking post-commit)
         try {
             if (notificationData?.email) {
-                const resend = new Resend(process.env.RESEND_API_KEY);
-                const { error } = await resend.emails.send({
+                const { error } = await sendEmailNotification({
                     from: process.env.EMAIL_FROM || 'Easy Sales Export <info@easysalesexport.com>',
                     to: notificationData.email,
                     subject: '⚠️ Action Required: Update Your Cooperative Application',
-                    html: `
+                    message: `
                         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
                             <h2 style="color:#d97706;">Application Update Requested</h2>
                             <p>Dear <strong>${notificationData.name}</strong>,</p>
@@ -572,6 +571,7 @@ export async function requestCooperativeRevisionAction(
                             </div>
                         </div>
                     `,
+                    metadata: { type: "cooperative_membership" },
                 });
                 if (error) {
                     logger.error("Resend API Error (Cooperative revision email):", error);

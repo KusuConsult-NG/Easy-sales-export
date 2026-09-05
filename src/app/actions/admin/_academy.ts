@@ -14,6 +14,7 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { moduleGrantRole } from "@/lib/module-grant-roles";
+import { sendEmailNotification } from "@/lib/email-notifications";
 
 // ============================================
 // Academy Application Management (Admin)
@@ -309,13 +310,11 @@ async function _approveAcademyApplicationAction(
         // 4. Send Approval Email
         if (userEmail && process.env.RESEND_API_KEY) {
             try {
-                const { Resend } = await import("resend");
-                const resend = new Resend(process.env.RESEND_API_KEY);
-                const { error } = await resend.emails.send({
+                const { error } = await sendEmailNotification({
                     from: process.env.EMAIL_FROM || "Easy Sales Export Academy <info@easysalesexport.com>",
                     to: userEmail,
                     subject: "🎓 Academy Application Approved!",
-                    html: `
+                    message: `
                         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
                             <div style="background:linear-gradient(135deg,#7c3aed,#a855f7);padding:32px;border-radius:12px 12px 0 0;text-align:center;">
                                 <h1 style="color:white;margin:0;font-size:24px;">Welcome to the Academy!</h1>
@@ -333,7 +332,8 @@ async function _approveAcademyApplicationAction(
                                 <p style="color:#6b7280;font-size:14px;">Easy Sales Export Academy Team</p>
                             </div>
                         </div>
-                    `
+                    `,
+                    metadata: { type: "academy_decision" },
                 });
                 if (error) {
                     logger.error("Resend API Error (Academy approval email):", error);

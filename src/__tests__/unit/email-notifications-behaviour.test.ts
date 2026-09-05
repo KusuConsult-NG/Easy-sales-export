@@ -294,6 +294,65 @@ describe('getBaseUrl, executed', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+describe('#394 — a per-call From and Reply-To reach Resend', () => {
+    /**
+     * The thirteen converted senders each keep their own From line — several
+     * send as "Easy Sales Export Academy" or "Easy Sales Cooperative" — and the
+     * contact form sets a Reply-To so replies reach the person who wrote in.
+     *
+     * These are BEHAVIOUR assertions, run through the mocked client, because
+     * the structural version was not enough: a mutant that deleted `data.from`
+     * from the sender's own resolver survived a test that only checked the
+     * resolver was CALLED.
+     */
+    it('USES THE CALLER\'S FROM WHEN ONE IS GIVEN', async () => {
+        process.env.EMAIL_FROM = 'Platform <platform@example.test>';
+
+        await (await mail()).sendEmailNotification({
+            to: 'learner@example.test',
+            subject: 'Academy decision',
+            message: '<p>hi</p>',
+            from: 'Easy Sales Export Academy <academy@example.test>',
+        });
+
+        expect((emailsSend.mock.calls[0] as any[])[0].from)
+            .toBe('Easy Sales Export Academy <academy@example.test>');
+    });
+
+    it('and falls back to EMAIL_FROM when none is', async () => {
+        process.env.EMAIL_FROM = 'Platform <platform@example.test>';
+
+        await (await mail()).sendEmailNotification({
+            to: 'someone@example.test',
+            subject: 'No sender given',
+            message: '<p>hi</p>',
+        });
+
+        expect((emailsSend.mock.calls[0] as any[])[0].from)
+            .toBe('Platform <platform@example.test>');
+    });
+
+    it('and passes Reply-To through, or omits it entirely', async () => {
+        await (await mail()).sendEmailNotification({
+            to: 'desk@example.test',
+            subject: 'Contact form',
+            message: '<p>hi</p>',
+            replyTo: 'writer@example.test',
+        });
+        expect((emailsSend.mock.calls[0] as any[])[0].replyTo).toBe('writer@example.test');
+
+        emailsSend.mockClear();
+        await (await mail()).sendEmailNotification({
+            to: 'desk@example.test',
+            subject: 'No reply-to',
+            message: '<p>hi</p>',
+        });
+        // Absent rather than undefined-valued: the key is spread in only when
+        // there is one, so a normal email carries no Reply-To header at all.
+        expect('replyTo' in (emailsSend.mock.calls[0] as any[])[0]).toBe(false);
+    });
+});
+
 describe('the senders reach Resend with what they were given', () => {
     it('reports a Resend error rather than claiming success', async () => {
         emailsSend.mockResolvedValue({ data: null, error: { message: 'invalid recipient' } });

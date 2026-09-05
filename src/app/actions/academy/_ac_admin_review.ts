@@ -10,7 +10,7 @@ import { hasAdminPermission } from "@/lib/admin-permissions";
 import { ActionResponse, withFlexibleSafeAction } from "@/lib/safe-action";
 import { normaliseAcademyPlan } from "@/lib/academy-plan";
 import { moduleGrantRole } from "@/lib/module-grant-roles";
-import { canSendEmail } from "@/lib/email-notifications";
+import { canSendEmail, sendEmailNotification } from "@/lib/email-notifications";
 
 /**
  * Academy Admin Actions - Application Approval/Rejection
@@ -105,14 +105,12 @@ async function _approveAcademyApplicationAction(
         // 5. Send Approval Email (Post-Commit Side Effect)
         if (canSendEmail("academy decision email", appData.personalInfo?.email)) {
             try {
-                const { Resend } = await import("resend");
-                const resend = new Resend(process.env.RESEND_API_KEY);
 
-                const { data, error } = await resend.emails.send({
+                const { error } = await sendEmailNotification({
                     from: process.env.EMAIL_FROM || "Easy Sales Export Academy <info@easysalesexport.com>",
                     to: appData.personalInfo.email,
                     subject: "Welcome to Academy - Application Approved!",
-                    html: `
+                    message: `
                         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                             <h2 style="color: #059669;">Welcome to Easy Sales Export Academy!</h2>
                             <p>We are thrilled to inform you that your Academy learner application has been approved.</p>
@@ -136,7 +134,8 @@ async function _approveAcademyApplicationAction(
                                 <a href="https://easysalesexport.com/academy" style="background-color: #059669; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Go to Academy</a>
                             </div>
                         </div>
-                    `
+                    `,
+                    metadata: { type: "academy_decision" },
                 });
                 if (error) {
                     logger.error("Resend API Error (Academy approval email):", error);
@@ -235,14 +234,12 @@ async function _rejectAcademyApplicationAction(
         // 3. Send Rejection Email
         if (canSendEmail("academy decision email", appData.personalInfo?.email)) {
             try {
-                const { Resend } = await import("resend");
-                const resend = new Resend(process.env.RESEND_API_KEY);
 
-                const { data, error } = await resend.emails.send({
+                const { error } = await sendEmailNotification({
                     from: process.env.EMAIL_FROM || "Easy Sales Export Academy <info@easysalesexport.com>",
                     to: appData.personalInfo.email,
                     subject: "Academy Application Update",
-                    html: `
+                    message: `
                         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                             <h2 style="color: #dc2626;">Academy Application Update</h2>
                             <p>Thank you for your interest in the Easy Sales Export Academy.</p>
@@ -260,7 +257,8 @@ async function _rejectAcademyApplicationAction(
 
                             <p>If you have any questions, please contact our support team.</p>
                         </div>
-                    `
+                    `,
+                    metadata: { type: "academy_decision" },
                 });
                 if (error) {
                     logger.error("Resend API Error (Academy rejection email):", error);

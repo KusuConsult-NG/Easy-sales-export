@@ -88,6 +88,23 @@ interface EmailData {
     message: string;
     metadata?: Record<string, any>;
     headers?: Record<string, string>;
+    /**
+     * #394. Added so the thirteen files that were constructing their own Resend
+     * client could move onto this sender WITHOUT their visible sender name
+     * changing. Several of them send as "Easy Sales Export Academy" or "Easy
+     * Sales Cooperative" rather than the platform default, and a conversion
+     * that quietly rewrote the From line would be a behaviour change dressed as
+     * a refactor. Absent means the default below, which is what every existing
+     * caller gets.
+     */
+    from?: string;
+    /** Reply-To, for the contact form: replies go to the person who wrote in. */
+    replyTo?: string;
+}
+
+/** The sender address, honoured per call and defaulted the way it always was. */
+function senderFor(data: EmailData): string {
+    return data.from || process.env.EMAIL_FROM || 'Easy Sales Export <info@easysalesexport.com>';
 }
 
 /**
@@ -176,15 +193,14 @@ export async function sendEmailNotification(data: EmailData): Promise<{ success:
         const { Resend } = await import('resend');
         const resend = new Resend(process.env.RESEND_API_KEY);
 
-        const senderEmail = process.env.EMAIL_FROM || 'Easy Sales Export <info@easysalesexport.com>';
-
         // Send email via Resend
         const result = await resend.emails.send({
-            from: senderEmail,
+            from: senderFor(data),
             to: data.to,
             subject: data.subject,
             html: data.message,
             headers: data.headers,
+            ...(data.replyTo ? { replyTo: data.replyTo } : {}),
             // Add tags for tracking
             tags: data.metadata ? [
                 { name: 'type', value: data.metadata.type || 'general' }
@@ -267,8 +283,20 @@ export async function sendEmailNotification(data: EmailData): Promise<{ success:
 async function queueForRetry(data: EmailData, lastError: string): Promise<void> {
     try {
         const { saveToQueue } = await import('@/lib/email-queue');
+        // #394. `from` and `replyTo` travel with the row. Without them a first
+        // attempt sent as "Easy Sales Export Academy" would be retried as the
+        // platform default, and a contact-form retry would lose the address the
+        // reply is supposed to go to — the retry delivering a subtly different
+        // email from the one that failed.
         await saveToQueue(
-            { to: data.to, subject: data.subject, message: data.message, metadata: data.metadata },
+            {
+                to: data.to,
+                subject: data.subject,
+                message: data.message,
+                metadata: data.metadata,
+                from: data.from,
+                replyTo: data.replyTo,
+            },
             lastError,
         );
     } catch (queueError) {
@@ -294,7 +322,7 @@ export async function sendBatchEmailNotifications(emails: EmailData[]): Promise<
         const senderEmail = process.env.EMAIL_FROM || 'Easy Sales Export <info@easysalesexport.com>';
 
         const toPayload = (data: EmailData) => ({
-            from: senderEmail,
+            from: data.from || senderEmail,
             to: [data.to],
             subject: data.subject,
             html: data.message,

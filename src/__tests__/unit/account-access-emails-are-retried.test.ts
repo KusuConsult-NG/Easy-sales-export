@@ -58,6 +58,11 @@
  *   account-access email; converting them is a separate piece of work. The
  *   count is pinned below so it can go down and not up.
  *
+ *   #394 DID THAT WORK. All thirteen are converted, so the assertion below is
+ *   no longer a bound but a named set of one: lib/mfa.ts, which is outside the
+ *   queue on purpose. The paragraph above is left as written because it was the
+ *   scope of #393 and the record of what that commit did and did not cover.
+ *
  *   MUTATION-TESTED, WITH A CONTROL. Against a green baseline, alongside the
  *   #354 suite:
  *
@@ -179,17 +184,18 @@ describe('#393 — the MFA code is deliberately NOT queued', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#393 — the remaining direct senders are counted, not forgotten', () => {
-    it('THE NUMBER OF FILES BYPASSING THE QUEUED SENDER CAN ONLY GO DOWN', () => {
-        const direct = directResendSenders();
-
-        // Fourteen at the time of writing, MFA among them. A new one is a new
-        // email that cannot be retried, and it should be a deliberate choice
-        // with a note like the one in lib/mfa.ts rather than a default.
-        expect(direct.length).toBeLessThanOrEqual(14);
-
-        // Vacuity guard: an empty list would pass the assertion above while
-        // meaning the detector had stopped seeing anything.
-        expect(direct.length).toBeGreaterThan(5);
+    it('THE LIST IS NOW A NAMED SET, NOT A COUNT', () => {
+        /**
+         * #394. This was `length <= 14` with a `> 5` vacuity guard, because
+         * thirteen files still built their own Resend client and the honest
+         * thing was to bound the number. They have all been converted, so a
+         * bound is no longer the strongest available claim: the set is named,
+         * and anything else appearing in it fails.
+         *
+         * The vacuity guard is gone with it — a named set cannot be satisfied
+         * by a detector that has stopped seeing, because MFA has to be IN it.
+         */
+        expect(directResendSenders()).toEqual(['src/lib/mfa.ts']);
     });
 });
 

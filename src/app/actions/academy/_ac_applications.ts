@@ -17,6 +17,7 @@ import { normaliseAcademyPlan } from "@/lib/academy-plan";
 import { normalisePhone } from "@/lib/phone";
 import { isDecidedAgainst } from "@/lib/registration-progress";
 import type { AcademyApplicationData } from "@/lib/types/academy-actions";
+import { sendEmailNotification } from "@/lib/email-notifications";
 
 const ACADEMY_REGISTRATION_FEE = 0;
 
@@ -436,17 +437,16 @@ async function _requestAcademyRevisionAction(
 
         if (userId) {
             try {
-                const { Resend } = await import('resend');
-                const resend = new Resend(process.env.RESEND_API_KEY);
                 const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
                 const email = userDoc.data()?.email;
                 const name = appData?.personalInfo?.firstName ? `${appData.personalInfo.firstName} ${appData.personalInfo.lastName || ''}`.trim() : appData?.personalInfo?.fullName || 'Applicant';
                 if (email) {
-                const { data, error } = await resend.emails.send({
+                const { error } = await sendEmailNotification({
                     from: process.env.EMAIL_FROM || 'Easy Sales Export Academy <info@easysalesexport.com>',
                     to: email,
                     subject: 'Action Required: Update Your Academy Application',
-                    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;"><h2 style="color:#2563eb;">Academy Application Update Required</h2><p>Dear <strong>${name}</strong>,</p><p>Our team requires some updates before your application can be approved.</p><div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:16px;margin:16px 0;"><p style="margin:0;color:#1d4ed8;"><strong>Note:</strong><br/>${reason}</p></div><p>Please <a href="${process.env.NEXTAUTH_URL || 'https://easysalesexport.com'}/academy/application">log in to update your application</a>.</p></div>`,
+                    message: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;"><h2 style="color:#2563eb;">Academy Application Update Required</h2><p>Dear <strong>${name}</strong>,</p><p>Our team requires some updates before your application can be approved.</p><div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:16px;margin:16px 0;"><p style="margin:0;color:#1d4ed8;"><strong>Note:</strong><br/>${reason}</p></div><p>Please <a href="${process.env.NEXTAUTH_URL || 'https://easysalesexport.com'}/academy/application">log in to update your application</a>.</p></div>`,
+                    metadata: { type: "academy_revision_request" },
                 });
                 if (error) {
                     logger.error("Resend API Error (Academy revision email):", error);

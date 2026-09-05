@@ -13,7 +13,7 @@ import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { LegacyOnboardingSchema } from "@/lib/schemas";
-import { sendLegacyMemberWelcomeEmail } from "@/lib/email-notifications";
+import { sendLegacyMemberWelcomeEmail, sendEmailNotification } from "@/lib/email-notifications";
 import { hasAdminPermission, includesPrivilegedRole, isSuperAdmin } from "@/lib/admin-permissions";
 import { requireAdmin } from "@/lib/require-admin";
 // ============================================
@@ -98,14 +98,12 @@ async function _inviteLegacyMemberAction(
 
         if (process.env.RESEND_API_KEY) {
             try {
-                const { Resend } = await import("resend");
-                const resend = new Resend(process.env.RESEND_API_KEY);
 
-                const { error: emailError } = await resend.emails.send({
+                const { error: emailError } = await sendEmailNotification({
                     from: process.env.EMAIL_FROM || "Easy Sales Cooperative <info@easysalesexport.com>",
                     to: email,
                     subject: "You're Invited to the Cooperative!",
-                    html: `
+                    message: `
                         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
                             <h2 style="color: #6366f1;">Welcome to the Cooperative!</h2>
                             <p>Hello ${firstName || "Member"},</p>
@@ -120,7 +118,8 @@ async function _inviteLegacyMemberAction(
 
                             <p style="margin-top: 30px; font-size: 12px; color: #6b7280;">If the button doesn't work, copy and paste this link into your browser:<br/>${onboardingLink}</p>
                         </div>
-                    `
+                    `,
+                    metadata: { type: "legacy_onboarding" },
                 });
 
                 if (emailError) {

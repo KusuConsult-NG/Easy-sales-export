@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/session-guard";
 import { getAdminDb } from "@/lib/supabase-db";
-import { Resend } from "resend";
 import { logger } from "@/lib/logger";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { recordAdminAction } from "@/lib/audit-log";
+import { sendEmailNotification } from "@/lib/email-notifications";
 
 export const dynamic = "force-dynamic";
 
 // Lazy factory — RESEND_API_KEY is a runtime secret, not available during Docker build
-const getResend = () => new Resend(process.env.RESEND_API_KEY);
 const FROM_EMAIL = process.env.EMAIL_FROM || "Easy Sales Export <info@easysalesexport.com>";
 const MAX_BATCH = 200;
 
@@ -193,14 +192,35 @@ export async function POST(req: NextRequest) {
                     continue;
                 }
 
-                // 3. Send via Resend
+                /**
+                 *   #394 THIS RECORDED "RECOVERY EMAIL SENT" FOR AN EMAIL THAT
+                 *        MAY NEVER HAVE LEFT.
+                 *
+                 *        The send was `await resend.emails.send({...})` with the
+                 *        result discarded. Resend RETURNS its errors rather than
+                 *        throwing them, so the catch below never fired: the row
+                 *        was stamped recoveryEmailSentAt, the admin was told
+                 *        "sent", and the person whose payment failed heard
+                 *        nothing. The stamp is then what stops anybody chasing
+                 *        it again.
+                 *
+                 *        Now the send is checked, the stamp is only written when
+                 *        the message actually left, and a failure is reported to
+                 *        the admin as an error rather than as a success.
+                 */
                 const { label } = paymentTypeInfo(type);
-                await getResend().emails.send({
+                const { success: sent, error: sendError } = await sendEmailNotification({
                     from: FROM_EMAIL,
                     to: email,
                     subject: `Complete your ${label} — ${formatAmount(amount)}`,
-                    html: buildEmailHtml(name, type, amount, status),
+                    message: buildEmailHtml(name, type, amount, status),
+                    metadata: { type: "payment_recovery" },
                 });
+
+                if (!sent) {
+                    results.push({ ref: reference, email, status: "error", reason: sendError || "send failed" });
+                    continue;
+                }
 
                 // 4. Mark recovery email sent timestamp
                 await db.collection(COLLECTIONS.FAILED_PAYMENTS).doc(reference).update({

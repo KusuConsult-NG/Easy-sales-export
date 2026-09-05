@@ -111,10 +111,15 @@ export async function GET(request: Request) {
             try {
                 // Attempt Send
                 const result = await resend.emails.send({
-                    from: senderEmail,
+                    // #394. The row's own sender, when it has one. A first
+                    // attempt that went out as "Easy Sales Export Academy" and
+                    // a retry that goes out as the platform default are two
+                    // different emails to the person receiving them.
+                    from: data.from || senderEmail,
                     to: data.to,
                     subject: data.subject,
                     html: data.message,
+                    ...(data.replyTo ? { replyTo: data.replyTo } : {}),
                     tags: data.metadata ? [
                         { name: 'type', value: data.metadata.type || 'retry' }
                     ] : undefined,

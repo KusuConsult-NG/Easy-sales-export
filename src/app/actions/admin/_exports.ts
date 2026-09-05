@@ -18,7 +18,7 @@ import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
 import { stripPii } from "@/lib/admin-pii";
 import { atomicUpdateUser } from "@/lib/services/userService";
 import { recordAdminAction } from "@/lib/audit-log";
-import { canSendEmail } from "@/lib/email-notifications";
+import { canSendEmail, sendEmailNotification } from "@/lib/email-notifications";
 
 // ============================================
 // Export Window Management (Admin)
@@ -256,14 +256,12 @@ async function _approveExportOnboardingAction(
         // 4. Send Approval Email
         if (canSendEmail("export decision email", appData.userEmail)) {
             try {
-                const { Resend } = await import("resend");
-                const resend = new Resend(process.env.RESEND_API_KEY);
 
-                const { error } = await resend.emails.send({
+                const { error } = await sendEmailNotification({
                     from: process.env.EMAIL_FROM || "Easy Sales Export <info@easysalesexport.com>",
                     to: appData.userEmail,
                     subject: "Export Account Approved!",
-                    html: `
+                    message: `
                         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                             <h2 style="color: #059669;">Welcome to Export Services!</h2>
                             <p>Your export onboarding application has been approved.</p>
@@ -278,7 +276,8 @@ async function _approveExportOnboardingAction(
                                 <a href="https://easysalesexport.com/export/dashboard" style="background-color: #059669; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Go to Export Dashboard</a>
                             </div>
                         </div>
-                    `
+                    `,
+                    metadata: { type: "export_decision" },
                 });
                 if (error) {
                     logger.error("Resend API Error (Export approval email):", error);
@@ -384,13 +383,19 @@ async function _requestExportApplicationRevisionAction(
         // Send email notification to applicant
         if (canSendEmail("export decision email", appData.userEmail)) {
             try {
-                const { Resend } = await import("resend");
-                const resend = new Resend(process.env.RESEND_API_KEY);
-                await resend.emails.send({
+                /**
+                 * #394. This was `await resend.emails.send({...})` with the
+                 * result thrown away. Resend RETURNS its errors rather than
+                 * throwing them, so the surrounding try/catch never fired and a
+                 * refused or rate-limited export decision email was invisible — not
+                 * logged, not retried, not noticed. Five sends across the
+                 * platform had that shape.
+                 */
+                const { error: sendError } = await sendEmailNotification({
                     from: process.env.EMAIL_FROM || "Easy Sales Export <info@easysalesexport.com>",
                     to: appData.userEmail,
                     subject: "Action Required: Correction Needed on Your Export Application",
-                    html: `
+                    message: `
                         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                             <h2 style="color: #ea580c;">Action Required: Correction Needed</h2>
                             <p>Dear ${appData.profile?.fullName || appData.userEmail},</p>
@@ -411,7 +416,9 @@ async function _requestExportApplicationRevisionAction(
                             <p style="color: #6b7280; font-size: 12px; margin-top: 30px;">Easy Sales Export Team</p>
                         </div>
                     `,
+                    metadata: { type: "export_decision" },
                 });
+                if (sendError) logger.error("[#394] email send failed", { error: sendError });
             } catch (emailErr) {
                 logger.error("[Export Revision] Email send failed:", emailErr);
             }
@@ -905,14 +912,12 @@ async function _rejectExportApplicationAction(
         // 4. Send Rejection Email
         if (canSendEmail("export decision email", appData.userEmail)) {
             try {
-                const { Resend } = await import("resend");
-                const resend = new Resend(process.env.RESEND_API_KEY);
 
-                const { error } = await resend.emails.send({
+                const { error } = await sendEmailNotification({
                     from: process.env.EMAIL_FROM || "Easy Sales Export <info@easysalesexport.com>",
                     to: appData.userEmail,
                     subject: "Export Application Update",
-                    html: `
+                    message: `
                         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                             <h2 style="color: #ea580c;">Export Application Update</h2>
                             <p>Your recent application for Export Services has been reviewed.</p>
@@ -928,7 +933,8 @@ async function _rejectExportApplicationAction(
                                 <a href="https://easysalesexport.com/export/onboarding/rejected" style="background-color: #ea580c; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">View Details</a>
                             </div>
                         </div>
-                    `
+                    `,
+                    metadata: { type: "export_decision" },
                 });
                 if (error) {
                     logger.error("Resend API Error (Export rejection email):", error);

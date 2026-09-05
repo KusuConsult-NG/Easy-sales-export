@@ -18,7 +18,7 @@ import { serializeDocs } from "@/lib/firestore-serialize";
 import { createNotificationAction } from "@/app/actions/notifications";
 import { LoanApplicationReviewSchema } from "@/lib/schemas";
 import { hasAdminPermission } from "@/lib/admin-permissions";
-import { canSendEmail } from "@/lib/email-notifications";
+import { canSendEmail, sendEmailNotification } from "@/lib/email-notifications";
 
 // ============================================
 // Loan Application Management (Admin)
@@ -397,13 +397,19 @@ async function _approveLoanApplication(
 
         if (canSendEmail("loan decision email", loanData.userEmail)) {
             try {
-                const { Resend } = await import("resend");
-                const resend = new Resend(process.env.RESEND_API_KEY);
-                await resend.emails.send({
+                /**
+                 * #394. This was `await resend.emails.send({...})` with the
+                 * result thrown away. Resend RETURNS its errors rather than
+                 * throwing them, so the surrounding try/catch never fired and a
+                 * refused or rate-limited loan decision email was invisible — not
+                 * logged, not retried, not noticed. Five sends across the
+                 * platform had that shape.
+                 */
+                const { error: sendError } = await sendEmailNotification({
                     from: process.env.EMAIL_FROM || "Easy Sales Export <info@easysalesexport.com>",
                     to: loanData.userEmail,
                     subject: "Loan Application Approved!",
-                    html: `
+                    message: `
                         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                             <h2 style="color: #10b981;">Congratulations! Your Loan is Approved</h2>
                             <p>Great news! Your loan application has been approved by our admin team.</p>
@@ -424,7 +430,9 @@ async function _approveLoanApplication(
                             <p>Thank you for being a valued member of our cooperative!</p>
                         </div>
                     `,
+                    metadata: { type: "loan_decision" },
                 });
+                if (sendError) logger.error("[#394] email send failed", { error: sendError });
             } catch (e) { logger.error('[admin] loan approval email failed silently:', e); }
         }
 
@@ -510,20 +518,28 @@ async function _rejectLoanApplication(
         // SIDE EFFECTS (Post-Commit)
         if (canSendEmail("loan decision email", loanData.userEmail)) {
             try {
-                const { Resend } = await import("resend");
-                const resend = new Resend(process.env.RESEND_API_KEY);
-                await resend.emails.send({
+                /**
+                 * #394. This was `await resend.emails.send({...})` with the
+                 * result thrown away. Resend RETURNS its errors rather than
+                 * throwing them, so the surrounding try/catch never fired and a
+                 * refused or rate-limited loan decision email was invisible — not
+                 * logged, not retried, not noticed. Five sends across the
+                 * platform had that shape.
+                 */
+                const { error: sendError } = await sendEmailNotification({
                     from: process.env.EMAIL_FROM || "Easy Sales Export <info@easysalesexport.com>",
                     to: loanData.userEmail,
                     subject: "Loan Application Update",
-                    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+                    message: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
                         <h2 style="color:#dc2626">Loan Application Update</h2>
                         <div style="background:#fef2f2;padding:16px;border-radius:8px;margin:20px 0">
                             <p>Unfortunately, we are unable to approve your loan application at this time.</p>
                             <p><strong>Reason:</strong> ${reason}</p>
                         </div>
-                    </div>`
+                    </div>`,
+                    metadata: { type: "loan_decision" },
                 });
+                if (sendError) logger.error("[#394] email send failed", { error: sendError });
             } catch (e) { logger.error('[admin] loan rejection email failed silently:', e); }
         }
 

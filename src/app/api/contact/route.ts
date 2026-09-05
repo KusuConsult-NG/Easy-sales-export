@@ -2,10 +2,10 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
-import { Resend } from "resend";
 import { COMPANY_INFO } from "@/lib/constants";
 import { rateLimit, getClientIp, createRateLimitResponse } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
+import { sendEmailNotification } from "@/lib/email-notifications";
 
 /**
  * This endpoint is unauthenticated and it SENDS EMAIL through Resend. Without a
@@ -48,12 +48,14 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // If RESEND_API_KEY is missing, every send will fail silently — surface it as a clear config error
+        // #394. The client construction moved into sendEmailNotification; the
+        // guard stays, because THIS route's answer to a missing key is a 503
+        // with a phone-us-instead message rather than the generic failure the
+        // shared sender returns. That distinction is the caller's to keep.
         const RESEND_API_KEY = process.env.RESEND_API_KEY;
-        const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
 
         // Guard: email service not configured
-        if (!resend) {
+        if (!RESEND_API_KEY) {
             logger.error("RESEND_API_KEY is not set — contact form emails will not be delivered.");
             return NextResponse.json(
                 { success: false, error: "Email service is currently unavailable. Please contact us directly at info@easysalesexport.com." },
@@ -62,12 +64,12 @@ export async function POST(request: NextRequest) {
         }
 
         const senderEmail = process.env.EMAIL_FROM || "Easy Sales Export Contact Form <info@easysalesexport.com>";
-        const { data, error } = await resend.emails.send({
+        const { error } = await sendEmailNotification({
             from: senderEmail,
             to: COMPANY_INFO.contact.general.email,
             replyTo: email,
             subject: `[Contact Form] ${subject}`,
-            html: `
+            message: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                     <h2 style="color: #2E519F;">New Contact Form Submission</h2>
                     
@@ -95,6 +97,7 @@ export async function POST(request: NextRequest) {
                     </p>
                 </div>
             `,
+            metadata: { type: "contact_form" },
         });
 
         if (error) {

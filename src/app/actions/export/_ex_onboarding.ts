@@ -23,6 +23,7 @@ import { serializeValue, toMillis } from "@/lib/firestore-serialize";
 import { uploadFileToStorage } from "@/lib/storage-admin";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { exportOnboardingSchema } from "@/lib/types/export-actions";
+import { sendEmailNotification } from "@/lib/email-notifications";
 
 export async function submitExportOnboardingAction(
     prevState: any,
@@ -481,17 +482,23 @@ export async function requestExportRevisionAction(
         });
 
         // Send revision email (non-blocking)
-        try { const { Resend } = await import('resend');
-            const resend = new Resend(process.env.RESEND_API_KEY);
-            const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        try {            const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
             const email = userDoc.data()?.email;
             const name = userDoc.data()?.fullName || userDoc.data()?.displayName || 'Applicant';
             if (email) {
-                await resend.emails.send({
+                /**
+                 * #394. This was `await resend.emails.send({...})` with the
+                 * result thrown away. Resend RETURNS its errors rather than
+                 * throwing them, so the surrounding try/catch never fired and a
+                 * refused or rate-limited export onboarding email was invisible — not
+                 * logged, not retried, not noticed. Five sends across the
+                 * platform had that shape.
+                 */
+                const { error: sendError } = await sendEmailNotification({
                     from: process.env.EMAIL_FROM || 'Easy Sales Export <info@easysalesexport.com>',
                     to: email,
                     subject: '⚠️ Action Required: Update Your Export Application',
-                    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
+                    message: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
                         <h2 style="color:#ea580c;">Export Application — Update Required</h2>
                         <p>Dear <strong>${name}</strong>,</p>
                         <p>Our team has reviewed your Export Windows onboarding application and requires some additional information.</p>
@@ -502,7 +509,10 @@ export async function requestExportRevisionAction(
                         <div style="text-align:center;margin:24px 0;">
                             <a href="${process.env.NEXTAUTH_URL || 'https://easysalesexport.com'}/export/onboarding" style="background:#ea580c;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;">Update Application</a>
                         </div>
-                    </div>` });
+                    </div>`,
+                    metadata: { type: "export_onboarding" },
+                });
+                if (sendError) logger.error("[#394] email send failed", { error: sendError });
             }
         } catch (emailError) { logger.error('Export revision email failed (non-blocking):', emailError);
         }
