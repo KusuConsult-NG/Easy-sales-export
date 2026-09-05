@@ -24,6 +24,10 @@ import {
     participantSourcesFor,
 } from "@/lib/escrow-status";
 import { recordAdminAction } from "@/lib/audit-log";
+import {
+    PAYMENT_INSTRUCTION_SETTLED,
+    PAYMENT_INSTRUCTION_SETTLED_VIA,
+} from "@/lib/payment-instruction";
 
 // Validation schemas
 const escrowAmountSchema = z.number().min(100).max(100000000); // ₦100 to ₦100M
@@ -594,7 +598,14 @@ async function _releaseEscrowFunds(
         const balanceBefore = credit.claimed ? balanceAfter - sellerPayout : balanceAfter;
 
         await db.runTransaction(async (tx) => {
-            // Create payout instruction
+            // Record the disbursement — NOT a request for one.
+            //
+            // #421: this said status "pending_admin_action" while the seller had
+            // already been paid, on the line above, through credit_wallet_once.
+            // Nothing reads this collection today, which is exactly the danger:
+            // the first admin queue built on the name the field invites would
+            // list every release ever made as an unpaid payout and pay every
+            // seller twice. It says what actually happened instead.
             const paymentInstructionRef = db.collection(COLLECTIONS.PAYMENT_INSTRUCTIONS).doc();
             tx.set(paymentInstructionRef, {
                 type: "escrow_release",
@@ -602,7 +613,9 @@ async function _releaseEscrowFunds(
                 recipientId: data.sellerId,
                 recipientEmail: data.sellerEmail || "",
                 amount: sellerPayout,
-                status: "pending_admin_action",
+                status: PAYMENT_INSTRUCTION_SETTLED,
+                settledVia: PAYMENT_INSTRUCTION_SETTLED_VIA,
+                settledReference: `escrow-release:${transactionId}`,
                 description: `Release escrow funds for ${data.productName}`,
                 createdAt: FieldValue.serverTimestamp(),
                 createdBy: userId,
@@ -819,6 +832,9 @@ async function _refundEscrowToBuyer(
             const data = txDoc.data()!;
 
             txData = data;
+            // Same as the release path (#421): the buyer's money moved through
+            // credit_wallet_once above. This row records the refund, it does not
+            // ask anyone to make one.
             const refundInstructionRef = db.collection(COLLECTIONS.PAYMENT_INSTRUCTIONS).doc();
             tx.set(refundInstructionRef, {
                 type: "escrow_refund",
@@ -826,7 +842,9 @@ async function _refundEscrowToBuyer(
                 recipientId: data.buyerId,
                 recipientEmail: data.buyerEmail,
                 amount: escrowAmount,
-                status: "pending_admin_action",
+                status: PAYMENT_INSTRUCTION_SETTLED,
+                settledVia: PAYMENT_INSTRUCTION_SETTLED_VIA,
+                settledReference: `escrow-refund:${transactionId}`,
                 description: `Refund escrow for ${data.productName}`,
                 createdAt: FieldValue.serverTimestamp(),
                 createdBy: userId,
