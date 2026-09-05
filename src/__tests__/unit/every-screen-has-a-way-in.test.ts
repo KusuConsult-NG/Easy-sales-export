@@ -314,17 +314,55 @@ describe('#362 — the ones left for the owner, now none', () => {
     });
 
     it('and every one of them WAS a real screen, not a stub — measured from git', () => {
-        // The point #362 made: a five-line redirect being unlinked is correct,
-        // and none of these was that. Measured against the commit before the
-        // retirements, because five of the eleven ARE five-line redirects now —
-        // asserting their current size would quietly invert the claim.
+        /**
+         * The point #362 made: a five-line redirect being unlinked is correct,
+         * and none of these was that. Measured against the commit before the
+         * retirements, because five of the eleven ARE five-line redirects now —
+         * asserting their current size would quietly invert the claim.
+         *
+         *   THIS ASSERTION FAILED ON CI AND WAS RIGHT TO. The first version ran
+         *   `git show <sha>:<path> | wc -l`. actions/checkout@v4 makes a SHALLOW
+         *   clone, so that commit is absent on the runner; git failed, and the
+         *   PIPE returned wc's exit status of 0, so execSync did not throw and
+         *   `wc -l` counted an empty stream as 0 lines. A failure reported as a
+         *   wrong answer — the class this whole audit is about (#102, #337,
+         *   #296), in my own test.
+         *
+         *   Rebuilt so it cannot lie either way. The counts are RECORDED here,
+         *   because they are historical constants and that is what the claim
+         *   actually rests on; and where the history IS present they are checked
+         *   against git, which catches a mistyped sha or a number I invented.
+         *   No pipe, so a git failure that is not "object missing" still throws.
+         */
         const before = 'ccd38df0';   // the commit preceding #384
-        for (const route of ['/loans/approve', '/dashboard/reviews/new', '/admin/escrow',
-                             '/marketplace/seller/analytics', '/verify-id/scan']) {
-            const lines = execSync(`git show ${before}:src/app${route}/page.tsx | wc -l`,
-                { encoding: 'utf-8', cwd: ROOT }).trim();
+        const MEASURED: Record<string, number> = {
+            '/loans/approve': 263,
+            '/dashboard/reviews/new': 287,
+            '/admin/escrow': 197,
+            '/marketplace/seller/analytics': 220,
+            '/verify-id/scan': 251,
+        };
 
-            expect({ route, big: Number(lines) > 150 }).toEqual({ route, big: true });
+        // Is the pre-retirement history reachable in this checkout?
+        let historyPresent = true;
+        try {
+            execSync(`git cat-file -e ${before}^{commit}`, { cwd: ROOT, stdio: 'ignore' });
+        } catch {
+            historyPresent = false;
+        }
+
+        for (const [route, recorded] of Object.entries(MEASURED)) {
+            // The claim itself, which holds regardless of clone depth.
+            expect({ route, big: recorded > 150 }).toEqual({ route, big: true });
+
+            if (!historyPresent) continue;
+
+            // And where the history is there, the recorded number must be the
+            // real one. No pipe: a genuine git error propagates.
+            const content = execSync(`git show ${before}:src/app${route}/page.tsx`,
+                { encoding: 'utf-8', cwd: ROOT, maxBuffer: 8 * 1024 * 1024 });
+            expect({ route, lines: content.split('\n').length - 1 })
+                .toEqual({ route, lines: recorded });
         }
     });
 
