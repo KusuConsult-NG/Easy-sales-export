@@ -13,6 +13,7 @@ import type { SellerVerification } from "@/lib/types/marketplace";
 import { serializeDoc, toMillis } from "@/lib/firestore-serialize";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { SellerVerificationSchema } from "@/lib/validations/marketplace";
+import { notifyBadgeUpdated } from "@/lib/marketplace-notifications";
 import { withSafeAction, ActionResponse } from "@/lib/safe-action";
 import { claimStatusTransition } from "@/lib/status-transition";
 import { hasAdminPermission } from "@/lib/admin-permissions";
@@ -604,6 +605,30 @@ async function setSellerBadge(
         targetId: userId,
         targetType: "user",
     });
+
+    /**
+     *   #399 #391's FIX LANDED ON ONE OF THE TWO BADGE DOORS.
+     *
+     *   #391 found that notifyBadgeUpdated — a message covering both grant and
+     *   revoke — had been written and never called, and wired it into
+     *   toggleVerifiedBadgeAction, the door /admin/marketplace/sellers uses.
+     *   This pair does the same job and was left without it, so a seller whose
+     *   badge changed here would be told nothing on any channel.
+     *
+     *   Neither of these two has a live caller today — that is how the orphan
+     *   queue found them — so this changes no behaviour now. It is done because
+     *   the two doors otherwise disagree about what granting a badge MEANS, and
+     *   a fix landing on one of several copies is the fault #297 is named for.
+     *
+     *   Wrapped the same way as the live call site: a notification failure must
+     *   not turn a badge that was actually written into a reported failure.
+     */
+    try {
+        await notifyBadgeUpdated({ sellerId: userId, granted })
+            ?.catch?.((e: unknown) => logger.error("[setSellerBadge] Notification failed:", { userId, error: e }));
+    } catch (e) {
+        logger.error("[setSellerBadge] Notification threw:", { userId, error: e });
+    }
 
     return { error: null, success: true as const, data: { success: true } };
 }
