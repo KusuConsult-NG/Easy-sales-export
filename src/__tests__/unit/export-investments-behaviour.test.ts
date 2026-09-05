@@ -216,9 +216,70 @@ describe('getUserExportInvestmentsAction', () => {
         expect((await list()).data[0].daysRemaining).toBe(0);
     });
 
-    it('falls back to a 20% expected return when none was recorded', async () => {
+    it('falls back to the TOTAL at the platform rate when none was recorded', async () => {
+        /**
+         *   #429 CORRECTION: THIS TEST PINNED THE DEFECT.
+         *
+         *   It asserted 20_000 on a ₦100,000 investment, and it was right about
+         *   what the code did: the fallback was `amount * 0.20`, the PROFIT
+         *   alone, while `expectedReturn` everywhere else in this product — both
+         *   fulfilment writers and the payout — is the TOTAL, principal
+         *   included. One column, one label, six times apart depending only on
+         *   whether the row carried the field, and the rows taking the fallback
+         *   are the legacy ones a portfolio is most likely showing.
+         *
+         *   The rate was never the problem. 0.20 is exactly the platform default
+         *   the window helper falls back to, which is why the line read as
+         *   correct for so long. The quantity was the problem.
+         *
+         *   Characterisation tests record what the code does, which is their
+         *   value and their hazard: this one turned the defect into an expected
+         *   result. It is corrected in place rather than deleted, because the
+         *   fallback path itself still needs a test — a row with no window must
+         *   still produce a figure, and that figure must mean what the label
+         *   says.
+         */
         store.seed(INVESTMENTS, 'mine', { investorId: INVESTOR, amount: 100_000 });
-        expect((await list()).data[0].expectedReturn).toBe(20_000);
+        // No windowId on the row, so the platform default multiplier (1.20)
+        // applies — the same rate as before, now measuring the same thing the
+        // stored value measures.
+        expect((await list()).data[0].expectedReturn).toBe(120_000);
+    });
+
+    it('and the fallback reads THIS window\'s rate, not the platform default', async () => {
+        /**
+         *   The assertion above cannot tell "derived from the window" from
+         *   "hardcoded at the default", because the default IS 1.20. Mutation
+         *   testing found exactly that: stopping the loader from ever assigning
+         *   the window row survived both suites, since every case in them used a
+         *   window whose rate equalled the default.
+         *
+         *   1.5 is not the default, so only a fallback that really reads the
+         *   window can produce 150,000.
+         */
+        seedWindow({ returnMultiplier: 1.5 });
+        store.seed(INVESTMENTS, 'mine', {
+            investorId: INVESTOR, windowId: WINDOW, amount: 100_000,
+        });
+        expect((await list()).data[0].expectedReturn).toBe(150_000);
+    });
+
+    it('and the fallback is the same quantity a recorded value would be', async () => {
+        // The invariant the case above exists to protect: whether the field is
+        // present or absent must not change WHAT the number means.
+        seedWindow({ returnMultiplier: 1.2 });
+        store.seed(INVESTMENTS, 'mine', {
+            investorId: INVESTOR, windowId: WINDOW, amount: 100_000,
+            expectedReturn: 120_000,
+        });
+        const withField = (await list()).data[0].expectedReturn;
+
+        store.seed(INVESTMENTS, 'other', {
+            investorId: INVESTOR, windowId: WINDOW, amount: 100_000,
+        });
+        const withoutField = (await list()).data.find((i: any) => i.id === 'other').expectedReturn;
+
+        expect(withoutField).toBe(withField);
     });
 });
 

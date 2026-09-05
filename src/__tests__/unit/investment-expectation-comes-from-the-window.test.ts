@@ -50,7 +50,29 @@
  *     the stored ROI stops matching the multiplier    KILLED
  *     the multiplier helper stops being window-derived KILLED
  *     the sibling path stops deriving it              KILLED
+ *     the reader's fallback returns to 0.20           KILLED
+ *     the reader's fallback ignores the window row    KILLED
  *     reword the header prose                         SURVIVED, as intended
+ *
+ *   ONE MUTANT THIS SUITE CANNOT KILL, AND SHOULD NOT PRETEND TO. Stopping the
+ *   loader from ever ASSIGNING the window row leaves the fallback expression
+ *   textually intact, so every assertion here still passes. This suite reads
+ *   source; runtime wiring is not something it can see. It is killed in
+ *   export-investments-behaviour.test.ts, by a case seeded with a rate of 1.5
+ *   — deliberately not the platform default, because 1.20 makes "derived from
+ *   the window" and "hardcoded at the default" the same number. That gap was
+ *   found by mutation testing, not by reading, and it is the same shape as the
+ *   one this finding's first draft had: a check self-consistent enough to pass
+ *   whether or not the thing it names is working.
+ *
+ *   AND THE FOURTH SITE, WHICH THIS FINDING ALMOST REPEATED ON ITSELF. The
+ *   writer was fixed and the READER left alone — `data.expectedReturn ||
+ *   (amount * 0.20)` in the portfolio loader. The stored figure is the TOTAL;
+ *   `amount * 0.20` is the PROFIT ALONE, at a rate written nowhere else. Six
+ *   times apart, one column, one label, and the fallback taken by exactly the
+ *   legacy rows a portfolio is most likely showing. Fixing one of N copies is
+ *   the defect this finding is about, so committing it inside the fix would
+ *   have been the finding's own shape a fourth time.
  */
 
 import { describe, it, expect } from '@jest/globals';
@@ -150,11 +172,46 @@ describe('#429 — one rule across the three places that use it', () => {
         expect(src).toMatch(/const totalPayout = amount \* returnMultiplier/);
     });
 
-    it('and all three name the SAME helper, so a rate change lands once', () => {
+    it('and THE PORTFOLIO READER derives its fallback the same way', () => {
+        /**
+         *   The fourth place, and the one I nearly left behind — which would
+         *   have been this finding's own defect committed inside its own fix.
+         *
+         *   It read `data.expectedReturn || (amount * 0.20)`. The stored figure
+         *   is the TOTAL (principal + profit); `amount * 0.20` is the PROFIT
+         *   ALONE, at a rate written nowhere else. One column, one label, and a
+         *   ₦100,000 investment showing ₦120,000 or ₦20,000 depending only on
+         *   whether its row carried the field.
+         */
+        const src = code(SIBLING);
+        expect(src).toMatch(
+            /const expectedReturn = data\.expectedReturn\s*\|\|\s*\(amount \* exportWindowReturnMultiplier\(windowRow\)\)/);
+        expect(src).not.toMatch(/amount \* 0\.20/);
+    });
+
+    it('and the stored value and the fallback measure the SAME quantity', () => {
+        // The defect was not only the rate. The two expressions computed
+        // different things: total versus profit. Same multiplier, same meaning.
+        const amount = 100_000;
+        for (const window of [{ returnMultiplier: 1.2 }, { returnMultiplier: 1.5 }, {}]) {
+            const m = exportWindowReturnMultiplier(window);
+            const stored = amount * m;          // what the writer stores
+            const fallback = amount * m;        // what the reader now computes
+            expect(fallback).toBe(stored);
+            // And it is the TOTAL, never the bare profit.
+            expect(fallback).toBeGreaterThan(amount);
+        }
+    });
+
+    it('and all FOUR name the SAME helper, so a rate change lands once', () => {
         for (const f of [INITIATOR, SIBLING, RELEASE]) {
             expect({ f, uses: code(f).includes('exportWindowReturnMultiplier') })
                 .toEqual({ f, uses: true });
         }
+        // The sibling file holds two of the four — the fulfilment write and the
+        // portfolio read — so count them rather than assume one each.
+        expect([...code(SIBLING).matchAll(/exportWindowReturnMultiplier\(/g)].length)
+            .toBeGreaterThanOrEqual(2);
     });
 
     it('and the helper refuses a window that would pay nothing or claw back', () => {

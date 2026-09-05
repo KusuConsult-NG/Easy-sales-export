@@ -65,11 +65,17 @@ export async function getUserExportInvestmentsAction(
             let endDate = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();
             let daysRemaining = 0;
 
+            // #429 Held beyond the block below, so the return fallback can be
+            // derived from the same window every other reader of this figure
+            // uses, rather than from a hardcoded rate.
+            let windowRow: Record<string, any> | null = null;
+
             if (data.windowId) {
                  const windowId = data.windowId;
                  const windowDoc = await db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(windowId).get();
                  if (windowDoc.exists) {
                      const wData = windowDoc.data()!;
+                     windowRow = wData;
                      commodity = wData.title || wData.commodity || commodity;
                      status = wData.status || status; // Reflect parent window status
                      startDate = wData.startDate?.toDate()?.toISOString() || startDate;
@@ -84,7 +90,37 @@ export async function getUserExportInvestmentsAction(
 
             // Real investment logic calculations
             const amount = data.amount || data.totalCost || 0;
-            const expectedReturn = data.expectedReturn || (amount * 0.20);
+            /**
+             *   #429 THE FALLBACK COMPUTED A DIFFERENT QUANTITY FROM THE STORED
+             *   VALUE — AT THE RIGHT RATE, WHICH IS WHY IT SURVIVED.
+             *
+             *   This read `data.expectedReturn || (amount * 0.20)`. The stored
+             *   figure is the TOTAL — principal plus profit, `amount *
+             *   exportWindowReturnMultiplier(window)`, written by both
+             *   fulfilment paths. `amount * 0.20` is the PROFIT ALONE.
+             *
+             *   THE RATE WAS NEVER WRONG. 0.20 is exactly
+             *   DEFAULT_EXPORT_ROI_PERCENT / 100 — the platform default the
+             *   helper itself falls back to. That is what made this line survive
+             *   every reading: the number matches the documented rate, so it
+             *   looks correct. It applied the right rate to compute the wrong
+             *   quantity, and no rate comparison would ever have caught it.
+             *
+             *   So on one portfolio screen, in one column, under one label, a
+             *   ₦100,000 investment showed ₦120,000 if its row carried the field
+             *   and ₦20,000 if it did not — six times apart, with nothing to say
+             *   which reading applied. The rows that take the fallback are the
+             *   ones written before the field existed, which is exactly the
+             *   population a portfolio is most likely to be showing.
+             *
+             *   Derived from the window now, like the writer (#429), the sibling
+             *   fulfilment path and the payout (#324). Four places, one rule.
+             *   When the window cannot be read, the platform default multiplier
+             *   applies rather than a second hardcoded rate — the helper's own
+             *   floor refuses to pay nothing or claw money back.
+             */
+            const expectedReturn = data.expectedReturn
+                || (amount * exportWindowReturnMultiplier(windowRow));
 
             const formatDate = (val: any) => { if (!val) return new Date().toISOString();
                 if (typeof val.toDate === 'function') return val.toDate().toISOString();
