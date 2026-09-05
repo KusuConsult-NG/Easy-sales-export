@@ -54,6 +54,33 @@ jest.mock('@/app/actions/notifications', () => ({
     createNotificationAction: jest.fn(async () => ({})),
 }));
 
+/**
+ *   #397 moved verifyLandListing off a raw .update() onto an atomic claim, so a
+ *   decision cannot land on a listing with a buyer's money against it.
+ *
+ *   The claim is MODELLED here rather than stubbed to `{ claimed: true }`. The
+ *   tests below are about WHO MAY VERIFY, and a stub that always claims would
+ *   pass just as happily with the status guard deleted — the vacuity #386 and
+ *   #395 both had to be talked out of. This answers from the status
+ *   setListing() just wrote, so an authorisation test still drives a real
+ *   transition and a locked listing is still refused.
+ */
+let currentListingStatus = 'pending_verification';
+jest.mock('@/lib/status-transition', () => ({
+    claimStatusTransition: jest.fn(async () => ({
+        claimed: false, status: currentListingStatus, exists: true,
+    })),
+    claimStatusTransitionFromAny: jest.fn(async ({ fromAny, to }: any) => {
+        // Mirrors the real filter: `to → to` is not a transition.
+        const startingPoints = (fromAny as string[]).filter((f) => f !== to);
+        return {
+            claimed: startingPoints.includes(currentListingStatus),
+            status: currentListingStatus,
+            exists: true,
+        };
+    }),
+}));
+
 function setSession(id: string | null, roles: string[] = []) {
     (global as any).mockRequireSession.mockImplementation(() => Promise.resolve(
         id === null
@@ -64,6 +91,7 @@ function setSession(id: string | null, roles: string[] = []) {
 
 /** One listing, in whatever status the test needs, with review fields present. */
 function setListing(status: string, extra: Record<string, any> = {}) {
+    currentListingStatus = status;
     const data = {
         title: 'Two hectares near Ikeja',
         description: 'Good soil, borehole on site, fenced perimeter.',
@@ -274,6 +302,36 @@ describe('verifyLandListing — who may verify', () => {
         //        is the definition of whose job it is, and the guard disagreed
         //        with it.
         const r: any = await verify('fn-admin-1', ['farm_nation_admin']);
+
+        expect(r.success).toBe(true);
+    });
+
+    it('REFUSES A LISTING WITH A BUYER PAYING FOR IT, AND SAYS SO', async () => {
+        /**
+         *   #397 The behaviour the claim exists for.
+         *
+         *   Farm Nation holds a buyer's money against `pending_escrow`. The
+         *   raw .update() this replaced wrote the decision regardless:
+         *   approving put the parcel back on the public market with the escrow
+         *   still open, and rejecting took it off the market with the money
+         *   still held and nothing in the flow to release it. #137's fault.
+         */
+        setListing('pending_escrow');
+
+        const r: any = await verify(ADMIN, ['admin']);
+
+        expect(r.success).toBe(false);
+        // Naming the state is the point — an admin told only "no" goes looking.
+        expect(String(r.error)).toContain('pending_escrow');
+        expect(String(r.error)).toMatch(/purchase in progress/i);
+    });
+
+    it('and still verifies a listing that is merely awaiting review', async () => {
+        // Vacuity guard for the test above: a refusal proves nothing if the
+        // action refuses everything.
+        setListing('pending_verification');
+
+        const r: any = await verify(ADMIN, ['admin']);
 
         expect(r.success).toBe(true);
     });

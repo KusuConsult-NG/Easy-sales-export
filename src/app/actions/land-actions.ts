@@ -16,7 +16,12 @@ import { requireSession } from "@/lib/session-guard";
 import { hasAdminPermission, isPlatformAdmin } from "@/lib/admin-permissions";
 import { isAdmin } from "@/lib/admin-permissions";
 import { PUBLIC_LAND_STATUSES, stripInternalLandFields } from "@/lib/land-visibility";
-import { isOwnerMutable } from "@/lib/land-listing-status";
+import {
+    isOwnerMutable,
+    APPROVABLE_FROM_STATUSES,
+    REJECTABLE_FROM_STATUSES,
+} from "@/lib/land-listing-status";
+import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { logger } from "@/lib/logger";
@@ -403,20 +408,82 @@ async function _verifyLandListing(
         return { success: false, error: "Unauthorized: land:verify_listings required", data: null };
     }
 
-    try { 
+    try {
         const validated = landVerificationSchema.parse(data);
 
-        const updateData: Record<string, unknown> = {
-            status: validated.verified ? 'verified' : 'rejected',
-            verifiedBy: session.user.id,
-            verifiedAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp() 
-        };
+        /**
+         *   #397 THE SIXTH BLIND LAND STATUS WRITE — AND THE ONE WITH THE SCREEN.
+         *
+         *   #27 converted five blind land status writes onto
+         *   claimStatusTransitionFromAny; the note on the fifth, in
+         *   admin/_land.ts, says "the other four are now converted to" this
+         *   shape. This was not among them, and it is the one an admin actually
+         *   reaches: /land/verify imports THIS function, while the hardened
+         *   admin/_land.ts::verifyLandListing has no screen at all. The wired
+         *   door was the unhardened one — the class of #276 and #297.
+         *
+         *   TWO FAULTS, BOTH OF THEM #27's
+         *
+         *   1. The write was unconditional. Farm Nation holds a buyer's money
+         *      against `pending_escrow`; approving from there put the parcel
+         *      back on the public market with the escrow still open, and
+         *      rejecting from there took it off the market with the buyer's
+         *      money still held and nothing in the flow to release it. That is
+         *      #137's fault, fixed on the other doors and left standing here.
+         *
+         *   2. It wrote `status` ALONE. The decision is carried by three fields
+         *      — status, verificationStatus and the `verified` boolean — and
+         *      land-listing-status.ts derives verificationStatus from
+         *      `obj.verified === true`. A listing approved here was 'verified'
+         *      to a status reader and undecided to every reader that goes
+         *      through the normaliser. #25 and #28 are the same split.
+         *
+         *   The starting states come from the shared sets rather than from a
+         *   sixth hand-written list (#26). Note that APPROVABLE_FROM_STATUSES
+         *   includes "rejected" on purpose, so an admin may reverse a rejection
+         *   — which is why rejectionReason is cleared on approval rather than
+         *   left to contradict the new decision.
+         */
+        const transition = await claimStatusTransitionFromAny({
+            collection: COLLECTIONS.LAND_LISTINGS,
+            id: validated.listingId,
+            fromAny: validated.verified
+                ? [...APPROVABLE_FROM_STATUSES]
+                : [...REJECTABLE_FROM_STATUSES],
+            to: validated.verified ? 'verified' : 'rejected',
+            patch: {
+                verificationStatus: validated.verified ? 'approved' : 'rejected',
+                verified: validated.verified,
+                verifiedBy: session.user.id,
+                verifiedAt: FieldValue.serverTimestamp(),
+                ...(validated.notes ? { verificationNotes: validated.notes } : {}),
+                rejectionReason: !validated.verified && validated.rejectionReason
+                    ? validated.rejectionReason
+                    : null,
+                updatedAt: FieldValue.serverTimestamp(),
+            },
+            recordPreviousAs: validated.verified
+                ? 'statusBeforeVerification'
+                : 'statusBeforeRejection',
+        });
 
-        if (validated.notes) { updateData.verificationNotes = validated.notes; }
-        if (!validated.verified && validated.rejectionReason) { updateData.rejectionReason = validated.rejectionReason; }
-
-        await db.collection(COLLECTIONS.LAND_LISTINGS).doc(validated.listingId).update(updateData);
+        if (!transition.claimed) {
+            logger.warn(
+                `[verifyLandListing] Refused: listing ${validated.listingId} is '${transition.status}', ` +
+                `which is not a ${validated.verified ? 'approvable' : 'rejectable'} state.`
+            );
+            return {
+                success: false,
+                data: null,
+                error: transition.status === null
+                    ? (transition.exists
+                        ? "This land listing has no status recorded, so a decision cannot be made on it."
+                        : "Land listing not found")
+                    : `This listing is '${transition.status}' and cannot be ` +
+                      `${validated.verified ? 'approved' : 'rejected'} from that state. ` +
+                      `A listing with a purchase in progress must be resolved first.`,
+            };
+        }
 
         // Audit log
         await createAdminAuditLog({ 
