@@ -20,6 +20,7 @@ import {
     PURCHASABLE_STATUSES,
     APPROVABLE_FROM_STATUSES,
     REJECTABLE_FROM_STATUSES,
+    isOwnerMutable,
     type LandListingStatus,
     type LandVerificationStatus,
 } from "@/lib/land-listing-status";
@@ -203,9 +204,69 @@ async function _submitForVerificationAction(
             return { success: false, error: "Unauthorized", data: null };
         }
 
-        await listingRef.update({ 
+        /**
+         *   #403 THE OWNER'S THIRD WRITE PATH, MISSED BY THE FIX THAT HARDENED
+         *   THE OTHER TWO.
+         *
+         *   This was:
+         *
+         *       await listingRef.update({ status: "pending_verification", ... })
+         *
+         *   — the current status neither read nor checked. The ownership guard
+         *   above tells you who is calling and nothing about what state the
+         *   parcel is in, so the owner of a listing at `pending_escrow` (a buyer
+         *   at Paystack) or `sold` could drag it back into review. The buyer's
+         *   fulfilment and cancel both advance the listing FROM their status via
+         *   claimStatusTransition, so after this write neither can ever fire:
+         *   the money taken, the parcel back in the review queue, and nothing
+         *   left that can move it out.
+         *
+         *   THE RULE ALREADY EXISTS AND THIS PATH WAS SKIPPED. land-actions.ts
+         *   had exactly this fault in updateLandListing and deleteLandListing,
+         *   and both were fixed against OWNER_MUTABLE_STATUSES — the shared list
+         *   of states the owner may still act from, with `pending` and every
+         *   DECISION_LOCKED status refused. There are THREE owner write paths.
+         *   The repair reached two. #297's class, and the reason the orphan
+         *   queue looks at unreached doors at all.
+         *
+         *   NOT REACHED IS NOT UNREACHABLE. No screen calls this — but the file
+         *   is "use server", so every export is a live HTTP endpoint that any
+         *   authenticated owner can post to. The absence of a button is not a
+         *   guard.
+         *
+         *   CHECKED, NOT CLAIMED — and that is deliberate. The admin decision
+         *   paths in this same file claim their transitions, and converting this
+         *   one to match was the first thing I wrote. It is wrong, for the two
+         *   reasons #397 recorded when it asked the same question of the edit and
+         *   delete paths:
+         *
+         *     - OWNER_MUTABLE_STATUSES admits a NULL status on purpose. Legacy
+         *       listings predate the vocabulary, and the shared module says
+         *       refusing them "would strand their owners entirely".
+         *       claimStatusTransitionFromAny returns immediately on a null
+         *       status, so a claim here would strand exactly those owners.
+         *
+         *     - The target, `pending_verification`, is itself an owner-mutable
+         *       starting state, and the helper strips the target from the
+         *       starting set by design.
+         *
+         *   So this takes the shape its two siblings take, which is also what
+         *   makes the three agree. The race window between the read and the
+         *   write is real and is shared by all three — narrower than the hole it
+         *   replaces, and not closable without stranding legacy owners.
+         */
+        if (!isOwnerMutable(listingData.status)) {
+            return {
+                success: false,
+                error: `This listing cannot be submitted for verification right now `
+                    + `(status: ${listingData.status}). A purchase is in progress or completed.`,
+                data: null,
+            };
+        }
+
+        await listingRef.update({
             status: "pending_verification",
-            updatedAt: FieldValue.serverTimestamp() 
+            updatedAt: FieldValue.serverTimestamp()
         });
 
         return { success: true, error: null, data: null };

@@ -36,15 +36,27 @@
  *     #400  walletCheckoutAction debits the wallet and never completes the
  *           order — no status, no escrow, no fee, no notification. RETIRED
  *           behind MARKETPLACE_WALLET_CHECKOUT.
+ *     #403  submitForVerificationAction wrote land status blind, so an owner
+ *           could drag a listing back into review from `pending_escrow` or
+ *           `sold` and strand the buyer's money. There are three owner write
+ *           paths and the shared rule had reached two. FIXED — #297's class
+ *           again.
+ *
+ *   AND THE REASON THIS QUEUE LOOKS AT UNREACHED DOORS AT ALL, stated once:
+ *   NOT REACHED IS NOT UNREACHABLE. These modules are "use server", so every
+ *   export is a live HTTP endpoint whether or not a screen calls it. #403 was
+ *   reachable by any authenticated owner the whole time. "No button" is not a
+ *   guard, and an orphan is not automatically harmless.
  *
  *   TRIAGED, AND NOT YET TRIAGED
  *   -----------------------------
- *   41 names carry a verdict below. 28 do not: they are listed in PENDING,
+ *   44 names carry a verdict below. 25 do not: they are listed in PENDING,
  *   named, and explicitly NOT waved through. #400 took the nine money paths
- *   this list called out and gave each a verdict; what remains is readers and
- *   admin/onboarding writes, none of which moves money.
+ *   this list called out and gave each a verdict, and #403 took the three land
+ *   ones; what remains is readers and admin/onboarding writes, none of which
+ *   moves money.
  *
- *   Recording them as pending is the honest state. Writing 28 verdicts I have
+ *   Recording them as pending is the honest state. Writing 25 verdicts I have
  *   not earned would make this file look finished while carrying guesses, which
  *   is exactly the failure the queue exists to catch.
  *
@@ -216,6 +228,13 @@ const TRIAGED: Record<string, string> = {
     createPaymentRecordAction: '#400 — payments.ts reader/writer trio, no screen',
     getPaymentByReferenceAction: '#400 — payments.ts reader/writer trio, no screen',
     getUserPaymentHistoryAction: '#400 — payments.ts reader/writer trio, no screen',
+
+    // #403 — the land names out of PENDING.
+    submitForVerificationAction: '#403 FIXED — wrote status blind; the owner rule had reached two of three paths',
+    createLandListingAction: '#403 — correct and guarded; the "draft" half of a draft→submit flow with no screen. '
+        + 'The live door is submitLandListingAction, which /farm-nation/list-land uses and which goes '
+        + 'straight to pending_verification',
+    submitLandInquiryAction: '#340 already recorded — public by design, no UI, deliberately not built there',
 };
 
 /**
@@ -236,7 +255,6 @@ const PENDING: readonly string[] = [
     'checkOnboardingStatusAction',
     'completeOnboardingAction',
     'createBulkNotificationsAction',
-    'createLandListingAction',
     'createReviewAction',
     'deleteCertificateAction',
     'getApprovedCooperativeMembersAction',
@@ -258,8 +276,6 @@ const PENDING: readonly string[] = [
     'getUserNotificationsAction',
     'removeFlashSaleProductAction',
     'softDeleteUserAction',
-    'submitForVerificationAction',
-    'submitLandInquiryAction',
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
