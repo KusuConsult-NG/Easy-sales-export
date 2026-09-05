@@ -25,6 +25,7 @@ import {
     MessageSquare,
     ShieldAlert,
     ScrollText,
+    Banknote,
     UserX,
     BadgeCheck,
     ToggleLeft,
@@ -102,6 +103,28 @@ const NAV_ITEMS = [
      *        src/__tests__/unit/every-screen-has-a-way-in.test.ts.
      */
     { label: "Loan Products", href: "/admin/cooperatives/loan-products", icon: ScrollText, section: "modules", permission: "cooperatives:approve_loans" as AdminPermission, featureToggle: "cooperative_loans" },
+    /**
+     *   #384 THE BUSINESS LOAN QUEUE. #362 left this one as an owner decision;
+     *        the measurement below settles it, so it is wired rather than asked.
+     *
+     *        LOAN_APPLICATIONS holds two products (#70). /admin/cooperatives/loans
+     *        is the COOPERATIVE queue: membership, guarantor, a cap that is a
+     *        multiple of savings. /loans/approve is the BUSINESS queue:
+     *        collateral and business details, none of that underwriting — and
+     *        getPendingLoanApplications filters on `filterByLoanProduct(…,
+     *        'business')` precisely so the two do not show each other's rows.
+     *
+     *        So it is not a duplicate of anything. It is the ONLY screen that
+     *        approves a business loan, it is gated on the same permission as the
+     *        cooperative queue, and #213 and #286 both repaired logic behind it.
+     *        Nothing linked to it, so none of that was reachable.
+     *
+     *        It keeps its /loans/approve path rather than moving under /admin:
+     *        the path is in route-manifest's protected set already, and moving a
+     *        route to fix a missing link is a change with more ways to go wrong
+     *        than the one being fixed.
+     */
+    { label: "Business Loans", href: "/loans/approve", icon: Banknote, section: "modules", permission: "cooperatives:approve_loans" as AdminPermission },
     { label: "Marketplace", href: "/admin/marketplace", icon: ShoppingBag, section: "modules" },
     { label: "Escrow Management", href: "/admin/marketplace/escrow", icon: ShieldCheck, section: "modules", featureToggle: "escrow_messaging" },
     { label: "Export Windows", href: "/admin/export", icon: Container, section: "modules", permission: "export:approve_applications" as AdminPermission },

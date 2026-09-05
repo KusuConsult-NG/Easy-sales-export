@@ -279,7 +279,7 @@ describe('#382 — no client component reaches a server-only module', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#382 — no client module declares a server function inside itself', () => {
     /**
-     *   A THIRD SHAPE, FOUND BY #380 AND MEASURED THE SAME WAY.
+     *   A THIRD SHAPE, FOUND BY #385 AND MEASURED THE SAME WAY.
      *
      *   JoinCooperativeModal held an inline server function inside a "use
      *   client" module, wired to its form through useActionState. A probe page

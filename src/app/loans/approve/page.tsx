@@ -20,12 +20,36 @@ export default function LoanApprovalPage() {
     const [loading, setLoading] = useState(true);
     const [selectedLoan, setSelectedLoan] = useState<LoanApplication | null>(null);
     const [processing, setProcessing] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
+    /**
+     *   #384 A REFUSAL RENDERED AS AN EMPTY QUEUE.
+     *
+     *        This kept `if (result.success && result.data)` and nothing else, so
+     *        a caller without `cooperatives:approve_loans` — or any read that
+     *        failed — fell through to the empty-state card below:
+     *
+     *            "No Pending Applications — All loan applications have been
+     *             reviewed"
+     *
+     *        On a queue of business loan applications that is the worst possible
+     *        wrong answer: it tells an approver the work is done. #307's shape,
+     *        and #296's lesson that a refusal read as a clean bill of health is
+     *        worse than a refusal.
+     *
+     *        The list is also cleared on failure rather than left showing the
+     *        previous page's rows beside an error, which would be two
+     *        contradictory statements on one screen.
+     */
     async function loadLoans() {
         setLoading(true);
+        setError(null);
         const result = await getPendingLoanApplications();
         if (result.success && result.data) {
             setLoans(result.data);
+        } else {
+            setLoans([]);
+            setError(result.error || "Could not load loan applications");
         }
         setLoading(false);
     }
@@ -153,8 +177,19 @@ export default function LoanApprovalPage() {
                     </div>
                 )}
 
+                {/* A failed or refused read says so, rather than showing "all reviewed". */}
+                {!loading && error && (
+                    <div className="bg-white rounded-2xl p-12 text-center border border-red-200">
+                        <XCircle className="w-16 h-16 text-red-300 mx-auto mb-4" />
+                        <h3 className="text-xl font-bold text-slate-900 mb-2">
+                            Could not load the queue
+                        </h3>
+                        <p className="text-slate-600">{error}</p>
+                    </div>
+                )}
+
                 {/* Loans List */}
-                {!loading && loans.length === 0 && (
+                {!loading && !error && loans.length === 0 && (
                     <div className="bg-white rounded-2xl p-12 text-center">
                         <FileText className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                         <h3 className="text-xl font-bold text-slate-900 mb-2">
@@ -166,7 +201,7 @@ export default function LoanApprovalPage() {
                     </div>
                 )}
 
-                {!loading && loans.length > 0 && (
+                {!loading && !error && loans.length > 0 && (
                     <div className="grid grid-cols-1 gap-6">
                         {loans.map((loan, index) => (
                             <motion.div

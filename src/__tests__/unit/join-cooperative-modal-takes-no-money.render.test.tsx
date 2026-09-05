@@ -3,7 +3,7 @@
  */
 
 /**
- *   #380 A FOURTH JOIN DOOR THAT CREDITED SAVINGS NOBODY HAD PAID.
+ *   #385 A FOURTH JOIN DOOR THAT CREDITED SAVINGS NOBODY HAD PAID.
  *
  *        JoinCooperativeModal held a server function declared inside this
  *        client module and wired to its form. It hand-rolled a complete join:
@@ -59,7 +59,7 @@ function renderModal() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('#380 — the modal can no longer move money, because it can no longer act', () => {
+describe('#385 — the modal can no longer move money, because it can no longer act', () => {
     it('HOLDS NO SERVER FUNCTION AT ALL', () => {
         // Scanned with comments removed, deliberately: the file's own header
         // describes what used to be here, and a raw-text assertion would trip on
@@ -91,7 +91,7 @@ describe('#380 — the modal can no longer move money, because it can no longer 
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('#380 — and it offers no control that takes or credits a figure', () => {
+describe('#385 — and it offers no control that takes or credits a figure', () => {
     it('RENDERS NO CONTRIBUTION FIELD', () => {
         renderModal();
 
@@ -121,7 +121,7 @@ describe('#380 — and it offers no control that takes or credits a figure', () 
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('#380 — it points at the join flow the product actually has', () => {
+describe('#385 — it points at the join flow the product actually has', () => {
     it('THE PRIMARY CONTROL LINKS TO THE PAID ONBOARDING PATH', () => {
         renderModal();
 
@@ -159,7 +159,7 @@ describe('#380 — it points at the join flow the product actually has', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('#380 — the premises the decision rests on', () => {
+describe('#385 — the premises the decision rests on', () => {
     it('THE SIBLING DOOR STILL REFUSES AN UNPAID CONTRIBUTION', () => {
         // If this ever stops being true, the reasoning for retiring this one
         // ("the rule already exists on the door that has it") is gone.

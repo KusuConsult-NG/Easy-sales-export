@@ -17,7 +17,7 @@
  * cron/release-escrow's, and the sweep below re-establishes it here rather than
  * trusting either.
  *
- * #380 CORRECTED THIS PARAGRAPH AND STRENGTHENED THE SWEEP BELOW. It used to
+ * #385 CORRECTED THIS PARAGRAPH AND STRENGTHENED THE SWEEP BELOW. It used to
  * name one writer — JoinCooperativeModal — and describe it as "a client-side
  * Firebase-SDK component from before the Supabase migration", a phrase copied
  * between four files, two of them by this audit, before anybody opened the
@@ -107,7 +107,7 @@ function source(rel: string): string {
 }
 
 /**
- * Every place in src/ that writes `field` onto a USER document — #380.
+ * Every place in src/ that writes `field` onto a USER document — #385.
  *
  * Parameterised on the field so the same detector can be pointed at a field
  * that IS written, as a positive control. An empty answer from an unparameterised
@@ -290,7 +290,7 @@ describe('the claim matches reality, in both directions', () => {
         // and so do #319's and dashboard.ts's, so each candidate is re-checked
         // against its source with comments removed. That trap has now cost this
         // audit three separate gates.
-        // #380: THE POSITIVE CONTROL COMES FIRST, because the answer is now an
+        // #385: THE POSITIVE CONTROL COMES FIRST, because the answer is now an
         // EMPTY LIST. "No writers found" and "the detector finds nothing at
         // all" are the same assertion result and different facts — a broken
         // grep, a renamed collection constant or a widened comment-stripper

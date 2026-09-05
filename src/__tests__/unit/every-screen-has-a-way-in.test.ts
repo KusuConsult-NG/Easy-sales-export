@@ -76,6 +76,7 @@
 
 import { describe, it, expect } from '@jest/globals';
 import { readFileSync, readdirSync, statSync, existsSync } from 'fs';
+import { execSync } from 'child_process';
 import { join, relative, dirname, resolve } from 'path';
 import { stripComments } from '@/lib/testing/strip-comments';
 
@@ -169,19 +170,91 @@ const WIRED = [
     '/admin/forensics',
 ];
 
-/** Screens left for the owner — recorded so they are not rediscovered. */
-const STILL_ORPHANED = [
-    '/academy/application/success',
+/**
+ *   #384 THE ELEVEN #362 LEFT FOR THE OWNER — DECIDED, NONE LEFT.
+ *
+ *        The standing instruction on this audit is that no decision is the
+ *        owner's, so each of the eleven was measured and settled rather than
+ *        recorded again. Two needed an entrance; eight were duplicates or dead
+ *        ends and now redirect to the screen that does the job; one was never an
+ *        orphan.
+ *
+ *        WIRED — the entrance was the only thing missing:
+ *
+ *          /loans/approve                 → AdminSidebar, "Business Loans".
+ *                                           LOAN_APPLICATIONS holds two products
+ *                                           (#70) and this is the BUSINESS queue;
+ *                                           getPendingLoanApplications filters on
+ *                                           filterByLoanProduct(…, 'business')
+ *                                           precisely so it and the cooperative
+ *                                           queue do not show each other's rows.
+ *                                           Not a duplicate of anything — the only
+ *                                           screen that approves a business loan.
+ *          /marketplace/seller/analytics  → ModuleSidebar, sellerOnly. The seller
+ *                                           nav moved out of MarketplaceSidebar
+ *                                           and this entry did not come with it.
+ *
+ *        RETIRED — kept as redirects, so no URL breaks and nothing is deleted:
+ *
+ *          /academy/application/success             → /academy/dashboard
+ *          /cooperatives/onboarding/success         → /cooperatives/dashboard
+ *          /cooperatives/onboarding/pending-payment → /cooperatives/onboarding
+ *              The three flow-completion screens. Each flow ends with a push to
+ *              a dashboard; no code has ever routed to these.
+ *          /verify-id/scan          → /verify-id
+ *              Was the correct scanner while /verify-id verified in the browser
+ *              with a key that is undefined there. That is fixed; both now POST
+ *              to /api/qr/verify, so this is a second copy of one screen.
+ *          /admin/escrow            → /admin/marketplace/escrow
+ *              197 lines beside 448, over the same actions. #60's shape, and
+ *              #113, #133, #325 and #375 all landed on the linked one.
+ *          /dashboard/reviews/new   → /marketplace/buyer/orders/[id]/review
+ *              Both write PRODUCT_REVIEWS and both actions are now equally
+ *              hardened, so this is a duplicate screen rather than a guard
+ *              asymmetry. The order page is the right home: a review belongs to
+ *              an order line, and that screen walks to the next unreviewed item.
+ *        NOT RETIRED, AND THE FIRST READING WAS WRONG — the two quiz screens.
+ *        They look like an older generation (they use /api/academy/quiz/*, the
+ *        linked pair uses server actions), and retiring them was the first
+ *        decision here. Measuring the two generations reversed it:
+ *
+ *          - api/academy/quiz/submit ENFORCES maxAttempts and is the only writer
+ *            of COLLECTIONS.QUIZ_ATTEMPTS. submitQuizScoreAction, which the
+ *            LINKED learner quiz calls, enforces no limit and records no
+ *            attempt.
+ *          - the unlinked admin editor sets passingScore, timeLimit,
+ *            maxAttempts, shuffleQuestions and shuffleAnswers. The linked one
+ *            sets none of them.
+ *
+ *        So the unwired pair is the COMPLETE pair, and an earlier pass's
+ *        maxAttempts enforcement is unreachable because the screen that posts to
+ *        it has no link. That is "N doors, and the wired one is not the hardened
+ *        one" — the shape this audit keeps finding — on graded assessment, and
+ *        it is too big to settle inside a navigation pass. #386.
+ *
+ *        NOT AN ORPHAN — corrected: /export/onboarding/rejected is reached from
+ *        a rejection email's absolute URL, which #362's own prose already said
+ *        while its list still counted it. It moves to EXCLUDED below.
+ */
+const STILL_ORPHANED: string[] = [
+    // Both held open by #386, with the measurement above. Not a decision left to
+    // the owner — a decision that needs the two quiz subsystems reconciled first.
     '/academy/courses/[courseId]/quiz',
     '/admin/academy/courses/[courseId]/quiz',
-    '/admin/escrow',
-    '/cooperatives/onboarding/pending-payment',
-    '/cooperatives/onboarding/success',
-    '/dashboard/reviews/new',
-    '/export/onboarding/rejected',
-    '/loans/approve',
-    '/marketplace/seller/analytics',
-    '/verify-id/scan',
+];
+
+/** Retired in #384: each still serves its URL, as a redirect to the live screen. */
+const RETIRED: Array<[string, string]> = [
+    ['/academy/application/success', '/academy/dashboard'],
+    ['/cooperatives/onboarding/success', '/cooperatives/dashboard'],
+    ['/cooperatives/onboarding/pending-payment', '/cooperatives/onboarding'],
+    ['/verify-id/scan', '/verify-id'],
+    ['/admin/escrow', '/admin/marketplace/escrow'],
+];
+
+/** Retired too, but their target is built from a route param. */
+const RETIRED_DYNAMIC: Array<[string, string]> = [
+    ['/dashboard/reviews/new', '/marketplace/buyer/orders/'],
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -230,41 +303,144 @@ describe('#362 — the five this commit wired up', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('#362 — the ones left for the owner, recorded', () => {
-    it('THEY ARE STILL UNREACHABLE, AND THAT IS THE OPEN DECISION', () => {
-        // Named rather than left to the next sweep. If one is linked, this
-        // fails and the list shrinks — which is the point of writing it here.
-        const stillOut = STILL_ORPHANED.filter((r) => !hasWayIn(r));
-
-        expect(stillOut.sort()).toEqual([...STILL_ORPHANED].sort());
+describe('#362 — the ones left for the owner, now none', () => {
+    it('NINE OF THE ELEVEN ARE SETTLED, AND THE OTHER TWO ARE NOT AN OWNER DECISION', () => {
+        // #384 wired two and retired six. The two quiz screens stay open under
+        // #386 — not because linking them is a product question, but because the
+        // measurement showed the LINKED pair is the thinner one, and swapping
+        // which quiz subsystem a learner is graded by is not a navigation edit.
+        expect(STILL_ORPHANED.sort()).toEqual([
+            '/academy/courses/[courseId]/quiz',
+            '/admin/academy/courses/[courseId]/quiz',
+        ]);
+        for (const route of STILL_ORPHANED) expect(hasWayIn(route)).toBe(false);
     });
 
-    it('and they are real screens, not stubs — measured by size', () => {
-        // A five-line redirect being unlinked is correct. These are not that.
-        for (const route of ['/loans/approve', '/dashboard/reviews/new', '/admin/escrow',
-                             '/marketplace/seller/analytics', '/verify-id/scan']) {
-            const lines = readFileSync(join(ROOT, `src/app${route}/page.tsx`), 'utf-8').split('\n').length;
-            expect({ route, big: lines > 150 }).toEqual({ route, big: true });
+    it('#386 — and the premise: the UNLINKED pair is the one that enforces', () => {
+        // The measurement that reversed the first decision. If either half of
+        // this stops being true, #386's framing has to be retaken.
+        const submitRoute = source('src/app/api/academy/quiz/submit/route.ts');
+        const linkedAction = source('src/app/actions/academy/_ac_quiz.ts');
+
+        expect(submitRoute).toContain('maxAttempts');
+        expect(submitRoute).toContain('COLLECTIONS.QUIZ_ATTEMPTS');
+        expect(linkedAction).not.toContain('maxAttempts');
+
+        const unlinkedEditor = source('src/app/admin/academy/courses/[courseId]/quiz/page.tsx');
+        const linkedEditor = source('src/app/admin/academy/[courseId]/quiz/[quizId]/page.tsx');
+        for (const field of ['maxAttempts', 'timeLimit', 'shuffleQuestions']) {
+            expect({ field, unlinked: unlinkedEditor.includes(field) }).toEqual({ field, unlinked: true });
+            expect({ field, linked: linkedEditor.includes(field) }).toEqual({ field, linked: false });
         }
     });
 
-    it('/admin/escrow REALLY IS A SECOND ESCROW ADMIN SCREEN', () => {
-        // The duplicate that makes it a decision rather than a repair.
+    it('and every one of them WAS a real screen, not a stub — measured from git', () => {
+        // The point #362 made: a five-line redirect being unlinked is correct,
+        // and none of these was that. Measured against the commit before the
+        // retirements, because five of the eleven ARE five-line redirects now —
+        // asserting their current size would quietly invert the claim.
+        const before = 'ccd38df0';   // the commit preceding #384
+        for (const route of ['/loans/approve', '/dashboard/reviews/new', '/admin/escrow',
+                             '/marketplace/seller/analytics', '/verify-id/scan']) {
+            const lines = execSync(`git show ${before}:src/app${route}/page.tsx | wc -l`,
+                { encoding: 'utf-8', cwd: ROOT }).trim();
+
+            expect({ route, big: Number(lines) > 150 }).toEqual({ route, big: true });
+        }
+    });
+
+    it('/admin/escrow REALLY WAS A SECOND ESCROW ADMIN SCREEN', () => {
+        // The duplicate that made it a decision rather than a repair. Both files
+        // still exist; the smaller one is now a redirect (see #384 below).
         expect(existsSync(join(ROOT, 'src/app/admin/escrow/page.tsx'))).toBe(true);
         expect(existsSync(join(ROOT, 'src/app/admin/marketplace/escrow/page.tsx'))).toBe(true);
         expect(hasWayIn('/admin/marketplace/escrow')).toBe(true);       // this one is linked
-        expect(hasWayIn('/admin/escrow')).toBe(false);                  // this one is not
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#384 — the two that only needed an entrance', () => {
+    it('THE BUSINESS LOAN QUEUE IS REACHABLE', () => {
+        expect(hasWayIn('/loans/approve')).toBe(true);
+        expect(source('src/components/admin/AdminSidebar.tsx')).toContain('href: "/loans/approve"');
     });
 
-    it('and the three flow-completion screens are named by NOTHING at all', () => {
-        // Not merely unlinked — no file in the repository mentions them, so
-        // whatever those flows do at the end, it is not these.
-        for (const route of ['/academy/application/success', '/cooperatives/onboarding/success',
-                             '/cooperatives/onboarding/pending-payment']) {
-            const mentions = FILES.filter((f) => !f.startsWith(`src/app${route}/`))
-                .filter((f) => source(f).includes(route));
+    it('and it is gated on the permission its own actions demand', () => {
+        // The nav must not offer a link the action refuses. Both
+        // getPendingLoanApplications and approveLoanApplication check
+        // cooperatives:approve_loans, so the entry names the same one.
+        const nav = source('src/components/admin/AdminSidebar.tsx');
+        const entry = nav.slice(nav.indexOf('href: "/loans/approve"'));
 
-            expect({ route, mentions }).toEqual({ route, mentions: [] });
+        expect(entry.slice(0, entry.indexOf('},') + 2)).toContain('cooperatives:approve_loans');
+        const action = source('src/app/actions/loan-actions.ts');
+        expect(action).toContain('cooperatives:approve_loans');
+    });
+
+    it('and a refused read no longer renders as an empty queue', () => {
+        // #307's shape on the sharpest possible screen: "No Pending
+        // Applications — All loan applications have been reviewed" is the worst
+        // wrong answer a loan approver can be given.
+        const page = source('src/app/loans/approve/page.tsx');
+
+        expect(page).toContain('setError(result.error || "Could not load loan applications")');
+        expect(page).toContain('Could not load the queue');
+        expect(page).toMatch(/!loading && !error && loans\.length === 0/);
+    });
+
+    it('SELLER ANALYTICS IS REACHABLE', () => {
+        expect(hasWayIn('/marketplace/seller/analytics')).toBe(true);
+        expect(source('src/components/layout/ModuleSidebar.tsx'))
+            .toContain('href: "/marketplace/seller/analytics"');
+    });
+
+    it('and it is sellerOnly, like every other seller entry beside it', () => {
+        const nav = source('src/components/layout/ModuleSidebar.tsx');
+        const entry = nav.slice(nav.indexOf('href: "/marketplace/seller/analytics"'));
+
+        expect(entry.slice(0, entry.indexOf('},') + 2)).toContain('sellerOnly: true');
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#384 — the eight that were retired, and what they point at', () => {
+    it('EVERY RETIRED SCREEN STILL SERVES ITS URL, AS A REDIRECT', () => {
+        for (const [route, target] of RETIRED) {
+            const code = source(`src/app${route}/page.tsx`);
+
+            // Quote-anchored on the closing quote, so a LONGER path cannot pass
+            // — the mutation that survived #362's first draft.
+            expect({ route, ok: new RegExp(`redirect\\(["']${target}["']\\)`).test(code) })
+                .toEqual({ route, ok: true });
+        }
+    });
+
+    it('and the three that carry a route param redirect to a built path', () => {
+        for (const [route, prefix] of RETIRED_DYNAMIC) {
+            const file = `src/app${route.replace('[courseId]', '[courseId]')}/page.tsx`;
+            const code = source(file);
+
+            expect({ route, hasRedirect: code.includes('redirect(') }).toEqual({ route, hasRedirect: true });
+            expect({ route, target: code.includes(prefix) }).toEqual({ route, target: true });
+        }
+    });
+
+    it('none of them still holds the screen it duplicated — vacuity guard', () => {
+        // Without this, a file that failed to be rewritten would pass the two
+        // assertions above simply by mentioning redirect() somewhere.
+        for (const [route] of [...RETIRED, ...RETIRED_DYNAMIC]) {
+            const code = source(`src/app${route}/page.tsx`);
+
+            expect({ route, lines: code.split('\n').filter((l) => l.trim()).length < 15 })
+                .toEqual({ route, lines: true });
+        }
+    });
+
+    it('and each says WHY, so the next reader does not have to re-derive it', () => {
+        for (const [route] of [...RETIRED, ...RETIRED_DYNAMIC]) {
+            const raw = readFileSync(join(ROOT, `src/app${route}/page.tsx`), 'utf-8');
+
+            expect({ route, recorded: raw.includes('#384 RETIRED') }).toEqual({ route, recorded: true });
         }
     });
 });
@@ -320,6 +496,11 @@ describe('#362 — THE RATCHET: no NEW screen may be built without a way in', ()
         const EXCLUDED = new Set([
             '/admin/withdrawals', '/notifications', '/marketplace/sell/orders',   // redirect stubs
             '/export/onboarding/rejected', '/auth/login/admin',                   // reached externally
+            // #384 — retired to redirects. They keep serving their URL and are
+            // unlinked BY DESIGN, exactly like the three stubs above, so they
+            // belong in the same exclusion for the same stated reason.
+            ...RETIRED.map(([r]) => r),
+            ...RETIRED_DYNAMIC.map(([r]) => r),
         ]);
 
         const orphans = ROUTES.filter((r) => !hasWayIn(r) && !EXCLUDED.has(r)).sort();
@@ -328,8 +509,11 @@ describe('#362 — THE RATCHET: no NEW screen may be built without a way in', ()
     });
 
     it('and the ratchet can actually see an orphan', () => {
-        // A ratchet that cannot fail is a comment.
-        expect(hasWayIn('/loans/approve')).toBe(false);
+        // A ratchet that cannot fail is a comment. #384 wired /loans/approve, so
+        // the negative case is now a route that does not exist — which is what
+        // an unlinked one looks like to hasWayIn, and the only honest example
+        // left now that the orphan list is empty.
+        expect(hasWayIn('/a-screen-nobody-built')).toBe(false);
         expect(hasWayIn('/admin/users')).toBe(true);
         expect(hasWayIn('/dashboard')).toBe(true);
     });

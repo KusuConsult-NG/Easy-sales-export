@@ -1,80 +1,20 @@
-import { CheckCircle, ArrowRight, GraduationCap } from "lucide-react";
-import Link from "next/link";
+/**
+ *   #384 RETIRED — THE ACADEMY APPLICATION DOES NOT END HERE.
+ *
+ *        The application wizard finishes with `router.push("/academy/dashboard")`
+ *        (academy/application/page.tsx). Nothing has ever sent an applicant to
+ *        this screen, and 80 lines of congratulation that no flow reaches is a
+ *        screen describing something that did not happen.
+ *
+ *   NOTHING IS DELETED. The implementation is in this file's git history, and
+ *   the URL keeps working: anyone holding a link or a bookmark lands on the
+ *   screen that does the job. #362 recorded eleven screens like this as an owner
+ *   decision; the standing instruction is that none of them is, so each was
+ *   measured and either wired or pointed at its live equivalent.
+ */
 
-export default function AcademyApplicationSuccessPage() {
-    return (
-        <div className="min-h-screen bg-linear-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-6">
-            <div className="max-w-2xl w-full">
-                <div className="bg-white rounded-3xl p-12 shadow-2xl text-center">
-                    {/* Success Icon */}
-                    <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <CheckCircle className="w-16 h-16 text-green-600" />
-                    </div>
+import { redirect } from "next/navigation";
 
-                    {/* Title */}
-                    <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">
-                        Application Submitted Successfully!
-                    </h1>
-
-                    {/* Message */}
-                    <p className="text-lg text-slate-600 mb-8">
-                        Thank you for applying to Easy Sales Academy. Your learner application has been received and is being processed.
-                    </p>
-
-                    {/* Next Steps */}
-                    <div className="bg-blue-50 rounded-2xl p-6 mb-8 text-left">
-                        <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900 mb-4">
-                            <GraduationCap className="w-6 h-6 text-blue-600" />
-                            What Happens Next?
-                        </h2>
-                        <ol className="space-y-3 text-slate-900">
-                            <li className="flex items-start gap-3">
-                                <span className="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
-                                    1
-                                </span>
-                                <span>You'll receive a confirmation email at your registered email address</span>
-                            </li>
-                            <li className="flex items-start gap-3">
-                                <span className="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
-                                    2
-                                </span>
-                                <span>Our team will review your application (usually within 24-48 hours)</span>
-                            </li>
-                            <li className="flex items-start gap-3">
-                                <span className="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
-                                    3
-                                </span>
-                                <span>You'll receive login credentials and instructions to access the Academy portal</span>
-                            </li>
-                        </ol>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                        <Link
-                            href="/academy"
-                            className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition shadow-lg hover:shadow-blue-500/50"
-                        >
-                            Back to Academy Home
-                            <ArrowRight className="w-5 h-5" />
-                        </Link>
-                        <Link
-                            href="/dashboard"
-                            className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-slate-200 text-slate-900 font-bold rounded-xl hover:bg-slate-300 transition"
-                        >
-                            Go to Dashboard
-                        </Link>
-                    </div>
-
-                    {/* Help Text */}
-                    <p className="mt-8 text-sm text-slate-500">
-                        Questions? Contact us at{" "}
-                        <a href="mailto:academy@easysalesexport.com" className="text-blue-600 hover:underline font-semibold">
-                            academy@easysalesexport.com
-                        </a>
-                    </p>
-                </div>
-            </div>
-        </div>
-    );
+export default function RetiredPage() {
+    redirect("/academy/dashboard");
 }

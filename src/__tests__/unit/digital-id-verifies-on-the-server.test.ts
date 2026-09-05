@@ -133,8 +133,20 @@ describe('#344 — both verify pages go through the server', () => {
         expect(page).toContain('fetch("/api/qr/verify"');
     });
 
-    it('and the scan page still does, so there is one verifier', () => {
-        expect(source('src/app/verify-id/scan/page.tsx')).toContain('fetch("/api/qr/verify"');
+    it('and there is now only ONE verify page, which is stronger — #384', () => {
+        // This asserted that /verify-id/scan ALSO posted to the route. It did,
+        // and that is why it was the correct scanner while /verify-id verified
+        // in the browser with a key that is undefined there.
+        //
+        // With /verify-id fixed the two were identical, and only one was linked.
+        // #384 retired the scan page to a redirect, so the claim "there is one
+        // verifier" is now true of the screens as well as the endpoint. The
+        // assertion follows the fact rather than being deleted: the redirect
+        // must go to the page the assertion above just checked.
+        const scan = source('src/app/verify-id/scan/page.tsx');
+
+        expect(scan).toMatch(/redirect\(["']\/verify-id["']\)/);
+        expect(scan).not.toContain('verifyDigitalIDQR(');
     });
 
     it('the route is the only caller of the verifier, and it audits every attempt', () => {

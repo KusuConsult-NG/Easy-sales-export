@@ -220,9 +220,15 @@ describe('#293 — a payment reference invented in the browser', () => {
         expect(HITS.D6.map((h) => `${h.file}:${h.line}`)).toEqual([]);
     });
 
-    it('the page shows a reference only when it was given one', () => {
-        expect(code()).toContain('searchParams.get("ref")');
+    it('the page invents no reference at all now, because it is RETIRED — #384', () => {
+        // The repair was "show a reference only when the URL gave you one",
+        // replacing one minted in the browser from Math.random. #384 then found
+        // that nothing has ever routed to this screen, and retired it to a
+        // redirect. So the browser mints nothing here, which is the strongest
+        // form of the same claim — and the D6 sweep above, which is the real
+        // guard, still covers the whole tree.
         expect(code()).not.toMatch(/COOP-PAY-/);
+        expect(code()).not.toContain('Math.random');
     });
 
     it('AND NO LONGER PUBLISHES HARDCODED BANK DETAILS', () => {
@@ -234,11 +240,16 @@ describe('#293 — a payment reference invented in the browser', () => {
         expect(code()).not.toMatch(/Use this as narration/);
     });
 
-    it('and the half that is true is still there', () => {
-        // Vacuity guard. Deleting both halves would pass everything above and
-        // leave a member with no idea how the fee is paid.
-        expect(code()).toContain('Verification Is Automatic');
-        expect(code()).toContain('confirmed with Paystack directly');
+    it('and the member is still told how the fee is paid — vacuity guard', () => {
+        // Was: this page's own "Verification Is Automatic … confirmed with
+        // Paystack directly". With the page retired (#384) the guard has to move
+        // to where the member actually lands, or it would be satisfied by a
+        // screen that says nothing at all.
+        const target = readFileSync(
+            join(process.cwd(), 'src/app/cooperatives/onboarding/OnboardingClient.tsx'), 'utf-8');
+
+        expect(code()).toMatch(/redirect\(["']\/cooperatives\/onboarding["']\)/);
+        expect(target).toMatch(/[Pp]aystack/);
     });
 
     it('that account number appears nowhere else in the repository', () => {

@@ -146,9 +146,29 @@ describe('the pending-payment page', () => {
         expect(strip(page)).not.toContain('Upload your payment receipt to speed up verification');
     });
 
-    it('and says what actually happens instead', () => {
-        expect(page).toContain('Verification Is Automatic');
-        expect(page).toContain('confirmed with Paystack directly');
+    it('and the screen is now RETIRED, so the copy it fixed is moot — #384', () => {
+        // This asserted the corrected copy ("Verification Is Automatic … 
+        // confirmed with Paystack directly"). #384 established that NOTHING has
+        // ever routed here — both of OnboardingClient's completion points push
+        // to the cooperative dashboard — so the screen was unreachable and the
+        // corrected copy was read by nobody.
+        //
+        // Retired to a redirect at /cooperatives/onboarding, which is the screen
+        // that actually answers "where am I up to": it recomputes paymentStatus
+        // server-side on every visit. The negative assertion above still runs
+        // against the file, so a future rewrite cannot bring the receipt promise
+        // back; this one now pins where the member is sent instead.
+        expect(page).toMatch(/redirect\(["']\/cooperatives\/onboarding["']\)/);
+    });
+
+    it('and the screen it redirects to makes no receipt promise either', () => {
+        // The half that matters: retiring a screen that lied is only a fix if
+        // the one taking its place does not lie in the same way.
+        const target = readFileSync(
+            join(process.cwd(), 'src/app/cooperatives/onboarding/OnboardingClient.tsx'), 'utf-8');
+
+        expect(strip(target)).not.toContain('Upload Receipt');
+        expect(strip(target)).not.toMatch(/payment receipt/i);
     });
 
     it('which is true — no receipt upload exists anywhere', () => {

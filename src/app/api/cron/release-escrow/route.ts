@@ -177,7 +177,7 @@ async function processExportWindows(now: Timestamp) {
         // the membership record and on withdrawal rows. So for every member
         // created by any current path, this gate was shut.
         //
-        // (#380: this used to name JoinCooperativeModal as the one writer and
+        // (#385: this used to name JoinCooperativeModal as the one writer and
         // call it "a client-side Firebase-SDK file from before the Supabase
         // migration" — wrong in all three parts, and repeated from here into
         // three other files before anyone read the file. That write is gone

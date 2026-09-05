@@ -27,7 +27,8 @@ import {
     Lock, Briefcase, Container, MessageSquare, User, Store,
     Waves, Building2, ClipboardCheck, ToggleLeft, BadgeCheck,
     UserX, MessageCircle, ShieldAlert, ChevronLeft, ChevronRight,
-    LogOut, X, Settings, Sprout, Zap, IdCard, ShoppingCart
+    LogOut, X, Settings, Sprout, Zap, IdCard, ShoppingCart,
+    BarChart,
 } from "lucide-react";
 
 
@@ -122,6 +123,19 @@ const MARKETPLACE_NAV: NavItem[] = [
     { name: "Escrow",            href: "/escrow",                     icon: Lock },
     { name: "Seller Dashboard",  href: "/marketplace/seller",         icon: Store,    sellerOnly: true },
     { name: "Quote Requests",    href: "/marketplace/seller/quotes",  icon: FileText, sellerOnly: true },
+    /**
+     *   #384 LOST IN A NAV MIGRATION, NOT NEVER-BUILT.
+     *
+     *        /marketplace/seller/analytics is 220 lines of seller performance
+     *        metrics, and #362 recorded it as "named only by the unrendered
+     *        MarketplaceSidebar". That is the whole story: the seller nav moved
+     *        from app/marketplace/seller/MarketplaceSidebar.tsx to this file —
+     *        the layout says so in a comment — and the Analytics entry did not
+     *        come with it. The old component still exists and still lists it,
+     *        which is why the route reads as "referenced" to a plain grep and
+     *        was unreachable to a seller.
+     */
+    { name: "Analytics",         href: "/marketplace/seller/analytics", icon: BarChart, sellerOnly: true },
 
     { name: "My Products",       href: "/marketplace/products",       icon: Package,  sellerOnly: true },
 ];

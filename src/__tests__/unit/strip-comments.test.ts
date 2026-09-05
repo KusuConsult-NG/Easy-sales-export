@@ -321,7 +321,23 @@ describe('it agrees with the naive version everywhere the naive version is right
         // Raised rather than relaxed, on the same test as every time: the file
         // strips actions/broadcast.ts with its own line-based filter and reads
         // send/route.ts raw, so no assertion in it reads its own mangled text.
-        expect(AFFECTED.length).toBeLessThanOrEqual(15);
+        //
+        // FIFTEEN became SIXTEEN when #384 rewrote two assertions in
+        // client-reads-the-answer.test.ts. Eighth form, and the SAME mechanism
+        // broadcast-access.test.ts demonstrated: the file did not newly acquire
+        // the trap — it has carried it since it was written, in its own
+        // `t.startsWith('//')` and `s.indexOf('/*')` — the naive regex has
+        // always opened a block comment at that literal and eaten to the next
+        // real close. What changed is the ratio: adding ten lines of prose about
+        // why the pending-payment screen is retired moved the damage from just
+        // under the 10% threshold to just over it. Measured: 185/275 raw
+        // non-blank lines before, 187/285 after.
+        //
+        // Raised rather than relaxed, on the same test as every time: that file
+        // strips OTHER files with its own line-based helper — the pending-payment
+        // page and admin/users — and never reads its own text, so no assertion
+        // in it can be misled by the mangling.
+        expect(AFFECTED.length).toBeLessThanOrEqual(16);
         expect(AFFECTED).toContain('src/lib/csp.ts');
         expect(AFFECTED).toContain('src/__tests__/unit/harness-covers-adapter.test.ts');
     });

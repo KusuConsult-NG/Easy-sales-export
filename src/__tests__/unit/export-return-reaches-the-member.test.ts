@@ -20,7 +20,7 @@
  * membership record and on withdrawal rows. For every member created by any
  * current path that gate was shut, and the whole payout block was skipped.
  *
- * (#380 corrected this paragraph. It used to name JoinCooperativeModal as the
+ * (#385 corrected this paragraph. It used to name JoinCooperativeModal as the
  * one writer and describe it as a client-side Firebase-SDK file predating the
  * Supabase migration — wrong in all three parts, and copied between four files
  * before anyone read the file. That write is gone; there are none.)

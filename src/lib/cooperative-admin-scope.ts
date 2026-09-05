@@ -31,7 +31,7 @@
  * A member's cooperative lives on their COOPERATIVE_MEMBERS record, not on
  * their user row.
  *
- * #380 CORRECTS WHAT THIS COMMENT USED TO SAY. It named one writer —
+ * #385 CORRECTS WHAT THIS COMMENT USED TO SAY. It named one writer —
  * JoinCooperativeModal — and described it as "a client-side Firebase-SDK
  * component from before the Supabase migration". Every part of that was wrong:
  * the write went through the Supabase adapter, it ran inside a server function,
