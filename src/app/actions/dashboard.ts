@@ -9,11 +9,62 @@ import { readCooperativeBalance } from "@/lib/cooperative-member-balance";
 import { serializeValue } from "@/lib/firestore-serialize";
 
 /**
- * Server Actions for Dashboard Data
- * 
- * Fetches aggregated data for user dashboard including stats,
- * recent activity, and escrow information.
+ * Server Actions for Dashboard Data — RETIRED, KEPT, AND REFUSED AT THE DOOR.
+ *
+ *   #426 A SUPERSEDED DASHBOARD, STILL REACHABLE, STILL CARRYING A WRONG COUNT.
+ *
+ *   NOTHING IMPORTS THIS MODULE. Checked across all of src, for the module path
+ *   and for each of the three action names. The apparent callers of
+ *   `getDashboardStatsAction` are a NAME COLLISION: actions/admin-analytics.ts
+ *   exports a function with the same name, and that is the one every admin
+ *   screen imports.
+ *
+ *   The member dashboard used to be six direct Supabase queries from the
+ *   browser under the public anon key. When that was closed it was rebuilt on
+ *   session-scoped actions — see src/app/dashboard/page.tsx, which builds its
+ *   own stats from my-data.ts. This module is what it was rebuilt AWAY FROM,
+ *   and it was left behind rather than retired.
+ *
+ *   WHY THAT IS NOT HARMLESS. These are "use server" exports, so all three are
+ *   independently addressable endpoints whether or not a screen calls them —
+ *   the property that made autoEnrollPaidUser a paid-content bypass. They are
+ *   session-guarded and read only the caller's own rows, so this is not a
+ *   security hole. The hazard is the other one, #421's shape: 360 lines that
+ *   LOOK like the dashboard's data layer, waiting for somebody to wire them up.
+ *
+ *   AND ONE OF THE NUMBERS IS WRONG. `academyEnrollments` counts
+ *   COLLECTIONS.ENROLLMENTS, which only the PAID enrolment flow writes. Free and
+ *   auto enrolments go to COURSE_ENROLLMENTS (#424 has the full map: three
+ *   enrolment collections, readers split across them). A learner whose courses
+ *   are all free would have been shown 0. That defect is recorded here rather
+ *   than repaired, because repairing a number nothing displays would leave the
+ *   real problem — the module being revivable — exactly where it was.
+ *
+ *   AN EARLIER FIX IN THIS FILE DELIVERED NOTHING, for the same reason: the
+ *   comment below records that three queries filtered EXPORT_WINDOWS by a
+ *   `userId` the collection does not have, so the export stats read empty for
+ *   every user. That was found and corrected. No user ever saw the difference,
+ *   because no screen reads this.
+ *
+ *   RETIRED, NOT DELETED. The code stays, the git history stays, and the flag
+ *   below revives it. Whoever sets it owns fixing the enrolment count first.
+ *   This is the treatment #379 and #386 established for a subsystem that is
+ *   kept but must not run.
  */
+
+/**
+ * Set LEGACY_DASHBOARD_ACTIONS=enabled to revive these three actions.
+ *
+ * Read at call time, not at module load, so a test can set it per case.
+ */
+function legacyDashboardActionsEnabled(): boolean {
+    return process.env.LEGACY_DASHBOARD_ACTIONS === "enabled";
+}
+
+/** The one refusal, so all three doors answer identically. */
+const RETIRED_MESSAGE =
+    "This dashboard data source is retired (#426). The member dashboard reads " +
+    "session-scoped actions instead. See src/app/actions/dashboard.ts.";
 
 // Type definitions
 export type DashboardStats = { totalExports: number;
@@ -59,6 +110,9 @@ type EscrowActionState = { error: string | null;
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 
 async function _getDashboardStatsAction(): Promise<DashboardActionState> {
+    if (!legacyDashboardActionsEnabled()) {
+        return { success: false as const, error: RETIRED_MESSAGE, data: null };
+    }
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
@@ -213,7 +267,11 @@ export const getDashboardStatsAction = withFlexibleSafeAction("getDashboardStats
 // Recent Activity Action
 // ============================================
 
-async function _getRecentActivityAction(): Promise<ActivityActionState> { try {
+async function _getRecentActivityAction(): Promise<ActivityActionState> {
+    if (!legacyDashboardActionsEnabled()) {
+        return { success: false as const, error: RETIRED_MESSAGE, data: null };
+    }
+    try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
@@ -274,7 +332,11 @@ export const getRecentActivityAction = withFlexibleSafeAction("getRecentActivity
 // Escrow Status Action
 // ============================================
 
-async function _getEscrowStatusAction(): Promise<EscrowActionState> { try {
+async function _getEscrowStatusAction(): Promise<EscrowActionState> {
+    if (!legacyDashboardActionsEnabled()) {
+        return { success: false as const, error: RETIRED_MESSAGE, data: null };
+    }
+    try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;

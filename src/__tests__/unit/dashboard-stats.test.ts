@@ -55,9 +55,41 @@
  * `participants array-contains` — a field _escrow.ts really does write — and
  * the access control: every query is scoped to session.user.id, with no
  * caller-supplied id anywhere.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ *   #426 CORRECTION: THIS IS NOT "THE MAIN DASHBOARD".
+ *
+ *   Everything above is accurate about the CODE and wrong about its REACH. The
+ *   premise — "the screen every user sees first" — does not hold: NOTHING
+ *   IMPORTS actions/dashboard.ts. The apparent callers are a name collision
+ *   with actions/admin-analytics.ts, which exports a getDashboardStatsAction of
+ *   its own, and that is the one admin screens use. src/app/dashboard/page.tsx
+ *   builds its own stats from session-scoped actions in my-data.ts.
+ *
+ *   So the four zeros this file describes were real, and no user ever saw them,
+ *   and the fix delivered nothing. Recorded rather than quietly rewritten,
+ *   because "we fixed it and nobody noticed" is itself the finding.
+ *
+ *   The module is retired behind LEGACY_DASHBOARD_ACTIONS (#426). These tests
+ *   set the flag so they keep exercising the preserved implementation — the
+ *   point of retiring rather than deleting is that the code still works when
+ *   revived, and that is what these assertions now prove.
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterAll, jest } from '@jest/globals';
+
+/**
+ * The module is retired behind this flag (#426). These tests exercise the
+ * PRESERVED implementation, so they turn it on — which is also the check that
+ * retiring it did not break it.
+ */
+const FLAG_BEFORE = process.env.LEGACY_DASHBOARD_ACTIONS;
+process.env.LEGACY_DASHBOARD_ACTIONS = 'enabled';
+afterAll(() => {
+    if (FLAG_BEFORE === undefined) delete process.env.LEGACY_DASHBOARD_ACTIONS;
+    else process.env.LEGACY_DASHBOARD_ACTIONS = FLAG_BEFORE;
+});
 
 const USER = 'user-1';
 
