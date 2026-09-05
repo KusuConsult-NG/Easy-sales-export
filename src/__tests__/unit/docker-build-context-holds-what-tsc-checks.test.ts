@@ -180,11 +180,25 @@ describe('#402 — the build context holds every file the type-check compiles', 
     it('and the checker names the eight files that actually broke, when asked to', () => {
         /**
          * THE CONTROL. Run against the configuration that failed — scripts/ and
-         * e2e/ dropped — the checker must produce the deploy log's own list.
-         * Thirteen TS2307s, eight distinct files.
+         * e2e/ dropped — the checker must produce the list of files that would
+         * break under it.
+         *
+         * The deploy log that prompted #402 carried thirteen TS2307s across
+         * EIGHT distinct files, and those eight are still every entry below
+         * except one. The ninth,
+         * src/__tests__/unit/academy-enrolment-tally.test.ts, was written later
+         * (#427) and imports scripts/academy-enrolment-tally.ts exactly as its
+         * sibling export-window-kind-and-goal.test.ts imports the export
+         * backfill's arithmetic — so it belongs to the same set and would have
+         * been the ninth entry in that log had it existed.
+         *
+         * Growing this list is expected when a new test reaches into scripts/.
+         * What must not happen is an entry DISAPPEARING, which would mean the
+         * checker had stopped seeing a real import.
          */
         expect(violations(new Set(), ['scripts', 'e2e'])).toEqual([
             'playwright.config.ts',
+            'src/__tests__/unit/academy-enrolment-tally.test.ts',
             'src/__tests__/unit/export-window-kind-and-goal.test.ts',
             'src/__tests__/unit/maintenance-scripts-are-inside-the-gates.test.ts',
             'src/__tests__/unit/maintenance-scripts-do-not-overstate.test.ts',

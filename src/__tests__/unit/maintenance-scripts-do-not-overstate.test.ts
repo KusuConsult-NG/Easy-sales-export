@@ -69,6 +69,7 @@ function read(rel: string): string {
 
 /** Every maintenance script that writes to the database. */
 const WRITING_SCRIPTS = [
+    'scripts/backfill-academy-enrolled-count.ts',
     'scripts/backfill-export-funding-goals.ts',
     'scripts/backfill-fixed-savings-ledger.ts',
     'scripts/firebase-schema-fix.ts',
@@ -620,7 +621,14 @@ describe('#329 — one convention across every writing script', () => {
             (rel) => !WRITING_SCRIPTS.includes(rel)
                 && !['scripts/seed-local.ts', 'src/scripts/cleanup-firebase.ts',
                     'src/scripts/auth-purge-orphans.ts', 'scripts/audit-data-integrity.ts',
-                    'scripts/academy-schema-repair.ts'].includes(rel),
+                    'scripts/academy-schema-repair.ts',
+                    // NOT a writing script. The detector matches `.add(`,
+                    // and this module's only match is a JavaScript
+                    // `Set.add` while deduplicating learners — it holds
+                    // pure arithmetic and imports no database client at
+                    // all. Listed rather than loosening the regex: a
+                    // narrower detector would start missing real writes.
+                    'scripts/academy-enrolment-tally.ts'].includes(rel),
         );
         expect(unlisted).toEqual([]);
     });
