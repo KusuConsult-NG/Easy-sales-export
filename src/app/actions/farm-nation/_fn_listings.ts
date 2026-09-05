@@ -262,7 +262,40 @@ async function _listPropertyAction(input: PropertyListingInput): Promise<ActionR
             ownerName: userData.name || "Unknown",
             ownerEmail: userData.email || "",
             ownerPhone: userData.phone || "",
-            status: "available",
+            /**
+             * IT PUT LAND ON SALE, LABELLED "Verified Land", WITH NO TITLE DEED.
+             *
+             * This wrote `status: "available"` beside `verified: false`,
+             * `documents: {}` and `images: []`. Those two lines contradict each
+             * other, and the one that decides anything is the status:
+             *
+             *   PURCHASABLE_STATUSES = ["verified", "available", "approved"]
+             *   BROWSABLE_STATUSES   = PURCHASABLE_STATUSES
+             *
+             * so `available` is immediately browsable AND buyable.
+             * _fn_purchases.ts gates a purchase on isPurchasable(property.status)
+             * and lets it through; farm-nation/page.tsx renders the badge as
+             * `isPurchasable(property.status) ? "Verified Land" : "Unverified
+             * Land"` and prints VERIFIED LAND over it. The `verified: false`
+             * field beside it is read by nothing that decides.
+             *
+             * And because `available` is not a pending status, the listing never
+             * appears in the admin verification queue, which reads
+             * `status == "pending_verification"`. So it could never be reviewed,
+             * and it did not need to be: it was already on sale.
+             *
+             * The comment "Requires admin verification" describes an intention
+             * the code did not carry out.
+             *
+             * REACHABLE. This module is "use server", so every export is an
+             * endpoint whether or not a screen calls it — and no screen calls
+             * this one, which is why nothing surfaced it.
+             *
+             * `pending_verification` is what the other two writers of this
+             * collection use and what the review queue reads. A listing with no
+             * documents belongs in that queue, not in the marketplace.
+             */
+            status: "pending_verification",
             verified: false, // Requires admin verification
             documents: {},
             viewCount: 0,

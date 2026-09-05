@@ -8,6 +8,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
 
 import { parseCurrencyStringToFloat } from "@/lib/utils";
+import { uploadFileToStorage } from "@/lib/storage-admin";
 
 /**
  * API Route: Create Land Listing
@@ -61,37 +62,76 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Extract media files (placeholder for cloud storage upload)
-        const images: string[] = [];
-        let videoUrl = "";
+        /**
+         * THE TITLE DEED WAS THE FILENAME.
+         *
+         * Every media and document field here was stored as
+         * `placeholder_${file.name}` under a comment reading "placeholder for
+         * cloud storage upload". Nothing was ever uploaded. The route then
+         * REQUIRED landTitle and surveyPlan before writing — so a listing
+         * entered the admin verification queue at `pending_verification`
+         * carrying, as its proof of ownership, the string
+         * "placeholder_deed.pdf".
+         *
+         * That is worse than storing nothing. An empty documents object reads
+         * as "no evidence supplied"; a populated one reads as evidence, and the
+         * reviewer approving a land sale is the person it misleads. This file
+         * has been visited by an earlier finding — the ownerId/status note
+         * below — which left the placeholders in place.
+         *
+         * Uploaded for real now, through the same helper the export and KYC
+         * document paths use. It resolves Cloudinary when configured and falls
+         * back to a local write when it is not, so this route no longer
+         * fabricates a URL under either condition.
+         *
+         * An upload that FAILS refuses the request rather than storing
+         * something. Half a listing whose deed did not upload is the same
+         * misleading record by another route.
+         */
+        const uploadOrFail = async (file: File, path: string): Promise<string> => {
+            const url = await uploadFileToStorage(file, path);
+            if (!url) throw new Error(`Upload produced no URL for ${path}`);
+            return url;
+        };
 
-        for (let i = 0; i < 8; i++) {
-            const image = formData.get(`image${i}`) as File;
-            if (image) {
-                images.push(`placeholder_${image.name}`);
-            }
-        }
+        const isUploadable = (value: unknown): value is File =>
+            value instanceof File && value.size > 0;
 
-        const video = formData.get("video") as File;
-        if (video) {
-            videoUrl = `placeholder_${video.name}`;
-        }
+        const landTitle = formData.get("landTitle");
+        const surveyPlan = formData.get("surveyPlan");
+        const taxClearance = formData.get("taxClearance");
+        const video = formData.get("video");
 
-        // Process documents
-        const documents: any = {};
-        const landTitle = formData.get("landTitle") as File;
-        const surveyPlan = formData.get("surveyPlan") as File;
-        const taxClearance = formData.get("taxClearance") as File;
-
-        if (landTitle) documents.landTitle = `placeholder_${landTitle.name}`;
-        if (surveyPlan) documents.surveyPlan = `placeholder_${surveyPlan.name}`;
-        if (taxClearance) documents.taxClearance = `placeholder_${taxClearance.name}`;
-
-        if (!documents.landTitle || !documents.surveyPlan) {
+        // Required documents are checked BEFORE anything is uploaded. The old
+        // refusal sat after all eleven placeholders had been built, which cost
+        // nothing then because nothing was uploaded; now that they are real
+        // uploads, a request that is going to be refused must not spend any.
+        if (!isUploadable(landTitle) || !isUploadable(surveyPlan)) {
             return NextResponse.json(
                 { success: false, data: null, meta: null, error: "Land title and survey plan are required" },
                 { status: 400 }
             );
+        }
+
+        const images: string[] = [];
+        for (let i = 0; i < 8; i++) {
+            const image = formData.get(`image${i}`);
+            if (isUploadable(image)) {
+                images.push(await uploadOrFail(image, `land-listings/${userId}/image-${i}`));
+            }
+        }
+
+        const videoUrl = isUploadable(video)
+            ? await uploadOrFail(video, `land-listings/${userId}/video`)
+            : "";
+
+        const documents: Record<string, string> = {
+            landTitle: await uploadOrFail(landTitle, `land-listings/${userId}/land-title`),
+            surveyPlan: await uploadOrFail(surveyPlan, `land-listings/${userId}/survey-plan`),
+        };
+        if (isUploadable(taxClearance)) {
+            documents.taxClearance = await uploadOrFail(
+                taxClearance, `land-listings/${userId}/tax-clearance`);
         }
 
         const gpsCoordinates = latitude && longitude ? {

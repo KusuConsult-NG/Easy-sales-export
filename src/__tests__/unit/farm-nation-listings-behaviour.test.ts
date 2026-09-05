@@ -385,7 +385,19 @@ describe('listPropertyAction', () => {
             ownerName: 'Ada Obi',
             ownerEmail: 'ada@example.com',
             ownerPhone: '08012345678',
-            status: 'available',
+            /**
+             * `available` until the land-listing evidence pass.
+             *
+             * This test's own name says "unverified", and `available` is not:
+             * it is in PURCHASABLE_STATUSES, so the listing was buyable and the
+             * farm-nation page labelled it "Verified Land" — with documents: {}
+             * and images: []. The characterisation recorded what the code did,
+             * and what it did contradicted the line above it,
+             * `verified: false, // Requires admin verification`.
+             *
+             * See land-listings-carry-real-evidence.test.ts.
+             */
+            status: 'pending_verification',
             verified: false,
             viewCount: 0,
             favoriteCount: 0,
@@ -401,8 +413,11 @@ describe('listPropertyAction', () => {
         }));
 
         const [, listing] = store.all(LISTINGS)[0] as [string, Record<string, any>];
+        // The point of this test is unchanged and still holds: the caller asked
+        // for status 'verified' and did not get it. Only the server's own
+        // constant moved — see the note above.
         expect(listing).toMatchObject({
-            ownerId: OWNER, status: 'available', verified: false, viewCount: 0,
+            ownerId: OWNER, status: 'pending_verification', verified: false, viewCount: 0,
         });
     });
 

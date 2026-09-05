@@ -274,11 +274,22 @@ describe('#340 — the badge that could never say "Verified"', () => {
     });
 
     it('and it really is an object, in both writers', () => {
-        // The claim above, pinned. If a writer ever produces an array the badge
-        // reasoning changes and this fails.
+        /**
+         * The claim above, pinned. If a writer ever produces an array the badge
+         * reasoning changes and this fails.
+         *
+         * Matched on the SHAPE rather than on one declaration's text. The route
+         * declared `const documents: any = {}` when this was written and now
+         * declares `const documents: Record<string, string> = { ... }` — it
+         * builds the object from real upload URLs instead of filling it with
+         * `placeholder_<filename>` afterwards. Same shape, different literal,
+         * and asserting the literal made that fix look like a regression.
+         */
         expect(source('src/app/actions/farm-nation/_fn_listings.ts')).toContain('documents: {}');
-        expect(source('src/app/api/farm-nation/create-listing/route.ts'))
-            .toContain('const documents: any = {}');
+
+        const route = source('src/app/api/farm-nation/create-listing/route.ts');
+        expect(route).toMatch(/const documents:\s*(any|Record<string, string>)\s*=\s*\{/);
+        expect(route).not.toMatch(/const documents[^=]*=\s*\[/);
     });
 
     it('isPurchasable answers the question the badge asks', async () => {
