@@ -1,55 +1,102 @@
 "use client";
 
+/**
+ *   #440 EVERY ELEMENT ON THIS SCREEN WAS DECORATIVE.
+ *
+ * It rendered four green "Healthy" cards from `{ redis: true, paystack: true,
+ * resend: true, firestore: true }` — four constants in the action, not four
+ * checks — plus six integrity counts from six hardcoded zeros, under the
+ * heading "Real-time data integrity audit and service status monitoring".
+ *
+ * The footer was worse, because it was specific:
+ *
+ *     Environment       "Production (Vercel)"         deploys on Railway, and
+ *                                                     said Production anywhere
+ *     Audit Level       "High Assurance (Sample 100)" nothing sampled anything
+ *     Security Status   ● "Active Enforcement"        a pulsing green light
+ *                                                     wired to nothing
+ *     Data is Stable    "no critical integrity        nothing was inspected
+ *                        issues in the sampled
+ *                        profiles"
+ *
+ * This is the screen an operator opens when they suspect the platform is
+ * broken, and it answered "everything is fine" before asking. #313's lesson —
+ * "we could not check" must never render as "nothing found" — applies here more
+ * than anywhere.
+ *
+ * AND THE REAL SCREEN WAS ONE DIRECTORY UP. /admin/system-health renders
+ * `runSystemHealthDiagnostic`, which scans user profiles, probes Redis, counts
+ * orphaned WAVE applications and reads the feature toggles. This page carried
+ * that report's field names with the work removed. The action behind it
+ * delegates to the real one now, so there is ONE implementation, and this page
+ * shows what it returned.
+ */
+
 import { useState, useEffect, useCallback } from "react";
-import { Activity, ShieldCheck, Database, Server, RefreshCw, AlertTriangle, CheckCircle, XCircle, Info, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { Activity, ShieldCheck, Database, Server, RefreshCw, AlertTriangle, CheckCircle, XCircle, CreditCard, Mail, Loader2, ArrowRight } from "lucide-react";
 import { runSystemDiagnosticAction } from "@/app/actions/admin";
+import type { HealthReport } from "@/app/actions/health";
 import { useToast } from "@/contexts/ToastContext";
 import { formatDate } from "@/lib/utils";
 
-interface DiagnosticData {
-    stats: {
-        totalUsers: number;
-        corruptedUsers: number;
-        legacyVerified: number;
-        missingNames: number;
-        desyncedRegistrations: number;
-        orphanedApplications: number;
-    };
-    services: {
-        redis: boolean;
-        paystack: boolean;
-        resend: boolean;
-        firestore: boolean;
-    };
-    timestamp: string;
-}
+/**
+ * A dependency card.
+ *
+ * `probed` separates "we asked it and it answered" from "the environment
+ * variable is set". Both are true statements; showing the same green tick for
+ * each is how a configuration check gets read as a reachability check, and this
+ * screen's whole defect was a tick that meant nothing at all.
+ */
+const HealthCard = ({ title, ok, probed, icon: Icon, description }: {
+    title: string;
+    ok: boolean | undefined;
+    probed: boolean;
+    icon: any;
+    description: string;
+}) => {
+    // No answer is its own state. Rendering "Healthy" for a service the action
+    // never reported on is the defect being repaired.
+    if (ok === undefined) {
+        return (
+            <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                <div className="flex items-start justify-between mb-4">
+                    <div className="p-3 rounded-xl bg-slate-100 text-slate-400"><Icon className="w-6 h-6" /></div>
+                    <div className="px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-slate-100 text-slate-500">
+                        Not checked
+                    </div>
+                </div>
+                <h3 className="font-bold text-slate-900 mb-1">{title}</h3>
+                <p className="text-sm text-slate-500">{description}</p>
+            </div>
+        );
+    }
 
-const HealthCard = ({ title, status, icon: Icon, description }: { title: string; status: boolean; icon: any; description: string }) => (
-    <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
-        <div className="flex items-start justify-between mb-4">
-            <div className={`p-3 rounded-xl ${status ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-                <Icon className="w-6 h-6" />
+    const label = ok ? (probed ? "Responding" : "Configured") : (probed ? "Unreachable" : "Not configured");
+    return (
+        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
+            <div className="flex items-start justify-between mb-4">
+                <div className={`p-3 rounded-xl ${ok ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                    <Icon className="w-6 h-6" />
+                </div>
+                <div className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${ok ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                    {label}
+                </div>
             </div>
-            <div className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${status ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                {status ? 'Healthy' : 'Down'}
-            </div>
+            <h3 className="font-bold text-slate-900 mb-1">{title}</h3>
+            <p className="text-sm text-slate-500">{description}</p>
+            {!probed && (
+                <p className="mt-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                    Key is set — reachability not checked
+                </p>
+            )}
         </div>
-        <h3 className="font-bold text-slate-900 mb-1">{title}</h3>
-        <p className="text-sm text-slate-500">{description}</p>
-    </div>
-);
-
-const StatRow = ({ label, value, color }: { label: string; value: number; color: string }) => (
-    <div className="flex items-center justify-between py-3 border-b border-slate-50 last:border-0">
-        <span className="text-sm text-slate-600">{label}</span>
-        <span className={`text-sm font-bold ${value > 0 ? color : 'text-slate-400'}`}>
-            {value > 0 ? value : 'None'}
-        </span>
-    </div>
-);
+    );
+};
 
 export default function AdminDiagnosticsPage() {
-    const [data, setData] = useState<DiagnosticData | null>(null);
+    const [data, setData] = useState<HealthReport | null>(null);
+    const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const { showToast } = useToast();
 
@@ -57,8 +104,12 @@ export default function AdminDiagnosticsPage() {
         setLoading(true);
         const result = await runSystemDiagnosticAction();
         if (result.success && result.data) {
-            setData(result.data as DiagnosticData);
+            setData(result.data as HealthReport);
+            setError(null);
         } else {
+            // A failed run REPLACES the result rather than emptying it (#307),
+            // and is shown as a failure rather than as a clean bill of health.
+            setError(result.error || "Failed to load diagnostics");
             showToast(result.error || "Failed to load diagnostics", "error");
         }
         setLoading(false);
@@ -68,13 +119,11 @@ export default function AdminDiagnosticsPage() {
         fetchDiagnostics();
     }, [fetchDiagnostics]);
 
-
-
-    if (loading && !data) {
+    if (loading && !data && !error) {
         return (
             <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-4">
                 <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
-                <p className="text-slate-500 font-medium animate-pulse">Running system-wide audit...</p>
+                <p className="text-slate-500 font-medium animate-pulse">Running the system health check...</p>
             </div>
         );
     }
@@ -86,10 +135,10 @@ export default function AdminDiagnosticsPage() {
                 <div>
                     <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-2 flex items-center gap-3">
                         <Activity className="w-8 h-8 text-blue-600" />
-                        System Health & Diagnostics
+                        System Health
                     </h1>
                     <p className="text-slate-600">
-                        Real-time data integrity audit and service status monitoring
+                        Dependency status and profile anomalies, checked when this page loads.
                     </p>
                 </div>
                 <button
@@ -98,101 +147,124 @@ export default function AdminDiagnosticsPage() {
                     className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50"
                 >
                     <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                    Refresh Audit
+                    Check again
                 </button>
             </div>
 
+            {error && (
+                <div className="max-w-6xl mx-auto mb-6 bg-red-50 border border-red-200 text-red-800 p-4 rounded-xl flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 shrink-0" />
+                    <div>
+                        <p className="text-sm font-bold">The check did not run</p>
+                        <p className="text-xs opacity-90">{error}</p>
+                    </div>
+                </div>
+            )}
+
             <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Service Status */}
+                {/* Dependencies */}
                 <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <HealthCard 
-                        title="Firestore Database" 
-                        status={data?.services.firestore ?? false} 
+                    <HealthCard
+                        title="Database"
+                        ok={data?.services.firestore}
+                        probed
                         icon={Database}
-                        description="Primary data storage and user profiles"
+                        description="Answered a bounded one-row read"
                     />
-                    <HealthCard 
-                        title="Upstash Redis" 
-                        status={data?.services.redis ?? false} 
+                    <HealthCard
+                        title="Upstash Redis"
+                        ok={data?.services.redis}
+                        probed
                         icon={Server}
                         description="Session caching and rate limiting"
                     />
-                    <HealthCard 
-                        title="Paystack API" 
-                        status={data?.services.paystack ?? false} 
-                        icon={CheckCircle}
+                    <HealthCard
+                        title="Paystack"
+                        ok={data?.services.paystack}
+                        probed={false}
+                        icon={CreditCard}
                         description="Payment gateway and escrow processing"
                     />
-                    <HealthCard 
-                        title="Resend Mail" 
-                        status={data?.services.resend ?? false} 
-                        icon={Info}
+                    <HealthCard
+                        title="Resend"
+                        ok={data?.services.resend}
+                        probed={false}
+                        icon={Mail}
                         description="Email notifications and alerts"
                     />
                 </div>
 
-                {/* Integrity Report */}
-                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                    <div className="flex items-center gap-2 mb-6">
+                {/* Profile anomalies — the figures the scan really produced */}
+                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col">
+                    <div className="flex items-center gap-2 mb-4">
                         <ShieldCheck className="w-5 h-5 text-blue-600" />
-                        <h2 className="font-bold text-slate-900">Integrity Report</h2>
+                        <h2 className="font-bold text-slate-900">Profile anomalies</h2>
                     </div>
 
-                    <div className="space-y-1">
-                        <StatRow label="Scanned User Profiles" value={data?.stats.totalUsers || 0} color="text-slate-900" />
-                        <StatRow label="Corrupted Profiles" value={data?.stats.corruptedUsers || 0} color="text-red-600" />
-                        <StatRow label="Legacy Schema (Verified)" value={data?.stats.legacyVerified || 0} color="text-amber-600" />
-                        <StatRow label="Missing Required Names" value={data?.stats.missingNames || 0} color="text-red-600" />
-                        <StatRow label="Desynced Registrations" value={data?.stats.desyncedRegistrations || 0} color="text-amber-600" />
-                        <StatRow label="Orphaned Applications" value={data?.stats.orphanedApplications || 0} color="text-red-600" />
+                    <div className="space-y-3 mb-6">
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm text-slate-600">Profiles scanned</span>
+                            <span className="text-sm font-bold text-slate-900">{data ? data.totalScanned : '—'}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm text-slate-600">Anomalies found</span>
+                            <span className={`text-sm font-bold ${data && data.anomaliesFound > 0 ? 'text-amber-600' : 'text-slate-900'}`}>
+                                {data ? data.anomaliesFound : '—'}
+                            </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm text-slate-600">Orphaned applications</span>
+                            <span className={`text-sm font-bold ${data && data.stats.orphanedApplications > 0 ? 'text-red-600' : 'text-slate-900'}`}>
+                                {data ? data.stats.orphanedApplications : '—'}
+                            </span>
+                        </div>
                     </div>
 
-                    <div className="mt-8 pt-6 border-t border-slate-50">
-                        {data?.stats.corruptedUsers === 0 ? (
-                            <div className="bg-emerald-50 text-emerald-700 p-4 rounded-xl flex items-start gap-3">
-                                <CheckCircle className="w-5 h-5 shrink-0" />
-                                <div>
-                                    <p className="text-sm font-bold">Data is Stable</p>
-                                    <p className="text-xs opacity-80">No critical integrity issues detected in the sampled profiles.</p>
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="bg-amber-50 text-amber-700 p-4 rounded-xl flex items-start gap-3">
-                                <AlertTriangle className="w-5 h-5 shrink-0" />
-                                <div>
-                                    <p className="text-sm font-bold">Action Required</p>
-                                    <p className="text-xs opacity-80">Integrity issues found. Use the CLI recovery tools to repair profiles.</p>
-                                </div>
-                            </div>
-                        )}
-                    </div>
+                    <p className="text-xs text-slate-500 leading-relaxed mb-4">
+                        This page checks dependencies and user profiles. The
+                        cross-module integrity scan reads eight collections and
+                        reports each check as pass, fail, warning or
+                        inconclusive.
+                    </p>
+                    <Link
+                        href="/admin/forensics"
+                        className="mt-auto inline-flex items-center justify-between gap-2 px-4 py-3 bg-slate-900 text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition"
+                    >
+                        Run the forensic scan
+                        <ArrowRight className="w-4 h-4 shrink-0" />
+                    </Link>
                 </div>
 
-                {/* Audit History / Metadata */}
+                {/* Summary — every figure below is one this page actually has */}
                 <div className="md:col-span-3 bg-slate-900 text-white p-6 rounded-2xl shadow-xl overflow-hidden relative group">
                     <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
                         <Activity className="w-32 h-32" />
                     </div>
                     <div className="relative z-10">
-                        <h2 className="text-lg font-bold mb-2">Audit Metadata</h2>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <h2 className="text-lg font-bold mb-4">Summary</h2>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                             <div>
-                                <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Last Audit Run</p>
-                                <p className="text-sm font-medium">{data ? formatDate(data.timestamp) : 'Never'}</p>
+                                <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Last checked</p>
+                                <p className="text-sm font-medium">{data ? formatDate(data.timestamp) : 'Not yet'}</p>
                             </div>
                             <div>
-                                <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Environment</p>
-                                <p className="text-sm font-medium">Production (Vercel)</p>
+                                <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Profiles scanned</p>
+                                <p className="text-sm font-medium">{data ? data.totalScanned : '—'}</p>
                             </div>
                             <div>
-                                <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Audit Level</p>
-                                <p className="text-sm font-medium">High Assurance (Sample 100)</p>
-                            </div>
-                            <div>
-                                <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Security Status</p>
+                                <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Dependencies down</p>
                                 <p className="text-sm font-medium flex items-center gap-1.5">
-                                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                                    Active Enforcement
+                                    {data ? (
+                                        <>
+                                            <span className={`w-2 h-2 rounded-full ${Object.values(data.services).some((s) => !s) ? 'bg-amber-400' : 'bg-emerald-500'}`} />
+                                            {Object.values(data.services).filter((s) => !s).length}
+                                        </>
+                                    ) : (
+                                        <>
+                                            <span className="w-2 h-2 rounded-full bg-slate-500" />
+                                            —
+                                        </>
+                                    )}
                                 </p>
                             </div>
                         </div>

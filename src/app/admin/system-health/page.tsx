@@ -116,13 +116,32 @@ export default function SystemHealthPage() {
                             <div className="mt-2 text-xs text-slate-500">Missing User Linkages</div>
                         </div>
 
+                        {/*
+                          * #440. A "Desynced Regs" tile stood here showing
+                          * `report.stats.desyncedRegistrations`, whose producer
+                          * was `const desyncedRegs = 0;` — declared zero, never
+                          * computed. It read "0 / Stale Module States" whatever
+                          * was true, which is a clean bill of health issued
+                          * without looking.
+                          *
+                          * The cross-module integrity questions are answered by
+                          * the forensic scan, which reports "inconclusive" as
+                          * its own state rather than folding it into a pass
+                          * (#266, #331). This points there instead of showing a
+                          * number nobody computed.
+                          */}
                         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
                             <div className="flex items-center gap-3 text-slate-500 mb-4">
                                 <ShieldAlert className="w-5 h-5 text-purple-500" />
-                                <span className="font-medium text-sm uppercase tracking-wide">Desynced Regs</span>
+                                <span className="font-medium text-sm uppercase tracking-wide">Cross-module checks</span>
                             </div>
-                            <span className="text-4xl font-bold text-slate-900">{report.stats.desyncedRegistrations}</span>
-                            <div className="mt-2 text-xs text-slate-500">Stale Module States</div>
+                            <Link
+                                href="/admin/forensics"
+                                className="text-sm font-semibold text-blue-600 hover:text-blue-700 hover:underline"
+                            >
+                                Run the forensic scan →
+                            </Link>
+                            <div className="mt-2 text-xs text-slate-500">Eight collections, reported per check</div>
                         </div>
                     </div>
 

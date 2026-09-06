@@ -3,7 +3,7 @@
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db, getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS, User } from "@/lib/types/firestore";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { getRedisClientStatus } from "@/lib/redis";
 import { logger } from "@/lib/logger";
 import { DEFAULT_TOGGLES } from "@/lib/feature-toggles";
@@ -26,10 +26,20 @@ export interface HealthReport {
         resend: boolean;
     };
     featureToggles: Record<string, boolean>;
+    /**
+     * #440. `desyncedRegistrations` used to be a third field here, and its
+     * producer was `const desyncedRegs = 0;` — declared zero, never computed,
+     * reported as a finding. The screen showed a confident "0 desynced
+     * registrations" that no code had ever looked for.
+     *
+     * It is removed rather than invented: defining what "desynced" means would
+     * be a NEW integrity rule, and /admin/forensics is where this codebase
+     * applies those (#266). A field nobody computes is worse than one nobody
+     * has, because somebody reads it.
+     */
     stats: {
         corruptedUsers: number;
         orphanedApplications: number;
-        desyncedRegistrations: number;
     };
     timestamp: string;
 }
@@ -42,7 +52,16 @@ export async function runSystemHealthDiagnostic(limit: number = 2000): Promise<
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
-        if (!session?.user || !isAdmin(session.user.roles)) { return { success: false as const, error: "Unauthorized access", data: null };
+        /**
+         * #440. This asked `isAdmin(...)`, true for ANY of the ten admin roles,
+         * and the report it returns carries `issues[].email` — one row per
+         * anomalous member, with their address. #438 closed this same shape on
+         * six admin routes, and /api/admin/verify-integrity, the other
+         * platform-integrity reader, names "audit:read". Same question, same
+         * answer, rather than a second one.
+         */
+        if (!session?.user || !hasAdminPermission(session.user.roles, "audit:read")) {
+            return { success: false as const, error: "Unauthorized: audit:read is required", data: null };
         }
 
         const db = getAdminDb();
@@ -132,11 +151,30 @@ export async function runSystemHealthDiagnostic(limit: number = 2000): Promise<
 
         // 4. Service Health
         const redisStatus = await getRedisClientStatus();
-        const firestoreStatus = !!db;
+
+        /**
+         * #440. This was `const firestoreStatus = !!db;`.
+         *
+         * `db` is the imported adapter MODULE. It is truthy the moment this
+         * file loads, so the card reading "Database: Active" was green
+         * unconditionally — including while every query on the page was
+         * failing. It is the same defect as the four constants in
+         * admin/_diagnostics.ts, sitting in the screen operators actually use.
+         *
+         * A bounded one-row read is what "the database answered" means. The
+         * catch reports the failure rather than swallowing it into a green
+         * tick (#313).
+         */
+        let databaseStatus = false;
+        try {
+            await db.collection(COLLECTIONS.USERS).limit(1).get();
+            databaseStatus = true;
+        } catch (probeError) {
+            logger.error("Health probe: database read failed", probeError);
+        }
 
         // 5. Orphaned Apps Check (Sample)
         let orphanedApps = 0;
-        const desyncedRegs = 0;
         const waveSnap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).limit(50).get();
         const userChecks = await Promise.all(waveSnap.docs.map(async (doc) => {
             const userId = doc.data().userId;
@@ -168,7 +206,9 @@ export async function runSystemHealthDiagnostic(limit: number = 2000): Promise<
             issues: issues,
             services: {
                 redis: redisStatus,
-                firestore: firestoreStatus,
+                firestore: databaseStatus,
+                // Configuration, not reachability. Both are true statements;
+                // the screen is what has to say which, and it does now.
                 paystack: !!process.env.PAYSTACK_SECRET_KEY,
                 resend: !!process.env.RESEND_API_KEY,
             },
@@ -176,7 +216,6 @@ export async function runSystemHealthDiagnostic(limit: number = 2000): Promise<
             stats: {
                 corruptedUsers: issues.filter(i => i.issueType.includes("Corruption")).length,
                 orphanedApplications: orphanedApps,
-                desyncedRegistrations: desyncedRegs
             },
             timestamp: new Date().toISOString()
         };

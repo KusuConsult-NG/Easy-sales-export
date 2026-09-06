@@ -212,7 +212,13 @@ describe('#361 — /admin/system-health is reachable now', () => {
     it('THE PAGE IT POINTS AT EXISTS AND GUARDS ITSELF', () => {
         // Linking to it would be worse than not, if it were ungated.
         expect(existsSync(join(ROOT, 'src/app/admin/system-health/page.tsx'))).toBe(true);
-        expect(source('src/app/actions/health.ts')).toContain('isAdmin(session.user.roles)');
+        // #440 TIGHTENED THIS, IT DID NOT RELAX IT. The assertion used to pin
+        // the literal `isAdmin(session.user.roles)` — true for any of the ten
+        // admin roles — and the report carries issues[].email, one row per
+        // anomalous member with their address. It now has to name a permission,
+        // which is the rule #375 set and #438 applied to the sibling route.
+        expect(source('src/app/actions/health.ts')).toContain('requireSession()');
+        expect(source('src/app/actions/health.ts')).toMatch(/hasAdminPermission\(session\.user\.roles, "[a-z_]+:[a-z_]+"\)/);
     });
 
     it('SOME RENDERED FILE NOW LINKS TO IT — the finding, closed', () => {
