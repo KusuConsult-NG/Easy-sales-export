@@ -18,10 +18,20 @@ import QRCode from 'qrcode';
  *        MFA_SECRET_KEY — the MFA routes refuse to run without the variable —
  *        and this module was not fixed with it.
  *
- *        Refusing is the only safe answer: security-checks.ts already fails a
- *        production boot whose QR_ENCRYPTION_KEY is missing or weak, and a
- *        development box without the key gets a message that names the
- *        variable instead of a card that looks signed and is not.
+ *        Refusing is the only safe answer, and a development box without the
+ *        key gets a message that names the variable instead of a card that
+ *        looks signed and is not.
+ *
+ *   #441 CORRECTS WHAT THIS COMMENT USED TO CLAIM. It said "security-checks.ts
+ *        already fails a production boot whose QR_ENCRYPTION_KEY is missing or
+ *        weak". It does not, and never did: validateProductionSecrets writes a
+ *        console.error and returns — its own source says it must NEVER throw,
+ *        because it runs at module scope in the root layout. layout.tsx also
+ *        wraps the call in a try/catch that only warns.
+ *
+ *        So the refusal below is not a second line of defence behind a boot
+ *        check. IT IS THE ONLY LINE. That makes it more important, not less,
+ *        which is why the claim is corrected rather than deleted.
  */
 function requireQrKey(): string {
     const key = process.env.QR_ENCRYPTION_KEY;

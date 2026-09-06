@@ -7,6 +7,7 @@ import { hasAdminPermission } from "@/lib/admin-permissions";
 import { getRedisClientStatus } from "@/lib/redis";
 import { logger } from "@/lib/logger";
 import { DEFAULT_TOGGLES } from "@/lib/feature-toggles";
+import { validateProductionSecrets } from "@/lib/security-checks";
 
 export interface HealthIssue { id: string; // userId
     email: string;
@@ -26,6 +27,17 @@ export interface HealthReport {
         resend: boolean;
     };
     featureToggles: Record<string, boolean>;
+    /**
+     * #441. Production secrets that are missing, too short, or a known-weak
+     * literal. `validateProductionSecrets` has always checked these and has
+     * always written the answer to a console.error nobody reads — it returns
+     * them now, and this is where an operator holding audit:read can see them.
+     *
+     * Empty in every non-production environment, because the check itself only
+     * runs on NODE_ENV === "production". The strings name the VARIABLE and the
+     * weakness, never the secret's value.
+     */
+    secretWeaknesses: string[];
     /**
      * #440. `desyncedRegistrations` used to be a third field here, and its
      * producer was `const desyncedRegs = 0;` — declared zero, never computed,
@@ -213,6 +225,7 @@ export async function runSystemHealthDiagnostic(limit: number = 2000): Promise<
                 resend: !!process.env.RESEND_API_KEY,
             },
             featureToggles,
+            secretWeaknesses: validateProductionSecrets(),
             stats: {
                 corruptedUsers: issues.filter(i => i.issueType.includes("Corruption")).length,
                 orphanedApplications: orphanedApps,

@@ -62,6 +62,15 @@ import { firstImageSrc, firstImageSrcOr, imageSrcOr } from '@/lib/first-image';
 const ROOT = process.cwd();
 const code = (rel: string) => stripComments(readFileSync(join(ROOT, rel), 'utf-8'), { label: rel });
 
+/**
+ * The page debounces 500ms before its first load, and this suite mounts the
+ * real component. Under the full run — 543 suites in parallel, with coverage
+ * instrumentation — the default 5s budget is not enough, and the suite failed
+ * intermittently on a TIMEOUT rather than on any assertion. Raised so a failure
+ * here means the grid did not render, which is the thing being tested.
+ */
+jest.setTimeout(30000);
+
 const mockSearch = jest.fn();
 
 jest.mock('@/app/actions/land-listings', () => ({
@@ -155,7 +164,7 @@ describe('#439 — the public catalogue survives the row that took it down', () 
 
         await waitFor(() => {
             expect(screen.getByTestId('property-grid')).toBeInTheDocument();
-        }, { timeout: 5000 });
+        }, { timeout: 15000 });
 
         expect(screen.getAllByTestId('property-card')).toHaveLength(3);
         // And the row with no images is one of the three, not a card that was
@@ -174,7 +183,7 @@ describe('#439 — the public catalogue survives the row that took it down', () 
 
         await waitFor(() => {
             expect(screen.getByText('No properties found')).toBeInTheDocument();
-        }, { timeout: 5000 });
+        }, { timeout: 15000 });
         expect(screen.queryByTestId('property-grid')).not.toBeInTheDocument();
     });
 });

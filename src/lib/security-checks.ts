@@ -17,13 +17,27 @@ const WEAK_SECRET_PATTERNS = [
 ];
 
 /**
- * Validate that production secrets are cryptographically secure
- * Throws an error if weak patterns are detected in production mode
+ * Report production secrets that are missing, too short, or a known-weak literal.
+ *
+ *   #441 THIS RETURNED VOID AND LOGGED, WHICH MADE IT UNTESTABLE AND LET THREE
+ *   PLACES CLAIM IT ENFORCED SOMETHING.
+ *
+ * The non-throwing behaviour is CORRECT and is kept: this is called at module
+ * scope in the root layout, so throwing would crash every Server Component
+ * render with a cryptic error. What was wrong is that the findings went nowhere
+ * a caller could read — so no test could assert on them, and two other modules
+ * were left describing this as a boot failure it never performs.
+ *
+ * It returns the findings now. Callers still choose what to do; layout.tsx
+ * logs, and the admin health report surfaces them to an operator who holds
+ * audit:read. Nothing about when it runs, or its refusal to throw, has changed.
+ *
+ * The strings name the VARIABLE and the weakness, never the secret's value.
  */
-export function validateProductionSecrets(): void {
+export function validateProductionSecrets(): string[] {
     // Only enforce in production
     if (process.env.NODE_ENV !== 'production') {
-        return;
+        return [];
     }
 
     const criticalSecrets = {
@@ -72,6 +86,8 @@ export function validateProductionSecrets(): void {
         // are sufficient to keep the app functional while the operator adds the vars.
         console.error(`\n[SECURITY] ${errorMessage}\n`);
     }
+
+    return weakSecrets;
 }
 
 /**

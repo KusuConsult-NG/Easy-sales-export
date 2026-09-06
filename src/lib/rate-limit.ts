@@ -183,11 +183,17 @@ const loginLimiter = new Ratelimit({
  * #192 about PLAYWRIGHT_TEST — a variable like this is harmless until somebody
  * copies a .env into a deploy config, and this one guards the login form.
  *
- * NODE_ENV is the discriminator now, and it is the one this codebase already
- * trusts for exactly this question: security-checks.ts enforces strong secrets
- * on `NODE_ENV === 'production'`. Next sets it at build and start, so it cannot
- * be turned off by adding a variable. Local development and jest keep the
- * bypass; a production build cannot have it at any price.
+ * NODE_ENV is the discriminator now, and the reason it can be trusted is that
+ * Next sets it at build and start, so it cannot be turned off by adding a
+ * variable. Local development and jest keep the bypass; a production build
+ * cannot have it at any price.
+ *
+ * #441 CORRECTS THE SUPPORTING SENTENCE, NOT THE CONCLUSION. This used to read
+ * "security-checks.ts ENFORCES strong secrets on NODE_ENV === 'production'".
+ * That module checks them and writes a console.error; it does not refuse, block
+ * or throw — it must not, because it runs at module scope in the root layout.
+ * The argument above stands on what Next guarantees about NODE_ENV, which is
+ * true; the citation overstated a neighbouring module and is removed.
  *
  * The "ratelimit-test" carve-out stays: tests/e2e/auth.spec.ts signs in as
  * ratelimit-test@example.com precisely to prove the limit still bites.

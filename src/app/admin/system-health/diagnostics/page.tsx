@@ -235,6 +235,36 @@ export default function AdminDiagnosticsPage() {
                     </Link>
                 </div>
 
+                {/*
+                  * #441. Weak or missing production secrets.
+                  *
+                  * validateProductionSecrets has always found these and has
+                  * always written them to a console.error nobody reads. This is
+                  * the first reader they have ever had.
+                  *
+                  * Rendered only when there is something to say: an empty list
+                  * in development means "the check does not run here", not "the
+                  * secrets are strong", and a green tick for that would be the
+                  * same lie #440 removed from this page.
+                  */}
+                {data && data.secretWeaknesses.length > 0 && (
+                    <div className="md:col-span-3 bg-red-50 border border-red-200 p-6 rounded-2xl">
+                        <div className="flex items-center gap-2 mb-3">
+                            <AlertTriangle className="w-5 h-5 text-red-600" />
+                            <h2 className="font-bold text-red-900">Weak or missing production secrets</h2>
+                        </div>
+                        <ul className="space-y-1.5">
+                            {data.secretWeaknesses.map((weakness) => (
+                                <li key={weakness} className="text-sm text-red-800">• {weakness}</li>
+                            ))}
+                        </ul>
+                        <p className="mt-4 text-xs text-red-700">
+                            Generate replacements with <code className="font-mono">openssl rand -base64 48</code> and
+                            set them in the deployment environment.
+                        </p>
+                    </div>
+                )}
+
                 {/* Summary — every figure below is one this page actually has */}
                 <div className="md:col-span-3 bg-slate-900 text-white p-6 rounded-2xl shadow-xl overflow-hidden relative group">
                     <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
