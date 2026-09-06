@@ -8,9 +8,9 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Product, Order } from "@/lib/types/marketplace";
-import { ProductSchema, OrderSchema, SellerAnalyticsSchema } from "@/lib/validations/marketplace";
+import { SellerAnalyticsSchema } from "@/lib/validations/marketplace";
 import { withSafeAction, ActionResponse } from "@/lib/safe-action";
-import { toMillis } from "@/lib/firestore-serialize";
+import { toMillis, serializeOrder, serializeProduct } from "@/lib/firestore-serialize";
 import { countsAsSellerRevenue } from "@/lib/order-status";
 import { scopeOrderToSeller, sellerOrderAmount } from "@/lib/order-scope";
 import { isRetired } from "@/lib/record-retirement";
@@ -100,18 +100,10 @@ async function _getSellerProductsAction(options: {
                 throw e;
             }
         }
-        const { serializeValue } = await import("@/lib/firestore-serialize");
-        
-        let products = snapshot.docs.map((doc: any) => { 
-            const data = doc.data();
-            try {
-                const parsed = ProductSchema.parse({ id: doc.id, ...data });
-                return serializeValue(parsed);
-            } catch {
-                // Graceful fallback: return raw serialized data rather than crashing/losing the product
-                return serializeValue({ id: doc.id, ...data });
-            }
-        });
+        // #443. Was ProductSchema.parse in a try with the raw document in the
+        // catch. Keeping the row rather than crashing was right (#130);
+        // returning it unhealed while still calling it a Product was not.
+        let products = snapshot.docs.map((doc: any) => serializeProduct(doc.id, doc.data()));
 
         /**
          *   #301 THE ONE LIST THAT WOULD HAVE KEPT SHOWING A DELETED PRODUCT.
@@ -243,8 +235,7 @@ async function _getSellerOrdersAction(options: { limit?: number;
             }
         }
 
-        const { serializeValue } = await import("@/lib/firestore-serialize");
-        let orders = snapshot.docs.map((doc: any) => { 
+        let orders = snapshot.docs.map((doc: any) => {
             /**
              *   #342 ONE ORDER DOCUMENT, SEVERAL SELLERS.
              *
@@ -268,12 +259,13 @@ async function _getSellerOrdersAction(options: { limit?: number;
              *        untouched.
              */
             const data = scopeOrderToSeller(doc.data(), userId);
-            try {
-                const parsed = OrderSchema.parse({ id: doc.id, ...data });
-                return serializeValue(parsed);
-            } catch (e) {
-                return serializeValue({ id: doc.id, ...data });
-            }
+
+            // #443. Same parse-or-raw-document fallback the buyer dashboard
+            // had, and the same consequence one screen along: the seller order
+            // list also reads `order.items.length` and `order.items.map(...)`
+            // unguarded. Scoping still happens first — serializeOrder shapes
+            // what scopeOrderToSeller decided this seller may see.
+            return serializeOrder(doc.id, data);
         });
 
         // Server-assisted search

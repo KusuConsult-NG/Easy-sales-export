@@ -8,8 +8,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Order } from "@/lib/types/marketplace";
-import { serializeDocs } from "@/lib/firestore-serialize";
-import { OrderSchema } from "@/lib/validations/marketplace";
+import { serializeDocs, serializeOrders } from "@/lib/firestore-serialize";
 import { withSafeAction, ActionResponse } from "@/lib/safe-action";
 import { isActiveOrderStatus, isPaidByBuyer, sumOrders } from "@/lib/order-status";
 import { countSavedItems } from "@/lib/saved-items-store";
@@ -59,16 +58,13 @@ async function _getBuyerOrdersAction(options: { limit?: number;
         query = query.limit(limit);
 
         const snapshot = await query.get();
-        const { serializeValue } = await import("@/lib/firestore-serialize");
-        const orders = snapshot.docs.map((doc: any) => { 
-            const data = doc.data();
-            try {
-                const parsed = OrderSchema.parse({ id: doc.id, ...data });
-                return serializeValue(parsed);
-            } catch (e) {
-                return serializeValue({ id: doc.id, ...data });
-            }
-        });
+
+        // #443. This was OrderSchema.parse in a try with the RAW DOCUMENT in
+        // the catch — so the one row the schema could not heal was the one row
+        // that reached the browser unvalidated, and `{order.items.length}` on
+        // the dashboard took the page down. serializeOrder heals instead, and
+        // logs the row rather than passing it through in silence.
+        const orders = serializeOrders(snapshot.docs);
 
         let newLastId = undefined;
         let hasMore = false;

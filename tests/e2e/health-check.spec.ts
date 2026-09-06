@@ -41,7 +41,17 @@ test.describe('System Health Diagnostic Suite', () => {
         
         // Verify Data Integrity metrics
         await expect(page.locator('text=Orphaned Apps')).toBeVisible();
-        await expect(page.locator('text=Desynced Regs')).toBeVisible();
+
+        // #440 removed the "Desynced Regs" tile. Its number came from
+        // `const desyncedRegs = 0;` — declared zero and never computed — so the
+        // tile issued a clean bill of health without looking, and THIS
+        // ASSERTION PASSED ON IT. The cross-module questions are answered by
+        // the forensic scan, which can report "inconclusive"; the tile now
+        // links there. Asserted on the link so the panel cannot silently
+        // disappear the way the number silently lied.
+        await expect(page.locator('text=Cross-module checks')).toBeVisible();
+        await expect(page.getByRole('link', { name: /forensic scan/i })).toHaveAttribute(
+            'href', '/admin/forensics');
         
         // Verify Feature Toggles
         await expect(page.locator('text=Feature Activation States')).toBeVisible();

@@ -147,6 +147,25 @@ export const OrderSchema = z.object({
         "cancelled",
         "disputed",
     ]).default("pending_payment"),
+    /**
+     *   #443 THE ONLY FIELD IN THIS SCHEMA THAT COULD NOT HEAL, AND THE ONE
+     *        THAT TOOK THE BUYER DASHBOARD DOWN.
+     *
+     *        Every field INSIDE this object has a default. The object itself
+     *        had none, so it was the one required key in an otherwise
+     *        self-healing schema — and a stored order without it failed the
+     *        whole parse. Both order-list actions caught that failure and
+     *        returned the RAW document instead, still typed as `Order`, so
+     *        `items` arrived undefined and `{order.items.length}` unwound
+     *        /marketplace/buyer/dashboard into its error boundary. Seen
+     *        happening, in Chromium, against a real stored row.
+     *
+     *        `.prefault({})` rather than `.default({})`: a default is returned
+     *        as written, so `.default({})` would have produced a bare `{}` and
+     *        left `deliveryAddress.recipientName` undefined for every healed
+     *        row. A prefault is PARSED, so the six defaults below actually
+     *        apply.
+     */
     deliveryAddress: z.object({
         recipientName: z.string().default("Guest"),
         recipientPhone: z.string().default(""),
@@ -154,7 +173,7 @@ export const OrderSchema = z.object({
         city: z.string().default(""),
         state: z.string().default(""),
         lga: z.string().default(""),
-    }),
+    }).prefault({}),
     buyerConfirmed: z.boolean().default(false),
     buyerConfirmedAt: dateSchema.optional(),
     escrowReleased: z.boolean().default(false),
@@ -162,6 +181,29 @@ export const OrderSchema = z.object({
     escrowTransactionId: z.string().optional(),
     paymentStatus: z.string().optional(),
     paymentReference: z.string().optional(),
+    /**
+     *   #443 SIX FIELDS THE APP WRITES AND READS THAT THIS SCHEMA DID NOT
+     *        DESCRIBE.
+     *
+     *        serializeOrder strips an order to this schema on the way to the
+     *        browser, which is what keeps the payload bounded (#151, #341).
+     *        That only works if the schema is an honest description of the
+     *        entity: anything the screens read and the schema omits would
+     *        simply vanish. Each of these is read by a screen, and each — bar
+     *        one, named below — has a writer.
+     *
+     *        estimatedDeliveryDate is READ BY THREE ORDER SCREENS AND WRITTEN
+     *        BY NOTHING. Recorded, not invented: it is declared optional here
+     *        so the strip does not change what those screens see (undefined
+     *        before, undefined after). Giving it a real value is a product
+     *        decision about who promises a delivery date, not a repair.
+     */
+    sellerIds: z.array(z.string()).default([]),
+    buyerPhone: z.string().optional(),
+    trackingNumber: z.string().optional(),
+    estimatedDeliveryDate: dateSchema.optional(),
+    reviewSubmitted: z.boolean().default(false),
+    sellerAmountPaid: z.number().optional(),
     createdAt: dateSchema,
     updatedAt: dateSchema,
     _version: z.number().default(0),
