@@ -649,10 +649,10 @@ export default function CheckoutPage() {
                     id: item.id,
                     title: item.title,
                     sellerId: item.sellerId,
-                    price: item.pricingTiers[0]?.price || 0,
+                    price: item.pricingTiers?.[0]?.price || 0,
                     quantity: item.quantity,
                     unit: item.unit,
-                    selectedTier: item.pricingTiers[0]?.type || "retail",
+                    selectedTier: item.pricingTiers?.[0]?.type || "retail",
                     addedAt: new Date(),
                 }));
                 const res = await calculateDeliveryAction(cartItems, {
@@ -676,7 +676,7 @@ export default function CheckoutPage() {
         fetchFee();
     }, [cart, distance, weight, isWithinCityCenter, showToast]);
 
-    const subtotal = cart.reduce((sum, item) => sum + (item.pricingTiers[0]?.price || 0) * item.quantity, 0);
+    const subtotal = cart.reduce((sum, item) => sum + (item.pricingTiers?.[0]?.price || 0) * item.quantity, 0);
 
     async function handlePaystackCheckout() {
         if (!session) {
@@ -729,10 +729,10 @@ export default function CheckoutPage() {
                 id: item.id,
                 title: item.title,
                 sellerId: item.sellerId,
-                price: item.pricingTiers[0]?.price || 0,
+                price: item.pricingTiers?.[0]?.price || 0,
                 quantity: item.quantity,
                 unit: item.unit,
-                selectedTier: item.pricingTiers[0]?.type || "retail",
+                selectedTier: item.pricingTiers?.[0]?.type || "retail",
                 addedAt: new Date(),
             }));
 
@@ -813,7 +813,7 @@ export default function CheckoutPage() {
                                 </h2>
                                 <div className="space-y-4">
                                     {cart.map((item) => {
-                                        const price = item.pricingTiers[0]?.price || 0;
+                                        const price = item.pricingTiers?.[0]?.price || 0;
                                         return (
                                             <div
                                                 key={item.id}

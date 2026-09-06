@@ -306,7 +306,7 @@ export default function SellerDashboardPage() {
                                     {/* Price */}
                                     <div className="mb-4">
                                         <p className="text-2xl font-bold text-blue-600">
-                                            ₦{product.pricingTiers[0]?.price.toLocaleString()}
+                                            ₦{product.pricingTiers?.[0]?.price?.toLocaleString()}
                                             <span className="text-sm text-slate-500 font-normal">
                                                 /{product.unit}
                                             </span>

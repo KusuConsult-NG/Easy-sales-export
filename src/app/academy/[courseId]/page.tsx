@@ -238,7 +238,7 @@ export default function CourseDetailPage(props: CourseDetailPageProps) {
 
         // Navigate to first lesson of first module
         const firstModule = course.modules[0];
-        const firstLesson = firstModule.lessons[0];
+        const firstLesson = firstModule?.lessons?.[0];
 
         if (firstLesson) {
             router.push(`/academy/${courseId}/lesson/${firstLesson.id}`);

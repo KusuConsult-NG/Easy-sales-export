@@ -121,8 +121,12 @@ export default function ProductDetailPage() {
     const isFS = (product as any).isFlashSale === true;
     const allImages = product.images && product.images.length > 0 ? product.images : ["/images/placeholder-product.jpg"];
     const mainImage = allImages[selectedImageIndex] || allImages[0];
+    // #442. The ternary above already proves the array is non-empty, so this
+    // was never at risk. It is spelled `?.[0]?.` anyway so that ONE shape means
+    // "reading the first pricing tier" everywhere — the eleven sites that did
+    // throw were all copies of a form that looked fine in isolation.
     const priceDisplay = product.pricingTiers && product.pricingTiers.length > 0
-        ? formatCurrency(product.pricingTiers[0].price)
+        ? formatCurrency(product.pricingTiers?.[0]?.price)
         : "Price on Request";
 
     // Determine badge based on product attributes
@@ -424,7 +428,7 @@ export default function ProductDetailPage() {
                                         {relatedProduct.title}
                                     </h3>
                                     <p className="text-lg font-bold text-green-600">
-                                        ₦{relatedProduct.pricingTiers[0]?.price.toLocaleString()}
+                                        ₦{relatedProduct.pricingTiers?.[0]?.price?.toLocaleString()}
                                         <span className="text-xs text-slate-500 font-normal">
                                             /{relatedProduct.unit}
                                         </span>
