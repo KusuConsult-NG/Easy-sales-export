@@ -47,11 +47,24 @@
  *   WITH ITS REASON, so a new endpoint cannot arrive ungated without somebody
  *   writing down why.
  *
- *   STILL OPEN, MEASURED AND NOT FIXED HERE. Twelve admin routes gate on
- *   isAdmin(roles) — an admin/not-admin check — without naming a permission,
- *   where #375's rule is that every admin gate names one. They are gated; what
- *   they lack is the granularity. That is a separate change to a separate rule
- *   and it is recorded rather than bundled in.
+ *   #438 CLOSED THE GAP THIS LEFT OPEN. Twelve admin routes gated on a ROLE
+ *   rather than a permission. Splitting them told two different stories:
+ *
+ *     SIX were gated on isAdmin(roles) — true for ANY of the ten admin roles.
+ *     Two of those returned personal data: the cooperative roster and the
+ *     marketplace buyer list. #97 ("any module admin can read the whole
+ *     cooperative roster") and #147 (the buyer and seller lists) are the same
+ *     finding on other doors. Each now names the permission its own directory
+ *     already uses.
+ *
+ *     SIX were gated on isSuperAdmin or isPlatformAdmin, which is STRICTER than
+ *     any permission in the matrix, not looser — schema-fix, feature-toggles
+ *     seeding, the orphaned-user repair, the reconcile sweep, debug-users and
+ *     add-roles. Reporting those as "missing a permission check" would have
+ *     been a false finding, and they are left alone with the reason recorded.
+ *
+ *   The count below is the ratchet: 42 of 48 name a permission, 6 are gated
+ *   more tightly than one, none is gated on less.
  */
 
 import { describe, it, expect } from '@jest/globals';
@@ -176,6 +189,35 @@ describe('#437 — the two admin conventions, both sound', () => {
         expect(auth).toMatch(/const SYNC_INTERVAL = 2 \* 60 \* 1000;/);
         expect(auth).toMatch(/if \(trigger === "update" \|\| !lastSynced \|\| \(now - lastSynced\) > SYNC_INTERVAL\)/);
         expect(auth).toMatch(/if \(token\.isBanned \|\| token\.sessionRevoked\)/);
+    });
+
+    it('#438 — NO admin route decides on isAdmin() alone any more', () => {
+        // isAdmin is true for every one of the ten admin roles. Where a route
+        // does something only some of them should do — read a roster, size a
+        // broadcast, run an integrity report — the matrix is what says which.
+        const roleOnly = adminRoutes.filter((f) => {
+            const src = code(f);
+            const usesBareIsAdmin = /[^a-zA-Z]isAdmin\s*\(\s*session/.test(src);
+            const namesPermission = /hasAdminPermission\s*\(|requireAdmin\s*\(\s*["']/.test(src);
+            return usesBareIsAdmin && !namesPermission;
+        }).map(routeName);
+
+        expect({ roleOnly }).toEqual({ roleOnly: [] });
+    });
+
+    it('and the six gated MORE tightly than a permission are left alone', () => {
+        // isSuperAdmin and isPlatformAdmin are stricter than anything in the
+        // matrix. Calling these "unguarded" would have been a false finding;
+        // pinning them stops a later sweep from "fixing" them downward.
+        const STRICTER = [
+            'admin/schema-fix', 'admin/feature-toggles/seed', 'admin/orphaned-users',
+            'admin/reconcile-sweep', 'admin/debug-users', 'admin/add-roles',
+        ];
+        for (const name of STRICTER) {
+            const src = code(`src/app/api/${name.replace('admin/', 'admin/')}/route.ts`);
+            expect({ name, strict: /isSuperAdmin\s*\(|isPlatformAdmin\s*\(/.test(src) })
+                .toEqual({ name, strict: true });
+        }
     });
 
     it('and requireAdmin re-reads roles live and fails closed', () => {

@@ -5,7 +5,7 @@ import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { AggregateField } from "@/lib/firestore-compat";
 
 /**
@@ -28,7 +28,9 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        if (!isAdmin(session.user.roles)) {
+        // #438: this was isAdmin(...) — true for ANY of the ten admin roles.
+        // Named permission because the WAVE compliance review queue.
+        if (!hasAdminPermission(session.user.roles, "wave:approve_applications")) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }

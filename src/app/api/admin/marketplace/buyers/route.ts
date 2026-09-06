@@ -5,7 +5,7 @@ import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 
 export async function GET() {
     try {
@@ -13,7 +13,9 @@ export async function GET() {
         if (!session?.user) {
             return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
         }
-        if (!isAdmin(session.user.roles)) {
+        // #438: this was isAdmin(...) — true for ANY of the ten admin roles.
+        // Named permission because a list of buyers, i.e. personal data; #147 put the other buyer and seller lists behind a named permission.
+        if (!hasAdminPermission(session.user.roles, "users:read")) {
             return NextResponse.json({ success: false, message: "Admin access required" }, { status: 403 });
         }
 

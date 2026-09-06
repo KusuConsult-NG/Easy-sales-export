@@ -5,7 +5,7 @@ import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { isAdmin } from "@/lib/admin-permissions";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
 
 /**
@@ -20,7 +20,9 @@ export async function GET(request: NextRequest) {
         }
 
         // Check if user is admin
-        if (!isAdmin(session.user.roles)) {
+        // #438: this was isAdmin(...) — true for ANY of the ten admin roles.
+        // Named permission because the cooperative ROSTER — #97 found "any module admin can read the whole cooperative roster" on another door.
+        if (!hasAdminPermission(session.user.roles, "cooperatives:approve_members")) {
             return NextResponse.json({ success: false, message: "Admin access required" }, { status: 403 });
         }
 

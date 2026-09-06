@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/session-guard";
-import { isAdmin } from "@/lib/admin-permissions";
+import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 import { logger } from "@/lib/logger";
 import { rateLimit, createRateLimitResponse } from "@/lib/rate-limiter";
 import { rateLimitConfig } from "@/lib/rate-limits.config";
@@ -45,7 +45,9 @@ export async function POST(req: NextRequest) {
         // own, and a query parameter is the worse of the two: an environment
         // variable needs deploy access, this needed a URL.
         const { session } = await requireSession();
-        if (!session?.user || !isAdmin(session.user.roles)) {
+        // #438: this was isAdmin(...) — true for ANY of the ten admin roles.
+        // Named permission because sizing a platform-wide blast is the same decision as sending it, and broadcast/send already asks for this.
+        if (!session?.user || !hasAdminPermission(session.user.roles, "announcements:manage")) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
         }
 

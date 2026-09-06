@@ -5,7 +5,7 @@ import { logger } from '@/lib/logger';
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { requireSession } from "@/lib/session-guard";
-import { isAdmin } from "@/lib/admin-permissions";
+import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
 
 /**
  * The cooperative data integrity report.
@@ -49,7 +49,9 @@ export async function GET() {
         // A READ, and every admin role holds "users:read", so isAdmin is the
         // right gate. What it discloses is aggregate integrity, not personal
         // data.
-        if (!isAdmin(session.user.roles)) {
+        // #438: this was isAdmin(...) — true for ANY of the ten admin roles.
+        // Named permission because a platform-wide integrity report across every collection.
+        if (!hasAdminPermission(session.user.roles, "audit:read")) {
             logger.warn(`Unauthorized integrity check attempt by user: ${session?.user?.id}`);
             return NextResponse.json({ success: false, error: "Forbidden: Admin access required" }, { status: 403 });
         }
