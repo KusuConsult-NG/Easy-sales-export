@@ -13,10 +13,29 @@ export async function register() {
                 console.log('[DNS Configuration] Prefer IPv4 resolver order configured in instrumentation.');
             }
             
-            // Validate environment variables on startup
+            /**
+             *   #450 THE BOOT REFUSES WHEN THE CONTAINER CANNOT SERVE.
+             *
+             *        This called logEnvValidation() and carried on. A Railway
+             *        container deployed with NO configuration therefore printed
+             *        "❌ Environment validation failed!", said "✓ Ready", took
+             *        traffic, and died in the middleware on every request with
+             *        MissingSecret.
+             *
+             *        Exiting is the kinder failure: Railway keeps the previous
+             *        container when a new one exits, so a misconfigured deploy
+             *        leaves the working site up instead of replacing it. The
+             *        decision belongs here, at the boot, rather than inside the
+             *        validator — see the note there.
+             */
             try {
                 const { logEnvValidation } = require('./lib/env-validator');
-                logEnvValidation();
+                const result = logEnvValidation();
+
+                if (result?.fatalMissing?.length && process.env.NODE_ENV === 'production') {
+                    console.error('[Env Validator] Exiting: cannot serve without', result.fatalMissing.join(', '));
+                    process.exit(1);
+                }
             } catch (envErr) {
                 console.error('[Env Validator] Failed to run environment variable validation:', envErr);
             }

@@ -91,22 +91,32 @@ export function validateProductionSecrets(): string[] {
 }
 
 /**
- * Validate that all required environment variables are present
+ * Validate that all required environment variables are present.
+ *
+ *   #450 A SECOND LIST OF REQUIRED VARIABLES, WITH NO CALLERS, THAT WOULD HAVE
+ *        FAILED EVERY CORRECT DEPLOY IF ANYONE HAD WIRED IT UP.
+ *
+ *        This threw a clear "MISSING REQUIRED ENVIRONMENT VARIABLES" and
+ *        NOTHING CALLED IT — while a Railway container booted with no
+ *        configuration at all, served traffic, and died on every request. The
+ *        guard written for exactly that situation was connected to nothing.
+ *
+ *        And its list had drifted. It demanded NEXT_PUBLIC_FIREBASE_API_KEY and
+ *        FIREBASE_PROJECT_ID, two names lib/env-validator.ts deliberately
+ *        REMOVED — Firebase is shimmed to Supabase, nothing reads them — so
+ *        connecting this function naively would have refused to start a
+ *        correctly configured platform. It also demanded OPENAI_API_KEY and the
+ *        two Upstash names, all three of which env-validator lists as
+ *        RECOMMENDED because every read of them has a fallback.
+ *
+ *        Two lists, one dead and wrong, is the shape this audit has found some
+ *        thirty times. There is one list now: env-validator's. This function
+ *        keeps its name and its throwing contract — a caller may still want the
+ *        exception rather than the exit — and reads the shared answer.
  */
 export function validateRequiredEnvVars(): void {
-    const required = [
-        'NEXTAUTH_URL',
-        'NEXTAUTH_SECRET',
-        'NEXT_PUBLIC_FIREBASE_API_KEY',
-        'FIREBASE_PROJECT_ID',
-        'PAYSTACK_SECRET_KEY',
-        'RESEND_API_KEY',
-        'OPENAI_API_KEY',
-        'UPSTASH_REDIS_REST_URL',
-        'UPSTASH_REDIS_REST_TOKEN',
-    ];
-
-    const missing = required.filter(key => !process.env[key]);
+    const { validateEnv } = require("./env-validator") as typeof import("./env-validator");
+    const missing = validateEnv().missing;
 
     if (missing.length > 0) {
         const errorMessage = [
