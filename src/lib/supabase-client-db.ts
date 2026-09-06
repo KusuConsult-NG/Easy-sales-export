@@ -92,9 +92,17 @@ function applyClientFilter(query: any, tableName: string, f: WhereFilter): any {
 
     if (f.op === 'array-contains-any') {
         const values = Array.isArray(f.value) ? f.value : [f.value];
-        return nativeCol
-            ? query.overlaps(nativeCol, values)
-            : query.filter(`raw_data->${f.field}`, 'ov', JSON.stringify(values));
+        if (!nativeCol) {
+            // `ov` is SQL `&&`, and Postgres has no `&&` for jsonb — verified,
+            // not inferred. The same line was in supabase-db; both are refused
+            // rather than rewritten, and both here so the fix does not reach
+            // one copy. See that module's note.
+            throw new Error(
+                `[supabase-client-db] Unsupported query operator "array-contains-any" on JSONB field `
+                + `"${f.field}": Postgres has no && operator for jsonb. Give the field a native `
+                + `TEXT[] column, or use array-contains for a single value.`);
+        }
+        return query.overlaps(nativeCol, values);
     }
 
     // Scalar comparisons. JSONB values come back as text, so the comparison

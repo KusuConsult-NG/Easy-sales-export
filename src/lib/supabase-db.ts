@@ -979,6 +979,36 @@ function applyFilter(
     return applyJsonbFilter(query, field, op, normalizedValue);
 }
 
+/**
+ * One value, quoted for a PostgREST in-list — `("pending","in progress")`.
+ *
+ * Reserved characters inside a quoted member are backslash-escaped, which is
+ * PostgREST's documented rule. The previous version interpolated the value
+ * straight into `"${v}"`, so a value containing a quote or a comma closed the
+ * member early and the filter silently meant something else — the shape this
+ * whole finding is about, one level down.
+ */
+function quoteForInList(value: any): string {
+    return `"${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
+
+function inList(value: any): string {
+    return `(${(Array.isArray(value) ? value : [value]).map(quoteForInList).join(',')})`;
+}
+
+/**
+ * An operator the adapter cannot express against this column shape.
+ *
+ * It THROWS. Returning an equality filter instead — which is what both switches
+ * below used to do — turns "everything except these" into "nothing", with no
+ * error anywhere. See the header on unsupportedOperator's callers.
+ */
+function unsupportedOperator(op: string, target: string, why: string): never {
+    throw new Error(
+        `[supabase-db] Unsupported query operator "${op}" on ${target}: ${why}`,
+    );
+}
+
 function applySimpleFilter(query: any, column: string, op: FilterOperator, value: any): any {
     switch (op) {
         case '==': return query.eq(column, value);
@@ -988,8 +1018,10 @@ function applySimpleFilter(query: any, column: string, op: FilterOperator, value
         case '>': return query.gt(column, value);
         case '>=': return query.gte(column, value);
         case 'in': return query.in(column, Array.isArray(value) ? value : [value]);
-        case 'not-in': return query.not(column, 'in', `(${(Array.isArray(value) ? value : [value]).map((v: any) => `"${v}"`).join(',')})`);
-        default: return query.eq(column, value);
+        case 'not-in': return query.not(column, 'in', inList(value));
+        default:
+            return unsupportedOperator(op, `native column "${column}"`,
+                'the adapter has no filter for it, and guessing one silently returns the wrong rows');
     }
 }
 
@@ -1070,6 +1102,17 @@ function applyJsonbFilter(query: any, field: string, op: FilterOperator, value: 
             const values = (Array.isArray(value) ? value : [value]).map(String);
             return query.in(jsonPath, values);
         }
+        // `not-in` had NO case here at all, so it fell through to the `default`
+        // below and became an EQUALITY on the joined list — "every order except
+        // these two" returned nothing, silently. Only eight tables have any
+        // native columns, so this branch is where nearly every query lands.
+        //
+        // A row whose key is ABSENT is excluded, because `raw_data->>'k'` is
+        // NULL there and `NULL NOT IN (…)` is NULL, not true. Verified against
+        // Postgres 16 rather than assumed — and it is what Firestore's `not-in`
+        // does with a missing field, so the two agree.
+        case 'not-in':
+            return query.not(jsonPath, 'in', inList(value));
         case 'array-contains': {
             // For JSONB arrays, use the @> (contains) operator
             const arrPath = parts.length === 1
@@ -1077,14 +1120,25 @@ function applyJsonbFilter(query: any, field: string, op: FilterOperator, value: 
                 : `raw_data${parts.slice(0, -1).map(p => `->${JSON.stringify(p)}`).join('')}->${JSON.stringify(parts[parts.length - 1])}`;
             return query.filter(arrPath, 'cs', JSON.stringify([value]));
         }
-        case 'array-contains-any': {
-            // Use the && (overlap) operator — checks if JSONB array overlaps with given values
-            const arrPath = parts.length === 1
-                ? `raw_data->${JSON.stringify(field)}`
-                : `raw_data${parts.slice(0, -1).map(p => `->${JSON.stringify(p)}`).join('')}->${JSON.stringify(parts[parts.length - 1])}`;
-            return query.filter(arrPath, 'ov', JSON.stringify(Array.isArray(value) ? value : [value]));
-        }
-        default: return query.eq(jsonPath, String(value));
+        case 'array-contains-any':
+            // This emitted PostgREST's `ov`, which is SQL `&&`. Postgres has no
+            // `&&` for jsonb — `select … where raw_data->'tags' && '["red"]'`
+            // is `ERROR: operator does not exist: jsonb && jsonb`, checked on
+            // Postgres 16, not inferred. So the branch could never have run.
+            //
+            // Every caller in this repository asks for it on `users.roles`,
+            // which IS a native TEXT[] column and takes the `overlaps` path
+            // above, so nothing is broken today. It is refused rather than
+            // rewritten: the correct form is an OR of `@>` filters, and I have
+            // no PostgREST here to exercise that against. Shipping an
+            // unverified query in place of one that errors would trade a loud
+            // failure for a quiet one, which is this finding's whole subject.
+            return unsupportedOperator(op, `JSONB field "${field}"`,
+                'Postgres has no && operator for jsonb; give the field a native TEXT[] column, '
+                + 'or use array-contains for a single value');
+        default:
+            return unsupportedOperator(op, `JSONB field "${field}"`,
+                'the adapter has no filter for it, and guessing one silently returns the wrong rows');
     }
 }
 
