@@ -129,8 +129,38 @@ export const OrderItemSchema = z.object({
     productTitle: z.string().default("Product"),
     quantity: z.number().default(1),
     unitPrice: z.number().default(0),
+    /**
+     *   #447 The other name the same figure is stored under. The two payment
+     *        paths write `pricePerUnit`; actions/orders.ts writes `unitPrice`.
+     *        Declared so healing keeps whichever a row carries — lib/order-scope.ts
+     *        reads both through itemUnitPrice(), which is the one statement of
+     *        the rule. Nothing rewrites stored rows.
+     */
+    pricePerUnit: z.number().optional(),
     totalPrice: z.number().default(0),
     tier: z.enum(["retail", "bulk", "export"]).default("retail"),
+    /**
+     *   #446 SECURITY. THIS FIELD DECIDES WHOSE ITEM IT IS, AND THE SCHEMA DID
+     *        NOT KNOW ABOUT IT.
+     *
+     *        A marketplace order is ONE row holding every seller's line items.
+     *        lib/order-scope.ts splits it with `items.filter(i => i?.sellerId
+     *        === sellerId)` — that filter is #342's entire fix, the one that
+     *        stopped a seller seeing another merchant's products, prices and
+     *        the whole basket's money.
+     *
+     *        Healing an order strips what this schema does not declare. So the
+     *        moment #446 routed order-management.ts's getSellerOrdersAction
+     *        through serializeOrder — which scopes AFTER serializing, unlike
+     *        its sibling, which scopes first — every item lost its sellerId,
+     *        `sellerItems` matched nothing, and the seller got the whole basket
+     *        back. #342's own ratchet failed on the next run and named it.
+     *
+     *        Optional, not required: #342 records that orders written before
+     *        every item carried a sellerId exist, and order-scope.ts returns
+     *        those untouched by design.
+     */
+    sellerId: z.string().optional(),
 });
 
 export const OrderSchema = z.object({

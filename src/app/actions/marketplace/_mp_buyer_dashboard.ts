@@ -8,7 +8,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Order } from "@/lib/types/marketplace";
-import { serializeDocs, serializeOrders } from "@/lib/firestore-serialize";
+import { serializeOrders } from "@/lib/firestore-serialize";
 import { withSafeAction, ActionResponse } from "@/lib/safe-action";
 import { isActiveOrderStatus, isPaidByBuyer, sumOrders } from "@/lib/order-status";
 import { countSavedItems } from "@/lib/saved-items-store";
@@ -108,9 +108,11 @@ async function _getBuyerStatsAction(): Promise<ActionResponse<{ stats: { activeO
             .limit(BUYER_STATS_ORDER_CAP)
             .get();
 
-        // DISEASE 5 FIX: serializeValue converts Firestore Timestamps → ISO strings
-        // so they don't crash React when passed to client components.
-        const orders = serializeDocs<Order>(snapshot.docs);
+        // #446. This was `serializeDocs<Order>` — a bare cast — in the same
+        // file whose sibling read #443 healed. It totals money by status, so
+        // an unparsed row here is a wrong number rather than a crash, which is
+        // exactly why it was easy to miss.
+        const orders = serializeOrders(snapshot.docs);
 
         const activeOrders = orders.filter(o => isActiveOrderStatus(o.status)).length;
         const completedOrders = orders.filter(o => o.status === "delivered" || o.status === "completed").length;

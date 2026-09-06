@@ -9,7 +9,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { claimStatusTransition, claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { isActiveEscrowStatus } from "@/lib/escrow-status";
 import { ORDER_CONFIRMABLE_FROM, hasReservedStock } from "@/lib/order-status";
-import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
+import { serializeValue, serializeProducts } from "@/lib/firestore-serialize";
 import type { ActionResponse } from "@/lib/safe-action";
 import { ProductSchema } from "@/lib/validations/marketplace";
 import { notifyOrderCancelled, notifyOrderDelivered } from "@/lib/marketplace-notifications";
@@ -122,8 +122,13 @@ async function _getProductsAction(filters?: ProductFilters): Promise<ActionRespo
 
         let products: Product[] = [];
         if (indexError) {
-            // DISEASE 5 FIX: serialize first to convert Timestamps before in-memory filtering
-            let productsData = serializeDocs(snapshot.docs);
+            //   #446 THE FALLBACK BRANCH HEALED NOTHING WHILE ITS SIBLING DID.
+            //
+            //        `serializeDocs(...)` then `as unknown as Product[]`, against
+            //        `serializeProducts(...)` four lines down — so a missing
+            //        index silently downgraded every guarantee `Product` makes,
+            //        inside ONE function. Both branches heal now.
+            let productsData: any[] = serializeProducts(snapshot.docs) as any[];
             
             // Apply filtered states in-memory
             if (filters?.state) {
@@ -136,9 +141,9 @@ async function _getProductsAction(filters?: ProductFilters): Promise<ActionRespo
                 productsData = productsData.filter((p: any) => p.exportReady === true);
             }
             
-            products = productsData as unknown as Product[];
+            products = productsData as unknown as Product[];  // already healed above
         } else {
-            products = serializeDocs<Product>(snapshot.docs);
+            products = serializeProducts(snapshot.docs);
         }
 
         // Client-side filters (for complex/non-indexed queries)
@@ -221,7 +226,7 @@ async function _getFeaturedProductsAction(): Promise<ActionResponse<{ products: 
         }
 
         // DISEASE 5 FIX: serialize immediately to prevent Timestamps crashing sorting/rendering
-        let products = serializeDocs<Product>(snapshot.docs);
+        let products = serializeProducts(snapshot.docs);
         
         if (indexError) {
             products.sort((a: any, b: any) => {
@@ -258,7 +263,7 @@ async function _getProductsByCategoryAction(category: string): Promise<ActionRes
             .get();
 
         const withTrust = await hydrateSellerTrust(
-            serializeDocs<Product>(snapshot.docs) as any[],
+            serializeProducts(snapshot.docs) as any[],
             readSeller,
         );
 

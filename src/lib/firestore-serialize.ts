@@ -350,3 +350,10 @@ export function serializeProduct(id: string, data: DocumentData | undefined): Pr
         "serializeProduct", ProductSchema, LenientProductSchema, id, data,
     ) as unknown as Product;
 }
+
+/** `serializeProduct` over a QuerySnapshot's docs. */
+export function serializeProducts(
+    docs: Array<{ id: string; data: () => DocumentData }>
+): Product[] {
+    return docs.map((doc) => serializeProduct(doc.id, doc.data()));
+}

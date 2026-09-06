@@ -74,6 +74,7 @@ import { z } from 'zod';
 import { serializeOrder, serializeProduct } from '@/lib/firestore-serialize';
 import { lenientObject } from '@/lib/schema-heal';
 import { OrderSchema } from '@/lib/validations/marketplace';
+import { itemUnitPrice, sellerOrderAmount } from '@/lib/order-scope';
 import { stripComments } from '@/lib/testing/strip-comments';
 
 /**
@@ -255,6 +256,86 @@ describe('#443 — the order that took the buyer dashboard down', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+/**
+ *   #447 ONE UNIT PRICE, TWO NAMES, AND THE FILE THAT PAYS SELLERS KNEW ONE.
+ *
+ *   Two payment paths write an order item's unit price as `pricePerUnit`;
+ *   actions/orders.ts — a third order-creation path — writes `unitPrice`.
+ *   lib/order-scope.ts read `pricePerUnit` alone, and it decides both what a
+ *   seller sees on a multi-seller order and the gross their dashboard shows
+ *   against the escrow. For an order created through orders.ts the goods came
+ *   to ZERO and the seller's share was the delivery split on its own.
+ *
+ *   Found by #446 breaking #342's ratchet, not by looking for it: healing
+ *   stripped `pricePerUnit`, the seller's total fell from 2500 to 500, and the
+ *   disagreement that had been masked by the raw-document fallback showed up.
+ *
+ *   Stated once in itemUnitPrice(); both names declared so healing keeps
+ *   whichever a row carries. NOTHING REWRITES STORED ROWS.
+ */
+describe('#447 — one unit price, two names', () => {
+    it('READS THE PAYMENT PATHS\' NAME', () => {
+        expect(itemUnitPrice({ pricePerUnit: 750, quantity: 2 })).toBe(750);
+    });
+
+    it('AND THE THIRD ORDER PATH\'S NAME — the case that came to zero', () => {
+        expect(itemUnitPrice({ unitPrice: 750, quantity: 2 })).toBe(750);
+    });
+
+    it('prefers pricePerUnit when a row somehow carries both', () => {
+        expect(itemUnitPrice({ pricePerUnit: 900, unitPrice: 100 })).toBe(900);
+    });
+
+    it('and is 0 for a row carrying neither, rather than NaN', () => {
+        // A NaN here propagates into a seller's displayed total and renders as
+        // "₦0" — the failure that does not look like one (#100).
+        expect(itemUnitPrice({ quantity: 3 })).toBe(0);
+        expect(itemUnitPrice({ pricePerUnit: 'lots' as any })).toBe(0);
+        expect(itemUnitPrice(null)).toBe(0);
+        expect(itemUnitPrice(undefined)).toBe(0);
+    });
+
+    it('SO A SELLER IS OWED THE SAME EITHER WAY THE ROW WAS WRITTEN', () => {
+        // The whole point, at the level the money is decided.
+        const asPaymentPathWritesIt = {
+            sellerIds: ['s1', 's2'], deliveryFee: 1000,
+            items: [
+                { sellerId: 's1', productId: 'a', pricePerUnit: 1000, quantity: 2 },
+                { sellerId: 's2', productId: 'b', pricePerUnit: 500, quantity: 1 },
+            ],
+        };
+        const asOrdersTsWritesIt = {
+            sellerIds: ['s1', 's2'], deliveryFee: 1000,
+            items: [
+                { sellerId: 's1', productId: 'a', unitPrice: 1000, quantity: 2 },
+                { sellerId: 's2', productId: 'b', unitPrice: 500, quantity: 1 },
+            ],
+        };
+
+        expect(sellerOrderAmount(asPaymentPathWritesIt, 's1')).toBe(2500);
+        expect(sellerOrderAmount(asOrdersTsWritesIt, 's1')).toBe(2500);
+    });
+
+    it('and both names survive healing, so scoping still works after it', () => {
+        // #446: healing strips what the schema does not declare, and
+        // order-management.ts scopes AFTER serializing. Stripping either name —
+        // or sellerId — hands the seller the whole basket back.
+        const healed = serializeOrder('multi', {
+            buyerId: 'b', sellerId: 's1', sellerIds: ['s1', 's2'],
+            createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+            items: [
+                { productId: 'a', sellerId: 's1', pricePerUnit: 1000, unitPrice: 1000, quantity: 2 },
+                { productId: 'b', sellerId: 's2', pricePerUnit: 500, unitPrice: 500, quantity: 1 },
+            ],
+        }) as any;
+
+        expect(healed.items[0].sellerId).toBe('s1');
+        expect(healed.items[0].pricePerUnit).toBe(1000);
+        expect(healed.items[0].unitPrice).toBe(1000);
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 describe('#443 — lenientObject derives its fallbacks and never throws', () => {
     const Strict = z.object({
         id: z.string(),
@@ -355,6 +436,75 @@ describe('#443 — no order or product reaches a screen unvalidated', () => {
         for (const rel of ORDER_DOORS) {
             expect({ rel, healed: /serializeOrders?\(/.test(code(rel)) }).toEqual({ rel, healed: true });
         }
+    });
+
+    /**
+     *   #446 THE TEST ABOVE ASKS WHETHER A FILE MENTIONS serializeOrder. IT DOES
+     *   NOT ASK WHETHER EVERY READ IN THAT FILE USES IT, AND #443 SHIPPED WITH
+     *   SIX THAT DID NOT.
+     *
+     *   Four of the eight order and product doors were converted; four were
+     *   not, and every one of the four sat in a file that PASSED the per-file
+     *   check because a sibling read in it had been converted. The list:
+     *
+     *     _buyer.ts                  three public catalogue reads, plus a
+     *                                missing-index fallback branch that healed
+     *                                nothing while its sibling four lines down
+     *                                did — one function, two guarantees
+     *     _mp_buyer_dashboard.ts     the stats read. It totals money by status
+     *                                rather than indexing an array, so a bad
+     *                                row is a wrong NUMBER, not a crash, which
+     *                                is why it was the easiest to miss
+     *     order-management.ts        getSellerOrdersAction and
+     *                                getBuyerOrdersAction — second doors onto
+     *                                operations _mp_seller_dashboard.ts and
+     *                                _mp_buyer_dashboard.ts already own, with
+     *                                no importers
+     *
+     *   That is the fix-reaches-one-of-N class this audit has recorded a dozen
+     *   times, committed by the finding that was fixing it. The remedy is not a
+     *   longer list — it is asking the question per READ instead of per FILE.
+     */
+    it('NO ACTION READS AN ORDER OR A PRODUCT THROUGH A BARE CAST', () => {
+        const BARE_CAST = /serializeDocs?\s*<\s*(Order|Product)\s*>/g;
+
+        const offenders: string[] = [];
+        for (const rel of ACTIONS) {
+            for (const m of code(rel).matchAll(BARE_CAST)) offenders.push(`${rel}: ${m[0]}`);
+        }
+
+        expect({ offenders }).toEqual({ offenders: [] });
+    });
+
+    it('POSITIVE CONTROL: that pattern matches the six #443 left behind', () => {
+        const BARE_CAST = /serializeDocs?\s*<\s*(Order|Product)\s*>/;
+        expect(BARE_CAST.test('const orders = serializeDocs<Order>(snapshot.docs);')).toBe(true);
+        expect(BARE_CAST.test('products = serializeDocs<Product>(snapshot.docs);')).toBe(true);
+        expect(BARE_CAST.test('const orders = serializeOrders(snapshot.docs);')).toBe(false);
+    });
+
+    /**
+     *   #446 RECORDED: order-management.ts carries a SECOND getSellerOrdersAction
+     *   and a SECOND getBuyerOrdersAction, and nothing imports either.
+     *
+     *   The screens reach the copies in _mp_seller_dashboard.ts and
+     *   _mp_buyer_dashboard.ts, through the marketplace barrel. #342 already
+     *   knew about the seller pair — it applied order scoping to "both readers
+     *   of this name at once" — and #443 then healed one of the two. Both are
+     *   healed now, so they cannot diverge in what they hand a screen.
+     *
+     *   Pinned as unreachable rather than deleted: removing an exported server
+     *   action from a live application is a bigger change than this finding,
+     *   and if anyone imports one they will have to reconcile the pair first.
+     */
+    it('and the duplicate order doors have no importers', () => {
+        const importers = (rel: string) => ACTIONS.concat(
+            sourceFiles(join(ROOT, 'src/app/marketplace')),
+            sourceFiles(join(ROOT, 'src/components')),
+        ).filter((f) => f !== rel && /@\/app\/actions\/order-management/.test(code(f))
+            && /getSellerOrdersAction|getBuyerOrdersAction/.test(code(f)));
+
+        expect(importers('src/app/actions/order-management.ts')).toEqual([]);
     });
 
     /**
