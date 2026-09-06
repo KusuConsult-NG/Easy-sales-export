@@ -58,6 +58,26 @@
  *     the nothing-arrived notice removed        KILLED
  *     it fires even when some DID arrive        KILLED
  *     the RAILWAY_* marker count dropped        KILLED
+ *
+ *   #462 AND "CHECK YOU ARE LOOKING AT THE SAME SERVICE" IS ADVICE NOBODY CAN
+ *   ACT ON, WHILE THE CONTAINER KNEW THE ANSWER.
+ *
+ *   #461 proved the fault was an empty service rather than a forgotten key, and
+ *   then asked the operator to go and confirm which service they were editing —
+ *   the one thing a dashboard with several services and environments makes
+ *   hard. Meanwhile Railway had stamped the answer into the container: among
+ *   the 23 markers it reported are RAILWAY_PROJECT_NAME,
+ *   RAILWAY_ENVIRONMENT_NAME and RAILWAY_SERVICE_NAME. The refusal prints them,
+ *   which turns the advice into an address.
+ *
+ *   Display names only — the same words the dashboard breadcrumb shows. The ids
+ *   are left out deliberately: a name is what an operator matches by eye and a
+ *   UUID is noise.
+ *
+ *     the address block removed                 KILLED
+ *     the service name dropped from it          KILLED
+ *     the RAILWAY_ENVIRONMENT fallback removed  KILLED
+ *     the block printed off Railway too         KILLED
  *     reword this header                        SURVIVED, as intended
  */
 
@@ -172,7 +192,12 @@ describe('#457 — a boot with nothing set says what to do first', () => {
         //        variables on it, not a forgotten key, and it needs a different
         //        fix.
         expect(output).toContain('NOT ONE of the variables this application defines is present');
-        expect(output).toContain('SAME service and environment');
+
+        //   #462 replaced "check you are looking at the SAME service" with an
+        //        instruction that follows the address block below it. Asserting
+        //        the old sentence would have pinned the weaker advice in place.
+        expect(output).toContain('Open EXACTLY that service and environment');
+        expect(output).toContain('must be LINKED into a service');
     });
 
     it('AND SAYS SO WHEN THE PLATFORM IS DEMONSTRABLY INJECTING', () => {
@@ -199,6 +224,47 @@ describe('#457 — a boot with nothing set says what to do first', () => {
 
         expect(partial).toContain('REFUSING TO START');
         expect(partial).not.toContain('NOT ONE of the variables');
+    });
+
+    it('AND NAMES THE SERVICE IT IS RUNNING AS — an address, not advice', () => {
+        //   #462 "Check you are looking at the same service" is the one thing a
+        //        dashboard with several services and environments makes hard,
+        //        and the container knew the answer the whole time: Railway
+        //        stamps the project, environment and service names into it.
+        const named = boot({
+            NODE_ENV: 'production',
+            RAILWAY_PROJECT_NAME: 'easy-sales-export',
+            RAILWAY_ENVIRONMENT_NAME: 'production',
+            RAILWAY_SERVICE_NAME: 'web',
+        });
+
+        expect(named).toContain('THIS CONTAINER IS RUNNING AS:');
+        expect(named).toContain('project      easy-sales-export');
+        expect(named).toContain('environment  production');
+        expect(named).toContain('service      web');
+    });
+
+    it('and falls back to RAILWAY_ENVIRONMENT when the _NAME form is absent', () => {
+        const named = boot({
+            NODE_ENV: 'production',
+            RAILWAY_ENVIRONMENT: 'production',
+            RAILWAY_SERVICE_NAME: 'web',
+        });
+
+        expect(named).toContain('environment  production');
+    });
+
+    it('and says so per line rather than inventing a name it was not given', () => {
+        const partial = boot({ NODE_ENV: 'production', RAILWAY_SERVICE_NAME: 'web' });
+
+        expect(partial).toContain('service      web');
+        expect(partial).toContain('project      (not reported)');
+    });
+
+    it('and prints no address block at all off Railway', () => {
+        // A bare "(not reported)" table on a platform that does not stamp these
+        // would be three lines of noise on every failing local boot.
+        expect(output).not.toContain('THIS CONTAINER IS RUNNING AS:');
     });
 
     it('AND NEVER PRINTS A VALUE — an env dump into a log cannot be recalled', () => {

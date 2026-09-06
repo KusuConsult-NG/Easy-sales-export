@@ -185,10 +185,50 @@ function whyNothingArrived(): string[] {
         platformMarkers.length > 0
             ? `variables here — ${platformMarkers.length} RAILWAY_* marker(s) arrived — so injection works`
             : 'the container up, so injection is expected to work',
-        'and this service has no variables of its own. Check that you are',
-        'looking at the SAME service and environment that produced this log, and',
-        'that shared/project variables are linked into it rather than only',
-        'defined alongside it.',
+        'and this service has no variables of its own.',
+        '',
+        ...whereThisIs(),
+        'Open EXACTLY that service and environment and set the variables there.',
+        'Shared or project-level variables must be LINKED into a service; defining',
+        'them alongside one does not put them in it.',
+        '',
+    ];
+}
+
+/**
+ * Name the service and environment this container is actually running as.
+ *
+ *   #462 "CHECK YOU ARE LOOKING AT THE SAME SERVICE" IS ADVICE NOBODY CAN ACT
+ *   ON, AND THE CONTAINER KNEW THE ANSWER THE WHOLE TIME.
+ *
+ *   #461 proved the fault was an empty service rather than a forgotten key, and
+ *   then asked the operator to go and confirm which service they were editing —
+ *   the one thing a dashboard with several services and environments makes hard.
+ *   Meanwhile Railway had stamped the answer into the container: among those 23
+ *   markers are RAILWAY_PROJECT_NAME, RAILWAY_ENVIRONMENT_NAME and
+ *   RAILWAY_SERVICE_NAME.
+ *
+ *   Printing them turns "check that you are looking at the same one" into an
+ *   address. A diagnosis that names the fault but not the place is where an
+ *   operator gives up, and this one had already cost four deploys.
+ *
+ *   THESE ARE DISPLAY NAMES, NOT CREDENTIALS — the same words shown in the
+ *   dashboard's own breadcrumb. Nothing else from the environment is printed,
+ *   and the ids are deliberately left out: a name is what the operator can
+ *   match by eye, and a UUID is only noise.
+ */
+function whereThisIs(): string[] {
+    const project = process.env.RAILWAY_PROJECT_NAME;
+    const environment = process.env.RAILWAY_ENVIRONMENT_NAME ?? process.env.RAILWAY_ENVIRONMENT;
+    const service = process.env.RAILWAY_SERVICE_NAME;
+
+    if (!project && !environment && !service) return [];
+
+    return [
+        'THIS CONTAINER IS RUNNING AS:',
+        `  project      ${project ?? '(not reported)'}`,
+        `  environment  ${environment ?? '(not reported)'}`,
+        `  service      ${service ?? '(not reported)'}`,
         '',
     ];
 }
