@@ -36,6 +36,11 @@ module.exports = createJestConfig({
     // NOT jest.setup.js. That file mocks @/lib/supabase-db globally, which is
     // exactly what these tests must not have — they talk to a database.
     setupFilesAfterEach: undefined,
+    // The local stack writes its URL and keys to .env.development.local, which
+    // Next does NOT load under NODE_ENV=test. Without this, a suite that goes
+    // through PostgREST comes up pointed at PLACEHOLDER_SUPABASE_URL and fails
+    // with a message that looks like a broken query. See the file's header.
+    setupFiles: ['<rootDir>/scripts/local-stack/jest-env.js'],
     moduleNameMapper: {
         '^@/(.*)$': '<rootDir>/src/$1',
     },

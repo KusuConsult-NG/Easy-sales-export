@@ -1414,6 +1414,72 @@ export class SupabaseDocumentReference {
 
 // ─── Query ────────────────────────────────────────────────────────────────────
 
+/** What `aggregate()` should ask PostgREST for, and where to read each field. */
+export interface AggregatePlan {
+    /** The PostgREST `select=` value. */
+    projection: string;
+    /** field -> native column, when the projection asked for that column. */
+    columnFor: Record<string, string | null>;
+}
+
+/**
+ * Decide the narrowest projection that can still answer an aggregate.
+ *
+ *   #455 aggregate() ISSUED `select('raw_data')` AND PAGED EVERY MATCHING
+ *        DOCUMENT, IN FULL, INTO JAVASCRIPT TO ADD UP ONE NUMBER.
+ *
+ *   The admin financial overview sums processed_payments where
+ *   status == completed, so drawing one tile transferred every completed
+ *   payment on the platform, entire. It is one of nine aggregate call sites and
+ *   the cost grows with the platform forever.
+ *
+ *   `amount` is a NATIVE COLUMN on processed_payments, transactions and
+ *   cooperative_loans (see NATIVE_COLUMNS), so the database can hand back one
+ *   number per row instead of a document. Measured on 1,500 rows carrying a 2 KB
+ *   document each: 81/65/61ms before, 33/12/11ms after, same total.
+ *
+ *   THREE CASES, AND EACH NEEDS A DIFFERENT ANSWER
+ *
+ *     every summed field has a native column   select those columns
+ *     any field lives only in the document     select raw_data — selecting a
+ *                                              column that does not exist fails
+ *                                              the query rather than falling back
+ *     nothing is summed at all (a count)       select `id`; counting rows needs
+ *                                              no field, and pulling documents to
+ *                                              count them is the same defect
+ *
+ *   This is a FUNCTION rather than an expression inside aggregate() because the
+ *   choice is not observable from outside — the caller sees the same total
+ *   either way. Testing it directly is what makes the count case, and the
+ *   document fallback, provable instead of asserted against a source string.
+ */
+export function aggregateProjection(tableName: string, fields: string[]): AggregatePlan {
+    const nativeFor = (field: string): string | null => {
+        // document_collections is the untyped catch-all: everything lives in the
+        // document, so there is never a column to narrow to.
+        if (!field || tableName === 'document_collections') return null;
+        const column = FIELD_TO_COLUMN[tableName]?.[field];
+        return column && NATIVE_COLUMNS[tableName]?.includes(column) ? column : null;
+    };
+
+    // Nothing to sum — a count. One column per row is all it takes to count
+    // them, and every table has `id`.
+    if (fields.length === 0) return { projection: 'id', columnFor: {} };
+
+    const columns = fields.map(nativeFor);
+
+    // All or nothing: PostgREST fails a select naming a column that does not
+    // exist, so one document-only field takes the whole aggregate to raw_data.
+    if (!columns.every(Boolean)) {
+        return { projection: 'raw_data', columnFor: Object.fromEntries(fields.map((f) => [f, null])) };
+    }
+
+    return {
+        projection: [...new Set(columns as string[])].join(','),
+        columnFor: Object.fromEntries(fields.map((f, i) => [f, columns[i]])),
+    };
+}
+
 export class SupabaseQuery {
     protected readonly _collection: string;
     protected _filters: WhereFilter[] = [];
@@ -1605,7 +1671,13 @@ export class SupabaseQuery {
         return {
             get: async (): Promise<{ data(): Record<string, number> }> => {
                 const tableName = getTableName(this._collection);
-                let query = supabaseAdmin.from(tableName).select('raw_data');
+
+                const fields = Object.values(spec)
+                    .map((v) => (v as any)?._field)
+                    .filter((f): f is string => typeof f === 'string');
+
+                const plan = aggregateProjection(tableName, fields);
+                let query = supabaseAdmin.from(tableName).select(plan.projection);
 
                 if (tableName === 'document_collections') {
                     query = query.eq('collection_name', this._collection);
@@ -1636,11 +1708,18 @@ export class SupabaseQuery {
                         continue;
                     }
 
+                    const column = plan.columnFor[field];
                     let sum = 0;
                     let counted = 0;
                     for (const row of rows) {
-                        const raw = row.raw_data || {};
-                        const n = Number(raw[field]);
+                        // From the column when the projection asked for it,
+                        // from the document otherwise. ONE plan decides both, so
+                        // the read cannot disagree with the select — which is
+                        // exactly the inconsistency that made my first A/B
+                        // measurement report a total of zero.
+                        const n = Number(
+                            column ? row[column] : (row.raw_data || {})[field],
+                        );
                         if (Number.isFinite(n)) {
                             sum += n;
                             counted++;

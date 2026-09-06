@@ -195,6 +195,11 @@ jest.mock('@/lib/supabase-db', () => {
         NATIVE_COLUMNS: jest.requireActual('@/lib/supabase-db').NATIVE_COLUMNS,
         FIELD_TO_COLUMN: jest.requireActual('@/lib/supabase-db').FIELD_TO_COLUMN,
 
+        // #455. A pure decision over those same maps — which columns an
+        // aggregate needs to select. From the real module for the same reason:
+        // a copy here would be a second answer to a question with one.
+        aggregateProjection: jest.requireActual('@/lib/supabase-db').aggregateProjection,
+
         ...helpers,
     };
 });
