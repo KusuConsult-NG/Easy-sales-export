@@ -273,6 +273,40 @@ export function logEnvValidation() {
         );
     }
 
+    /**
+     *   #450 A PRODUCTION BOOT MISSING A FATAL VARIABLE STOPS HERE.
+     *
+     *        This function printed the failure and returned, and the caller
+     *        carried on booting. The result, observed on Railway: a container
+     *        that reported "✓ Ready", accepted traffic, and died in the
+     *        middleware on every single request with MissingSecret.
+     *
+     *        Exiting is the kinder failure. Railway keeps the previous
+     *        container when a new one exits, so a misconfigured deploy leaves
+     *        the working site up instead of replacing it. Booting broken
+     *        converts a configuration mistake into an outage.
+     *
+     *        Production only. In development a missing key should stop the one
+     *        thing that needs it, not the server you are debugging with.
+     */
+    const fatalMissing = FATAL_ENV_VARS.filter((key) => !process.env[key]);
+    if (fatalMissing.length > 0 && process.env.NODE_ENV === 'production') {
+        console.error(
+            [
+                '',
+                '🛑 REFUSING TO START.',
+                '',
+                'These variables are not set, and without them this container',
+                'cannot answer a single request:',
+                ...fatalMissing.map((k) => `  - ${k}`),
+                '',
+                'Set them on the deployment platform and redeploy. The previous',
+                'container keeps serving until this one starts cleanly.',
+                '',
+            ].join('\n'),
+        );
+    }
+
     // Printed EVERYWHERE, production included. These only ever populate in
     // production — that is the condition the weak-secret check runs under — so
     // suppressing them outside development guaranteed nobody would ever read
