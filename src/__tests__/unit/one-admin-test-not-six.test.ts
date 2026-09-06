@@ -75,6 +75,7 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join, relative } from 'path';
 import { stripComments } from '@/lib/testing/strip-comments';
+import { isAdmin, isSuperAdmin, adminLandingPath } from '@/lib/admin-permissions';
 
 const source = (rel: string) => stripComments(readFileSync(rel, 'utf-8'));
 
@@ -249,13 +250,22 @@ describe('#356 — the other four copies', () => {
             .toContain('const isAdmin = isAdminRoles(verifiedRoles);');
     });
 
-    it('THE POST-LOGIN REDIRECT USES isAdmin — AND KEEPS THE LEGACY SPELLINGS', () => {
+    it('THE POST-LOGIN REDIRECT USES isAdmin — AND STILL ADMITS THE LEGACY SPELLINGS', () => {
         const code = source('src/app/actions/auth.ts');
 
         expect(code).toContain('const hasAdminRole = isAdmin(');
-        // Not narrowed away: 'superadmin' is honoured elsewhere in this repo.
-        expect(code).toContain("r === 'superadmin'");
-        expect(code).toContain("r.includes('admin_dashboard')");
+
+        //   #458 'superadmin' USED TO BE SPELLED OUT ON THIS LINE and is not
+        //        any more — isAdmin resolves it. The spelling must still be
+        //        ADMITTED, which is what actually matters and is asserted
+        //        behaviourally; asserting the literal is what would force the
+        //        duplication back.
+        expect(isAdmin(['superadmin'])).toBe(true);
+
+        // 'admin_dashboard' is a different legacy shape, matched as a
+        // substring, and no canonical role contains it — so it stays written
+        // out here, and stays pinned.
+        expect(code).toContain("includes('admin_dashboard')");
     });
 
     it("and 'superadmin' really is still honoured elsewhere, so keeping it is not cargo", () => {
@@ -279,8 +289,32 @@ describe('#356 — the other four copies', () => {
          *   without it — but the count is recorded honestly, because when that
          *   last site goes the branch should go with it rather than being kept
          *   by a comment nobody rechecks.
+         *
+         *   #458 THAT LAST SITE HAS GONE, AND THE BRANCH WENT WITH IT — which
+         *   is what the paragraph above said should happen.
+         *
+         *   The reason it had to go is worse than redundancy. auth.ts was the
+         *   ONLY file that knew the spelling: isAdmin did not, PERMISSION_MATRIX
+         *   had no entry, and app/admin/page.tsx computed `isGlobalAdmin` by
+         *   hand. So login sent the holder to /admin and /admin sent them to
+         *   /dashboard. Honouring a legacy spelling in the one place that only
+         *   decides where to send somebody, and nowhere that decides whether
+         *   they may arrive, is worse than not honouring it at all.
+         *
+         *   lib/role-aliases resolves it now, before any predicate judges. This
+         *   assertion is BEHAVIOURAL rather than a string, because a string
+         *   pinned to auth.ts is what would have made #458 unfixable without
+         *   first deleting a test.
          */
-        expect(source('src/app/actions/auth.ts')).toContain("roleStrings.includes('superadmin')");
+        expect(isAdmin(['superadmin'])).toBe(true);
+        expect(isSuperAdmin(['superadmin'])).toBe(true);
+        expect(adminLandingPath(['superadmin'])).toBe('/admin');
+
+        // POSITIVE CONTROL: not everything resolves — a near miss still fails.
+        expect(isAdmin(['superadmim'])).toBe(false);
+
+        // And auth.ts states it nowhere by hand any more.
+        expect(source('src/app/actions/auth.ts')).not.toContain("'superadmin'");
 
         // And it is NOT honoured in the retired document viewer any more.
         expect(source('src/app/api/admin/documents/[docId]/route.ts')).not.toContain('superadmin');
@@ -373,7 +407,11 @@ describe('#356 — THE RATCHET: one admin test, not six', () => {
         const code = source('src/lib/admin-permissions.ts');
         const line = code.split('\n').find((l) => l.includes(".endsWith(\"_admin\")"))!;
 
-        expect(line).toContain('userRoles.find(');
-        expect(line).not.toMatch(/if\s*\(|return\s+userRoles\.some/);
+        //   #458 THIS PINNED THE VARIABLE NAME, `userRoles.find(`, and broke
+        //        when the function started resolving legacy spellings first
+        //        and read `held` instead. The name was never the point — that
+        //        the line is a LOOKUP and not a gate was. Asserted as that.
+        expect(line).toMatch(/const\s+\w+\s*=\s*\w+\.find\(/);
+        expect(line).not.toMatch(/if\s*\(|return\s+\w+\.some/);
     });
 });

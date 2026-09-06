@@ -10,6 +10,8 @@
  * SECURITY: Use these helpers for all admin operations
  */
 
+import { canonicalRoles } from "./role-aliases";
+
 export type AdminRole = "super_admin" | "admin" | "moderator" | "support" | "wave_admin" | "cooperative_admin" | "marketplace_admin" | "export_admin" | "farm_nation_admin" | "academy_admin";
 
 export type AdminPermission =
@@ -229,8 +231,10 @@ export function hasAdminPermission(
 ): boolean {
     if (!userRoles || userRoles.length === 0) return false;
 
-    // Check each admin role the user has
-    for (const role of userRoles) {
+    // Check each admin role the user has. #458: a legacy spelling resolves to
+    // its canonical role first, or it matches no PERMISSION_MATRIX key and
+    // silently holds no permission at all.
+    for (const role of canonicalRoles(userRoles)) {
         if (isAdminRole(role)) {
             const permissions = PERMISSION_MATRIX[role as AdminRole];
             if (permissions.includes(permission)) {
@@ -247,7 +251,7 @@ export function hasAdminPermission(
  */
 export function isAdmin(userRoles: string[] | undefined): boolean {
     if (!userRoles) return false;
-    return userRoles.some(role =>
+    return canonicalRoles(userRoles).some(role =>
         role === "super_admin" ||
         role === "admin" ||
         role === "moderator" ||
@@ -322,7 +326,7 @@ export function permissionForContentType(type: string): AdminPermission | null {
  * Check if user is super admin
  */
 export function isSuperAdmin(userRoles: string[] | undefined): boolean {
-    return userRoles?.includes("super_admin") ?? false;
+    return canonicalRoles(userRoles).includes("super_admin");
 }
 
 /**
@@ -364,7 +368,7 @@ export const PLATFORM_ADMIN_ROLES: readonly AdminRole[] = (
  */
 export function isPlatformAdmin(userRoles: string[] | undefined): boolean {
     if (!userRoles) return false;
-    return userRoles.some((role) => (PLATFORM_ADMIN_ROLES as readonly string[]).includes(role));
+    return canonicalRoles(userRoles).some((role) => (PLATFORM_ADMIN_ROLES as readonly string[]).includes(role));
 }
 
 /**
@@ -446,6 +450,69 @@ export const MODULE_ADMIN_ROLE: Readonly<Record<string, AdminRole>> = {
 };
 
 /**
+ * Where an admin lands, and the order that decides it when they hold several
+ * module roles.
+ *
+ *   #458 THIS RULE WAS WRITTEN TWICE, WITH DIFFERENT ORDERS.
+ *
+ *        actions/auth.ts, deciding where LOGIN sends an admin:
+ *            academy, wave, marketplace, cooperative, export, farm nation
+ *
+ *        app/admin/page.tsx, deciding where /admin REDIRECTS an admin:
+ *            wave, cooperative, marketplace, export, farm nation, academy
+ *
+ *        Both take the first match, so somebody holding academy_admin AND
+ *        wave_admin has TWO homes: login puts them in Academy, and opening
+ *        /admin puts them in WAVE. The silo they are "locked to" depended on
+ *        which door they came through.
+ *
+ *        Login is the path almost everybody takes, so ITS order is the one kept
+ *        here — that changes the fewest landings of the two.
+ */
+export const MODULE_ADMIN_HOME: ReadonlyArray<readonly [AdminRole, string]> = [
+    ["academy_admin", "/admin/academy"],
+    ["wave_admin", "/admin/wave"],
+    ["marketplace_admin", "/admin/marketplace"],
+    ["cooperative_admin", "/admin/cooperatives"],
+    ["export_admin", "/admin/export"],
+    ["farm_nation_admin", "/admin/farm-nation"],
+];
+
+/**
+ * The admin section this user should land on, or null if they are not an admin.
+ *
+ * A GLOBAL ADMIN OUTRANKS A MODULE ROLE. Both implementations this replaces
+ * already agreed on that — each checked `!isGlobalAdmin` before considering a
+ * silo — although the comment in app/admin/page.tsx claimed the opposite:
+ *
+ *     "Strict Silo Isolation: If a user has a module admin role, they are
+ *      locked to that silo, EVEN IF they are also granted super_admin or admin
+ *      rights (as per user requirements)."
+ *
+ * That described behaviour the code did not have, in an access-control path,
+ * and it is corrected rather than implemented: locking a deliberately-granted
+ * super_admin out of the global dashboard because they also hold wave_admin is
+ * a worse answer than the one both files were actually giving.
+ *
+ * `moderator` and `support` are admins with no silo, so they land on /admin —
+ * which is what #356 fixed when it found both being sent to the member
+ * dashboard at every login.
+ */
+export function adminLandingPath(userRoles: string[] | undefined): string | null {
+    const held = canonicalRoles(userRoles);
+    if (!isAdmin(held)) return null;
+
+    const isGlobalAdmin = held.includes("super_admin") || held.includes("admin");
+    if (!isGlobalAdmin) {
+        for (const [role, path] of MODULE_ADMIN_HOME) {
+            if (held.includes(role)) return path;
+        }
+    }
+
+    return "/admin";
+}
+
+/**
  * Which roles hold a permission — the inverse of the matrix lookup.
  *
  * WHY THIS EXISTS
@@ -495,7 +562,7 @@ export function rolesWithPermission(permission: AdminPermission): AdminRole[] {
  */
 export function includesPrivilegedRole(roles: string[] | undefined): boolean {
     if (!roles) return false;
-    return roles.some((r) => PRIVILEGED_ROLES.includes(r));
+    return canonicalRoles(roles).some((r) => PRIVILEGED_ROLES.includes(r));
 }
 
 /**
@@ -503,14 +570,15 @@ export function includesPrivilegedRole(roles: string[] | undefined): boolean {
  */
 export function getHighestAdminRole(userRoles: string[] | undefined): AdminRole | null {
     if (!userRoles) return null;
+    const held = canonicalRoles(userRoles);
 
-    if (userRoles.includes("super_admin")) return "super_admin";
-    if (userRoles.includes("admin")) return "admin";
-    if (userRoles.includes("moderator")) return "moderator";
-    if (userRoles.includes("support")) return "support";
+    if (held.includes("super_admin")) return "super_admin";
+    if (held.includes("admin")) return "admin";
+    if (held.includes("moderator")) return "moderator";
+    if (held.includes("support")) return "support";
     
     // Module admins
-    const moduleAdmin = userRoles.find(r => r.endsWith("_admin") && r !== "super_admin");
+    const moduleAdmin = held.find(r => r.endsWith("_admin") && r !== "super_admin");
     if (moduleAdmin) return moduleAdmin as AdminRole;
 
     return null;

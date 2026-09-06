@@ -395,10 +395,14 @@ describe('#364 — RECORDED, NOT REPAIRED: the same shape outside src/app/api', 
         'src/app/actions/academy/_ac_live.ts',
         'src/app/actions/admin-users.ts',
         'src/app/actions/audit-log-actions.ts',
-        'src/app/actions/auth.ts',
+        // #458 removed 'src/app/actions/auth.ts' and 'src/app/admin/page.tsx'.
+        // Both hand-wrote `super_admin || admin` to decide where an admin
+        // lands, in DIFFERENT orders, and neither knew the legacy `superadmin`
+        // spelling that login itself honoured — so its holder was sent to the
+        // admin portal and bounced back to /dashboard. Both now ask
+        // adminLandingPath, which resolves the alias first.
         'src/app/actions/bulk-user-operations.ts',
         'src/app/admin/export/catalog/page.tsx',
-        'src/app/admin/page.tsx',
         'src/app/admin/settings/security/page.tsx',
         'src/app/escrow/[id]/chat/page.tsx',
         'src/app/marketplace/products/page.tsx',

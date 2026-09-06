@@ -6,6 +6,7 @@
  */
 
 import { UserRole, LEGACY_ROLE_MAP, type LegacyRole } from "./types/roles";
+import { canonicalRoles } from "./role-aliases";
 
 /**
  * App identifiers matching route paths
@@ -164,9 +165,15 @@ export function getUserAccessibleApps(userRoles: UserRole[]): AppIdentifier[] {
 function normaliseRoles(userRoles: UserRole[] | undefined | null): UserRole[] {
     if (!Array.isArray(userRoles)) return [];
 
-    return userRoles
-        .filter((role): role is UserRole => typeof role === 'string')
-        .map(role => (LEGACY_ROLE_MAP as Record<string, UserRole>)[role] ?? role);
+    //   #458 THIS TABLE IS NO LONGER PRIVATE TO THIS FILE. It resolved the
+    //        pre-migration names for app access and nothing else did for role
+    //        checks, so a `vendor` reached the seller app while
+    //        hasRole(roles, "seller") said no. canonicalRoles is the one
+    //        resolver now, over one table, and it also carries the legacy
+    //        `superadmin` spelling that only actions/auth.ts used to know.
+    return canonicalRoles(
+        userRoles.filter((role): role is UserRole => typeof role === 'string'),
+    );
 }
 
 /**

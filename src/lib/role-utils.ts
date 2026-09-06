@@ -6,26 +6,30 @@
 
 import type { UserRole } from "./types/roles";
 import { ROLE_HIERARCHY } from "./types/roles";
+import { canonicalRoles } from "./role-aliases";
 
 /**
  * Check if user has a specific role
  */
 export function hasRole(userRoles: UserRole[], requiredRole: UserRole): boolean {
-    return userRoles.includes(requiredRole);
+    // #458. A legacy spelling must mean the same thing here as it does at login.
+    return canonicalRoles(userRoles).includes(requiredRole);
 }
 
 /**
  * Check if user has ANY of the required roles
  */
 export function hasAnyRole(userRoles: UserRole[], requiredRoles: UserRole[]): boolean {
-    return requiredRoles.some(role => userRoles.includes(role));
+    const held = canonicalRoles(userRoles);
+    return requiredRoles.some(role => held.includes(role));
 }
 
 /**
  * Check if user has ALL of the required roles
  */
 export function hasAllRoles(userRoles: UserRole[], requiredRoles: UserRole[]): boolean {
-    return requiredRoles.every(role => userRoles.includes(role));
+    const held = canonicalRoles(userRoles);
+    return requiredRoles.every(role => held.includes(role));
 }
 
 /**
@@ -50,7 +54,7 @@ export function isSuperAdmin(userRoles: UserRole[]): boolean {
  */
 export function getHighestRoleLevel(userRoles: UserRole[]): number {
     if (userRoles.length === 0) return 0;
-    return Math.max(...userRoles.map(role => ROLE_HIERARCHY[role] || 0));
+    return Math.max(...canonicalRoles(userRoles).map(role => ROLE_HIERARCHY[role] || 0));
 }
 
 /**

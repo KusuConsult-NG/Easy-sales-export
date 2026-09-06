@@ -18,7 +18,7 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { rateLimit, getActionClientIp } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
-import { isAdmin } from '@/lib/admin-permissions';
+import { isAdmin, adminLandingPath } from '@/lib/admin-permissions';
 import { normalisePhone, phoneLookupVariants } from '@/lib/phone';
 import { splitFullName } from '@/lib/person-name';
 import { isSafeInternalPath } from '@/lib/safe-redirect';
@@ -150,16 +150,21 @@ export async function getPostLoginRedirect(email: string) { try {
             //        login — and `endsWith('_admin')` would have redirected any
             //        future role sharing that suffix into the admin area.
             //
-            //        isAdmin() is the fact. The two legacy spellings below are
-            //        KEPT rather than narrowed away: 'superadmin' without the
-            //        underscore is still honoured twenty lines down and in
-            //        api/admin/documents/[docId], so dropping it here would
-            //        strand whoever holds it.
+            //        isAdmin() is the fact.
+            //
+            //   #458 AND 'superadmin' IS NO LONGER SPELLED OUT HERE. This file
+            //        was the only one that knew the spelling, which is why its
+            //        holder was sent to /admin and bounced back to /dashboard
+            //        by a page that did not. lib/role-aliases resolves it to
+            //        super_admin before ANY predicate judges it — isAdmin
+            //        included — so the clause that used to sit here is now dead
+            //        code, and removing it leaves one statement of the rule
+            //        instead of two.
+            //
+            //        'admin_dashboard' stays: it is a different legacy shape,
+            //        matched as a SUBSTRING, and no canonical role contains it.
             const hasAdminRole = isAdmin(userRoles.map((role: string) => String(role).toLowerCase()))
-                || userRoles.some((role: string) => {
-                    const r = String(role).toLowerCase();
-                    return r === 'superadmin' || r.includes('admin_dashboard');
-                });
+                || userRoles.some((role: string) => String(role).toLowerCase().includes('admin_dashboard'));
 
             // ── SECURITY GUARD: LEGACY PASSWORD RESET ──────────────────────
             // If the user was onboarded by an admin (legacy flow), 
@@ -170,30 +175,25 @@ export async function getPostLoginRedirect(email: string) { try {
             }
 
             if (hasAdminRole) { // Determine specific admin landing page
-                let adminRedirect = '/admin';
-                
-                // If they are a global admin/super admin, they should land on the main /admin dashboard.
-                // Module admin roles take priority only for silo-isolated module admins.
-                // Compared as plain strings, like the hasAdminRole check above.
-                // `roles` is declared UserRole[], but it is read straight out of
-                // the database, so at runtime it holds whatever is stored there
-                // — including the legacy 'superadmin' spelling, which is not in
-                // the UserRole union. Treating the declared type as a guarantee
-                // here would mean dropping that comparison and quietly demoting
-                // anyone still carrying it.
-                const roleStrings: string[] = userRoles as unknown as string[];
-                const isGlobalAdmin = roleStrings.includes('super_admin')
-                    || roleStrings.includes('superadmin')
-                    || roleStrings.includes('admin');
-                
-                if (!isGlobalAdmin) {
-                    if (userRoles.includes('academy_admin')) adminRedirect = '/admin/academy';
-                    else if (userRoles.includes('wave_admin')) adminRedirect = '/admin/wave';
-                    else if (userRoles.includes('marketplace_admin')) adminRedirect = '/admin/marketplace';
-                    else if (userRoles.includes('cooperative_admin')) adminRedirect = '/admin/cooperatives';
-                    else if (userRoles.includes('export_admin')) adminRedirect = '/admin/export';
-                    else if (userRoles.includes('farm_nation_admin')) adminRedirect = '/admin/farm-nation';
-                }
+                /**
+                 *   #458 THIS ORDERING WAS ONE OF TWO, AND THE OTHER ONE
+                 *        DISAGREED WITH IT.
+                 *
+                 *        app/admin/page.tsx restated the same rule with the
+                 *        modules in a different order, so somebody holding
+                 *        academy_admin AND wave_admin landed in Academy from
+                 *        login and in WAVE from /admin.
+                 *
+                 *        The legacy 'superadmin' handling that used to live
+                 *        here is gone from this file, not lost: lib/role-aliases
+                 *        resolves it to super_admin before any predicate judges
+                 *        it, so it now means the same thing to the redirect, to
+                 *        requireAdmin and to the permission matrix — none of
+                 *        which had ever heard of it. Honouring it HERE alone is
+                 *        what sent its holder to an admin portal that bounced
+                 *        them straight back to /dashboard.
+                 */
+                const adminRedirect = adminLandingPath(userRoles as unknown as string[]) ?? '/admin';
 
                 logger.info(`[getPostLoginRedirect] User ${email} has admin privileges, redirecting to ${adminRedirect}`);
                 return { error: null, success: true as const, data: { redirectUrl: adminRedirect } };
