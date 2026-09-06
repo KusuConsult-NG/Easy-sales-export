@@ -29,6 +29,19 @@ const m = {
 };
 
 jest.mock('next-auth/react', () => ({ useSession: () => mockUseSession() }));
+/**
+ *   #453 THE PAGE NOW MAKES ONE CALL, NOT EIGHT.
+ *
+ *   getMyDashboard runs the same eight queries server-side behind a single
+ *   session check, which removes seven HTTP round trips and — with Redis unset,
+ *   as this platform is deployed — seven database reads of the same user row.
+ *
+ *   The eight mocks are KEPT and composed into it rather than replaced by a
+ *   fixed object. Each test still decides what one query returns, and this
+ *   suite still fails if the page stops showing what a query gave it. A single
+ *   `getMyDashboard: () => FIXTURE` would have passed no matter what the page
+ *   did with the parts.
+ */
 jest.mock('@/app/actions/my-data', () => ({
     getMyServiceRegistrations: (...a: any[]) => m.getMyServiceRegistrations(...a),
     getMyUnreadNotificationCount: (...a: any[]) => m.getMyUnreadNotificationCount(...a),
@@ -38,6 +51,30 @@ jest.mock('@/app/actions/my-data', () => ({
     getMyActiveOrderCount: (...a: any[]) => m.getMyActiveOrderCount(...a),
     getUpcomingEvents: (...a: any[]) => m.getUpcomingEvents(...a),
     getRecentResources: (...a: any[]) => m.getRecentResources(...a),
+    getMyDashboard: async () => {
+        const settled = await Promise.allSettled([
+            m.getMyServiceRegistrations(),
+            m.getMyUnreadNotificationCount(),
+            m.getMyUnreadMessageCount(),
+            m.getMyNotifications(4),
+            m.getMyWalletBalance(),
+            m.getMyActiveOrderCount(),
+            m.getUpcomingEvents(3),
+            m.getRecentResources(3),
+        ]);
+        const at = (i: number, fallback: any) =>
+            settled[i].status === 'fulfilled' ? (settled[i] as any).value : fallback;
+        return {
+            serviceRegistrations: at(0, {}),
+            unreadNotifications: at(1, 0),
+            unreadMessages: at(2, 0),
+            recentNotifications: at(3, []),
+            walletBalance: at(4, 0),
+            activeOrders: at(5, 0),
+            upcomingEvents: at(6, []),
+            recentResources: at(7, []),
+        };
+    },
 }));
 jest.mock('@/components/AnnouncementBanner', () => ({
     __esModule: true,

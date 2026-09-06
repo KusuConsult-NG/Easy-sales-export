@@ -12,6 +12,7 @@ import { isPaymentBypassAccount } from "@/lib/payment-bypass";
 import { adminAuth } from "@/lib/firebase-admin";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { namePartsOf, joinFullName } from "@/lib/person-name";
 import { z } from "zod";
 import { strictEmailSchema, strictPhoneSchema } from "@/lib/schemas";
 import { withSafeAction } from "@/lib/safe-action";
@@ -52,13 +53,23 @@ export const getUserProfileAction = withSafeAction("getUserProfileAction", async
 
     const userData = userDoc.data()!;
 
-    const splitName = (fullName: string) => { const parts = fullName.trim().split(/\s+/).filter(Boolean);
-        return {
-            first: parts[0] || "",
-            last: parts.length > 1 ? parts.slice(1).join(" ") : "" };
-    };
-
-    const nameSplit = splitName(userData.fullName || "");
+    /**
+     *   #452 THIS SPLIT `fullName` INTO TWO PARTS AND OVERWROTE THE THREE THE
+     *        ROW ACTUALLY STORED, WHICH DUPLICATED MIDDLE NAMES ON SAVE.
+     *
+     *        It was `first = parts[0]`, `last = parts.slice(1).join(" ")`,
+     *        applied unconditionally. Registration stores first / other / last
+     *        correctly, so for "Ada Ngozi Obi" the screen showed
+     *        last = "Ngozi Obi" while otherName was still "Ngozi". The form
+     *        sent both back untouched and the writer joined them into
+     *        "Ada Ngozi Ngozi Obi" — growing by one copy every save, with
+     *        nothing edited.
+     *
+     *        namePartsOf prefers what is STORED and derives only for rows
+     *        written before the parts were kept separately. One rule, in
+     *        lib/person-name.ts, shared with registration and the writer.
+     */
+    const nameSplit = namePartsOf(userData);
 
     const profile = serializeDoc<any>(userId, userData);
 
@@ -69,6 +80,7 @@ export const getUserProfileAction = withSafeAction("getUserProfileAction", async
             profile: {
                 ...profile,
                 firstName: nameSplit.first,
+                otherName: nameSplit.other,
                 lastName: nameSplit.last,
                 version: userData._version || 0
             }
@@ -213,10 +225,17 @@ export const updateUserProfileAction = withSafeAction("updateUserProfileAction",
             updatePayload.gender = requestedGender;
         }
 
-        if (validated.firstName || validated.lastName || validated.otherName) { const first = validated.firstName ?? existing.firstName ?? existing.fullName?.split(' ')[0] ?? "";
-            const last = validated.lastName ?? existing.lastName ?? existing.fullName?.split(' ').slice(1).join(' ') ?? "";
-            const other = validated.otherName ?? existing.otherName ?? "";
-            updatePayload.fullName = [first, other, last].filter(Boolean).join(' ').trim();
+        if (validated.firstName || validated.lastName || validated.otherName) {
+            // #452. The fallback here restated the two-part split a THIRD time.
+            // namePartsOf gives the row's own parts under the one rule; the
+            // submitted fields override them; joinFullName is split's exact
+            // inverse, so the round trip cannot grow a name.
+            const stored = namePartsOf(existing);
+            updatePayload.fullName = joinFullName({
+                first: validated.firstName ?? stored.first,
+                other: validated.otherName ?? stored.other,
+                last: validated.lastName ?? stored.last,
+            });
         }
 
         await versionedUpdate(transaction, userRef, validated.version, updatePayload);
