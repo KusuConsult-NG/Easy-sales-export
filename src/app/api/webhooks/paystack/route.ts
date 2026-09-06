@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyPaystackWebhook } from "@/lib/paystack-server";
 import { supabaseDb as db } from "@/lib/supabase-db";
+import { resolveActiveUserId } from "@/lib/user-identity";
 import { FieldValue } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
@@ -54,15 +55,10 @@ export async function POST(req: NextRequest) {
 
             // Resolve legacy Firebase UID to active Supabase ID if migrated
             if (rawUserId) {
-                const userDoc = await db.collection(COLLECTIONS.USERS).doc(rawUserId).get();
-                if (userDoc.exists) {
-                    const userData = userDoc.data();
-                    if (userData?._migratedTo) {
-                        userId = userData._migratedTo;
-                    } else if (userData?.supabaseAuthId) {
-                        userId = userData.supabaseAuthId;
-                    }
-                }
+                // #449. Followed ONE hop while getUserProfile followed the
+                // whole chain, so on a twice-migrated member the session said
+                // one account and this credited another. Same walk now.
+                userId = (await resolveActiveUserId(rawUserId, db.collection(COLLECTIONS.USERS))).id;
             }
 
             // COMPATIBILITY: Old cooperative portal used `purpose` instead of `type`.

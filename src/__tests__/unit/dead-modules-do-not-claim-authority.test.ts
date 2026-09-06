@@ -389,7 +389,8 @@ describe('#355 — the ratchet: unreachable, or canonical, but not both silently
         // Named rather than left to the next sweep. None of these claims
         // authority; each is dead code that would work if wired up.
         for (const f of [
-            'src/lib/auth-redirect.ts',
+            // auth-redirect.ts was on this list and is DELETED — #445, owner
+            // decision. Its absence is pinned in dead-module-authority.test.ts.
             'src/lib/external-domains.ts',
             'src/lib/paystack-fulfillment.ts',
             'src/lib/validations/escrow.ts',

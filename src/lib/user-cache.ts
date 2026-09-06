@@ -2,6 +2,7 @@ import { getCached, setCache, deleteCache, CacheKeys, CACHE_TTL } from './redis'
 import { runQueryWithRetry } from './firestore-utils';
 import { getAdminDb } from './firebase-admin';
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { resolveActiveUser } from "./user-identity";
 
 export interface CachedUserProfile {
     id: string;
@@ -106,19 +107,51 @@ export async function getUserProfile(userId: string): Promise<CachedUserProfile 
             userData = dbRow.raw_data || {};
         }
 
-        // Self-healing migration resolver:
-        // If the database profile points to a migrated target, fetch and cache the migrated target instead!
-        if (userData && userData._migratedTo && userData._migratedTo !== userId) {
-            const migratedId = userData._migratedTo;
-            console.log(`[getUserProfile] Intercepted legacy user ${userId} migrated to ${migratedId}. Fetching migrated profile.`);
-            return getUserProfile(migratedId);
+        /**
+         *   #449 THIS RECURSED WITH NO CYCLE GUARD AND NO LIMIT, AND A BROKEN
+         *        POINTER RESOLVED TO NOTHING.
+         *
+         *        `return getUserProfile(migratedId)` — so two rows pointing at
+         *        each other spun forever. Not a stack overflow: every hop
+         *        awaits, so it yields and simply never returns. The probe that
+         *        found it had to be killed rather than failing. In production
+         *        that is a login request that never answers.
+         *
+         *        And a pointer naming a row that is not there returned null,
+         *        which lib/auth.ts turns into "User profile not found in
+         *        database". The user's profile is the one they started from;
+         *        they were told they do not exist because a POINTER broke.
+         *
+         *        The walk is bounded and shared now — see lib/user-identity.ts.
+         *        It keeps the last row that EXISTED, so a broken chain degrades
+         *        to the newest good profile instead of to no profile.
+         */
+        const resolved = await resolveActiveUser(userId, async (id) => {
+            if (id === userId) return userData;
+            const doc = await runQueryWithRetry<any>(
+                () => getAdminDb().collection(COLLECTIONS.USERS).doc(id).get());
+            return doc.exists ? doc.data() : null;
+        });
+
+        if (resolved.healed) {
+            console.warn(
+                `[getUserProfile] migration chain from ${userId} stopped at ${resolved.id} ` +
+                `after ${resolved.hops} hop(s): ${resolved.stoppedBecause}. ` +
+                `Serving the last profile that exists.`,
+            );
         }
+
+        if (resolved.id !== userId) {
+            console.log(`[getUserProfile] legacy user ${userId} resolves to ${resolved.id}.`);
+        }
+        userData = resolved.row ?? userData;
+        const activeId = resolved.id;
 
         // NOTE: registerAction writes 'fullName' to Firestore, not 'displayName'.
         // We read both to handle legacy documents that may have used 'displayName'.
         const resolvedName = userData.fullName || userData.displayName || '';
         const profile: CachedUserProfile = {
-            id: userId,
+            id: activeId,
             email: dbRow?.email || userData.email,
             displayName: resolvedName,
             photoURL: userData.photoURL,

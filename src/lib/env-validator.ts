@@ -8,6 +8,11 @@ interface EnvValidationResult {
     missing: string[];
     warnings: string[];
     /**
+     * Set on the value logEnvValidation returns: the FATAL_ENV_VARS that are
+     * absent. Empty means the container can at least answer requests.
+     */
+    fatalMissing?: string[];
+    /**
      * Findings that must be seen in production, kept apart from `warnings`.
      *
      * The weak-secret check below runs ONLY when NODE_ENV === 'production', and
@@ -27,13 +32,43 @@ interface EnvValidationResult {
 // startup print "❌ Environment validation failed!" on every correctly
 // configured deploy, which buried the entries that genuinely matter — most
 // importantly SUPABASE_SERVICE_ROLE_KEY.
+/**
+ *   #450 THE VARIABLES WITHOUT WHICH THE PLATFORM CANNOT SERVE A SINGLE
+ *        REQUEST. A production boot missing one of these EXITS.
+ *
+ *        From a real Railway container log, deployed with no configuration at
+ *        all:
+ *
+ *            ❌ Environment validation failed!
+ *            Missing required variables: [ ...fifteen names... ]
+ *            ✓ Ready in 0ms
+ *            [auth][error] MissingSecret: Please define a `secret`.
+ *                at /app/.next/server/src/middleware.js
+ *
+ *        It printed the failure and SERVED ANYWAY. Every request then died in
+ *        the middleware on MissingSecret — so the platform accepted traffic it
+ *        could not answer, and the deploy counted as a success. Railway keeps
+ *        the previous container when a new one exits; booting instead replaced
+ *        a working site with a broken one.
+ *
+ *        These four are the ones that were PROVEN fatal by that log, not a
+ *        guess: no NEXTAUTH_SECRET and the middleware rejects everything; no
+ *        Supabase URL/keys and there is no data layer to answer with. A missing
+ *        RESEND_API_KEY breaks email, which is a broken feature on a working
+ *        platform — that stays a loud error, not an exit.
+ */
+const FATAL_ENV_VARS = [
+    'NEXTAUTH_SECRET',
+    'NEXT_PUBLIC_SUPABASE_URL',
+    'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+    'SUPABASE_SERVICE_ROLE_KEY',
+] as const;
+
 const REQUIRED_ENV_VARS = [
     'NEXTAUTH_URL',
     'NEXTAUTH_SECRET',
     'NEXT_PUBLIC_SUPABASE_URL',
     'NEXT_PUBLIC_SUPABASE_ANON_KEY',
-    'QOREID_CLIENT_ID',
-    'QOREID_SECRET_KEY',
 ] as const;
 
 const PRODUCTION_REQUIRED_ENV_VARS = [
@@ -51,6 +86,26 @@ const PRODUCTION_REQUIRED_ENV_VARS = [
 ] as const;
 
 const RECOMMENDED_ENV_VARS = [
+    /**
+     *   #450 QOREID_CLIENT_ID and QOREID_SECRET_KEY WERE REQUIRED, AND THAT
+     *        REPEATED THE MISTAKE THE NOTE ABOVE RECORDS.
+     *
+     *        The comment on REQUIRED_ENV_VARS explains that six FIREBASE_*
+     *        names were removed because requiring variables nothing reads made
+     *        startup print "❌ Environment validation failed!" on every
+     *        correctly configured deploy, "which buried the entries that
+     *        genuinely matter". QoreID had taken over that job: the module is
+     *        parked by owner decision, so the keys are unset, so EVERY deploy
+     *        printed the failure banner — and a container with NOTHING
+     *        configured looked exactly like a healthy one.
+     *
+     *        lib/qoreid.ts reads them at call time and throws a message naming
+     *        them, so an unset key breaks identity verification at the moment
+     *        it is used and nothing else. That is a per-request failure with a
+     *        clear cause, which is what it should be.
+     */
+    'QOREID_CLIENT_ID',
+    'QOREID_SECRET_KEY',
     'EMAIL_FROM',
     'OPENAI_API_KEY',
     // Read at 32 sites. Recommended rather than required, deliberately: every
@@ -127,6 +182,40 @@ export function logEnvValidation() {
         console.error('Missing required variables:', result.missing);
     }
 
+    /**
+     *   #450 A PRODUCTION BOOT MISSING A FATAL VARIABLE STOPS HERE.
+     *
+     *        This function printed the failure and returned, and the caller
+     *        carried on booting. The result, observed on Railway: a container
+     *        that reported "✓ Ready", accepted traffic, and died in the
+     *        middleware on every single request with MissingSecret.
+     *
+     *        Exiting is the kinder failure. Railway keeps the previous
+     *        container when a new one exits, so a misconfigured deploy leaves
+     *        the working site up instead of replacing it. Booting broken
+     *        converts a configuration mistake into an outage.
+     *
+     *        Production only. In development a missing key should stop the one
+     *        thing that needs it, not the server you are debugging with.
+     */
+    const fatalMissing = FATAL_ENV_VARS.filter((key) => !process.env[key]);
+    if (fatalMissing.length > 0 && process.env.NODE_ENV === 'production') {
+        console.error(
+            [
+                '',
+                '🛑 REFUSING TO START.',
+                '',
+                'These variables are not set, and without them this container',
+                'cannot answer a single request:',
+                ...fatalMissing.map((k) => `  - ${k}`),
+                '',
+                'Set them on the deployment platform and redeploy. The previous',
+                'container keeps serving until this one starts cleanly.',
+                '',
+            ].join('\n'),
+        );
+    }
+
     // Printed EVERYWHERE, production included. These only ever populate in
     // production — that is the condition the weak-secret check runs under — so
     // suppressing them outside development guaranteed nobody would ever read
@@ -146,5 +235,13 @@ export function logEnvValidation() {
         }
     }
 
-    return result;
+    // #450. REPORTED HERE, ACTED ON AT THE BOOT.
+    //
+    // My first version called process.exit(1) right here, and a suite that
+    // calls this function for an unrelated reason had its jest worker killed
+    // mid-run. A library function that terminates the process is hostile to
+    // every caller that is not a boot sequence — and it is instrumentation.ts
+    // that owns the decision to start or not. The finding is reported; the
+    // refusal happens where refusing means something.
+    return { ...result, fatalMissing };
 }

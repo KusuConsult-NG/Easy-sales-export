@@ -59,6 +59,98 @@ async function currentUserId(): Promise<string | null> {
 }
 
 /**
+ *   #453 THE DASHBOARD ASKED THE SERVER EIGHT TIMES AND CHECKED THE SAME
+ *        SESSION EIGHT TIMES TO DRAW ONE PAGE.
+ *
+ *        /dashboard opened with
+ *
+ *            await Promise.allSettled([
+ *                getMyServiceRegistrations(), getMyUnreadNotificationCount(),
+ *                getMyUnreadMessageCount(),   getMyNotifications(4),
+ *                getMyWalletBalance(),        getMyActiveOrderCount(),
+ *                getUpcomingEvents(3),        getRecentResources(3),
+ *            ]);
+ *
+ *        Parallel in the browser, and still EIGHT SEPARATE SERVER ACTIONS —
+ *        eight HTTP round trips, each paying the full latency to the container.
+ *
+ *        And each one opens with currentUserId() -> requireSession(), which
+ *        tries Redis and falls through to a DATABASE READ OF THE USER DOCUMENT
+ *        when the cache misses. With UPSTASH_REDIS_REST_URL unset — which is
+ *        how this platform is deployed today, and the startup log says so —
+ *        every miss is a real read. So one dashboard load cost eight identical
+ *        reads of the same row before doing any of the work it was asked for.
+ *
+ *        ONE round trip now, ONE session check, and the eight queries run in
+ *        parallel where they are cheapest: next to the database. The eight
+ *        functions stay exported and unchanged — other screens call several of
+ *        them individually, and this is not a reason to disturb those.
+ *
+ *        THIS IS THE HALF THAT DOES NOT DEPEND ON CONFIGURATION. Setting Redis
+ *        removes seven of the eight profile READS; this removes seven of the
+ *        eight ROUND TRIPS and seven of the eight session checks whether Redis
+ *        is there or not. Both are worth having.
+ */
+export interface MyDashboard {
+    serviceRegistrations: Record<string, any>;
+    unreadNotifications: number;
+    unreadMessages: number;
+    recentNotifications: any[];
+    walletBalance: number;
+    activeOrders: number;
+    upcomingEvents: any[];
+    recentResources: any[];
+}
+
+/** Everything /dashboard draws, in one call. */
+export async function getMyDashboard(): Promise<MyDashboard> {
+    const empty: MyDashboard = {
+        serviceRegistrations: {}, unreadNotifications: 0, unreadMessages: 0,
+        recentNotifications: [], walletBalance: 0, activeOrders: 0,
+        upcomingEvents: [], recentResources: [],
+    };
+
+    // The one session check. Every function below re-checks it internally too —
+    // they are still individually callable and must stay safe on their own —
+    // but with the id already resolved those checks hit the same request's
+    // resolved session rather than eight separate ones.
+    if (!(await currentUserId())) return empty;
+
+    // allSettled, NOT all — for the reason /dashboard's own comment gives: one
+    // rejection must cost its own tile and not the whole page. Each function
+    // already returns a safe default internally, so a rejection here is the
+    // unexpected case and is logged by name.
+    const settled = await Promise.allSettled([
+        getMyServiceRegistrations(),
+        getMyUnreadNotificationCount(),
+        getMyUnreadMessageCount(),
+        getMyNotifications(4),
+        getMyWalletBalance(),
+        getMyActiveOrderCount(),
+        getUpcomingEvents(3),
+        getRecentResources(3),
+    ]);
+
+    const at = <T,>(index: number, fallback: T, name: string): T => {
+        const result = settled[index];
+        if (result.status === "fulfilled") return result.value as T;
+        logger.error(`[my-data] dashboard: ${name} failed`, { reason: result.reason });
+        return fallback;
+    };
+
+    return {
+        serviceRegistrations: at(0, {}, "service registrations"),
+        unreadNotifications: at(1, 0, "unread notification count"),
+        unreadMessages: at(2, 0, "unread message count"),
+        recentNotifications: at(3, [], "recent notifications"),
+        walletBalance: at(4, 0, "wallet balance"),
+        activeOrders: at(5, 0, "active order count"),
+        upcomingEvents: at(6, [], "upcoming events"),
+        recentResources: at(7, [], "recent resources"),
+    };
+}
+
+/**
  * Module subscriptions driving sidebar and dashboard navigation.
  * Replaces a live document listener on the caller's own user record.
  */

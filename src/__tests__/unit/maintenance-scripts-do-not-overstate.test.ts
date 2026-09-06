@@ -561,6 +561,46 @@ describe('#329 — one convention across every writing script', () => {
         expect(missing).toEqual([]);
     });
 
+    /**
+     *   #448 THE TEST ABOVE ACCEPTS A HAND-ROLLED EQUIVALENT, AND THE THREE
+     *   SCRIPTS THAT TOOK IT UP WERE THE THREE THAT NEVER NAMED THEIR TARGET.
+     *
+     *   `!isApply( && !'--apply'` is satisfied by `process.argv.includes(
+     *   '--apply')`, which is behaviourally the same for the mode — and skips
+     *   the shared preamble, where the OTHER half lives: modeBanner prints the
+     *   hostname the writes travel to, and targetHost REFUSES when it cannot
+     *   name one.
+     *
+     *   Measured before it was fixed: eight of eleven printed the banner. The
+     *   three that did not were backfill-export-funding-goals,
+     *   backfill-fixed-savings-ledger and repair-savings-balance — the three an
+     *   operator reaches for to repair live data, where running against the
+     *   wrong database produces a report indistinguishable from the right one.
+     *
+     *   So the rule is asserted on the OUTPUT an operator sees, not on the flag
+     *   parsing. A ratchet that accepts two spellings will eventually be
+     *   satisfied by the spelling that omits something.
+     */
+    it('AND EVERY ONE OF THEM NAMES THE DATABASE IT IS ABOUT TO WRITE TO', () => {
+        const silent = WRITING_SCRIPTS.filter((rel) => {
+            const src = stripComments(read(rel));
+            return !(src.includes('modeBanner(') && src.includes('targetHost('));
+        });
+
+        expect({ silent }).toEqual({ silent: [] });
+    });
+
+    it('and takes the mode from the shared helper, not a second spelling of it', () => {
+        // The two halves arrive together or not at all — that is the whole
+        // lesson of the three above.
+        const handRolled = WRITING_SCRIPTS.filter((rel) => {
+            const src = stripComments(read(rel));
+            return /process\.argv\.includes\(\s*['"]--apply['"]\s*\)/.test(src);
+        });
+
+        expect({ handRolled }).toEqual({ handRolled: [] });
+    });
+
     it('AND NONE OF THEM EXITS 0 AFTER FAILING', () => {
         // `.catch(console.error)` logs and exits successfully. Three did this.
         const swallowing = [...WRITING_SCRIPTS, 'scripts/audit-data-integrity.ts'].filter((rel) => {

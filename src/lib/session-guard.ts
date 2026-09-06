@@ -15,6 +15,7 @@ import { SESSION_EXPIRED_CODE, type SessionExpiredResult } from "@/lib/session-e
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
+import { resolveActiveUser } from "@/lib/user-identity";
 import { isAdmin as _isAdmin } from "@/lib/role-utils";
 import type { UserRole } from "@/lib/types/roles";
 
@@ -76,11 +77,24 @@ export async function requireSession(): Promise<
             logger.debug(`[SessionGuard] Fetching user doc for ID: ${userId} from collection: ${COLLECTIONS.USERS}`);
             let userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
 
-            // Intercept migrated user session ID
-            if (userDoc.exists && userDoc.data()?._migratedTo && userDoc.data()?._migratedTo !== userId) {
-                const migratedId = userDoc.data()?._migratedTo;
-                logger.info(`[SessionGuard] Profile ${userId} has been migrated to ${migratedId}. Loading migrated profile instead.`);
-                userDoc = await db.collection(COLLECTIONS.USERS).doc(migratedId).get();
+            // #449. Followed the pointer ONE hop, and replaced the document
+            // with whatever it named — including a document that does not
+            // exist, which then read as "needs migration". Bounded, cycle-safe,
+            // and it keeps the last row that EXISTS. See lib/user-identity.ts.
+            if (userDoc.exists) {
+                const resolved = await resolveActiveUser(userId, async (id) => {
+                    if (id === userId) return userDoc.data() ?? null;
+                    const doc = await db.collection(COLLECTIONS.USERS).doc(id).get();
+                    return doc.exists ? (doc.data() ?? null) : null;
+                });
+
+                if (resolved.id !== userId) {
+                    logger.info(`[SessionGuard] Profile ${userId} resolves to ${resolved.id} (${resolved.hops} hop(s)). Loading it instead.`);
+                    userDoc = await db.collection(COLLECTIONS.USERS).doc(resolved.id).get();
+                }
+                if (resolved.healed) {
+                    logger.warn(`[SessionGuard] migration chain from ${userId} is broken (${resolved.stoppedBecause}); using ${resolved.id}.`);
+                }
             }
 
             // ── JIT MIGRATION CHECK ──────────────────────────────────────────

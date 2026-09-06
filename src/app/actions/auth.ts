@@ -20,6 +20,7 @@ import { rateLimit, getActionClientIp } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 import { isAdmin } from '@/lib/admin-permissions';
 import { normalisePhone, phoneLookupVariants } from '@/lib/phone';
+import { splitFullName } from '@/lib/person-name';
 import { isSafeInternalPath } from '@/lib/safe-redirect';
 
 const loginLimiter = rateLimit(rateLimitConfig.login);
@@ -728,16 +729,12 @@ export async function registerAction(prevState: any, formData: FormData) { const
         // Split fullName into structured fields at registration time.
         // This ensures every new user has firstName/lastName from day one,
         // eliminating the legacy data gap for all future registrations.
-        const nameParts = validatedData.fullName.trim().split(/\s+/).filter(Boolean);
-        const registrationFirstName = nameParts[0] || "";
-        let registrationOtherName = "";
-        let registrationLastName = "";
-        if (nameParts.length > 2) { 
-            registrationOtherName = nameParts.slice(1, -1).join(" ");
-            registrationLastName = nameParts[nameParts.length - 1];
-        } else if (nameParts.length === 2) { 
-            registrationLastName = nameParts[1];
-        }
+        // #452. One rule — lib/person-name.ts. This is where it came from.
+        const registrationName = splitFullName(validatedData.fullName);
+        const registrationFirstName = registrationName.first;
+        const registrationOtherName = registrationName.other;
+        const registrationLastName = registrationName.last;
+
 
         // Create Firestore user profile under canonical Supabase UUID
         const userProfile: Omit<FirestoreUser, "createdAt" | "updatedAt"> = { 

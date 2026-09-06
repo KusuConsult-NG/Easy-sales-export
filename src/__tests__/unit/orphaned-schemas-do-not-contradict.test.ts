@@ -250,7 +250,11 @@ describe('#369 — all three are orphans, measured', () => {
     it('the importer sweep reports importers where they exist', () => {
         // Vacuity guard: an empty answer must not come from a broken sweep.
         expect(importersOf('src/lib/escrow-status.ts').length).toBeGreaterThan(3);
-        expect(importersOf('src/lib/validations/marketplace.ts').length).toBe(7);
+        // 6 since #443: _mp_catalog.ts and _mp_buyer_dashboard.ts stopped
+        // importing ProductSchema/OrderSchema when their parse-or-raw-document
+        // fallbacks were replaced by serializeProduct/serializeOrder, and
+        // lib/firestore-serialize.ts picked both schemas up in their place.
+        expect(importersOf('src/lib/validations/marketplace.ts').length).toBe(6);
     });
 
     it('and it is measured on code, not on prose', () => {

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { OFFLINE_CHECKOUT_METHODS } from "@/lib/offline-checkout";
+import { PRODUCT_CATEGORY_ALIASES } from "@/lib/product-search";
 
 /**
  * Marketplace Zod Schemas
@@ -23,7 +24,33 @@ export const PricingTierSchema = z.object({
     minQuantity: z.number().default(1),
 });
 
+/**
+ *   #444 THE SPELLINGS THIS ENUM ACCEPTS ARE DERIVED FROM THE ONES THE
+ *        DATABASE ACTUALLY HOLDS, NOT LISTED AGAIN BY HAND.
+ *
+ *        lib/product-search.ts carries an alias table (#131) precisely because
+ *        products were written with several spellings of one category —
+ *        "roots", "roots_tubers", "tuber", "tubers", "yam", "yams", "cassava"
+ *        for the one this enum spells "roots". Nine there, one here.
+ *
+ *        That disagreement was invisible while a failed parse fell back to the
+ *        raw document. #443 heals instead, so a product stored as "tubers"
+ *        would have come back as "other" — out of its own category filter, and
+ *        described to its seller as uncategorised. An existing seller-dashboard
+ *        test went red and said so.
+ *
+ *        Spread from PRODUCT_CATEGORY_ALIASES so the read side cannot drift
+ *        from the stored data again, the same move #379 made for payment
+ *        methods. This stays a CLOSED enum: createProductAction validates the
+ *        listing form through this schema, so `category: "not-a-category"` is
+ *        still refused — widening it to `z.string()` broke exactly that test,
+ *        which is how this ordering was arrived at.
+ */
+const STORED_CATEGORY_SPELLINGS = Object.values(PRODUCT_CATEGORY_ALIASES)
+    .flat() as [string, ...string[]];
+
 export const ProductCategorySchema = z.enum([
+    ...STORED_CATEGORY_SPELLINGS,
     "poultry",
     "sea_foods",
     "horticultural",
@@ -102,8 +129,38 @@ export const OrderItemSchema = z.object({
     productTitle: z.string().default("Product"),
     quantity: z.number().default(1),
     unitPrice: z.number().default(0),
+    /**
+     *   #447 The other name the same figure is stored under. The two payment
+     *        paths write `pricePerUnit`; actions/orders.ts writes `unitPrice`.
+     *        Declared so healing keeps whichever a row carries — lib/order-scope.ts
+     *        reads both through itemUnitPrice(), which is the one statement of
+     *        the rule. Nothing rewrites stored rows.
+     */
+    pricePerUnit: z.number().optional(),
     totalPrice: z.number().default(0),
     tier: z.enum(["retail", "bulk", "export"]).default("retail"),
+    /**
+     *   #446 SECURITY. THIS FIELD DECIDES WHOSE ITEM IT IS, AND THE SCHEMA DID
+     *        NOT KNOW ABOUT IT.
+     *
+     *        A marketplace order is ONE row holding every seller's line items.
+     *        lib/order-scope.ts splits it with `items.filter(i => i?.sellerId
+     *        === sellerId)` — that filter is #342's entire fix, the one that
+     *        stopped a seller seeing another merchant's products, prices and
+     *        the whole basket's money.
+     *
+     *        Healing an order strips what this schema does not declare. So the
+     *        moment #446 routed order-management.ts's getSellerOrdersAction
+     *        through serializeOrder — which scopes AFTER serializing, unlike
+     *        its sibling, which scopes first — every item lost its sellerId,
+     *        `sellerItems` matched nothing, and the seller got the whole basket
+     *        back. #342's own ratchet failed on the next run and named it.
+     *
+     *        Optional, not required: #342 records that orders written before
+     *        every item carried a sellerId exist, and order-scope.ts returns
+     *        those untouched by design.
+     */
+    sellerId: z.string().optional(),
 });
 
 export const OrderSchema = z.object({
@@ -147,6 +204,25 @@ export const OrderSchema = z.object({
         "cancelled",
         "disputed",
     ]).default("pending_payment"),
+    /**
+     *   #443 THE ONLY FIELD IN THIS SCHEMA THAT COULD NOT HEAL, AND THE ONE
+     *        THAT TOOK THE BUYER DASHBOARD DOWN.
+     *
+     *        Every field INSIDE this object has a default. The object itself
+     *        had none, so it was the one required key in an otherwise
+     *        self-healing schema — and a stored order without it failed the
+     *        whole parse. Both order-list actions caught that failure and
+     *        returned the RAW document instead, still typed as `Order`, so
+     *        `items` arrived undefined and `{order.items.length}` unwound
+     *        /marketplace/buyer/dashboard into its error boundary. Seen
+     *        happening, in Chromium, against a real stored row.
+     *
+     *        `.prefault({})` rather than `.default({})`: a default is returned
+     *        as written, so `.default({})` would have produced a bare `{}` and
+     *        left `deliveryAddress.recipientName` undefined for every healed
+     *        row. A prefault is PARSED, so the six defaults below actually
+     *        apply.
+     */
     deliveryAddress: z.object({
         recipientName: z.string().default("Guest"),
         recipientPhone: z.string().default(""),
@@ -154,7 +230,7 @@ export const OrderSchema = z.object({
         city: z.string().default(""),
         state: z.string().default(""),
         lga: z.string().default(""),
-    }),
+    }).prefault({}),
     buyerConfirmed: z.boolean().default(false),
     buyerConfirmedAt: dateSchema.optional(),
     escrowReleased: z.boolean().default(false),
@@ -162,6 +238,37 @@ export const OrderSchema = z.object({
     escrowTransactionId: z.string().optional(),
     paymentStatus: z.string().optional(),
     paymentReference: z.string().optional(),
+    /**
+     *   #443 SIX FIELDS THE APP WRITES AND READS THAT THIS SCHEMA DID NOT
+     *        DESCRIBE.
+     *
+     *        serializeOrder strips an order to this schema on the way to the
+     *        browser, which is what keeps the payload bounded (#151, #341).
+     *        That only works if the schema is an honest description of the
+     *        entity: anything the screens read and the schema omits would
+     *        simply vanish. Each of these is read by a screen, and each — bar
+     *        one, named below — has a writer.
+     *
+     *        estimatedDeliveryDate is READ BY THREE ORDER SCREENS AND WRITTEN
+     *        BY NOTHING. Recorded, not invented: it is declared optional here
+     *        so the strip does not change what those screens see (undefined
+     *        before, undefined after). Giving it a real value is a product
+     *        decision about who promises a delivery date, not a repair.
+     */
+    sellerIds: z.array(z.string()).default([]),
+    buyerPhone: z.string().optional(),
+    /**
+     *   #444 Read by the seller's order search and written onto a marketplace
+     *        order by NOTHING — the writers put them on the escrow row.
+     *        Declared so a row that does carry them survives the strip and
+     *        matches; the search no longer depends on them.
+     */
+    buyerName: z.string().optional(),
+    buyerEmail: z.string().optional(),
+    trackingNumber: z.string().optional(),
+    estimatedDeliveryDate: dateSchema.optional(),
+    reviewSubmitted: z.boolean().default(false),
+    sellerAmountPaid: z.number().optional(),
     createdAt: dateSchema,
     updatedAt: dateSchema,
     _version: z.number().default(0),

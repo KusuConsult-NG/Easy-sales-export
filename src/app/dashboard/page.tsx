@@ -9,16 +9,7 @@ import {
     TrendingUp, Users, BookOpen, Landmark, ExternalLink, Settings,
 } from "lucide-react";
 import AnnouncementBanner from "@/components/AnnouncementBanner";
-import {
-    getMyServiceRegistrations,
-    getMyUnreadNotificationCount,
-    getMyUnreadMessageCount,
-    getMyNotifications,
-    getMyWalletBalance,
-    getMyActiveOrderCount,
-    getUpcomingEvents,
-    getRecentResources,
-} from "@/app/actions/my-data";
+import { getMyDashboard } from "@/app/actions/my-data";
 import { toDate } from "@/lib/date-utils";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { UserRole } from "@/lib/types/roles";
@@ -235,32 +226,28 @@ function DashboardHomeContent() {
             // Each failure now costs only its own value, and says which one it
             // was — a blank tile with nothing in the console is the kind of
             // thing that gets diagnosed twice.
-            const settled = await Promise.allSettled([
-                getMyServiceRegistrations(),
-                getMyUnreadNotificationCount(),
-                getMyUnreadMessageCount(),
-                getMyNotifications(4),
-                getMyWalletBalance(),
-                getMyActiveOrderCount(),
-                getUpcomingEvents(3),
-                getRecentResources(3),
-            ]);
+            //   #453 ONE ROUND TRIP, NOT EIGHT.
+            //
+            //   These were eight separate server actions. Parallel in the
+            //   browser and still eight HTTP requests to the container, each
+            //   re-checking the same session — which, with Redis unset, is
+            //   eight database reads of the same user row before any of the
+            //   work below starts.
+            //
+            //   getMyDashboard does the same eight queries in parallel on the
+            //   server, behind one session check. The allSettled behaviour the
+            //   comment above describes is kept, inside it: a failure still
+            //   costs its own tile and says which one.
+            const dash = await getMyDashboard();
 
-            const valueOf = <T,>(index: number, fallback: T, name: string): T => {
-                const result = settled[index];
-                if (result.status === "fulfilled") return result.value as T;
-                console.error(`Dashboard: ${name} failed`, result.reason);
-                return fallback;
-            };
-
-            const regs = valueOf<Record<string, any>>(0, {}, "service registrations");
-            const unreadNotifications = valueOf<number>(1, 0, "unread notification count");
-            const unreadMessages = valueOf<number>(2, 0, "unread message count");
-            const recent = valueOf<any[]>(3, [], "recent notifications");
-            const walletBalance = valueOf<number>(4, 0, "wallet balance");
-            const activeOrders = valueOf<number>(5, 0, "active order count");
-            const events = valueOf<any[]>(6, [], "upcoming events");
-            const resources = valueOf<any[]>(7, [], "recent resources");
+            const regs = dash.serviceRegistrations;
+            const unreadNotifications = dash.unreadNotifications;
+            const unreadMessages = dash.unreadMessages;
+            const recent = dash.recentNotifications;
+            const walletBalance = dash.walletBalance;
+            const activeOrders = dash.activeOrders;
+            const events = dash.upcomingEvents;
+            const resources = dash.recentResources;
 
             if (cancelled) return;
 

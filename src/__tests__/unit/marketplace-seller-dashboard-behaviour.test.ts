@@ -268,11 +268,24 @@ describe('getSellerOrdersAction', () => {
             .toEqual(['done', 'waiting']);
     });
 
+    /**
+     *   #444 THIS TEST USED TO SEED `title` ON AN ORDER ITEM, AND NO WRITER
+     *   HAS EVER STORED THAT.
+     *
+     *   It passed because the fixture had no deliveryAddress, so OrderSchema
+     *   threw and the action returned the RAW document — carrying whatever the
+     *   fixture invented. #443 made the schema heal instead, and this test went
+     *   red, which is how the dead search term was found: the writers store
+     *   `productTitle` and every render reads `productTitle`.
+     *
+     *   Seeded with the real names now, so it pins the search against data the
+     *   application can actually produce.
+     */
     it('searches the id, the buyer and the item titles', async () => {
         seedOrder('order-aaa', { buyerName: 'Chidi Okafor', buyerEmail: 'chidi@example.com' });
         seedOrder('order-bbb', {
             buyerName: 'Ngozi Eze', buyerEmail: 'ngozi@example.com',
-            items: [{ productId: 'p2', title: 'Cassava flour', quantity: 2, price: 1000 }],
+            items: [{ productId: 'p2', productTitle: 'Cassava flour', quantity: 2, unitPrice: 1000 }],
         });
 
         const { getSellerOrdersAction } = await actions();
@@ -280,6 +293,23 @@ describe('getSellerOrdersAction', () => {
         expect(orderIds(await getSellerOrdersAction({ search: 'cassava' }))).toEqual(['order-bbb']);
         expect(orderIds(await getSellerOrdersAction({ search: 'aaa' }))).toEqual(['order-aaa']);
         expect(orderIds(await getSellerOrdersAction({ search: 'Okafor' }))).toEqual(['order-aaa']);
+    });
+
+    it('#444 and it finds an order by the name on the DELIVERY ADDRESS', async () => {
+        // The term that works on a real stored row. buyerName/buyerEmail are
+        // read by the search and written onto a marketplace order by nothing —
+        // they land on the escrow row instead — so before this the search could
+        // only ever match an id.
+        seedOrder('order-ccc', {
+            deliveryAddress: { recipientName: 'Amaka Nwosu', recipientPhone: '08030001111' },
+        });
+        seedOrder('order-ddd', {
+            deliveryAddress: { recipientName: 'Tunde Bello', recipientPhone: '08030002222' },
+        });
+
+        const { getSellerOrdersAction } = await actions();
+        expect(orderIds(await getSellerOrdersAction({ search: 'amaka' }))).toEqual(['order-ccc']);
+        expect(orderIds(await getSellerOrdersAction({ search: '08030002222' }))).toEqual(['order-ddd']);
     });
 
     it('a search still honours the caller\'s limit, and reports no cursor', async () => {

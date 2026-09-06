@@ -1,7 +1,6 @@
 import type { NextAuthConfig } from "next-auth";
 import { isPublicPath, isProtectedPath } from "@/lib/route-manifest";
 import type { UserRole } from "@/lib/types/roles";
-import { HUB_MODULES } from "@/config/modules.config";
 import { logger } from "@/lib/logger";
 
 /**

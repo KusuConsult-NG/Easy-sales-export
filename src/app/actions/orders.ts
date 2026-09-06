@@ -257,8 +257,11 @@ async function _getOrderByIdAction(orderId: string) { let sessionResult;
             .where("orderId", "==", orderId)
             .get();
 
-        const { serializeDoc } = await import("@/lib/firestore-serialize");
-        const order = serializeDoc(orderDoc.id, orderDoc.data()) as unknown as any;
+        // #443. Was serializeDoc — no schema at all — while three screens read
+        // `order.items.map(...)` off the result because the type said they
+        // could. serializeOrder makes the type true.
+        const { serializeOrder } = await import("@/lib/firestore-serialize");
+        const order = serializeOrder(orderDoc.id, orderDoc.data()) as unknown as any;
 
         // The ACTIVE escrow, not whichever row came back first.
         //

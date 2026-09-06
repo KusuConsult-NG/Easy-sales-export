@@ -12,7 +12,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { paystackPayout, payoutReference } from "@/lib/paystack-transfer";
 import { claimStatusTransition, claimStatusTransitionFromAny } from "@/lib/status-transition";
-import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
+import { serializeDoc, serializeDocs, serializeOrder, serializeOrders } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { waveCommission } from "@/lib/wave-commission";
 import { getLogisticsProvider } from "@/lib/logistics";
@@ -67,7 +67,7 @@ async function _getSellerOrdersAction(filters?: { status?: OrderStatus; }) { let
          *        The BUYER's copy of the same action, below, is untouched: the
          *        whole basket is exactly what a buyer bought.
          */
-        const orders = serializeDocs<Order>(snapshot.docs)
+        const orders = serializeOrders(snapshot.docs)
             .map((o) => scopeOrderToSeller(o as any, userId) as Order);
 
         return { error: null, success: true as const, data: { orders } };
@@ -337,7 +337,7 @@ async function _getBuyerOrdersAction(filters?: { status?: OrderStatus; }) { let 
         }
 
         const snapshot = await query.get();
-        const orders = serializeDocs<Order>(snapshot.docs);
+        const orders = serializeOrders(snapshot.docs);
 
         return { error: null, success: true as const, data: { orders } };
     } catch (error) { logger.error("Get buyer orders error:", { 
@@ -704,7 +704,9 @@ async function _getOrderDetailsAction(orderId: string) { let sessionResult;
             .where("orderId", "==", orderId)
             .get();
 
-        const order = serializeDoc<Order>(orderDoc.id, orderDoc.data()) as any;
+        // #443. Was `serializeDoc<Order>(...)` — a bare cast onto a type whose
+        // `items: OrderItem[]` the document does not have to satisfy.
+        const order = serializeOrder(orderDoc.id, orderDoc.data()) as any;
         if (!order.sellerId && Array.isArray(order.sellerIds) && order.sellerIds.length > 0) {
             order.sellerId = order.sellerIds[0];
         }

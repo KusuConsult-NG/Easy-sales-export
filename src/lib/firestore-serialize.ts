@@ -248,3 +248,112 @@ export function serializeWaveApplication(id: string, data: DocumentData | undefi
         email: raw.userEmail || raw.email || "", // Standardize missing emails
     };
 }
+
+
+import type { Order, Product } from "./types/marketplace";
+import { OrderSchema, ProductSchema } from "./validations/marketplace";
+import { lenientObject } from "./schema-heal";
+
+/** The healing forms. Derived from the strict schemas, never restated. */
+const LenientOrderSchema = lenientObject(OrderSchema);
+const LenientProductSchema = lenientObject(ProductSchema);
+
+/**
+ *   #443 EVERY ORDER THAT REACHES A SCREEN COMES THROUGH HERE, AND WHAT COMES
+ *        OUT IS THE SHAPE `Order` PROMISES.
+ *
+ *        Four actions read orders, and they had three different ideas about
+ *        validation:
+ *
+ *          _mp_buyer_dashboard    OrderSchema.parse in a try, RAW DOCUMENT in
+ *          _mp_seller_dashboard   the catch — so the one row the schema could
+ *                                 not heal was the one row that skipped it
+ *          orders.ts              serializeDoc, no schema at all
+ *          order-management.ts    serializeDoc<Order>, a bare cast
+ *
+ *        Six screens then read `order.items.length` or `order.items.map(...)`
+ *        with no guard, because the type said they could. ONE of the nine
+ *        readers guarded it — buyer/orders/page.tsx writes
+ *        `order.items && order.items.length > 0` — which is the shape of a
+ *        defect somebody has already met and fixed where they stood.
+ *
+ *        A stored order with no `deliveryAddress` and no `items` failed the
+ *        parse, took the raw-document path, and threw
+ *        "Cannot read properties of undefined (reading 'length')" into the
+ *        error boundary of /marketplace/buyer/dashboard. Observed in Chromium
+ *        during a full browser run, on a real row, twice.
+ *
+ *        The fix is at the boundary rather than in the six renders. Scattering
+ *        `?.` through the screens would have hidden the next boundary break
+ *        instead of fixing it, and would have left the type still lying.
+ *
+ *        A row that needs healing is LOGGED. #379 recorded this exact hazard
+ *        in a comment — "would have skipped validation silently rather than
+ *        failing visibly" — and silence is the half that let it sit.
+ */
+function healThroughSchema(
+    label: string,
+    strictSchema: { safeParse: (v: unknown) => { success: boolean; data?: unknown; error?: { issues: Array<{ path: PropertyKey[]; code: string }> } } },
+    lenientSchema: { parse: (v: unknown) => unknown },
+    id: string,
+    data: DocumentData | undefined,
+): Record<string, unknown> {
+    const raw = serializeDoc<Record<string, unknown>>(id, data ?? {});
+
+    const strict = strictSchema.safeParse(raw);
+    if (strict.success) return serializeValue(strict.data);
+
+    logger.warn(`[${label}] document did not satisfy its schema; healing`, {
+        id,
+        // Field paths and issue codes only. The VALUES are the document's
+        // contents — buyer addresses among them — and do not belong in a log.
+        issues: (strict.error?.issues ?? []).map((issue) => `${issue.path.join(".")}: ${issue.code}`),
+    });
+
+    // Merged OVER the raw document, not returned in place of it. The old catch
+    // returned the raw document and lost nothing; this keeps that property and
+    // adds the guarantees, so healing can never make a screen show less than
+    // the broken path did.
+    const healed = lenientSchema.parse(raw) as Record<string, unknown>;
+    return serializeValue({ ...raw, ...healed, id });
+}
+
+export function serializeOrder(id: string, data: DocumentData | undefined): Order {
+    return healThroughSchema(
+        "serializeOrder", OrderSchema, LenientOrderSchema, id, data,
+    ) as unknown as Order;
+}
+
+/** `serializeOrder` over a QuerySnapshot's docs. */
+export function serializeOrders(
+    docs: Array<{ id: string; data: () => DocumentData }>
+): Order[] {
+    return docs.map((doc) => serializeOrder(doc.id, doc.data()));
+}
+
+/**
+ *   #443 THE SAME FALLBACK, ON THE CATALOGUE SIDE.
+ *
+ *        Five product reads carried `ProductSchema.parse` in a try with the
+ *        raw document in the catch, one of them in the same file as the order
+ *        list above. That fallback is #130's mitigation — one malformed row
+ *        must not empty the catalogue — and it is right about that and wrong
+ *        about how: a raw document still typed `Product` is what #439 and #442
+ *        then had to defend against in the RENDERS, twice, screen by screen.
+ *
+ *        Healing here does what the catch was reaching for. The renders keep
+ *        their guards; they are simply no longer the only thing standing
+ *        between a stored row and an error boundary.
+ */
+export function serializeProduct(id: string, data: DocumentData | undefined): Product {
+    return healThroughSchema(
+        "serializeProduct", ProductSchema, LenientProductSchema, id, data,
+    ) as unknown as Product;
+}
+
+/** `serializeProduct` over a QuerySnapshot's docs. */
+export function serializeProducts(
+    docs: Array<{ id: string; data: () => DocumentData }>
+): Product[] {
+    return docs.map((doc) => serializeProduct(doc.id, doc.data()));
+}

@@ -295,8 +295,20 @@ describe('the backfill for rows that predate both fields', () => {
     });
 
     it('reporting by default and writing only with --apply', () => {
+        //   #448 THIS ASSERTED THE EXACT LINE, AND THE EXACT LINE WAS THE BUG.
+        //
+        //   It pinned `const APPLY = process.argv.includes('--apply')` as a
+        //   string. That spelling parses the flag correctly and skips the
+        //   shared preamble, where modeBanner prints the HOSTNAME the writes go
+        //   to — so this script was one of three that never named the database
+        //   it was about to change. A test pinned to an implementation detail
+        //   held the detail in place and said nothing about the behaviour.
+        //
+        //   Asserted on the two things an operator depends on instead: the mode
+        //   comes from the shared helper, and the target is printed.
         const src = source('scripts/backfill-export-funding-goals.ts');
-        expect(src).toContain("const APPLY = process.argv.includes('--apply');");
+        expect(src).toContain('const APPLY = isApply();');
+        expect(src).toMatch(/modeBanner\([^)]*APPLY,\s*targetHost\(\)\)/);
         expect(src).toContain('Nothing was written. Re-run with --apply to write.');
     });
 

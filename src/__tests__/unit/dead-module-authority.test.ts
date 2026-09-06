@@ -32,8 +32,9 @@
  *        HUB_MODULES now, so the fallback cannot disagree with the router; the
  *        env overrides are kept.
  *
- *        Its six NEXT_PUBLIC_*_URL names appear in this repository ONLY in that
- *        file. Six environment variables with no reader.
+ *        Its six NEXT_PUBLIC_*_URL names appeared in this repository ONLY in
+ *        that file. Six environment variables with no reader — RETIRED in #445
+ *        by owner decision, so a module domain now has one source.
  *
  *        THE ONE THAT DESCRIBES A FEATURE THAT DOES NOT EXIST
  *        ----------------------------------------------------
@@ -44,7 +45,8 @@
  *        not the register page, not a layout. Wiring it up would change
  *        nothing until the second half is built.
  *
- *        OWNER DECISION: build module-branded auth, or retire the helper.
+ *        OWNER DECISION TAKEN (#445): RETIRE. The file is deleted; its absence
+ *        and the missing reader half are pinned below.
  *
  *        THE HARMLESS ONE
  *        ----------------
@@ -54,16 +56,17 @@
  *        it is a third name for the payment handlers in a codebase where "two
  *        doors onto one operation" has been the finding some twenty times.
  *
- *        NOTHING WAS DELETED. Each file states what it is; the domain map is
- *        derived rather than duplicated.
+ *        WHAT #367 LEFT AND #445 SETTLED. #367 deleted nothing and put two
+ *        questions to the owner. Both are answered now: auth-redirect.ts is
+ *        deleted, and the six env overrides are gone. paystack-fulfillment.ts
+ *        stays, labelled — it was never a question.
  */
 
 import { describe, it, expect, jest } from '@jest/globals';
-import { readFileSync, readdirSync } from 'fs';
+import { existsSync, readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { EXTERNAL_DOMAINS, getModuleUrl, redirectToModule } from '@/lib/external-domains';
 import { HUB_MODULES } from '@/config/modules.config';
-import { getModuleAuthUrl, getLoginUrl, getRegisterUrl } from '@/lib/auth-redirect';
 import { stripComments } from '@/lib/testing/strip-comments';
 
 const ROOT = process.cwd();
@@ -131,8 +134,20 @@ describe('#367 — the domain map is derived, so it cannot drift again', () => {
     it('and the two that had drifted now name the routed domain', () => {
         // Stated as literals as well, so the test says WHICH answer is right
         // rather than only that two derivations agree.
+        //
+        //   #454 THIS PINNED farmnation.easysalesexport.com, AND THE OWNER HAS
+        //   SINCE SETTLED IT THE OTHER WAY.
+        //
+        //   #367 found the two spellings disagreeing and made HUB_MODULES the
+        //   source — correctly, because ONE answer beats two. It could not know
+        //   which answer, so it kept the one already in the config.
+        //
+        //   Shown the live deployment, the owner confirmed easysalesmarket.com
+        //   (which the config already had) and farmnation.ng (which it did not).
+        //   modules.config.ts carries that now, and middleware.ts keeps both
+        //   easysalesexport.com spellings as aliases so old links still land.
         expect(EXTERNAL_DOMAINS.marketplace).toBe('https://easysalesmarket.com');
-        expect(EXTERNAL_DOMAINS.farmNation).toBe('https://farmnation.easysalesexport.com');
+        expect(EXTERNAL_DOMAINS.farmNation).toBe('https://farmnation.ng');
     });
 
     it('middleware routes on the same object, which is why that is the right answer', () => {
@@ -154,17 +169,26 @@ describe('#367 — the domain map is derived, so it cannot drift again', () => {
         expect(() => redirectToModule('wave')).toThrow(/browser navigation/);
     });
 
-    it('an env override still wins, which is why the six were kept', async () => {
-        // The override path is the only reason those variables survive the
-        // derivation. Untested, "kept for deployments" would be a guess.
+    /**
+     *   #445 THE SIX ENV OVERRIDES ARE RETIRED — OWNER DECISION.
+     *
+     *   #367 kept them so a deployment could point a module elsewhere. Nothing
+     *   in the repository set them, nothing else read them, and the module that
+     *   did has no importers: a second, silent answer to a question HUB_MODULES
+     *   already answers. The owner chose to retire them rather than build on
+     *   them, so a module's domain has exactly ONE source.
+     *
+     *   Asserted as absence, so the second source cannot come back quietly.
+     */
+    it('AN ENV OVERRIDE NO LONGER CHANGES A MODULE DOMAIN', async () => {
         const previous = process.env.NEXT_PUBLIC_WAVE_URL;
         process.env.NEXT_PUBLIC_WAVE_URL = 'https://wave.staging.example';
         jest.resetModules();
         try {
             const fresh = await import('@/lib/external-domains');
 
-            expect(fresh.EXTERNAL_DOMAINS.wave).toBe('https://wave.staging.example');
-            // And the ones with no override still come from HUB_MODULES.
+            // HUB_MODULES, not the environment.
+            expect(fresh.EXTERNAL_DOMAINS.wave).toBe('https://waveprogramme.com');
             expect(fresh.EXTERNAL_DOMAINS.marketplace).toBe('https://easysalesmarket.com');
         } finally {
             if (previous === undefined) delete process.env.NEXT_PUBLIC_WAVE_URL;
@@ -173,9 +197,7 @@ describe('#367 — the domain map is derived, so it cannot drift again', () => {
         }
     });
 
-    it('the six env overrides have no other reader in this repository', () => {
-        // Recorded rather than removed: a deployment may set them, and dropping
-        // the override would silently ignore it.
+    it('and the six names appear NOWHERE in src/', () => {
         const NAMES = [
             'NEXT_PUBLIC_MARKETPLACE_URL', 'NEXT_PUBLIC_COOPERATIVES_URL',
             'NEXT_PUBLIC_ACADEMY_URL', 'NEXT_PUBLIC_WAVE_URL',
@@ -183,41 +205,59 @@ describe('#367 — the domain map is derived, so it cannot drift again', () => {
         ];
 
         for (const name of NAMES) {
-            const readers = SRC.filter((f) => f !== 'src/lib/external-domains.ts'
-                && code(f).includes(name));
-
+            const readers = SRC.filter((f) => code(f).includes(name));
             expect({ name, readers }).toEqual({ name, readers: [] });
         }
+    });
+
+    it('and every module domain resolves from HUB_MODULES alone', () => {
+        // The vacuity guard on the two tests above: they would both pass on an
+        // EXTERNAL_DOMAINS that had stopped resolving anything at all.
+        for (const [key, url] of Object.entries(EXTERNAL_DOMAINS)) {
+            expect({ key, ok: /^https:\/\/[a-z0-9.-]+$/.test(url) }).toEqual({ key, ok: true });
+        }
+        expect(Object.keys(EXTERNAL_DOMAINS)).toHaveLength(6);
     });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('#367 — auth-redirect describes a feature the product does not have', () => {
-    it('the helper works — it is not broken, it is unused', () => {
-        // Executed, because "dead" must not be confused with "wrong": if the
-        // owner wires it up, this is the behaviour they get.
-        expect(getModuleAuthUrl('/marketplace/onboarding', 'login')).toBe('/auth/login?module=marketplace');
-        expect(getModuleAuthUrl('/cooperatives/dashboard', 'register')).toBe('/auth/register?module=cooperatives');
-        expect(getModuleAuthUrl('/dashboard', 'login')).toBe('/auth/login');
-        expect(getLoginUrl('/wave/application', '/wave/application'))
-            .toBe('/auth/login?module=wave&callbackUrl=%2Fwave%2Fapplication');
-        expect(getRegisterUrl('/export/onboarding', '/export'))
-            .toBe('/auth/register?module=export&returnUrl=%2Fexport');
+/**
+ *   #445 auth-redirect.ts IS DELETED — OWNER DECISION.
+ *
+ *   #367 measured it and put the choice to the owner: build module-branded auth,
+ *   or retire the helper. The answer was retire.
+ *
+ *   It described a feature in two halves and only ever had one. It built
+ *   `/auth/login?module=marketplace` "so users see module-specific branding
+ *   during authentication"; nothing called it, and NOTHING READ a `module`
+ *   search parameter — not the login page, not the register page, not a layout.
+ *   Wiring it up would have changed nothing until the missing half was built.
+ *   Generic branding on login is normal and nobody has missed it.
+ *
+ *   Pinned as absence in both directions, because dead code that reads like a
+ *   working feature is how the next person loses an afternoon.
+ */
+describe('#445 — module-branded auth is retired, not half-built', () => {
+    it('THE HELPER IS GONE', () => {
+        expect(existsSync(join(ROOT, 'src/lib/auth-redirect.ts'))).toBe(false);
     });
 
-    it('NOTHING IMPORTS IT', () => {
-        expect(importersOf('src/lib/auth-redirect.ts', 'auth-redirect')).toEqual([]);
+    it('and nothing in src/ names it', () => {
+        const mentions = SRC.filter((f) => /auth-redirect|getModuleAuthUrl|getRegisterUrl/.test(code(f)));
+        expect(mentions).toEqual([]);
     });
 
-    it('AND NOTHING READS THE PARAMETER IT BUILDS', () => {
-        // The second, independent reason the feature is absent. Even wired up,
-        // ?module= would change nothing.
+    it('and NOTHING READS A `module` PARAMETER — the half that was never built', () => {
+        // The independent reason the feature was absent. Recorded so that
+        // rebuilding it starts from the right end: the reader first.
         const readers = SRC.filter((f) => /get\(\s*["']module["']\s*\)/.test(code(f)));
 
         expect(readers).toEqual([]);
     });
 
-    it('and middleware builds its own login redirect instead', () => {
+    it('and middleware still builds the login redirect it always did', () => {
+        // The redirect a signed-out visitor actually gets. Unchanged by the
+        // deletion, which is the point: nothing depended on the helper.
         const mw = code('src/middleware.ts');
 
         expect(mw).toContain('loginUrl.searchParams.set("callbackUrl"');

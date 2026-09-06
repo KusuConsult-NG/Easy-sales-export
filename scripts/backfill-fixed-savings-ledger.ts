@@ -55,11 +55,31 @@
 import { createClient } from '@supabase/supabase-js';
 import { existsSync } from 'fs';
 import { config as loadEnv } from 'dotenv';
+import { isApply, modeBanner, targetHost } from './_maintenance-guard';
 
 if (existsSync('.env.development.local')) loadEnv({ path: '.env.development.local' });
 loadEnv({ path: '.env.local' });
 
-const APPLY = process.argv.includes('--apply');
+
+/**
+ *   #448 THIS SCRIPT DID NOT SAY WHICH DATABASE IT WAS ABOUT TO WRITE TO.
+ *
+ *        Eight of the eleven writing scripts print `modeBanner(name, apply,
+ *        targetHost())` before doing anything — the name, the mode, and the
+ *        HOSTNAME the writes travel to. Three did not, and all three are the
+ *        ones an operator reaches for when repairing live data.
+ *
+ *        They survived #329's ratchet because it accepts either `isApply(` or
+ *        a literal `'--apply'`, and these hand-rolled the second. The check was
+ *        satisfied by an equivalent that skipped the half that matters here:
+ *        an operator with the wrong .env loaded got a report identical to the
+ *        right one.
+ *
+ *        Both halves now come from scripts/_maintenance-guard.ts, and targetHost
+ *        REFUSES rather than defaulting when the URL is unset — an unknown
+ *        target must stop a script, not be waved through.
+ */
+const APPLY = isApply();
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -220,7 +240,7 @@ async function writeLedgerRow(plan: Plan, cooperativeId: string): Promise<void> 
 }
 
 async function main() {
-    console.log(`\n🔧 Fixed-savings cooperative-ledger backfill`);
+    console.log(modeBanner('Fixed-savings cooperative-ledger backfill', APPLY, targetHost()));
     console.log(`   Database: ${new URL(url).hostname}`);
     console.log(`   Mode:     ${APPLY ? '⚠️  APPLY — this will write ledger rows' : 'report only (pass --apply to write)'}\n`);
 

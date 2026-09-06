@@ -68,8 +68,42 @@ interface OrderItem {
     sellerId?: string;
     productId?: string;
     pricePerUnit?: unknown;
+    unitPrice?: unknown;
     quantity?: unknown;
     [key: string]: unknown;
+}
+
+/**
+ *   #447 ONE UNIT PRICE, TWO NAMES, AND THIS FILE KNEW ONLY ONE OF THEM.
+ *
+ *        A marketplace order item is written under `pricePerUnit` by the two
+ *        payment paths — _payment_orders.ts and _payment_verify.ts both compute
+ *        `item.pricePerUnit * item.quantity`, and so does
+ *        infrastructure/payments/service.ts — and under `unitPrice` by the
+ *        THIRD order-creation path, actions/orders.ts, which builds its line
+ *        items as `{ productId, productTitle, quantity, unitPrice, totalPrice,
+ *        tier }`. OrderItemSchema declares only `unitPrice`.
+ *
+ *        So this file, which decides both what a seller SEES on a multi-seller
+ *        order and the gross figure their dashboard shows against the escrow,
+ *        read `pricePerUnit` alone: for any order created through orders.ts the
+ *        goods came to ZERO, and the seller's share was the delivery split on
+ *        its own.
+ *
+ *        Found by #446. Routing order-management.ts through serializeOrder made
+ *        healing strip `pricePerUnit` — the schema does not declare it — and
+ *        #342's own ratchet went red with the seller's total at 500 instead of
+ *        2500. The name disagreement had been invisible for as long as a failed
+ *        parse fell back to the raw document.
+ *
+ *        Stated once, here, and read by both callers below. Both names are
+ *        declared on OrderItemSchema so healing keeps whichever a row carries;
+ *        nothing rewrites stored rows.
+ */
+export function itemUnitPrice(item: OrderItem | null | undefined): number {
+    if (!item) return 0;
+    const primary = num(item.pricePerUnit);
+    return primary !== 0 ? primary : num(item.unitPrice);
 }
 
 interface ScopeableOrder {
@@ -132,7 +166,7 @@ export function sellerOrderAmount(
 
     const mine = sellerItems(order, sellerId);
     const goods = mine.reduce(
-        (sum, i) => sum + num(i?.pricePerUnit) * num(i?.quantity),
+        (sum, i) => sum + itemUnitPrice(i) * num(i?.quantity),
         0,
     );
 
@@ -162,7 +196,7 @@ export function scopeOrderToSeller<T extends ScopeableOrder>(
 
     const mine = sellerItems(order, sellerId);
     const subtotal = mine.reduce(
-        (sum, i) => sum + num(i?.pricePerUnit) * num(i?.quantity),
+        (sum, i) => sum + itemUnitPrice(i) * num(i?.quantity),
         0,
     );
     const total = sellerOrderAmount(order, sellerId);

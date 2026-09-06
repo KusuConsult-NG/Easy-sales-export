@@ -2,6 +2,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { Timestamp } from "@/lib/firestore-compat";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { resolveActiveUserId } from "@/lib/user-identity";
 import { platformFeeFor, sellerNetFor } from "@/lib/platform-fee";
 import { exportWindowReturnMultiplier } from "@/lib/export-window-status";
 import { logger } from "@/lib/logger";
@@ -1287,16 +1288,12 @@ export async function processWaveRegistration(reference: string, amount: number,
  */
 export async function processCooperativeContribution(reference: string, amount: number, userId: string, paidAt?: Date) {
     // Resolve legacy Firebase UID to active Supabase ID if migrated
-    let activeUserId = userId;
-    const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-    if (userDoc.exists) {
-        const userData = userDoc.data();
-        if (userData?._migratedTo) {
-            activeUserId = userData._migratedTo;
-        } else if (userData?.supabaseAuthId) {
-            activeUserId = userData.supabaseAuthId;
-        }
-    }
+    // #449. `_migratedTo` then `supabaseAuthId`, stated once in
+    // lib/user-identity.ts. This was one of five readers that followed the
+    // pointer exactly ONE hop while getUserProfile followed the whole chain, so
+    // a twice-migrated member signed in as one account and was credited on
+    // another.
+    const activeUserId = (await resolveActiveUserId(userId, db.collection(COLLECTIONS.USERS))).id;
 
     const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(activeUserId);
 

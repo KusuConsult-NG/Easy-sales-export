@@ -7,8 +7,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Product } from "@/lib/types/marketplace";
-import { serializeDocs } from "@/lib/firestore-serialize";
-import { ProductSchema } from "@/lib/validations/marketplace";
+import { serializeDocs, serializeProduct } from "@/lib/firestore-serialize";
 import { withSafeAction, ActionResponse } from "@/lib/safe-action";
 import { hydrateSellerTrust, resolveSellerTrust, SELLER_NAME_FALLBACK } from "@/lib/seller-trust";
 import {
@@ -125,16 +124,9 @@ async function _getMarketplaceProductsAction(params: {
             }
         }
 
-        const { serializeValue } = await import("@/lib/firestore-serialize");
-        let products = snapshot.docs.map((doc: any) => { 
-            const data = doc.data();
-            try {
-                const parsed = ProductSchema.parse({ id: doc.id, ...data });
-                return serializeValue(parsed);
-            } catch {
-                return serializeValue({ id: doc.id, ...data });
-            }
-        });
+        // #443. See serializeProduct: the row is still kept when it fails the
+        // schema (#130), but it is healed rather than passed through raw.
+        let products = snapshot.docs.map((doc: any) => serializeProduct(doc.id, doc.data()) as any);
 
         if (indexError) {
             products.sort((a: any, b: any) => {
@@ -308,11 +300,8 @@ async function _getProductByIdAction(productId: string): Promise<ActionResponse<
                 eventId: data.eventId,
             };
 
-            try {
-                product = { ...(serializeValue(ProductSchema.parse(mappedData)) as Product), ...flashFields } as Product;
-            } catch (e) {
-                product = serializeValue(mappedData) as Product;
-            }
+            // #443. Healed rather than parse-or-raw — see serializeProduct.
+            product = { ...(serializeProduct(String(mappedData.id), mappedData) as Product), ...flashFields } as Product;
         } else {
             // The badge, live, on the ordinary product branch too.
             //
@@ -327,11 +316,8 @@ async function _getProductByIdAction(productId: string): Promise<ActionResponse<
             );
             const hydrated = { ...raw, sellerName: raw.sellerName || trust.sellerName, sellerVerified: trust.sellerVerified };
 
-            try {
-                product = serializeValue(ProductSchema.parse(hydrated)) as Product;
-            } catch (e) {
-                product = serializeValue(hydrated) as Product;
-            }
+            // #443. Healed rather than parse-or-raw — see serializeProduct.
+            product = serializeProduct(String(raw.id), hydrated) as Product;
         }
 
         return { error: null, success: true as const, data: product };
@@ -376,16 +362,8 @@ async function _getRecommendedProductsAction(limitCount: number = 3): Promise<Ac
             }
         }
 
-        const { serializeValue } = await import("@/lib/firestore-serialize");
-        const products = snapshot.docs.map((doc: any) => { 
-            const data = doc.data();
-            try {
-                const parsed = ProductSchema.parse({ id: doc.id, ...data });
-                return serializeValue(parsed);
-            } catch (e) {
-                return serializeValue({ id: doc.id, ...data });
-            }
-        });
+        // #443. Healed rather than returned raw — see serializeProduct.
+        const products = snapshot.docs.map((doc: any) => serializeProduct(doc.id, doc.data()) as any);
 
         if (indexError) {
             products.sort((a: any, b: any) => {
@@ -600,13 +578,8 @@ async function _searchProductsAction(params: { query?: string;
             }
         }
 
-        const products = productsData.map((p: any) => {
-            try {
-                return ProductSchema.parse(p);
-            } catch (e) {
-                return p as Product;
-            }
-        });
+        // #443. Healed rather than parse-or-raw — see serializeProduct.
+        const products = productsData.map((p: any) => serializeProduct(String(p.id), p));
 
         // Seller name AND badge, both live, one read per unique seller.
         //

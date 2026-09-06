@@ -8,9 +8,9 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Product, Order } from "@/lib/types/marketplace";
-import { ProductSchema, OrderSchema, SellerAnalyticsSchema } from "@/lib/validations/marketplace";
+import { SellerAnalyticsSchema } from "@/lib/validations/marketplace";
 import { withSafeAction, ActionResponse } from "@/lib/safe-action";
-import { toMillis } from "@/lib/firestore-serialize";
+import { toMillis, serializeOrder, serializeProduct } from "@/lib/firestore-serialize";
 import { countsAsSellerRevenue } from "@/lib/order-status";
 import { scopeOrderToSeller, sellerOrderAmount } from "@/lib/order-scope";
 import { isRetired } from "@/lib/record-retirement";
@@ -100,18 +100,10 @@ async function _getSellerProductsAction(options: {
                 throw e;
             }
         }
-        const { serializeValue } = await import("@/lib/firestore-serialize");
-        
-        let products = snapshot.docs.map((doc: any) => { 
-            const data = doc.data();
-            try {
-                const parsed = ProductSchema.parse({ id: doc.id, ...data });
-                return serializeValue(parsed);
-            } catch {
-                // Graceful fallback: return raw serialized data rather than crashing/losing the product
-                return serializeValue({ id: doc.id, ...data });
-            }
-        });
+        // #443. Was ProductSchema.parse in a try with the raw document in the
+        // catch. Keeping the row rather than crashing was right (#130);
+        // returning it unhealed while still calling it a Product was not.
+        let products = snapshot.docs.map((doc: any) => serializeProduct(doc.id, doc.data()));
 
         /**
          *   #301 THE ONE LIST THAT WOULD HAVE KEPT SHOWING A DELETED PRODUCT.
@@ -243,8 +235,7 @@ async function _getSellerOrdersAction(options: { limit?: number;
             }
         }
 
-        const { serializeValue } = await import("@/lib/firestore-serialize");
-        let orders = snapshot.docs.map((doc: any) => { 
+        let orders = snapshot.docs.map((doc: any) => {
             /**
              *   #342 ONE ORDER DOCUMENT, SEVERAL SELLERS.
              *
@@ -268,23 +259,57 @@ async function _getSellerOrdersAction(options: { limit?: number;
              *        untouched.
              */
             const data = scopeOrderToSeller(doc.data(), userId);
-            try {
-                const parsed = OrderSchema.parse({ id: doc.id, ...data });
-                return serializeValue(parsed);
-            } catch (e) {
-                return serializeValue({ id: doc.id, ...data });
-            }
+
+            // #443. Same parse-or-raw-document fallback the buyer dashboard
+            // had, and the same consequence one screen along: the seller order
+            // list also reads `order.items.length` and `order.items.map(...)`
+            // unguarded. Scoping still happens first — serializeOrder shapes
+            // what scopeOrderToSeller decided this seller may see.
+            return serializeOrder(doc.id, data);
         });
 
         // Server-assisted search
         if (search) { 
             const q = search.toLowerCase().trim();
+            /**
+             *   #444 THE SELLER'S ORDER SEARCH MATCHED ON THREE NAMES THAT NO
+             *        ORDER WRITER STORES, SO IT COULD ONLY EVER FIND AN ID.
+             *
+             *        It read `item.title`, `o.buyerName` and `o.buyerEmail`.
+             *
+             *          item.title      every writer stores `productTitle` —
+             *                          _payment_orders.ts and _payment_verify.ts
+             *                          both build items from `item.productTitle`,
+             *                          and every render reads productTitle. The
+             *                          `title` spelling belongs to the PRODUCT
+             *                          document, one level away.
+             *          buyerName       written onto the ESCROW row and onto
+             *          buyerEmail      farm-nation purchases — never onto a
+             *                          marketplace order.
+             *
+             *        Found by #443: healing the order through its schema strips
+             *        what the schema does not declare, and three seller-search
+             *        tests went red. They had been passing on a fixture that
+             *        seeded fields the app cannot produce, green because the
+             *        parse was FAILING and the raw document came through. The
+             *        broken validation was holding up a broken search.
+             *
+             *        Searched on what an order actually holds. The delivery
+             *        address is where a marketplace order records who is
+             *        receiving it, and the seller can already see it — this
+             *        makes it findable rather than newly visible. buyerName and
+             *        buyerEmail stay in the list and are declared on the schema,
+             *        so a row that does carry them still matches.
+             */
             orders = orders.filter((o: any) => {
-                const itemTitles = o.items?.map((item: any) => item.title).filter(Boolean) || [];
+                const itemTitles = o.items?.map((item: any) => item.productTitle).filter(Boolean) || [];
                 const searchString = [
                     o.id,
+                    o.orderNumber,
                     o.buyerName,
                     o.buyerEmail,
+                    o.deliveryAddress?.recipientName,
+                    o.deliveryAddress?.recipientPhone,
                     ...itemTitles
                 ].filter(Boolean).map(String).join(" ").toLowerCase();
                 return searchString.includes(q);

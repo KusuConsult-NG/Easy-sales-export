@@ -200,10 +200,26 @@ describe('#343 — the type is what checks it now, not a cast', () => {
     it('and getUserProfile really does resolve the migration itself', () => {
         // The claim the repair rests on: the interceptor was dead because the
         // field is consumed one level down.
+        //
+        //   #449 THIS ASSERTED THE STRING `userData._migratedTo`, AND THAT
+        //   STRING WAS THE UNBOUNDED RECURSION. getUserProfile read the field
+        //   and called itself, so a cycle hung the login and a dangling pointer
+        //   refused it. The resolution moved into lib/user-identity.ts, where
+        //   it is bounded and shared with the five other readers — which is a
+        //   better answer to the same question this test is asking.
+        //
+        //   Asserted on the resolution happening, not on the spelling of it.
         const cache = source('src/lib/user-cache.ts');
 
-        expect(cache).toContain('userData._migratedTo');
-        expect(cache).toContain('return getUserProfile(migratedId)');
+        expect(cache).toContain('resolveActiveUser(');
+        // Was `expect(cache).toContain('return getUserProfile(migratedId)')` —
+        // pinning the recursive call itself. #449 measured what that call did
+        // on a cycle: it never returned. The bounded walk replaces it, and the
+        // profile is built under the id the walk LANDED on, not the one asked
+        // for, which is the part that actually matters to a caller.
+        expect(cache).toContain('const activeId = resolved.id;');
+        expect(cache).toContain('id: activeId,');
+        expect(cache).not.toContain('return getUserProfile(migratedId)');
     });
 });
 
