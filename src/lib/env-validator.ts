@@ -143,6 +143,57 @@ const RECOMMENDED_ENV_VARS = [
 ] as const;
 
 /**
+ * Tell the operator WHICH KIND of misconfiguration this is.
+ *
+ *   #461 "WHICH VARIABLE DID I MISS" IS THE WRONG QUESTION WHEN THE ANSWER IS
+ *   "ALL OF THEM", AND THE LOG COULD NOT TELL THE TWO APART.
+ *
+ *   Three deploys in a row printed the same list of thirteen names. Each time
+ *   the reasonable reading was that some variables had been set and some had
+ *   been missed — so the next move was hunting for the missing ones, which do
+ *   not exist, because NONE of them had arrived.
+ *
+ *   The evidence was in the log and took a Dockerfile to interpret. The image
+ *   sets `ENV PORT=3000`; the container reported listening on 8080. Only the
+ *   platform sets PORT, so injection was working and the service simply had no
+ *   user variables on it — set on a different service, a different environment,
+ *   or defined as shared variables and never linked. That is a completely
+ *   different fix from "add the one you forgot", and nothing in the output said
+ *   so.
+ *
+ *   The container can see that for itself. Railway stamps every container with
+ *   RAILWAY_* markers, so those present alongside none of ours is conclusive.
+ *
+ *   NAMES ONLY, NEVER VALUES, and only names this file already lists or that
+ *   the platform defines — an environment dump into a log is how a secret ends
+ *   up somewhere it cannot be recalled from.
+ */
+function whyNothingArrived(): string[] {
+    const wanted = [...REQUIRED_ENV_VARS, ...PRODUCTION_REQUIRED_ENV_VARS];
+    const present = new Set(wanted.filter((key) => process.env[key]));
+    const platformMarkers = Object.keys(process.env).filter((k) => k.startsWith('RAILWAY_'));
+
+    if (present.size > 0) {
+        // Some arrived, some did not — the ordinary "you missed one" case, and
+        // the list above is the answer.
+        return [];
+    }
+
+    return [
+        'NOT ONE of the variables this application defines is present, which is',
+        'not the same as having missed a few. The deployment platform IS setting',
+        platformMarkers.length > 0
+            ? `variables here — ${platformMarkers.length} RAILWAY_* marker(s) arrived — so injection works`
+            : 'the container up, so injection is expected to work',
+        'and this service has no variables of its own. Check that you are',
+        'looking at the SAME service and environment that produced this log, and',
+        'that shared/project variables are linked into it rather than only',
+        'defined alongside it.',
+        '',
+    ];
+}
+
+/**
  * Validate environment variables
  */
 export function validateEnv(): EnvValidationResult {
@@ -266,6 +317,7 @@ export function logEnvValidation() {
                 'cannot answer a single request:',
                 ...fatalMissing.map((k) => `  - ${k}`),
                 '',
+                ...whyNothingArrived(),
                 'Set them on the deployment platform and redeploy. The previous',
                 'container keeps serving until this one starts cleanly.',
                 '',

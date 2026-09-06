@@ -32,11 +32,32 @@
  *   validator's source to find out which list is which, so the log now says it:
  *   what blocks, what merely degrades, and what each degraded one costs.
  *
+ *   #461 AND THE SAME LOG COULD NOT TELL "YOU MISSED A FEW" FROM "NONE OF THEM
+ *   ARRIVED", WHICH ARE DIFFERENT FAULTS WITH DIFFERENT FIXES.
+ *
+ *   Three deploys in a row printed the same thirteen names. Each time the
+ *   reasonable reading was that some had been set and some missed — so the next
+ *   move was hunting for the missing ones, which do not exist, because NONE of
+ *   them had arrived.
+ *
+ *   The evidence was in the log and needed the Dockerfile to interpret. The
+ *   image sets `ENV PORT=3000`; the container reported listening on 8080. Only
+ *   the platform sets PORT, so injection was working and the service simply had
+ *   no user variables on it — set on another service, another environment, or
+ *   defined as shared variables and never linked.
+ *
+ *   The container can see that for itself: Railway stamps every container with
+ *   RAILWAY_* markers, so those arriving alongside none of ours is conclusive.
+ *   NAMES ONLY, never values — an environment dump into a log cannot be recalled.
+ *
  *   MUTATION-TESTED, WITH A CONTROL. Against a green baseline:
  *
  *     the two lists printed as one again        KILLED
  *     WHAT_BREAKS loses an entry                KILLED
  *     a fatal variable listed as degrading      KILLED
+ *     the nothing-arrived notice removed        KILLED
+ *     it fires even when some DID arrive        KILLED
+ *     the RAILWAY_* marker count dropped        KILLED
  *     reword this header                        SURVIVED, as intended
  */
 
@@ -141,6 +162,55 @@ describe('#457 — a boot with nothing set says what to do first', () => {
 
     it('and still refuses to start — #450 is not softened, only explained', () => {
         expect(output).toContain('🛑 REFUSING TO START.');
+    });
+
+    it('AND SAYS WHEN *NOTHING* ARRIVED — a different fault from missing a few', () => {
+        //   #461 Three deploys printed the same thirteen names, and each time
+        //        the reasonable reading was "some were set and some were
+        //        missed" — so the next move was hunting for variables that do
+        //        not exist. None of them had arrived. That is a service with no
+        //        variables on it, not a forgotten key, and it needs a different
+        //        fix.
+        expect(output).toContain('NOT ONE of the variables this application defines is present');
+        expect(output).toContain('SAME service and environment');
+    });
+
+    it('AND SAYS SO WHEN THE PLATFORM IS DEMONSTRABLY INJECTING', () => {
+        // RAILWAY_* markers present alongside none of ours is conclusive: the
+        // mechanism works and the service is empty.
+        const withMarkers = boot({
+            NODE_ENV: 'production',
+            RAILWAY_ENVIRONMENT: 'production',
+            RAILWAY_SERVICE_NAME: 'web',
+            PORT: '8080',
+        });
+
+        expect(withMarkers).toContain('2 RAILWAY_* marker(s) arrived');
+    });
+
+    it('AND STAYS QUIET WHEN SOME ARRIVED — then the list above IS the answer', () => {
+        // The discriminator. If this fired whenever anything was missing it
+        // would be noise on the ordinary "you missed one" deploy.
+        const partial = boot({
+            NODE_ENV: 'production',
+            NEXTAUTH_SECRET: 'set',
+            NEXT_PUBLIC_SUPABASE_URL: 'https://example.supabase.co',
+        });
+
+        expect(partial).toContain('REFUSING TO START');
+        expect(partial).not.toContain('NOT ONE of the variables');
+    });
+
+    it('AND NEVER PRINTS A VALUE — an env dump into a log cannot be recalled', () => {
+        const secrets = boot({
+            NODE_ENV: 'production',
+            RAILWAY_ENVIRONMENT: 'production',
+            SOME_UNRELATED_SECRET: 'sk_live_do_not_print_me',
+            PORT: '8080',
+        });
+
+        expect(secrets).not.toContain('sk_live_do_not_print_me');
+        expect(secrets).not.toContain('SOME_UNRELATED_SECRET');
     });
 
     it('POSITIVE CONTROL: a fully configured boot prints no failure banner', () => {
