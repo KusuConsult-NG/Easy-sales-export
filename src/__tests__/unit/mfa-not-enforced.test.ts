@@ -30,8 +30,18 @@
  * comment said the cookie was "used by middleware enforcement"; that middleware
  * does not exist.
  *
- * WHY THIS IS PINNED RATHER THAN FIXED
- * ------------------------------------
+ * OWNER DECISION (#445): DO NOT ENFORCE. Asked directly, told directly. This
+ * is no longer my judgement held open pending an answer — it is the answer, and
+ * these tests are the record of it.
+ *
+ * If it is ever revisited, the order matters and is the reason the decision was
+ * put this way: wire verifyBackupCode() first, THEN enforcement. Turning
+ * enforcement on while recovery is unwired locks anyone who loses their
+ * authenticator out of their own money, using the recovery path they were
+ * promised at setup.
+ *
+ * WHY IT WAS PINNED RATHER THAN FIXED
+ * -----------------------------------
  * Turning enforcement on is a product decision with a live consequence.
  * requiresMFA covers withdrawals and loan approvals; enabling it while
  * verifyBackupCode has no caller would lock anyone who loses their

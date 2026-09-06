@@ -30,19 +30,27 @@ import { HUB_MODULES } from "@/config/modules.config";
  *        it would have sent marketplace and Farm Nation users to a domain the
  *        router does not canonically serve.
  *
- *        DERIVED NOW. HUB_MODULES is the source; the env overrides are kept so
- *        a deployment can still point a module elsewhere, and the fallback can
- *        no longer disagree with the router.
+ *        DERIVED. HUB_MODULES is the source, so the fallback can no longer
+ *        disagree with the router.
  *
- *        NOTE ON THOSE ENV VARS. All six NEXT_PUBLIC_*_URL names appear in this
- *        repository ONLY here. Nothing else reads them, and nothing set them —
- *        they are the configuration surface of a module with no consumers.
- *        Kept, because a deployment may set them and removing the override
- *        would silently ignore it.
+ *   #445 AND THE SIX NEXT_PUBLIC_*_URL OVERRIDES ARE GONE — OWNER DECISION.
+ *
+ *        #367 kept them on the argument that a deployment might set one and
+ *        removing the override would silently ignore it. That argument was
+ *        weaker than it looked: all six names appeared in this repository ONLY
+ *        here, nothing set them in any environment file, and the module that
+ *        read them has no importers. They were the configuration surface of a
+ *        feature with no consumers — a second, silent way to answer a question
+ *        HUB_MODULES already answers, in a codebase where "two statements of
+ *        one rule" has been the finding some thirty times.
+ *
+ *        The owner chose to retire them rather than build on them. A module's
+ *        domain now has exactly one source: src/config/modules.config.ts, which
+ *        middleware.ts and auth.config.ts already route and scope cookies on.
+ *        To point a module elsewhere, change it there.
  */
 
-const withEnv = (slug: string, override: string | undefined): string => {
-    if (override) return override;
+const domainOf = (slug: string): string => {
     const mod = Object.values(HUB_MODULES).find((m) => m.slug === slug);
     // A slug that is not in HUB_MODULES is a typo in this file, not a runtime
     // condition. Naming it beats returning "https://undefined".
@@ -51,12 +59,12 @@ const withEnv = (slug: string, override: string | undefined): string => {
 };
 
 export const EXTERNAL_DOMAINS = {
-    marketplace: withEnv("marketplace", process.env.NEXT_PUBLIC_MARKETPLACE_URL),
-    cooperatives: withEnv("cooperatives", process.env.NEXT_PUBLIC_COOPERATIVES_URL),
-    academy: withEnv("academy", process.env.NEXT_PUBLIC_ACADEMY_URL),
-    wave: withEnv("wave", process.env.NEXT_PUBLIC_WAVE_URL),
-    export: withEnv("export", process.env.NEXT_PUBLIC_EXPORT_URL),
-    farmNation: withEnv("farm-nation", process.env.NEXT_PUBLIC_FARM_NATION_URL),
+    marketplace: domainOf("marketplace"),
+    cooperatives: domainOf("cooperatives"),
+    academy: domainOf("academy"),
+    wave: domainOf("wave"),
+    export: domainOf("export"),
+    farmNation: domainOf("farm-nation"),
 } as const;
 
 export type ExternalDomain = keyof typeof EXTERNAL_DOMAINS;
