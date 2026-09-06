@@ -23,12 +23,21 @@ export async function GET(request: NextRequest) {
 
         const userId = session.user.id;
 
-        // Auto-enroll if the user has an active paid plan
-        const userPlan = (session.user as any)?.serviceRegistrations?.academy?.plan || "free";
-        const isPaid = ["elite", "standard", "foundation", "advanced"].includes(userPlan.toLowerCase());
-        if (isPaid) {
-            await autoEnrollPaidUser(userId, userPlan);
-        }
+        /**
+         *   #460 THIS GATE WAS THE BUG, not a saving.
+         *
+         *        `isPaid` was computed from the JWT claim, which is up to eight
+         *        hours old, and a false answer SKIPPED THE CALL ENTIRELY. So
+         *        somebody who had just paid was not enrolled — the function that
+         *        would have noticed never ran — and the academy stayed empty
+         *        until their token happened to refresh.
+         *
+         *        autoEnrollPaidUser decides from the stored document now,
+         *        derives the user from the session itself, and returns
+         *        immediately for anyone unpaid. Calling it unconditionally is
+         *        both correct and cheaper than being wrong.
+         */
+        await autoEnrollPaidUser(userId, "");
 
         // 1. Fetch all courses in academy_courses to map details
         const coursesSnapshot = await db.collection(COLLECTIONS.ACADEMY_COURSES).get();

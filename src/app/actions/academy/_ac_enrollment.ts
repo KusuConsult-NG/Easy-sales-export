@@ -295,17 +295,64 @@ export async function autoEnrollPaidUser(userId: string, userPlan: string) {
 
     const sessionUser = sessionResult.session.user as any;
     const resolvedUserId = sessionUser.id;
-    const resolvedPlan = sessionUser?.serviceRegistrations?.academy?.plan || "free";
+    if (!resolvedUserId) return;
 
-    if (!resolvedUserId || !resolvedPlan) return;
+    /**
+     *   #460 THE PLAN AND THE ADMIN'S DECISION WERE READ OFF THE JWT, WHICH IS
+     *        UP TO EIGHT HOURS OLD.
+     *
+     *        `sessionUser.serviceRegistrations.academy.plan` is a token claim
+     *        baked in at login. auth.config.ts issues stateless JWTs with an
+     *        8-hour maxAge, so this decided entitlement from a snapshot that can
+     *        predate everything that matters about it:
+     *
+     *          somebody PAYS       claim still says "free", so nothing enrols.
+     *                              They are charged and the academy stays empty
+     *                              until they happen to sign in again.
+     *          an admin REJECTS    claim still says approved, so enrolment and
+     *                              progress rows keep accruing for courses the
+     *                              module gate will not open.
+     *
+     *        The comment this replaces said "a plan is what somebody bought and
+     *        a status is what an admin decided, and the decision wins". It does
+     *        — but the decision it read was the one in the token, not the one
+     *        the admin made.
+     *
+     *        THE PATTERN IS ALREADY IN THIS CODEBASE. #364 swept this class out
+     *        of fifteen API routes, requireAdmin re-reads roles live, and
+     *        api/wave/training-sessions falls back to the stored document when
+     *        the claim does not grant. Academy was missed by all of it, in two
+     *        verbatim copies.
+     *
+     *        Read once, here, where the grant is made — the callers used to
+     *        compute `isPaid` from the same stale claim and SKIP THE CALL, which
+     *        is what made a fresh payment invisible.
+     *
+     *        A FAILED READ ENROLS NOBODY. This function writes rows and runs on
+     *        every dashboard load, so a retry costs nothing and a wrong grant
+     *        persists. Denying on an unreadable document is the safe direction.
+     */
+    let stored: any;
+    try {
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(resolvedUserId).get();
+        // Kept although a mutation test showed removing it changes nothing —
+        // data() on a missing document is undefined, which already resolves to
+        // "free" and returns below. It states the intent rather than relying on
+        // that coincidence holding in the adapter.
+        if (!userDoc.exists) return;
+        stored = userDoc.data() || {};
+    } catch (e) {
+        logger.error("[autoEnrollPaidUser] Could not read the user document — enrolling nobody", e);
+        return;
+    }
+
+    const academy = stored?.serviceRegistrations?.academy ?? {};
+    const resolvedPlan = academy.plan || "free";
 
     // A decided-against registration enrols in nothing, for the same reason
     // enrollInCourseAction now refuses one: a plan is what somebody bought and a
-    // status is what an admin decided, and the decision wins. This function runs
-    // on every academy dashboard load, so without the guard a rejected applicant
-    // who had paid for a tier kept accruing enrolment and progress rows for
-    // courses the module gate will not let them open.
-    if (isDecidedAgainst(sessionUser?.serviceRegistrations?.academy?.status)) return;
+    // status is what an admin decided, and the decision wins.
+    if (isDecidedAgainst(academy.status)) return;
 
     const plan = String(resolvedPlan).toLowerCase();
     const isPaid = ["elite", "standard", "foundation", "advanced", "member", "student", "academy_student", "scholarship", "active", "enrolled", "approved"].includes(plan);
@@ -464,12 +511,11 @@ async function _getEnrolledCoursesWithDetailsAction(): Promise<ActionResponse<an
 
         const userId = session.user.id;
 
-        // Auto-enroll if the user has an active paid plan
-        const userPlan = (session.user as any)?.serviceRegistrations?.academy?.plan || "free";
-        const isPaid = ["elite", "standard", "foundation", "advanced"].includes(userPlan.toLowerCase());
-        if (isPaid) {
-            await autoEnrollPaidUser(userId, userPlan);
-        }
+        //   #460 The same stale-claim gate the API route carried, verbatim.
+        //        A false `isPaid` skipped the call, so a fresh payment enrolled
+        //        nobody. autoEnrollPaidUser reads the stored document and
+        //        returns immediately for anyone unpaid.
+        await autoEnrollPaidUser(userId, "");
 
 
         // 1. Fetch all progress records for this user
