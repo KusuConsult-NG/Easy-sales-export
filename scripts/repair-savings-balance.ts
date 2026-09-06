@@ -88,13 +88,33 @@ import {
 } from '../src/lib/wallet-ledger';
 import { existsSync } from 'fs';
 import { config as loadEnv } from 'dotenv';
+import { isApply, modeBanner, targetHost } from './_maintenance-guard';
 
 // Unlike seed-local.ts, this script is MEANT for the real database, so
 // .env.local is loaded. .env.development.local wins if a local stack is up.
 if (existsSync('.env.development.local')) loadEnv({ path: '.env.development.local' });
 loadEnv({ path: '.env.local' });
 
-const APPLY = process.argv.includes('--apply');
+
+/**
+ *   #448 THIS SCRIPT DID NOT SAY WHICH DATABASE IT WAS ABOUT TO WRITE TO.
+ *
+ *        Eight of the eleven writing scripts print `modeBanner(name, apply,
+ *        targetHost())` before doing anything — the name, the mode, and the
+ *        HOSTNAME the writes travel to. Three did not, and all three are the
+ *        ones an operator reaches for when repairing live data.
+ *
+ *        They survived #329's ratchet because it accepts either `isApply(` or
+ *        a literal `'--apply'`, and these hand-rolled the second. The check was
+ *        satisfied by an equivalent that skipped the half that matters here:
+ *        an operator with the wrong .env loaded got a report identical to the
+ *        right one.
+ *
+ *        Both halves now come from scripts/_maintenance-guard.ts, and targetHost
+ *        REFUSES rather than defaulting when the URL is unset — an unknown
+ *        target must stop a script, not be waved through.
+ */
+const APPLY = isApply();
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -220,7 +240,7 @@ async function repair(userId: string, references: AffectedPayment[]): Promise<vo
 
 async function main() {
     const host = new URL(url).hostname;
-    console.log(`\n🔧 Savings-balance repair`);
+    console.log(modeBanner('Savings-balance repair', APPLY, targetHost()));
     console.log(`   Database: ${host}`);
     console.log(`   Mode:     ${APPLY ? '⚠️  APPLY — this will change balances' : 'report only (pass --apply to write)'}\n`);
 
