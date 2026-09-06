@@ -120,9 +120,21 @@ async function CooperativeLayoutContent({ children }: { children: React.ReactNod
                         }
                     }, { merge: true });
 
-                    // 3. Invalidate Redis Cache to reflect the status change
-                    const { redis, CacheKeys } = await import("@/lib/redis");
-                    await redis.del(CacheKeys.userProfile(userId));
+                    //   3. Invalidate the cached profile so the status change is seen.
+                    //
+                    //   #459 THIS USED THE RAW CLIENT — `redis.del(...)` — WHICH
+                    //        BYPASSES THE FALLBACK STORE. While every cache was a
+                    //        no-op that made no difference; the moment caching
+                    //        actually works, an invalidation aimed at the stub
+                    //        leaves the stale profile in place for its full TTL,
+                    //        and this user would be sent back to repair a
+                    //        registration they had just repaired.
+                    //
+                    //        invalidateUserCache clears the profile AND the three
+                    //        sibling keys written beside it, through deleteCache,
+                    //        which reaches whichever store the write went to.
+                    const { invalidateUserCache } = await import("@/lib/user-cache");
+                    await invalidateUserCache(userId);
                 } catch (repairErr) {
                     logger.error(`[CooperativeLayout] Failed to write repair status for user ${userId}`, repairErr);
                     // Do not re-throw — still redirect them to onboarding so they can fix their data

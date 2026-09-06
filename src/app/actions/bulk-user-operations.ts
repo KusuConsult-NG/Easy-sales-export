@@ -125,6 +125,18 @@ export async function bulkSuspendUsersAction(
 
             await Promise.allSettled([
                 ...successfulIds.flatMap(userId => [
+                    //   #459 NOTHING READS `user:suspended:`. All three
+                    //        references in this repository are writes — two
+                    //        setex and one del — so this key has never gated
+                    //        anything, with or without Upstash configured.
+                    //        Suspension is actually enforced from the user
+                    //        document, which requireAdmin re-reads live
+                    //        (`data?.suspended === true`), so the behaviour is
+                    //        correct and this write is decoration.
+                    //
+                    //        Left in place rather than removed: it is harmless,
+                    //        and a reviewer who deletes it should do so knowing
+                    //        it is unread, not assuming it is load-bearing.
                     redis.setex(`user:suspended:${userId}`, ttlSeconds, "true"),
                     invalidateUserCache(userId)
                 ]),

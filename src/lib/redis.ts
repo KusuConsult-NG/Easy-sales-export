@@ -1,4 +1,9 @@
 import { Redis } from '@upstash/redis';
+import {
+    getFallbackCache,
+    setFallbackCache,
+    deleteFallbackCache,
+} from './cache-fallback';
 
 // Initialize Redis client safely
 const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
@@ -91,6 +96,13 @@ export const CACHE_TTL = {
  * Get cached value
  */
 export async function getCached<T>(key: string): Promise<T | null> {
+    //   #459 WITHOUT UPSTASH, `redis` IS A STUB WHOSE get() RETURNS null AND
+    //        WHOSE setex() DISCARDS — so every cache on this platform was a
+    //        no-op, while the rate limiters beside them fell back to memory.
+    //        See cache-fallback.ts for what that cost and why the fallback is
+    //        per-instance.
+    if (!isRedisConfigured) return getFallbackCache<T>(key);
+
     try {
         const value = await redis.get<T>(key);
         return value;
@@ -104,6 +116,8 @@ export async function getCached<T>(key: string): Promise<T | null> {
  * Set cached value with TTL
  */
 export async function setCache(key: string, value: any, ttlSeconds: number): Promise<boolean> {
+    if (!isRedisConfigured) return setFallbackCache(key, value, ttlSeconds);
+
     try {
         await redis.setex(key, ttlSeconds, value);
         return true;
@@ -117,6 +131,10 @@ export async function setCache(key: string, value: any, ttlSeconds: number): Pro
  * Delete cached value
  */
 export async function deleteCache(key: string): Promise<boolean> {
+    // Invalidation must reach the same store the write went to, or a stale
+    // entry outlives the change that was meant to clear it.
+    if (!isRedisConfigured) return deleteFallbackCache(key);
+
     try {
         await redis.del(key);
         return true;

@@ -311,3 +311,22 @@ global.console = {
     error: jest.fn(),
     warn: jest.fn(),
 }
+
+//   #459 THE FALLBACK CACHE IS PER-PROCESS, AND A JEST WORKER IS ONE PROCESS.
+//
+//        With no Upstash configured — which is every test run — getCached and
+//        setCache now go to an in-memory store instead of a stub that discarded
+//        everything. That store outlives an individual test, so without this a
+//        value cached by one test would be served to the next, and a test could
+//        pass because of what a previous test had already looked up.
+//
+//        Cleared before each test, so caching is exercised WITHIN a test and
+//        never leaks across one.
+beforeEach(() => {
+    try {
+        jest.requireActual('@/lib/cache-fallback').clearFallbackCache();
+    } catch {
+        // The module resolves in every suite that loads the app; a suite that
+        // does not is unaffected either way.
+    }
+});
