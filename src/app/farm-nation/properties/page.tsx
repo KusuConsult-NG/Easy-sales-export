@@ -7,6 +7,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { searchLandListingsAction, type LandListing } from "@/app/actions/land-listings";
 import { useSearchParams, useRouter } from "next/navigation";
+import { firstImageSrcOr } from "@/lib/first-image";
 
 function PropertiesContent() {
     const searchParams = useSearchParams();
@@ -274,7 +275,7 @@ function PropertiesContent() {
                                     {/* Property Image */}
                                     <div className="relative h-48 bg-slate-200">
                                         <Image
-                                            src={property.images[0] || "/placeholder-land.jpg"}
+                                            src={firstImageSrcOr(property.images, "/placeholder-land.jpg")}
                                             alt={property.title}
                                             fill
                                             className="object-cover group-hover:scale-105 transition-transform duration-300"

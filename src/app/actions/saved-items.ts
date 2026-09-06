@@ -10,6 +10,7 @@ import { isSavedItemType, isSavedRow, savedItemDocId } from "@/lib/saved-items";
 import { readSavedRows } from "@/lib/saved-items-store";
 import { publicSellerSummary, type PublicSellerSummary } from "@/lib/public-seller-summary";
 import { isLandListingViewable } from "@/lib/land-visibility";
+import { firstImageSrc } from "@/lib/first-image";
 
 /**
  * Saving a seller, and saving a property — #105.
@@ -297,9 +298,7 @@ async function _getSavedPropertiesAction(): Promise<
                             price: Number(data.price) || 0,
                             size: data.size ?? "",
                             status: String(data.status ?? ""),
-                            image: Array.isArray(data.images) && typeof data.images[0] === "string"
-                                ? data.images[0]
-                                : null,
+                            image: firstImageSrc(data.images),
                             location,
                         },
                     };

@@ -17,6 +17,7 @@ import { getBuyerStatsAction, getBuyerOrdersAction, getRecommendedProductsAction
 import type { Order, Product } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
 import { toDate, formatLocalDate } from "@/lib/date-utils";
+import { firstImageSrcOr } from "@/lib/first-image";
 
 export default function BuyerDashboard() {
     const [loading, setLoading] = useState(true);
@@ -55,11 +56,15 @@ export default function BuyerDashboard() {
                     const transformed = recommendedResult.data.products.map((p: any) => ({
                         id: p.id,
                         name: p.title,
-                        price: p.pricingTiers[0]?.price || 0,
+                        // `pricingTiers` is the same shape hazard as `images`
+                        // (#439): a product row without the key made this
+                        // `undefined[0]`, which throws while the list is being
+                        // built rather than showing one gap.
+                        price: p.pricingTiers?.[0]?.price || 0,
                         unit: p.unit,
                         seller: p.sellerName || "Unknown Seller",
                         rating: p.rating || 0,
-                        image: p.images[0] || "/images/logo.jpg"
+                        image: firstImageSrcOr(p.images, "/images/logo.jpg")
                     }));
                     setRecommendedProducts(transformed);
                 }

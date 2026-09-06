@@ -12,6 +12,7 @@ import { SaveItemButton } from "@/components/saved/SaveItemButton";
 import { getPropertyByIdAction, type LandListing } from "@/app/actions/land-listings";
 import { getUserTierAction } from "@/app/actions/cooperative";
 import { useToast } from "@/contexts/ToastContext";
+import { imageSrcOr } from "@/lib/first-image";
 
 export default function PropertyDetailsPage() {
     const params = useParams();
@@ -133,7 +134,7 @@ export default function PropertyDetailsPage() {
                                 <div className="relative">
                                     <div className="aspect-video relative bg-slate-200">
                                         <Image
-                                            src={property.images[currentImageIndex] || "/placeholder-land.jpg"}
+                                            src={imageSrcOr(property.images?.[currentImageIndex], "/placeholder-land.jpg")}
                                             alt={property.title}
                                             fill
                                             className="object-cover"

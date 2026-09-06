@@ -6,6 +6,7 @@ import Image from "next/image";
 import { Package, Plus, Clock, CheckCircle2, XCircle, Trash2, Loader2 } from "lucide-react";
 import { getUserExportProductsAction, deleteExportProductAction } from "@/app/actions/export-products";
 import { useToast } from "@/contexts/ToastContext";
+import { firstImageSrc } from "@/lib/first-image";
 
 export default function MyExportProductsPage() {
     const [products, setProducts] = useState<any[]>([]);
@@ -122,11 +123,10 @@ export default function MyExportProductsPage() {
                               * carrying a bare storage key would have broken
                               * the whole grid rather than showing one gap.
                               */}
-                            {product.images?.[0]
-                                && (product.images[0].startsWith("http://") || product.images[0].startsWith("https://")) && (
+                            {firstImageSrc(product.images) && (
                                 <div className="relative h-48 w-full bg-slate-50 overflow-hidden border-b border-slate-100 shrink-0">
                                     <Image
-                                        src={product.images[0]}
+                                        src={firstImageSrc(product.images)!}
                                         alt={product.name}
                                         fill
                                         sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"

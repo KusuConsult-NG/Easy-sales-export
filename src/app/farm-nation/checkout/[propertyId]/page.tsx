@@ -11,6 +11,7 @@ import {
 import { getPropertyByIdAction, type LandListing } from "@/app/actions/land-listings";
 import { getUserTierAction } from "@/app/actions/cooperative";
 import { initializePropertyPaymentAction } from "@/app/actions/farm-nation-payment";
+import { firstImageSrc } from "@/lib/first-image";
 
 export default function CheckoutPage() {
     const params = useParams();
@@ -334,10 +335,10 @@ export default function CheckoutPage() {
                             <h2 className="text-xl font-bold text-slate-900 mb-4">Order Summary</h2>
 
                             {/* Property Preview */}
-                            {property.images && property.images.length > 0 && (
+                            {firstImageSrc(property.images) && (
                                 <div className="relative aspect-video rounded-xl overflow-hidden mb-4">
                                     <Image
-                                        src={property.images[0]}
+                                        src={firstImageSrc(property.images)!}
                                         alt={property.title}
                                         fill
                                         className="object-cover"

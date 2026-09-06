@@ -4,6 +4,7 @@ import Link from "next/link";
 import { BadgeCheck, Store, MapPin, Star, Package, ArrowLeft, ShoppingCart } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { SaveItemButton } from "@/components/saved/SaveItemButton";
+import { firstImageSrc } from "@/lib/first-image";
 
 interface SellerPageProps {
     params: Promise<{ sellerId: string }>;
@@ -163,9 +164,9 @@ export default async function SellerStorefrontPage({ params }: SellerPageProps) 
                             >
                                 {/* Image */}
                                 <div className="h-44 bg-slate-100 overflow-hidden relative">
-                                    {product.images?.[0] && (product.images[0].startsWith('http://') || product.images[0].startsWith('https://')) ? (
+                                    {firstImageSrc(product.images) ? (
                                         <Image
-                                            src={product.images[0]}
+                                            src={firstImageSrc(product.images)!}
                                             alt={product.title}
                                             fill
                                             className="object-cover group-hover:scale-105 transition-transform duration-300"

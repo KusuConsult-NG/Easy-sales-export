@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { getMyLandListings, deleteLandListing } from "@/app/actions/land-actions";
 import { useToast } from "@/contexts/ToastContext";
+import { firstImageSrc } from "@/lib/first-image";
 
 export default function MyPropertiesPage() {
     const router = useRouter();
@@ -184,9 +185,9 @@ export default function MyPropertiesPage() {
                                 className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition"
                             >
                                 <div className="relative aspect-video bg-slate-200">
-                                    {property.images && property.images.length > 0 ? (
+                                    {firstImageSrc(property.images) ? (
                                         <Image
-                                            src={property.images[0]}
+                                            src={firstImageSrc(property.images)!}
                                             alt={property.title}
                                             fill
                                             className="object-cover"

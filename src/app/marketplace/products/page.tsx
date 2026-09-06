@@ -9,6 +9,7 @@ import { getMarketplaceProductsAction } from "@/app/actions/marketplace";
 import type { Product } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
 import { useDebounce } from "@/hooks/useDebounce";
+import { firstImageSrc } from "@/lib/first-image";
 
 const CATEGORY_MAP = [
     { id: "all", label: "All" },
@@ -190,9 +191,9 @@ export default function MarketplaceProductsPage() {
                                 <div key={product.id} className="bg-white rounded-3xl overflow-hidden shadow-md hover:shadow-xl border border-slate-100 hover:border-slate-200/80 transition-all duration-300 hover:-translate-y-1.5 h-full flex flex-col group">
                                     {/* Product Image */}
                                     <div className="relative h-60 bg-slate-100 overflow-hidden">
-                                        {product.images && product.images[0] && (product.images[0].startsWith('http://') || product.images[0].startsWith('https://')) ? (
+                                        {firstImageSrc(product.images) ? (
                                             <Image
-                                                src={product.images[0]}
+                                                src={firstImageSrc(product.images)!}
                                                 alt={product.title}
                                                 fill
                                                 className="object-cover group-hover:scale-[1.03] transition-transform duration-500"

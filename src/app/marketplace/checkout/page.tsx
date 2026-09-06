@@ -48,6 +48,7 @@ function estimateCartWeight(items: any[]): number {
 
 import dynamicImport from "next/dynamic";
 import { NIGERIAN_STATE_COORDINATES } from "@/lib/locations";
+import { firstImageSrc } from "@/lib/first-image";
 
 const CheckoutMapFallback = dynamicImport(
     () => import("@/components/marketplace/CheckoutMapFallback"),
@@ -819,9 +820,9 @@ export default function CheckoutPage() {
                                                 className="flex items-start gap-4 pb-4 border-b border-slate-200 last:border-0"
                                             >
                                                 <div className="relative w-20 h-20 rounded-lg overflow-hidden bg-slate-100">
-                                                    {item.images[0] ? (
+                                                    {firstImageSrc(item.images) ? (
                                                         <Image
-                                                            src={item.images[0]}
+                                                            src={firstImageSrc(item.images)!}
                                                             alt={item.title}
                                                             fill
                                                             className="object-cover"

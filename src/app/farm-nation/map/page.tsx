@@ -7,6 +7,7 @@ import dynamic from "next/dynamic";
 import { Filter, Grid, MapIcon, Search } from "lucide-react";
 import Image from "next/image";
 import { isPurchasable } from "@/lib/land-listing-status";
+import { firstImageSrc } from "@/lib/first-image";
 
 // Dynamically import map component to avoid SSR issues
 const MapView = dynamic(() => import("@/components/farm-nation/MapView"), {
@@ -328,9 +329,9 @@ export default function FarmNationMapPage() {
                                 onClick={() => router.push(`/farm-nation/property/${listing.id}`)}
                             >
                                 <div className="relative h-48 bg-slate-200">
-                                    {listing.images[0] && (
+                                    {firstImageSrc(listing.images) && (
                                         <Image
-                                            src={listing.images[0]}
+                                            src={firstImageSrc(listing.images)!}
                                             alt={listing.title}
                                             fill
                                             className="object-cover"

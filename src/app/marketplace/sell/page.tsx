@@ -11,6 +11,7 @@ import { getSellerProductsAction, getSellerVerificationAction, deleteProductActi
 import Image from "next/image";
 import type { Product } from "@/lib/types/marketplace";
 import { useToast } from "@/contexts/ToastContext";
+import { firstImageSrc } from "@/lib/first-image";
 
 export default function SellerDashboardPage() {
     const { data: session, status } = useSession();
@@ -245,9 +246,9 @@ export default function SellerDashboardPage() {
                             >
                                 {/* Product Image */}
                                 <div className="relative h-48 bg-slate-200">
-                                    {product.images && product.images.length > 0 && (product.images[0].startsWith('http://') || product.images[0].startsWith('https://')) ? (
+                                    {firstImageSrc(product.images) ? (
                                         <Image
-                                            src={product.images[0]}
+                                            src={firstImageSrc(product.images)!}
                                             alt={product.title}
                                             fill
                                             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"

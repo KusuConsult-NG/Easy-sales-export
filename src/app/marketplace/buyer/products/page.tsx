@@ -24,6 +24,7 @@ import { getProductsAction } from "@/app/actions/marketplace";
 import { getActiveFlashSaleProductsAction } from "@/app/actions/village-market";
 import type { Product, ProductCategory } from "@/lib/types/marketplace";
 import { SELLER_NAME_FALLBACK } from "@/lib/seller-trust";
+import { firstImageSrc } from "@/lib/first-image";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -416,9 +417,9 @@ export default function ProductsPage() {
                                         >
                                             {/* Product Image */}
                                             <div className="h-44 bg-slate-100 relative overflow-hidden">
-                                                {product.images?.[0] && (product.images[0].startsWith('http://') || product.images[0].startsWith('https://')) ? (
+                                                {firstImageSrc(product.images) ? (
                                                     <Image
-                                                        src={product.images[0]}
+                                                        src={firstImageSrc(product.images)!}
                                                         alt={product.title}
                                                         fill
                                                         sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"

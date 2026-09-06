@@ -12,6 +12,7 @@ import { getProductAction, getRelatedProductsAction } from "@/app/actions/market
 import type { Product } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
 import QuoteRequestModal from "@/components/modals/QuoteRequestModal";
+import { firstImageSrc } from "@/lib/first-image";
 
 export default function ProductDetailPage() {
     const params = useParams();
@@ -404,9 +405,9 @@ export default function ProductDetailPage() {
                                 className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition group"
                             >
                                 <div className="relative h-48">
-                                    {relatedProduct.images?.[0] ? (
+                                    {firstImageSrc(relatedProduct.images) ? (
                                         <Image
-                                            src={relatedProduct.images[0]}
+                                            src={firstImageSrc(relatedProduct.images)!}
                                             alt={relatedProduct.title}
                                             fill
                                             className="object-cover group-hover:scale-105 transition-transform duration-300"

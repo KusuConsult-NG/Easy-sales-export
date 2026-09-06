@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { checkFarmNationStatusAction } from "@/app/actions/farm-nation";
 import { searchLandListingsAction } from "@/app/actions/land-listings";
 import { isPurchasable } from "@/lib/land-listing-status";
+import { firstImageSrc } from "@/lib/first-image";
 
 const categories = [
     { name: "Arable Land", icon: "🌾" },
@@ -174,9 +175,9 @@ export default function FarmNationLandingPage() {
                                 className="bg-white rounded-2xl overflow-hidden elevation-2 hover-lift block"
                             >
                                 <div className="relative h-56 bg-slate-200">
-                                    {property.images?.[0] ? (
+                                    {firstImageSrc(property.images) ? (
                                         <Image
-                                            src={property.images[0]}
+                                            src={firstImageSrc(property.images)!}
                                             alt={property.title}
                                             fill
                                             className="object-cover"
