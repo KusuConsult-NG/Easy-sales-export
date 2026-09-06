@@ -240,9 +240,7 @@ async function writeLedgerRow(plan: Plan, cooperativeId: string): Promise<void> 
 }
 
 async function main() {
-    console.log(modeBanner('Fixed-savings cooperative-ledger backfill', APPLY, targetHost()));
-    console.log(`   Database: ${new URL(url).hostname}`);
-    console.log(`   Mode:     ${APPLY ? '⚠️  APPLY — this will write ledger rows' : 'report only (pass --apply to write)'}\n`);
+    console.log(modeBanner('Fixed-savings cooperative-ledger backfill', APPLY, targetHost(), 'this will write ledger rows'));
 
     await readPlans();
 

@@ -590,6 +590,50 @@ describe('#329 — one convention across every writing script', () => {
         expect({ silent }).toEqual({ silent: [] });
     });
 
+    it('AND SAYS IT ONCE — #448 left two of them printing the banner twice', () => {
+        //   #463 The fix that gave every script the shared banner did not remove
+        //        the hand-rolled one two of them already had, so
+        //        backfill-fixed-savings-ledger and repair-savings-balance each
+        //        printed Target AND Database, Mode AND Mode. Observed on a real
+        //        production run:
+        //
+        //            Target:   dpuiznenrymoyarvdave.supabase.co
+        //            Mode:     report only (pass --apply to write)
+        //            Database: dpuiznenrymoyarvdave.supabase.co
+        //            Mode:     report only (pass --apply to write)
+        //
+        //        Two of three is the one-of-N shape again, inside my own fix for
+        //        the same class. The hand-rolled Mode line was the MORE specific
+        //        of the two — "this will change balances" against the shared
+        //        "this will write" — so the specificity moved into modeBanner's
+        //        fourth argument rather than being deleted.
+        const doubled = WRITING_SCRIPTS.filter((rel) => {
+            const src = stripComments(read(rel));
+            if (!src.includes('modeBanner(')) return false;
+            return /Database:\s/.test(src) || (src.match(/`   Mode: /g) ?? []).length > 0;
+        });
+
+        expect({ doubled }).toEqual({ doubled: [] });
+    });
+
+    it('POSITIVE CONTROL: that scan really would catch a second banner line', () => {
+        const withDuplicate = "console.log(modeBanner('X', A, h()));\nconsole.log(`   Database: ${h}`);";
+        const clean = "console.log(modeBanner('X', A, h(), 'this will write rows'));";
+
+        expect(/Database:\s/.test(withDuplicate)).toBe(true);
+        expect(/Database:\s/.test(clean)).toBe(false);
+    });
+
+    it('and the shared banner carries what applying DOES, when the script says so', () => {
+        // Behavioural, not a string scan: the specificity that used to live in
+        // the deleted lines must actually reach the operator.
+        expect(modeBanner('Savings-balance repair', true, 'db.example.com', 'this will change balances'))
+            .toContain('APPLY — this will change balances');
+
+        // and stays generic when a script has nothing more precise to add.
+        expect(modeBanner('Thing', true, 'db.example.com')).toContain('APPLY — this will write');
+    });
+
     it('and takes the mode from the shared helper, not a second spelling of it', () => {
         // The two halves arrive together or not at all — that is the whole
         // lesson of the three above.

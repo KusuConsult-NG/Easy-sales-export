@@ -240,9 +240,7 @@ async function repair(userId: string, references: AffectedPayment[]): Promise<vo
 
 async function main() {
     const host = new URL(url).hostname;
-    console.log(modeBanner('Savings-balance repair', APPLY, targetHost()));
-    console.log(`   Database: ${host}`);
-    console.log(`   Mode:     ${APPLY ? '⚠️  APPLY — this will change balances' : 'report only (pass --apply to write)'}\n`);
+    console.log(modeBanner('Savings-balance repair', APPLY, targetHost(), 'this will change balances'));
 
     const affected = await findAffectedPayments();
     if (affected.length === 0) {

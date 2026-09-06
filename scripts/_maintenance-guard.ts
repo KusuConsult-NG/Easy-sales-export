@@ -59,11 +59,33 @@ export function targetHost(url: string | undefined = process.env.NEXT_PUBLIC_SUP
 }
 
 /** The banner every script prints before doing anything. */
-export function modeBanner(name: string, apply: boolean, host: string): string {
+export function modeBanner(
+    name: string,
+    apply: boolean,
+    host: string,
+    /**
+     *   #463 WHAT APPLYING ACTUALLY DOES, in this script's own words.
+     *
+     *        #448 gave every writing script this shared banner and did not
+     *        remove the hand-rolled one two of them already had, so they printed
+     *        the target twice and the mode twice — one of them the script that
+     *        CHANGES BALANCES. Deleting the hand-rolled lines would have lost
+     *        something, though: they said "this will write ledger rows" and
+     *        "this will change balances", where the shared line only says "this
+     *        will write". An operator about to repair live data is owed the
+     *        specific sentence.
+     *
+     *        So the specificity moved into the shared banner instead of being
+     *        dropped or duplicated. Optional, because most scripts have nothing
+     *        more precise to add.
+     */
+    applyDoes?: string,
+): string {
+    const doing = applyDoes ? `⚠️  APPLY — ${applyDoes}` : "⚠️  APPLY — this will write";
     return (
         `\n${name}\n` +
         `   Target:   ${host}\n` +
-        `   Mode:     ${apply ? "⚠️  APPLY — this will write" : "report only (pass --apply to write)"}\n`
+        `   Mode:     ${apply ? doing : "report only (pass --apply to write)"}\n`
     );
 }
 
