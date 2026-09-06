@@ -85,6 +85,30 @@ const PRODUCTION_REQUIRED_ENV_VARS = [
     'CLOUDINARY_API_SECRET',
 ] as const;
 
+/**
+ * What actually stops working when a NON-fatal variable is missing.
+ *
+ * #457. The startup log named thirteen variables and refused to start over
+ * four, without saying they were different lists — so every one of the thirteen
+ * read as a blocker. A name alone does not tell an operator whether to hunt for
+ * a key now or after the site is up; what it costs does.
+ *
+ * Every name in REQUIRED_ENV_VARS and PRODUCTION_REQUIRED_ENV_VARS that is not
+ * in FATAL_ENV_VARS appears here — a test asserts it, so a variable added to
+ * either list cannot arrive without an explanation.
+ */
+const WHAT_BREAKS: Record<string, string> = {
+    NEXTAUTH_URL: 'sign-in callbacks resolve against the wrong host',
+    NEXT_PUBLIC_URL: 'links in emails and Paystack callbacks fall back to a guessed host',
+    RESEND_API_KEY: 'no email leaves the platform — verification, receipts, invitations',
+    PAYSTACK_SECRET_KEY: 'no payment can be initialised or verified',
+    MFA_SECRET_KEY: 'multi-factor enrolment and verification fail',
+    QR_ENCRYPTION_KEY: 'QR codes cannot be issued or read',
+    NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: 'every upload fails — marketplace media, certificates, export documents',
+    CLOUDINARY_API_KEY: 'every upload fails — marketplace media, certificates, export documents',
+    CLOUDINARY_API_SECRET: 'every upload fails — marketplace media, certificates, export documents',
+};
+
 const RECOMMENDED_ENV_VARS = [
     /**
      *   #450 QOREID_CLIENT_ID and QOREID_SECRET_KEY WERE REQUIRED, AND THAT
@@ -177,9 +201,42 @@ export function validateEnv(): EnvValidationResult {
 export function logEnvValidation() {
     const result = validateEnv();
 
+    /**
+     *   #457 THE STARTUP LOG PRINTED THIRTEEN NAMES AND THEN REFUSED TO START
+     *        OVER FOUR, WITHOUT SAYING THEY WERE DIFFERENT LISTS.
+     *
+     *        An operator reading
+     *
+     *            ❌ Environment validation failed!
+     *            Missing required variables: [ 13 names ]
+     *            🛑 REFUSING TO START.  ...  - 4 names
+     *
+     *        reasonably concludes the container needs all thirteen, and goes
+     *        looking for a Cloudinary key before it can see the site come up.
+     *        It needs FOUR. The other nine each break one feature on a platform
+     *        that is otherwise serving — which is the whole distinction #450
+     *        drew, and then did not print.
+     *
+     *        Saying which is which turns a wall into a short list.
+     */
     if (!result.valid) {
+        const fatal = result.missing.filter((k) => (FATAL_ENV_VARS as readonly string[]).includes(k));
+        const degrades = result.missing.filter((k) => !(FATAL_ENV_VARS as readonly string[]).includes(k));
+
         console.error('❌ Environment validation failed!');
-        console.error('Missing required variables:', result.missing);
+        if (fatal.length > 0) {
+            console.error(
+                `   ${fatal.length} that STOP THE CONTAINER STARTING: ${fatal.join(', ')}`,
+            );
+        }
+        if (degrades.length > 0) {
+            console.error(
+                `   ${degrades.length} that break one feature each, but still serve: ${degrades.join(', ')}`,
+            );
+            for (const key of degrades) {
+                console.error(`     - ${key}: ${WHAT_BREAKS[key] ?? 'the feature that reads it'}`);
+            }
+        }
     }
 
     /**
