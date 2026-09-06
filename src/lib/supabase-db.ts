@@ -1418,9 +1418,24 @@ export class SupabaseDocumentReference {
 export interface AggregatePlan {
     /** The PostgREST `select=` value. */
     projection: string;
-    /** field -> native column, when the projection asked for that column. */
+    /**
+     * field -> the property to read on each returned row: a native column, or
+     * the alias given to a JSON path. `null` means read it out of `raw_data`,
+     * which the projection then has to have asked for.
+     */
     columnFor: Record<string, string | null>;
 }
+
+/**
+ * A JSON key safe to place in a PostgREST `select=`.
+ *
+ * The select grammar gives meaning to `,` `:` `(` `)` `.` `-` `>` and quotes, so
+ * a field carrying any of them would change the query rather than name a key.
+ * Every field this codebase aggregates is a plain camelCase identifier; anything
+ * else takes the whole plan back to `raw_data`, which is always correct and
+ * merely wider.
+ */
+const SAFE_JSON_KEY = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 /**
  * Decide the narrowest projection that can still answer an aggregate.
@@ -1438,15 +1453,46 @@ export interface AggregatePlan {
  *   number per row instead of a document. Measured on 1,500 rows carrying a 2 KB
  *   document each: 81/65/61ms before, 33/12/11ms after, same total.
  *
- *   THREE CASES, AND EACH NEEDS A DIFFERENT ANSWER
+ *   AND THE NATIVE COLUMN ONLY REACHES TWO OF THE NINE CALL SITES. The other
+ *   seven — escrow_transactions, loan_applications, cooperative_withdrawals,
+ *   wave_withdrawals, wave shipments — live in `document_collections`, the
+ *   untyped catch-all where there is no column to narrow to. Fixing the two
+ *   tables that happen to be typed and leaving the seven that are not would be
+ *   fixing one of N copies, which is the shape of defect this audit keeps
+ *   finding.
  *
- *     every summed field has a native column   select those columns
- *     any field lives only in the document     select raw_data — selecting a
- *                                              column that does not exist fails
- *                                              the query rather than falling back
- *     nothing is summed at all (a count)       select `id`; counting rows needs
- *                                              no field, and pulling documents to
- *                                              count them is the same defect
+ *   POSTGREST CAN PROJECT A JSON PATH, so those seven need not pull documents
+ *   either. Verified against the real PostgREST this repo runs, v12.2.3:
+ *
+ *       select=agg0:raw_data->>amountDisbursed     -> [{"agg0":"250"}]
+ *       select=amount,agg0:raw_data->>fee          -> [{"amount":5.00,"agg0":"9"}]
+ *       ...on a row without the key                -> [{"agg0":null}]
+ *
+ *   camelCase keys pass through, aliases work, and a native column and a JSON
+ *   path mix in one select. So the plan narrows EVERY field it can name, from
+ *   whichever of the two places that field lives in.
+ *
+ *   THE CASES
+ *
+ *     nothing is summed at all (a count)   select `id`; counting rows needs no
+ *                                          field, and pulling documents to count
+ *                                          them is the same defect
+ *     the field has a native column        select the column
+ *     the field is a plain JSON key        select `raw_data->>key`, aliased
+ *     anything else                        select raw_data, whole — always
+ *                                          correct, merely wider
+ *
+ *   ONE DIFFERENCE IN SEMANTICS, STATED PLAINLY. `->>` cannot tell a key that is
+ *   absent from a key explicitly stored as JSON `null`; both come back as SQL
+ *   NULL. Reading the document could: absent gave `undefined` and was skipped,
+ *   while an explicit null gave `Number(null) === 0`, which was skipped from
+ *   neither the sum nor the count. Sums are unaffected — adding 0 changes
+ *   nothing — so this can only move an `average`, by one in its denominator, for
+ *   a document that stores an explicit null. `average` has no call site in this
+ *   codebase, and not counting a null is the better answer anyway. The read
+ *   applies that rule on BOTH routes rather than one, so a value is a number or
+ *   it is not, wherever it came from. It is recorded because it is a real
+ *   difference, not because it is a risk.
  *
  *   This is a FUNCTION rather than an expression inside aggregate() because the
  *   choice is not observable from outside — the caller sees the same total
@@ -1466,18 +1512,30 @@ export function aggregateProjection(tableName: string, fields: string[]): Aggreg
     // them, and every table has `id`.
     if (fields.length === 0) return { projection: 'id', columnFor: {} };
 
-    const columns = fields.map(nativeFor);
-
-    // All or nothing: PostgREST fails a select naming a column that does not
-    // exist, so one document-only field takes the whole aggregate to raw_data.
-    if (!columns.every(Boolean)) {
+    // A field this function cannot name safely takes the WHOLE plan back to the
+    // document: a select is one string, and half a narrowing is not a narrowing.
+    if (!fields.every((f) => SAFE_JSON_KEY.test(f))) {
         return { projection: 'raw_data', columnFor: Object.fromEntries(fields.map((f) => [f, null])) };
     }
 
-    return {
-        projection: [...new Set(columns as string[])].join(','),
-        columnFor: Object.fromEntries(fields.map((f, i) => [f, columns[i]])),
-    };
+    const select = new Set<string>();
+    const columnFor: Record<string, string | null> = {};
+
+    fields.forEach((field, i) => {
+        const native = nativeFor(field);
+        if (native) {
+            select.add(native);
+            columnFor[field] = native;
+            return;
+        }
+        // `agg0`, `agg1`, ... — positional, so two fields never share an alias,
+        // and no table has a column by those names to collide with.
+        const alias = `agg${i}`;
+        select.add(`${alias}:raw_data->>${field}`);
+        columnFor[field] = alias;
+    });
+
+    return { projection: [...select].join(','), columnFor };
 }
 
 export class SupabaseQuery {
@@ -1712,14 +1770,18 @@ export class SupabaseQuery {
                     let sum = 0;
                     let counted = 0;
                     for (const row of rows) {
-                        // From the column when the projection asked for it,
-                        // from the document otherwise. ONE plan decides both, so
-                        // the read cannot disagree with the select — which is
-                        // exactly the inconsistency that made my first A/B
-                        // measurement report a total of zero.
-                        const n = Number(
-                            column ? row[column] : (row.raw_data || {})[field],
-                        );
+                        // From the column or JSON-path alias the projection
+                        // asked for, from the document otherwise. ONE plan
+                        // decides both, so the read cannot disagree with the
+                        // select — which is exactly the inconsistency that made
+                        // my first A/B measurement report a total of zero.
+                        const value = column ? row[column] : (row.raw_data || {})[field];
+
+                        // A missing or null value is NOT a number. `->>` returns
+                        // SQL NULL for both an absent key and an explicit null,
+                        // and `Number(null)` is 0 — which would put a row that
+                        // holds no figure into an average's denominator.
+                        const n = value === null || value === undefined ? NaN : Number(value);
                         if (Number.isFinite(n)) {
                             sum += n;
                             counted++;
