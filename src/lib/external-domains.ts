@@ -11,8 +11,17 @@ import { HUB_MODULES } from "@/config/modules.config";
  *        The six domains were written out by hand here. The domain the
  *        application actually routes on comes from HUB_MODULES in
  *        src/config/modules.config.ts — middleware.ts builds its DOMAIN_MAP by
- *        reducing over it, and auth.config.ts reads the same object for cookie
- *        scoping. Comparing the two:
+ *        reducing over it.
+ *
+ *        #454 CORRECTS THE SECOND HALF OF THAT SENTENCE. It used to read "and
+ *        auth.config.ts reads the same object for cookie scoping". It does not.
+ *        auth.config.ts imported HUB_MODULES and never referenced it, and its
+ *        cookie options set NO `domain` at all — the session cookie is
+ *        host-only and the CSRF cookie is `__Host-`, which forbids a domain
+ *        attribute outright. Every module domain therefore has its own session,
+ *        by design. The unused import is gone.
+ *
+ *        Comparing the two:
  *
  *          module        this file (was)                    HUB_MODULES
  *          ------------  --------------------------------  ------------------------------

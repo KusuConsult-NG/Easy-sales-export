@@ -62,7 +62,11 @@ export const HUB_MODULES: Record<string, ModuleConfig> = {
     FARM_NATION: {
         id: 'mod_farm_001',
         name: 'Farm Nation',
-        domain: 'farmnation.easysalesexport.com',
+        // #454 OWNER DECISION: farmnation.ng is the canonical domain.
+        // easysalesmarket.com was already right; this was the only one that
+        // disagreed with the deployment. middleware.ts keeps the two
+        // easysalesexport.com spellings as aliases so old links still land.
+        domain: 'farmnation.ng',
         slug: 'farm-nation',
         version: '1.0.0',
         features: { hasAcademy: true, hasFinance: false, hasChat: false, hasListings: true },

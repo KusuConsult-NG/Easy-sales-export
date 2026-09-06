@@ -134,8 +134,20 @@ describe('#367 — the domain map is derived, so it cannot drift again', () => {
     it('and the two that had drifted now name the routed domain', () => {
         // Stated as literals as well, so the test says WHICH answer is right
         // rather than only that two derivations agree.
+        //
+        //   #454 THIS PINNED farmnation.easysalesexport.com, AND THE OWNER HAS
+        //   SINCE SETTLED IT THE OTHER WAY.
+        //
+        //   #367 found the two spellings disagreeing and made HUB_MODULES the
+        //   source — correctly, because ONE answer beats two. It could not know
+        //   which answer, so it kept the one already in the config.
+        //
+        //   Shown the live deployment, the owner confirmed easysalesmarket.com
+        //   (which the config already had) and farmnation.ng (which it did not).
+        //   modules.config.ts carries that now, and middleware.ts keeps both
+        //   easysalesexport.com spellings as aliases so old links still land.
         expect(EXTERNAL_DOMAINS.marketplace).toBe('https://easysalesmarket.com');
-        expect(EXTERNAL_DOMAINS.farmNation).toBe('https://farmnation.easysalesexport.com');
+        expect(EXTERNAL_DOMAINS.farmNation).toBe('https://farmnation.ng');
     });
 
     it('middleware routes on the same object, which is why that is the right answer', () => {

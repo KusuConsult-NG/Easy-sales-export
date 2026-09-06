@@ -24,17 +24,34 @@ const DOMAIN_MAP: Record<string, string> = Object.values(HUB_MODULES).reduce((ac
 
 // Root domain alias
 DOMAIN_MAP["easysalesexport.com"] = "";
-DOMAIN_MAP["farmnation.ng"] = "/farm-nation";
+// #454. farmnation.ng is the CANONICAL domain now (modules.config.ts), so it
+// arrives through the derived map above and no longer needs adding by hand.
+// These two remain as ALIASES, which is what they always were: old links and
+// any DNS still pointing at the subdomain must keep landing on the module.
 DOMAIN_MAP["farmnation.easysalesexport.com"] = "/farm-nation";
 DOMAIN_MAP["farm-nation.easysalesexport.com"] = "/farm-nation";
 // Explicit aliases for Academy and Export custom domains (www variants)
 DOMAIN_MAP["www.easysalesacademy.com"] = "/academy";
 DOMAIN_MAP["www.easysalesexportng.com"] = "/export";
 
-const APEX_DOMAINS: string[] = Object.values(HUB_MODULES)
-    .map(m => m.domain)
-    .filter(d => !d.endsWith(".easysalesexport.com"));
-APEX_DOMAINS.push("easysalesexport.com");
+/*
+ *   #454 APEX_DOMAINS WAS COMPUTED HERE AND READ BY NOTHING.
+ *
+ *        It filtered HUB_MODULES for domains outside easysalesexport.com and
+ *        appended the root — and no line in this file, or any other, consulted
+ *        it. The apex redirect below tests `hostname === "easysalesexport.com"`
+ *        directly.
+ *
+ *        Removed rather than left, because a list named APEX_DOMAINS is exactly
+ *        the thing somebody reaches for when adding a redirect, and it would
+ *        have been silently out of date. It was also the one place the
+ *        farm-nation domain change would have altered behaviour — moving that
+ *        module off easysalesexport.com adds it to a list nothing reads.
+ *
+ *        OPEN, AND NOT DECIDED HERE: the other five module apexes have www
+ *        variants in DOMAIN_MAP but no apex -> www redirect. Whether they
+ *        should get one is a product question about their DNS, not a repair.
+ */
 
 const authMiddleware = auth((req: any) => {
     const { pathname } = req.nextUrl;
