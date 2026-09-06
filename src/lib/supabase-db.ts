@@ -23,6 +23,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Timestamp, FieldValue } from './firestore-compat';
 import { invalidateCacheForCollection } from './cache-map';
 import { logger } from './logger';
+import { inList, jsonbArrayContainsAnyClause } from './postgrest-filters';
 
 // ─── Table Mapping ─────────────────────────────────────────────────────────────
 // Declared in ./supabase-table-map so the browser-side reader shares them
@@ -980,23 +981,6 @@ function applyFilter(
 }
 
 /**
- * One value, quoted for a PostgREST in-list — `("pending","in progress")`.
- *
- * Reserved characters inside a quoted member are backslash-escaped, which is
- * PostgREST's documented rule. The previous version interpolated the value
- * straight into `"${v}"`, so a value containing a quote or a comma closed the
- * member early and the filter silently meant something else — the shape this
- * whole finding is about, one level down.
- */
-function quoteForInList(value: any): string {
-    return `"${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
-}
-
-function inList(value: any): string {
-    return `(${(Array.isArray(value) ? value : [value]).map(quoteForInList).join(',')})`;
-}
-
-/**
  * An operator the adapter cannot express against this column shape.
  *
  * It THROWS. Returning an equality filter instead — which is what both switches
@@ -1120,22 +1104,17 @@ function applyJsonbFilter(query: any, field: string, op: FilterOperator, value: 
                 : `raw_data${parts.slice(0, -1).map(p => `->${JSON.stringify(p)}`).join('')}->${JSON.stringify(parts[parts.length - 1])}`;
             return query.filter(arrPath, 'cs', JSON.stringify([value]));
         }
-        case 'array-contains-any':
-            // This emitted PostgREST's `ov`, which is SQL `&&`. Postgres has no
-            // `&&` for jsonb — `select … where raw_data->'tags' && '["red"]'`
-            // is `ERROR: operator does not exist: jsonb && jsonb`, checked on
-            // Postgres 16, not inferred. So the branch could never have run.
-            //
-            // Every caller in this repository asks for it on `users.roles`,
-            // which IS a native TEXT[] column and takes the `overlaps` path
-            // above, so nothing is broken today. It is refused rather than
-            // rewritten: the correct form is an OR of `@>` filters, and I have
-            // no PostgREST here to exercise that against. Shipping an
-            // unverified query in place of one that errors would trade a loud
-            // failure for a quiet one, which is this finding's whole subject.
-            return unsupportedOperator(op, `JSONB field "${field}"`,
-                'Postgres has no && operator for jsonb; give the field a native TEXT[] column, '
-                + 'or use array-contains for a single value');
+        case 'array-contains-any': {
+            // Was PostgREST's `ov`, i.e. SQL `&&`, which Postgres does not have
+            // for jsonb — PGRST returns 42883 "operator does not exist: jsonb
+            // && unknown". An OR of `@>` containments asks the same question
+            // and Postgres does have that. See lib/postgrest-filters, where
+            // every form is recorded against the PostgREST that answered it.
+            const arrPath = parts.length === 1
+                ? `raw_data->${JSON.stringify(field)}`
+                : `raw_data${parts.slice(0, -1).map(p => `->${JSON.stringify(p)}`).join('')}->${JSON.stringify(parts[parts.length - 1])}`;
+            return query.or(jsonbArrayContainsAnyClause(arrPath, value));
+        }
         default:
             return unsupportedOperator(op, `JSONB field "${field}"`,
                 'the adapter has no filter for it, and guessing one silently returns the wrong rows');

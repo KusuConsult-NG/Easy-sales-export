@@ -44,21 +44,34 @@
  *   emitted PostgREST's `ov`, which is SQL `&&`, and Postgres has no `&&` for
  *   jsonb. Measured, not inferred — see below.
  *
- *   WHAT I MEASURED, AND WHERE. There is no Supabase in this container (the
- *   local stack needs Docker images the egress policy denies), so I started a
- *   real Postgres 16.13 and ran the exact expressions the adapter builds:
+ *   WHAT I MEASURED, AND WHERE — AND TWO CORRECTIONS TO MY OWN FIRST PASS.
+ *   I first wrote that there was no Supabase in this container because "the
+ *   local stack needs Docker images the egress policy denies", and that the
+ *   PostgREST wire syntax therefore could not be exercised. BOTH WERE WRONG.
+ *   The Docker constraint belongs to scripts/ci-integration-db.sh, which runs
+ *   `supabase start`. scripts/local-stack/up.sh exists precisely because that
+ *   is often unavailable, needs no Docker at all, and brought up real
+ *   PostgreSQL 16.13 and real PostgREST v12.2.3 here on the first try. Its own
+ *   header says so; I did not read it before claiming otherwise.
  *
- *     raw_data->>'status' <> 'cancelled'          -> a,c   (row with NO status EXCLUDED)
- *     raw_data->>'status' not in ('cancelled',…)  -> a     (row with NO status EXCLUDED)
- *     raw_data->'tags' && '["red"]'::jsonb        -> ERROR: operator does not
- *                                                    exist: jsonb && jsonb
- *     raw_data->'tags' @> '["red"]'::jsonb        -> a,d   (array-contains: fine)
- *     raw_data->>'status' = 'cancelled,refunded'  -> no rows   (the old not-in)
+ *   So every form is now measured on the wire, not inferred:
  *
- *   The two exclusions match Firestore's treatment of a missing field, so the
- *   `not-in` added here has the semantics callers already expect. The PostgREST
- *   wire syntax itself I could NOT exercise — no PostgREST here — so this suite
- *   asserts the query the adapter builds, and says so rather than implying more.
+ *     raw_data->"tags"=ov.["red"]              42883, operator does not exist:
+ *                                              jsonb && unknown
+ *     or=(raw_data->tags.cs.["a,b"])           PGRST100, failed to parse logic
+ *                                              tree — the comma splits it
+ *     or=(raw_data->"tags".cs."[\"red\"]",…)    the rows holding red or green
+ *     roles=ov.{}  (native TEXT[])             no rows
+ *     not.in.("say \"no\"") unescaped           did NOT exclude the row
+ *
+ *   AND array-contains-any IS NOW IMPLEMENTED, NOT REFUSED. My first pass
+ *   refused it "because the correct form is an OR of @> filters and I have no
+ *   PostgREST to exercise it against". That reason evaporated with the stack
+ *   running, and leaving a refusal standing on a reason that is no longer true
+ *   is the thing this audit corrects everywhere else. It is implemented,
+ *   exercised against real PostgREST, and pinned by a db-integration suite —
+ *   __tests__/db-integration/filter-operators.test.ts, which is where a
+ *   difference between "the filter we built" and "the rows we got" can fail.
  *
  *   NOTHING IS BROKEN TODAY, SAID PLAINLY. `not-in` has no caller. All five
  *   array-contains-any callers ask for `users.roles`, which IS a native TEXT[]
@@ -68,18 +81,15 @@
  *   the wrong rows without an error. The next person to write it would have had
  *   no way to find out.
  *
- *   REFUSED, NOT GUESSED. array-contains-any on JSONB is an OR of `@>` filters,
- *   and I have no PostgREST to exercise that against. Shipping an unverified
- *   query in place of one that errors trades a loud failure for a quiet one,
- *   which is this finding's subject. Both adapters refuse it, with a message
- *   naming the fix.
+ *   ONE SPELLING, ONE MODULE. lib/postgrest-filters holds the in-list quoting
+ *   and the array-contains-any clause, and BOTH adapters call it. The `ov` line
+ *   was written out twice, which is how a fix reaches one copy — the failure
+ *   behind #425, #426, #429, #430, #431, #432 and #433.
  *
- *   ONE RESIDUAL DIVERGENCE, RECORDED RATHER THAN HIDDEN. fake-db still answers
- *   array-contains-any on any field, because its semantics are not wrong — the
- *   adapters refuse it for a Postgres limitation, not a meaning. It has no table
- *   map, so teaching it the native/JSONB split is a bigger change than this
- *   finding. The ratchet below pins that this is the ONLY operator the three
- *   doors treat differently.
+ *   AND THE THREE DOORS NOW AGREE ON ALL TEN OPERATORS. fake-db already
+ *   implemented not-in and array-contains-any correctly in memory; both
+ *   adapters now answer them the same way, so the double is no longer more
+ *   capable than the thing it doubles.
  *
  *   MUTATION-TESTED, WITH A CONTROL. Against a green baseline:
  *
@@ -104,7 +114,7 @@ jest.mock('@/lib/supabase', () => {
         eq: record('eq'), neq: record('neq'),
         lt: record('lt'), lte: record('lte'), gt: record('gt'), gte: record('gte'),
         in: record('in'), is: record('is'),
-        not: record('not'), filter: record('filter'),
+        not: record('not'), filter: record('filter'), or: record('or'),
         contains: record('contains'), overlaps: record('overlaps'),
         order: jest.fn(() => chain),
         limit: jest.fn(() => chain),
@@ -207,14 +217,34 @@ describe('#434 — array-contains-any', () => {
         expect({ column: call!.a, values: call!.b }).toEqual({ column: 'roles', values: ['admin', 'seller'] });
     });
 
-    it('and is REFUSED on a JSONB field rather than emitting SQL Postgres rejects', async () => {
-        // `ov` is `&&`, and `jsonb && jsonb` is "operator does not exist" —
-        // measured on Postgres 16, see the header.
-        await expect(
-            supabaseDb.collection('jest_ops').where('tags', 'array-contains-any', ['red']).get(),
-        ).rejects.toThrow(/Unsupported query operator "array-contains-any" on JSONB field "tags"/);
+    it('and on a JSONB field it builds an OR of @> containments', async () => {
+        // Was `ov`, i.e. `&&`, which PostgREST answered with 42883 "operator
+        // does not exist: jsonb && unknown". Which rows come back is pinned by
+        // __tests__/db-integration/filter-operators.test.ts, against a real
+        // PostgREST; this pins the clause the adapter hands it.
+        await supabaseDb.collection('jest_ops')
+            .where('tags', 'array-contains-any', ['red', 'green']).get();
 
+        const call = callFor('or');
+        expect(call).toBeDefined();
+        expect(call!.a).toBe(
+            'raw_data->"tags".cs."[\\"red\\"]",raw_data->"tags".cs."[\\"green\\"]"');
         expect(callFor('filter')).toBeUndefined();
+    });
+
+    it('and the JSON payload is QUOTED, so a comma cannot split the logic tree', async () => {
+        await supabaseDb.collection('jest_ops')
+            .where('tags', 'array-contains-any', ['a,b']).get();
+        // Unquoted this is a PGRST100 parse error, measured.
+        expect(callFor('or')!.a).toBe('raw_data->"tags".cs."[\\"a,b\\"]"');
+    });
+
+    it('and an EMPTY list is spelled as a contradiction, matching the native branch', async () => {
+        // `roles=ov.{}` on a native TEXT[] column returns no rows, and an empty
+        // `or=()` is a parse error, so the impossible condition is written out.
+        await supabaseDb.collection('jest_ops')
+            .where('tags', 'array-contains-any', []).get();
+        expect(callFor('or')!.a).toBe('raw_data->"tags".not.cs."[]"');
     });
 
     it('and array-contains on a JSONB field is untouched — it uses @>, which works', async () => {
@@ -251,13 +281,23 @@ describe('#434 — an operator the adapter cannot express fails loudly', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#434 — the three doors', () => {
-    it('THE BROWSER ADAPTER REFUSES THE SAME JSONB array-contains-any', () => {
+    it('THE BROWSER ADAPTER USES THE SAME CLAUSE, FROM THE SAME MODULE', () => {
         // The identical `ov` line was in both. Fixing one and not the other is
         // the failure this audit has recorded seven times (#425, #426, #429,
-        // #430, #431, #432, #433).
+        // #430, #431, #432, #433), so the spelling is called, not restated.
         const src = code(BROWSER);
         expect(src).not.toMatch(/'ov'/);
-        expect(src).toMatch(/Unsupported query operator "array-contains-any" on JSONB field/);
+        expect(src).toMatch(/jsonbArrayContainsAnyClause/);
+        expect(src).toMatch(/from '\.\/postgrest-filters'/);
+    });
+
+    it('and so does the server adapter — one module, not two spellings', () => {
+        const src = code(SERVER);
+        expect(src).toMatch(/jsonbArrayContainsAnyClause/);
+        expect(src).toMatch(/from '\.\/postgrest-filters'/);
+        // The in-list quoting moved there too, so it cannot drift either.
+        expect(src).toMatch(/inList\(value\)/);
+        expect(src).not.toMatch(/replace\(\/\\\\\//);
     });
 
     it('and the server adapter no longer has an `ov` filter either', () => {
@@ -292,8 +332,7 @@ describe('#434 — the three doors', () => {
             '<': 'filtered', '<=': 'filtered', '>': 'filtered', '>=': 'filtered',
             'in': 'filtered', 'not-in': 'filtered',
             'array-contains': 'filtered',
-            // The one Postgres cannot do on jsonb.
-            'array-contains-any': 'refused',
+            'array-contains-any': 'filtered',
         });
     });
 

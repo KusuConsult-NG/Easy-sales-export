@@ -72,7 +72,11 @@ function resolveDbEnv({ label, envFile = '.env.staging' }) {
         console.warn(
             `[${label}] Skipping — no database configured.\n` +
             `  Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in ${envFile},\n` +
-            `  or run the whole stack locally with: npx supabase start\n` +
+            // Was "npx supabase start", which pulls container images and so
+            // fails on exactly the machines that reach this message. up.sh
+            // needs no Docker, and it writes the two variables above.
+            `  or bring the whole stack up locally with: ./scripts/local-stack/up.sh\n` +
+            `  then re-run with those variables exported from .env.development.local\n` +
             `  (${envFile} currently carries all three variables with EMPTY values.)`
         );
     }

@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { DEDICATED_TABLE_MAP, NATIVE_COLUMNS, FIELD_TO_COLUMN } from './supabase-table-map';
+import { jsonbArrayContainsAnyClause } from './postgrest-filters';
 
 /**
  * Rows a query with no explicit limit() returns.
@@ -92,17 +93,12 @@ function applyClientFilter(query: any, tableName: string, f: WhereFilter): any {
 
     if (f.op === 'array-contains-any') {
         const values = Array.isArray(f.value) ? f.value : [f.value];
-        if (!nativeCol) {
-            // `ov` is SQL `&&`, and Postgres has no `&&` for jsonb — verified,
-            // not inferred. The same line was in supabase-db; both are refused
-            // rather than rewritten, and both here so the fix does not reach
-            // one copy. See that module's note.
-            throw new Error(
-                `[supabase-client-db] Unsupported query operator "array-contains-any" on JSONB field `
-                + `"${f.field}": Postgres has no && operator for jsonb. Give the field a native `
-                + `TEXT[] column, or use array-contains for a single value.`);
-        }
-        return query.overlaps(nativeCol, values);
+        // `ov` is SQL `&&`, which Postgres does not have for jsonb. Both
+        // adapters emitted it; both use the OR-of-`@>` spelling now, from the
+        // one module, so the fix cannot reach a single copy.
+        return nativeCol
+            ? query.overlaps(nativeCol, values)
+            : query.or(jsonbArrayContainsAnyClause(`raw_data->${f.field}`, f.value));
     }
 
     // Scalar comparisons. JSONB values come back as text, so the comparison
