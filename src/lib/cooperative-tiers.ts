@@ -3,6 +3,8 @@
  * - Member
  */
 
+import { installmentDueDate } from "@/lib/loan-schedule-dates";
+
 export type CooperativeTier = "Member";
 
 export interface TierRequirements {
@@ -128,8 +130,12 @@ export function calculateRepaymentSchedule(
     let remainingPrincipal = loanAmount;
 
     for (let i = 1; i <= durationMonths; i++) {
-        const dueDate = new Date(startDate);
-        dueDate.setMonth(dueDate.getMonth() + i);
+        // The same rule the persisted schedule uses, called rather than
+        // restated — see lib/loan-schedule-dates. calculateLoanCost, this
+        // function's only caller, discards these dates and keeps the interest,
+        // so the defect was latent here; a second statement of the rule is
+        // exactly how a fix reaches one site and not the other.
+        const dueDate = installmentDueDate(startDate, i);
 
         const interestAmount = remainingPrincipal * r;
         let principalAmount = monthlyPayment - interestAmount;

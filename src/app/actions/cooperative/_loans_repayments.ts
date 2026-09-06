@@ -20,6 +20,7 @@ import { isAdmin } from "@/lib/admin-permissions";
 import { checkRepaymentAmount } from "@/lib/loan-repayment-amount";
 import { checkRepaymentAllocations, singleAllocation } from "@/lib/repayment-allocation";
 import { calculatePenalty } from "@/lib/calculatePenalty";
+import { installmentDueDate } from "@/lib/loan-schedule-dates";
 import type { LoanApplication, RepaymentInstallment } from "@/lib/types/cooperative-loans";
 import { resolveLoanApplication, normaliseLoanApplication } from "@/lib/loan-application-location";
 
@@ -118,8 +119,11 @@ async function _getRepaymentScheduleAction(
             const interestAmount = interestAmountKobo / 100;
             const totalAmount = totalAmountKobo / 100;
 
-            const dueDate = new Date(startDate);
-            dueDate.setMonth(dueDate.getMonth() + i);
+            // Clamped to the end of the target month, not rolled past it.
+            // `setMonth(getMonth() + i)` gave a loan disbursed on the 31st two
+            // instalments in one month and none in the next. See
+            // lib/loan-schedule-dates.
+            const dueDate = installmentDueDate(startDate, i);
 
             const installmentRef = await db.collection(COLLECTIONS.LOAN_REPAYMENTS).add({
                 loanId,
