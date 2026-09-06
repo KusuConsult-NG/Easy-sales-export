@@ -16,10 +16,46 @@ const customJestConfig = {
         // adapter was only ever exercised through a hand-written mock.
         '^uuid$': '<rootDir>/src/lib/__mocks__/uuid.js',
     },
+    /**
+     * WHAT THE COVERAGE NUMBER IS A NUMBER *OF* — #436.
+     *
+     * This omitted src/app/api entirely. 121 route files, the server-side
+     * entry points reachable from the internet, carrying the admin gates, the
+     * payment verifications and the money writes — and the figure the CI floor
+     * enforced was computed as though they did not exist.
+     *
+     * Measured when they were added: 87 of the 121 are at 0%, and the API
+     * surface alone is at 25.8% statements (1,457 / 5,649). Overall statements
+     * go 67.3% -> 61.7% and branches 55.8% -> 51.6% — which is the same suite
+     * measured honestly, not a regression.
+     *
+     * #74 found this gate declaring 70% while the truth was 32%, because no
+     * command passed --coverage. This is its sibling: the command runs now, and
+     * it was measuring the half of the codebase least exposed.
+     *
+     * PAGES ARE STILL OUT, AS A STATED DECISION WITH ITS NUMBER. Adding
+     * src/app/**\/*.tsx (246 page and layout components) gives 43.8% statements,
+     * 35.4% branches, 30.1% functions, 44% lines — every one of them below the
+     * floor below, so including them would mean LOWERING the floor by ten to
+     * twenty-five points. That trades a gate that bites for a bigger
+     * denominator, and src/components (437 files) already carries the UI logic
+     * these pages compose. The figure is recorded so the exclusion is a
+     * decision someone can revisit, not an omission nobody noticed.
+     */
     collectCoverageFrom: [
         'src/app/actions/**/*.ts',
+        'src/app/api/**/*.ts',
         'src/lib/**/*.ts',
         'src/components/**/*.{ts,tsx}',
+        // Omitted too, and found by listing the directories rather than
+        // reading the list: services/ is five modules that call getAdminDb()
+        // for the analytics, finance and user-metrics figures; hooks/,
+        // contexts/ and infrastructure/ are executable client logic.
+        'src/services/**/*.ts',
+        'src/hooks/**/*.{ts,tsx}',
+        'src/contexts/**/*.{ts,tsx}',
+        'src/infrastructure/**/*.ts',
+        'src/config/**/*.ts',
         '!src/**/*.d.ts',
         '!src/**/*.stories.{ts,tsx}',
         '!src/**/__tests__/**',
@@ -98,10 +134,19 @@ const customJestConfig = {
      */
     coverageThreshold: {
         global: {
-            branches: 43,
-            functions: 45,
-            lines: 54,
-            statements: 53,
+            // Re-set against the WIDER denominator above (#436), and against
+            // the MEASURED figure rather than an aspiration: statements 60.62,
+            // branches 50.72, functions 56.06, lines 61.48.
+            //
+            // One to two points of headroom, deliberately. My first pass put
+            // functions at 56 against a real 56.06 — a gate that a single new
+            // uncovered function turns red for no defect. A floor that flaps
+            // gets raised by whoever it inconveniences, which is how #74's
+            // 70%-against-32% happened.
+            branches: 49,
+            functions: 54,
+            lines: 60,
+            statements: 59,
         },
     },
     testMatch: [
