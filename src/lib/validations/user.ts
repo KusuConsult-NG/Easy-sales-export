@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normaliseGender } from "../gender";
 import { dateSchema, addressSchema, bankDetailsSchema } from "./shared";
 
 /**
@@ -14,14 +15,13 @@ export const UserSchema = z.object({
     fullName: z.string().default("Easy Sales User"),
     email: z.string().email().default("user@easysales.local"),
     phone: z.string().optional(),
-    gender: z.preprocess((val) => {
-        if (typeof val === "string") {
-            const normalized = val.toLowerCase().trim();
-            if (normalized === "male") return "male";
-            if (normalized === "female") return "female";
-        }
-        return undefined;
-    }, z.enum(["male", "female"]).optional()),
+    //   #464 This preprocess WAS the platform's only normaliser for a stored
+    //        gender, and the WAVE eligibility forensic did not use it — it
+    //        compared `gender !== "female"` and reported 194 of 200 participants
+    //        ineligible, including people stored as "Female", the exact spelling
+    //        the WAVE application's own schema requires. Stated once in
+    //        lib/gender.ts and shared, rather than a second spelling here.
+    gender: z.preprocess((val) => normaliseGender(val), z.enum(["male", "female"]).optional()),
     stateOfOrigin: z.string().optional(),
     lga: z.string().optional(),
     residentialAddress: z.string().optional(),

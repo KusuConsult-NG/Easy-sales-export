@@ -11,6 +11,7 @@ import { EXPORT_WINDOW_INVESTABLE_STATUSES } from "@/lib/export-window-status";
 import { checkCourseAccess } from "@/lib/academy-plan";
 import { isPlatformAdmin } from "@/lib/admin-permissions";
 import { normalisePhone } from "@/lib/phone";
+import { genderOutcome } from "@/lib/gender";
 
 /**
  * Forensic data-integrity scan.
@@ -148,6 +149,45 @@ export async function runForensicScanAction(): Promise<
                 )
             );
             snaps.forEach(snap => snap.docs.forEach((d: any) => existingIds.add(d.id)));
+
+            /**
+             *   #464 A MIGRATED USER'S PROFILE IS NOT KEYED BY THEIR AUTH ID,
+             *        AND THIS REPORTED ALL OF THEM AS GHOSTS — 83 OF 100 ON THE
+             *        FIRST PRODUCTION SCAN.
+             *
+             *        user-migration.ts writes `supabaseAuthId: supabaseUid` onto
+             *        the EXISTING profile and leaves that profile under its
+             *        original Firebase-era id. So the join from an auth user to
+             *        their profile goes through that field, not through the
+             *        document id — which is the whole reason lib/user-identity.ts
+             *        exists, and #449 fixed six readers that each walked it their
+             *        own way. This check was a seventh, and walked none of it.
+             *
+             *        The ids in that report are the tell: the auth users are
+             *        UUIDs while the profiles carrying them are 28-character
+             *        Firebase ids.
+             *
+             *        A ghost is now an auth user found by NEITHER route. Batched
+             *        the same way as the lookup above rather than one query per
+             *        remaining id.
+             */
+            const unmatched = authUserIds.filter((uid: string) => !existingIds.has(uid));
+
+            if (unmatched.length > 0) {
+                const pointerChunks: string[][] = [];
+                for (let i = 0; i < unmatched.length; i += 30) {
+                    pointerChunks.push(unmatched.slice(i, i + 30));
+                }
+                const pointerSnaps = await Promise.all(
+                    pointerChunks.map(chunk =>
+                        db.collection(COLLECTIONS.USERS).where("supabaseAuthId", "in", chunk).get()
+                    )
+                );
+                pointerSnaps.forEach(snap => snap.docs.forEach((d: any) => {
+                    const linked = d.data()?.supabaseAuthId;
+                    if (typeof linked === "string" && linked) existingIds.add(linked);
+                }));
+            }
 
             for (const uid of authUserIds) {
                 if (!existingIds.has(uid)) ghostUserIds.push(uid);
@@ -314,6 +354,9 @@ export async function runForensicScanAction(): Promise<
 
             const ineligibleIds: string[] = [];
             const undatedIds: string[] = [];
+            // #464. Separate from ineligible: the row does not say, which is
+            // not the same as saying no.
+            const unknownGenderIds: string[] = [];
 
             for (const doc of waveParticipantsQuery.docs) {
                 const data = doc.data();
@@ -337,8 +380,29 @@ export async function runForensicScanAction(): Promise<
                     || data.kyc?.dateOfBirth
                     || data.verificationProfile?.dob;
 
-                // Gender Check
-                if (gender !== "female") {
+                //   #464 THIS REFUSED THE EXACT SPELLING THE WAVE APPLICATION
+                //        DEMANDS. Registration stores any of "Male", "Female",
+                //        "male", "female"; the WAVE form's own schema requires
+                //        z.literal("Female"); this line accepted only the lower
+                //        case. So a real participant who applied through the
+                //        proper form was reported ineligible by the forensic
+                //        meant to police that form — 194 of 200 on the first
+                //        production scan.
+                //
+                //        AND "other" IS NOT "MALE". Around 180 of those stored
+                //        "other", which is what the migration wrote when it had
+                //        no gender to carry. Calling that INELIGIBLE asserts
+                //        something the row does not say. The note above about
+                //        the date already drew this line — "'no finding' and
+                //        'could not look' are different answers" — and the
+                //        gender check one statement below kept conflating them.
+                const outcome = genderOutcome(gender, "female");
+
+                if (outcome === "unknown") {
+                    unknownGenderIds.push(`${doc.id} (gender not recorded: ${gender ?? "absent"})`);
+                    continue;
+                }
+                if (outcome === "ineligible") {
                     ineligibleIds.push(`${doc.id} (Gender: ${gender})`);
                     continue;
                 }
@@ -374,17 +438,30 @@ export async function runForensicScanAction(): Promise<
             results.push({
                 module: "WAVE",
                 check: "Eligibility Paradox (Gender/Age)",
-                status: ineligibleIds.length > 0 ? "fail" : "pass",
+                //   #464 A GAP IN THE RECORDS IS NOT A FAILED CHECK. When the
+                //        only entries are people whose gender or date of birth
+                //        was never recorded, the honest status is
+                //        "inconclusive" — the scan could not look, which the
+                //        ScanResult type already has a word for and this check
+                //        was not using.
+                status: ineligibleIds.length > 0
+                    ? "fail"
+                    : (unknownGenderIds.length > 0 || undatedIds.length > 0)
+                        ? "inconclusive"
+                        : "pass",
                 details:
                     `Scanned ${waveParticipantsQuery.size} participants. Found ${ineligibleIds.length} ineligible.` +
+                    (unknownGenderIds.length > 0
+                        ? ` ${unknownGenderIds.length} have no gender recorded — a gap in the records, not a finding about them.`
+                        : "") +
                     (undatedIds.length > 0
                         ? ` ${undatedIds.length} could not be age-checked — no readable date of birth on record.`
                         : ""),
                 // Listed alongside, so somebody reading the report can see WHO
                 // was not checked. They are not counted as ineligible: an
-                // absent date is a gap in the records, not evidence about a
-                // participant.
-                affectedIds: [...ineligibleIds, ...undatedIds]
+                // absent date or gender is a gap in the records, not evidence
+                // about a participant.
+                affectedIds: [...ineligibleIds, ...unknownGenderIds, ...undatedIds]
             });
         } catch (e: any) { results.push({ module: "WAVE", check: "Eligibility Scan", status: "fail", details: e.message, affectedIds: [] });
         }

@@ -133,12 +133,35 @@ describe('the forensic age check reads where the date lives', () => {
     });
 
     it('does not count an absent date as ineligibility', () => {
-        // A gap in the records is not evidence about a participant, and marking
-        // them ineligible would turn a data problem into an accusation.
-        const push = forensics.slice(forensics.indexOf('check: "Eligibility Paradox'));
+        //   A gap in the records is not evidence about a participant, and marking
+        //   them ineligible would turn a data problem into an accusation.
+        //
+        //   #464 THIS PINNED THE TERNARY ITSELF —
+        //        `ineligibleIds.length > 0 ? "fail" : "pass"` — and broke when a
+        //        third outcome was added for the SAME reason this test exists:
+        //        a scan whose only entries are gaps now reports "inconclusive"
+        //        rather than "pass", because it could not look. The intent is
+        //        unchanged and stronger; only the literal had to go. Fifth time
+        //        in this audit a test pinned to a source string stood in front of
+        //        the fix it was written to protect.
+        const push = forensics.slice(forensics.indexOf('check: "Eligibility Paradox'), 
+            forensics.indexOf('check: "Eligibility Paradox') + 2600);
 
-        expect(push.slice(0, 900)).toContain('ineligibleIds.length > 0 ? "fail" : "pass"');
-        expect(push.slice(0, 900)).toContain('[...ineligibleIds, ...undatedIds]');
+        // "fail" is still driven by real ineligibility and nothing else.
+        expect(push).toMatch(/status:\s*ineligibleIds\.length > 0\s*\n?\s*\?\s*"fail"/);
+
+        // An undated participant is listed, never counted as ineligible.
+        expect(push).toContain('...undatedIds');
+        expect(push).not.toMatch(/undatedIds[^\n]*\?\s*"fail"/);
+    });
+
+    it('AND A SCAN THAT ONLY FOUND GAPS SAYS SO — #464', () => {
+        // The stronger version of the line above: "could not look" now has its
+        // own status rather than borrowing "pass".
+        const push = forensics.slice(forensics.indexOf('check: "Eligibility Paradox'),
+            forensics.indexOf('check: "Eligibility Paradox') + 2600);
+
+        expect(push).toContain('"inconclusive"');
     });
 
     it('handles an unreadable date rather than computing from NaN', () => {
