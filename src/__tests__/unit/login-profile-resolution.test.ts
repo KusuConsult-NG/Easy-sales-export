@@ -46,6 +46,7 @@
 import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { activeIdFromRow } from '@/lib/user-identity';
 
 const AUTH = 'src/lib/auth.ts';
 const PAYMENTS = 'src/infrastructure/payments/service.ts';
@@ -121,12 +122,25 @@ describe('the profile chosen is the one that identifies itself with the caller',
 
     it('which is the order the rest of the platform already resolves in', () => {
         // Vacuity guard: this is not an order invented here.
-        const payments = code(PAYMENTS);
-        const migratedAt = payments.indexOf('activeUserId = userData._migratedTo;');
-        const supabaseAt = payments.indexOf('activeUserId = userData.supabaseAuthId;');
+        //
+        //   #449 THIS READ THE ORDER OUT OF payments/service.ts BY MATCHING TWO
+        //   LITERAL LINES. Those lines were one of SIX places that answered
+        //   "which row is this user", and the six did not agree — one recursed
+        //   without a cycle guard, four followed a single hop. The order was
+        //   right and its repetition was the defect.
+        //
+        //   It is stated once now, in lib/user-identity.ts, and asserted where
+        //   it lives — by BEHAVIOUR rather than by source order, so the next
+        //   move of the same rule does not read as a regression.
+        const migrated = activeIdFromRow('caller', { _migratedTo: 'M', supabaseAuthId: 'S' });
+        const supabaseOnly = activeIdFromRow('caller', { supabaseAuthId: 'S' });
 
-        expect(migratedAt).toBeGreaterThan(-1);
-        expect(supabaseAt).toBeGreaterThan(migratedAt);
+        expect(migrated).toBe('M');        // _migratedTo wins
+        expect(supabaseOnly).toBe('S');    // and supabaseAuthId is the fallback
+
+        // And the payment path really does resolve through that shared rule,
+        // rather than keeping a seventh copy of it.
+        expect(code(PAYMENTS)).toContain('resolveActiveUserId(');
 
         // And the field really is written and read elsewhere, so consulting it
         // is using the platform's own link rather than inventing one.

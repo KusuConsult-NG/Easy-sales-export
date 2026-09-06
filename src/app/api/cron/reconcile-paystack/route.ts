@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseDb as db } from "@/lib/supabase-db";
+import { resolveActiveUserId } from "@/lib/user-identity";
 import { Timestamp } from "@/lib/firestore-compat";
 import { paystackBaseUrl } from "@/lib/paystack-host";
 
@@ -160,15 +161,9 @@ export async function GET(request: NextRequest) {
 
                             // Resolve legacy Firebase UID to active Supabase ID if migrated
                             if (rawUserId) {
-                                const userDoc = await db.collection("users").doc(rawUserId).get();
-                                if (userDoc.exists) {
-                                    const userData = userDoc.data();
-                                    if (userData?._migratedTo) {
-                                        userId = userData._migratedTo;
-                                    } else if (userData?.supabaseAuthId) {
-                                        userId = userData.supabaseAuthId;
-                                    }
-                                }
+                                // #449. One hop became the whole chain, so this and the
+                                // session agree on who was paid.
+                                userId = (await resolveActiveUserId(rawUserId, db.collection("users"))).id;
                             }
 
                             const type = metadata.type || metadata.purpose || null;
