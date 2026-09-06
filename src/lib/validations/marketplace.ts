@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { OFFLINE_CHECKOUT_METHODS } from "@/lib/offline-checkout";
+import { PRODUCT_CATEGORY_ALIASES } from "@/lib/product-search";
 
 /**
  * Marketplace Zod Schemas
@@ -23,7 +24,33 @@ export const PricingTierSchema = z.object({
     minQuantity: z.number().default(1),
 });
 
+/**
+ *   #444 THE SPELLINGS THIS ENUM ACCEPTS ARE DERIVED FROM THE ONES THE
+ *        DATABASE ACTUALLY HOLDS, NOT LISTED AGAIN BY HAND.
+ *
+ *        lib/product-search.ts carries an alias table (#131) precisely because
+ *        products were written with several spellings of one category —
+ *        "roots", "roots_tubers", "tuber", "tubers", "yam", "yams", "cassava"
+ *        for the one this enum spells "roots". Nine there, one here.
+ *
+ *        That disagreement was invisible while a failed parse fell back to the
+ *        raw document. #443 heals instead, so a product stored as "tubers"
+ *        would have come back as "other" — out of its own category filter, and
+ *        described to its seller as uncategorised. An existing seller-dashboard
+ *        test went red and said so.
+ *
+ *        Spread from PRODUCT_CATEGORY_ALIASES so the read side cannot drift
+ *        from the stored data again, the same move #379 made for payment
+ *        methods. This stays a CLOSED enum: createProductAction validates the
+ *        listing form through this schema, so `category: "not-a-category"` is
+ *        still refused — widening it to `z.string()` broke exactly that test,
+ *        which is how this ordering was arrived at.
+ */
+const STORED_CATEGORY_SPELLINGS = Object.values(PRODUCT_CATEGORY_ALIASES)
+    .flat() as [string, ...string[]];
+
 export const ProductCategorySchema = z.enum([
+    ...STORED_CATEGORY_SPELLINGS,
     "poultry",
     "sea_foods",
     "horticultural",
@@ -200,6 +227,14 @@ export const OrderSchema = z.object({
      */
     sellerIds: z.array(z.string()).default([]),
     buyerPhone: z.string().optional(),
+    /**
+     *   #444 Read by the seller's order search and written onto a marketplace
+     *        order by NOTHING — the writers put them on the escrow row.
+     *        Declared so a row that does carry them survives the strip and
+     *        matches; the search no longer depends on them.
+     */
+    buyerName: z.string().optional(),
+    buyerEmail: z.string().optional(),
     trackingNumber: z.string().optional(),
     estimatedDeliveryDate: dateSchema.optional(),
     reviewSubmitted: z.boolean().default(false),
