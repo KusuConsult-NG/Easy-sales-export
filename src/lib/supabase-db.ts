@@ -911,6 +911,87 @@ interface OrderByClause {
  * Map a Firestore field name + operator to a Supabase query filter.
  * Handles both native columns and raw_data JSONB fields.
  */
+/**
+ *   #480 THE ADAPTER REQUIRED A COLUMN THE DATABASE MIGHT NOT HAVE YET.
+ *
+ *   #478 routed every users.email equality through `email_normalised`, the
+ *   generated column migration 032 adds. That made the CODE depend on the SQL
+ *   having been applied first — and the owner's migration-status query, run
+ *   minutes later, came back:
+ *
+ *       032  users.email_normalised column + index   *** MISSING ***
+ *
+ *   Deploying the code in that state would have sent `email_normalised=eq.…` to
+ *   a column that does not exist and failed EVERY email lookup: login, session
+ *   resolution, password reset, the cooperative and module checks. A total
+ *   outage, caused by a deploy landing before a paste.
+ *
+ *   #473 and #476 were both built to degrade safely for exactly this reason —
+ *   ask for the new thing, fall back to the old one, say so in the log. #478 was
+ *   not, and that inconsistency is the defect here.
+ *
+ *   DEFAULT SAFE, UPGRADE WHEN PROVEN. The filter column starts as the plain
+ *   `email` — the pre-#478 behaviour, which cannot fail — and moves to
+ *   `email_normalised` only once a probe has confirmed the column exists. So a
+ *   deploy without the migration is exactly as good as it was before #478
+ *   rather than broken, and a database with the migration gets the fix as soon
+ *   as the probe answers.
+ *
+ *   The window is one query wide, and #476's RPC fallback covers it: a login in
+ *   that instant still finds a badly-stored profile through
+ *   find_users_by_normalised_email.
+ */
+let emailFilterColumn: 'email' | 'email_normalised' = 'email';
+let emailColumnProbe: Promise<void> | null = null;
+
+function probeEmailNormalisedColumn(): Promise<void> {
+    if (emailColumnProbe) return emailColumnProbe;
+
+    emailColumnProbe = (async () => {
+        try {
+            const { error } = await supabaseAdmin
+                .from('users')
+                .select('email_normalised')
+                .limit(1);
+
+            if (!error) {
+                emailFilterColumn = 'email_normalised';
+                return;
+            }
+
+            console.warn(
+                '[supabase-db] users.email_normalised is not available, so email lookups compare the ' +
+                'raw column and will miss a profile stored with different case or surrounding space ' +
+                '(#478). Apply supabase/migrations/032_users_email_normalised_column.sql. Reason: ' +
+                error.message,
+            );
+        } catch {
+            // Probing must never throw into a caller's query.
+        }
+    })();
+
+    return emailColumnProbe;
+}
+
+/**
+ * Settle the capability BEFORE the first filter is built.
+ *
+ * The probe was fire-and-forget at first, which left a one-query window where a
+ * badly-stored profile was missed — small, covered by #476's RPC fallback, and
+ * still wrong: the same call would behave differently depending on whether a
+ * background request had landed yet. Awaiting it once per process costs a single
+ * round trip and makes every answer deterministic, which is worth more than the
+ * round trip.
+ */
+export async function ensureEmailFilterColumn(): Promise<void> {
+    await probeEmailNormalisedColumn();
+}
+
+/** Exported for the tests that assert the default is the safe one. */
+export function __emailFilterColumnForTests(): string {
+    return emailFilterColumn;
+}
+
 function applyFilter(
     query: any,
     tableName: string,
@@ -1001,6 +1082,14 @@ function applyFilter(
         const blank = (v: unknown) => v === null || v === undefined || v === '';
         const widens = Array.isArray(value) ? value.some(blank) : blank(value);
         if (widens) {
+            return applySimpleFilter(query, 'email', op, normalizedValue);
+        }
+
+        //   #480 Ask whether the column exists; until it answers, use the raw
+        //   one. A deploy that lands before migration 032 is then exactly as
+        //   good as it was before #478 rather than broken.
+        probeEmailNormalisedColumn();
+        if (emailFilterColumn !== 'email_normalised') {
             return applySimpleFilter(query, 'email', op, normalizedValue);
         }
 
@@ -1769,6 +1858,11 @@ export class SupabaseQuery {
                 if (tableName === 'document_collections') {
                     query = query.eq('collection_name', this._collection);
                 }
+                // #480 Settle whether users.email_normalised exists before building the
+                // filter, so the same call cannot answer differently depending on
+                // whether a background probe has landed yet.
+                await ensureEmailFilterColumn();
+
                 for (const filter of this._filters) {
                     query = applyFilter(query, tableName, this._collection, filter);
                 }
@@ -1800,6 +1894,11 @@ export class SupabaseQuery {
                 if (tableName === 'document_collections') {
                     query = query.eq('collection_name', this._collection);
                 }
+                // #480 Settle whether users.email_normalised exists before building the
+                // filter, so the same call cannot answer differently depending on
+                // whether a background probe has landed yet.
+                await ensureEmailFilterColumn();
+
                 for (const filter of this._filters) {
                     query = applyFilter(query, tableName, this._collection, filter);
                 }
@@ -1895,7 +1994,12 @@ export class SupabaseQuery {
             }
         }
 
-        // Apply where filters
+        // Apply where filters.
+        //
+        // #480 the email-column capability is settled by the ASYNC callers of
+        // this method before they call it — see ensureEmailFilterColumn(). This
+        // method is synchronous and used in several places, so awaiting here
+        // would make all of them async for one probe.
         for (const filter of this._filters) {
             query = applyFilter(query, tableName, this._collection, filter);
         }
@@ -1976,6 +2080,11 @@ export class SupabaseQuery {
     }
 
     async get(): Promise<SupabaseQuerySnapshot> {
+        //   #480 Settle whether users.email_normalised exists before the filter
+        //   is built, so the same call cannot answer differently depending on
+        //   whether a background probe has landed yet. Once per process.
+        await ensureEmailFilterColumn();
+
         const { query, isDedicated } = this._buildQuery();
 
         // Apply limit and fetch auto-paginated batches to bypass Supabase 1,000-row select caps
@@ -2165,6 +2274,9 @@ export class SupabaseQuery {
         const collection = this._collection;
 
         async function* rows() {
+            // #480 — as in get(): settle the email-column capability first.
+            await ensureEmailFilterColumn();
+
             const { query, isDedicated } = buildQuery();
             let fetchedSoFar = 0;
 

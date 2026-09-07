@@ -199,6 +199,14 @@ jest.mock('@/lib/supabase-db', () => {
         // aggregate needs to select. From the real module for the same reason:
         // a copy here would be a second answer to a question with one.
         aggregateProjection: jest.requireActual('@/lib/supabase-db').aggregateProjection,
+        //   #480 the email-column capability probe. A no-op here: the mocked
+        //   adapter never reaches PostgREST, so there is nothing to probe, and
+        //   a real one would make every mocked query wait on a network call
+        //   that cannot succeed. The behaviour it guards is asserted against a
+        //   REAL database in src/__tests__/pg/a-blank-email-is-not-an-identity.test.ts,
+        //   in both migration states.
+        ensureEmailFilterColumn: jest.fn(async () => {}),
+        __emailFilterColumnForTests: jest.requireActual('@/lib/supabase-db').__emailFilterColumnForTests,
 
         ...helpers,
     };

@@ -203,22 +203,34 @@ dbDescribe('#476 — asked through the adapter the login actually calls', () => 
         expect(found.rows[0].data().fullName).toBe('Ada Obi');
     }, 300_000);
 
-    it('AND IT RESOLVES ON THE EXACT PATH NOW — #478 moved the fix one layer down', async () => {
-        //   This asserted viaFallback === true when written, and #478 changed
-        //   the answer for a good reason: the ADAPTER now routes every
-        //   users.email equality through the email_normalised generated column,
-        //   so the badly-stored row is found by the ordinary query and the RPC
-        //   fallback never runs.
+    it('AND WHICH PATH RESOLVES IT DEPENDS ON WHETHER MIGRATION 032 IS APPLIED', async () => {
+        //   This asserted viaFallback === false outright, which was true on a
+        //   database with 032 and FAILED on one without — which is precisely the
+        //   state the owner's production database was in when they ran the
+        //   migration-status query.
         //
-        //   Recorded rather than deleted, because "the fallback stopped firing"
-        //   and "the fallback stopped working" look identical from a passing
-        //   test, and the next person needs to know which one this is.
+        //   Both states are correct and both must be asserted, because the whole
+        //   point of #480 is that the code works either way:
+        //
+        //     WITH 032     the adapter routes to email_normalised and the
+        //                  ordinary query finds the row — no fallback.
+        //     WITHOUT it   the adapter uses the raw column, misses, and #476's
+        //                  RPC fallback finds it instead.
+        //
+        //   What must NEVER differ is that the row is found at all.
         const { findProfilesByEmail } = await import('@/lib/profile-lookup');
+
+        const { rows: col } = await client!.query(
+            `select count(*)::int as n from information_schema.columns
+              where table_schema='public' and table_name='users' and column_name='email_normalised'`,
+        );
+        const migrationApplied = col[0].n === 1;
 
         const found = await findProfilesByEmail(WANTED);
 
-        expect({ found: found.rows.length, viaFallback: found.viaFallback })
-            .toEqual({ found: 1, viaFallback: false });
+        expect(found.rows.map((r) => r.id)).toEqual([LEGACY_ID]);
+        expect({ migrationApplied, viaFallback: found.viaFallback })
+            .toEqual({ migrationApplied, viaFallback: !migrationApplied });
     }, 300_000);
 
     it('AND THE RPC FALLBACK ITSELF STILL WORKS — the second line, tested directly', async () => {

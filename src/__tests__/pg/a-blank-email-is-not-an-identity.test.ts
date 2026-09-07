@@ -77,6 +77,26 @@ afterAll(async () => {
 
 const ours = (rows: any[]) => rows.map((r) => r.id).filter((id: string) => id.startsWith(TAG)).sort();
 
+/**
+ * Whether migration 032 is applied to the database under test.
+ *
+ *   #480 THIS SUITE ASSUMED IT WAS, AND THE OWNER'S PRODUCTION SHOWED IT WAS
+ *   NOT. Two tests below are statements about a normalised column, and on a
+ *   database without one they failed while the code was behaving exactly as
+ *   designed — degrading to the raw column, with #476's RPC fallback still
+ *   finding the profile.
+ *
+ *   Both states are correct. The suite has to say which it is looking at rather
+ *   than assume the tidier one, because the untidy one is what production was.
+ */
+const migration032 = async (): Promise<boolean> => {
+    const { rows } = await client!.query(
+        `select count(*)::int as n from information_schema.columns
+          where table_schema='public' and table_name='users' and column_name='email_normalised'`,
+    );
+    return rows[0].n === 1;
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 dbDescribe('#479 — a blank email must not match another blank email', () => {
     it('THE ADAPTER DOES NOT WIDEN A BLANK SEARCH', async () => {
@@ -101,15 +121,38 @@ dbDescribe('#479 — a blank email must not match another blank email', () => {
         expect(ours(snap.docs)).toEqual([`${TAG}-empty`]);
     }, 300_000);
 
-    it('POSITIVE CONTROL: a REAL address is still normalised — #478 still works', async () => {
+    it('POSITIVE CONTROL: a REAL address is normalised WHEN 032 IS APPLIED', async () => {
         //   Without this, "blank does not widen" could be satisfied by removing
         //   the normalisation altogether, which is the defect #478 fixed.
+        //
+        //   #480: on a database WITHOUT 032 the adapter deliberately uses the
+        //   raw column, so this asserts the state it is actually in. What must
+        //   hold either way is that a login still finds the person — that is
+        //   asserted in login-finds-the-profile-it-already-has.test.ts, through
+        //   #476's RPC fallback.
+        const { supabaseDb } = await import('@/lib/supabase-db');
+        const { COLLECTIONS } = await import('@/lib/types/firestore');
+        const applied = await migration032();
+
+        const snap = await supabaseDb
+            .collection(COLLECTIONS.USERS)
+            .where('email', '==', `  ${TAG}-REAL@Example.COM `)
+            .get();
+
+        expect({ applied, found: ours(snap.docs) })
+            .toEqual({ applied, found: applied ? [`${TAG}-real`] : [] });
+    }, 300_000);
+
+    it('AND WITHOUT 032 THE ADAPTER FALLS BACK RATHER THAN ERRORING', async () => {
+        //   The whole point of #480. A deploy that lands before the migration
+        //   must be exactly as good as it was before #478 — not broken with
+        //   "column email_normalised does not exist" on every email lookup.
         const { supabaseDb } = await import('@/lib/supabase-db');
         const { COLLECTIONS } = await import('@/lib/types/firestore');
 
         const snap = await supabaseDb
             .collection(COLLECTIONS.USERS)
-            .where('email', '==', `  ${TAG}-REAL@Example.COM `)
+            .where('email', '==', `${TAG}-real@example.com`)
             .get();
 
         expect(ours(snap.docs)).toEqual([`${TAG}-real`]);
@@ -117,16 +160,19 @@ dbDescribe('#479 — a blank email must not match another blank email', () => {
 
     it('and the widening it prevents is real, not hypothetical', async () => {
         //   The measurement that motivated the guard, run against the same rows:
-        //   normalising blanks collapses '' and '   ' into one value.
-        const { rows: raw } = await client!.query(
-            `select count(*)::int as n from public.users where email = '   ' and id like $1`, [`${TAG}-%`],
-        );
-        const { rows: norm } = await client!.query(
-            `select count(*)::int as n from public.users where email_normalised = '' and id like $1`, [`${TAG}-%`],
+        //   normalising blanks collapses '' and '   ' into one value. Expressed
+        //   with lower(btrim(...)) rather than the column, so it states the FACT
+        //   about normalisation and holds whether or not 032 is applied.
+        const { rows } = await client!.query(
+            `select
+                 count(*) filter (where email = '   ')::int                      as raw_match,
+                 count(*) filter (where lower(btrim(email)) = '')::int           as normalised_match
+               from public.users where id like $1`,
+            [`${TAG}-%`],
         );
 
-        expect(raw[0].n).toBe(1);
-        expect(norm[0].n).toBeGreaterThan(1);
+        expect(rows[0].raw_match).toBe(1);
+        expect(rows[0].normalised_match).toBeGreaterThan(1);
     }, 300_000);
 });
 
