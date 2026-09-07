@@ -64,12 +64,35 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
     const [noteText, setNoteText] = useState("");
     const [savingNote, setSavingNote] = useState(false);
     const [loadingNotes, setLoadingNotes] = useState(false);
+    /**
+     *   #492 A FAILED READ IS NOT AN EMPTY LIST.
+     *
+     *        Without this the catch below has nowhere to put its answer, and
+     *        the render falls to "No notes yet — add the first one below." on a
+     *        dispute whose escalation history simply could not be read.
+     */
+    const [notesError, setNotesError] = useState<string | null>(null);
 
     async function loadNotes(dId: string) {
         setLoadingNotes(true);
-        const res = await getEscalationNotesAction(dId);
-        if (res.success && res.data?.notes) setNotes(res.data.notes);
-        setLoadingNotes(false);
+        setNotesError(null);
+        try {
+            const res = await getEscalationNotesAction(dId);
+            if (res.success && res.data?.notes) {
+                setNotes(res.data.notes);
+            } else if (!res.success) {
+                //   A REFUSAL IS NOT AN EMPTY LIST EITHER. This branch used to
+                //   fall through silently, so an action that answered
+                //   "unauthorized" rendered as a dispute nobody had escalated.
+                setNotesError(res.error || "The escalation notes could not be read.");
+            }
+        } catch (err) {
+            setNotesError(
+                err instanceof Error ? err.message : "The escalation notes could not be read.",
+            );
+        } finally {
+            setLoadingNotes(false);
+        }
     }
 
     async function handleAddNote() {
@@ -596,6 +619,33 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
                         {loadingNotes ? (
                             <div className="flex items-center justify-center py-6">
                                 <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+                            </div>
+                        ) : notesError ? (
+                            /**
+                             *   #492 "COULD NOT READ" AND "NOTHING TO READ" ARE
+                             *        DIFFERENT ANSWERS.
+                             *
+                             *        An admin deciding a dispute reads this
+                             *        panel for the escalation history. Rendering
+                             *        a failed read as "No notes yet" tells them
+                             *        nobody escalated anything — which is a
+                             *        statement about the case, made on the
+                             *        strength of a request that did not return.
+                             */
+                            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                                <p className="text-sm font-semibold text-amber-900">
+                                    The escalation notes could not be loaded.
+                                </p>
+                                <p className="text-xs text-amber-800 mt-1">
+                                    {notesError} This is not the same as there being none — do not
+                                    decide this dispute on it.
+                                </p>
+                                <button
+                                    onClick={() => dispute && loadNotes(dispute.id)}
+                                    className="mt-2 text-xs font-semibold text-amber-900 underline"
+                                >
+                                    Try again
+                                </button>
                             </div>
                         ) : notes.length === 0 ? (
                             <p className="text-slate-400 text-sm mb-4">No notes yet — add the first one below.</p>

@@ -19,26 +19,47 @@ export default function SellerDashboardPage() {
 
     const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(true);
+    //   #492 — see loadSellerData: without this the stats render as a shop with
+    //   nothing in it.
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [verification, setVerification] = useState<any>(null);
     const [filterStatus, setFilterStatus] = useState<"all" | "active" | "pending" | "suspended" | "sold_out">("all");
     const { showToast } = useToast();
 
     const loadSellerData = async () => {
         setLoading(true);
-        const [productsRes, verificationRes] = await Promise.all([
-            getSellerProductsAction(),
-            getSellerVerificationAction()
-        ]);
+        setLoadError(null);
+        /**
+         *   #492 A FAILED READ RENDERED A SELLER'S DASHBOARD AS ZERO.
+         *
+         *        `products` stayed empty, and the stats above are computed
+         *        straight off it — 0 products, 0 orders, 0 views, 0 rating — so
+         *        a seller with a full catalogue was shown an empty shop. And
+         *        `verification` stayed undefined, which the page reads as
+         *        "not verified".
+         */
+        try {
+            const [productsRes, verificationRes] = await Promise.all([
+                getSellerProductsAction(),
+                getSellerVerificationAction()
+            ]);
 
-        if (productsRes.success) {
-            setProducts(productsRes.data?.products || []);
+            if (productsRes.success) {
+                setProducts(productsRes.data?.products || []);
+            } else {
+                setLoadError((productsRes as any).error || "Your products could not be loaded.");
+            }
+
+            if (verificationRes.success) {
+                setVerification(verificationRes.data?.verification);
+            }
+        } catch (err) {
+            setLoadError(
+                err instanceof Error ? err.message : "Your seller dashboard could not be loaded.",
+            );
+        } finally {
+            setLoading(false);
         }
-
-        if (verificationRes.success) {
-            setVerification(verificationRes.data?.verification);
-        }
-
-        setLoading(false);
     };
 
     async function handleDeleteProduct(productId: string, productTitle: string) {
@@ -92,6 +113,37 @@ export default function SellerDashboardPage() {
         return (
             <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <Loader2 className="w-12 h-12 animate-spin text-blue-600" />
+            </div>
+        );
+    }
+
+    /**
+     *   #492 BEFORE THE VERIFICATION GATE, AND THAT ORDER IS THE POINT.
+     *
+     *        `if (!verification || verification.status !== "approved")` renders
+     *        "verification required" — and a failed read leaves `verification`
+     *        undefined, so an APPROVED seller was told to go and get verified.
+     *        Of everything on this page that a failed read got wrong, that is
+     *        the one that sends somebody down a road they have already walked.
+     */
+    if (loadError) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center p-8">
+                <div className="max-w-md text-center">
+                    <h2 className="text-xl font-bold text-slate-900 mb-2">
+                        Your seller dashboard could not be loaded
+                    </h2>
+                    <p className="text-sm text-slate-600 mb-4">
+                        {loadError} Nothing here says your shop is empty or unverified — the page
+                        simply could not read it.
+                    </p>
+                    <button
+                        onClick={() => loadSellerData()}
+                        className="px-5 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold"
+                    >
+                        Try again
+                    </button>
+                </div>
             </div>
         );
     }

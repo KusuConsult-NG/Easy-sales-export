@@ -26,19 +26,40 @@ export default function EditExportWindowPage({ params }: { params: Promise<{ id:
 
     async function loadData() {
         setLoading(true);
-        const result = await getExportRequestByIdAction(id);
-        if (result.success && result.export) {
-            const data = result.export;
-            setWindowData(data);
-            setTimeline(data.timeline || []);
-            setDocuments(data.documents || []);
-            setSpecs(data.specifications || []);
-            setBenefits(data.benefits || []);
-        } else {
-            showToast("Failed to load export window", "error");
-            router.push("/admin/export");
+        /**
+         *   #492 THIS ONE ALREADY REPORTED ITS REFUSAL — and a REJECTED call
+         *        skipped both the message and the redirect, leaving the admin on
+         *        a permanent skeleton of an export window.
+         *
+         *        The redirect stays for the refusal, which is a real "this is
+         *        not here" answer. A throw is not, so it says so and stays put:
+         *        bouncing somebody off the page they asked for, without
+         *        explanation, is how a transient failure looks like a deleted
+         *        record.
+         */
+        try {
+            const result = await getExportRequestByIdAction(id);
+            if (result.success && result.export) {
+                const data = result.export;
+                setWindowData(data);
+                setTimeline(data.timeline || []);
+                setDocuments(data.documents || []);
+                setSpecs(data.specifications || []);
+                setBenefits(data.benefits || []);
+            } else {
+                showToast("Failed to load export window", "error");
+                router.push("/admin/export");
+            }
+        } catch (err) {
+            showToast(
+                err instanceof Error
+                    ? `Could not load the export window: ${err.message}`
+                    : "Could not load the export window. It may still exist — try again.",
+                "error",
+            );
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     }
 
     useEffect(() => {

@@ -48,6 +48,15 @@ export default function VillageMarketEventPage() {
     const [event, setEvent] = useState<VillageMarketEvent | null>(null);
     const [products, setProducts] = useState<FlashSaleProduct[]>([]);
     const [loading, setLoading] = useState(true);
+    /**
+     *   #492 "EVENT NOT FOUND" WAS ALSO WHAT A FAILED READ LOOKED LIKE.
+     *
+     *        loadEvent set `event` from whatever came back and reset the flag
+     *        unconditionally, so a rejected call left `event` null — and the
+     *        render below says "Event not found" to a buyer whose event exists
+     *        and is running.
+     */
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [joining, setJoining] = useState(false);
     const [showAddProduct, setShowAddProduct] = useState(false);
     const [addingProduct, setAddingProduct] = useState(false);
@@ -58,10 +67,18 @@ export default function VillageMarketEventPage() {
 
     async function loadEvent() {
         setLoading(true);
-        const res = await getVillageMarketEventAction(eventId);
-        setEvent(res.event);
-        setProducts(res.products);
-        setLoading(false);
+        setLoadError(null);
+        try {
+            const res = await getVillageMarketEventAction(eventId);
+            setEvent(res.event);
+            setProducts(res.products);
+        } catch (err) {
+            setLoadError(
+                err instanceof Error ? err.message : "This event could not be loaded.",
+            );
+        } finally {
+            setLoading(false);
+        }
     };
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -211,6 +228,27 @@ export default function VillageMarketEventPage() {
         return (
             <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <Loader2 className="w-10 h-10 animate-spin text-emerald-600" />
+            </div>
+        );
+    }
+
+    if (loadError) {
+        //   #492 — before the not-found branch, because "we could not look" has
+        //   to be answered before "there is nothing there".
+        return (
+            <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-4 px-6 text-center">
+                <p className="text-slate-800 text-lg font-semibold">This event could not be loaded.</p>
+                <p className="text-slate-500 text-sm max-w-md">
+                    {loadError} That is not the same as the event not existing — reload the page to
+                    try again.
+                </p>
+                <button
+                    onClick={() => loadEvent()}
+                    className="px-5 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-semibold"
+                >
+                    Try again
+                </button>
+                <Link href="/marketplace/village-market" className="text-emerald-600 font-semibold hover:underline">← Back to Village Market</Link>
             </div>
         );
     }

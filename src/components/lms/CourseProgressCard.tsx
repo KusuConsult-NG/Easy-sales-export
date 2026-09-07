@@ -13,6 +13,7 @@ interface CourseProgressCardProps {
 export default function CourseProgressCard({ courseId, courseTitle, totalLessons = 10 }: CourseProgressCardProps) {
     const [progress, setProgress] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [generatingCert, setGeneratingCert] = useState(false);
 
     async function handleGenerateCertificate() {
@@ -24,16 +25,35 @@ export default function CourseProgressCard({ courseId, courseTitle, totalLessons
     useEffect(() => {
         async function fetchProgress() {
             setLoading(true);
-            const result = await getCourseProgress(courseId);
-            if (result.success && result.data?.progress) {
-                setProgress(result.data.progress);
+            setLoadError(null);
+            /**
+             *   #492 A FAILED READ RENDERED AS "0% COMPLETE".
+             *
+             *        `progress` stayed null, and the card below computes
+             *        `progress?.progressPercent || 0` — so a student who had
+             *        finished the course was shown an empty progress bar and
+             *        zero lessons done. Not a spinner they could wait out; a
+             *        confident, wrong number.
+             */
+            try {
+                const result = await getCourseProgress(courseId);
+                if (result.success && result.data?.progress) {
+                    setProgress(result.data.progress);
 
-                // Auto-generate certificate if completed and not already generated
-                if (result.data.progress.completed && result.data.progress.progressPercent >= 100) {
-                    handleGenerateCertificate();
+                    // Auto-generate certificate if completed and not already generated
+                    if (result.data.progress.completed && result.data.progress.progressPercent >= 100) {
+                        handleGenerateCertificate();
+                    }
+                } else if (!result.success) {
+                    setLoadError(result.error || "Your progress could not be loaded.");
                 }
+            } catch (err) {
+                setLoadError(
+                    err instanceof Error ? err.message : "Your progress could not be loaded.",
+                );
+            } finally {
+                setLoading(false);
             }
-            setLoading(false);
         };
 
         fetchProgress();
@@ -47,6 +67,27 @@ export default function CourseProgressCard({ courseId, courseTitle, totalLessons
                     <div className="h-4 bg-slate-200 rounded w-1/3 mb-4"></div>
                     <div className="h-2 bg-slate-200 rounded w-full"></div>
                 </div>
+            </div>
+        );
+    }
+
+    if (loadError) {
+        /**
+         *   #492 SAID PLAINLY, RATHER THAN SHOWN AS ZERO.
+         *
+         *        The student is the one person who knows this number is wrong,
+         *        and being told "0%" by the platform is worse than being told it
+         *        could not be read — the second they can act on.
+         */
+        return (
+            <div className="bg-white rounded-xl p-6 shadow-lg border border-amber-200">
+                <p className="text-sm font-semibold text-amber-900">
+                    Your progress for this course could not be loaded.
+                </p>
+                <p className="text-xs text-amber-800 mt-1">
+                    {loadError} This does not mean you have made none — reload the page to try
+                    again.
+                </p>
             </div>
         );
     }

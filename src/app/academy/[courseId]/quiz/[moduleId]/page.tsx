@@ -32,6 +32,15 @@ export default function QuizPage(props: QuizPageProps) {
     const [currentModule, setCurrentModule] = useState<CourseModule | null>(null);
     const [quiz, setQuiz] = useState<Quiz | null>(null);
     const [loading, setLoading] = useState(true);
+    /**
+     *   #492 "QUIZ NOT FOUND" WAS ALSO WHAT A FAILED READ LOOKED LIKE.
+     *
+     *        loadQuiz reset the flag and returned on a refused course read, and
+     *        again at the end. `quiz` stayed null either way, and the render
+     *        below tells a student their quiz does not exist — on a timed
+     *        assessment they are trying to sit.
+     */
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [quizStarted, setQuizStarted] = useState(false);
     const [quizCompleted, setQuizCompleted] = useState(false);
@@ -155,23 +164,29 @@ export default function QuizPage(props: QuizPageProps) {
 
     async function loadQuiz() {
         setLoading(true);
+        setLoadError(null);
+        try {
+            const courseReq = await getCourseByIdAction(courseId);
 
-        const courseReq = await getCourseByIdAction(courseId);
+            if (!courseReq.success || !courseReq.data) {
+                //   A refusal is not a missing quiz.
+                setLoadError((courseReq as any).error || "This quiz could not be loaded.");
+                return;
+            }
 
-        if (!courseReq.success || !courseReq.data) {
+            const courseData = courseReq.data;
+
+            // Find module and quiz
+            const courseModule = courseData.modules.find((m: CourseModule) => m.id === moduleId);
+
+            setCourse(courseData);
+            setCurrentModule(courseModule || null);
+            setQuiz(courseModule?.quiz || null);
+        } catch (err) {
+            setLoadError(err instanceof Error ? err.message : "This quiz could not be loaded.");
+        } finally {
             setLoading(false);
-            return;
         }
-        
-        const courseData = courseReq.data;
-
-        // Find module and quiz
-        const courseModule = courseData.modules.find((m: CourseModule) => m.id === moduleId);
-
-        setCourse(courseData);
-        setCurrentModule(courseModule || null);
-        setQuiz(courseModule?.quiz || null);
-        setLoading(false);
     }
 
     function handleSelectAnswer(questionId: string, answerIndex: number) {
@@ -250,6 +265,36 @@ export default function QuizPage(props: QuizPageProps) {
         return (
             <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 flex items-center justify-center">
                 <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
+            </div>
+        );
+    }
+
+    if (loadError) {
+        //   #492 — asked before "not found", because a student told their quiz
+        //   does not exist has no reason to try again, and this one should.
+        return (
+            <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 flex items-center justify-center">
+                <div className="text-center px-6">
+                    <h2 className="text-2xl font-bold text-slate-900 mb-2">
+                        This quiz could not be loaded
+                    </h2>
+                    <p className="text-sm text-slate-600 max-w-md mb-4">
+                        {loadError} That is not the same as the quiz not existing — nothing has been
+                        recorded against you.
+                    </p>
+                    <button
+                        onClick={() => loadQuiz()}
+                        className="px-5 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold mr-3"
+                    >
+                        Try again
+                    </button>
+                    <button
+                        onClick={() => router.push(`/academy/${courseId}`)}
+                        className="text-blue-500 hover:text-blue-600 font-medium"
+                    >
+                        ← Back to Course
+                    </button>
+                </div>
             </div>
         );
     }

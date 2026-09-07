@@ -40,6 +40,10 @@ export default function WaveResourcesPage() {
     const [resources, setResources] = useState<WaveResource[]>([]);
     const [filteredResources, setFilteredResources] = useState<WaveResource[]>([]);
     const [loading, setLoading] = useState(true);
+    //   #492 — see loadResources: without this a failed read is shown as the
+    //   hard-coded default library, which reads as "this is everything there
+    //   is".
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [selectedCategory, setSelectedCategory] = useState<string>("all");
     const [searchQuery, setSearchQuery] = useState("");
     const [downloading, setDownloading] = useState<string | null>(null);
@@ -75,6 +79,24 @@ export default function WaveResourcesPage() {
             if (checking) return;
 
             setLoading(true);
+            setLoadError(null);
+            /**
+             *   #492 THIS ONE FAILS INTO A FICTION, NOT AN EMPTY LIST.
+             *
+             *        When the read returns nothing the page substitutes a set of
+             *        hard-coded default resources — real, useful PDFs, but not
+             *        the ones an admin uploaded. A REJECTED call skipped the
+             *        reset entirely and left the spinner; a call that merely
+             *        returned nothing showed the defaults, which is
+             *        indistinguishable from a library that has only ever held
+             *        those four.
+             *
+             *        The defaults stay for the genuinely-empty case — a member
+             *        with no materials at all is worse off without them. A
+             *        FAILED read is now told apart from an empty one and says
+             *        so, so nobody concludes their coordinator uploaded nothing.
+             */
+            try {
             const data = await getResourcesAction();
             if (data.success && data.data && data.data.length > 0) {
                 // Map the default resources to guides if their title matches
@@ -140,7 +162,13 @@ export default function WaveResourcesPage() {
                 setResources(defaultResources);
                 setFilteredResources(defaultResources);
             }
-            setLoading(false);
+            } catch (err) {
+                setLoadError(
+                    err instanceof Error ? err.message : "The resource library could not be loaded.",
+                );
+            } finally {
+                setLoading(false);
+            }
         }
 
         loadResources();
@@ -283,6 +311,22 @@ export default function WaveResourcesPage() {
                 {loading ? (
                     <div className="flex items-center justify-center py-20">
                         <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
+                    </div>
+                ) : loadError ? (
+                    /**
+                     *   #492 "Resources will appear here once uploaded by
+                     *        administrators" is a statement about the
+                     *        coordinator's work, and it was being made on the
+                     *        strength of a request that did not return.
+                     */
+                    <div className="bg-amber-500/10 backdrop-blur-xl border border-amber-300/40 rounded-2xl p-10 text-center">
+                        <h3 className="text-xl font-semibold text-white mb-2">
+                            The resource library could not be loaded
+                        </h3>
+                        <p className="text-amber-100 text-sm max-w-md mx-auto">
+                            {loadError} This does not mean there are none — reload the page to try
+                            again.
+                        </p>
                     </div>
                 ) : filteredResources.length === 0 ? (
                     <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-12 text-center">

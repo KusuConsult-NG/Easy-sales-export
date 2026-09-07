@@ -142,6 +142,16 @@ export function stuckFlags(source: string, label = 'source'): string[] {
          *        over-strict spinner check costs a look at a handler that turns
          *        out to be fine.
          */
+        //   #492 AND THE TRY CAN LEAVE EARLY TOO.
+        //
+        //        The tail is unreachable from ANY branch that returns, not only
+        //        from the catch. A loader that refuses early —
+        //        `setLoadError(...); return;` inside the try — skips a reset
+        //        placed after the block just as surely, and #492's own quiz
+        //        loader has exactly that shape. Found by mutating it: removing
+        //        the `finally` produced a genuinely stuck spinner and this
+        //        reported nothing. Third gap in this checker, and the third
+        //        found by mutating a repair rather than by reading it.
         const catchEscapes = /\breturn\b|\bthrow\b/.test(catchBody);
         const tail = catchEscapes
             ? ''
@@ -198,7 +208,27 @@ export function stuckFlags(source: string, label = 'source'): string[] {
             const resets = new RegExp(`\\bset${flag}\\(\\s*false\\s*\\)`);
             if (resets.test(catchBody)) continue;    // shape 2
             if (resets.test(finallyBody)) continue;  // shape 1
-            if (resets.test(tail)) continue;         // shape 3, when reachable
+
+            /**
+             *   #492 AND THE TRY CAN LEAVE EARLY TOO — but only when it leaves
+             *        WITHOUT resetting.
+             *
+             *        The tail is unreachable from any branch that returns, not
+             *        just from the catch: a loader that refuses early —
+             *        `setLoadError(...); return;` — skips a reset placed after
+             *        the block. #492's quiz loader has exactly that shape, and
+             *        removing its `finally` produced a genuinely stuck spinner
+             *        the checker did not report.
+             *
+             *        The first version of this rule flagged the broadcast
+             *        screen, which is CORRECT: its early return does
+             *        `setSending(false); return;`. So the question is not
+             *        whether the try returns, but whether it returns having
+             *        already reset — which is what this per-flag test asks, and
+             *        why it lives here rather than beside catchEscapes.
+             */
+            const tryReturnsUnreset = /\breturn\b/.test(tryBody) && !resets.test(tryBody);
+            if (!tryReturnsUnreset && resets.test(tail)) continue;   // shape 3, reachable
 
             out.push(`${label}:set${flag}`);
         }
@@ -308,6 +338,45 @@ describe('#405 — the checker itself, proved on synthetic handlers', () => {
                 setSaving(false);
             }
         `, 'synthetic')).toEqual(['synthetic:setSaving']);
+    });
+
+    it('#492 — AND A TAIL RESET IS UNREACHABLE FROM A TRY THAT RETURNS', () => {
+        //   The early-refusal shape every loader in #492 has: the try answers
+        //   "could not read" and returns, so a reset after the block never runs.
+        expect(stuckFlags(`
+            async function loadQuiz() {
+                setLoading(true);
+                try {
+                    const r = await get();
+                    if (!r.success) { setLoadError("no"); return; }
+                    setQuiz(r.data);
+                } catch (e) {
+                    setLoadError("no");
+                }
+                setLoading(false);
+            }
+        `, 'synthetic')).toEqual(['synthetic:setLoading']);
+    });
+
+    it('#492 — AND A TRY THAT RETURNS HAVING ALREADY RESET IS FINE', () => {
+        //   The false positive the first version of that rule produced, on the
+        //   broadcast screen: `setSending(false); return;` inside the try is
+        //   correct, and flagging it would have taught people to ignore the
+        //   checker. The question is not whether the try returns — it is
+        //   whether it returns WITHOUT resetting.
+        expect(stuckFlags(`
+            async function handleSend() {
+                setSending(true);
+                try {
+                    const r = await post();
+                    if (!r.success) { showToast("failed"); setSending(false); return; }
+                    setStep("done");
+                } catch (e) {
+                    showToast("error");
+                }
+                setSending(false);
+            }
+        `, 'synthetic')).toEqual([]);
     });
 
     it('#491 — AND A TAIL RESET THE CATCH CAN REACH IS STILL FINE', () => {
@@ -468,6 +537,29 @@ describe('#407 — the shape #405 could not see: an await with no try at all', (
         ['src/components/academy/QuizComponent.tsx', 'handleSubmit'],
         ['src/components/admin/EnrollStudentModal.tsx', 'handleEnroll'],
         ['src/components/ai/AISidebar.tsx', 'handleSendMessage'],
+        /**
+         *   #492 THE EIGHT LOADERS, and they needed the OTHER repair.
+         *
+         *        #407 said a blanket try/finally is wrong for a loader because
+         *        it turns "spinner forever" into "empty screen with no
+         *        explanation". True — and the stuck spinner was never the worst
+         *        of these. Each was already rendering a confident, wrong answer
+         *        on a failed read: ₦0 total revenue, "verification required" to
+         *        an approved seller, "0% complete" to a student who had
+         *        finished, "Event not found", "Quiz Not Found", "No notes yet".
+         *
+         *        So each gained an error state AND the branch order that makes
+         *        it reachable — "could not read" answered before "there is
+         *        nothing there".
+         */
+        ['src/app/academy/[courseId]/quiz/[moduleId]/page.tsx', 'loadQuiz'],
+        ['src/app/admin/export/edit/[id]/page.tsx', 'loadData'],
+        ['src/app/admin/finance/page.tsx', 'loadFinanceData'],
+        ['src/app/admin/marketplace/disputes/[id]/page.tsx', 'loadNotes'],
+        ['src/app/marketplace/sell/page.tsx', 'loadSellerData'],
+        ['src/app/marketplace/village-market/[id]/page.tsx', 'loadEvent'],
+        ['src/app/wave/(member)/resources/page.tsx', 'loadResources'],
+        ['src/components/lms/CourseProgressCard.tsx', 'fetchProgress'],
     ];
 
     it.each(FIXED)('%s :: %s no longer holds a spinner across an unguarded await', (rel, fn) => {
@@ -525,15 +617,20 @@ describe('#407 — the shape #405 could not see: an await with no try at all', (
          * which also rendered NaN% and treated a failed read as an empty
          * schedule. That left 29.
          *
-         * #491 took the remaining twenty-one ACTION HANDLERS. What is left is
-         * eight LOADERS, and they are left on purpose: a blanket try/finally is
-         * the wrong repair for a loader, because it turns "spinner forever" into
-         * "empty screen with no explanation" — #307's class, and the very defect
-         * #408 and #409 found underneath the three loaders they did fix. Each
-         * needs an error state built into what its screen RENDERS, which is a
-         * different change from this one and is named in KNOWN below.
+         * #491 took the twenty-one ACTION HANDLERS. #492 took the last eight,
+         * which were LOADERS and needed the different repair #407 named: an
+         * error state in what the screen RENDERS, asked BEFORE the empty state,
+         * or it is unreachable behind the old lie. See
+         * a-failed-read-is-not-an-empty-screen.render.test.tsx — the stuck
+         * spinner was never the worst of those eight. Each was rendering a
+         * confident, wrong answer: ₦0 revenue, "verification required" to an
+         * approved seller, "0% complete" to a student who had finished.
+         *
+         * ZERO, and that is the number to defend. It is not "no known defects
+         * of this shape" — it is "none", and a new one is a test failure on the
+         * commit that introduces it.
          */
-        expect(found.length).toBe(8);
+        expect(found.length).toBe(0);
         // And every handler fixed above is genuinely out of the population.
         for (const [rel, fn] of FIXED) expect(found).not.toContain(`${rel}:${fn}`);
 
@@ -551,16 +648,11 @@ describe('#407 — the shape #405 could not see: an await with no try at all', (
          *        screen renders, which is a change to the page rather than to
          *        the handler — see the note on the count above.
          */
-        const KNOWN = [
-            'src/app/academy/[courseId]/quiz/[moduleId]/page.tsx:loadQuiz',
-            'src/app/admin/export/edit/[id]/page.tsx:loadData',
-            'src/app/admin/finance/page.tsx:loadFinanceData',
-            'src/app/admin/marketplace/disputes/[id]/page.tsx:loadNotes',
-            'src/app/marketplace/sell/page.tsx:loadSellerData',
-            'src/app/marketplace/village-market/[id]/page.tsx:loadEvent',
-            'src/app/wave/(member)/resources/page.tsx:loadResources',
-            'src/components/lms/CourseProgressCard.tsx:fetchProgress',
-        ];
+        //   #492 emptied it. Kept rather than deleted: the list is the shape
+        //   this ratchet needs the day somebody has a reason to add one back,
+        //   and an empty KNOWN states plainly that nothing is currently
+        //   tolerated. A count alone never could.
+        const KNOWN: string[] = [];
         expect([...found].sort()).toEqual([...KNOWN].sort());
     });
 });

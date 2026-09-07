@@ -70,6 +70,16 @@ export default function AdminFinancePage() {
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [failedTx, setFailedTx] = useState<FailedTransaction[]>([]);
     const [totalRevenue, setTotalRevenue] = useState(0);
+    /**
+     *   #492 THE WORST OF THE EIGHT LOADERS, because the number it renders on
+     *        a failed read is MONEY.
+     *
+     *        `setLoading(false)` ran unconditionally and the state kept its
+     *        initial zero, so a read that failed showed an admin a Total Revenue
+     *        of ₦0 and "0 successful payments" — a confident figure about the
+     *        platform's takings, produced by a request that did not return.
+     */
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [totalSuccessfulCount, setTotalSuccessfulCount] = useState<number | null>(null);
     const [totalAbandonedCount, setTotalAbandonedCount] = useState<number | null>(null);
     const [totalFailedCount, setTotalFailedCount] = useState<number | null>(null);
@@ -100,16 +110,28 @@ export default function AdminFinancePage() {
 
     async function loadFinanceData(silent = false) {
         if (!silent) setLoading(true);
-        const res = await getFinancialOverviewAction();
-        if (res.success && res.recentTransactions) {
-            setTotalRevenue(res.totalRevenue ?? 0);
-            setTransactions(res.recentTransactions as Transaction[]);
-            setFailedTx(res.failedTransactions as FailedTransaction[]);
-            setTotalSuccessfulCount(res.totalSuccessfulCount ?? null);
-            setTotalAbandonedCount(res.totalAbandonedCount ?? null);
-            setTotalFailedCount(res.totalFailedCount ?? null);
+        setLoadError(null);
+        try {
+            const res = await getFinancialOverviewAction();
+            if (res.success && res.recentTransactions) {
+                setTotalRevenue(res.totalRevenue ?? 0);
+                setTransactions(res.recentTransactions as Transaction[]);
+                setFailedTx(res.failedTransactions as FailedTransaction[]);
+                setTotalSuccessfulCount(res.totalSuccessfulCount ?? null);
+                setTotalAbandonedCount(res.totalAbandonedCount ?? null);
+                setTotalFailedCount(res.totalFailedCount ?? null);
+            } else {
+                //   A refusal is not zero revenue. This branch fell through
+                //   silently and left the initial state on screen.
+                setLoadError((res as any).error || "The financial overview could not be read.");
+            }
+        } catch (err) {
+            setLoadError(
+                err instanceof Error ? err.message : "The financial overview could not be read.",
+            );
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     useEffect(() => {
@@ -239,6 +261,34 @@ export default function AdminFinancePage() {
                     </div>
                 </div>
 
+                {/**
+                  *   #492 THE FIGURES ARE NOT SHOWN AT ALL WHEN THEY COULD NOT
+                  *        BE READ.
+                  *
+                  *        Not a banner ABOVE the cards — the cards themselves
+                  *        would still be sitting there reading ₦0, and an
+                  *        operator scanning a dashboard reads the number, not
+                  *        the notice above it. Withholding them is the only
+                  *        version of this that cannot mislead.
+                  */}
+                {loadError ? (
+                    <div className="mb-6 rounded-2xl border border-amber-300 bg-amber-50 p-6">
+                        <p className="text-base font-bold text-amber-900">
+                            The financial figures could not be loaded.
+                        </p>
+                        <p className="text-sm text-amber-800 mt-1">
+                            {loadError} They are hidden rather than shown as zero — nothing here
+                            says the platform took no money.
+                        </p>
+                        <button
+                            onClick={() => loadFinanceData()}
+                            className="mt-3 px-4 py-2 rounded-lg bg-amber-900 text-white text-sm font-semibold"
+                        >
+                            Try again
+                        </button>
+                    </div>
+                ) : (
+                <>
                 {/* Summary Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
                     <div className="bg-linear-to-br from-green-500 to-emerald-600 rounded-2xl p-6 shadow-lg text-white">
@@ -513,6 +563,15 @@ export default function AdminFinancePage() {
                     </div>
                 </div>
 
+                </>
+                )}
+
+                {/**
+                  *   #492 Quick Actions stay OUTSIDE the guard: they are
+                  *   navigation, they are true whatever the figures did, and
+                  *   taking them away would strand an admin on a page with one
+                  *   error and no way onward.
+                  */}
                 {/* Quick Actions */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <Link href="/admin/marketplace/withdrawals" className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition flex items-center justify-between group">
