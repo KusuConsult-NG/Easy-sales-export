@@ -12,6 +12,7 @@ import { serializeDocs } from "@/lib/firestore-serialize";
 import type { AuditLogEntry, AuditAction, AuditSeverity } from "@/lib/audit-log";
 import { getCached, setCache } from "@/lib/redis";
 import { hasAdminPermission } from "@/lib/admin-permissions";
+import { redactAuditEntries } from "@/lib/audit-metadata-privacy";
 
 /**
  * How many rows the statistics panel will read.
@@ -113,7 +114,32 @@ export async function getAuditLogsAction(filters: { userId?: string;
 
         const snapshot = await q.get();
 
-        const logs = serializeDocs(snapshot.docs) as unknown as AuditLogEntry[];
+        /**
+         *   #474 REDACTED HERE, BECAUSE #468 ONLY FIXED THE WRITER.
+         *
+         *   #468 stopped new audit entries carrying an applicant's name, state
+         *   and age, and a member's bank account number. It could not do
+         *   anything about entries already written, and the owner opened this
+         *   screen and saw a WAVE entry from 15 August — three weeks before that
+         *   fix — still showing all four fields.
+         *
+         *   THE ROWS ARE NOT TOUCHED. An audit log that can be edited afterwards
+         *   is not an audit log, and the owner's standing instruction is that
+         *   nothing is destroyed to fix a defect. The stored record keeps
+         *   everything; the READER stops displaying it, and the value is
+         *   replaced rather than removed so an auditor can still see that a
+         *   field was captured and go to the record for it.
+         *
+         *   THIS IS THE ONLY DOOR THAT RETURNS METADATA. exportAuditLogsCSV
+         *   pages through THIS function rather than querying the collection, so
+         *   the export inherits the redaction instead of needing its own copy —
+         *   which is what would have drifted. getAuditStatsAction reads the same
+         *   collection but returns only counts, and analytics.service.ts takes a
+         *   count. Both were checked.
+         */
+        const logs = redactAuditEntries(
+            serializeDocs(snapshot.docs) as unknown as AuditLogEntry[],
+        );
 
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
