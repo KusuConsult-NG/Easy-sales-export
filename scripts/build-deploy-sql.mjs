@@ -100,6 +100,15 @@ const EXPECTED = [
              "the plain form under a lock_timeout: ShareLock, reads unaffected, 718 ms " +
              "of blocked writes on 50,009 rows. See #469 in its header.",
     },
+    {
+        n: "028",
+        why: "the GIN index on users.roles. Order does not matter against the " +
+             "others; it is here because without it EVERY one of the 27 places " +
+             "that filters users by role is a full scan of the users table, and " +
+             "one of them — the Farm Nation forensic — hit the statement timeout " +
+             "in production and reported a whole check as unrunnable. Plain " +
+             "CREATE INDEX under a lock_timeout, per #469.",
+    },
     { n: "004", why: "row-level security — LAST, and in a low-traffic window" },
 ];
 

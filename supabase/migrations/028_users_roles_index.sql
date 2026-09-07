@@ -1,0 +1,110 @@
+-- ============================================================================
+-- #471  EVERY SCREEN THAT LISTS USERS BY ROLE READ THE WHOLE TABLE.
+-- ============================================================================
+--
+-- The owner's forensics run came back with a check that could not finish at all:
+--
+--     Farm Nation / Verification Scan
+--     Could not complete this scan: [supabase-db] query users:
+--     canceling statement due to statement timeout
+--
+-- That check asks one question:
+--
+--     SELECT id, raw_data FROM users
+--      WHERE roles @> ARRAY['farmer']
+--        AND raw_data->>'isVerified' = 'true'
+--      LIMIT 50;
+--
+-- `roles` is a native TEXT[] column and it had NO INDEX. Neither did the JSONB
+-- path. So the query is a sequential scan, and — this is the part that turns it
+-- from slow into fatal — THE `LIMIT 50` NEVER RESCUES IT. A LIMIT lets a scan
+-- stop early only when it FINDS that many rows. There are two or three verified
+-- farmers on this platform, so the scan can never fill the limit and must read
+-- every row in the table, detoasting each document to evaluate the JSONB path.
+--
+-- MEASURED against a real PostgreSQL 16 with 50,009 users, with the verified
+-- farmers reduced to 3 so the LIMIT cannot be satisfied — production's shape:
+--
+--   BEFORE                                          21.972 ms   12,571 buffers
+--     Seq Scan on users
+--       Filter: (roles @> '{farmer}' AND (raw_data->>'isVerified') = 'true')
+--       Rows Removed by Filter: 50006
+--
+--   AFTER  create index using gin (roles)            0.314 ms       67 buffers
+--     Bitmap Heap Scan on users
+--       Recheck Cond: (roles @> '{farmer}')
+--       ->  Bitmap Index Scan on idx_users_roles  (rows=512)
+--
+-- 70x on time and 188x on blocks touched. THE BLOCK COUNT IS THE NUMBER THAT
+-- MATTERS HERE. Locally every one of those 12,571 buffers was a cache hit, which
+-- is why 50,009 rows still took only 22 ms. In production they are not: raw_data
+-- is a TOASTed JSONB column, so the discarded 50,006 rows are read from disk to
+-- be thrown away. That is the difference between 22 ms here and a statement
+-- timeout there.
+--
+-- AND IT IS NOT ONE FORENSIC CHECK. `roles` is filtered in 27 places:
+--
+--   /admin/users                  the role filter and its count query
+--   /admin/marketplace            buyers and sellers
+--   messages.ts                   every admin, twice, on the notification path
+--   wallet.ts                     the notifiable-roles fan-out
+--   sms-broadcast.ts              buyers, academy participants, export members
+--   in-app-broadcast.ts           buyers
+--   communications.service.ts     sellers
+--   academy catalogue             instructors
+--   forensics.ts                  wave participants, cooperative members, farmers
+--
+-- Every one of them was a full scan of the users table, on a page load. This is
+-- the shape of "the dashboards are slow" that measuring one query at a time
+-- kept missing: not one slow page, one missing index under twenty of them.
+--
+-- WHY THIS IS THE SHAPE THAT DESERVES AN INDEX, WHERE 022'S WAS NOT
+-- -----------------------------------------------------------------
+-- Migration 022 is marked DO NOT APPLY on its own measurements: its indexes
+-- served a filter matching 96% of its table, where an index scan is slower than
+-- the seq scan it replaces. Its header sets the test:
+--
+--     "Apply this only when the EXPLAIN ANALYZE in the header shows a seq scan
+--      over a LARGE table returning a SMALL fraction of it."
+--
+-- 512 farmers of 50,009 rows is 1%. And the planner was asked the other half of
+-- 022's question directly — what does it do when a role matches EVERYTHING?
+--
+--     EXPLAIN ANALYZE SELECT id FROM users WHERE roles @> ARRAY['user'];
+--     ->  Seq Scan on users  (rows=50009)
+--
+-- It ignores the index, correctly. So this index helps the selective roles and
+-- costs nothing on the unselective ones. That discrimination is exactly what
+-- 022's expression indexes could not make.
+--
+-- COST, MEASURED RATHER THAN ASSUMED
+-- ----------------------------------
+--   write   2,000 inserts without the index   14.284 ms
+--           2,000 inserts with it             19.029 ms
+--           = ~2.4 microseconds per row
+--
+--   size    176 kB, against a 98 MB table — 0.18%
+--
+-- GIN rather than btree because the operators are @> (array-contains) and &&
+-- (array-contains-any), which btree cannot serve at all. Both are measured
+-- above; `&&` becomes a Bitmap Index Scan too.
+--
+-- HOW TO APPLY
+-- ------------
+-- Paste this file into the Supabase SQL Editor and run it, or let it arrive in
+-- the consolidated deploy. Plain CREATE INDEX under a lock_timeout, for the
+-- reason #469 records in 027's header: CONCURRENTLY cannot run in a transaction
+-- and the SQL Editor always opens one, so a CONCURRENTLY migration here is a
+-- migration that never gets applied. The build takes a ShareLock — reads are
+-- unaffected, writes pause for the duration — and the lock_timeout turns
+-- queueing behind an open transaction into a clean, re-runnable abort.
+--
+-- Safe to re-run: IF NOT EXISTS.
+-- ============================================================================
+
+SET lock_timeout = '5s';
+
+CREATE INDEX IF NOT EXISTS idx_users_roles
+    ON public.users USING GIN (roles);
+
+RESET lock_timeout;
