@@ -976,6 +976,34 @@ function applyFilter(
         const value = Array.isArray(normalizedValue)
             ? normalizedValue.map(norm)
             : norm(normalizedValue);
+
+        /**
+         *   A BLANK EMAIL IS NOT AN IDENTITY, AND NORMALISING IT WIDENS THE
+         *   MATCH — SO IT IS NOT NORMALISED.
+         *
+         *   Production holds 49 profiles whose email is null, empty or
+         *   whitespace. Routing a BLANK search through email_normalised makes
+         *   '   ' and '' the same value, so a lookup for one would return all of
+         *   them — measured on a real cluster: 2 rows where the raw column
+         *   returned 1.
+         *
+         *   That matters because session-guard.ts, the cooperative lookups and
+         *   the admin search all reach this with `where('email','==', x)`. An
+         *   identity lookup that resolved a blank address to somebody's
+         *   blank-email profile is a worse defect than the one #478 fixed.
+         *
+         *   So the normalisation applies to REAL addresses only, and a blank
+         *   value keeps the raw column and the exact pre-#478 behaviour. This is
+         *   not a workaround: 'find the user whose email is nothing' is not a
+         *   question identity code should ever be asking, and anything that
+         *   genuinely wants those rows should say so explicitly.
+         */
+        const blank = (v: unknown) => v === null || v === undefined || v === '';
+        const widens = Array.isArray(value) ? value.some(blank) : blank(value);
+        if (widens) {
+            return applySimpleFilter(query, 'email', op, normalizedValue);
+        }
+
         return applySimpleFilter(query, 'email_normalised', op, value);
     }
 

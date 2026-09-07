@@ -267,11 +267,24 @@ describe('#465 — a scan that could not run is not a scan that found something'
         expect({ stillFailing }).toEqual({ stillFailing: [] });
     });
 
-    it('AND ALL EIGHT OF THEM DO — not the one that was noticed', () => {
+    it('AND EVERY ONE OF THEM DOES — not the one that was noticed', () => {
+        //   THIS COUNTED TO EIGHT, AND THAT WAS THE WRONG SHAPE. #479 added a
+        //   ninth check — profiles with no email — whose catch reports
+        //   "inconclusive" exactly as the rule requires, and this failed on the
+        //   NUMBER while the rule was being followed perfectly.
+        //
+        //   Seventh time in this audit that a test pinned to an incidental
+        //   detail stood in the way of correct work. So it now asserts the rule
+        //   instead: every catch in this file reports inconclusive, however many
+        //   checks there are.
         const code = forensics();
+
+        const catches = (code.match(/\} catch \(e: any\) \{ results\.push\(/g) ?? []);
         const inconclusive = (code.match(/status: "inconclusive", details: `Could not complete this scan/g) ?? []);
 
-        expect(inconclusive.length).toBe(8);
+        expect(catches.length).toBeGreaterThanOrEqual(8);
+        expect({ catches: catches.length, inconclusive: inconclusive.length })
+            .toEqual({ catches: catches.length, inconclusive: catches.length });
     });
 
     it('and still says what went wrong, rather than swallowing it', () => {

@@ -209,6 +209,66 @@ export async function runForensicScanAction(): Promise<
         } catch (e: any) { results.push({ module: "Auth", check: "Ghost User Scan", status: "inconclusive", details: `Could not complete this scan: ${e.message}`, affectedIds: [] });
         }
 
+        // CHECK: Profiles with no email address
+        /**
+         *   #479 A PROFILE WITH NO EMAIL CAN ONLY EVER BE FOUND BY ITS DOCUMENT
+         *   ID, AND NOTHING WAS COUNTING THEM.
+         *
+         *        The owner's own query turned up 49 rows whose email is null,
+         *        empty or whitespace. Every lookup in this codebase that
+         *        resolves a person from an address — the login, the ghost scan,
+         *        session-guard, password reset, the cooperative and module
+         *        checks — misses all of them. If such a profile sits under a
+         *        legacy id rather than the auth id, the person is unreachable
+         *        and #476's branch writes them a blank profile instead.
+         *
+         *        #479 makes the LOGIN repair its own row from the address
+         *        Supabase Auth just verified. That only reaches people who log
+         *        in. This counts the rest, so they can be found rather than
+         *        waited for.
+         *
+         *        These are FINDINGS, not gaps: a user record with no email is
+         *        something to fix, and unlike an unrecorded gender it is not a
+         *        fact about the person that was never collected — they signed up
+         *        with an address.
+         */
+        try {
+            const noEmail = await db.collection(COLLECTIONS.USERS)
+                .where("email", "==", "")
+                .limit(200)
+                .get();
+
+            const nullEmail = await db.collection(COLLECTIONS.USERS)
+                .where("email", "==", null as any)
+                .limit(200)
+                .get();
+
+            const seen = new Set<string>();
+            const ids: string[] = [];
+            for (const snap of [noEmail, nullEmail]) {
+                for (const d of snap.docs) {
+                    if (seen.has(d.id)) continue;
+                    seen.add(d.id);
+                    const roles = (d.data()?.roles ?? []) as string[];
+                    ids.push(`${d.id}${roles.length ? ` (roles: ${roles.join(", ")})` : " (no roles)"}`);
+                }
+            }
+
+            results.push({
+                module: "Auth",
+                check: "Profiles With No Email Address",
+                status: ids.length > 0 ? "fail" : "pass",
+                details: ids.length === 0
+                    ? "Every profile carries an email address."
+                    : `${ids.length} profile(s) have no email stored. They cannot be found by any `
+                      + `lookup that resolves a person from their address, so if the profile is not `
+                      + `keyed by the auth id the person gets a blank profile at login. A login now `
+                      + `repairs its own row (#479); these are the ones that have not logged in since.`,
+                affectedIds: ids
+            });
+        } catch (e: any) { results.push({ module: "Auth", check: "Profiles With No Email Address", status: "inconclusive", details: `Could not complete this scan: ${e.message}`, affectedIds: [] });
+        }
+
         // ============================================================================
         // 2. MARKETPLACE INTEGRITY
         // ============================================================================

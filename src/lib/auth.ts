@@ -248,6 +248,57 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                                     );
                                 }
                                 const matchedData = matchedDoc.data()!;
+
+                                /**
+                                 *   #479 A PROFILE WITH NO EMAIL CAN ONLY EVER
+                                 *   BE FOUND BY ITS DOCUMENT ID.
+                                 *
+                                 *        Production holds 49 of them — null,
+                                 *        empty or whitespace. Every lookup in
+                                 *        this codebase that resolves a person
+                                 *        from an address misses them, so if
+                                 *        their profile is under a legacy id
+                                 *        they are unreachable and #476's branch
+                                 *        writes them a blank one instead.
+                                 *
+                                 *        Supabase Auth has just VERIFIED this
+                                 *        address for this account, and the
+                                 *        profile has just been resolved by an
+                                 *        identity link. So the address is
+                                 *        known, and the field is empty: fill
+                                 *        it, and the row stops being invisible.
+                                 *
+                                 *        ONLY WHEN EMPTY. An existing address is
+                                 *        never overwritten — a profile whose
+                                 *        email differs from the one used to sign
+                                 *        in is a finding, not something to
+                                 *        quietly reconcile, and overwriting it
+                                 *        would destroy the evidence.
+                                 *
+                                 *        Non-fatal. A login must not fail
+                                 *        because a repair did.
+                                 */
+                                const storedEmail = typeof matchedData.email === 'string'
+                                    ? matchedData.email.trim()
+                                    : '';
+                                if (storedEmail === '') {
+                                    try {
+                                        await db.collection(COLLECTIONS.USERS).doc(matchedDoc.id).set(
+                                            { email: email.toLowerCase(), updatedAt: FieldValue.serverTimestamp() },
+                                            { merge: true },
+                                        );
+                                        logger.warn(
+                                            `${authCtx} Profile ${matchedDoc.id} had NO email stored and was `
+                                            + `reachable only by id (#479). Filled it in from the address just `
+                                            + `verified by Supabase Auth.`,
+                                        );
+                                    } catch (fillErr: any) {
+                                        logger.error(
+                                            `${authCtx} Could not backfill the missing email on profile `
+                                            + `${matchedDoc.id} (#479): ${fillErr?.message}`,
+                                        );
+                                    }
+                                }
                                 if (matchedData._migratedTo) {
                                     uid = matchedData._migratedTo;
                                     logger.info(`${authCtx} Authenticated via Supabase Auth. Profile ID: ${matchedDoc.id} (Migrated to: ${uid})`);

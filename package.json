@@ -57,7 +57,8 @@
     "pg:stop": "bash scripts/local-postgres.sh stop",
     "test:pg": "jest --config jest.config.pg.js --runInBand",
     "stack:up": "bash scripts/local-stack/up.sh",
-    "stack:down": "bash scripts/local-stack/down.sh"
+    "stack:down": "bash scripts/local-stack/down.sh",
+    "sql:only": "node scripts/build-deploy-sql.mjs --only"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",

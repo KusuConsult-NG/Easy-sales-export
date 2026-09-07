@@ -180,6 +180,43 @@ const outIdx = args.indexOf("--out");
 const outFile = outIdx >= 0 ? args[outIdx + 1] : null;
 const skipRls = args.includes("--skip-rls");
 
+/**
+ * --only 030,031,032 — just those migrations, in this file's order.
+ *
+ *   #479 THERE WAS NO WAY TO GET THE SQL FOR *SOME* MIGRATIONS.
+ *
+ *        This script emitted the whole deployment or nothing. That is right for
+ *        a fresh database and wrong for the situation the owner is actually in
+ *        every time: a live database that already has 002-029, and three new
+ *        files to apply. Their only options were to paste 30 migrations again
+ *        (safe, because every one is idempotent, but slow and frightening) or
+ *        to open three files and paste them by hand in the right order — which
+ *        is the manual step this script exists to remove.
+ *
+ *        The ORDER still comes from EXPECTED, so a subset cannot be pasted in
+ *        the wrong sequence, and an unknown number is refused rather than
+ *        silently skipped.
+ */
+const onlyIdx = args.indexOf("--only");
+const only = onlyIdx >= 0
+    ? String(args[onlyIdx + 1] ?? "").split(",").map((n) => n.trim()).filter(Boolean)
+    : null;
+
+if (only && only.length > 0) {
+    const known = new Set(EXPECTED.map((e) => e.n));
+    const unknown = only.filter((n) => !known.has(n));
+    if (unknown.length > 0) {
+        console.error(
+            `\n[build-deploy-sql] REFUSING — not in the application order: ${unknown.join(", ")}\n\n` +
+            `Every migration this script can emit is listed in EXPECTED, which is also what\n` +
+            `defines the order they must be applied in. A number that is not there is either a\n` +
+            `typo or a migration nobody added to the list — and emitting it anyway would be\n` +
+            `pasting SQL in an order this script cannot vouch for.\n`
+        );
+        process.exit(1);
+    }
+}
+
 const available = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(".sql"));
 
 function findMigration(prefix) {
@@ -191,6 +228,7 @@ const chosen = [];
 
 for (const step of EXPECTED) {
     if (skipRls && step.n === "004") continue;
+    if (only && !only.includes(step.n)) continue;
     const file = findMigration(step.n);
     if (!file) {
         missing.push(step);
