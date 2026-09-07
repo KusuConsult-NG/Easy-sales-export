@@ -43,6 +43,12 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 
 const listUsers = jest.fn<any>();
 const getAll = jest.fn<any>();
+/**
+ * What a `where(...).get()` returns. Empty by default, which is what this suite
+ * means: none of the scanned accounts has a profile, so every one is an orphan
+ * and the pagination is what is under test.
+ */
+const whereGet = jest.fn<any>(() => Promise.resolve({ docs: [], empty: true, size: 0 }));
 
 jest.mock('@/lib/firebase-admin', () => ({
     adminAuth: { listUsers: (...args: any[]) => listUsers(...args) },
@@ -50,13 +56,29 @@ jest.mock('@/lib/firebase-admin', () => ({
 
 jest.mock('@/lib/supabase-db', () => ({
     supabaseDb: {
-        collection: () => ({ doc: (id: string) => ({ id }) }),
+        //   #466 THE SCAN NO LONGER LOOKS UP BY DOCUMENT ID ALONE. It asks
+        //        lib/auth-profile-link, which queries `where(...).in` twice —
+        //        by id, then by email — because a migrated user's profile is
+        //        under their legacy id and the old lookup listed every one of
+        //        them as an orphan. This mock answers the query shape that
+        //        module actually issues; `getAll` is kept for any caller that
+        //        still uses it.
+        collection: () => ({
+            doc: (id: string) => ({ id }),
+            where: () => ({ get: () => whereGet() }),
+        }),
         getAll: (...refs: any[]) => getAll(...refs),
     },
 }));
 
 jest.mock('@/lib/firestore-compat', () => ({
     FieldValue: { serverTimestamp: () => 'ts' },
+    //   #466 FieldPath WAS MISSING and the scan now uses it, so every test here
+    //        threw "Cannot read properties of undefined (reading 'documentId')".
+    //        The incomplete-mock class this repository has a ratchet for: a stub
+    //        that omits what the code under test reaches for does not fail
+    //        honestly, it fails as something else.
+    FieldPath: { documentId: () => '__name__' },
 }));
 
 /** An Auth account record, as listUsers returns it. */
@@ -172,9 +194,14 @@ describe('it still finds orphans', () => {
         listUsers
             .mockResolvedValueOnce(page(0, 1, 'tok-2'))
             .mockResolvedValueOnce({ users: [authUser('u1')], pageToken: undefined });
-        getAll.mockImplementation(async (...refs: any[]) =>
-            refs.map((r: any) => ({ exists: r.id !== 'u1' }))
-        );
+        //   #466 The scan resolves through lib/auth-profile-link now, which
+        //        queries by id and then by email rather than getAll-ing one doc
+        //        per account. Everyone EXCEPT u1 has a profile.
+        whereGet.mockImplementation(async () => ({
+            docs: [{ id: 'u0', data: () => ({ email: 'u0@example.com' }) }],
+            empty: false,
+            size: 1,
+        }));
         const { detectOrphanedUsers } = await import('@/lib/orphaned-user-repair');
 
         const scan = await detectOrphanedUsers();
@@ -218,6 +245,17 @@ describe('"repair all" reports how much of Auth it saw', () => {
 
     it('and reports complete when it really was', async () => {
         listUsers.mockResolvedValueOnce(page(0, 3, undefined));
+        // #466. All three already have a profile, so there is nothing to repair
+        // — which is what `total: 0` below means.
+        whereGet.mockImplementation(async () => ({
+            docs: [
+                { id: 'u0', data: () => ({ email: 'u0@example.com' }) },
+                { id: 'u1', data: () => ({ email: 'u1@example.com' }) },
+                { id: 'u2', data: () => ({ email: 'u2@example.com' }) },
+            ],
+            empty: false,
+            size: 3,
+        }));
         const { repairAllOrphanedUsers } = await import('@/lib/orphaned-user-repair');
 
         const result = await repairAllOrphanedUsers();

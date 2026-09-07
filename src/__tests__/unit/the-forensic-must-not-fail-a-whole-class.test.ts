@@ -203,64 +203,46 @@ describe('#464 — the forensic separates a finding from a gap', () => {
 describe('#464 — a migrated user is not a ghost', () => {
     const forensics = () => source('src/app/actions/forensics.ts');
 
-    it('THE GHOST CHECK LOOKS BEYOND THE DOCUMENT ID', () => {
-        // 83 of 100. user-migration.ts leaves a migrated profile under its
-        // Firebase-era id, so the document-id lookup alone can never find one.
+    it('THE GHOST CHECK ASKS THE SHARED RESOLUTION', () => {
+        //   83 of 100. user-migration.ts leaves a migrated profile under its
+        //   Firebase-era id, so a document-id lookup alone can never find one.
+        //
+        //   #466 MOVED THE LOOKUP OUT OF THIS FILE. orphaned-user-repair.ts had
+        //   the same narrow rule and never got the fix — and its half WRITES,
+        //   so it would have created a duplicate profile for every migrated
+        //   user it mislabelled. One resolution, three callers; the behaviour is
+        //   asserted in the-repair-must-not-create-a-second-profile.test.ts.
         const code = forensics();
 
-        expect(code).toContain('const unmatchedUsers = authUsers.filter');
+        expect(code).toContain('authAccountsWithProfiles(');
     });
 
-    it('AND IT MATCHES ON AN INDEXED COLUMN — #465, the first fix timed out', () => {
-        //   #464 queried `where("supabaseAuthId", "in", chunk)`. That field
-        //   lives inside raw_data with no index, so production answered
-        //   "canceling statement due to statement timeout" and the whole scan
-        //   reported nothing. `email` is a NATIVE column on users, and the key
-        //   user-migration.ts itself matches a legacy record on.
+    it('AND KEEPS NO COPY OF ITS OWN', () => {
+        // A second implementation beside the shared one is how #466 happened.
         const code = forensics();
 
-        expect(code).toContain('.where("email", "in", chunk)');
+        expect(code).not.toContain('.where("email", "in", chunk)');
         expect(code).not.toContain('.where("supabaseAuthId", "in", chunk)');
     });
 
-    it('AND email REALLY IS A NATIVE COLUMN — the premise', () => {
-        // If it stops being one, this query becomes the seq scan it replaced
-        // and the scan starts timing out again with nothing to explain it.
+    it('AND user-migration REALLY DOES WRITE THAT POINTER — the premise', () => {
+        // The reason a migrated profile is findable at all. If this stops being
+        // true, the ghost count climbs back with nothing to explain it.
+        expect(source('src/lib/user-migration.ts')).toContain('supabaseAuthId: supabaseUid');
+    });
+
+    it('AND email REALLY IS A NATIVE COLUMN — why the join uses it', () => {
+        // #465: matching on supabaseAuthId is a seq scan and timed the whole
+        // scan out. email is indexed, and is what user-migration matches on.
         expect(NATIVE_COLUMNS['users']).toContain('email');
         expect(FIELD_TO_COLUMN['users']?.supabaseAuthId).toBeUndefined();
-    });
-
-    it('AND THE SECOND LOOKUP IS BATCHED, like the first', () => {
-        // One query per unmatched id would be 83 serial round trips on the very
-        // scan this fixes.
-        const code = forensics();
-        const block = code.slice(code.indexOf('const unmatchedUsers ='), code.indexOf('const unmatchedUsers =') + 1400);
-
-        expect(block).toContain('emailChunks');
-        expect(block).toContain('Promise.all');
-    });
-
-    it('and it only runs when something is unmatched', () => {
-        const code = forensics();
-
-        expect(code).toContain('if (unmatchedUsers.length > 0)');
-    });
-
-    it('and the match is case-insensitive on both sides', () => {
-        // Auth stores what somebody typed. A profile stored "Ada@Example.com"
-        // against an auth "ada@example.com" would be a false ghost, which is
-        // the class of bug this whole finding is.
-        const code = forensics();
-        const block = code.slice(code.indexOf('const unmatchedUsers ='), code.indexOf('const unmatchedUsers =') + 1400);
-
-        expect((block.match(/trim\(\)\.toLowerCase\(\)/g) ?? []).length).toBeGreaterThanOrEqual(2);
     });
 
     it('POSITIVE CONTROL: a user found by NEITHER route is still a ghost', () => {
         // The check must not be softened into never reporting anything.
         const code = forensics();
 
-        expect(code).toContain('if (!existingIds.has(uid)) ghostUserIds.push(uid)');
+        expect(code).toContain('if (!existingIds.has(user.uid)) ghostUserIds.push(user.uid)');
     });
 });
 

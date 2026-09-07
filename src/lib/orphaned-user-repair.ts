@@ -6,6 +6,7 @@
  */
 
 import { adminAuth } from "@/lib/firebase-admin";
+import { authAccountsWithProfiles, authAccountHasProfile } from './auth-profile-link';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { FieldValue } from "@/lib/firestore-compat";
 import { COLLECTIONS } from '@/lib/types/firestore';
@@ -89,30 +90,32 @@ export async function detectOrphanedUsers(startPageToken?: string): Promise<Orph
             pagesRead++;
             scanned += listUsersResult.users.length;
 
-            // Check each user for Firestore profile efficiently in batches of 50
-            const chunkSize = 50;
-            for (let i = 0; i < listUsersResult.users.length; i += chunkSize) {
-                const chunk = listUsersResult.users.slice(i, i + chunkSize);
-                const refs = chunk.map(u => db.collection(COLLECTIONS.USERS).doc(u.uid));
+            //   #466 THIS ASKED ONLY `doc(u.uid)`, so every MIGRATED user was
+            //        listed as an orphan. user-migration.ts leaves the profile
+            //        under its original Firebase-era id, so the auth id is not
+            //        where it lives — which #464 and #465 taught the forensic
+            //        scan and did not teach this file. The two then disagreed by
+            //        25 accounts on the same 100 users.
+            //
+            //        One resolution now, in lib/auth-profile-link.ts, shared with
+            //        the scan and with the repair below.
+            const withProfiles = await authAccountsWithProfiles(
+                listUsersResult.users.map((u: any) => ({ uid: u.uid, email: u.email })),
+            );
 
-                // Fetch up to 50 docs in parallel
-                const docs = await db.getAll(...refs);
+            for (const userRecord of listUsersResult.users) {
+                if (withProfiles.has(userRecord.uid)) continue;
 
-                docs.forEach((doc: { exists: boolean }, idx: number) => {
-                    const userRecord = chunk[idx];
-                    if (!doc.exists) {
-                        orphanedUsers.push({
-                            uid: userRecord.uid,
-                            email: userRecord.email,
-                            displayName: userRecord.displayName,
-                            createdAt: userRecord.metadata.creationTime,
-                        });
+                orphanedUsers.push({
+                    uid: userRecord.uid,
+                    email: userRecord.email,
+                    displayName: userRecord.displayName,
+                    createdAt: userRecord.metadata.creationTime,
+                });
 
-                        logger.warn('Orphaned user detected', {
-                            uid: userRecord.uid,
-                            email: userRecord.email,
-                        });
-                    }
+                logger.warn('Orphaned user detected', {
+                    uid: userRecord.uid,
+                    email: userRecord.email,
                 });
             }
 
@@ -149,9 +152,19 @@ export async function repairOrphanedUser(uid: string): Promise<{ success: boolea
         // Get user from Firebase Auth
         const userRecord = await adminAuth.getUser(uid);
 
-        // Check if Firestore profile already exists
-        const existingDoc = await db.collection(COLLECTIONS.USERS).doc(uid).get();
-        if (existingDoc.exists) {
+        //   #466 THIS GUARD IS THE ONE THAT MATTERS, because what follows it
+        //        CREATES A PROFILE.
+        //
+        //        It asked `doc(uid)` alone. For a migrated user — profile under
+        //        their legacy id, same email — that lookup finds nothing, the
+        //        guard passes, and this writes a SECOND profile keyed by the
+        //        auth id. One person, two rows, their data split between them.
+        //        "Repair All" on /admin/orphaned-users was one click from doing
+        //        that to every migrated account in the scan.
+        //
+        //        Same resolution as the detector and the forensic scan now. A
+        //        profile found by EITHER route means there is nothing to repair.
+        if (await authAccountHasProfile({ uid, email: userRecord.email })) {
             return { success: false, error: 'User already has Firestore profile' };
         }
 

@@ -12,6 +12,7 @@ import { checkCourseAccess } from "@/lib/academy-plan";
 import { isPlatformAdmin } from "@/lib/admin-permissions";
 import { normalisePhone } from "@/lib/phone";
 import { genderOutcome } from "@/lib/gender";
+import { authAccountsWithProfiles } from "@/lib/auth-profile-link";
 
 /**
  * Forensic data-integrity scan.
@@ -131,109 +132,26 @@ export async function runForensicScanAction(): Promise<
             const authUsers = listUsersResult.users;
             const ghostUserIds: string[] = [];
 
-            // Batched, not one read per user.
-            //
-            // This was a serial `.doc(uid).get()` inside the loop: 100 round
-            // trips, each waiting for the last. The same chunked
-            // FieldPath.documentId() `in` query that admin.ts uses for hydration
-            // does it in 4 concurrent queries.
-            const authUserIds = authUsers.map((u: any) => u.uid);
-            const existingIds = new Set<string>();
-            const idChunks: string[][] = [];
-            for (let i = 0; i < authUserIds.length; i += 30) {
-                idChunks.push(authUserIds.slice(i, i + 30));
-            }
-            const snaps = await Promise.all(
-                idChunks.map(chunk =>
-                    db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get()
-                )
+            /**
+             *   #466 THE RESOLUTION MOVED OUT OF THIS FILE.
+             *
+             *        #464 taught this scan that a migrated profile is not keyed
+             *        by the auth id, and #465 made that lookup cheap enough to
+             *        finish. Neither reached orphaned-user-repair.ts, whose
+             *        detector reported a different number from this one and
+             *        whose REPAIR would have written a duplicate profile for
+             *        every migrated user it mislabelled.
+             *
+             *        One resolution, in lib/auth-profile-link.ts, shared by the
+             *        scan, the detector and the repair — so a report and the
+             *        button next to it cannot mean different things.
+             */
+            const existingIds = await authAccountsWithProfiles(
+                authUsers.map((u: any) => ({ uid: u.uid, email: u.email })),
             );
-            snaps.forEach(snap => snap.docs.forEach((d: any) => existingIds.add(d.id)));
 
-            /**
-             *   #464 A MIGRATED USER'S PROFILE IS NOT KEYED BY THEIR AUTH ID,
-             *        AND THIS REPORTED ALL OF THEM AS GHOSTS — 83 OF 100 ON THE
-             *        FIRST PRODUCTION SCAN.
-             *
-             *        user-migration.ts writes `supabaseAuthId: supabaseUid` onto
-             *        the EXISTING profile and leaves that profile under its
-             *        original Firebase-era id. So the join from an auth user to
-             *        their profile goes through that field, not through the
-             *        document id — which is the whole reason lib/user-identity.ts
-             *        exists, and #449 fixed six readers that each walked it their
-             *        own way. This check was a seventh, and walked none of it.
-             *
-             *        The ids in that report are the tell: the auth users are
-             *        UUIDs while the profiles carrying them are 28-character
-             *        Firebase ids.
-             *
-             *        A ghost is now an auth user found by NEITHER route. Batched
-             *        the same way as the lookup above rather than one query per
-             *        remaining id.
-             */
-            /**
-             *   #465 MATCHED ON EMAIL, WHICH IS AN INDEXED COLUMN — the pointer
-             *        field is not, and querying it timed the scan out.
-             *
-             *        #464's fix asked `where("supabaseAuthId", "in", chunk)`.
-             *        supabaseAuthId lives inside raw_data with no index, so that
-             *        is a sequential scan of the users table, three chunks
-             *        concurrently, and production answered:
-             *
-             *            [supabase-db] query users:
-             *            canceling statement due to statement timeout
-             *
-             *        A correct join that never completes reports nothing. NATIVE
-             *        COLUMNS on users are id, email, roles, created_at,
-             *        updated_at — and email is the key user-migration.ts itself
-             *        matches a legacy record on, so it is the join that already
-             *        exists rather than a new guess.
-             *
-             *        IT IS A WEAKER LINK THAN THE POINTER, and worth saying so: a
-             *        profile whose email no longer matches its auth account would
-             *        still be reported. That is the honest trade against a query
-             *        that cannot finish, and the residue is a handful of names to
-             *        look at rather than a whole scan lost.
-             *
-             *        An index on raw_data->>'supabaseAuthId' would allow the
-             *        stronger join. Migration 022 exists for that class and is
-             *        marked DO NOT APPLY, on measurements showing indexes of that
-             *        shape bought nothing at this data size. Its own stated
-             *        trigger is "a seq scan over a LARGE table returning a SMALL
-             *        fraction" — which this query is — so if email matching ever
-             *        proves insufficient, that is the door, with an EXPLAIN
-             *        ANALYZE first.
-             */
-            const unmatchedUsers = authUsers.filter((u: any) => !existingIds.has(u.uid));
-
-            if (unmatchedUsers.length > 0) {
-                const uidByEmail = new Map<string, string>();
-                for (const u of unmatchedUsers) {
-                    const email = typeof u.email === "string" ? u.email.trim().toLowerCase() : "";
-                    if (email) uidByEmail.set(email, u.uid);
-                }
-
-                const emails = [...uidByEmail.keys()];
-                const emailChunks: string[][] = [];
-                for (let i = 0; i < emails.length; i += 30) {
-                    emailChunks.push(emails.slice(i, i + 30));
-                }
-
-                const emailSnaps = await Promise.all(
-                    emailChunks.map(chunk =>
-                        db.collection(COLLECTIONS.USERS).where("email", "in", chunk).get()
-                    )
-                );
-                emailSnaps.forEach(snap => snap.docs.forEach((d: any) => {
-                    const stored = d.data()?.email;
-                    const key = typeof stored === "string" ? stored.trim().toLowerCase() : "";
-                    const uid = key ? uidByEmail.get(key) : undefined;
-                    if (uid) existingIds.add(uid);
-                }));
-            }
-
-            for (const uid of authUserIds) {
-                if (!existingIds.has(uid)) ghostUserIds.push(uid);
+            for (const user of authUsers) {
+                if (!existingIds.has(user.uid)) ghostUserIds.push(user.uid);
             }
 
             results.push({
