@@ -13,6 +13,7 @@ import { isPlatformAdmin } from "@/lib/admin-permissions";
 import { normalisePhone } from "@/lib/phone";
 import { genderOutcome } from "@/lib/gender";
 import { authAccountsWithProfiles } from "@/lib/auth-profile-link";
+import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
 
 /**
  * Forensic data-integrity scan.
@@ -603,16 +604,38 @@ export async function runForensicScanAction(): Promise<
             for (const doc of coopMembersQuery.docs) {
                 const userId = doc.id;
 
-                const memberSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
-                if (!memberSnap.exists) {
+                /**
+                 *   #488 THE OWNER'S "2 COOPERATIVE MEMBERS WITH NO MEMBERSHIP
+                 *        RECORD" WAS THIS SCAN REPORTING ITS OWN NARROW READ.
+                 *
+                 *        Those two records are not missing. They are where
+                 *        every other reader finds them — under an
+                 *        auto-generated document id, carrying `userId` as a
+                 *        field. See lib/cooperative-member-lookup.ts.
+                 *
+                 *        A forensic scan asking a narrower question than the
+                 *        application is worse than no scan: it manufactures
+                 *        findings, and an operator who learns to ignore them
+                 *        will ignore the real one too. #475's lesson, arriving
+                 *        from the other direction.
+                 *
+                 *        The shared lookup performs NO WRITE, which is why it
+                 *        is the right helper here — this screen tells the
+                 *        operator it only reads, and a scan that repairs what it
+                 *        measures cannot be run twice for the same answer.
+                 */
+                const memberRow = await findCooperativeMemberRow(
+                    db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), userId,
+                );
+                if (!memberRow) {
                     // Reported rather than counted as a zero balance. A user with
-                    // the cooperative_member role and no membership record is
-                    // itself a finding.
+                    // the cooperative_member role and no membership record —
+                    // under EITHER key — is itself a finding.
                     unreadableMembers.push(userId);
                     continue;
                 }
 
-                const memberData = memberSnap.data() || {};
+                const memberData = memberRow.data || {};
                 const heldBalance = Number(memberData.savingsBalance || 0) + Number(memberData.lockedBalance || 0);
 
                 const transactionsSnapshot = await db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS)

@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
 
 /**
  * API Route: Check Cooperative Membership Status
@@ -21,10 +22,22 @@ export async function GET(request: NextRequest) {
 
         const userId = session.user.id;
 
-        // Check if user is a member (Admin SDK)
-        const membershipDoc = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
+        /**
+         *   #488 THE ROUTE WHOSE ENTIRE JOB IS THIS QUESTION ASKED THE NARROW
+         *        VERSION OF IT.
+         *
+         *        A doc-id read that misses is indistinguishable from having no
+         *        membership — lib/cooperative-member-lookup.ts says so in its
+         *        header — and this answered `isMember: false, status:
+         *        "not_member"` to a paid-up member whose row carries `userId` as
+         *        a field. Of the eight doors that had this, it is the one whose
+         *        answer other screens are most likely to trust.
+         */
+        const memberRow = await findCooperativeMemberRow(
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), userId,
+        );
 
-        if (!membershipDoc.exists) {
+        if (!memberRow) {
             return NextResponse.json({
                 success: true,
                 isMember: false,
@@ -32,7 +45,7 @@ export async function GET(request: NextRequest) {
             });
         }
 
-        const membershipData = membershipDoc.data();
+        const membershipData = memberRow.data;
 
         return NextResponse.json({
             success: true,

@@ -18,6 +18,7 @@ import {
 import { canTransactAsMember, NOT_A_TRANSACTING_MEMBER_MESSAGE } from "@/lib/cooperative-membership-status";
 import { rateLimit, createRateLimitResponse } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
+import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
 
 // Rate limiter for withdrawal requests (very strict for financial security)
 const withdrawalLimiter = rateLimit(rateLimitConfig.withdrawal);
@@ -81,17 +82,32 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Check membership status (Admin SDK)
-        const membershipDoc = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
+        /**
+         *   #488 THIS REFUSED A MEMBER WHOSE ROW IS NOT KEYED BY THEIR USER ID,
+         *        AND THEN LOCKED FUNDS ON THE ID IT HAD FAILED TO READ.
+         *
+         *        See lib/cooperative-member-lookup.ts for why such rows exist.
+         *        Fixing only this read would have been worse than leaving it:
+         *        the lock further down writes to
+         *        `.doc(userId)`, so the member would pass the gate and have
+         *        their funds locked on a PHANTOM row — a second membership
+         *        document holding a lockedBalance and nothing else, while their
+         *        real savings sat untouched.
+         *
+         *        The resolved id is carried to that write.
+         */
+        const memberRow = await findCooperativeMemberRow(
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), userId,
+        );
 
-        if (!membershipDoc.exists) {
+        if (!memberRow) {
             return NextResponse.json(
                 { success: false, message: 'You must be a cooperative member to request withdrawal' },
                 { status: 403 }
             );
         }
 
-        const membershipData = membershipDoc.data()!;
+        const membershipData = memberRow.data;
 
         // "approved" is the LEGACY spelling of "active", not a lesser status —
         // the member directory and the admin list both query for either, under
@@ -191,7 +207,8 @@ export async function POST(request: NextRequest) {
         // member's savings reduced with nothing recorded — no plan, no request,
         // nothing for anyone to act on — and the catch below only logged it.
         let locked = false;
-        const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
+        // #488 — the row the read above resolved, not the raw user id.
+        const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberRow.id);
         // Declared outside the try so the response below can still name it.
         const withdrawalRef = db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).doc();
         try {

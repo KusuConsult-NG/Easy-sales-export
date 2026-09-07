@@ -29,6 +29,7 @@ interface WithdrawalRequestData { amount: number;
     reason?: string; }
 
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
+import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
 
 async function _submitWithdrawalRequestAction(
     data: WithdrawalRequestData
@@ -65,14 +66,30 @@ async function _submitWithdrawalRequestAction(
             };
         }
 
-        const membershipRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
-        const membershipDoc = await membershipRef.get();
-
-        if (!membershipDoc.exists) {
+        /**
+         *   #488 A DOC-ID READ REFUSED A MEMBER WHOSE ROW IS KEYED ANOTHER WAY.
+         *
+         *        lib/cooperative-member-lookup.ts exists for this and states
+         *        the reason: joinCooperativeAction creates rows with an
+         *        AUTO-GENERATED document id and the claim paths return whatever
+         *        document they matched, so those rows carry `userId` as a FIELD
+         *        and are invisible here. Three call sites adopted the shared
+         *        lookup — both loan doors and one money path — and eight reads
+         *        did not, this among them.
+         *
+         *        The member sees their dashboard, their savings and their ID
+         *        card, all of which resolve the row properly, and is then told
+         *        "You are not a member of any cooperative" when they try to
+         *        withdraw their own money.
+         */
+        const memberRow = await findCooperativeMemberRow(
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), userId,
+        );
+        if (!memberRow) {
             throw new Error('You are not a member of any cooperative');
         }
-
-        const membership = membershipDoc.data()!;
+        const membershipRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberRow.id);
+        const membership = memberRow.data;
 
         // #276 This checked only that the row EXISTED, like platform.ts. Same
         // omission, same shared predicate — and "approved" must still pass,

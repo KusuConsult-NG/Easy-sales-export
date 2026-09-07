@@ -19,6 +19,7 @@ import { getAdminScope } from "@/lib/cooperative-admin-scope";
 import { balanceFieldOf } from "@/lib/cooperative-member-balance";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { extractCanonicalUser } from "@/lib/canonical/normalizer";
+import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
 
 // ============================================================================
 // TRANSACTION MONITORING
@@ -365,11 +366,24 @@ export async function approveWithdrawalAction(
                 name = userDoc.data()?.fullName || "Member";
             }
 
-            const coopMemberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
-            const coopMemberDoc = await coopMemberRef.get();
+            /**
+             *   #488 THE WORST OF THE EIGHT, BECAUSE IT SAYS NOTHING.
+             *
+             *        A doc-id read that missed did not refuse — it fell through
+             *        to the nested collection and, failing that, carried on. So
+             *        for a member whose row is keyed by an auto-generated id
+             *        (see lib/cooperative-member-lookup.ts), APPROVING their
+             *        withdrawal left `lockedBalance` untouched: the money is
+             *        paid out and still shown as locked, with no error and no
+             *        log. The member's balance is quietly wrong and nothing on
+             *        any screen says why.
+             */
+            const memberRow = await findCooperativeMemberRow(
+                db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), userId,
+            );
 
-            if (coopMemberDoc.exists) {
-                await coopMemberRef.update({
+            if (memberRow) {
+                await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberRow.id).update({
                     lockedBalance: FieldValue.increment(-amount),
                     updatedAt: FieldValue.serverTimestamp(),
                 });
@@ -589,11 +603,22 @@ export async function rejectWithdrawalAction(
                 name = userDoc.data()?.fullName || "Member";
             }
 
-            const coopMemberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
-            const coopMemberDoc = await coopMemberRef.get();
+            /**
+             *   #488 THE SAME SILENCE, ON THE REJECTION PATH, WHERE IT COSTS
+             *        THE MEMBER THEIR MONEY RATHER THAN THE LEDGER ITS
+             *        ACCURACY.
+             *
+             *        Rejecting a withdrawal must return the locked amount to
+             *        savings. A doc-id miss skipped both increments, so the
+             *        member's funds stayed locked out of a request that was
+             *        refused — indefinitely, with nothing recording it.
+             */
+            const memberRow = await findCooperativeMemberRow(
+                db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), userId,
+            );
 
-            if (coopMemberDoc.exists) {
-                await coopMemberRef.update({
+            if (memberRow) {
+                await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberRow.id).update({
                     savingsBalance: FieldValue.increment(amount),
                     lockedBalance: FieldValue.increment(-amount),
                     updatedAt: FieldValue.serverTimestamp(),

@@ -15,6 +15,7 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { debitJsonbBalance } from "@/lib/wallet-ledger";
 import { canTransactAsMember, NOT_A_TRANSACTING_MEMBER_MESSAGE } from "@/lib/cooperative-membership-status";
 import { compensateJsonbDebit } from "@/lib/wallet-ledger";
+import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
 
 /**
  * API Route: Create Fixed Savings Plan
@@ -47,18 +48,28 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Check if user is an approved cooperative member
-        const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
-        const memberDoc = await memberRef.get();
+        /**
+         *   #488 A DOC-ID READ REFUSED A MEMBER WHOSE ROW IS KEYED ANOTHER WAY,
+         *        AND `memberRef` IS DEBITED FURTHER DOWN.
+         *
+         *        Both sides move together — see lib/cooperative-member-lookup.ts
+         *        for why such rows exist, and the withdrawal route for what
+         *        fixing only the read would have cost: a debit against a
+         *        document that does not exist.
+         */
+        const memberRow = await findCooperativeMemberRow(
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), userId,
+        );
 
-        if (!memberDoc.exists) {
+        if (!memberRow) {
             return NextResponse.json(
                 { success: false, message: "You must be a cooperative member to create fixed savings" },
                 { status: 403 }
             );
         }
 
-        const memberData = memberDoc.data()!;
+        const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberRow.id);
+        const memberData = memberRow.data;
         // This door already accepted either spelling; it is the shared rule now
         // so the two that accepted only "active" cannot drift back.
         if (!canTransactAsMember(memberData)) {

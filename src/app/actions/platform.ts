@@ -14,6 +14,7 @@ import { revalidatePath } from "next/cache";
 import { parseCurrencyStringToFloat } from "@/lib/utils";
 import { COOPERATIVE_MINIMUM_BALANCE, formatMinimumBalance, COOPERATIVE_MINIMUM_WITHDRAWAL, formatMinimumWithdrawal } from "@/lib/cooperative-limits";
 import { canTransactAsMember, NOT_A_TRANSACTING_MEMBER_MESSAGE } from "@/lib/cooperative-membership-status";
+import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
 
 /**
  * Server Actions for Platform Forms
@@ -208,14 +209,29 @@ export async function submitWithdrawalAction(
             return { error: "Duplicate transaction detected. Please wait.", success: false as const };
         }
 
-        // CORRECT PATTERN: Use Root Collection for members (Standardized)
-        const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(session.user.id);
-        const memberDoc = await memberRef.get();
+        /**
+         *   #488 "CORRECT PATTERN" WAS HALF THE PATTERN.
+         *
+         *        The comment this replaces recorded a real decision — read the
+         *        ROOT collection, not the nested one — and stopped there. Most
+         *        writers key the row by the user id and some do not, so a
+         *        doc-id read refuses a member whose row was created by
+         *        joinCooperativeAction or bound by a claim path. See
+         *        lib/cooperative-member-lookup.ts.
+         *
+         *        This door withdraws money, and its refusal is the sentence the
+         *        owner keeps being shown: "You are not a member of any
+         *        cooperative", to somebody who is.
+         */
+        const memberRow = await findCooperativeMemberRow(
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), session.user.id,
+        );
 
-        if (!memberDoc.exists) { throw new Error("You are not a member of any cooperative");
+        if (!memberRow) { throw new Error("You are not a member of any cooperative");
         }
 
-        const memberData = memberDoc.data();
+        const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberRow.id);
+        const memberData = memberRow.data;
 
         //   #276 EXISTING IS NOT THE SAME AS MAY TRANSACT.
         //

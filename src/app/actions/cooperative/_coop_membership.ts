@@ -15,6 +15,7 @@ import { registerCooperativeMemberAction } from "./_coop_registration";
 import { isAdmin } from "@/lib/admin-permissions";
 import { mayClaimMembershipByEmail } from "@/lib/cooperative-membership-claim";
 import { registrationProgressScore } from "@/lib/registration-progress";
+import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
 
 /** How many members one directory read will return. */
 const DIRECTORY_ROW_CAP = 2000;
@@ -39,23 +40,40 @@ async function _getMembershipAction(): Promise<GetMembershipState> { try {
             await autoProvisionLegacyCooperative(userId, userData);
         }
 
-        const snapshot = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-            .where("userId", "==", userId)
-            .get();
+        /**
+         *   #488 THIS WAS A HAND-WRITTEN COPY OF lib/cooperative-member-lookup,
+         *        WITH ONE EXTRA STEP.
+         *
+         *        The first two strategies — the `userId` field and the document
+         *        id — are exactly what findCooperativeMemberRow walks, and the
+         *        copies had already drifted: this one healed a missing `userId`
+         *        field and its sibling in _coop_identity.ts sorted by recency,
+         *        each doing what the other did not.
+         *
+         *        The shared rule is used for those two. The EMAIL step below is
+         *        deliberately not in it — matching a membership on a free-text
+         *        address is a CLAIM, which is how one account takes over
+         *        another's savings, and it belongs behind
+         *        mayClaimMembershipByEmail where a caller has to ask for it.
+         *        That is the shared module's own recorded decision and it is
+         *        right.
+         */
+        const memberRow = await findCooperativeMemberRow(
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), userId,
+        );
 
         let doc;
-        if (snapshot.empty) {
-            // Fallback 1: direct document ID check
-            const docRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
-            const docSnap = await docRef.get();
-            if (docSnap.exists) {
-                // Heal the document by adding the userId field on-the-fly
-                const docData = docSnap.data()!;
-                if (!docData.userId) {
-                    await docRef.update({ userId });
-                }
-                doc = docSnap;
-            } else if (userData?.email) {
+        if (memberRow) {
+            const docRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberRow.id);
+            // Heal the document by adding the userId field on-the-fly. Kept
+            // here rather than moved into the shared lookup: the forensic scan
+            // reads through the same helper and its screen says it only reads.
+            if (!memberRow.data.userId) {
+                await docRef.update({ userId });
+            }
+            doc = { id: memberRow.id, data: () => memberRow.data } as any;
+        } else {
+            if (userData?.email) {
                 // Fallback 2: query by email
                 const emailQuery = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
                     .where("email", "==", userData.email.toLowerCase())
@@ -82,8 +100,6 @@ async function _getMembershipAction(): Promise<GetMembershipState> { try {
             } else {
                 return { error: "No membership found", success: false as const, data: null };
             }
-        } else {
-            doc = snapshot.docs[0];
         }
 
         const membership = serializeDoc<CooperativeMembership>(doc.id, doc.data());
@@ -109,13 +125,25 @@ async function _getUserTierAction(): Promise<{ success: true; error: null; data:
         if (!sessionResult.session) return { error: "Action failed", success: false as const, data: null };
         const { session } = sessionResult;
 
-        const membershipRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(session.user.id);
-        const membershipDoc = await membershipRef.get();
+        /**
+         *   #488 THIS ONE DOES NOT REFUSE — IT UNDER-REPORTS, WHICH IS WORSE.
+         *
+         *        A doc-id miss returned `{ tier: null, totalContributions: 0 }`
+         *        with `success: true`, so a member whose row is keyed by an
+         *        auto-generated id (see lib/cooperative-member-lookup.ts) was
+         *        shown NO TIER AND ZERO CONTRIBUTIONS — not an error they could
+         *        report, just their savings history rendered as nothing.
+         *
+         *        And the tier decides their loan ceiling.
+         */
+        const memberRow = await findCooperativeMemberRow(
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), session.user.id,
+        );
 
-        if (!membershipDoc.exists) { return { error: null, success: true as const, data: { tier: null, totalContributions: 0 } };
+        if (!memberRow) { return { error: null, success: true as const, data: { tier: null, totalContributions: 0 } };
         }
 
-        const data = membershipDoc.data();
+        const data = memberRow.data;
         // Check if data exists and has totalContributions, else 0. 
         // Note: data() returns undefined if not exists but we checked exists. 
         // But TS might want optional chaining or explicit cast.
@@ -179,22 +207,21 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
         let memberDocData: any = null;
         let memberRef: any = null;
         
-        const memberSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-            .doc(session.user.id)
-            .get();
+        /**
+         *   #488 THE SECOND HAND-WRITTEN COPY IN THIS FILE, and the fourth in
+         *        the module. Same two strategies, same order, written out again
+         *        — which is how the first copy came to heal a missing `userId`
+         *        field and this one not to.
+         */
+        const memberRow = await findCooperativeMemberRow(
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), session.user.id,
+        );
 
-        if (memberSnap.exists) {
-            memberDocData = memberSnap.data();
-            memberRef = memberSnap.ref;
+        if (memberRow) {
+            memberDocData = memberRow.data;
+            memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberRow.id);
         } else {
-            const memberQuery = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                .where("userId", "==", session.user.id)
-                .limit(1)
-                .get();
-            if (!memberQuery.empty) {
-                memberDocData = memberQuery.docs[0].data();
-                memberRef = memberQuery.docs[0].ref;
-            } else if (session.user.email) {
+            if (session.user.email) {
                 const emailQuery = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
                     .where("email", "==", session.user.email.toLowerCase())
                     .limit(1)

@@ -95,8 +95,27 @@ async function _initiateCooperativePaymentAction(
         }
         const registrationFee = COOPERATIVE_CONFIG.registrationFee; // Reduced for low-barrier entry
 
-        // Create or update partial membership record
-        const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
+        /**
+         *   #488 A DOC-ID MISS HERE CHARGES A PAID MEMBER AGAIN.
+         *
+         *        This reads the row to answer "have they already paid?", and
+         *        the branch below spells out what happens when the answer comes
+         *        back wrong: "the merge rewrites their membershipStatus to
+         *        'pending' and Paystack charges them the registration fee a
+         *        second time." That note was written about a legacy STATUS
+         *        spelling; the same outcome follows from a legacy KEY. A row
+         *        created by joinCooperativeAction has an auto-generated
+         *        document id, so this read misses and the member pays twice.
+         *
+         *        Resolved through the shared lookup, falling back to the user
+         *        id when there genuinely is no row — which is the right place
+         *        to CREATE one.
+         */
+        const existingRow = await findCooperativeMemberRow(
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), userId,
+        );
+        const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+            .doc(existingRow?.id ?? userId);
 
         // Check if already active or paid
         const memberDoc = await runQueryWithRetry(() => memberRef.get());
@@ -332,8 +351,21 @@ async function _submitWithdrawalAction(
         // under the comment "both are fully approved members" — so a legacy
         // member holding the role and listed in the directory was refused their
         // own savings here. See lib/cooperative-membership-status.ts.
-        const membershipSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
-        if (!membershipSnap.exists || !canTransactAsMember(membershipSnap.data())) {
+        /**
+         *   #488 AND THIS FILE ALREADY IMPORTED THE SHARED LOOKUP FOR ITS OTHER
+         *        TWO FUNCTIONS. #83's shape inside a single file.
+         *
+         *        Three lines here key on the raw user id — this read, the debit
+         *        below, and the lock after it — so they were at least CONSISTENT:
+         *        a member whose row is auto-id keyed was refused, and no wrong
+         *        row was touched. That is why all three move together. Fixing
+         *        only the read would let them past the gate and then debit a
+         *        row id that does not exist.
+         */
+        const memberRow = await findCooperativeMemberRow(
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS), userId,
+        );
+        if (!memberRow || !canTransactAsMember(memberRow.data)) {
             return { success: false as const, error: NOT_A_TRANSACTING_MEMBER_MESSAGE, data: null };
         }
 
@@ -358,7 +390,8 @@ async function _submitWithdrawalAction(
         // which screen they withdrew from. See lib/cooperative-limits.ts.
         const debit = await debitJsonbBalanceWithFloor({
             table: "cooperative_members",
-            id: userId,
+            // #488 — the resolved row, not the user id. See the read above.
+            id: memberRow.id,
             field: "savingsBalance",
             amount,
             floor: COOPERATIVE_MINIMUM_BALANCE,
@@ -399,7 +432,7 @@ async function _submitWithdrawalAction(
         // reverses exactly that much.
         let locked = false;
         try {
-        await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).update({
+        await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberRow.id).update({
             lockedBalance: FieldValue.increment(amount),
             updatedAt: FieldValue.serverTimestamp(),
         });
@@ -419,7 +452,7 @@ async function _submitWithdrawalAction(
             // (_withdrawal.ts) already does it this way, and a caller-supplied
             // value would let a member choose which admin may act on their
             // withdrawal.
-            cooperativeId: membershipSnap.data()?.cooperativeId || "default",
+            cooperativeId: memberRow.data?.cooperativeId || "default",
             amount,
             reason: reason || "Standard Withdrawal",
             bankAccount,
@@ -439,7 +472,15 @@ async function _submitWithdrawalAction(
         } catch (workError) {
             await compensateJsonbDebit({
                 table: "cooperative_members",
-                id: userId,
+                //   #488 THE SAME ROW THE DEBIT TOOK IT FROM.
+                //
+                //   A compensation keyed differently from its debit does not
+                //   reverse anything: the member's savings stay reduced and a
+                //   row that is not theirs is credited. That would have been
+                //   this fix CAUSING the loss it exists to prevent, in the one
+                //   branch that only runs when something has already gone
+                //   wrong — the hardest place to notice it.
+                id: memberRow.id,
                 field: "savingsBalance",
                 amount,
                 reason: "withdrawal request could not be recorded after the debit",
