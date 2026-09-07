@@ -108,6 +108,14 @@ const EXCLUDED = [
              "were dropped to make it fit. Apply it on its own, and only after the " +
              "EXPLAIN ANALYZE in its header shows the indexes are worth having.",
     },
+    {
+        n: "027",
+        why: "Same reason as 022 — CREATE INDEX CONCURRENTLY cannot run inside a " +
+             "transaction block. UNLIKE 022 it IS meant to be applied: its header " +
+             "carries the EXPLAIN ANALYZE 022 asks for, on the query /admin/users " +
+             "issues, 26.496 ms sorting 50,009 rows against 0.061 ms scanning the " +
+             "index. Run it on its own, then check pg_index for an INVALID build.",
+    },
 ];
 
 const args = process.argv.slice(2);
