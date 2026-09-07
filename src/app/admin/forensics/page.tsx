@@ -211,6 +211,21 @@ export default function ForensicsPage() {
 
                                     <p className="mt-2 text-sm text-slate-700">{r.details}</p>
 
+                                    {/*
+                                      *   #475 THE FINDING AND THE GAP ARE NOT THE SAME LIST.
+                                      *
+                                      *        The WAVE check reported "Affected records (190)"
+                                      *        over 1 ineligible participant and 189 records
+                                      *        nobody could check. The summary said which was
+                                      *        which; this list did not, and this list is what a
+                                      *        reader scrolls.
+                                      *
+                                      *        Findings stay where they were and keep the
+                                      *        heading. The unchecked are still shown — a scan
+                                      *        that hid what it could not read would report a
+                                      *        clean result on a fraction of the population — but
+                                      *        below, folded, and counted separately.
+                                      */}
                                     {r.affectedIds.length > 0 && (
                                         <div className="mt-3 overflow-x-auto rounded-lg bg-slate-50 p-3">
                                             <p className="mb-1 text-xs font-semibold text-slate-500">
@@ -220,6 +235,23 @@ export default function ForensicsPage() {
                                                 {r.affectedIds.join("\n")}
                                             </code>
                                         </div>
+                                    )}
+
+                                    {(r.notCheckedIds?.length ?? 0) > 0 && (
+                                        <details className="mt-3 rounded-lg border border-slate-200 bg-white">
+                                            <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-slate-500 hover:text-slate-700">
+                                                Could not be checked ({r.notCheckedIds!.length})
+                                                {" — "}
+                                                <span className="font-normal">
+                                                    a gap in the records, not a finding about these people
+                                                </span>
+                                            </summary>
+                                            <div className="overflow-x-auto border-t border-slate-100 bg-slate-50 p-3">
+                                                <code className="whitespace-pre text-xs text-slate-600">
+                                                    {r.notCheckedIds!.join("\n")}
+                                                </code>
+                                            </div>
+                                        </details>
                                     )}
                                 </div>
                             );

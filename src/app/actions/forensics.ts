@@ -102,7 +102,36 @@ export interface ScanResult { module: string;
      */
     status: "pass" | "fail" | "warning" | "inconclusive";
     details: string;
-    affectedIds: string[]; }
+    /**
+     * The records that ARE the finding — the ones somebody has to act on.
+     *
+     *   #475 ONE FINDING WAS BURIED IN A HUNDRED AND NINETY.
+     *
+     *        The WAVE eligibility check listed its 1 ineligible participant,
+     *        its 186 participants with no gender recorded, and its 3 with no
+     *        readable date of birth, in ONE array under the heading "Affected
+     *        records (190)". The summary line said which was which; the list
+     *        did not, and the list is what a reader scrolls.
+     *
+     *        #464 put them there on purpose — "so somebody reading the report
+     *        can see WHO was not checked" — and that intent is right. What was
+     *        wrong is that a record the scan COULD NOT EVALUATE was presented
+     *        identically to a record it evaluated and failed. The reader has to
+     *        act on one and cannot act on the other.
+     */
+    affectedIds: string[];
+    /**
+     * Records the scan could NOT evaluate, and why.
+     *
+     * A gap in the data, not evidence about the person. Kept and shown — a scan
+     * that silently narrowed to what it could read would report a clean bill of
+     * health on a fraction of the population, which is the #331 failure this
+     * file exists because of — but shown SEPARATELY, and never counted as a
+     * finding.
+     *
+     * Optional: a check with nothing it could not read simply omits it.
+     */
+    notCheckedIds?: string[]; }
 
 export async function runForensicScanAction(): Promise<
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
@@ -434,11 +463,21 @@ export async function runForensicScanAction(): Promise<
                     (undatedIds.length > 0
                         ? ` ${undatedIds.length} could not be age-checked — no readable date of birth on record.`
                         : ""),
-                // Listed alongside, so somebody reading the report can see WHO
-                // was not checked. They are not counted as ineligible: an
-                // absent date or gender is a gap in the records, not evidence
-                // about a participant.
-                affectedIds: [...ineligibleIds, ...unknownGenderIds, ...undatedIds]
+                //   #475 THE FINDING AND THE GAP ARE NO LONGER ONE LIST.
+                //
+                //        This was `[...ineligibleIds, ...unknownGenderIds,
+                //        ...undatedIds]` — 1 ineligible participant and 189
+                //        records nobody could check, under a single heading
+                //        reading "Affected records (190)". The owner had to be
+                //        told which one mattered.
+                //
+                //        #464's reason for listing the unchecked was right and
+                //        is kept: a scan that quietly narrowed to what it could
+                //        read would report a clean result on a fraction of the
+                //        population. They are still shown. They are shown as
+                //        what they are.
+                affectedIds: ineligibleIds,
+                notCheckedIds: [...unknownGenderIds, ...undatedIds]
             });
         } catch (e: any) { results.push({ module: "WAVE", check: "Eligibility Scan", status: "inconclusive", details: `Could not complete this scan: ${e.message}`, affectedIds: [] });
         }
