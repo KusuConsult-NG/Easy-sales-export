@@ -39,8 +39,45 @@
 -- MATTERS HERE. Locally every one of those 12,571 buffers was a cache hit, which
 -- is why 50,009 rows still took only 22 ms. In production they are not: raw_data
 -- is a TOASTed JSONB column, so the discarded 50,006 rows are read from disk to
--- be thrown away. That is the difference between 22 ms here and a statement
--- timeout there.
+-- be thrown away.
+--
+-- ============================================================================
+-- #472  WHAT THAT 70x IS, AND WHAT IT IS NOT — READ THIS BEFORE QUOTING IT
+-- ============================================================================
+--
+-- The figures above are the QUERY PLAN. They were then checked END TO END,
+-- through the adapter the application actually calls, over HTTP, through real
+-- PostgREST, to real PostgreSQL:
+--
+--     50,009 rows    without the index  27 ms      with it   5 ms
+--    150,009 rows                       25 ms                4 ms
+--    450,009 rows                       45 ms                4 ms
+--
+-- FIVE TO ELEVEN TIMES END TO END, NOT SEVENTY. A fixed round trip of about
+-- 4 ms dominates once the query stops being the slow part. Both numbers are
+-- real; they measure different things, and quoting the plan figure as though it
+-- were a page-load figure overstates this fix by an order of magnitude.
+--
+-- AND THE PRODUCTION TIMEOUT WAS NOT REPRODUCED. This migration exists because
+-- a forensic check reported
+--
+--     canceling statement due to statement timeout
+--
+-- At 450,009 rows on the development machine the UNINDEXED call still answers in
+-- 45 ms. Nothing reachable here comes near a multi-second limit, so whatever
+-- makes that query exceed it in production — cold cache against network storage,
+-- a small shared instance, a shorter timeout than assumed — has NOT been
+-- demonstrated, and this index is not proven to clear it. What IS proven, and
+-- asserted deterministically in
+-- src/__tests__/pg/the-role-scan-reads-the-whole-table-without-the-index.test.ts:
+--
+--     * without the index the query reads essentially the whole table
+--     * with it, at least twenty times fewer blocks
+--     * the adapter returns the SAME ROWS either way
+--
+-- If the check still times out after this is applied, the next step is to
+-- measure it THERE rather than to assume more indexes.
+-- ============================================================================
 --
 -- AND IT IS NOT ONE FORENSIC CHECK. `roles` is filtered in 27 places:
 --
