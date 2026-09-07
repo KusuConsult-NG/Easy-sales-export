@@ -300,21 +300,27 @@ describe('#485 — the screens tell the difference', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('#485 — the last remaining check is not optional', () => {
-    it('THE FAKE-ID GATE IS ON UNLESS EXPLICITLY TURNED OFF', () => {
-        //   It was `=== 'true'` — off unless switched on — because the owner
-        //   needed placeholder numbers while the provider was out. With the
-        //   provider parked for good this pattern test is the ONLY check any
-        //   identity number receives, and an only check must not be opt-in.
+describe('#487 — a real-looking number passes without any external check', () => {
+    /**
+     *   The owner's rule, given in two instructions: "pass all BVN and NIN input
+     *   as true without QoreID", and "do not accept this: 11111111111 or similar
+     *   combination but a number that looks like a real NIN or BVN".
+     *
+     *   Those are not opposed. #357 split this file's job in two — whether an
+     *   EXTERNAL CHECK is required, and whether the value is an identity number
+     *   at all — and the instructions land on one each.
+     */
+    it('THE FORMAT GATE IS ON UNLESS EXPLICITLY TURNED OFF', () => {
         const validators = code('src/lib/kyc-validators.ts');
 
         expect(validators).toContain("process.env.KYC_REJECT_FAKE_IDS !== 'false'");
     });
 
-    it('AND IT ACTUALLY REJECTS THE PATTERNS IT NAMES', () => {
-        //   #357: this function was `return false`, under a header listing four
-        //   families it "blocked". The gate being on means nothing if the check
-        //   behind it is inert again.
+    it('AND IT REFUSES PLACEHOLDERS WHILE ACCEPTING REAL-LOOKING NUMBERS', () => {
+        //   Both directions. Without the second, the gate could be satisfied by
+        //   a function that refuses everything, which would halt enrolment; and
+        //   #357's finding was the opposite — a check that refused nothing under
+        //   a header claiming it blocked four families of placeholder.
         const previous = process.env.KYC_REJECT_FAKE_IDS;
         delete process.env.KYC_REJECT_FAKE_IDS;
         try {
@@ -324,13 +330,21 @@ describe('#485 — the last remaining check is not optional', () => {
             for (const fake of ['11111111111', '12345678901', '12121212121', '98765432109']) {
                 expect({ fake, rejected: isObviouslyFakeId(fake) }).toEqual({ fake, rejected: true });
             }
-            //   And a plausible number is NOT rejected. Without this the gate
-            //   could be satisfied by a function that refuses everything, which
-            //   would stop enrolment entirely.
-            expect(isObviouslyFakeId('22193847561')).toBe(false);
+            for (const real of ['22193847561', '70316482905', '54098127634']) {
+                expect({ real, rejected: isObviouslyFakeId(real) }).toEqual({ real, rejected: false });
+            }
         } finally {
             if (previous === undefined) delete process.env.KYC_REJECT_FAKE_IDS;
             else process.env.KYC_REJECT_FAKE_IDS = previous;
         }
+    });
+
+    it('and no automated provider is consulted for either answer', () => {
+        //   "without QoreID" — the format check is local arithmetic on the
+        //   digits, and there is nothing else.
+        const validators = code('src/lib/kyc-validators.ts');
+
+        expect(validators).not.toMatch(/fetch\(/);
+        expect(validators).not.toMatch(/await /);
     });
 });

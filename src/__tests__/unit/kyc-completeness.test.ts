@@ -61,10 +61,11 @@ const USER = 'user-1';
  *   #485 A FIXTURE THAT IS NOT A PLACEHOLDER.
  *
  *   Every BVN in this suite was '12345678901', a sequential run that
- *   looksLikeFakeId names explicitly. It passed only because the fake-ID gate
- *   was opt-in; it is on by default now, and a suite whose fixtures cannot get
- *   past the platform's own validation is a suite testing a path real users
- *   never take.
+ *   looksLikeFakeId names explicitly. #487 turned the gate back off at the
+ *   owner's instruction, so either value passes again — and the fixture stays
+ *   plausible anyway: a suite whose data could not survive the gate being
+ *   switched on is a suite that would break the day somebody switches it on.
+ *   The case above covers the placeholder deliberately.
  */
 const REAL_BVN = '22348915073';
 
@@ -152,13 +153,15 @@ describe('an empty submission is not a submission', () => {
         expect(mockAtomicUpdate).not.toHaveBeenCalled();
     });
 
-    it('#485 — REFUSES A PLACEHOLDER, which is new and is the point', async () => {
+    it('#487 — REFUSES A PLACEHOLDER, and accepts a real-looking number', async () => {
+        //   The owner's rule: "pass all BVN and NIN input as true without
+        //   QoreID … do not accept this: 11111111111 or similar combination but
+        //   a number that looks like a real NIN or BVN". No external check, and
+        //   no value that is not an identity number at all.
+        //
         //   Every fixture in this suite used to be '12345678901' — a sequential
-        //   run, and one of the exact patterns looksLikeFakeId names. It passed
-        //   because the gate was opt-in and unset. With the external provider
-        //   parked that pattern test is the platform's ONLY check on an identity
-        //   number, so it is on by default now, and this file's own fixtures
-        //   were the first thing it caught.
+        //   run, one of the exact patterns looksLikeFakeId names. It passed only
+        //   because the gate was unset.
         const r: any = await verifyBvn('12345678901');
 
         expect(r.success).toBe(false);

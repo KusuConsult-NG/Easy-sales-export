@@ -142,46 +142,48 @@ describe('#357 — the check itself is real now', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('#485 — the GATE is ON, because it is the only check left', () => {
+describe('#487 — a real-looking number passes, 11111111111 does not', () => {
     /**
-     *   #485 THESE ASSERTIONS PINNED THE GATE SHUT.
+     *   #487 THE OWNER'S RULE, GIVEN IN TWO INSTRUCTIONS.
      *
-     *        They were right when written: the gate was off because the owner
-     *        needed placeholder identity numbers to keep working while the
-     *        external identity provider was out of service, and the top one
-     *        said so — "the owner is testing with placeholder numbers, this must
-     *        keep working."
+     *        "pass all BVN and NIN input as true without QoreID", then
+     *        "do not accept this: 11111111111 or similar combination but a
+     *        number that looks like a real NIN or BVN".
      *
-     *        The provider is now parked permanently, which makes this pattern
-     *        test the ONLY check any identity number in this platform receives.
-     *        An only check must not be opt-in, so the flag was reversed — and
-     *        these three assertions, unchanged, would have held it opt-in
-     *        forever. Tenth time in this audit that a green test has been the
-     *        thing keeping a defect in place.
+     *        Those look opposed and are not, because #357 split this file into
+     *        two things: whether an EXTERNAL CHECK is required, and whether the
+     *        value is an identity number at all. Nothing here contacts any
+     *        provider — that is "pass" — and a value with no identity shape is
+     *        refused. Both assertions below, in that order.
+     *
+     *        I had these the wrong way round for one commit, reading the first
+     *        instruction as "accept everything" and switching the gate off. The
+     *        clarification is what the code now says.
      */
-    it('WITH NOTHING CONFIGURED, PLACEHOLDERS ARE REJECTED', async () => {
-        //   THE test. A deployment that sets no environment variable gets the
-        //   check, which is the direction a KYC control fails.
+    it('A NUMBER THAT LOOKS REAL IS ACCEPTED, WITH NO EXTERNAL CHECK', async () => {
+        //   The first instruction. Nothing in this platform contacts an
+        //   identity provider, and no member waits on one.
         const { isObviouslyFakeId } = await import('@/lib/kyc-validators');
 
-        for (const id of ['00000000000', '11111111111', '12345678901', '12121212121']) {
-            expect({ id, rejected: isObviouslyFakeId(id) }).toEqual({ id, rejected: true });
-        }
-    });
-
-    it('AND A REAL-LOOKING NUMBER IS STILL ACCEPTED', async () => {
-        //   The half that stops the gate from being satisfied by a function
-        //   that refuses everything, which would halt enrolment entirely.
-        const { isObviouslyFakeId } = await import('@/lib/kyc-validators');
-
-        for (const id of ['22348915073', '70316482905', '19384756201']) {
+        for (const id of ['22348915073', '70316482905', '19384756201', '54098127634']) {
             expect({ id, rejected: isObviouslyFakeId(id) }).toEqual({ id, rejected: false });
         }
     });
 
-    it('AND IT CAN STILL BE TURNED OFF FOR A TESTING WINDOW — but only explicitly', async () => {
-        //   The switch is kept and reversed rather than removed: the owner's
-        //   original need was real, and a deliberate "false" still serves it.
+    it('AND 11111111111 OR SIMILAR IS NOT', async () => {
+        //   The second. With nothing configured — a deployment that sets no
+        //   variable gets the check, which is the direction a KYC control
+        //   should fail.
+        const { isObviouslyFakeId } = await import('@/lib/kyc-validators');
+
+        for (const id of ['00000000000', '11111111111', '12345678901', '12121212121', '98765432109']) {
+            expect({ id, rejected: isObviouslyFakeId(id) }).toEqual({ id, rejected: true });
+        }
+    });
+
+    it('and it can be switched off for a testing window, but only explicitly', async () => {
+        //   Kept because the owner's original need for placeholder numbers was
+        //   real; one variable is a cheaper way back than a code change.
         const { fakeIdRejectionEnabled, isObviouslyFakeId } = await import('@/lib/kyc-validators');
 
         process.env.KYC_REJECT_FAKE_IDS = 'false';
@@ -189,9 +191,7 @@ describe('#485 — the GATE is ON, because it is the only check left', () => {
         expect(isObviouslyFakeId('11111111111')).toBe(false);
     });
 
-    it('and no other value turns it off — not "0", not "no", not empty', async () => {
-        //   A typo in a deployment variable must not silently disable the
-        //   platform's only identity check.
+    it('and no other value turns it off — a typo must not disable the check', async () => {
         const { fakeIdRejectionEnabled } = await import('@/lib/kyc-validators');
 
         for (const value of ['0', 'no', 'FALSE', 'off', '', 'true']) {
@@ -219,8 +219,8 @@ describe('#485 — the GATE is ON, because it is the only check left', () => {
         //   reader is the direction the gate fails and why, which is what this
         //   asserts.
         expect(raw).toMatch(/EVERY PART OF THIS FILE WAS INERT/);
-        expect(raw).toMatch(/AND THE GATE IS NOW ON/);
-        expect(raw).toMatch(/an only check must not be opt-in/);
+        expect(raw).toMatch(/AND THE GATE IS ON/);
+        expect(raw).toMatch(/a number that looks like a real NIN or BVN/i);
     });
 
     it('RECORDED: the all-same-digit rule is redundant, and kept anyway', async () => {

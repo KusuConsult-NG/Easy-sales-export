@@ -36,12 +36,10 @@
  *          both callers          now actually call it, so the switch reaches
  *                                something.
  *
- *        AND THE GATE IS NOW ON. It was off by default because the owner needed
- *        placeholder identity numbers to keep working while the external
- *        provider was out of service. #485 parked that provider permanently,
- *        which means this pattern test is the only check any identity number in
- *        this platform receives — and an only check must not be opt-in. See
- *        fakeIdRejectionEnabled below for the full reasoning and the cost.
+ *        AND THE GATE IS ON (#485, confirmed by the owner in #487): a number
+ *        that looks like a real NIN or BVN is accepted with no external check
+ *        of any kind, and 11111111111 is not. See fakeIdRejectionEnabled below
+ *        for the owner's two instructions and why they are not opposed.
  *
  * Blocked patterns:
  *  - All same digit     : 00000000000, 11111111111 … 99999999999
@@ -55,28 +53,32 @@ const ASCENDING  = '01234567890123456789'; // doubled so substrings wrap
 const DESCENDING = '98765432109876543210';
 
 /**
- *   #485 THIS IS ON NOW, AND THE FLAG ONLY TURNS IT OFF.
+ *   #487 THE OWNER'S RULE, IN TWO INSTRUCTIONS THAT LOOK OPPOSED AND ARE NOT.
  *
- *        It was off unless KYC_REJECT_FAKE_IDS was explicitly "true", and the
- *        reason was recorded plainly: the owner needed placeholder identity
- *        numbers to keep working while the external provider was out, so
- *        switching it on "would break the owner's own flow".
+ *        "pass all BVN and NIN input as true without QoreID", and then
+ *        "do not accept this: 11111111111 or similar combination but a number
+ *        that looks like a real NIN or BVN".
  *
- *        THAT REASONING INVERTS ONCE THE PROVIDER IS PARKED FOR GOOD. With no
- *        automated check anywhere in the platform, this pattern test is the ONLY
- *        thing standing between the database and 11111111111 recorded as a
- *        member's BVN. Leaving it off made the last remaining check optional at
- *        the exact moment it became the only one.
+ *        Together they say exactly what this file already does, once the two
+ *        halves #357 separated are kept apart:
  *
- *        WHAT IT COSTS, STATED PLAINLY: a member cannot enrol with a
- *        placeholder number any more, and neither can a tester. That is the
- *        intended effect. looksLikeFakeId rejects only all-same-digit,
- *        sequential and short-block-repeated values — patterns a real NIN or
- *        BVN does not have — so no genuine identity is refused by it.
+ *          PASS means do not require an external check. Nothing here contacts
+ *          any provider; a well-formed number is accepted and recorded as
+ *          `self_declared` (#485), and no member is blocked waiting on a
+ *          verification that cannot happen.
  *
- *        The switch is kept, and reversed: set KYC_REJECT_FAKE_IDS=false to
- *        turn it off for a testing window. A deployment that sets nothing gets
- *        the check, which is the direction a KYC control should fail.
+ *          NOT 11111111111 means refuse a value that is obviously not an
+ *          identity at all. looksLikeFakeId names three families — all-same-
+ *          digit, a run up or down the keypad, and a short block repeated to
+ *          fill the field — and a real NIN or BVN has none of those shapes.
+ *
+ *        So the gate is ON by default. A deployment that sets nothing gets the
+ *        format check, which is the direction a KYC control should fail, and
+ *        the only submissions it costs are ones nobody could have meant.
+ *
+ *        KYC_REJECT_FAKE_IDS=false turns it off for a testing window. It is
+ *        kept because the owner's original need for placeholder numbers was
+ *        real, and one variable is a cheaper way back than a code change.
  */
 export function fakeIdRejectionEnabled(): boolean {
     return process.env.KYC_REJECT_FAKE_IDS !== 'false';
@@ -127,9 +129,9 @@ export function looksLikeFakeId(id: string): boolean {
  * Returns true if the ID looks obviously fake / is a known test pattern.
  * Both NIN and BVN are 11-digit strings — call this for either.
  *
- * #485 — answers TRUE for a placeholder unless KYC_REJECT_FAKE_IDS is
- * explicitly "false". With no automated identity provider in service this is
- * the platform's only check on an identity number.
+ * #487 — answers TRUE for a placeholder unless KYC_REJECT_FAKE_IDS is
+ * explicitly "false". A number that looks like a real NIN or BVN is accepted
+ * with no external check of any kind; 11111111111 is not.
  */
 export function isObviouslyFakeId(id: string): boolean {
     if (!fakeIdRejectionEnabled()) return false;
