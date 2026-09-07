@@ -684,33 +684,98 @@ export async function runForensicScanAction(): Promise<
          * written together and a badge WITHOUT that registration is exactly the
          * anomaly the check wanted: a verified farmer nothing approved.
          */
+        /**
+         *   #486 AND THE REPAIR MOVED IT FROM A FIELD THAT DOES NOT EXIST TO A
+         *        FIELD THAT MEANS SOMETHING ELSE.
+         *
+         *        #331's version, immediately above, read:
+         *
+         *            users where isVerified == true
+         *                  and roles array-contains "farmer"
+         *              → fail if serviceRegistrations.farmNation.status
+         *                       !== "approved"
+         *
+         *        and the note beside it calls isVerified "the badge this was
+         *        written to police … set by _approveFarmerAction when a farmer
+         *        is approved". True of the one line it looked at. False of the
+         *        flag: THIRTEEN paths write `isVerified: true`, across every
+         *        module on the platform — the admin Verify toggle, legacy
+         *        import, export approval, seller approval, four cooperative
+         *        sites, two WAVE sites, two academy sites, and TWO IN PAYMENT
+         *        FULFILMENT.
+         *
+         *        So it means "somebody, somewhere, approved this account — or
+         *        they paid for something". A farmer who also joined the
+         *        cooperative carries it, and this check called that VERIFICATION
+         *        FRAUD for the ordinary state of having a Farm Nation
+         *        application still pending. Both of the owner's two findings
+         *        were that. A check that could never fail became a check that
+         *        could never be right, and from outside they look identical.
+         *
+         *        WHAT IT ASKS NOW. _approveFarmerAction writes the user's
+         *        registration status and the authoritative application record
+         *        IN ONE TRANSACTION. If those two disagree, an approval landed
+         *        by halves — which is a real anomaly, about data this platform
+         *        writes itself, and the kind of thing that leaves a member
+         *        approved on one screen and pending on another. That is the
+         *        complaint the owner keeps reporting.
+         *
+         *        NOT "role without approval". Every applicant holds the farmer
+         *        role from the moment they submit the form (#486's other half),
+         *        so that question would report every pending applicant as a
+         *        finding — hundreds of rows of noise around nothing.
+         */
         try {
-            const verifiedFarmersQuery = await db.collection(COLLECTIONS.USERS)
-                .where("isVerified", "==", true)
+            const farmerRoleQuery = await db.collection(COLLECTIONS.USERS)
                 .where("roles", "array-contains", "farmer")
                 .limit(50)
                 .get();
 
-            const fraudIds: string[] = [];
+            const driftIds: string[] = [];
+            let compared = 0;
 
-            for (const doc of verifiedFarmersQuery.docs) {
+            for (const doc of farmerRoleQuery.docs) {
                 const data = doc.data() as any;
-                const registration = data?.serviceRegistrations?.farmNation?.status;
-                if (registration !== "approved") {
-                    fraudIds.push(`${doc.id} (badge set, farmNation registration: ${registration ?? "none"})`);
+                const userStatus = data?.serviceRegistrations?.farmNation?.status ?? null;
+
+                const appSnap = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
+                    .where("userId", "==", doc.id)
+                    .get();
+
+                if (appSnap.empty) {
+                    //   A user whose registration says approved with no
+                    //   application behind it. Not reported when the user has no
+                    //   registration either — that is a farmer who arrived by
+                    //   some other route (a legacy import, an admin role grant)
+                    //   and is not this check's business.
+                    if (userStatus === "approved") {
+                        driftIds.push(`${doc.id} (user: approved, no application record)`);
+                    }
+                    continue;
+                }
+
+                //   The most advanced application decides. A member may
+                //   reasonably hold an older rejected application and a newer
+                //   approved one; the reverse is what would be wrong.
+                const appStatuses = appSnap.docs.map((d) => (d.data() as any)?.status ?? null);
+                const appApproved = appStatuses.includes("approved");
+                compared += 1;
+
+                if (appApproved !== (userStatus === "approved")) {
+                    driftIds.push(
+                        `${doc.id} (user: ${userStatus ?? "none"}, application: ${appStatuses.join("/") || "none"})`
+                    );
                 }
             }
 
             results.push({
                 module: "Farm Nation",
-                check: "Verification Fraud (Badge vs Approval)",
-                status: fraudIds.length > 0 ? "fail" : "pass",
-                // The number actually scanned, not a literal 50. An empty
-                // population is stated as such rather than dressed as a pass.
-                details: verifiedFarmersQuery.size === 0
-                    ? "No verified farmers found to check."
-                    : `Scanned ${verifiedFarmersQuery.size} verified farmers. Found ${fraudIds.length} whose Farm Nation registration is not approved.`,
-                affectedIds: fraudIds
+                check: "Approval Drift (User Record vs Application)",
+                status: driftIds.length > 0 ? "fail" : "pass",
+                details: farmerRoleQuery.size === 0
+                    ? "No farmers found to check."
+                    : `Scanned ${farmerRoleQuery.size} accounts holding the farmer role; compared ${compared} against their authoritative application record. Found ${driftIds.length} whose user registration and application disagree.`,
+                affectedIds: driftIds
             });
         } catch (e: any) { results.push({ module: "Farm Nation", check: "Verification Scan", status: "inconclusive", details: `Could not complete this scan: ${e.message}`, affectedIds: [] });
         }

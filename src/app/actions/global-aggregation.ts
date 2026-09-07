@@ -137,6 +137,25 @@ export async function getUserMetricsAction() {
 
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
+        /**
+         *   #486 `verified` HERE IS NOT AN IDENTITY-VERIFICATION COUNT, AND
+         *        WHOEVER READS THIS NUMBER NEEDS TO KNOW THAT.
+         *
+         *        `isVerified: true` is written by thirteen paths across every
+         *        module — the admin Verify toggle, legacy import, export and
+         *        seller approval, four cooperative sites, two WAVE, two academy
+         *        — and by PAYMENT FULFILMENT, twice. So this counts accounts
+         *        approved by some part of the platform, or that paid for
+         *        something. It is a useful number and it is not a KYC number.
+         *
+         *        After #485 the platform performs NO automated identity
+         *        verification at all: a NIN or BVN is self-declared unless a
+         *        named admin confirmed it by hand. A metric labelled "verified"
+         *        beside that is exactly the confusion this audit keeps finding.
+         *
+         *        The field name is kept — dashboards read it — and the meaning
+         *        is stated here rather than left to be inferred from the word.
+         */
         const [totalSnap, activeSnap, verifiedSnap] = await Promise.all([
             db.collection(COLLECTIONS.USERS).count().get(),
             db.collection(COLLECTIONS.USERS).where("updatedAt", ">=", thirtyDaysAgo).count().get(),

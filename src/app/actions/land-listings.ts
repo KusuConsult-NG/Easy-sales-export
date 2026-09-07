@@ -25,6 +25,7 @@ import {
     type LandVerificationStatus,
 } from "@/lib/land-listing-status";
 import { stripInternalLandFields, isLandListingViewable } from "@/lib/land-visibility";
+import { hasAppAccess } from "@/lib/role-app-mapping";
 
 /**
  * Farm Nation - Land Listings & Verification
@@ -103,6 +104,35 @@ async function _createLandListingAction(data: {
             return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         }
         const { session } = sessionResult;
+
+        /**
+         *   #486 THIS DOOR ASKED FOR A SESSION AND NOTHING ELSE.
+         *
+         *        Any signed-in account on the platform could create a land
+         *        listing — an academy student, a marketplace buyer, somebody
+         *        who has never opened Farm Nation. Not an approval, not the
+         *        farmer role, no relationship to the module at all. The API
+         *        route the wizard posts to had exactly the same gap, so this is
+         *        not a fix that reached one of two doors: it was never written
+         *        for either.
+         *
+         *        THE GATE IS THE MODULE'S OWN ACCESS RULE, NOT APPROVAL, AND
+         *        THAT IS DELIBERATE. Requiring an approved registration is the
+         *        stricter reading and it would stop every pending applicant
+         *        today, with no warning — which is how a repair becomes an
+         *        outage. hasAppAccess is what the navigation already assumes and
+         *        what the rest of the module enforces, so this breaks nobody
+         *        already using Farm Nation and closes the door to everybody who
+         *        is not.
+         */
+        if (!hasAppAccess((session.user.roles ?? []) as any, "farm-nation")) {
+            return {
+                success: false,
+                error: "You need a Farm Nation account to list land. Complete Farm Nation onboarding first.",
+                data: null,
+            };
+        }
+
         const ownerId = session.user.id;
 
         // Fields listed, not spread.
@@ -793,6 +823,28 @@ async function _submitLandListingAction(data: {
             return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         }
         const { session } = sessionResult;
+
+        /**
+         *   #486 THE LIVE DOOR, AND THE THIRD ONE WITH NO MODULE GATE.
+         *
+         *        Its own comment says so: "/land/submit and farm-nation/list-land
+         *        both call it". A previous repair made the OWNER trustworthy —
+         *        taken from the session rather than the request — and left
+         *        WHETHER THE CALLER MAY LIST AT ALL unasked. Any signed-in
+         *        account could publish into the queue an admin works.
+         *
+         *        Three doors write to this table: _createLandListingAction
+         *        above, this one, and api/farm-nation/create-listing. None had
+         *        the gate. See the note on the first for why it is the module's
+         *        access rule and not an approved registration.
+         */
+        if (!hasAppAccess((session.user.roles ?? []) as any, "farm-nation")) {
+            return {
+                success: false,
+                error: "You need a Farm Nation account to list land. Complete Farm Nation onboarding first.",
+                data: null,
+            };
+        }
 
         const listing: any = {
             ownerId: session.user.id,

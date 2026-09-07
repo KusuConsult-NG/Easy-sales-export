@@ -76,7 +76,18 @@ const ADMIN = 'admin-1';
 const LISTINGS = COLLECTIONS.LAND_LISTINGS;
 const INQUIRIES = COLLECTIONS.LAND_INQUIRIES;
 
-function actAs(id: string | null, roles: string[] = ['user'], name = 'Ada Obi'): void {
+/**
+ *   #486 THE DEFAULT ROLE HERE IS `farmer` NOW.
+ *
+ *        Every land-listing writer takes a session and — since #486 — a Farm
+ *        Nation access role. This helper defaulted to `['user']`, which grants
+ *        access to no module, so every listing test in this file was exercising
+ *        the caller the gate exists to refuse. The tests below are about what a
+ *        listing CONTAINS; the authorisation of the caller is
+ *        land-listings-authz.test.ts's subject, and it asserts both directions
+ *        there.
+ */
+function actAs(id: string | null, roles: string[] = ['farmer'], name = 'Ada Obi'): void {
     (globalThis as {
         mockRequireSession: { mockImplementation: (f: () => unknown) => void };
     }).mockRequireSession.mockImplementation(() => Promise.resolve(
@@ -147,7 +158,7 @@ describe('createLandListingAction', () => {
     it('takes the owner from the SESSION, ignoring the ownerId parameter', async () => {
         // The parameter is retained so existing callers compile and is
         // deliberately not trusted.
-        actAs('real-caller', ['user'], 'Ngozi Eze');
+        actAs('real-caller', ['farmer'], 'Ngozi Eze');
 
         expect((await create(listingInput({ ownerId: 'somebody-else' }))).success).toBe(true);
 
@@ -531,7 +542,7 @@ describe('submitLandListingAction', () => {
     });
 
     it('takes the owner from the SESSION, not the request', async () => {
-        actAs('real-caller', ['user'], 'Ngozi Eze');
+        actAs('real-caller', ['farmer'], 'Ngozi Eze');
 
         await submit({
             ...listingInput({ ownerId: 'somebody-else', ownerName: 'Fake', ownerEmail: 'fake@x.com' }),
@@ -575,7 +586,7 @@ describe('submitLandListingAction', () => {
         // The listing was fixed to take its owner from the session and the audit
         // row and this notification were left reading the request — one copy of
         // a path fixed and its siblings missed, inside a single function.
-        actAs('real-caller', ['user']);
+        actAs('real-caller', ['farmer']);
 
         await submit({
             ...listingInput({ ownerId: 'somebody-else' }), imageUrls: [], documentUrls: [],

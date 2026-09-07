@@ -72,8 +72,16 @@ function setWorld(opts: {
     enrolments?: any[];
     courses?: Record<string, any>;
     usersById?: Record<string, any>;
+    /**
+     *   #486 the farm nation check compares the user's registration against
+     *   the AUTHORITATIVE application record, so the world has to hold both.
+     *   Under the old check it read one document and compared it to a flag
+     *   thirteen unrelated paths write, which needed no second collection —
+     *   and could not fail correctly.
+     */
+    farmApplications?: any[];
 }) {
-    const { users = [], enrolments = [], courses = {}, usersById = {} } = opts;
+    const { users = [], enrolments = [], courses = {}, usersById = {}, farmApplications = [] } = opts;
 
     (global as any).mockFirestoreGet.mockImplementation((idOrCollection: string) => {
         const empty = { exists: false, empty: true, size: 0, docs: [], data: () => ({}) };
@@ -86,6 +94,13 @@ function setWorld(opts: {
                 ...Object.entries(usersById).map(([id, data]) => ({ id, data: () => data })),
             ];
             return Promise.resolve({ exists: false, empty: docs.length === 0, size: docs.length, docs, data: () => ({}) });
+        }
+        if (idOrCollection === 'farm_nation_applications') {
+            return Promise.resolve({
+                exists: false, empty: farmApplications.length === 0, size: farmApplications.length,
+                docs: farmApplications.map((a) => ({ id: a.id, data: () => a.data })),
+                data: () => ({}),
+            });
         }
         if (idOrCollection === 'course_enrollments') {
             return Promise.resolve({
@@ -116,7 +131,7 @@ function check(result: any, name: string) {
 }
 
 const ACADEMY = 'Enrollment Audit (Access vs Plan)';
-const FARM = 'Verification Fraud (Badge vs Approval)';
+const FARM = 'Approval Drift (User Record vs Application)';
 
 beforeEach(() => {
     jest.clearAllMocks();
@@ -201,17 +216,31 @@ describe('#331 — the academy check can now fail', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('#331 — the farm nation check can now fail', () => {
-    it('FINDS A VERIFIED BADGE WITH NO APPROVED REGISTRATION', () => {
+describe('#486 — the farm nation check asks a question it can be right about', () => {
+    /**
+     *   THESE CASES USED TO SEED `isVerified: true` AND EXPECT A FAILURE.
+     *
+     *   They were correct about the code. The code was asking the wrong
+     *   question: `isVerified` is written by thirteen paths across every module,
+     *   including payment fulfilment, so "verified badge, registration pending"
+     *   is the ordinary state of a farmer who also joined the cooperative. Both
+     *   of the owner's two production findings were exactly that, and this
+     *   suite was proving the false positive worked.
+     *
+     *   What it compares now is the user's registration against the
+     *   authoritative application record — two documents _approveFarmerAction
+     *   writes in ONE transaction, so disagreement means an approval landed by
+     *   halves.
+     */
+    it('FINDS A USER APPROVED ON THEIR RECORD AND NOT ON THE APPLICATION', () => {
+        //   THE test. This is the half-applied approval: the member is told
+        //   they are approved and the queue still holds them as pending.
         setWorld({
             users: [{
                 id: 'f1',
-                data: {
-                    isVerified: true,
-                    roles: ['farmer'],
-                    serviceRegistrations: { farmNation: { status: 'pending' } },
-                },
+                data: { roles: ['farmer'], serviceRegistrations: { farmNation: { status: 'approved' } } },
             }],
+            farmApplications: [{ id: 'a1', data: { userId: 'f1', status: 'pending' } }],
         });
 
         return scan().then((res) => {
@@ -222,25 +251,53 @@ describe('#331 — the farm nation check can now fail', () => {
         });
     });
 
-    it('and when the registration is missing entirely', async () => {
-        setWorld({ users: [{ id: 'f2', data: { isVerified: true, roles: ['farmer'] } }] });
+    it('AND THE OTHER DIRECTION — approved application, user record not updated', async () => {
+        //   The one that strands a member: an admin approved them and the
+        //   record the app reads still says pending, so they see a waiting room
+        //   for a decision that was made.
+        setWorld({
+            users: [{
+                id: 'f2',
+                data: { roles: ['farmer'], serviceRegistrations: { farmNation: { status: 'pending' } } },
+            }],
+            farmApplications: [{ id: 'a2', data: { userId: 'f2', status: 'approved' } }],
+        });
 
         const c = check(await scan(), FARM);
 
         expect(c.status).toBe('fail');
-        expect(c.affectedIds.some((s: string) => s.includes('none'))).toBe(true);
+        expect(c.affectedIds.some((s: string) => s.startsWith('f2'))).toBe(true);
     });
 
-    it('passes a farmer whose registration is approved', async () => {
+    it('AND AN APPROVED USER WITH NO APPLICATION AT ALL', async () => {
         setWorld({
             users: [{
                 id: 'f3',
+                data: { roles: ['farmer'], serviceRegistrations: { farmNation: { status: 'approved' } } },
+            }],
+            farmApplications: [],
+        });
+
+        const c = check(await scan(), FARM);
+
+        expect(c.status).toBe('fail');
+        expect(c.affectedIds.some((s: string) => s.includes('no application record'))).toBe(true);
+    });
+
+    it('A PENDING APPLICANT IS NOT A FINDING — the false positive this replaces', async () => {
+        //   The assertion that matters most to the owner. Under the old check,
+        //   this user failed if any module had ever set isVerified. They are a
+        //   farmer whose application is pending, and the two records agree.
+        setWorld({
+            users: [{
+                id: 'f4',
                 data: {
-                    isVerified: true,
+                    isVerified: true,   // set by the cooperative, or a payment
                     roles: ['farmer'],
-                    serviceRegistrations: { farmNation: { status: 'approved' } },
+                    serviceRegistrations: { farmNation: { status: 'pending' } },
                 },
             }],
+            farmApplications: [{ id: 'a4', data: { userId: 'f4', status: 'pending' } }],
         });
 
         const c = check(await scan(), FARM);
@@ -249,26 +306,40 @@ describe('#331 — the farm nation check can now fail', () => {
         expect(c.affectedIds).toEqual([]);
     });
 
+    it('and a farmer with no registration and no application is not this check\'s business', async () => {
+        //   A legacy import or an admin role grant. Reporting them would bury
+        //   the real findings under the population, which is #475's lesson.
+        setWorld({ users: [{ id: 'f5', data: { roles: ['farmer'] } }], farmApplications: [] });
+
+        const c = check(await scan(), FARM);
+
+        expect(c.status).toBe('pass');
+    });
+
     it('REPORTS THE COUNT IT ACTUALLY SCANNED', async () => {
         setWorld({
             users: [
-                { id: 'f4', data: { isVerified: true, roles: ['farmer'], serviceRegistrations: { farmNation: { status: 'approved' } } } },
-                { id: 'f5', data: { isVerified: true, roles: ['farmer'], serviceRegistrations: { farmNation: { status: 'approved' } } } },
+                { id: 'f6', data: { roles: ['farmer'], serviceRegistrations: { farmNation: { status: 'approved' } } } },
+                { id: 'f7', data: { roles: ['farmer'], serviceRegistrations: { farmNation: { status: 'approved' } } } },
+            ],
+            farmApplications: [
+                { id: 'a6', data: { userId: 'f6', status: 'approved' } },
+                { id: 'a7', data: { userId: 'f7', status: 'approved' } },
             ],
         });
 
         const c = check(await scan(), FARM);
 
-        expect(c.details).toMatch(/Scanned 2 verified farmers/);
+        expect(c.details).toMatch(/Scanned 2 accounts holding the farmer role/);
         expect(c.details).not.toMatch(/Scanned 50/);
     });
 
-    it('says so when there are no verified farmers', async () => {
+    it('says so when there are no farmers', async () => {
         setWorld({ users: [] });
 
         const c = check(await scan(), FARM);
 
-        expect(c.details).toBe('No verified farmers found to check.');
+        expect(c.details).toBe('No farmers found to check.');
     });
 });
 

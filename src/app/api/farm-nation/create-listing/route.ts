@@ -11,6 +11,7 @@ import { parseCurrencyStringToFloat } from "@/lib/utils";
 // The flag and the refusal live in lib, NOT here: a route.ts may export only
 // its handlers and Next's config keys. See lib/retired-endpoints.
 import { legacyLandListingApiEnabled, LAND_LISTING_API_RETIRED_MESSAGE } from "@/lib/retired-endpoints";
+import { hasAppAccess } from "@/lib/role-app-mapping";
 
 /**
  * API Route: Create Land Listing — RETIRED. It could not store a title deed.
@@ -67,6 +68,27 @@ export async function POST(request: NextRequest) {
             return NextResponse.json(
                 { success: false, data: null, meta: null, error: LAND_LISTING_API_RETIRED_MESSAGE },
                 { status: 410 }
+            );
+        }
+
+        /**
+         *   #486 THE SECOND DOOR, WITH THE SAME MISSING GATE.
+         *
+         *        This route and submitLandListingAction both wrote to the land
+         *        listings table on a session alone. See the note on the action
+         *        for why the gate is the module's access rule rather than an
+         *        approved registration: raising it to approval would lock out
+         *        every pending applicant today.
+         */
+        if (!hasAppAccess((session.user.roles ?? []) as any, "farm-nation")) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    data: null,
+                    meta: null,
+                    error: "You need a Farm Nation account to list land. Complete Farm Nation onboarding first.",
+                },
+                { status: 403 }
             );
         }
 

@@ -155,7 +155,32 @@ export function buildUserColumns(deps: {
                 <div>
                     <div className="font-bold text-slate-900 flex items-center gap-2">
                         {user.name}
-                        {user.isVerified && <Shield className="w-3 h-3 text-green-600" />}
+                        {/**
+                          *   #486 A GREEN SHIELD BESIDE A NAME READS AS
+                          *        "IDENTITY CONFIRMED". IT IS NOT THAT.
+                          *
+                          *        `isVerified` is written by thirteen paths
+                          *        across every module — the admin Verify
+                          *        toggle, legacy import, export and seller
+                          *        approval, four cooperative sites, two WAVE,
+                          *        two academy, and TWO IN PAYMENT FULFILMENT.
+                          *        Paying for an academy course sets it.
+                          *
+                          *        So it means "approved by some part of this
+                          *        platform", which is worth showing and is not
+                          *        what the bare shield says. The identity
+                          *        badges are the NIN/BVN column, and after #485
+                          *        they say self-declared unless an admin
+                          *        confirmed them by hand.
+                          */}
+                        {user.isVerified && (
+                            <Shield
+                                className="w-3 h-3 text-green-600"
+                                aria-label="Approved by a module"
+                            >
+                                <title>{`Approved by a module or a paid registration — not an identity check. isVerified: ${user.isVerified}`}</title>
+                            </Shield>
+                        )}
                     </div>
                     <div className="text-xs text-slate-500">{user.email}</div>
                 </div>

@@ -55,7 +55,11 @@ jest.mock('@/lib/wallet-ledger', () => ({
 
 function setSession(id: string) {
     (global as any).mockRequireSession.mockImplementation(() => Promise.resolve({
-        session: { user: { id, name: id, email: `${id}@e.com`, roles: [] } },
+        //   #486 — the land-listing writers now require a Farm Nation access
+        //   role. This fixture signed in with none, which is precisely the
+        //   caller the new gate refuses. What this suite is about is whose
+        //   identity gets recorded, not whether they may act.
+        session: { user: { id, name: id, email: `${id}@e.com`, roles: ['farmer'] } },
         error: null,
     }));
 }

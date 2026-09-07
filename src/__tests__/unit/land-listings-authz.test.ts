@@ -137,8 +137,17 @@ describe('creating a listing', () => {
         setListing();
     });
 
+    /**
+     *   #486 THE CALLER NEEDS FARM NATION ACCESS NOW, WHICH IS WHY THIS
+     *        FIXTURE GREW A ROLE.
+     *
+     *        All three listing writers took a session and nothing else, so any
+     *        signed-in account could publish land. This suite's own fixture
+     *        signed in with `roles: []` — exactly the caller the gate now
+     *        refuses, and one that passed before the gate existed.
+     */
     it('records the session user as owner, not the request', async () => {
-        setSession(ATTACKER);
+        setSession(ATTACKER, ['farmer']);
         const { createLandListingAction } = await import('@/app/actions/land-listings');
 
         await createLandListingAction({
@@ -149,6 +158,42 @@ describe('creating a listing', () => {
         } as any);
 
         expect(added()?.ownerId).toBe(ATTACKER);
+    });
+
+    it('#486 — REFUSES A SIGNED-IN CALLER WITH NO FARM NATION ACCESS', async () => {
+        //   THE new gate. An academy student or a marketplace buyer could
+        //   publish land listings into the queue an admin works.
+        setSession(ATTACKER, ['academy_participant']);
+        const { createLandListingAction } = await import('@/app/actions/land-listings');
+
+        const r: any = await createLandListingAction({
+            ownerId: ATTACKER, ownerName: 'A', ownerEmail: 'a@e.com',
+            title: 'x', description: 'x',
+            location: { state: 's', lga: 'l', address: 'a' },
+            size: 1, price: 1,
+        } as any);
+
+        expect(r.success).toBe(false);
+        expect(String(r.error)).toMatch(/Farm Nation account/i);
+        expect(added()).toBeUndefined();
+    });
+
+    it('#486 — and a pending applicant is NOT refused', async () => {
+        //   The deliberate limit of the fix: the gate is the module's access
+        //   rule, not an approved registration, because the application form
+        //   grants `farmer` and raising it to approval would stop every pending
+        //   applicant today.
+        setSession(ATTACKER, ['farmer']);
+        const { createLandListingAction } = await import('@/app/actions/land-listings');
+
+        const r: any = await createLandListingAction({
+            ownerId: ATTACKER, ownerName: 'A', ownerEmail: 'a@e.com',
+            title: 'x', description: 'x',
+            location: { state: 's', lga: 'l', address: 'a' },
+            size: 1, price: 1,
+        } as any);
+
+        expect(r.success).toBe(true);
     });
 
     it('refuses an unauthenticated caller', async () => {
