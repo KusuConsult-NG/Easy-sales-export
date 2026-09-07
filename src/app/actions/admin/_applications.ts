@@ -305,15 +305,21 @@ async function _editApplicationAction(params: {
             }
 
             // KYC Updates
+            //   #485 an admin TYPING a number into the application editor is
+            //   not an identity check either — it is the member's number,
+            //   transcribed. The manual-verify control is the one that records a
+            //   confirmation, and it records who made it.
             if (has("bvn")) {
                 userUpdate.bvn = val("bvn");
                 userUpdate.bvnVerified = val("bvn") ? true : false;
+                userUpdate.bvnVerificationMethod = val("bvn") ? 'self_declared' : null;
                 coopUpdate.bvn = val("bvn");
                 sellerUpdate.bvn = val("bvn");
             }
             if (has("nin")) {
                 userUpdate.nin = val("nin");
                 userUpdate.ninVerified = val("nin") ? true : false;
+                userUpdate.ninVerificationMethod = val("nin") ? 'self_declared' : null;
                 coopUpdate.nin = val("nin");
                 sellerUpdate.nin = val("nin");
             }

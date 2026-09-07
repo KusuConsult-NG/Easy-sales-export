@@ -125,6 +125,12 @@ const PUBLIC_BY_DESIGN: Record<string, string> = {
     'wallet/verify': 'the post-checkout return URL; it delegates to confirmWalletFundingAction, which does its own session check',
     'whatsapp-invite': 'the token IN the URL is the credential; redemption is claimed exactly once through claimIdempotencyKey',
     'kyc/verify-id': 'retired — returns 410 to every caller',
+    //   #485 — the receiver for an external identity provider that is no longer
+    //   in service. It refuses every delivery with 410 and, unlike the version
+    //   it replaces, writes nothing at all: the collection it used to stage
+    //   into had no consumer, so its real behaviour was accumulating unread
+    //   rows from unauthenticated callers.
+    'webhooks/identity-provider': 'retired — returns 410 to every caller and performs no write',
 };
 
 function controlsIn(rel: string): string[] {

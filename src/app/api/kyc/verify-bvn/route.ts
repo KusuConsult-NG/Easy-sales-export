@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
-import { qoreIdService } from '@/lib/qoreid';
+import { IDENTITY_PROVIDER } from '@/lib/identity-verification';
 
 async function verifyBVNHandler(req: NextRequest) {
     try {
@@ -19,7 +19,7 @@ async function verifyBVNHandler(req: NextRequest) {
         // isMatch: true to any caller, including one that posted nothing at
         // all. Whatever is decided about the bypass below, answering
         // "the name matches" to a request containing no name is wrong on its
-        // own terms — and when the QoreID call is restored these are exactly
+        // own terms — and if an automated check is ever restored these are exactly
         // the arguments it needs.
         const body = await req.json().catch(() => ({}));
         const { bvn, firstName, lastName } = body ?? {};
@@ -31,29 +31,35 @@ async function verifyBVNHandler(req: NextRequest) {
             );
         }
 
-        // NOT VERIFIED. Read this before trusting the response.
-        //
-        // qoreIdService.verifyBVN is implemented — OAuth token, real call,
-        // timeout, rate-limit and error handling — and /api/kyc/verify-business
-        // calls the same service for CAC and TIN today. This route imports it
-        // and does not call it.
-        //
-        // So the reason recorded in kyc-self-assertion.test.ts — that no QoreID
-        // call exists in the repository — is no longer true. The integration is
-        // here and these two endpoints skip it. Restoring the check is:
-        //
-        //     const result = await qoreIdService.verifyBVN(bvn, firstName, lastName);
-        //
-        // and verify-business shows the shape of failing closed when the
-        // credentials are absent (503, "Verification service currently
-        // unavailable"). The reason not to flip it in an audit is operational,
-        // not technical: if QOREID_* is unset in production, every BVN check
-        // starts returning 503 and onboarding stops. That is a deployment
-        // decision.
-        //
-        // `checked: false` is on the response so the answer says what it is.
-        logger.info('[KYC] BVN verification bypassed and passed as true', { userId: session.user.id });
-        return NextResponse.json({ success: true, isMatch: true, checked: false });
+        /**
+         *   #485 THIS ANSWERED "THE NAME MATCHES" WITHOUT ASKING ANYONE.
+         *
+         *        It returned `isMatch: true` unconditionally, and the two
+         *        browser callers write `bvnVerified: true` on the strength of
+         *        it. The automated check that was supposed to sit here is parked by
+         *        the owner and this route no longer imports it, so there is now
+         *        nothing in the platform that could check a BVN — which makes
+         *        an `isMatch` of any value a claim this endpoint cannot make.
+         *
+         *        So it stops making it. What it CAN say is true and useful: the
+         *        member supplied a well-formed BVN and the platform has recorded
+         *        it, unchecked. `isMatch` is kept, and kept TRUE, for one
+         *        reason — the callers gate the member's progress on it, and the
+         *        owner cannot afford onboarding to stop — but it now travels
+         *        with `checked: false` and `method: 'self_declared'`, and the
+         *        screens render those rather than a green tick.
+         *
+         *        See lib/identity-verification.ts for why the stored boolean is
+         *        deliberately unchanged and where the truth is recorded instead.
+         */
+        logger.info('[KYC] BVN recorded as self-declared — no automated check is configured', { userId: session.user.id });
+        return NextResponse.json({
+            success: true,
+            isMatch: true,
+            checked: false,
+            method: 'self_declared',
+            provider: IDENTITY_PROVIDER,
+        });
     } catch (error) {
         logger.error('Error in verify-bvn route:', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

@@ -121,7 +121,11 @@ const DynamicDetailModal: React.FC<DynamicDetailModalProps> = ({
         setLocalData(prev => ({
             ...prev,
             [`${field}Verified`]: isMatch,
+            //   #485 mirrors what the route actually wrote. A manual
+            //   confirmation is its own method and outranks the self_declared
+            //   flag every other path produces.
             [`${field}Status`]: isMatch ? "verified" : "failed",
+            [`${field}VerificationMethod`]: isMatch ? "manual_admin_review" : undefined,
             [`${field}VerificationDetails`]: details
         }));
     };
@@ -134,13 +138,13 @@ const DynamicDetailModal: React.FC<DynamicDetailModalProps> = ({
 
         const { firstName, lastName } = getApplicantNames(localData);
         if (!firstName || !lastName) {
-            alert("Applicant first name and last name/surname are required to verify with QoreID.");
+            alert("Applicant first name and last name/surname are required before you can confirm this identity.");
             return;
         }
 
         setVerifyingField(field);
         try {
-            const response = await fetch("/api/admin/kyc/verify-qoreid", {
+            const response = await fetch("/api/admin/kyc/manual-verify", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -158,7 +162,7 @@ const DynamicDetailModal: React.FC<DynamicDetailModalProps> = ({
                 if (result.isMatch) {
                     updateLocalVerification(field, true, result.details);
                     if (onVerified) onVerified(field, result.details);
-                    alert(result.message || `${field.toUpperCase()} verified successfully!`);
+                    alert(result.message || `${field.toUpperCase()} marked as manually verified by you.`);
                 } else {
                     updateLocalVerification(field, false, result.details);
                     alert(result.message || `${field.toUpperCase()} name check mismatch.`);
@@ -237,8 +241,25 @@ const DynamicDetailModal: React.FC<DynamicDetailModalProps> = ({
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-6">
                                     {group.fields.map(([key, value]) => {
                                         const isBvnNin = key === "bvn" || key === "nin";
-                                        const isVerified = localData[`${key}Verified`] === true || localData.kyc?.[`${key}Verified`] === true;
-                                        const status = localData[`${key}Status`] || localData.kyc?.[`${key}Status`] || (isVerified ? "verified" : undefined);
+                                        const isProvided = localData[`${key}Verified`] === true || localData.kyc?.[`${key}Verified`] === true;
+                                        const status = localData[`${key}Status`] || localData.kyc?.[`${key}Status`] || (isProvided ? "self_declared" : undefined);
+                                        /**
+                                         *   #485 THIS BADGE READ THE FLAG THAT
+                                         *        MEANS "A NUMBER WAS TYPED".
+                                         *
+                                         *        Every self-declared identity —
+                                         *        which is all of them — showed a
+                                         *        green "Verified" here, and the
+                                         *        button that lets an admin
+                                         *        actually confirm one was hidden
+                                         *        behind `!isVerified`, so it
+                                         *        could never be clicked. The one
+                                         *        real check the platform has was
+                                         *        unreachable because the screen
+                                         *        already claimed it had happened.
+                                         */
+                                        const method = localData[`${key}VerificationMethod`] || localData.kyc?.[`${key}VerificationMethod`];
+                                        const isVerified = isProvided && method === "manual_admin_review";
                                         const displayVal = formatValue(value);
 
                                         return (
@@ -258,6 +279,13 @@ const DynamicDetailModal: React.FC<DynamicDetailModalProps> = ({
                                                                 <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">
                                                                     <AlertCircle className="w-3 h-3 text-red-600" /> Mismatch
                                                                 </span>
+                                                            ) : isProvided ? (
+                                                                <span
+                                                                    title="Supplied by the member. No automated identity check is configured, so nothing has confirmed it."
+                                                                    className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full"
+                                                                >
+                                                                    <AlertCircle className="w-3 h-3 text-amber-600" /> Self-declared
+                                                                </span>
                                                             ) : null}
 
                                                             {collectionName && (!isVerified || status === "failed") && (
@@ -269,7 +297,7 @@ const DynamicDetailModal: React.FC<DynamicDetailModalProps> = ({
                                                                     {verifyingField === key ? (
                                                                         <Loader2 className="w-3 h-3 animate-spin text-indigo-600" />
                                                                     ) : (
-                                                                        "Verify via QoreID"
+                                                                        "Mark as verified"
                                                                     )}
                                                                 </button>
                                                             )}

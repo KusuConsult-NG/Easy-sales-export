@@ -38,6 +38,7 @@
 import React from "react";
 import { Users, CheckCircle, XCircle, Loader2, Edit, Shield, FileCheck, FileX, MapPin, Layers } from "lucide-react";
 import { formatDate } from "@/lib/utils";
+import { identityBadge } from "@/lib/identity-verification";
 
 export interface User {
     id: string;
@@ -52,8 +53,11 @@ export interface User {
     bankDetails?: any;
     bvn?: string;
     bvnVerified?: boolean;
+    /** #485 — 'self_declared' | 'manual_admin_review'. Absent means self_declared. */
+    bvnVerificationMethod?: string;
     nin?: string;
     ninVerified?: boolean;
+    ninVerificationMethod?: string;
     kycStatus?: string;
     idType?: string;
     taxId?: string;
@@ -86,6 +90,33 @@ const MODULE_COLORS: Record<string, string> = {
 };
 
 /** Role badge colours. Pure lookup, no state. */
+/**
+ *   #485 ONE STATEMENT OF WHAT AN IDENTITY BADGE SAYS.
+ *
+ *        The tone is derived from identityBadge() rather than decided here, so
+ *        this column and DynamicDetailModal cannot come to disagree about what
+ *        the same stored record means.
+ */
+function IdentityBadge({ label, provided, verified, method }: {
+    label: string;
+    provided: boolean;
+    verified?: boolean;
+    method?: string;
+}) {
+    const badge = identityBadge(provided, { verified, method });
+    const tone =
+        badge.tone === 'checked' ? 'bg-emerald-100 text-emerald-700'
+        : badge.tone === 'declared' ? 'bg-amber-100 text-amber-700'
+        : 'bg-slate-100 text-slate-400';
+
+    return (
+        <span
+            className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${tone}`}
+            title={`${label}: ${badge.title}`}
+        >{label}</span>
+    );
+}
+
 export const getRoleBadge = (role: string) => {
     const colors: Record<string, string> = {
         admin: "bg-purple-100 text-purple-700",
@@ -165,25 +196,26 @@ export function buildUserColumns(deps: {
         accessor: (user: User) => (
             <div className="flex gap-1.5 flex-wrap w-32">
                 {/* NIN badge */}
-                {user.nin ? (
-                    <span
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${user.ninVerified ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                            }`}
-                        title={`NIN: ${user.ninVerified ? 'Verified' : 'Pending'}`}
-                    >NIN</span>
-                ) : (
-                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-400" title="NIN not provided">NIN</span>
-                )}
-                {/* BVN badge */}
-                {user.bvn ? (
-                    <span
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${user.bvnVerified ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                            }`}
-                        title={`BVN: ${user.bvnVerified ? 'Verified' : 'Pending'}`}
-                    >BVN</span>
-                ) : (
-                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-400" title="BVN not provided">BVN</span>
-                )}
+                {/**
+                  *   #485 GREEN MEANT "A NUMBER WAS TYPED".
+                  *
+                  *        `ninVerified` / `bvnVerified` are set by every path
+                  *        that records an identity, none of which checks
+                  *        anything — so this rendered an emerald "Verified" for
+                  *        the whole user base, and an operator deciding whether
+                  *        to approve a loan or release a payout read it as a
+                  *        check that had happened.
+                  *
+                  *        Three states now, because there are three:
+                  *          emerald  a named admin confirmed it by hand
+                  *          amber    the member supplied it, nothing checked it
+                  *          grey     not provided
+                  *
+                  *        identityBadge() states that once so this column and
+                  *        the detail modal cannot drift apart (#390).
+                  */}
+                <IdentityBadge label="NIN" provided={!!user.nin} verified={user.ninVerified} method={user.ninVerificationMethod} />
+                <IdentityBadge label="BVN" provided={!!user.bvn} verified={user.bvnVerified} method={user.bvnVerificationMethod} />
                 {user.taxId && (
                     <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${user.tinVerified ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`} title="TIN">TIN</span>
                 )}

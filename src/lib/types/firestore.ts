@@ -254,11 +254,11 @@ export interface CooperativeOnboardingApplication {
         validId?: { name: string; url: string };
         idType?: string;
         idNumber?: string;
-        // idVerified removed — was set by QoreID (now removed). Admin reviews manually.
+        // idVerified removed — #485, the automated provider is parked. Admin reviews manually.
         passportPhoto?: { name: string; url: string };
         proofOfAddress?: { name: string; url: string };
         bvn?: string;            // Optional — no longer required; admin reviews manually
-        // bvnVerified removed — was set by QoreID (now removed). Admin reviews manually.
+        // bvnVerified removed — #485, the automated provider is parked. Admin reviews manually.
     };
     paymentReference?: string;
     paymentStatus?: "pending" | "completed" | "failed";

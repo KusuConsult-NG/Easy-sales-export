@@ -537,10 +537,14 @@ async function _onboardLegacyMemberAction(
                 bankCode: data.bankCode || "",
             } : undefined,
             // KYC
+            //   #485 `!!data.nin` — the same presence-is-verification rule,
+            //   applied to every record a legacy import brings in.
             nin: data.nin,
             ninVerified: !!data.nin,
+            ninVerificationMethod: data.nin ? 'self_declared' : null,
             bvn: data.bvn,
             bvnVerified: !!data.bvn,
+            bvnVerificationMethod: data.bvn ? 'self_declared' : null,
             // Verification Documents (uploaded by admin during legacy onboarding)
             documents: (data.validIdUrl || data.passportPhotoUrl || data.proofOfAddressUrl) ? {
                 validId: data.validIdUrl ? { url: data.validIdUrl, name: "ID Document", uploadedAt: new Date().toISOString() } : undefined,

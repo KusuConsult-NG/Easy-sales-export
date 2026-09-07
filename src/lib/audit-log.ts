@@ -191,7 +191,14 @@ export type AuditAction =
     | 'farm_nation_approve'
     | 'guarantor_verified'
     | 'inspector_dispatched'
+    /**
+     *   #485 KEPT, BECAUSE ROWS ALREADY CARRY IT. The route that wrote this
+     *        never called the provider its name claims; it is now
+     *        'kyc_manual_verify' below, which is what the act always was.
+     *        Removing this would make existing audit rows unreadable.
+     */
     | 'kyc_qoreid_verify'
+    | 'kyc_manual_verify'
     | 'password_resets_purged'
     | 'paystack_sync_run'
     | 'recovery_emails_sent'

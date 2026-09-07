@@ -111,25 +111,19 @@ const WHAT_BREAKS: Record<string, string> = {
 
 const RECOMMENDED_ENV_VARS = [
     /**
-     *   #450 QOREID_CLIENT_ID and QOREID_SECRET_KEY WERE REQUIRED, AND THAT
-     *        REPEATED THE MISTAKE THE NOTE ABOVE RECORDS.
+     *   #485 THE EXTERNAL IDENTITY PROVIDER'S TWO KEYS ARE GONE FROM THIS LIST.
      *
-     *        The comment on REQUIRED_ENV_VARS explains that six FIREBASE_*
-     *        names were removed because requiring variables nothing reads made
-     *        startup print "❌ Environment validation failed!" on every
-     *        correctly configured deploy, "which buried the entries that
-     *        genuinely matter". QoreID had taken over that job: the module is
-     *        parked by owner decision, so the keys are unset, so EVERY deploy
-     *        printed the failure banner — and a container with NOTHING
-     *        configured looked exactly like a healthy one.
+     *        #450 moved them from REQUIRED to RECOMMENDED, because requiring
+     *        keys nothing reads printed "❌ Environment validation failed!" on
+     *        every correctly configured deploy and buried the entries that
+     *        genuinely matter. The provider is now out of service entirely and
+     *        no runtime file reads either key, so RECOMMENDING them repeats the
+     *        same mistake one notch quieter: an operator setting up a container
+     *        would go looking for credentials to a service that is switched off.
      *
-     *        lib/qoreid.ts reads them at call time and throws a message naming
-     *        them, so an unset key breaks identity verification at the moment
-     *        it is used and nothing else. That is a per-request failure with a
-     *        clear cause, which is what it should be.
+     *        The parked module still reads them at call time if it is ever
+     *        restored, and restoring it means putting these back here.
      */
-    'QOREID_CLIENT_ID',
-    'QOREID_SECRET_KEY',
     'EMAIL_FROM',
     'OPENAI_API_KEY',
     // Read at 32 sites. Recommended rather than required, deliberately: every

@@ -25,32 +25,25 @@
  *            below its import line in either file. So even un-bypassing (a)
  *            would have changed nothing — the wire was never run.
  *
- *        WHAT IS DONE ABOUT IT, AND WHY IT IS STILL OFF.
+ *        WHAT WAS DONE ABOUT IT, AND WHAT #485 CHANGED.
  *
- *        The owner's standing instruction is to keep QoreID out for now, and
- *        that is exactly what the bypass was for: verifyNINAction and
- *        verifyBVNAction accept any 11 digits, so sequential and repeated test
- *        values have to keep working. Turning this on today would break the
- *        owner's own testing, so it is NOT on.
- *
- *        Instead the three faults are fixed separately from the decision:
+ *        The three faults were fixed separately from the decision to run the
+ *        gate:
  *
  *          looksLikeFakeId()     the real check, always real, always callable.
  *                                Testable and tested regardless of the switch.
- *          isObviouslyFakeId()   the GATE. Returns looksLikeFakeId(id) when
- *                                KYC_REJECT_FAKE_IDS === "true", and false
- *                                otherwise — today's behaviour, unchanged, and
- *                                now stated instead of hidden in a one-liner.
+ *          isObviouslyFakeId()   the GATE, which consults the switch.
  *          both callers          now actually call it, so the switch reaches
- *                                something. With the flag unset that is a
- *                                no-op, which is the point: nothing changes
- *                                until somebody decides it should.
+ *                                something.
  *
- *        OWNER DECISION: set KYC_REJECT_FAKE_IDS=true when QoreID comes back,
- *        or when you are done testing with placeholder identity numbers.
+ *        AND THE GATE IS NOW ON. It was off by default because the owner needed
+ *        placeholder identity numbers to keep working while the external
+ *        provider was out of service. #485 parked that provider permanently,
+ *        which means this pattern test is the only check any identity number in
+ *        this platform receives — and an only check must not be opt-in. See
+ *        fakeIdRejectionEnabled below for the full reasoning and the cost.
  *
- * Blocked patterns (by looksLikeFakeId, and by isObviouslyFakeId once the flag
- * is set):
+ * Blocked patterns:
  *  - All same digit     : 00000000000, 11111111111 … 99999999999
  *  - Sequential asc/desc: 12345678901, 01234567890, 98765432109 …
  *  - Repeating sequences: 12121212121, 12312312312, 12341234123 …
@@ -61,9 +54,32 @@
 const ASCENDING  = '01234567890123456789'; // doubled so substrings wrap
 const DESCENDING = '98765432109876543210';
 
-/** Is the fake-ID check switched on? Off unless explicitly enabled. */
+/**
+ *   #485 THIS IS ON NOW, AND THE FLAG ONLY TURNS IT OFF.
+ *
+ *        It was off unless KYC_REJECT_FAKE_IDS was explicitly "true", and the
+ *        reason was recorded plainly: the owner needed placeholder identity
+ *        numbers to keep working while the external provider was out, so
+ *        switching it on "would break the owner's own flow".
+ *
+ *        THAT REASONING INVERTS ONCE THE PROVIDER IS PARKED FOR GOOD. With no
+ *        automated check anywhere in the platform, this pattern test is the ONLY
+ *        thing standing between the database and 11111111111 recorded as a
+ *        member's BVN. Leaving it off made the last remaining check optional at
+ *        the exact moment it became the only one.
+ *
+ *        WHAT IT COSTS, STATED PLAINLY: a member cannot enrol with a
+ *        placeholder number any more, and neither can a tester. That is the
+ *        intended effect. looksLikeFakeId rejects only all-same-digit,
+ *        sequential and short-block-repeated values — patterns a real NIN or
+ *        BVN does not have — so no genuine identity is refused by it.
+ *
+ *        The switch is kept, and reversed: set KYC_REJECT_FAKE_IDS=false to
+ *        turn it off for a testing window. A deployment that sets nothing gets
+ *        the check, which is the direction a KYC control should fail.
+ */
 export function fakeIdRejectionEnabled(): boolean {
-    return process.env.KYC_REJECT_FAKE_IDS === 'true';
+    return process.env.KYC_REJECT_FAKE_IDS !== 'false';
 }
 
 /**
@@ -111,8 +127,9 @@ export function looksLikeFakeId(id: string): boolean {
  * Returns true if the ID looks obviously fake / is a known test pattern.
  * Both NIN and BVN are 11-digit strings — call this for either.
  *
- * Answers false while KYC_REJECT_FAKE_IDS is unset, so placeholder identity
- * numbers keep working for testing. See the #357 note at the top of this file.
+ * #485 — answers TRUE for a placeholder unless KYC_REJECT_FAKE_IDS is
+ * explicitly "false". With no automated identity provider in service this is
+ * the platform's only check on an identity number.
  */
 export function isObviouslyFakeId(id: string): boolean {
     if (!fakeIdRejectionEnabled()) return false;

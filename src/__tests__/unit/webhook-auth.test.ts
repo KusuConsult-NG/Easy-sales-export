@@ -100,56 +100,53 @@ describe("africastalking webhook", () => {
     });
 });
 
-// ─── QoreID — HMAC-SHA256 signature header ────────────────────────────────────
+// ─── Identity provider — retired, and it must REFUSE rather than 404 ─────────
 
-describe("qoreid webhook", () => {
-    const SECRET = 'qoreid-secret';
-    const sign = (body: string) => crypto.createHmac('sha256', SECRET).update(body).digest('hex');
-
+/**
+ *   #485 THIS BLOCK USED TO PROVE THE HMAC GUARD ON A RECEIVER FOR AN EXTERNAL
+ *        IDENTITY PROVIDER. The provider is out of service, the receiver is
+ *        retired, and the collection it staged into was never read by anything.
+ *
+ *        The assertions are replaced rather than deleted, because "retired" has
+ *        a failure mode of its own: an endpoint that quietly accepts and drops
+ *        writes, or one that 404s so a misconfigured caller cannot tell a
+ *        retirement from a typo. It must refuse, explicitly, and write nothing.
+ */
+describe("retired identity-provider webhook", () => {
     async function post(signature: string | null, event: any) {
-        const { POST } = await import('@/app/api/webhooks/qoreid/route');
-        const body = JSON.stringify(event);
+        const { POST } = await import('@/app/api/webhooks/identity-provider/route');
         if (signature !== null) currentHeaders['x-qoreid-signature'] = signature;
-        const req = { text: async () => body } as any;
-        return POST(req);
+        void event;
+        return POST();
     }
 
-    it('refuses (500) when no secret is configured', async () => {
+    it('REFUSES EVERY DELIVERY WITH 410 GONE, SIGNED OR NOT', async () => {
+        //   410 and not 404: a caller still configured to post here gets an
+        //   answer that says the endpoint was retired, not that the URL is
+        //   wrong. That is the difference between a five-minute diagnosis and
+        //   an afternoon.
+        process.env.QOREID_WEBHOOK_SECRET = 'anything';
         const res = await post('deadbeef', { event: 'verification.completed' });
-        expect(res.status).toBe(500);
-        expect(mockSet).not.toHaveBeenCalled();
+        expect(res.status).toBe(410);
     });
 
-    it('rejects (401) a missing signature header — the omitted-header bypass', async () => {
-        process.env.QOREID_WEBHOOK_SECRET = SECRET;
+    it('AND WRITES NOTHING — the staging collection had no consumer', async () => {
+        //   The receiver's real behaviour was to accumulate unread rows from
+        //   unauthenticated callers. Retiring it has to stop the write, not
+        //   just the processing.
         const res = await post(null, { event: 'verification.completed' });
-        expect(res.status).toBe(401);
+        expect(res.status).toBe(410);
         expect(mockSet).not.toHaveBeenCalled();
     });
 
-    it('rejects (401) a wrong signature', async () => {
-        process.env.QOREID_WEBHOOK_SECRET = SECRET;
-        const res = await post('00', { event: 'verification.completed' });
-        expect(res.status).toBe(401);
+    it('and it does not depend on a secret that is no longer set', async () => {
+        //   It answered 500 to everything when the secret was unset, which is
+        //   what production actually did. A retired endpoint must not need
+        //   configuration to refuse correctly.
+        delete process.env.QOREID_WEBHOOK_SECRET;
+        const res = await post('deadbeef', { event: 'x' });
+        expect(res.status).toBe(410);
         expect(mockSet).not.toHaveBeenCalled();
-    });
-
-    it('does not crash on a non-hex signature (Buffer.from truncation)', async () => {
-        process.env.QOREID_WEBHOOK_SECRET = SECRET;
-        // 'zz' is not hex; the route must reject it, not throw.
-        const res = await post('zzzz', { event: 'verification.completed' });
-        expect(res.status).toBe(401);
-        expect(mockSet).not.toHaveBeenCalled();
-    });
-
-    it('accepts a correctly signed payload and stages it', async () => {
-        process.env.QOREID_WEBHOOK_SECRET = SECRET;
-        const body = JSON.stringify({ event: 'verification.completed', id: 'evt-1' });
-        currentHeaders['x-qoreid-signature'] = sign(body);
-        const { POST } = await import('@/app/api/webhooks/qoreid/route');
-        const res = await POST({ text: async () => body } as any);
-        expect(res.status).toBe(200);
-        expect(mockSet).toHaveBeenCalledTimes(1);
     });
 });
 

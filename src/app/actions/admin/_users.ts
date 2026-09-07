@@ -569,17 +569,30 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
                 address: data.address,
                 state: bestState || "",
                 lga: bestLga || "",
-                // KYC fields — prefer nested kyc.* (written by live QoreID actions),
-                // fall back to legacy top-level fields for existing records.
+                // KYC fields — prefer nested kyc.*, fall back to legacy
+                // top-level fields for existing records.
                 //
                 // The *_verified / *Status flags stay for everyone: whether a
                 // member has passed KYC is what an admin needs to triage a
                 // ticket. The numbers themselves are behind users:export.
                 ...(maySeePii ? { bvn: bestBvn, nin: bestNin } : {}),
                 bvnVerified: bestBvnVerified,
-                bvnStatus: data.kyc?.bvnStatus || (bestBvnVerified ? 'verified' : undefined),
+                bvnStatus: data.kyc?.bvnStatus || (bestBvnVerified ? 'self_declared' : undefined),
                 ninVerified: bestNinVerified,
-                ninStatus: data.kyc?.ninStatus || (bestNinVerified ? 'verified' : undefined),
+                ninStatus: data.kyc?.ninStatus || (bestNinVerified ? 'self_declared' : undefined),
+                /**
+                 *   #485 THE FACT THE BADGE NEEDS AND THE ROW DID NOT CARRY.
+                 *
+                 *        Without this every row reaches the table with no
+                 *        method, identityBadge() reads that as self_declared —
+                 *        which is correct for the existing user base — and an
+                 *        identity a named admin DID confirm by hand would show
+                 *        amber alongside the rest. The manual review is the only
+                 *        real check this platform performs; it has to be
+                 *        visible or nobody will perform it.
+                 */
+                bvnVerificationMethod: data.kyc?.bvnVerificationMethod || data.bvnVerificationMethod,
+                ninVerificationMethod: data.kyc?.ninVerificationMethod || data.ninVerificationMethod,
                 kycStatus: data.kyc?.status || data.kycStatus || 'pending',
                 taxId: data.taxId,
                 tinVerified: data.tinVerified,

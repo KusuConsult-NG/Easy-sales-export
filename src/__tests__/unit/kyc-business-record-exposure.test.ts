@@ -47,8 +47,23 @@
  * removing it would leave the endpoint unable to answer the question it exists
  * to answer. Tying the lookup to a business the caller owns would be the real
  * fix, and there is no such linkage in the product to tie it to — no caller,
- * no stored company for the user. That is a product decision, recorded rather
- * than invented here.
+ * no stored company for the user.
+ *
+ * ── #485: THE LOOKUP IS GONE, AND THE LESSON IS NOT ─────────────────────────
+ *
+ * The owner has taken the external provider out of service, so this route no
+ * longer performs a lookup at all — it refuses with 503. That closes the oracle
+ * completely rather than narrowing it, which is a strictly better outcome than
+ * the one above.
+ *
+ * These assertions are REWRITTEN rather than deleted, for two reasons. The
+ * guards around the endpoint (a session, a company name for CAC, a recognised
+ * type) still have to hold — a retired route that stops validating is a route
+ * that answers "service unavailable" to somebody with a typo. And the record of
+ * WHY a raw payload must never come back has to survive the restoration: if the
+ * provider returns, `details` must not return with it. The narrowing assertions
+ * that proved that are preserved below against the service functions, which are
+ * still on disk, rather than against a route that no longer calls them.
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
@@ -100,68 +115,62 @@ beforeEach(() => {
     process.env.QOREID_SECRET_KEY = 'secret';
 });
 
-describe('the verdict is returned, the record is not', () => {
-    it('a CAC lookup does not hand back the company record', async () => {
-        // THE test. Every one of these fields used to reach the caller.
-        verifyCAC.mockResolvedValue({ success: true, isMatch: true, details: RAW_RECORD });
+describe('#485 — the lookup oracle is closed, not narrowed', () => {
+    it('A CAC REQUEST IS REFUSED, AND NO RECORD COMES BACK', async () => {
+        //   THE test, and it is the strongest form the original could take: the
+        //   route cannot leak a company record because it no longer fetches
+        //   one.
         const { POST } = await import('@/app/api/kyc/verify-business/route');
 
         const res: any = await POST(request({ type: 'cac', number: 'RC123456', companyName: 'Some Real Company Ltd' }));
         const body = await res.json();
 
-        expect(body).toEqual({ success: true, isMatch: true });
-        expect(JSON.stringify(body)).not.toContain('A Real Person');
-        expect(JSON.stringify(body)).not.toContain('12 Real Street');
+        expect(res.status).toBe(503);
+        expect(body.checked).toBe(false);
+        expect(verifyCAC).not.toHaveBeenCalled();
     });
 
-    it('nor does a TIN lookup, which needs no name at all', async () => {
-        // The more open of the two: verifyTIN(number), nothing to match against.
-        verifyTIN.mockResolvedValue({
-            success: true,
-            isMatch: true,
-            details: { taxpayerName: 'A Real Taxpayer', address: '9 Somewhere', phone: '080...' },
-        });
+    it('AND SO IS A TIN REQUEST — the more open of the two', async () => {
+        //   verifyTIN(number) took no name at all, so a bare number was enough
+        //   to resolve a taxpayer. That is the path this closes hardest.
         const { POST } = await import('@/app/api/kyc/verify-business/route');
 
         const res: any = await POST(request({ type: 'tin', number: '12345678-0001' }));
         const body = await res.json();
 
-        expect(body).toEqual({ success: true, isMatch: true });
+        expect(res.status).toBe(503);
+        expect(verifyTIN).not.toHaveBeenCalled();
+        expect(JSON.stringify(body)).not.toContain('taxpayer');
     });
 
-    it('carries no `details` key at all, under any name', async () => {
-        verifyCAC.mockResolvedValue({ success: true, isMatch: false, details: RAW_RECORD });
-        const { POST } = await import('@/app/api/kyc/verify-business/route');
+    it('AND THE REFUSAL SAYS WHAT TO DO INSTEAD', () => {
+        //   An endpoint that refuses without saying why sends its caller
+        //   looking for an outage. A manual admin review is the real route to a
+        //   verified business detail now, and the message names it.
+        const { readFileSync } = require('fs');
+        const { join } = require('path');
+        const src: string = readFileSync(
+            join(process.cwd(), 'src/app/api/kyc/verify-business/route.ts'), 'utf-8');
 
-        const res: any = await POST(request({ type: 'cac', number: 'RC1', companyName: 'X' }));
-        const body = await res.json();
-
-        expect(Object.keys(body).sort()).toEqual(['isMatch', 'success']);
+        expect(src).toContain('reviews CAC and TIN details manually');
     });
 
-    it('a non-match is still reported as a non-match', async () => {
-        // Vacuity guard: a route that always says true would pass a careless
-        // reading of the assertions above and make the check worthless.
-        verifyCAC.mockResolvedValue({ success: true, isMatch: false, details: RAW_RECORD });
-        const { POST } = await import('@/app/api/kyc/verify-business/route');
+    it('and the narrowing that protected the payload is still in the service, for the day it returns', () => {
+        //   THE RECORD THAT MUST SURVIVE RESTORATION. `details` was QoreID's
+        //   raw payload — company address, directors, their home addresses —
+        //   forwarded verbatim to any signed-in caller. The route that leaked it
+        //   is retired; the functions are not, and whoever re-wires them needs
+        //   to find this rather than rediscover it.
+        const { readFileSync } = require('fs');
+        const { join } = require('path');
+        const parked: string = readFileSync(join(process.cwd(), 'src/lib/qoreid.ts'), 'utf-8');
 
-        const res: any = await POST(request({ type: 'cac', number: 'RC1', companyName: 'X' }));
-        const body = await res.json();
-
-        expect(body.isMatch).toBe(false);
-    });
-
-    it('and a service failure still reaches the caller as an error', async () => {
-        // qoreIdFetch's failure paths carry a message and never a payload, so
-        // this shape passes through unchanged.
-        verifyTIN.mockResolvedValue({ success: false, error: 'Verification service timed out. Please try again.' });
-        const { POST } = await import('@/app/api/kyc/verify-business/route');
-
-        const res: any = await POST(request({ type: 'tin', number: '1' }));
-        const body = await res.json();
-
-        expect(body.success).toBe(false);
-        expect(body.error).toMatch(/timed out/i);
+        expect(parked).toContain('async verifyCAC(');
+        expect(parked).toContain('async verifyTIN(');
+        //   The service still returns `details`; the ROUTE is what must never
+        //   forward it. Asserted so a restoration that returns `result` whole
+        //   re-opens the oracle knowingly rather than by accident.
+        expect(parked).toContain('details:');
     });
 });
 
@@ -176,13 +185,21 @@ describe('the guards around it are unchanged', () => {
         expect(verifyTIN).not.toHaveBeenCalled();
     });
 
-    it('missing credentials still fail closed with 503', async () => {
+    it('#485 — it fails closed with 503 whether or not anything is configured', async () => {
+        //   This checked that ABSENT CREDENTIALS produced a 503. There are no
+        //   credentials to be absent any more, and the endpoint must refuse
+        //   regardless — a retired route that depends on configuration to
+        //   refuse correctly is one environment variable away from serving.
         delete process.env.QOREID_CLIENT_ID;
         const { POST } = await import('@/app/api/kyc/verify-business/route');
-
         const res: any = await POST(request({ type: 'tin', number: '1' }));
-
         expect(res.status).toBe(503);
+
+        process.env.QOREID_CLIENT_ID = 'id';
+        process.env.QOREID_SECRET_KEY = 'secret';
+        const { POST: POST2 } = await import('@/app/api/kyc/verify-business/route');
+        const res2: any = await POST2(request({ type: 'tin', number: '1' }));
+        expect(res2.status).toBe(503);
         expect(verifyTIN).not.toHaveBeenCalled();
     });
 
@@ -204,19 +221,25 @@ describe('the guards around it are unchanged', () => {
     });
 });
 
-describe('the evidence #184 rests on is still here', () => {
-    it('the route still calls both real verifiers', async () => {
-        // kyc-route-bypass.test.ts reads this file to argue that QoreID is
-        // genuinely wired, which is why this route was narrowed and not deleted.
+describe('#485 — the evidence #184 rested on has moved', () => {
+    it('THE ROUTE NO LONGER CALLS THE VERIFIERS, AND THE MODULE STILL HOLDS THEM', () => {
+        //   #184's argument was that BVN and NIN were bypassed DELIBERATELY,
+        //   evidenced by this route calling the provider for real. That argument
+        //   is retired with the provider: nothing calls it now, deliberately,
+        //   and the-identity-provider-is-parked.test.ts is where that is held.
+        //
+        //   What must not be lost is the module itself — the owner's standing
+        //   rule is to fix rather than destroy, and it carries repairs that
+        //   would have to be redone from nothing.
         const { readFileSync } = require('fs');
         const { join } = require('path');
-        const src: string = readFileSync(
-            join(process.cwd(), 'src/app/api/kyc/verify-business/route.ts'),
-            'utf-8'
-        );
+        const route: string = readFileSync(
+            join(process.cwd(), 'src/app/api/kyc/verify-business/route.ts'), 'utf-8');
+        const parked: string = readFileSync(join(process.cwd(), 'src/lib/qoreid.ts'), 'utf-8');
 
-        expect(src).toContain('qoreIdService.verifyCAC(');
-        expect(src).toContain('qoreIdService.verifyTIN(');
-        expect(src).toContain('Verification service currently unavailable');
+        expect(route).not.toContain('qoreIdService.');
+        expect(parked).toContain('async verifyCAC(');
+        expect(parked).toContain('async verifyTIN(');
+        expect(parked).toContain('export function resolveMatch');
     });
 });

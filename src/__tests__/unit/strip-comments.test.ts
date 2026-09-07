@@ -337,9 +337,25 @@ describe('it agrees with the naive version everywhere the naive version is right
         // strips OTHER files with its own line-based helper — the pending-payment
         // page and admin/users — and never reads its own text, so no assertion
         // in it can be misled by the mangling.
-        expect(AFFECTED.length).toBeLessThanOrEqual(16);
+        //
+        // SIXTEEN became SEVENTEEN when #485 rewrote three assertions in
+        // kyc-route-bypass.test.ts. NINTH form, and the same mechanism as the
+        // seventh and eighth: the file did not newly acquire the trap. Its
+        // codeOnly() helper has always carried `t.startsWith('//')` and
+        // `t.startsWith('/*')` on adjacent lines — the naive regex opens a block
+        // comment at that literal and eats to the next real close. What changed
+        // is the ratio: roughly thirty lines of prose about why the external
+        // identity provider is parked moved the damage from under the 10%
+        // threshold to over it.
+        //
+        // Raised rather than relaxed, on the same test as every time: that file
+        // strips OTHER files — the two KYC routes and the parked provider
+        // module — with its own line-based codeOnly(), and never reads its own
+        // text, so no assertion in it can be misled by the mangling.
+        expect(AFFECTED.length).toBeLessThanOrEqual(17);
         expect(AFFECTED).toContain('src/lib/csp.ts');
         expect(AFFECTED).toContain('src/__tests__/unit/harness-covers-adapter.test.ts');
+        expect(AFFECTED).toContain('src/__tests__/unit/kyc-route-bypass.test.ts');
     });
 
     it('only two of them are application source, which is what narrows the risk', () => {

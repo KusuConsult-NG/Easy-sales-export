@@ -196,9 +196,16 @@ export async function registerCooperativeMemberAction(
                 proofOfAddress: formData.get("proofOfAddressUrl") ? { name: formData.get("proofOfAddressName") as string,
                     url: formData.get("proofOfAddressUrl") as string } : undefined },
             bvn: bvn || null,
+            //   #485 `bvn ? true : false` — the PRESENCE OF DIGITS recorded as
+            //   a verification, at three sites in this file. The boolean keeps
+            //   its value (gates depend on it, see lib/identity-verification.ts)
+            //   and the method now says where it came from, so the admin badge
+            //   can show "Self-declared" instead of a green tick.
             bvnVerified: bvn ? true : false,
+            bvnVerificationMethod: bvn ? 'self_declared' : null,
             nin: nin || null,
             ninVerified: nin ? true : false,
+            ninVerificationMethod: nin ? 'self_declared' : null,
             state: validatedData.stateOfOrigin,
             membershipStatus: resolvedStatus,
             onboardingCompleted: true,
@@ -687,9 +694,16 @@ export async function resubmitCooperativeApplicationAction(
             nextOfKinPhone: validatedData.nextOfKinPhone,
             nextOfKinAddress: validatedData.nextOfKinAddress,
             bvn: bvn || null,
+            //   #485 `bvn ? true : false` — the PRESENCE OF DIGITS recorded as
+            //   a verification, at three sites in this file. The boolean keeps
+            //   its value (gates depend on it, see lib/identity-verification.ts)
+            //   and the method now says where it came from, so the admin badge
+            //   can show "Self-declared" instead of a green tick.
             bvnVerified: bvn ? true : false,
+            bvnVerificationMethod: bvn ? 'self_declared' : null,
             nin: nin || null,
             ninVerified: nin ? true : false,
+            ninVerificationMethod: nin ? 'self_declared' : null,
             membershipStatus: 'pending',
             revisionNote: null,
             resubmittedAt: FieldValue.serverTimestamp(),
@@ -740,9 +754,16 @@ export async function resubmitCooperativeApplicationAction(
             'address.ward': validatedData.ward || null,
             'address.street': validatedData.residentialAddress || null,
             bvn: bvn || null,
+            //   #485 `bvn ? true : false` — the PRESENCE OF DIGITS recorded as
+            //   a verification, at three sites in this file. The boolean keeps
+            //   its value (gates depend on it, see lib/identity-verification.ts)
+            //   and the method now says where it came from, so the admin badge
+            //   can show "Self-declared" instead of a green tick.
             bvnVerified: bvn ? true : false,
+            bvnVerificationMethod: bvn ? 'self_declared' : null,
             nin: nin || null,
             ninVerified: nin ? true : false,
+            ninVerificationMethod: nin ? 'self_declared' : null,
             nextOfKin: {
                 name: validatedData.nextOfKinName || null,
                 phone: validatedData.nextOfKinPhone || null,

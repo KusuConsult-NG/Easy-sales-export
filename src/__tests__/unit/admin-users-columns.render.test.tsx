@@ -158,19 +158,45 @@ describe('Actions column — handlers and busy state', () => {
 });
 
 describe('KYC column — badge states', () => {
-    it('marks a provided, verified NIN differently from an unverified one', () => {
-        const { unmount } = renderCell('KYC', makeUser({ nin: '123', ninVerified: true }));
-        expect(screen.getByTitle('NIN: Verified')).toBeInTheDocument();
-        unmount();
+    /**
+     *   #485 THIS COLUMN HAD TWO STATES AND THE DATA HAS THREE.
+     *
+     *        It painted emerald "Verified" off `ninVerified` — a flag set by
+     *        every path that records an identity, none of which checks anything
+     *        — so the whole user base showed as verified to an operator
+     *        deciding whether to approve a loan or release a payout.
+     *
+     *        These assertions moved with it. They were correct about the code
+     *        and the code was wrong, which is the ninth time in this audit a
+     *        green test has held a defect in place.
+     */
+    it('AN IDENTITY NOBODY CHECKED IS NOT SHOWN AS VERIFIED', () => {
+        //   THE assertion. `ninVerified: true` with no method is what every
+        //   existing record looks like.
+        renderCell('KYC', makeUser({ nin: '123', ninVerified: true }));
 
-        renderCell('KYC', makeUser({ nin: '123', ninVerified: false }));
-        expect(screen.getByTitle('NIN: Pending')).toBeInTheDocument();
+        const badge = screen.getByText('NIN');
+        expect(badge.getAttribute('title')).toMatch(/not independently checked/i);
+        expect(badge.className).toContain('amber');
+        expect(badge.getAttribute('title')).not.toMatch(/: Verified/);
+    });
+
+    it('AND ONE AN ADMIN CONFIRMED BY HAND IS', () => {
+        //   The manual review is the only real check the platform performs. If
+        //   it looked the same as a self-declaration nobody would perform it.
+        renderCell('KYC', makeUser({
+            nin: '123', ninVerified: true, ninVerificationMethod: 'manual_admin_review',
+        } as any));
+
+        const badge = screen.getByText('NIN');
+        expect(badge.getAttribute('title')).toBe('NIN: Verified by an admin review');
+        expect(badge.className).toContain('emerald');
     });
 
     it('shows NIN and BVN as not provided when absent', () => {
         renderCell('KYC', makeUser());
-        expect(screen.getByTitle('NIN not provided')).toBeInTheDocument();
-        expect(screen.getByTitle('BVN not provided')).toBeInTheDocument();
+        expect(screen.getByTitle('NIN: Not provided')).toBeInTheDocument();
+        expect(screen.getByTitle('BVN: Not provided')).toBeInTheDocument();
     });
 
     it('only shows TIN and CAC when the user has them', () => {

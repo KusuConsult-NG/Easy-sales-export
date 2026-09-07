@@ -2,7 +2,7 @@
  * Step 5: Business Verification (Sellers Only)
  *
  * Collects business documents. TIN and CAC verification is manual (admin-reviewed).
- * QoreID live verification has been removed.
+ * Automated business verification has been removed (#485).
  */
 
 "use client";

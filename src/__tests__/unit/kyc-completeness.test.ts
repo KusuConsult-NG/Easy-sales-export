@@ -57,6 +57,17 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 
 const USER = 'user-1';
 
+/**
+ *   #485 A FIXTURE THAT IS NOT A PLACEHOLDER.
+ *
+ *   Every BVN in this suite was '12345678901', a sequential run that
+ *   looksLikeFakeId names explicitly. It passed only because the fake-ID gate
+ *   was opt-in; it is on by default now, and a suite whose fixtures cannot get
+ *   past the platform's own validation is a suite testing a path real users
+ *   never take.
+ */
+const REAL_BVN = '22348915073';
+
 jest.mock('@/lib/cache-invalidation', () => ({
     invalidateUserCache: jest.fn(async () => ({})),
     invalidateAdminGlobalStats: jest.fn(async () => ({})),
@@ -141,9 +152,23 @@ describe('an empty submission is not a submission', () => {
         expect(mockAtomicUpdate).not.toHaveBeenCalled();
     });
 
+    it('#485 — REFUSES A PLACEHOLDER, which is new and is the point', async () => {
+        //   Every fixture in this suite used to be '12345678901' — a sequential
+        //   run, and one of the exact patterns looksLikeFakeId names. It passed
+        //   because the gate was opt-in and unset. With the external provider
+        //   parked that pattern test is the platform's ONLY check on an identity
+        //   number, so it is on by default now, and this file's own fixtures
+        //   were the first thing it caught.
+        const r: any = await verifyBvn('12345678901');
+
+        expect(r.success).toBe(false);
+        expect(String(r.error)).toMatch(/placeholder/i);
+        expect(mockAtomicUpdate).not.toHaveBeenCalled();
+    });
+
     it('still accepts a well-formed BVN', async () => {
         // Vacuity guard. Refusing everything would block the whole KYC flow.
-        const r: any = await verifyBvn('12345678901');
+        const r: any = await verifyBvn(REAL_BVN);
 
         expect(r.success).toBe(true);
         expect(mockAtomicUpdate).toHaveBeenCalled();
@@ -165,7 +190,7 @@ describe('completeness is not vacuous', () => {
         // partial write, and exactly what saveKYCProfileAction would read.
         setUserKyc({});
 
-        await verifyBvn('12345678901');
+        await verifyBvn(REAL_BVN);
 
         expect(overallStatusPatch()?.['kyc.status']).toBe('pending');
         expect(overallStatusPatch()?.kycVerified).toBe(false);
@@ -175,9 +200,9 @@ describe('completeness is not vacuous', () => {
         // Vacuity guard for the assertion above: the rule must still pass
         // somebody who genuinely completed KYC.
         const { hashData } = await import('@/lib/security');
-        setUserKyc({ bvn: hashData('12345678901'), bvnVerified: true });
+        setUserKyc({ bvn: hashData(REAL_BVN), bvnVerified: true });
 
-        await verifyBvn('12345678901');
+        await verifyBvn(REAL_BVN);
 
         expect(overallStatusPatch()?.['kyc.status']).toBe('verified');
         expect(overallStatusPatch()?.kycVerified).toBe(true);
@@ -191,25 +216,30 @@ describe('completeness is not vacuous', () => {
         const { hashData } = await import('@/lib/security');
         setUserKyc({ bvn: hashData('00000000000'), bvnVerified: true });
 
-        await verifyBvn('12345678901');
+        await verifyBvn(REAL_BVN);
 
         expect(overallStatusPatch()?.kycVerified).toBe(false);
     });
 });
 
 describe('the QoreID bypass, recorded rather than changed', () => {
-    it('performs no identity verification anywhere in the file', async () => {
-        // #105 recorded this and it is unchanged: no QoreID call exists in the
-        // repository, and the BVN path logs that it is bypassed. Asserted so
-        // the state of the decision is visible in the suite rather than only in
-        // a PR comment — and so that wiring a real verifier in later has to
-        // come past this test deliberately.
+    it('performs no identity verification anywhere in the file, and SAYS SO', async () => {
+        //   This pinned the log line "verified forcefully (QoreID bypassed)" —
+        //   a sentence, not a behaviour — and #485 rewrote it, so the assertion
+         //  failed on a change that made the code MORE honest. Eleventh time in
+        //   this audit a test pinned to a spelling has held one in place.
+        //
+        //   What it means is that nothing in this file checks an identity and
+        //   that the file admits it. Both are asserted, neither by exact words.
         const { readFileSync } = await import('fs');
         const { join } = await import('path');
         const src = readFileSync(join(process.cwd(), 'src/app/actions/kyc.ts'), 'utf-8');
 
-        expect(src).toContain('QoreID bypassed');
+        expect(src).toMatch(/self.declared/i);
         expect(src).not.toMatch(/fetch\([^)]*qoreid/i);
+        //   And the stored status must not claim otherwise — the log is for the
+        //   operator, this is what an admin screen reads.
+        expect(src).toContain("'kyc.bvnStatus': 'self_declared'");
     });
 
     it('has no queue for the manual review the voter\'s card defers to', async () => {
@@ -237,7 +267,7 @@ describe('ownership', () => {
     it('refuses an unauthenticated caller', async () => {
         setSession(null);
 
-        const r: any = await verifyBvn('12345678901');
+        const r: any = await verifyBvn(REAL_BVN);
 
         expect(r.success).toBe(false);
         expect(mockAtomicUpdate).not.toHaveBeenCalled();
@@ -246,7 +276,7 @@ describe('ownership', () => {
     it('writes only to the caller\'s own record', async () => {
         setSession(USER);
 
-        await verifyBvn('12345678901');
+        await verifyBvn(REAL_BVN);
 
         for (const call of mockAtomicUpdate.mock.calls) {
             expect(call[0]).toBe(USER);

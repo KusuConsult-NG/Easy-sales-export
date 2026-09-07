@@ -3,11 +3,14 @@
 /**
  * KYC Server Actions
  *
- * Handles real-time BVN and NIN verification via QoreID and persists
- * the result to the user's Firestore document.
+ * Records the BVN, NIN and Voter's Card a member supplies, and persists the
+ * result to the user's document.
+ *
+ * #485 — NOT "verification". No automated identity provider is in service; see
+ * lib/identity-verification.ts, which states that once and says what each
+ * stored flag actually means.
  */
 
-import { qoreIdService } from '@/lib/qoreid';
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { runQueryWithRetry } from '@/lib/firestore-utils';
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -34,8 +37,9 @@ export interface SubmitKYCPayload { firstName: string;
 // ─── Verify BVN ──────────────────────────────────────────────────────────────
 
 /**
- * Verify a single BVN against QoreID and save the result to Firestore.
- * Returns isMatch:true only if QoreID confirms the name matches the BVN record.
+ * Record a member's BVN. #485 — this header said the result was confirmed
+ * against an external record; nothing here has ever done that. It stores what
+ * the member supplied, marked self_declared.
  */
 async function _verifyBVNAction(payload: { bvn: string;
     firstName: string;
@@ -59,9 +63,9 @@ async function _verifyBVNAction(payload: { bvn: string;
         // Combined with the completeness rule below, that marked an account
         // KYC-verified having submitted no identity document whatsoever.
         //
-        // This is separate from the QoreID decision recorded further down: that
-        // one is "we trust what the user types". This was "we mark verified
-        // when the user types nothing", which nobody decided.
+        // This is separate from #485's finding: that one is "we record what the
+        // member types and call it self-declared". This was "we mark verified
+        // when the member types nothing", which nobody decided.
         if (!/^\d{11}$/.test(String(bvn ?? "").trim())) {
             return { success: false as const, error: 'A BVN must be 11 digits', data: null };
         }
@@ -74,12 +78,23 @@ async function _verifyBVNAction(payload: { bvn: string;
             return { success: false as const, error: fakeIdErrorMessage('BVN'), data: null };
         }
 
-        // Persist result to Firestore forcefully as fully verified
+        /**
+         *   #485 THIS WROTE 'verified' FOR SOMETHING NOTHING VERIFIED.
+         *
+         *        No check runs above this line and none is configured — the
+         *        automated provider is parked. `bvnVerified` keeps its value because
+         *        onboarding gates and updateOverallKYCStatus depend on it (see
+         *        lib/identity-verification.ts for why changing it would stop
+         *        onboarding), but the STATUS now says what happened, and the
+         *        method is recorded so a screen can render "Self-declared"
+         *        instead of a green tick an operator will act on.
+         */
         await runQueryWithRetry(() => atomicUpdateUser(userId, { 
             'kyc.bvn': bvn ? hashData(bvn) : hashData('00000000000'),
             'kyc.bvnVerified': true,
             'kyc.bvnVerifiedAt': FieldValue.serverTimestamp(),
-            'kyc.bvnStatus': 'verified'
+            'kyc.bvnStatus': 'self_declared',
+            'kyc.bvnVerificationMethod': 'self_declared'
         }));
 
         // Update overall KYC status if BVN now verified
@@ -87,7 +102,7 @@ async function _verifyBVNAction(payload: { bvn: string;
 
         await invalidateUserCache(userId);
 
-        logger.info('BVN verified forcefully (QoreID bypassed)', { userId });
+        logger.info('BVN recorded as self-declared — no automated identity check is configured', { userId });
         return { success: true, error: null, data: { isMatch: true } };
     } catch (error) { 
         const message = error instanceof Error ? error.message : 'An unexpected error occurred';
@@ -114,7 +129,7 @@ export const verifyBVNAction = withSafeAction("verifyBVNAction", _verifyBVNActio
 // ─── Verify NIN ──────────────────────────────────────────────────────────────
 
 /**
- * Verify a single NIN against QoreID (nin-premium endpoint) and save
+ * Record a member's NIN (#485 — self-declared, nothing checks it) and save
  * the result to Firestore.
  */
 async function _verifyNINAction(payload: { nin: string;
@@ -139,12 +154,23 @@ async function _verifyNINAction(payload: { nin: string;
             return { success: false as const, error: fakeIdErrorMessage('NIN'), data: null };
         }
 
-        // Persist result to Firestore forcefully as fully verified
+        /**
+         *   #485 THIS WROTE 'verified' FOR SOMETHING NOTHING VERIFIED.
+         *
+         *        No check runs above this line and none is configured — the
+         *        automated provider is parked. `ninVerified` keeps its value because
+         *        onboarding gates and updateOverallKYCStatus depend on it (see
+         *        lib/identity-verification.ts for why changing it would stop
+         *        onboarding), but the STATUS now says what happened, and the
+         *        method is recorded so a screen can render "Self-declared"
+         *        instead of a green tick an operator will act on.
+         */
         await runQueryWithRetry(() => atomicUpdateUser(userId, { 
             'kyc.nin': nin ? hashData(nin) : hashData('00000000000'),
             'kyc.ninVerified': true,
             'kyc.ninVerifiedAt': FieldValue.serverTimestamp(),
-            'kyc.ninStatus': 'verified'
+            'kyc.ninStatus': 'self_declared',
+            'kyc.ninVerificationMethod': 'self_declared'
         }));
 
         // Update overall KYC status if NIN now verified
@@ -152,7 +178,7 @@ async function _verifyNINAction(payload: { nin: string;
 
         await invalidateUserCache(userId);
 
-        logger.info('NIN verified forcefully (QoreID bypassed)', { userId });
+        logger.info('NIN recorded as self-declared — no automated identity check is configured', { userId });
         return { success: true, error: null, data: { isMatch: true } };
     } catch (error) { 
         const message = error instanceof Error ? error.message : 'An unexpected error occurred';
@@ -179,9 +205,8 @@ export const verifyNINAction = withSafeAction("verifyNINAction", _verifyNINActio
 // ─── Verify Voter's Card ─────────────────────────────────────────────────────
 
 /**
- * Verify a single Voter's Card against QoreID and save the result to Firestore.
- * NOTE: PVC API is highly unreliable, so we allow users to pass this step
- * and defer to manual review.
+ * Record a member's Voter's Card and defer to manual review. There has never
+ * been an automated check on this one and the code says so plainly below.
  */
 async function _verifyVotersCardAction(payload: { votersCardNumber: string;
     firstName: string;
@@ -200,18 +225,33 @@ async function _verifyVotersCardAction(payload: { votersCardNumber: string;
 
         logger.info("Voter's Card verification started", { userId, vin: votersCardNumber.slice(0, 4) + '***' });
 
-        // No QoreID verification implemented for Voter's card as per requirements.
-        // We defer to manual review and directly mark it as submitted/verified.
+        // No automated check exists for a Voter's Card. Deferred to manual
+        // review and recorded as submitted.
         const originalStatus = 'pending_manual_review';
 
-        // Persist result to Firestore but forcefully override to allow the user to pass
+        /**
+         *   #485 THE STATUS SAID 'verified' AND THE FIELD BESIDE IT SAID
+         *        'pending_manual_review', IN THE SAME UPDATE.
+         *
+         *        Both were written together, and the review one of them defers
+         *        to had no queue: nothing anywhere read the field. So a member
+         *        passed the step, an operator saw "verified", and the review
+         *        never happened because there was nowhere for it to appear.
+         *
+         *        `votersCardVerified` keeps its value — the member must not get
+         *        stuck, which is the whole reason for the relaxation — and the
+         *        status now says what it is. The queue that reads it is
+         *        getIdentitiesAwaitingReview in actions/admin/_users.ts.
+         *
+         *        The field name loses its provider prefix; nothing ever read it
+         *        under the old name, and readers accept both.
+         */
         await runQueryWithRetry(() => atomicUpdateUser(userId, { 'kyc.votersCard': votersCardNumber,
-            // Relaxation for Voter's Card: since PVC names in Nigeria often have inconsistent ordering
-            // or the DB fails, we forcefully mark it verified so the user isn't stuck.
             'kyc.votersCardVerified': true,
             'kyc.votersCardVerifiedAt': FieldValue.serverTimestamp(),
-            'kyc.votersCardStatus': 'verified',
-            'kyc.votersCardOriginalQoreIdStatus': originalStatus }));
+            'kyc.votersCardStatus': 'self_declared',
+            'kyc.votersCardVerificationMethod': 'self_declared',
+            'kyc.votersCardReviewStatus': originalStatus }));
 
         // Update overall KYC status since we forced voter's card to verified
         await updateOverallKYCStatus(userId);

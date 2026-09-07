@@ -100,18 +100,25 @@ describe('the integration exists, which is the correction', () => {
         expect(qoreid).toContain('rate-limited');
     });
 
-    it('another route calls it today', () => {
+    /**
+     *   #485 THE ROUTE THAT PROVED THE INTEGRATION WAS LIVE NO LONGER CALLS IT.
+     *
+     *        verify-business was the standing evidence that the provider was
+     *        real and that BVN/NIN were bypassed deliberately. The owner has
+     *        taken the provider out of service, so that route now refuses
+     *        instead of inventing a verdict — and these two assertions, which
+     *        were correct, would have kept a live door open to a service that
+     *        is off.
+     */
+    it('AND THE ROUTE THAT USED TO CALL IT NOW REFUSES', () => {
         const business = source('src/app/api/kyc/verify-business/route.ts');
 
-        expect(business).toContain('qoreIdService.verifyCAC(');
-        expect(business).toContain('qoreIdService.verifyTIN(');
-    });
-
-    it('and shows the shape of failing closed without credentials', () => {
-        // Which is what restoring the BVN and NIN call would inherit, and the
-        // operational risk that keeps it a deployment decision.
-        expect(source('src/app/api/kyc/verify-business/route.ts'))
-            .toContain('Verification service currently unavailable');
+        expect(business).not.toContain('qoreIdService.verifyCAC(');
+        expect(business).not.toContain('qoreIdService.verifyTIN(');
+        //   Refusing, not silently succeeding: an endpoint whose whole job is a
+        //   verdict must not answer one it cannot reach.
+        expect(business).toContain('status: 503');
+        expect(business).toContain('Business verification is not available');
     });
 
     it('bank verification is real too', () => {
@@ -134,10 +141,17 @@ describe('the integration exists, which is the correction', () => {
 });
 
 describe('the bypass, recorded on the route path', () => {
-    it('both routes import the service and never call it', () => {
+    it('#485 — NEITHER ROUTE IMPORTS THE PARKED SERVICE AT ALL ANY MORE', () => {
+        //   This asserted `imports: true, calls: false` — an import kept for a
+        //   call that was never made. Once the provider is parked that import
+        //   is the one thing that could bring it back by accident, so it is
+        //   gone, and the-identity-provider-is-parked.test.ts holds the line
+        //   across the whole codebase rather than just these two files.
         for (const [name, src] of [['bvn', bvn], ['nin', nin]] as const) {
-            expect(`${name} imports: ${src.includes("from '@/lib/qoreid'")}`).toBe(`${name} imports: true`);
-            expect(`${name} calls: ${codeOnly(src).includes('qoreIdService.')}`).toBe(`${name} calls: false`);
+            expect({ name, imports: src.includes("from '@/lib/qoreid'") })
+                .toEqual({ name, imports: false });
+            expect({ name, calls: codeOnly(src).includes('qoreIdService.') })
+                .toEqual({ name, calls: false });
         }
     });
 
@@ -187,11 +201,15 @@ describe('the answer says what it is, and needs a question', () => {
     });
 
     it('still answers the callers, which both depend on', () => {
-        // Vacuity guard: making these fail closed is exactly the deployment
-        // decision being left open, and doing it here would break onboarding
-        // silently under cover of a validation fix.
+        // Vacuity guard, and it still matters: making these fail closed would
+        // break onboarding silently under cover of a truthfulness fix. #485
+        // reformatted the response object across several lines to carry
+        // `checked` and `method`, so pinning the one-line spelling failed on
+        // correct code. What it means is that both fields are still answered.
         for (const src of [bvn, nin]) {
-            expect(src).toContain('success: true, isMatch: true');
+            const body = codeOnly(src);
+            expect(body).toContain('success: true');
+            expect(body).toContain('isMatch: true');
         }
     });
 

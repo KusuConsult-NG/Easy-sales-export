@@ -2,9 +2,9 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from "@/lib/session-guard";
-import { qoreIdService } from '@/lib/qoreid';
 import { logger } from "@/lib/logger";
 import { withRateLimit } from "@/lib/rate-limit";
+import { IDENTITY_PROVIDER } from "@/lib/identity-verification";
 
 async function verifyBusinessHandler(req: NextRequest) {
     try {
@@ -25,55 +25,50 @@ async function verifyBusinessHandler(req: NextRequest) {
             return NextResponse.json({ error: 'Company Name is required to verify CAC registration' }, { status: 400 });
         }
 
-        // --- STRICT PRODUCTION CHECK: Fail if QoreID credentials missing ---
-        if (!process.env.QOREID_CLIENT_ID || !process.env.QOREID_SECRET_KEY) {
-            logger.error('CRITICAL: QoreID credentials missing. Failing business verification securely.');
-            return NextResponse.json({ error: 'Verification service currently unavailable.' }, { status: 503 });
-        }
-        // --- END STRICT CHECK ---
-
-        let result;
-
-        if (type === 'cac') {
-            result = await qoreIdService.verifyCAC(number, companyName);
-        } else if (type === 'tin') {
-            result = await qoreIdService.verifyTIN(number);
-        } else {
+        //   #485 THE TYPE IS STILL VALIDATED BEFORE THE REFUSAL BELOW.
+        //
+        //   The dispatch this replaces ended in an `else` that answered 400 to
+        //   an unrecognised type, and folding every request into one 503 would
+        //   have told a caller with a typo that the service was down. A
+        //   malformed request is still a malformed request whether or not
+        //   anything is behind the endpoint.
+        if (type !== 'cac' && type !== 'tin') {
             return NextResponse.json({ error: 'Invalid business verification type' }, { status: 400 });
         }
 
-        // THE UPSTREAM RECORD IS NOT PART OF THE ANSWER.
-        //
-        // This returned `result` whole, and verifyCAC and verifyTIN both end:
-        //
-        //     return { success: true, isMatch: ..., details: result.data };
-        //
-        // where `details` is QoreID's raw payload for whatever RC number or TIN
-        // the caller typed. So any signed-in account could POST an arbitrary
-        // number and read back the record it resolves to — a third party's
-        // business, not their own. Nothing in this codebase establishes that the
-        // caller has anything to do with the company they are asking about,
-        // because nothing calls this route at all: it is referenced only by
-        // comments in verify-bvn/verify-nin and by kyc-route-bypass.test.ts,
-        // which cite it as the evidence that the QoreID integration is real.
-        //
-        // A verification endpoint owes its caller a verdict, and that is what it
-        // returns now. The failure shape is unchanged — qoreIdFetch's error
-        // paths carry a message string and never a payload.
-        //
-        // Kept rather than deleted, on the strength of what #184 established:
-        // this route calling verifyCAC and verifyTIN is the standing evidence
-        // that BVN and NIN are *deliberately* bypassed while the rest of KYC is
-        // wired for real. Deleting it would take that argument with it.
-        //
-        // If a screen ever needs a resolved company name to show the user, add
-        // that one named field. Do not restore `details` — the reason this was
-        // exposed is that a whole payload is easier to forward than to read.
-        if (!result.success) {
-            return NextResponse.json(result);
-        }
-
-        return NextResponse.json({ success: true, isMatch: result.isMatch });
+        /**
+         *   #485 THE ONLY ROUTE THAT REALLY CALLED THE PROVIDER, AND THE
+         *        PROVIDER IS PARKED.
+         *
+         *        It resolved CAC and TIN numbers against an external register.
+         *        The owner has taken that integration out of service, so there
+         *        is nothing behind this endpoint to ask — and an endpoint whose
+         *        whole job is a verdict must not invent one.
+         *
+         *        It REFUSES, with the status it already used when credentials
+         *        were absent (503), so any caller written against it keeps the
+         *        error path it already handles. The route is kept rather than
+         *        deleted so the URL answers something explicable instead of a
+         *        404, and so restoring the module is a change in one file.
+         *
+         *        Nothing in the application calls this today — swept, it is
+         *        referenced only by tests. So this refusal changes no user
+         *        journey; it just stops the endpoint being a live door to a
+         *        service that is off.
+         */
+        logger.warn('[KYC] Business verification requested while no provider is in service', {
+            userId: session.user.id,
+            type,
+        });
+        return NextResponse.json(
+            {
+                success: false,
+                error: 'Business verification is not available. An administrator reviews CAC and TIN details manually.',
+                checked: false,
+                provider: IDENTITY_PROVIDER,
+            },
+            { status: 503 }
+        );
     } catch (error) {
         logger.error('Error in verify-business route:', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
