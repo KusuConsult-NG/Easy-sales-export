@@ -216,6 +216,34 @@ must be its own migration with no `BEGIN`/`COMMIT`, unlike every other migration
 in this repo. Building these indexes non-concurrently would take an ACCESS
 EXCLUSIVE lock on live tables.
 
+> **CORRECTION — #469, 2026-09-07.** The last sentence above is wrong, and it is
+> the sentence that cost this project the #467 speedup. A plain `CREATE INDEX`
+> takes a **ShareLock**, not `AccessExclusiveLock` — asked directly of the
+> cluster, with the answer asserted in
+> `src/__tests__/pg/created-at-is-indexed-where-it-is-ordered.test.ts`. Reads
+> are **unaffected** for the whole build; what blocks is **writes**, for 718 ms
+> on a 50,009-row table.
+>
+> The rest of the paragraph is right and stays: `CONCURRENTLY` genuinely cannot
+> run in a transaction. What was missing is the other half of the fact — **this
+> project has no route that avoids one.** `scripts/build-deploy-sql.mjs` says so
+> in its own header: migrations are applied by pasting into the Supabase SQL
+> Editor "because neither psql nor the Supabase CLI is installed", and the Editor
+> wraps every submission in a transaction with no setting to stop it.
+>
+> Migration 027 followed this paragraph, used `CONCURRENTLY`, and the owner got
+> `ERROR: 25001` when they tried to apply it. It is now the plain form under a
+> `SET lock_timeout`, which converts the one real risk — queueing behind an open
+> transaction and stalling every writer behind the request — into a clean,
+> re-runnable abort. `scripts/build-deploy-sql.mjs` now **refuses to build** if a
+> migration in the consolidated file carries a statement that cannot run in a
+> transaction, and says why moving it to `EXCLUDED` is not the answer.
+>
+> **So do not copy the `CONCURRENTLY` form out of this section** unless somebody
+> has first installed a client that does not wrap statements in a transaction.
+> Until then, the plain form under a `lock_timeout` is the one that can actually
+> be applied. See 027's header for the measurements.
+
 **Verify before believing any of this.** The claim is that these predicates
 currently seq-scan; confirm on the real data rather than taking it on trust:
 
@@ -428,6 +456,14 @@ an unused index is write cost with no read benefit.
 It is also the only migration in this repo with **no `BEGIN`/`COMMIT`**, because
 `CREATE INDEX CONCURRENTLY` cannot run inside a transaction. Adding them will
 make it fail.
+
+> **#469, 2026-09-07.** That is now a reason 022 cannot be applied *at all* here,
+> not merely a note about how to apply it: the Supabase SQL Editor is this
+> project's only route and it always opens a transaction. If 022 is ever
+> revisited and its `EXPLAIN ANALYZE` justifies it, rewrite it into the plain
+> form under a `SET lock_timeout` — see 027 — rather than leaving it in a shape
+> nothing here can run. 022 stays excluded from the consolidated deploy on its
+> own merits (DO NOT APPLY, unverified value), which is a different reason.
 
 ## Priority
 

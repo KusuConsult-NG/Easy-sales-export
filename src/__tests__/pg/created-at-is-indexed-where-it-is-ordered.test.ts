@@ -122,26 +122,130 @@ dbDescribe('#467 — every dedicated table can be ordered by created_at cheaply'
     });
 });
 
+const SQL_027 = 'supabase/migrations/027_dedicated_table_created_at_indexes.sql';
+const sql = () => readFileSync(SQL_027, 'utf-8');
+
+/** The header NAMES the CONCURRENTLY form, for a future where a table is huge.
+ *  Naming it is not writing it, so the statements are read without comments. */
+const statements = () =>
+    sql()
+        .replace(/\/\*[\s\S]*?\*\//g, ' ')
+        .replace(/^\s*--.*$/gm, ' ');
+
 // ─────────────────────────────────────────────────────────────────────────────
-describe('#467 — the migration says how to apply it safely', () => {
-    const sql = () => readFileSync('supabase/migrations/027_dedicated_table_created_at_indexes.sql', 'utf-8');
+dbDescribe('#469 — the migration can be applied by the route this project has', () => {
+    /**
+     *   THE FIRST DRAFT OF 027 COULD NOT BE APPLIED AT ALL.
+     *
+     *   It used CREATE INDEX CONCURRENTLY and told the operator to run the file
+     *   "on its own". They did, in the Supabase SQL Editor, and got
+     *
+     *       ERROR: 25001: CREATE INDEX CONCURRENTLY cannot run inside a
+     *       transaction block
+     *
+     *   The Editor wraps every submission in a transaction and has no setting
+     *   for that — and build-deploy-sql.mjs's own header says the Editor is the
+     *   only route here, "because neither psql nor the Supabase CLI is
+     *   installed". So the 430x fix above sat unapplied while THREE places in
+     *   this repository recorded the instruction nobody could follow: the file's
+     *   header, the builder's EXCLUDED list, and the test right here, which
+     *   asserted CONCURRENTLY was the safe choice.
+     *
+     *   A test can pin a file to a form that cannot be used. This one did.
+     */
+    it('APPLIES INSIDE A TRANSACTION BLOCK — the thing that failed', async () => {
+        //   The assertion that matters, and the only one that could have caught
+        //   this: submit the real file the way the SQL Editor submits it, then
+        //   ask what it left behind.
+        //
+        //   The error is caught rather than thrown so the failure REPORTS the
+        //   Postgres code. A raw throw here would say "query failed"; `25001` is
+        //   the whole finding.
+        await client!.query('BEGIN');
+        const failed = await client!
+            .query(readFileSync(SQL_027, 'utf-8'))
+            .then(() => null, (e: any) => ({ code: e.code, message: e.message }));
+        await client!.query(failed ? 'ROLLBACK' : 'COMMIT');
 
-    it('EVERY STATEMENT IS CONCURRENTLY — the alternative locks the table', () => {
-        const creates = sql().split('\n').filter((l) => l.trim().startsWith('CREATE INDEX'));
+        expect(failed).toBeNull();
 
-        expect(creates.length).toBe(DEDICATED.length);
-        for (const line of creates) {
-            expect({ line, safe: line.includes('CONCURRENTLY') && line.includes('IF NOT EXISTS') })
-                .toEqual({ line, safe: true });
-        }
+        const { rows } = await client!.query(
+            `select tablename from pg_indexes
+             where schemaname='public' and indexname like '%_created_at'
+               and tablename = any($1)`,
+            [DEDICATED],
+        );
+        expect({ indexed: rows.map((r: any) => r.tablename).sort() })
+            .toEqual({ indexed: [...DEDICATED].sort() });
+    });
+
+    it('POSITIVE CONTROL: the CONCURRENTLY form really does fail that way', async () => {
+        // Without this, "the file applied" could mean the harness never wrapped
+        // anything in a transaction and the test proves nothing.
+        await client!.query('BEGIN');
+        const failed = await client!
+            .query('CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_probe_469 ON public.users (created_at DESC)')
+            .then(() => null, (e: any) => e);
+        await client!.query('ROLLBACK');
+
+        expect(failed?.code).toBe('25001');
+    });
+
+    it('IS RE-RUNNABLE — a timed-out run must be resumable', async () => {
+        // The lock_timeout below converts a stall into an abort, which is only
+        // an improvement if running it again finishes the job.
+        for (let i = 0; i < 2; i += 1) await client!.query(readFileSync(SQL_027, 'utf-8'));
+
+        const { rows } = await client!.query(
+            `select count(*)::int as n from pg_indexes
+             where schemaname='public' and indexname like '%_created_at'
+               and tablename = any($1)`,
+            [DEDICATED],
+        );
+        expect(rows[0].n).toBe(DEDICATED.length);
+    });
+
+    it('AND LEAVES NO INVALID INDEX BEHIND', async () => {
+        // The failure mode CONCURRENTLY has and the plain form does not: an
+        // index the planner ignores and every write still maintains.
+        const { rows } = await client!.query('select indexrelid::regclass::text as name from pg_index where not indisvalid');
+        expect({ invalid: rows.map((r: any) => r.name) }).toEqual({ invalid: [] });
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#469 — and it says what the cheap route actually costs', () => {
+    it('NO STATEMENT IN IT IS CONCURRENTLY', () => {
+        expect(statements()).not.toMatch(/CREATE\s+INDEX\s+CONCURRENTLY/i);
+    });
+
+    it('EVERY BUILD IS GUARDED BY A lock_timeout', () => {
+        //   The one real risk of a plain build is not its duration — it is that
+        //   the ShareLock request QUEUES behind any open transaction on the
+        //   table, and every writer arriving after queues behind the request.
+        //   Without this line a 718 ms build can become a stall.
+        const body = statements();
+        const guard = body.indexOf('SET lock_timeout');
+        const firstCreate = body.search(/CREATE\s+INDEX/i);
+
+        expect(guard).toBeGreaterThanOrEqual(0);
+        expect(guard).toBeLessThan(firstCreate);
     });
 
     it('AND IT COVERS EXACTLY THE DEDICATED TABLES', () => {
-        const body = sql();
+        const body = statements();
+        const creates = body.split('\n').filter((l) => l.trim().startsWith('CREATE INDEX'));
 
+        expect(creates.length).toBe(DEDICATED.length);
         for (const table of DEDICATED) {
             expect({ table, covered: body.includes(`ON public.${table} (created_at DESC)`) })
                 .toEqual({ table, covered: true });
+        }
+    });
+
+    it('and every one is IF NOT EXISTS — the re-run above depends on it', () => {
+        for (const line of statements().split('\n').filter((l) => l.trim().startsWith('CREATE INDEX'))) {
+            expect({ line, idempotent: line.includes('IF NOT EXISTS') }).toEqual({ line, idempotent: true });
         }
     });
 
@@ -156,7 +260,80 @@ describe('#467 — the migration says how to apply it safely', () => {
         expect(body).toContain('Sort Key: created_at DESC');
     });
 
-    it('and tells the operator how to check for an INVALID build', () => {
+    it('AND CORRECTS THE CLAIM THAT MADE THE CHEAP ROUTE LOOK UNACCEPTABLE', () => {
+        //   The first draft said the plain form "takes an ACCESS EXCLUSIVE lock
+        //   and blocks every read and write". Asked directly, it takes a
+        //   ShareLock — reads are unaffected. That wrong sentence is why the
+        //   unusable form looked like the only safe one, so the corrected fact
+        //   has to survive in the file rather than only in a commit message.
+        const body = sql();
+
+        expect(body).toContain('ShareLock');
+        expect(body).toContain('READS KEEP WORKING');
+    });
+
+    it('and still tells the operator how to check an INVALID build, for the form that can leave one', () => {
         expect(sql()).toContain('WHERE NOT indisvalid');
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+dbDescribe('#469 — asked of the database, not read off the file', () => {
+    it('A PLAIN CREATE INDEX TAKES ShareLock, NOT AccessExclusiveLock', async () => {
+        // The premise of the whole rewrite. If a future Postgres changed this,
+        // the header's cost argument is wrong and somebody must re-read it.
+        await client!.query('BEGIN');
+        await client!.query('CREATE INDEX idx_probe_469_lockmode ON public.users (created_at DESC)');
+        const { rows } = await client!.query(
+            `select l.mode from pg_locks l join pg_class c on c.oid = l.relation
+             where c.relnamespace = 'public'::regnamespace
+               and c.relname = 'users' and l.pid = pg_backend_pid()`,
+        );
+        await client!.query('ROLLBACK');
+
+        const modes = rows.map((r: any) => r.mode);
+        expect(modes).toContain('ShareLock');
+        expect(modes).not.toContain('AccessExclusiveLock');
+    });
+
+    it('AND READS KEEP WORKING WHILE ONE IS HELD', async () => {
+        // ShareLock is only good news if ACCESS SHARE does not conflict with it.
+        // Rather than trust the table, hold one and read through it.
+        const reader = new Client({ connectionString: URL, connectionTimeoutMillis: 5000 });
+        await reader.connect();
+        try {
+            await client!.query('BEGIN');
+            await client!.query('LOCK TABLE public.users IN SHARE MODE');
+
+            const { rows } = await reader.query('select count(*)::int as n from public.users');
+            expect(rows[0].n).toBeGreaterThan(0);
+        } finally {
+            await client!.query('ROLLBACK');
+            await reader.end().catch(() => {});
+        }
+    });
+
+    it('AND A WRITER DOES NOT — which is the cost being accepted', async () => {
+        // The control for the test above: if nothing conflicted with ShareLock,
+        // "reads keep working" would be trivially true and would not mean the
+        // lock is mild.
+        const writer = new Client({ connectionString: URL, connectionTimeoutMillis: 5000 });
+        await writer.connect();
+        try {
+            await client!.query('BEGIN');
+            await client!.query('LOCK TABLE public.users IN SHARE MODE');
+
+            await writer.query('BEGIN');
+            await writer.query("SET lock_timeout = '1s'");
+            const failed = await writer
+                .query('LOCK TABLE public.users IN ROW EXCLUSIVE MODE')
+                .then(() => null, (e: any) => e);
+            await writer.query('ROLLBACK').catch(() => {});
+
+            expect(failed?.code).toBe('55P03'); // lock_not_available
+        } finally {
+            await client!.query('ROLLBACK');
+            await writer.end().catch(() => {});
+        }
     });
 });

@@ -89,6 +89,17 @@ const EXPECTED = [
              "after 017, which it REPLACES. Applied in the other order, the mirroring " +
              "disappears and a .where() list disagrees with the document it links to.",
     },
+    {
+        n: "027",
+        why: "the created_at indexes the eight DEDICATED tables were promoted without. " +
+             "Order does not matter against the others — they are indexes, not " +
+             "functions — but it belongs IN this file rather than beside it. Its " +
+             "first draft used CREATE INDEX CONCURRENTLY, which cannot run in a " +
+             "transaction, so it could not be applied by the SQL Editor this header " +
+             "says is the only route available here, and it sat unapplied. It is now " +
+             "the plain form under a lock_timeout: ShareLock, reads unaffected, 718 ms " +
+             "of blocked writes on 50,009 rows. See #469 in its header.",
+    },
     { n: "004", why: "row-level security — LAST, and in a low-traffic window" },
 ];
 
@@ -107,14 +118,6 @@ const EXCLUDED = [
              "worse, take an ACCESS EXCLUSIVE lock on live tables if the CONCURRENTLY " +
              "were dropped to make it fit. Apply it on its own, and only after the " +
              "EXPLAIN ANALYZE in its header shows the indexes are worth having.",
-    },
-    {
-        n: "027",
-        why: "Same reason as 022 — CREATE INDEX CONCURRENTLY cannot run inside a " +
-             "transaction block. UNLIKE 022 it IS meant to be applied: its header " +
-             "carries the EXPLAIN ANALYZE 022 asks for, on the query /admin/users " +
-             "issues, 26.496 ms sorting 50,009 rows against 0.061 ms scanning the " +
-             "index. Run it on its own, then check pg_index for an INVALID build.",
     },
 ];
 
@@ -194,6 +197,71 @@ if (missing.length > 0) {
         "these files create. Merge the branch that carries them, then run this again.\n"
     );
     process.exit(1);
+}
+
+/**
+ * #469 — NOTHING IN THIS FILE MAY BE A STATEMENT THAT CANNOT RUN IN A
+ * TRANSACTION.
+ *
+ * The generated file is pasted into the Supabase SQL Editor, which wraps every
+ * submission in a transaction and offers no way not to. A handful of Postgres
+ * statements refuse to run inside one, and a single one of them makes the WHOLE
+ * paste fail at that line — the migrations after it never run, and the operator
+ * is left with a partial deployment reported as one error.
+ *
+ * 027's first draft was CREATE INDEX CONCURRENTLY. It was correctly kept OUT of
+ * this file for exactly that reason, and then it could not be applied any other
+ * way either, because this project has no psql and no Supabase CLI — so the fix
+ * it carried sat unapplied while three places in the repository recorded an
+ * instruction nobody could follow.
+ *
+ * Excluding such a file is therefore not a solution; it only moves the problem
+ * somewhere with no route out. This check names the statement AND says so, so
+ * the next person rewrites it into a transactional form rather than adding
+ * another entry to EXCLUDED.
+ */
+const NON_TRANSACTIONAL = [
+    { re: /\bCREATE\s+INDEX\s+CONCURRENTLY\b/i, what: "CREATE INDEX CONCURRENTLY" },
+    { re: /\bDROP\s+INDEX\s+CONCURRENTLY\b/i, what: "DROP INDEX CONCURRENTLY" },
+    { re: /\bREINDEX\s+(?:\w+\s+)*CONCURRENTLY\b/i, what: "REINDEX CONCURRENTLY" },
+    { re: /\bVACUUM\b/i, what: "VACUUM" },
+    { re: /\bCREATE\s+DATABASE\b/i, what: "CREATE DATABASE" },
+    { re: /\bALTER\s+SYSTEM\b/i, what: "ALTER SYSTEM" },
+    { re: /\bALTER\s+TYPE\s+.*\bADD\s+VALUE\b/i, what: "ALTER TYPE ... ADD VALUE" },
+];
+
+const untransactional = [];
+for (const step of chosen) {
+    const body = stripSqlComments(readFileSync(join(MIGRATIONS_DIR, step.file), "utf8"));
+    for (const { re, what } of NON_TRANSACTIONAL) {
+        if (re.test(body)) untransactional.push({ file: step.file, what });
+    }
+}
+
+if (untransactional.length > 0) {
+    console.error("\n[build-deploy-sql] REFUSING TO BUILD — a migration here cannot run inside a transaction:\n");
+    for (const u of untransactional) {
+        console.error(`  ${u.file}  ->  ${u.what}`);
+    }
+    console.error(
+        "\nThe Supabase SQL Editor wraps every submission in a transaction, and there\n" +
+        "is no setting for that. One of these statements fails the WHOLE paste at\n" +
+        "that line, leaving everything after it unapplied.\n" +
+        "\n" +
+        "Do NOT just move it to EXCLUDED. That is what happened to 027, and this\n" +
+        "project has no psql and no Supabase CLI, so 'apply it separately' meant it\n" +
+        "was never applied at all. Rewrite it into a form that runs in a transaction\n" +
+        "— for an index, the plain build under a lock_timeout; see 027's header for\n" +
+        "what that actually costs, measured.\n"
+    );
+    process.exit(1);
+}
+
+/** SQL comments, so a statement NAMED in a header is not read as one written. */
+function stripSqlComments(sql) {
+    return sql
+        .replace(/\/\*[\s\S]*?\*\//g, " ")
+        .replace(/^\s*--.*$/gm, " ");
 }
 
 /**
