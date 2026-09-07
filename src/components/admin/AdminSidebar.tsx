@@ -144,14 +144,45 @@ const NAV_ITEMS = [
     { label: "Settings", href: "/admin/settings", icon: Settings, section: "finance" },
 ];
 
-export default function AdminSidebar() {
+/**
+ *   #484 THE SERVER ALREADY KNOWS WHO THIS IS, AND THIS COMPONENT ASKED AGAIN.
+ *
+ *        admin/layout.tsx is a server component. It awaits requireSession(),
+ *        reads `session.user.roles`, and refuses anyone isAdmin() rejects —
+ *        so by the time it renders <AdminSidebar /> the answer is in its hand.
+ *        It passed nothing, and the sidebar started from zero and waited on
+ *        /api/auth/session over the network to learn what the process rendering
+ *        it had just finished checking.
+ *
+ *        That round trip IS the window in which the wrong screen is up. Handing
+ *        the roles down does not shorten it — it removes it: the nav is correct
+ *        in the server's own HTML, before the browser has run any JavaScript.
+ *
+ *        useSession is still read, and still wins once it resolves. These are
+ *        the same roles from the same session, but #414's rule holds: a value
+ *        rendered at request time and a value the client refreshes can diverge
+ *        (a role revoked mid-session), and when they do the LIVE one decides.
+ */
+export default function AdminSidebar({ initialRoles }: { initialRoles?: string[] } = {}) {
     const pathname = usePathname();
     const [isMobileOpen, setIsMobileOpen] = useState(false);
     const toggles = useFeatureToggles(["wave_program", "cooperative_loans", "escrow_messaging", "farm_nation_purchases", "academy_courses", "digital_id_system"]);
-    const { data: session } = useSession();
-    
+    /**
+     *   #484 `status` WAS DISCARDED, AND "NOT YET" BECAME "MAY NOT".
+     *
+     *        This read only `data`. useSession has three states, and the one
+     *        where the answer is UNKNOWN produced `roles = []` — which every
+     *        gate below correctly refuses, and which the label chain at the foot
+     *        of this file falls through to "Moderator". A super_admin was shown
+     *        an empty nav over the name of a real, narrow role, on every cold
+     *        load. See loading-is-not-denied.render.test.tsx.
+     */
+    const { data: session, status } = useSession();
+
     // Role-based UI filtering
-    const roles: string[] = (session?.user as any)?.roles || [];
+    const liveRoles: string[] | undefined = (session?.user as any)?.roles;
+    const rolesKnown = status !== "loading" || initialRoles !== undefined;
+    const roles: string[] = (status === "loading" ? initialRoles : liveRoles) ?? [];
     /**
      *   #382 THIS BLOCK CALLED ITSELF A PERMISSIONS CHECK AND CHECKED NOTHING.
      *
@@ -215,7 +246,24 @@ export default function AdminSidebar() {
 
                     {/* Navigation */}
                     <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
-                        {(() => {
+                        {/**
+                          *   #484 NOTHING IS CLAIMED UNTIL SOMETHING IS KNOWN.
+                          *
+                          *        Reached only when this component is rendered
+                          *        WITHOUT initialRoles — admin/layout.tsx now
+                          *        supplies them, so on that path there is no
+                          *        such frame at all. It stays because a second
+                          *        caller mounting this without the prop must get
+                          *        a placeholder, not a fabricated refusal.
+                          */}
+                        {!rolesKnown ? (
+                            <div data-testid="admin-nav-loading" className="px-3 py-2 space-y-2" aria-busy="true">
+                                <span className="sr-only">Loading navigation…</span>
+                                {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+                                    <div key={i} className="h-8 rounded-lg bg-slate-800/60 animate-pulse" />
+                                ))}
+                            </div>
+                        ) : (() => {
                             const sections = [
                                 { key: "platform", label: "Platform" },
                                 { key: "modules", label: "Modules" },
@@ -223,12 +271,7 @@ export default function AdminSidebar() {
                             ];
                             return sections.map(({ key, label }) => {
                                 const items = NAV_ITEMS.filter(i => i.section === key);
-                                return (
-                                    <div key={key} className="mb-4">
-                                        <p className="px-3 mb-1 text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                                            {label}
-                                        </p>
-                                        {items.map((item) => {
+                                const rendered = items.map((item) => {
                                             if (item.featureToggle && toggles[item.featureToggle] === false) {
                                                 return null;
                                             }
@@ -292,7 +335,31 @@ export default function AdminSidebar() {
                                                     <span>{item.label}</span>
                                                 </Link>
                                             );
-                                        })}
+                                        });
+
+                                /**
+                                 *   #484 A HEADING OVER EMPTY SPACE IS A CLAIM,
+                                 *        AND IT WAS THE ONE THAT MADE THE BLANK
+                                 *        NAV READ AS AUTHORITATIVE.
+                                 *
+                                 *        The label was printed before the items
+                                 *        were filtered, so it survived them all
+                                 *        being refused. A support admin reaches
+                                 *        analytics and audit logs and nothing in
+                                 *        MODULES — and got a MODULES heading
+                                 *        over nothing, which says the section is
+                                 *        theirs and merely empty.
+                                 */
+                                if (!rendered.some(Boolean)) {
+                                    return null;
+                                }
+
+                                return (
+                                    <div key={key} className="mb-4">
+                                        <p className="px-3 mb-1 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                                            {label}
+                                        </p>
+                                        {rendered}
                                     </div>
                                 );
                             });
@@ -303,9 +370,25 @@ export default function AdminSidebar() {
                     <div className="p-4 border-t border-slate-800">
                         <div className="bg-slate-800/50 rounded-xl p-4 mb-4">
                             <p className="text-xs text-slate-500 uppercase font-semibold mb-1">Signed in as</p>
-                            <p className="text-sm font-medium text-white truncate">
-                                {isSuperAdmin ? "Super Admin" : isFullAdmin ? "Administrator" : isWaveAdmin ? "WAVE Admin" : isCoopAdmin ? "Coop Admin" : isMktAdmin ? "Marketplace Admin" : isExportAdmin ? "Export Admin" : isFarmAdmin ? "Farm Admin" : isAcadAdmin ? "Academy Admin" : "Moderator"}
-                            </p>
+                            {/**
+                              *   #484 THE LAST ELSE OF THIS CHAIN IS "Moderator",
+                              *        AND AN UNKNOWN SESSION FELL INTO IT.
+                              *
+                              *        moderator is a real role holding
+                              *        content:approve and nothing else. Printing
+                              *        it over roles nobody has supplied yet told
+                              *        the platform owner they were signed in as
+                              *        somebody with almost no access — the
+                              *        caption under an empty nav, which is what
+                              *        made the screen readable as a refusal.
+                              */}
+                            {rolesKnown ? (
+                                <p className="text-sm font-medium text-white truncate">
+                                    {isSuperAdmin ? "Super Admin" : isFullAdmin ? "Administrator" : isWaveAdmin ? "WAVE Admin" : isCoopAdmin ? "Coop Admin" : isMktAdmin ? "Marketplace Admin" : isExportAdmin ? "Export Admin" : isFarmAdmin ? "Farm Admin" : isAcadAdmin ? "Academy Admin" : "Moderator"}
+                                </p>
+                            ) : (
+                                <div data-testid="admin-role-loading" className="h-5 w-28 rounded bg-slate-700/60 animate-pulse" />
+                            )}
                         </div>
                         <button
                             onClick={async () => {

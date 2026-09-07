@@ -31,8 +31,21 @@ async function AdminLayoutContent({ children }: { children: React.ReactNode }) {
 
     return (
         <div className="flex min-h-screen bg-slate-50">
-            {/* Admin Sidebar */}
-            <AdminSidebar />
+            {/**
+              *   #484 THE ROLES ARE ALREADY IN HAND HERE — HAND THEM DOWN.
+              *
+              *        This component awaited the session and refused everyone
+              *        isAdmin() rejects two statements ago. Rendering the
+              *        sidebar with no props sent it back to the network for the
+              *        same answer, and until that returned it drew an empty nav
+              *        captioned "Signed in as Moderator" over a super_admin.
+              *
+              *        With this the nav is right in the server's own HTML and
+              *        that window does not exist. useSession still overrides it
+              *        the moment it resolves, so a role revoked mid-session
+              *        still takes the link away.
+              */}
+            <AdminSidebar initialRoles={roles} />
 
             {/* Main Content Area */}
             <main className="flex-1 lg:pl-64 min-h-screen transition-all">
