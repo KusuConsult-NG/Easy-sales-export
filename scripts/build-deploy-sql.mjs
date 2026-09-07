@@ -127,6 +127,21 @@ const EXPECTED = [
              "profile over the top — #476, which is the owner's 'account not found / " +
              "missing details even when fully registered'.",
     },
+    {
+        n: "031",
+        why: "find_users_by_normalised_emails — the BATCH form, for the ghost scan and " +
+             "the orphan repair. MUST ship with lib/auth-profile-link.ts: without it " +
+             "people whose profile is stored with odd case or spacing are reported as " +
+             "orphaned AND the repair may write them a duplicate (#478).",
+    },
+    {
+        n: "032",
+        why: "users.email_normalised, the generated column every email filter is routed " +
+             "to. MUST ship with the adapter change in supabase-db.ts — the two are one " +
+             "fix. Applied WITHOUT the code, nothing changes; the code WITHOUT this " +
+             "sends email_normalised=eq.… to a column that does not exist and every " +
+             "email lookup fails, so keep them together and apply this first.",
+    },
     { n: "004", why: "row-level security — LAST, and in a low-traffic window" },
 ];
 

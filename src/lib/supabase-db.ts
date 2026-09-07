@@ -947,6 +947,38 @@ function applyFilter(
         return applySimpleFilter(query, 'id', op, normalizedValue);
     }
 
+    /**
+     *   #478 AN EMAIL FILTER COMPARES A NORMALISED VALUE, ONCE, HERE.
+     *
+     *   #476 found the login missing a profile stored as '  Ada@Example.COM '
+     *   because `where('email','==', email.toLowerCase())` normalises the INPUT
+     *   and not the STORED VALUE. #477 found the same in the ghost scan and the
+     *   orphan repair, and #478 found a third copy in preValidateLoginAction —
+     *   the one that decides which profile gets migrated.
+     *
+     *   There are two dozen more sites with that shape: session-guard,
+     *   password-reset, module-access-check, six cooperative lookups, the admin
+     *   search. Patching them one at a time is exactly how this reached three
+     *   copies, so it is fixed once, at the only place they all pass through.
+     *
+     *   `email_normalised` is a STORED GENERATED column — lower(btrim(email)) —
+     *   added by migration 032 with an index. Only EQUALITY and IN are routed to
+     *   it, because those are identity questions; ordering and range comparisons
+     *   keep the raw column, where they mean what they say.
+     *
+     *   IT IS DELIBERATELY NOT IN NATIVE_COLUMNS. That list drives the WRITE
+     *   path, and a generated column cannot be written — adding it there would
+     *   turn every user update into an error. This is a read-side routing rule
+     *   and nothing else.
+     */
+    if (tableName === 'users' && field === 'email' && (op === '==' || op === 'in' || op === '!=')) {
+        const norm = (v: unknown) => (typeof v === 'string' ? v.trim().toLowerCase() : v);
+        const value = Array.isArray(normalizedValue)
+            ? normalizedValue.map(norm)
+            : norm(normalizedValue);
+        return applySimpleFilter(query, 'email_normalised', op, value);
+    }
+
     // Check if this field has a native column mapping
     const fieldMap = FIELD_TO_COLUMN[tableName] || {};
     const nativeCol = fieldMap[field];

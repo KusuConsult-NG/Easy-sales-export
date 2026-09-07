@@ -478,13 +478,44 @@ export async function preValidateLoginAction(credentials: any): Promise<{ succes
         const needsMigration = !userDoc.exists || (!userDoc.data()?._migratedAt && !userDoc.data()?._legacyFirebaseUid);
         if (needsMigration && email) {
             try {
-                const legacyQuery = await db.collection(COLLECTIONS.USERS)
-                    .where("email", "==", email.toLowerCase())
-                    .limit(1)
-                    .get();
-                if (!legacyQuery.empty) {
-                    const legacyUserDoc = legacyQuery.docs[0];
+                /**
+                 *   #478 THE THIRD COPY OF #476/#477, AND THE ONE THAT DECIDES
+                 *   WHICH PROFILE GETS MIGRATED.
+                 *
+                 *        This was
+                 *
+                 *            .where("email", "==", email.toLowerCase())
+                 *            .limit(1)
+                 *
+                 *        with two defects stacked. The filter compares a
+                 *        lowercased input against a column that is not
+                 *        normalised, so a row stored as '  Ada@Example.COM ' is
+                 *        never found — and then `!userDoc.exists` below writes a
+                 *        blank profile instead. And `limit(1)` with NO ORDER BY
+                 *        picks an ARBITRARY row when a person has several, so
+                 *        the JIT migration could copy from an empty duplicate
+                 *        rather than from the profile holding their enrolments.
+                 *
+                 *        Both are now the shared rule: findProfilesByEmail finds
+                 *        the rows however they are stored, and
+                 *        chooseProfileForAuthAccount picks the same one every
+                 *        time, preferring the row that carries the person's
+                 *        registrations.
+                 */
+                const { findProfilesByEmail } = await import("@/lib/profile-lookup");
+                const { chooseProfileForAuthAccount } = await import("@/lib/profile-choice");
+                const legacyLookup = await findProfilesByEmail(email);
+                const legacyChoice = chooseProfileForAuthAccount(legacyLookup.rows, uid);
+                if (legacyChoice.chosen) {
+                    const legacyUserDoc = legacyChoice.chosen;
                     const legacyUid = legacyUserDoc.id;
+                    if (legacyChoice.ambiguous && legacyLookup.rows.length > 1) {
+                        logger.error(
+                            `[PreValidate] ${legacyLookup.rows.length} profiles match this email and none `
+                            + `identifies with the authenticated account. Migrating from ${legacyUid}, chosen `
+                            + `by evidence (#477) — these rows need reconciling.`,
+                        );
+                    }
                     if (legacyUid !== uid) {
                         logger.info(`[PreValidate] User JIT migration needed. Triggering JIT migration for ${email} (${legacyUid} → ${uid})`);
                         const { migrateLegacyUserData } = await import("@/lib/user-migration");

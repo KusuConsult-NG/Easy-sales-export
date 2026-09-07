@@ -200,8 +200,38 @@ dbDescribe('#476 — asked through the adapter the login actually calls', () => 
         const found = await findProfilesByEmail(WANTED);
 
         expect(found.rows.map((r) => r.id)).toEqual([LEGACY_ID]);
-        expect(found.viaFallback).toBe(true);
         expect(found.rows[0].data().fullName).toBe('Ada Obi');
+    }, 300_000);
+
+    it('AND IT RESOLVES ON THE EXACT PATH NOW — #478 moved the fix one layer down', async () => {
+        //   This asserted viaFallback === true when written, and #478 changed
+        //   the answer for a good reason: the ADAPTER now routes every
+        //   users.email equality through the email_normalised generated column,
+        //   so the badly-stored row is found by the ordinary query and the RPC
+        //   fallback never runs.
+        //
+        //   Recorded rather than deleted, because "the fallback stopped firing"
+        //   and "the fallback stopped working" look identical from a passing
+        //   test, and the next person needs to know which one this is.
+        const { findProfilesByEmail } = await import('@/lib/profile-lookup');
+
+        const found = await findProfilesByEmail(WANTED);
+
+        expect({ found: found.rows.length, viaFallback: found.viaFallback })
+            .toEqual({ found: 1, viaFallback: false });
+    }, 300_000);
+
+    it('AND THE RPC FALLBACK ITSELF STILL WORKS — the second line, tested directly', async () => {
+        //   #478 made the adapter the first line. If that routing is ever
+        //   removed, or the generated column is missing on a database where
+        //   only the code was deployed, this is what catches the person — so it
+        //   is tested on its own rather than only through the path that now
+        //   bypasses it.
+        const { rows } = await client!.query(
+            `select id from find_users_by_normalised_email($1)`, [WANTED],
+        );
+
+        expect(rows.map((r: any) => r.id)).toEqual([LEGACY_ID]);
     }, 300_000);
 
     it('AND A CORRECTLY STORED EMAIL STILL RESOLVES ON THE EXACT PATH', async () => {

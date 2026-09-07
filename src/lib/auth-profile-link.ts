@@ -101,6 +101,50 @@ export async function authAccountsWithProfiles(accounts: AuthAccount[]): Promise
         if (uid) found.add(uid);
     }));
 
+    /**
+     *   #478 THE `in` FILTER COMPARES THE RAW COLUMN, SO A ROW STORED AS
+     *   '  Ada@Example.COM ' IS NEVER FETCHED.
+     *
+     *   The normalisation above runs on the stored value AFTER the query, which
+     *   reads as though the case is handled — and is not, because the row never
+     *   comes back. #476 found this at the login; it is the same shape here, and
+     *   here it matters more: repairOrphanedUser guards on this result and then
+     *   CREATES A PROFILE, so a person whose profile is merely stored with odd
+     *   spacing gets a second one written by the button meant to help them.
+     *
+     *   Only the accounts still unresolved are asked about, so a tenant with
+     *   tidy data pays nothing.
+     */
+    const stillMissing = accounts.filter((a) => !found.has(a.uid));
+    if (stillMissing.length === 0) return found;
+
+    const outstandingEmails = [...new Set(stillMissing.map((a) => key(a.email)).filter(Boolean))];
+    if (outstandingEmails.length === 0) return found;
+
+    const { supabaseAdmin } = await import('./supabase');
+    const { data, error } = await supabaseAdmin.rpc('find_users_by_normalised_emails', {
+        p_emails: outstandingEmails,
+    });
+
+    if (error) {
+        //   Not silent. Without migration 031 this scan reports people as
+        //   ghosts who are not, and the repair beside it may write duplicates
+        //   for them — so the log names the file, per #473.
+        console.error(
+            '[auth-profile-link] find_users_by_normalised_emails unavailable — profiles stored ' +
+            'with different case or surrounding space will be reported as orphaned, and the ' +
+            'repair may create duplicates for them (#478). Apply ' +
+            'supabase/migrations/031_find_users_by_normalised_emails_batch.sql. Reason:',
+            error.message,
+        );
+        return found;
+    }
+
+    for (const r of (data ?? []) as Array<{ email: string }>) {
+        const uid = uidByEmail.get(key(r.email));
+        if (uid) found.add(uid);
+    }
+
     return found;
 }
 

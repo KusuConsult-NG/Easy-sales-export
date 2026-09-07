@@ -24,6 +24,7 @@ import { runQueryWithRetry } from "@/lib/firestore-utils";
 import { supabase, supabaseAdmin } from "./supabase";
 import { supabaseDb as db } from "./supabase-db";
 import { findProfilesByEmail } from "./profile-lookup";
+import { chooseProfileForAuthAccount } from "./profile-choice";
 
 /**
  * NextAuth v5 Configuration
@@ -207,21 +208,43 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                                  * comes to that — an arbitrary pick should be
                                  * visible rather than silent.
                                  */
+                                /**
+                                 *   #477 THE LAST RESORT WAS `?? userSnap.docs[0]`,
+                                 *   AND THAT IS NOT A CHOICE — IT IS ROW ORDER.
+                                 *
+                                 *        The query carries no ORDER BY; measured,
+                                 *        it is `select=id&email=eq.…` and nothing
+                                 *        else. Postgres promises no order without
+                                 *        one, and an UPDATE writes the new row
+                                 *        version at the end of the heap.
+                                 *        Demonstrated on a real cluster, six rows
+                                 *        sharing one email:
+                                 *
+                                 *          initial          order-1 … order-6
+                                 *          edit order-1     order-2 … order-1
+                                 *          edit order-3     order-2 order-4 …
+                                 *
+                                 *        So a duplicated user was signed in to a
+                                 *        DIFFERENT profile whenever any of their
+                                 *        rows was edited — sometimes the one with
+                                 *        their registrations, sometimes an empty
+                                 *        one. Production has real people on 6, 5
+                                 *        and 4 rows.
+                                 *
+                                 *        The three identity links below are
+                                 *        unchanged. What replaces docs[0] is a
+                                 *        TOTAL order over evidence, so the answer
+                                 *        stops moving between logins.
+                                 */
                                 const authedId = sbData.user.id;
-                                const matchedDoc =
-                                    userSnap.docs.find(doc => doc.id === authedId)
-                                    ?? userSnap.docs.find(doc => doc.data()?._migratedTo === authedId)
-                                    ?? userSnap.docs.find(doc => doc.data()?.supabaseAuthId === authedId)
-                                    ?? userSnap.docs[0];
+                                const choice = chooseProfileForAuthAccount(userSnap.docs, authedId);
+                                const matchedDoc = choice.chosen!;
 
-                                if (!userSnap.docs.some(doc =>
-                                    doc.id === authedId
-                                    || doc.data()?._migratedTo === authedId
-                                    || doc.data()?.supabaseAuthId === authedId
-                                )) {
+                                if (choice.ambiguous) {
                                     logger.error(
                                         `${authCtx} No profile identifies itself with the authenticated account. `
-                                        + `Falling back to the first of ${userSnap.docs.length} row(s) matching this email.`,
+                                        + `Chose ${matchedDoc.id} from ${choice.candidates} row(s) matching this email `
+                                        + `by evidence (#477) — these rows need reconciling.`,
                                     );
                                 }
                                 const matchedData = matchedDoc.data()!;

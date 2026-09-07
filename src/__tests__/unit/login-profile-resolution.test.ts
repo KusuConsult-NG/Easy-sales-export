@@ -44,6 +44,8 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
+import { chooseProfileForAuthAccount } from '@/lib/profile-choice';
+import { stripComments } from '@/lib/testing/strip-comments';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { activeIdFromRow } from '@/lib/user-identity';
@@ -74,18 +76,26 @@ const doc = (id: string, data: Record<string, unknown> = {}): Doc => ({ id, data
  * The resolution the login path performs, lifted out so it can be exercised.
  * Pinned to the original by "the rule the login path actually runs" below.
  */
+/**
+ *   #478 THIS WAS A COPY OF THE RULE, PINNED TO auth.ts BY SOURCE STRING.
+ *
+ *        The copy below used to be four lines reproducing the resolution, and
+ *        "the rule the login path actually runs" asserted that auth.ts still
+ *        contained those exact characters. When #477 replaced the arbitrary
+ *        `?? docs[0]` with a deterministic choice, this suite failed — not
+ *        because the behaviour regressed but because the STRING changed.
+ *
+ *        Sixth time in this audit that a test pinned to an implementation
+ *        detail has stood in the way of the fix. The rule is now a real
+ *        function, so the copy is deleted and the tests below call the thing
+ *        the login calls. There is nothing left to pin.
+ */
 function resolveProfile(docs: Doc[], authedId: string): Doc | undefined {
-    return docs.find((d) => d.id === authedId)
-        ?? docs.find((d) => d.data()?._migratedTo === authedId)
-        ?? docs.find((d) => d.data()?.supabaseAuthId === authedId)
-        ?? docs[0];
+    return chooseProfileForAuthAccount(docs as any, authedId).chosen as Doc | undefined;
 }
 
 function identifiesItself(docs: Doc[], authedId: string): boolean {
-    return docs.some((d) =>
-        d.id === authedId
-        || d.data()?._migratedTo === authedId
-        || d.data()?.supabaseAuthId === authedId);
+    return !chooseProfileForAuthAccount(docs as any, authedId).ambiguous;
 }
 
 const AUTHED = 'supabase-uuid-of-the-caller';
@@ -214,13 +224,19 @@ describe('an unmatched pick is arbitrary, and says so', () => {
 describe('the rule the login path actually runs', () => {
     const auth = code(AUTH);
 
-    it('is the one exercised above', () => {
-        // Pins the copy to the original.
+    it('is the one exercised above — the same function, not a copy of it', () => {
+        //   No longer a string pin. The tests above call
+        //   chooseProfileForAuthAccount, and this asserts the login calls it
+        //   too, so the two cannot describe different rules.
         expect(auth).toContain('const authedId = sbData.user.id;');
-        expect(auth).toContain('userSnap.docs.find(doc => doc.id === authedId)');
-        expect(auth).toContain('?? userSnap.docs.find(doc => doc.data()?._migratedTo === authedId)');
-        expect(auth).toContain('?? userSnap.docs.find(doc => doc.data()?.supabaseAuthId === authedId)');
-        expect(auth).toContain('?? userSnap.docs[0];');
+        expect(auth).toContain('chooseProfileForAuthAccount(userSnap.docs, authedId)');
+    });
+
+    it('AND THE ARBITRARY PICK IS GONE — #477', () => {
+        //   `?? userSnap.docs[0]` returned whatever Postgres listed first on a
+        //   query with no ORDER BY, so a person with several profiles was
+        //   signed in to a different one whenever any row was edited.
+        expect(stripComments(auth)).not.toContain('?? userSnap.docs[0]');
     });
 
     it('and the session id still follows a matching migration pointer', () => {
