@@ -33,6 +33,65 @@ export async function getFeatureToggle(featureName: string): Promise<boolean> { 
 }
 
 /**
+ * Every requested toggle, in ONE database round trip and ONE server call.
+ *
+ *   #481 SIX BOOLEANS COST SIX ROUND TRIPS EACH WAY, ON THE CRITICAL PATH.
+ *
+ *   Measured on /admin with a real browser against real PostgREST: 45 database
+ *   round trips, of which only a handful are actually sequential — and the
+ *   LONGEST sequential chain was six single-toggle reads:
+ *
+ *       document_collections?id=eq.wave_program&collection_name=eq.feature_toggles
+ *       document_collections?id=eq.cooperative_loans&…
+ *       …four more…
+ *
+ *   useFeatureToggles() asks for them in a Promise.all, which looks parallel and
+ *   is not: each is a separate SERVER ACTION, so each is its own
+ *   browser -> server request AND its own server -> database query. Six of each,
+ *   serialised, before the navigation can render. Locally that is 71 ms and
+ *   invisible; over the network to Railway and on to Supabase it is the
+ *   dominant cost of the page.
+ *
+ *   The collection holds a handful of documents. Reading ALL of them once is
+ *   cheaper than reading six of them individually, so this takes the names,
+ *   makes one query, and answers them all.
+ *
+ *   FAIL-CLOSED IS PRESERVED EXACTLY. #245 removed a catch that returned
+ *   DEFAULT_TOGGLES on error, because seven of those default to TRUE — so a
+ *   transient read error re-enabled a feature an admin had killed. #410 fixed
+ *   the same thing in the client hook. A failure here resolves EVERY requested
+ *   name through resolveToggle({ readFailed: true }), which is the one
+ *   statement of that rule both sides already use.
+ */
+export async function getFeatureToggles(featureNames: string[]): Promise<Record<string, boolean>> {
+    const names = [...new Set(featureNames.filter((n) => typeof n === 'string' && n.length > 0))];
+    if (names.length === 0) return {};
+
+    try {
+        const snapshot = await db.collection(COLLECTIONS.FEATURE_TOGGLES).get();
+
+        const stored = new Map<string, boolean | undefined>();
+        for (const doc of snapshot.docs) {
+            stored.set(doc.id, (doc.data() as FeatureToggle)?.enabled);
+        }
+
+        const out: Record<string, boolean> = {};
+        for (const name of names) {
+            out[name] = resolveToggle(name, { stored: stored.get(name) });
+        }
+        return out;
+    } catch (error) {
+        // The whole read failed, so NOTHING is known — every name fails closed,
+        // through the same helper the single-toggle path uses. See #245.
+        logger.error('Failed to get feature toggles — failing CLOSED for all of them:', error);
+
+        const out: Record<string, boolean> = {};
+        for (const name of names) out[name] = resolveToggle(name, { readFailed: true });
+        return out;
+    }
+}
+
+/**
  * Update feature toggle state (admin only)
  */
 export async function updateFeatureToggle(

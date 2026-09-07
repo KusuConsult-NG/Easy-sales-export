@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getFeatureToggle } from "@/app/actions/feature-toggles";
+import { getFeatureToggle, getFeatureToggles } from "@/app/actions/feature-toggles";
 import { DEFAULT_TOGGLES, resolveToggle } from "@/lib/feature-toggles";
 
 /**
@@ -70,26 +70,34 @@ export function useFeatureToggles(featureNames: string[]): Record<string, boolea
 
     useEffect(() => {
         async function checkToggles() {
-            const results: Record<string, boolean> = {};
-
-            // Use Promise.all to fetch all toggles in parallel
-            await Promise.all(
-                featureNames.map(async (name) => {
-                    try {
-                        const isEnabled = await getFeatureToggle(name);
-                        results[name] = isEnabled;
-                    } catch {
-                        // #410. This was `DEFAULT_TOGGLES[name] ?? false` — the
-                        // line #245 removed from the server for turning a killed
-                        // feature back on. Every caller of THIS hook is a
-                        // navigation menu, so that is a killed module still
-                        // offered to the user.
-                        results[name] = resolveToggle(name, { readFailed: true });
-                    }
-                })
-            );
-
-            setToggles(results);
+            /**
+             *   #481 THIS WAS A Promise.all OF ONE SERVER ACTION PER TOGGLE,
+             *   WHICH LOOKS PARALLEL AND IS NOT.
+             *
+             *   Each call is a separate SERVER ACTION: its own
+             *   browser -> server request AND its own server -> database query.
+             *   Measured on /admin, the six toggles this hook asks for were the
+             *   LONGEST SEQUENTIAL CHAIN on the page — six of each, before the
+             *   navigation could render. Locally 71 ms and invisible; over the
+             *   network to Railway and on to Supabase, the dominant cost.
+             *
+             *   One call now, answering all of them from a single read of a
+             *   collection that holds a handful of documents.
+             */
+            try {
+                setToggles(await getFeatureToggles(featureNames));
+            } catch {
+                // #410. This was `DEFAULT_TOGGLES[name] ?? false` — the line
+                // #245 removed from the server for turning a killed feature
+                // back on. Every caller of THIS hook is a navigation menu, so
+                // that is a killed module still offered to the user.
+                //
+                // The action itself already fails closed; this covers the call
+                // never arriving at all.
+                const results: Record<string, boolean> = {};
+                featureNames.forEach((name) => { results[name] = resolveToggle(name, { readFailed: true }); });
+                setToggles(results);
+            }
         }
 
         checkToggles();
