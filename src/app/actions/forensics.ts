@@ -270,6 +270,104 @@ export async function runForensicScanAction(): Promise<
         } catch (e: any) { results.push({ module: "Auth", check: "Profiles With No Email Address", status: "inconclusive", details: `Could not complete this scan: ${e.message}`, affectedIds: [] });
         }
 
+        /**
+         *   #490 The address is MASKED on this report. A platform admin can see
+         *   it in full on the user screens; a forensic report is the thing most
+         *   likely to be screenshotted into a chat, and the profile ids beside
+         *   it are what an operator needs to act.
+         */
+        const maskAddress = (email: string): string => {
+            const [local, domain] = email.split("@");
+            if (!domain) return "***";
+            const head = local.slice(0, 3);
+            return `${head}${local.length > 3 ? "***" : ""}@${domain}`;
+        };
+
+        // CHECK: One address, several profiles
+        /**
+         *   #490 SIX PROFILES FOR ONE PERSON, AND NOTHING ON ANY SCREEN SAID SO.
+         *
+         *        The owner found these by running SQL by hand:
+         *
+         *            lubashehu369@gmail.com     6
+         *            walidazayyanu74@gmail.com  5
+         *            nancindaniel@gmail.com     5
+         *
+         *        Two rows per migrated person is BY DESIGN — migrateLegacyUserData
+         *        copies the profile forward and tombstones the original, because
+         *        nothing here is destroyed. The third onwards are the defect
+         *        #490 fixes: a second auth account for the same address made
+         *        chooseProfileForAuthAccount fall through to best-evidence, and
+         *        the login path migrated anyway.
+         *
+         *        This does not decide which row is the person, and must not:
+         *        that is a judgement about somebody's records, and the platform
+         *        has no basis for it. It COUNTS them, so the population is on the
+         *        screen next to everything else rather than in a query nobody
+         *        remembers to run.
+         *
+         *        A blank address is skipped. #479: a blank email is not an
+         *        identity, so grouping on it would report the 49 email-less
+         *        profiles as one 49-way duplicate — the loudest possible way to
+         *        say nothing. They have their own check above.
+         */
+        try {
+            const PAGE = 1000;
+            const byEmail = new Map<string, string[]>();
+            let scanned = 0;
+
+            for (let page = 0; page < 6; page++) {
+                const snap = await db.collection(COLLECTIONS.USERS)
+                    .orderBy("createdAt", "desc")
+                    .limit(PAGE)
+                    .offset(page * PAGE)
+                    .get();
+
+                if (snap.empty) break;
+                scanned += snap.docs.length;
+
+                for (const d of snap.docs) {
+                    const raw = (d.data() ?? {}) as Record<string, any>;
+                    const normalised = typeof raw.email === "string" ? raw.email.trim().toLowerCase() : "";
+                    if (!normalised) continue;
+                    const list = byEmail.get(normalised) ?? [];
+                    list.push(d.id);
+                    byEmail.set(normalised, list);
+                }
+
+                if (snap.docs.length < PAGE) break;
+            }
+
+            const duplicateEmails: string[] = [];
+            for (const [email, ids] of byEmail) {
+                if (ids.length > 1) {
+                    duplicateEmails.push(`${maskAddress(email)} — ${ids.length} profiles: ${ids.join(", ")}`);
+                }
+            }
+            //   Worst first: a six-way split is a different problem from a pair.
+            duplicateEmails.sort((a, b) => {
+                const n = (s: string) => Number(s.match(/— (\d+) profiles/)?.[1] ?? 0);
+                return n(b) - n(a);
+            });
+
+            results.push({
+                module: "Auth",
+                check: "Duplicate Profiles (One Address, Several Accounts)",
+                status: duplicateEmails.length > 0 ? "warning" : "pass",
+                //   The number actually scanned, not the table size. #331.
+                details: duplicateEmails.length === 0
+                    ? `Scanned ${scanned} profiles. Every address holds one.`
+                    : `Scanned ${scanned} profiles. ${duplicateEmails.length} address(es) hold more than `
+                      + `one. TWO IS NORMAL for anyone migrated from the old system — the original is `
+                      + `kept and tombstoned, never deleted. Three or more is #490's defect, now fixed `
+                      + `at the source; these are the records it already produced. Nothing here merges `
+                      + `or deletes them: which of somebody's records is the person is not a decision `
+                      + `code should make unattended.`,
+                affectedIds: duplicateEmails
+            });
+        } catch (e: any) { results.push({ module: "Auth", check: "Duplicate Profiles (One Address, Several Accounts)", status: "inconclusive", details: `Could not complete this scan: ${e.message}`, affectedIds: [] });
+        }
+
         // ============================================================================
         // 2. MARKETPLACE INTEGRITY
         // ============================================================================

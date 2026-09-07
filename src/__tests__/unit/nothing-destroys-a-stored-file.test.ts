@@ -164,8 +164,17 @@ describe('#303 — the three other records that had to survive', () => {
 
         expect(src).not.toMatch(/memberSourceRef\.delete\(\)/);
         expect(src).toMatch(/_migratedTo: supabaseUid/);
-        // The branch that was already correct is still correct.
-        expect(src).toMatch(/userId: supabaseUid,\s*_legacyFirebaseUid: firebaseUid/);
+        //   The branch that was already correct is still correct: the copied row
+        //   is re-keyed to the new account AND records which id it came from.
+        //
+        //   #490 — this pinned `_legacyFirebaseUid: firebaseUid`, the exact
+        //   spelling of the source variable, and failed when steps 2-10 were
+        //   wrapped in a loop over every id in the migration chain. The variable
+        //   is now `legacySourceUid` and the RULE is unchanged. Twelfth time in
+        //   this audit an assertion tied to an identifier has broken on correct
+        //   code; what it means is that provenance is recorded, so that is what
+        //   it asks.
+        expect(src).toMatch(/userId: supabaseUid,\s*_legacyFirebaseUid: \w+/);
     });
 
     it('A SENT EMAIL IS RECORDED, not destroyed', () => {

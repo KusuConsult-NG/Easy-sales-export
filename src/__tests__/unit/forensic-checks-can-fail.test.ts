@@ -344,6 +344,82 @@ describe('#486 — the farm nation check asks a question it can be right about',
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+describe('#490 — the duplicate-profile check counts what is there', () => {
+    const DUPES = 'Duplicate Profiles (One Address, Several Accounts)';
+
+    it('REPORTS AN ADDRESS HOLDING SEVERAL PROFILES', async () => {
+        //   Executed rather than grepped: a source assertion that the check
+        //   EXISTS stayed true for a version whose status was hard-coded to
+        //   "pass", and that mutant survived.
+        setWorld({
+            users: [
+                { id: 'u1', data: { email: 'ada@example.com' } },
+                { id: 'u2', data: { email: 'Ada@Example.COM' } },
+                { id: 'u3', data: { email: 'solo@example.com' } },
+            ],
+        });
+
+        const c = check(await scan(), DUPES);
+
+        expect(c.status).toBe('warning');
+        expect(c.affectedIds).toHaveLength(1);
+        expect(c.affectedIds[0]).toMatch(/2 profiles/);
+        //   Case and surrounding space are not two different people (#476).
+        expect(c.affectedIds[0]).toMatch(/u1/);
+        expect(c.affectedIds[0]).toMatch(/u2/);
+    });
+
+    it('AND PASSES WHEN EVERY ADDRESS HOLDS ONE', async () => {
+        //   The other direction, without which "warning" could be constant.
+        setWorld({
+            users: [
+                { id: 'u1', data: { email: 'ada@example.com' } },
+                { id: 'u2', data: { email: 'bola@example.com' } },
+            ],
+        });
+
+        const c = check(await scan(), DUPES);
+
+        expect(c.status).toBe('pass');
+        expect(c.affectedIds).toEqual([]);
+    });
+
+    it('AND BLANK ADDRESSES ARE NOT ONE 49-WAY DUPLICATE', async () => {
+        //   #479: a blank email is not an identity. Grouping on it would report
+        //   the email-less profiles as a single enormous finding — the loudest
+        //   possible way to say nothing. They have their own check.
+        setWorld({
+            users: [
+                { id: 'b1', data: { email: '' } },
+                { id: 'b2', data: { email: null } },
+                { id: 'b3', data: {} },
+                { id: 'b4', data: { email: '   ' } },
+            ],
+        });
+
+        const c = check(await scan(), DUPES);
+
+        expect(c.status).toBe('pass');
+    });
+
+    it('and the address is masked on the report', async () => {
+        //   A forensic report is the thing most likely to be screenshotted into
+        //   a chat. The profile ids beside it are what an operator acts on.
+        setWorld({
+            users: [
+                { id: 'u1', data: { email: 'lubashehu369@gmail.com' } },
+                { id: 'u2', data: { email: 'lubashehu369@gmail.com' } },
+            ],
+        });
+
+        const c = check(await scan(), DUPES);
+
+        expect(c.affectedIds[0]).not.toContain('lubashehu369');
+        expect(c.affectedIds[0]).toContain('@gmail.com');
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 describe('#331 — the fields that made both checks impossible are gone', () => {
     const src = source('src/app/actions/forensics.ts');
 

@@ -112,9 +112,48 @@ function createdAtMs(data: unknown): number | null {
  * Order two candidates, best first. A TOTAL order — it never returns 0 for two
  * distinct rows, because the last comparison is the id.
  */
-function betterFirst(a: ProfileCandidate, b: ProfileCandidate): number {
+/**
+ *   #490 A ROW THAT SAYS `_migratedTo: <somebody else>` HAS BEEN SUPERSEDED.
+ *
+ *        Reached only from betterFirst, which runs after every exact-match rule
+ *        — so a row pointing AT the caller is still their record and never
+ *        touches this. This is about the OTHER rows in the list.
+ */
+function isSuperseded(data: unknown, authedId: string): boolean {
+    const pointer = asRecord(data)._migratedTo;
+    return typeof pointer === 'string' && pointer !== '' && pointer !== authedId;
+}
+
+function betterFirst(a: ProfileCandidate, b: ProfileCandidate, authedId: string): number {
     const da = a.data();
     const db = b.data();
+
+    /**
+     *   #490 SUPERSESSION FIRST, AND THAT ORDER IS THE FINDING.
+     *
+     *        Rule 4 below prefers the OLDEST row, under the comment "The
+     *        ORIGINAL account, not a later duplicate". That is right for two
+     *        rival originals and exactly backwards after a migration: the
+     *        migrated row IS the later duplicate, and it is the one holding
+     *        everything — the merge of both records, every registration, the
+     *        roles. The legacy row is a tombstone.
+     *
+     *        The two tie on rules 1-3, because the migrated row is a copy of the
+     *        legacy one. So rule 4 chose the tombstone, and where createdAt was
+     *        carried across by the merge, rule 5 decided a member's identity by
+     *        a string comparison of document ids.
+     *
+     *        A returning member could be handed their superseded record, and the
+     *        login path then MIGRATES from it — copying a dead row forward over
+     *        the live one.
+     *
+     *        Ranked above registrations deliberately: a tombstone's extra
+     *        registration is one the live row already inherited in the merge, so
+     *        it is not evidence of anything.
+     */
+    const supersededA = isSuperseded(da, authedId) ? 1 : 0;
+    const supersededB = isSuperseded(db, authedId) ? 1 : 0;
+    if (supersededA !== supersededB) return supersededA - supersededB;
 
     // 1. The row carrying their enrolments. This is what "missing details" means.
     const regs = registrationWeight(db) - registrationWeight(da);
@@ -169,6 +208,6 @@ export function chooseProfileForAuthAccount(
     const byAuthId = candidates.find((d) => asRecord(d.data()).supabaseAuthId === authedId);
     if (byAuthId) return { chosen: byAuthId, reason: 'supabase-auth-id', ambiguous: false, candidates: candidates.length };
 
-    const best = [...candidates].sort(betterFirst)[0];
+    const best = [...candidates].sort((x, y) => betterFirst(x, y, authedId))[0];
     return { chosen: best, reason: 'best-evidence', ambiguous: true, candidates: candidates.length };
 }
