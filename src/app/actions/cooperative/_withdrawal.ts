@@ -186,9 +186,28 @@ async function _submitWithdrawalRequestAction(
             userEmail,
             targetId: `W-${Date.now()}`,
             targetType: 'withdrawal',
+            /**
+             *   #468 THE MEMBER'S BANK ACCOUNT NUMBER WAS IN HERE, and
+             *        `accountNumber` is on the platform's OWN PII list —
+             *        admin-pii.ts:21, whose header says "no bvn, no nin, no
+             *        accountNumber" since #151.
+             *
+             *        /admin/audit-logs renders metadata as raw JSON, and
+             *        `audit:read` is held by all ten admin roles. So every
+             *        module admin, moderator and support agent could read the
+             *        account number of every member who requested a withdrawal.
+             *
+             *        The number is on the withdrawal row itself, where the
+             *        people who process payouts see it. An audit entry says who
+             *        did what to which record — targetId is the withdrawal —
+             *        not a second copy of the record's contents.
+             *
+             *        The bank NAME stays: it is not a credential, and a bank
+             *        changing between requests is exactly the kind of thing an
+             *        auditor is looking for.
+             */
             metadata: { amount: validatedData.amount,
-                bankName: validatedData.bankName,
-                accountNumber: validatedData.accountNumber },
+                bankName: validatedData.bankName },
             details: `Withdrawal request of ₦${validatedData.amount.toLocaleString()} submitted` });
 
         try { const { sendWithdrawalConfirmationEmail } = await import('@/lib/email-notifications');

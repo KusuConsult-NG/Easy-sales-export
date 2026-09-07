@@ -434,11 +434,35 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
             userId: session.user.id,
             targetId: applicationId,
             targetType: "wave_application",
+            /**
+             *   #468 THIS PUT THE APPLICANT'S NAME, STATE AND AGE INTO THE
+             *        AUDIT LOG, WHICH EVERY ADMIN ROLE CAN READ.
+             *
+             *        It recorded surname, firstName, stateOfResidence and
+             *        `Verified 18+ (Auto-calculated: ${age})` — the age itself,
+             *        not the verdict. /admin/audit-logs renders metadata as raw
+             *        JSON, and `audit:read` is held by all ten admin roles:
+             *        super_admin, admin, moderator, support and every module
+             *        admin. So a marketplace_admin or a support agent could read
+             *        the name, home state and age of every woman who applied to
+             *        WAVE, from a screen that has nothing to do with WAVE.
+             *
+             *        THE FILE NEXT DOOR ALREADY STATES THE RULE. _wv_admin_live
+             *        logs roomName but deliberately NOT roomKey, saying "the
+             *        audit log is read by every admin role... What is needed here
+             *        is which session ran, not how to join it." The same test
+             *        applies: what is needed here is WHICH APPLICATION was
+             *        submitted, and `targetId` is already the application id.
+             *        Anyone entitled to the applicant's details can open it.
+             *
+             *        The age CHECK is worth recording — it is a gate that ran and
+             *        passed, and an auditor needs to know it was applied. The
+             *        DATE OF BIRTH derived from it is not; it is the applicant's,
+             *        and it is one field away from her identity in a women-only
+             *        programme.
+             */
             metadata: {
-                surname: validatedData.surname,
-                firstName: validatedData.firstName,
-                stateOfResidence: validatedData.stateOfResidence,
-                ageVerification: `Verified 18+ (Auto-calculated: ${calculatedAge})`
+                ageVerification: "passed: 18 or over",
             }
         }).catch(err => logger.error("Deferred audit log failed (WAVE):", err));
 
