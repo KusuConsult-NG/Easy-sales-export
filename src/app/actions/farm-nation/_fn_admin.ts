@@ -11,6 +11,7 @@ import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { APPROVABLE_FROM_STATUSES } from "@/lib/land-listing-status";
 import type { Property } from "@/lib/types/farm-nation-actions";
 import { recordAdminAction } from "@/lib/audit-log";
+import { resolveProfileEmail } from "@/lib/profile-email-resolution";
 
 async function _approveFarmNationSellerAction(userId: string): Promise<ActionResponse<null>> { 
     try {
@@ -51,6 +52,45 @@ async function _approveFarmNationSellerAction(userId: string): Promise<ActionRes
             .where("userId", "==", userId);
         const appSnap = await appQuery.get();
 
+        /**
+         *   #489 THE FORTY-NINTH BLANK ACCOUNT. Same defect as the cooperative
+         *        approval, two sources deep instead of one:
+         *
+         *            email: profile.email || appData.userEmail || ""
+         *
+         *        See lib/profile-email-resolution.ts for what an empty string
+         *        in that field costs the person it is written for.
+         *
+         *        RESOLVED BEFORE THE TRANSACTION OPENS, deliberately: the auth
+         *        lookup is an external round trip and does not belong inside
+         *        one. The transaction still decides whether to create, so a
+         *        profile that appears in between takes the update branch
+         *        exactly as it did before.
+         */
+        const existingUserDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        let resolvedEmail: string | null = null;
+
+        if (!existingUserDoc.exists) {
+            const preAppData = !appSnap.empty ? appSnap.docs[0].data() : {};
+            const preProfile = preAppData.profile || {};
+            resolvedEmail = await resolveProfileEmail(userId, [
+                preProfile.email,
+                preAppData.userEmail,
+            ]);
+
+            if (!resolvedEmail) {
+                return {
+                    success: false as const,
+                    error:
+                        `This applicant has no email address on file, and none could be found on their `
+                        + `sign-in record. Add an email to the application before approving, or the account `
+                        + `created here could not be signed into or searched for.`,
+                    data: null,
+                    meta: null,
+                };
+            }
+        }
+
         // ── SYNC AUTHORITATIVE RECORD & USER IN A TRANSACTION ──────
         await db.runTransaction(async (transaction) => {
             const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
@@ -61,7 +101,10 @@ async function _approveFarmNationSellerAction(userId: string): Promise<ActionRes
                 const profile = appData.profile || {};
                 transaction.set(userRef, {
                     uid: userId,
-                    email: profile.email || appData.userEmail || "",
+                    //   Never `|| ""`. If this is null the guard above has
+                    //   already returned, so the non-null assertion is the
+                    //   control flow speaking, not an assumption.
+                    email: resolvedEmail!,
                     fullName: profile.firstName ? `${profile.firstName} ${profile.lastName || ''}`.trim() : "Farmer",
                     createdAt: FieldValue.serverTimestamp(),
                     roles: ["farmer"],

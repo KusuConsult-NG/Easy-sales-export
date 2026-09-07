@@ -142,6 +142,15 @@ const EXPECTED = [
              "sends email_normalised=eq.… to a column that does not exist and every " +
              "email lookup fails, so keep them together and apply this first.",
     },
+    {
+        n: "033",
+        why: "idx_users_supabase_auth_id and find_users_by_supabase_auth_ids — the fourth " +
+             "and only email-free route from an auth account to its profile. Without it, a " +
+             "profile carrying no email address (49 of them, minted by two admin approvals " +
+             "before #489) cannot be linked to its owner: the forensic scan reports those " +
+             "people as ghosts and the repair beside it may write each of them a duplicate " +
+             "profile. Measured 23.608 ms -> 0.298 ms on the batch of 100 the scan issues.",
+    },
     { n: "004", why: "row-level security — LAST, and in a low-traffic window" },
 ];
 

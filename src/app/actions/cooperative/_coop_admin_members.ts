@@ -19,6 +19,7 @@ import { deleteCache, invalidateCooperativeCache, invalidateAdminGlobalStats } f
 import { extractCanonicalUser } from "@/lib/canonical/normalizer";
 import { recordAdminAction } from "@/lib/audit-log";
 import { sendEmailNotification } from "@/lib/email-notifications";
+import { resolveProfileEmail } from "@/lib/profile-email-resolution";
 
 // ============================================================================
 // MEMBER MANAGEMENT
@@ -349,10 +350,51 @@ async function _updateMemberStatusAction(
                 }
 
                 if (!userDoc || !userDoc.exists) {
+                    /**
+                     *   #489 THIS MINTED A PROFILE WITH `email: ""`, AND IT IS
+                     *        WHERE 48 OF THE OWNER'S 49 BLANK ACCOUNTS CAME
+                     *        FROM.
+                     *
+                     *        `memberData?.email || ""` — an identity field with
+                     *        a `|| ""` fallback, looking at one record. A
+                     *        membership created by a legacy import or an invite
+                     *        may carry no address, and the person's actual
+                     *        email is on their AUTH RECORD, which this never
+                     *        asked.
+                     *
+                     *        The result is an account nobody can reach: #479
+                     *        established that a blank-email profile is findable
+                     *        only by its document id, so the member cannot sign
+                     *        in, no admin can search for them, and the forensic
+                     *        scan reports them as a ghost — carrying
+                     *        `isVerified: true`.
+                     *
+                     *        REFUSING IS BETTER THAN THAT. The admin gets a
+                     *        message naming what is missing and can fix the
+                     *        record; the alternative is a row nobody can act
+                     *        on. Only this CREATE branch is affected — an
+                     *        existing profile is updated exactly as before.
+                     */
+                    const resolvedEmail = await resolveProfileEmail(targetUserId, [
+                        memberData?.email,
+                        userDoc?.data()?.email,
+                    ]);
+
+                    if (!resolvedEmail) {
+                        return {
+                            success: false as const,
+                            error:
+                                `This member has no email address on file, and none could be found on their `
+                                + `sign-in record. Add an email to the membership before approving, or the `
+                                + `account created here could not be signed into or searched for.`,
+                            data: null,
+                        };
+                    }
+
                     // Combine initial set and update payload
                     const initialData = {
                         uid: targetUserId,
-                        email: memberData?.email || "",
+                        email: resolvedEmail,
                         fullName: `${memberData?.firstName || ''} ${memberData?.lastName || ''}`.trim() || "Cooperative Member",
                         createdAt: FieldValue.serverTimestamp(),
                         roles: ["cooperative_member"],

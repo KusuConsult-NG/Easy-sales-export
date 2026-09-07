@@ -70,6 +70,11 @@ function read(rel: string): string {
 /** Every maintenance script that writes to the database. */
 const WRITING_SCRIPTS = [
     'scripts/backfill-academy-enrolled-count.ts',
+    //   #489 — fills the email on the 49 profiles two admin approvals minted
+    //   with `email: ""`, from each profile's OWN auth record. It writes one
+    //   field, never overwrites one that is set, and refuses rather than invent
+    //   an address for somebody the platform cannot identify.
+    'scripts/backfill-blank-profile-emails.ts',
     'scripts/backfill-export-funding-goals.ts',
     'scripts/backfill-fixed-savings-ledger.ts',
     'scripts/firebase-schema-fix.ts',

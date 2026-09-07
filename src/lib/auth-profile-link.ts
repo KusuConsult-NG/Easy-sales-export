@@ -145,6 +145,62 @@ export async function authAccountsWithProfiles(accounts: AuthAccount[]): Promise
         if (uid) found.add(uid);
     }
 
+    /**
+     *   #489 EVERY ROUTE ABOVE NEEDS AN EMAIL, AND 49 PROFILES HAVE NONE.
+     *
+     *   Two admin approvals minted profiles with `email: ""` — see
+     *   lib/profile-email-resolution.ts, which is where that is now stopped.
+     *   The rows they already wrote answer to none of the three strategies
+     *   above: not the document id, if the profile is a migrated one kept under
+     *   its Firebase-era id; not `email`; not the normalised email.
+     *
+     *   So those people are reported as GHOSTS, and repairOrphanedUser guards
+     *   on this same result and then CREATES A PROFILE — writing a second one
+     *   for somebody who already has one. That is #466's defect, reached
+     *   through a different door.
+     *
+     *   THE POINTER IS THE STRONGEST LINK OF THE FOUR and the only one that
+     *   works with no email: user-migration.ts writes `supabaseAuthId` onto the
+     *   legacy profile as an explicit statement of ownership, and
+     *   profile-choice.ts and password-reset.ts both already read it.
+     *
+     *   The header of this file says it was excluded because the field is
+     *   unindexed and #465 measured the timeout. Migration 033 adds the index —
+     *   measured, 23.608 ms to 0.298 ms for the batch of 100 this scan issues —
+     *   so the reason no longer holds.
+     *
+     *   LAST, because it is the only one needing a migration: a database
+     *   without 033 keeps exactly today's behaviour rather than failing.
+     */
+    const withoutProfile = accounts.filter((a) => !found.has(a.uid));
+    if (withoutProfile.length === 0) return found;
+
+    const { data: byPointer, error: pointerError } = await supabaseAdmin.rpc(
+        'find_users_by_supabase_auth_ids',
+        { p_auth_ids: withoutProfile.map((a) => a.uid) },
+    );
+
+    if (pointerError) {
+        //   Loud, per #473. A silent degrade here means the scan reports
+        //   ghosts who are not, and the repair beside it writes duplicates for
+        //   them — which is the exact failure #466 exists to prevent.
+        console.error(
+            '[auth-profile-link] find_users_by_supabase_auth_ids unavailable — a profile with no ' +
+            'email address cannot be linked to its auth account, so those users will be reported ' +
+            'as orphaned and the repair may create duplicates for them (#489). Apply ' +
+            'supabase/migrations/033_find_users_by_supabase_auth_id.sql. Reason:',
+            pointerError.message,
+        );
+        return found;
+    }
+
+    const claimed = new Set(withoutProfile.map((a) => a.uid));
+    for (const row of (byPointer ?? []) as Array<{ supabase_auth_id: string }>) {
+        //   The RPC returns the pointer, so the row maps straight back to the
+        //   account that asked about it — no second pass, and no guessing.
+        if (claimed.has(row.supabase_auth_id)) found.add(row.supabase_auth_id);
+    }
+
     return found;
 }
 
