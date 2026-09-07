@@ -190,24 +190,41 @@ export default function QuizPage(props: QuizPageProps) {
         // a value the course loader used to send to the browser — and posted
         // the number. The server stored whatever arrived.
         setSubmitting(true);
-        const result = await submitQuizScoreAction(
-            session.user.id,
-            courseId,
-            moduleId,
-            answers
-        );
+        /**
+         *   #491 THE TIMED QUIZ, WHERE A DEAD BUTTON COSTS THE ATTEMPT.
+         *
+         *        This one is worse than its sibling in QuizComponent: the
+         *        student is against a clock held in localStorage, and a rejected
+         *        submission left the button spinning while it ran out. The
+         *        timer keys are cleared only on a recorded result — clearing
+         *        them on a failure would hand the student a quiz with no time
+         *        left and no score.
+         */
+        try {
+            const result = await submitQuizScoreAction(
+                session.user.id,
+                courseId,
+                moduleId,
+                answers
+            );
 
-        if (result.success && result.data) {
-            setScore(result.data.score ?? 0);
-            setPassed(result.data.passed || false);
-            setQuizCompleted(true);
-            localStorage.removeItem(`quiz_timer_end_${moduleId}`);
-            localStorage.removeItem(`quiz_strikes_${moduleId}`);
-        } else {
-            showToast(result.error || "Failed to submit quiz", "error");
+            if (result.success && result.data) {
+                setScore(result.data.score ?? 0);
+                setPassed(result.data.passed || false);
+                setQuizCompleted(true);
+                localStorage.removeItem(`quiz_timer_end_${moduleId}`);
+                localStorage.removeItem(`quiz_strikes_${moduleId}`);
+            } else {
+                showToast(result.error || "Failed to submit quiz", "error");
+            }
+        } catch (err) {
+            showToast(
+                err instanceof Error ? err.message : "Could not submit the quiz. Your answers are still selected — try again.",
+                "error",
+            );
+        } finally {
+            setSubmitting(false);
         }
-
-        setSubmitting(false);
     }
 
     async function handleSubmitQuiz() {

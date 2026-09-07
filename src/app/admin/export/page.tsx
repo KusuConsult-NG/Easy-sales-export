@@ -94,16 +94,26 @@ export default function AdminExportPage() {
         if (!confirm(`Change status to ${newStatus}?`)) return;
 
         setActionLoading(true);
-        const result = await updateExportStatusAction(selectedExport.id, newStatus);
+        //   #491 — and the reload inside the success branch is awaited too, so
+        //   a status that DID change could still leave the dialog frozen.
+        try {
+            const result = await updateExportStatusAction(selectedExport.id, newStatus);
 
-        if (result.success) {
-            showToast("Status updated successfully!", "success");
-            setSelectedExport(null);
-            await loadExports(true);
-        } else {
-            showToast(result.error || "Failed to update status", "error");
+            if (result.success) {
+                showToast("Status updated successfully!", "success");
+                setSelectedExport(null);
+                await loadExports(true);
+            } else {
+                showToast(result.error || "Failed to update status", "error");
+            }
+        } catch (err) {
+            showToast(
+                err instanceof Error ? err.message : "Could not update the status. Re-open the export to check whether it changed.",
+                "error",
+            );
+        } finally {
+            setActionLoading(false);
         }
-        setActionLoading(false);
     }
 
     const getStatusColor = (status: string) => {

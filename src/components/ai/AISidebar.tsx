@@ -85,30 +85,46 @@ export function AISidebar({ userRole = 'user' }: AISidebarProps) {
         };
         setMessages(prev => [...prev, userMessage]);
 
-        const result = await sendAIMessage({
-            message: messageToSend,
-            context: {
-                currentPage: pathname,
-                userRole,
-            },
-        });
-
-        if (result.success && result.data?.response) {
-            // Update with AI response
-            const aiMessage: AIChatMessage = {
-                id: result.data.chatId || Date.now().toString(),
-                userId: 'current',
+        /**
+         *   #491 A REJECTED CALL LEFT THE ASSISTANT TYPING FOREVER.
+         *
+         *        `setLoading(false)` was last, so a dropped connection froze the
+         *        composer — and the optimistic message stayed on screen looking
+         *        like it had been sent. Both are handled: the flag in `finally`,
+         *        and the optimistic row removed on the throw exactly as the
+         *        failure branch already removed it.
+         */
+        try {
+            const result = await sendAIMessage({
                 message: messageToSend,
-                response: result.data.response,
-                createdAt: new Date().toISOString(),
-            };
-            setMessages(prev => [...prev.slice(0, -1), aiMessage]);
-        } else {
-            // Remove optimistic message on error
-            setMessages(prev => prev.slice(0, -1));
-        }
+                context: {
+                    currentPage: pathname,
+                    userRole,
+                },
+            });
 
-        setLoading(false);
+            if (result.success && result.data?.response) {
+                // Update with AI response
+                const aiMessage: AIChatMessage = {
+                    id: result.data.chatId || Date.now().toString(),
+                    userId: 'current',
+                    message: messageToSend,
+                    response: result.data.response,
+                    createdAt: new Date().toISOString(),
+                };
+                setMessages(prev => [...prev.slice(0, -1), aiMessage]);
+            } else {
+                // Remove optimistic message on error
+                setMessages(prev => prev.slice(0, -1));
+            }
+        } catch {
+            //   Their text is put back in the box rather than lost with the
+            //   optimistic row.
+            setMessages(prev => prev.slice(0, -1));
+            setInputMessage(messageToSend);
+        } finally {
+            setLoading(false);
+        }
     }
 
     function handleSuggestionClick(suggestion: string) {

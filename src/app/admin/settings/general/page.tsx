@@ -45,12 +45,20 @@ export default function GeneralSettingsPage() {
 
     async function handleSave() {
         setSaving(true);
-        const result = await savePlatformSettingsAction(settings);
-        setSaving(false);
-        if (result.success) {
-            toast.success("Settings saved successfully");
-        } else {
-            toast.error(result.error || "Failed to save settings");
+        //   #491 — `setSaving(false)` sat between the await and the result
+        //   check, so a rejected action skipped it and left the Save button
+        //   spinning until reload, on the screen that configures the platform.
+        try {
+            const result = await savePlatformSettingsAction(settings);
+            if (result.success) {
+                toast.success("Settings saved successfully");
+            } else {
+                toast.error(result.error || "Failed to save settings");
+            }
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Could not save the settings. Please try again.");
+        } finally {
+            setSaving(false);
         }
     };
 

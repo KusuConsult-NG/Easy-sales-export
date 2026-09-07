@@ -61,24 +61,35 @@ function CreateEventModal({ onClose, onCreated }: { onClose: () => void; onCreat
         if (endDate <= startDate) return showToast("End time must be after start time", "error");
 
         setLoading(true);
-        const res = await createVillageMarketEventAction({
-            title: form.title.trim(),
-            description: form.description.trim() || undefined,
-            location: form.location.trim(),
-            state: form.state,
-            startTime: startDate.toISOString(),
-            endTime: endDate.toISOString(),
-            isRecurring: form.isRecurring,
-            recurringDay: form.isRecurring ? form.recurringDay : undefined,
-        });
-        setLoading(false);
+        //   #491 — a rejected create left the button spinning over a form the
+        //   admin had just filled in completely. The dialog is NOT closed on
+        //   failure, so their work survives the retry.
+        try {
+            const res = await createVillageMarketEventAction({
+                title: form.title.trim(),
+                description: form.description.trim() || undefined,
+                location: form.location.trim(),
+                state: form.state,
+                startTime: startDate.toISOString(),
+                endTime: endDate.toISOString(),
+                isRecurring: form.isRecurring,
+                recurringDay: form.isRecurring ? form.recurringDay : undefined,
+            });
 
-        if (res.success) {
-            showToast("Village Market event created successfully!", "success");
-            onCreated();
-            onClose();
-        } else {
-            showToast(res.error || "Failed to create event", "error");
+            if (res.success) {
+                showToast("Village Market event created successfully!", "success");
+                onCreated();
+                onClose();
+            } else {
+                showToast(res.error || "Failed to create event", "error");
+            }
+        } catch (err) {
+            showToast(
+                err instanceof Error ? err.message : "Could not create the event. Check the market list before retrying, in case it was created.",
+                "error",
+            );
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -181,10 +192,17 @@ function AddMerchantModal({ eventId, onClose, onAdded }: { eventId: string; onCl
     async function handle() {
         if (!form.name) return showToast("Merchant name is required", "error");
         setLoading(true);
-        const res = await addExternalMerchantAction(eventId, { displayName: form.name, productsDescription: form.products || undefined, phone: form.phoneNumber || undefined, businessName: form.description || undefined });
-        setLoading(false);
-        if (res.success) { showToast("External merchant added!", "success"); onAdded(); onClose(); }
-        else showToast(res.error || "Failed", "error");
+        //   #491 — the second dead button on this screen. The dialog is not
+        //   closed on failure, so the merchant details survive a retry.
+        try {
+            const res = await addExternalMerchantAction(eventId, { displayName: form.name, productsDescription: form.products || undefined, phone: form.phoneNumber || undefined, businessName: form.description || undefined });
+            if (res.success) { showToast("External merchant added!", "success"); onAdded(); onClose(); }
+            else showToast(res.error || "Failed", "error");
+        } catch (err) {
+            showToast(err instanceof Error ? err.message : "Could not add the merchant. Please try again.", "error");
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (

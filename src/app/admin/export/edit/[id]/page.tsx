@@ -56,15 +56,22 @@ export default function EditExportWindowPage({ params }: { params: Promise<{ id:
             benefits,
         };
 
-        const result = await updateExportWindowAction(id, updateData);
+        //   #491 — a rejected update left the Save button spinning over an
+        //   export window whose edits were never written.
+        try {
+            const result = await updateExportWindowAction(id, updateData);
 
-        if (result.success) {
-            showToast("Export Window updated successfully", "success");
-            router.refresh();
-        } else {
-            showToast(result.error || "Failed to update", "error");
+            if (result.success) {
+                showToast("Export Window updated successfully", "success");
+                router.refresh();
+            } else {
+                showToast(result.error || "Failed to update", "error");
+            }
+        } catch (err) {
+            showToast(err instanceof Error ? err.message : "Could not save the export window. Please try again.", "error");
+        } finally {
+            setSaving(false);
         }
-        setSaving(false);
     }
 
     // Helper to generic field update

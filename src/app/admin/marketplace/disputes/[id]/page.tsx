@@ -75,14 +75,23 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
     async function handleAddNote() {
         if (!noteText.trim() || !dispute) return;
         setSavingNote(true);
-        const res = await addEscalationNoteAction(dispute.id, noteText);
-        setSavingNote(false);
-        if (res.success) {
-            showToast("Note saved", "success");
-            setNoteText("");
-            loadNotes(dispute.id);
-        } else {
-            showToast(res.error || "Failed to save note", "error");
+        //   #491 — a dead Save button on a dispute, with the admin's note still
+        //   in the box and no way to tell whether it was recorded.
+        try {
+            const res = await addEscalationNoteAction(dispute.id, noteText);
+            if (res.success) {
+                showToast("Note saved", "success");
+                setNoteText("");
+                loadNotes(dispute.id);
+            } else {
+                showToast(res.error || "Failed to save note", "error");
+            }
+        } catch (err) {
+            //   The note is deliberately NOT cleared: it is the admin's words,
+            //   and a failure they can retry beats one that loses them.
+            showToast(err instanceof Error ? err.message : "Could not save the note. Your text is still here — try again.", "error");
+        } finally {
+            setSavingNote(false);
         }
     }
 

@@ -40,22 +40,41 @@ export default function QuizComponent({
 
         setSubmitting(true);
 
-        // The server grades this. It used to be counted here against
-        // q.correctAnswer, which the course loader sent to the browser, and the
-        // resulting number was what got stored.
-        const result = await submitQuizScoreAction(userId, courseId, moduleId, answers);
+        /**
+         *   #491 A STUDENT'S FINISHED QUIZ, AND A DEAD SUBMIT BUTTON.
+         *
+         *        The reset ran on the refusal branch and again at the end, which
+         *        reads as careful — and a REJECTED call skipped both. The
+         *        student's answers were on screen with no way to send them.
+         *
+         *        setSubmitted and onComplete stay OUTSIDE the try: marking the
+         *        quiz done is not error handling, and a throw inside the parent
+         *        refresh must not be reported as a failed submission.
+         */
+        try {
+            // The server grades this. It used to be counted here against
+            // q.correctAnswer, which the course loader sent to the browser, and
+            // the resulting number was what got stored.
+            const result = await submitQuizScoreAction(userId, courseId, moduleId, answers);
 
-        if (result?.success && result.data) {
-            setScore(result.data.score ?? 0);
-            setResults(result.data.results ?? {});
-        } else {
-            showToast(result?.error || "Failed to submit quiz", "error");
-            setSubmitting(false);
+            if (result?.success && result.data) {
+                setScore(result.data.score ?? 0);
+                setResults(result.data.results ?? {});
+            } else {
+                showToast(result?.error || "Failed to submit quiz", "error");
+                return;
+            }
+        } catch (err) {
+            showToast(
+                err instanceof Error ? err.message : "Could not submit the quiz. Your answers are still here — try again.",
+                "error",
+            );
             return;
+        } finally {
+            setSubmitting(false);
         }
 
         setSubmitted(true);
-        setSubmitting(false);
 
         // Refresh parent
         onComplete();

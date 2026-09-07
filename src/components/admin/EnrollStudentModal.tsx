@@ -44,18 +44,29 @@ export default function EnrollStudentModal({ isOpen, onClose }: EnrollStudentMod
         }
 
         setIsSubmitting(true);
-        const res = await manualAcademyEnrollmentAction(selectedUser.id, plan);
-        if (res.success) {
-            showToast("Student enrolled successfully", "success");
-            onClose();
-            // Reset state
-            setSearchQuery("");
-            setUsers([]);
-            setSelectedUser(null);
-        } else {
-            showToast(res.error || "Failed to enroll student", "error");
+        //   #491 — an enrolment grants a student access to a paid plan. A frozen
+        //   dialog after a rejected call left the admin unsure whether it took,
+        //   and the message says to check rather than guess.
+        try {
+            const res = await manualAcademyEnrollmentAction(selectedUser.id, plan);
+            if (res.success) {
+                showToast("Student enrolled successfully", "success");
+                onClose();
+                // Reset state
+                setSearchQuery("");
+                setUsers([]);
+                setSelectedUser(null);
+            } else {
+                showToast(res.error || "Failed to enroll student", "error");
+            }
+        } catch (err) {
+            showToast(
+                err instanceof Error ? err.message : "Could not enrol the student. Check their account before trying again, in case it went through.",
+                "error",
+            );
+        } finally {
+            setIsSubmitting(false);
         }
-        setIsSubmitting(false);
     };
 
     return (

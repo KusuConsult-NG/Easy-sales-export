@@ -265,20 +265,32 @@ export default function AdminSellersPage() {
     async function handleSaveEdit() {
         if (!editingVerification) return;
         setEditSaving(true);
-        const result = await editApplicationAction({
-            collection: "seller_verifications",
-            docId: editingVerification.id,
-            fields: editDraft as any,
-            editNote: editNote || undefined,
-        });
-        if (result.success) {
-            showToast("Seller updated with audit trail.", "success");
-            setEditingVerification(null);
-            await loadVerifications();
-        } else {
-            showToast(result.error || "Failed to update seller", "error");
+        //   #491 — this writes an audit trail, so a frozen dialog after a
+        //   rejected call leaves the admin unsure whether their edit is on the
+        //   record. Re-opening the seller is the only way to tell, and the
+        //   message says so.
+        try {
+            const result = await editApplicationAction({
+                collection: "seller_verifications",
+                docId: editingVerification.id,
+                fields: editDraft as any,
+                editNote: editNote || undefined,
+            });
+            if (result.success) {
+                showToast("Seller updated with audit trail.", "success");
+                setEditingVerification(null);
+                await loadVerifications();
+            } else {
+                showToast(result.error || "Failed to update seller", "error");
+            }
+        } catch (err) {
+            showToast(
+                err instanceof Error ? err.message : "Could not save the seller. Re-open them to check whether the edit was recorded.",
+                "error",
+            );
+        } finally {
+            setEditSaving(false);
         }
-        setEditSaving(false);
     };
 
     async function handleToggleBadge(verification: SellerVerification) {

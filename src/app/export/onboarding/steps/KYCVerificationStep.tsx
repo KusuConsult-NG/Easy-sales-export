@@ -94,21 +94,44 @@ export function KYCVerificationStep({
 
         setSaving(true);
 
-        // Persist KYC profile fields to Firestore
-        const saveResult = await saveKYCProfileAction({
-            firstName: kycData.firstName!,
-            lastName: kycData.lastName!,
-            otherNames: kycData.otherNames,
-            dateOfBirth: kycData.dateOfBirth!,
-            phoneNumber: kycData.phoneNumber!,
-            address: kycData.address!,
-            city: kycData.city!,
-            state: kycData.state!,
-            idType: kycData.idType,
-            idNumber: kycData.idNumber,
-        });
-
-        setSaving(false);
+        /**
+         *   #491 A DEAD CONTINUE BUTTON, HALFWAY THROUGH ONBOARDING.
+         *
+         *        A member fills in nine identity fields and uploads two
+         *        documents, and a rejected save left the button spinning with
+         *        all of it on screen and no way forward. Of the twenty-one
+         *        handlers in this finding it is the only one on a MEMBER'S path
+         *        rather than an admin's — and the only one where the person
+         *        cannot simply ask somebody.
+         *
+         *        onNext is deliberately OUTSIDE the try: advancing the wizard is
+         *        not error handling, and wrapping it would turn a throw in the
+         *        NEXT step into a message about saving KYC.
+         */
+        let saveResult: Awaited<ReturnType<typeof saveKYCProfileAction>>;
+        try {
+            // Persist KYC profile fields to Firestore
+            saveResult = await saveKYCProfileAction({
+                firstName: kycData.firstName!,
+                lastName: kycData.lastName!,
+                otherNames: kycData.otherNames,
+                dateOfBirth: kycData.dateOfBirth!,
+                phoneNumber: kycData.phoneNumber!,
+                address: kycData.address!,
+                city: kycData.city!,
+                state: kycData.state!,
+                idType: kycData.idType,
+                idNumber: kycData.idNumber,
+            });
+        } catch (err) {
+            showToast(
+                err instanceof Error ? err.message : 'Could not save your details. Your answers are still here — please try again.',
+                'error',
+            );
+            return;
+        } finally {
+            setSaving(false);
+        }
 
         if (!saveResult.success) {
             showToast(saveResult.error || 'Failed to save KYC data. Please try again.', 'error');

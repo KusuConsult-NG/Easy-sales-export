@@ -123,12 +123,20 @@ export default function QuizEditorPage() {
 
     async function handleSave() {
         setIsLoading(true);
-        const result = await saveQuizAction(courseId, quizId, quizTitle, questions as any, passingScore);
-        setIsLoading(false);
-        if (result.success) {
-            toast.success("Quiz saved successfully");
-        } else {
-            toast.error(result.error || "Failed to save quiz");
+        //   #491 — the reset sat between the await and the result check, so a
+        //   rejected action skipped it and left the button spinning with a
+        //   quiz's worth of unsaved edits behind it.
+        try {
+            const result = await saveQuizAction(courseId, quizId, quizTitle, questions as any, passingScore);
+            if (result.success) {
+                toast.success("Quiz saved successfully");
+            } else {
+                toast.error(result.error || "Failed to save quiz");
+            }
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Could not save the quiz. Your changes are still on screen — try again.");
+        } finally {
+            setIsLoading(false);
         }
     };
 

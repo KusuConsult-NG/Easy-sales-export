@@ -88,26 +88,43 @@ export default function AdminWaveResourcesPage() {
         data.append("tags", formData.tags);
 
         setUploading(true);
-        const result = await uploadResourceAction(data);
+        /**
+         *   #491 A DEAD UPLOAD BUTTON IS THE WORST OF THIS SET.
+         *
+         *        A file upload is the slowest call on any of these screens and
+         *        therefore the likeliest to be cut off — and the reset was the
+         *        last statement, after an awaited reload inside the success
+         *        branch. The admin was left watching a spinner with no way to
+         *        know whether the file had landed, and the modal is deliberately
+         *        NOT closed on failure so their selection survives the retry.
+         */
+        try {
+            const result = await uploadResourceAction(data);
 
-        if (result.success) {
-            showToast("Resource uploaded successfully!", "success");
-            setShowUploadModal(false);
-            setSelectedFile(null);
-            setFormData({
-                title: "",
-                description: "",
-                category: "document",
-                tags: "",
-            });
+            if (result.success) {
+                showToast("Resource uploaded successfully!", "success");
+                setShowUploadModal(false);
+                setSelectedFile(null);
+                setFormData({
+                    title: "",
+                    description: "",
+                    category: "document",
+                    tags: "",
+                });
 
-            // Reload resources
-            await loadResources();
-        } else {
-            showToast(result.error || "Failed to upload resource", "error");
+                // Reload resources
+                await loadResources();
+            } else {
+                showToast(result.error || "Failed to upload resource", "error");
+            }
+        } catch (err) {
+            showToast(
+                err instanceof Error ? err.message : "The upload did not complete. Check the resource list before uploading again, in case it landed.",
+                "error",
+            );
+        } finally {
+            setUploading(false);
         }
-
-        setUploading(false);
     }
 
     async function handleDelete(resourceId: string) {

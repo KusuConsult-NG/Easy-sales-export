@@ -128,13 +128,25 @@ export default function InAppBroadcastPage() {
         setLoadingPreview(true);
         setPreview(null);
         setResult(null);
-        const res = await previewInAppBroadcastAction(buildFilters());
-        if (res.success) {
-            setPreview(res.data);
-        } else {
-            setResult({ success: false, delivered: 0, error: res.error });
+        //   #491 — same shape as handleSend below. A dead preview button is
+        //   worse than it looks here: handleSend refuses to run without a
+        //   preview, so this one failing silently blocks the whole screen.
+        try {
+            const res = await previewInAppBroadcastAction(buildFilters());
+            if (res.success) {
+                setPreview(res.data);
+            } else {
+                setResult({ success: false, delivered: 0, error: res.error });
+            }
+        } catch (err) {
+            setResult({
+                success: false,
+                delivered: 0,
+                error: err instanceof Error ? err.message : "Could not count the recipients. Try again.",
+            });
+        } finally {
+            setLoadingPreview(false);
         }
-        setLoadingPreview(false);
     };
 
     async function handleSend() {
@@ -153,20 +165,41 @@ export default function InAppBroadcastPage() {
 
         setSending(true);
         setResult(null);
-        const res = await sendInAppBroadcastAction(
-            buildFilters(),
-            title.trim(),
-            message.trim(),
-            notifType,
-            link.trim() || undefined,
-            linkText.trim() || undefined
-        );
-        if (res.success) {
-            setResult({ success: true, delivered: res.data.delivered });
-        } else {
-            setResult({ success: false, delivered: 0, error: res.error });
+        /**
+         *   #491 A REJECTED PROMISE LEFT THIS BUTTON DEAD.
+         *
+         *        `setSending(false)` was the last statement, so a server action
+         *        that REJECTS rather than resolves — a dropped connection, a
+         *        500, a serialization error — skipped it. The spinner ran until
+         *        reload, and an admin who had just asked to notify every user on
+         *        the platform had no idea whether it went.
+         */
+        try {
+            const res = await sendInAppBroadcastAction(
+                buildFilters(),
+                title.trim(),
+                message.trim(),
+                notifType,
+                link.trim() || undefined,
+                linkText.trim() || undefined
+            );
+            if (res.success) {
+                setResult({ success: true, delivered: res.data.delivered });
+            } else {
+                setResult({ success: false, delivered: 0, error: res.error });
+            }
+        } catch (err) {
+            //   Reported through the screen's own channel, and deliberately
+            //   NOT as a success with zero delivered — "it failed" and "it
+            //   reached nobody" are different answers.
+            setResult({
+                success: false,
+                delivered: 0,
+                error: err instanceof Error ? err.message : "The broadcast could not be sent. It may or may not have reached anyone — check before resending.",
+            });
+        } finally {
+            setSending(false);
         }
-        setSending(false);
     };
 
     return (

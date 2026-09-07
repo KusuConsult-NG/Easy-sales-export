@@ -120,22 +120,85 @@ export function stuckFlags(source: string, label = 'source'): string[] {
         const finallyMatch = /^\s*finally\s*\{/.exec(src.slice(afterCatch, afterCatch + 20));
         const finallyBody = finallyMatch ? block(src, afterCatch + finallyMatch[0].length - 1)[0] : '';
 
-        // Shape 3: a reset placed after the whole try/catch(/finally).
-        const tail = src.slice(finallyMatch ? afterCatch + finallyBody.length : afterCatch,
-            (finallyMatch ? afterCatch + finallyBody.length : afterCatch) + 400);
+        /**
+         *   Shape 3: a reset placed after the whole try/catch(/finally).
+         *
+         *   #491 AND IT IS ONLY SAFE IF THE CATCH CAN REACH IT.
+         *
+         *        This accepted a tail reset unconditionally. A catch that
+         *        RETURNS — which is the ordinary shape for a handler that stops
+         *        on failure, and which four of #491's own repairs use — never
+         *        reaches the line after it, so the flag stays set forever. The
+         *        checker called that clean.
+         *
+         *        Found by mutation-testing #491's fixes: moving the reset out of
+         *        `finally` in KYCVerificationStep and QuizComponent produced a
+         *        genuinely dead button and this reported nothing. Every result
+         *        this function has given since #405 was measured with that hole
+         *        in it.
+         *
+         *        A `throw` in the catch is the same case. Both are conservative:
+         *        a return inside a nested callback would be counted too, and an
+         *        over-strict spinner check costs a look at a handler that turns
+         *        out to be fine.
+         */
+        const catchEscapes = /\breturn\b|\bthrow\b/.test(catchBody);
+        const tail = catchEscapes
+            ? ''
+            : src.slice(finallyMatch ? afterCatch + finallyBody.length : afterCatch,
+                (finallyMatch ? afterCatch + finallyBody.length : afterCatch) + 400);
 
-        for (const reset of [...tryBody.matchAll(/\bset([A-Z]\w*)\(\s*false\s*\)/g)]) {
-            const flag = reset[1];
+        /**
+         *   #491 THE FLAGS CONSIDERED ARE THE ONES SET ON THE WAY IN, NOT THE
+         *        ONES RESET INSIDE THE TRY.
+         *
+         *        This iterated `set*(false)` occurrences WITHIN tryBody, so a
+         *        handler that sets a flag, awaits, and resets it ONLY after the
+         *        try/catch was never examined at all — there was no reset inside
+         *        the body to iterate. Combined with the tail being accepted
+         *        unconditionally, that made two genuine defects invisible:
+         *        a returning catch with the reset behind it.
+         *
+         *        Both were found by mutation-testing #491's own repairs, and
+         *        both had been invisible since #405. The population this
+         *        function reports is only as honest as the question it asks, and
+         *        the question was narrower than the header claimed.
+         *
+         *        Starting from the flag that was SET is the same question asked
+         *        from the other end, and it cannot miss a handler for not
+         *        containing the shape it was looking for.
+         */
+        /**
+         *   #491 THE LOOKBACK STOPS AT THE ENCLOSING FUNCTION.
+         *
+         *        A flat 400 characters crosses function boundaries, and asking
+         *        "what was set on the way in" made that matter: the disputes
+         *        screen has a loader ending 40 characters above the next
+         *        handler's try, and its `setLoadingNotes(true)` was read as
+         *        entering a try in a DIFFERENT function. A checker that reports
+         *        a defect in the wrong place teaches people to ignore it, which
+         *        is worse than one that misses.
+         */
+        const window = src.slice(Math.max(0, tryMatch.index! - 400), tryMatch.index!);
+        const boundary = Math.max(
+            window.lastIndexOf('async function '),
+            window.lastIndexOf('= async ('),
+            window.lastIndexOf('=> {'),
+        );
+        const before = boundary === -1 ? window : window.slice(boundary);
+        const entered = new Set(
+            [...before.matchAll(/\bset([A-Z]\w*)\(\s*true\s*\)/g)].map((m) => m[1]),
+        );
+
+        for (const flag of entered) {
             if (!SPINNER.test(flag)) continue;
+            //   Nothing to strand if the guarded region cannot reject.
+            if (!/\bawait\b/.test(tryBody)) continue;
 
             const resets = new RegExp(`\\bset${flag}\\(\\s*false\\s*\\)`);
             if (resets.test(catchBody)) continue;    // shape 2
             if (resets.test(finallyBody)) continue;  // shape 1
-            if (resets.test(tail)) continue;         // shape 3
-
-            // Only a real defect if something set it true on the way in.
-            const before = src.slice(Math.max(0, tryMatch.index! - 400), tryMatch.index!);
-            if (!new RegExp(`\\bset${flag}\\(\\s*true\\s*\\)`).test(before)) continue;
+            if (resets.test(tail)) continue;         // shape 3, when reachable
 
             out.push(`${label}:set${flag}`);
         }
@@ -228,6 +291,77 @@ describe('#405 — the checker itself, proved on synthetic handlers', () => {
         `)).toEqual([]);
     });
 
+    it('#491 — IT REPORTS A TAIL RESET THE CATCH CANNOT REACH', () => {
+        //   THE case the checker was blind to since #405, found by mutating
+        //   #491's own repairs. A catch that RETURNS is the ordinary shape for a
+        //   handler that stops on failure, and the line after it never runs.
+        expect(stuckFlags(`
+            async function handleSubmit() {
+                setSaving(true);
+                try {
+                    const r = await save();
+                    if (!r.ok) { showToast("failed"); }
+                } catch (e) {
+                    showToast("error");
+                    return;
+                }
+                setSaving(false);
+            }
+        `, 'synthetic')).toEqual(['synthetic:setSaving']);
+    });
+
+    it('#491 — AND A TAIL RESET THE CATCH CAN REACH IS STILL FINE', () => {
+        //   The other direction, without which the rule above could be
+        //   satisfied by rejecting every tail reset — which would flag correct
+        //   code and teach people to ignore the checker.
+        expect(stuckFlags(`
+            async function handleSubmit() {
+                setSaving(true);
+                try {
+                    await save();
+                } catch (e) {
+                    showToast("error");
+                }
+                setSaving(false);
+            }
+        `, 'synthetic')).toEqual([]);
+    });
+
+    it('#491 — AND A FLAG WITH NO RESET INSIDE THE TRY IS STILL EXAMINED', () => {
+        //   The second half of the same hole: the checker used to iterate
+        //   `set*(false)` occurrences INSIDE the try, so a handler that never
+        //   reset the flag at all had nothing to iterate and was skipped —
+        //   the worst case reported as clean.
+        expect(stuckFlags(`
+            async function handleSubmit() {
+                setSaving(true);
+                try {
+                    await save();
+                } catch (e) {
+                    showToast("error");
+                }
+            }
+        `, 'synthetic')).toEqual(['synthetic:setSaving']);
+    });
+
+    it('#491 — and a flag set in a DIFFERENT function is not attributed here', () => {
+        //   The false positive the widened question produced on first run: a
+        //   loader ending just above a handler's try had its own flag read as
+        //   entering that try. A checker that reports a defect in the wrong
+        //   place teaches people to ignore it.
+        expect(stuckFlags(`
+            async function loadNotes() {
+                setLoadingNotes(true);
+                const r = await get();
+                setLoadingNotes(false);
+            }
+            async function handleAddNote() {
+                setSavingNote(true);
+                try { await save(); } catch (e) { showToast("x"); } finally { setSavingNote(false); }
+            }
+        `, 'synthetic')).toEqual([]);
+    });
+
     it('and it clears a catch that resets too', () => {
         expect(stuckFlags(`
             setSending(true);
@@ -293,6 +427,47 @@ describe('#407 — the shape #405 could not see: an await with no try at all', (
         ['src/app/escrow/[id]/chat/page.tsx', 'handleSendMessage'],
         ['src/app/admin/content-approval/page.tsx', 'handleApprove'],
         ['src/app/admin/content-approval/page.tsx', 'handleReject'],
+        /**
+         *   #491 THE REMAINING TWENTY-ONE ACTION HANDLERS.
+         *
+         *        #407 fixed the money and irreversible-decision ones and
+         *        recorded the rest, correctly, as needing per-screen thought
+         *        rather than a blanket wrapper. These are that thought, applied:
+         *        every one resets its flag in a `finally` and reports the
+         *        failure through the channel its own screen already uses —
+         *        showToast, sonner, or a local message state — rather than a
+         *        console line nobody sees.
+         *
+         *        Three of them do more than reset, and those are the ones worth
+         *        naming: the AI composer puts the member's text back in the box
+         *        rather than losing it with the optimistic row; the timed quiz
+         *        does NOT clear its localStorage timer on a failure, because
+         *        that would hand the student a quiz with no time left and no
+         *        score; and every dialog that could have half-succeeded says so
+         *        — "check before retrying" — instead of implying nothing
+         *        happened.
+         */
+        ['src/app/admin/communications/in-app/page.tsx', 'handleSend'],
+        ['src/app/admin/communications/in-app/page.tsx', 'handlePreview'],
+        ['src/app/admin/settings/general/page.tsx', 'handleSave'],
+        ['src/app/admin/academy/[courseId]/quiz/[quizId]/page.tsx', 'handleSave'],
+        ['src/app/admin/export/applications/page.tsx', 'handleSaveRevision'],
+        ['src/app/admin/export/edit/[id]/page.tsx', 'handleSave'],
+        ['src/app/admin/export/page.tsx', 'handleStatusUpdate'],
+        ['src/app/admin/marketplace/disputes/[id]/page.tsx', 'handleAddNote'],
+        ['src/app/admin/marketplace/sellers/page.tsx', 'handleSaveEdit'],
+        ['src/app/admin/marketplace/village-market/page.tsx', 'handleCreate'],
+        ['src/app/admin/marketplace/village-market/page.tsx', 'handle'],
+        ['src/app/admin/wave/applications/page.tsx', 'handleSaveEdit'],
+        ['src/app/admin/wave/resources/page.tsx', 'handleUpload'],
+        ['src/app/export/onboarding/steps/KYCVerificationStep.tsx', 'handleSubmit'],
+        ['src/app/marketplace/buyer/orders/[id]/review/page.tsx', 'handleProductReview'],
+        ['src/app/marketplace/buyer/orders/[id]/review/page.tsx', 'handleSellerReview'],
+        ['src/app/profile/page.tsx', 'handleSave'],
+        ['src/app/academy/[courseId]/quiz/[moduleId]/page.tsx', 'submitQuiz'],
+        ['src/components/academy/QuizComponent.tsx', 'handleSubmit'],
+        ['src/components/admin/EnrollStudentModal.tsx', 'handleEnroll'],
+        ['src/components/ai/AISidebar.tsx', 'handleSendMessage'],
     ];
 
     it.each(FIXED)('%s :: %s no longer holds a spinner across an unguarded await', (rel, fn) => {
@@ -346,15 +521,46 @@ describe('#407 — the shape #405 could not see: an await with no try at all', (
          * 3 more by #408 (loadLoans on both loan screens and loadListings on the
          * land queue — where the stuck spinner turned out to be the lesser
          * defect: those loaders rendered "no loans" and "All Caught Up!" after a
-         * failed read). 30 remain, and the number is asserted so a 31st cannot
-         * appear without somebody deciding it should.
+         * failed read). #409 took one more — RepaymentSchedule's fetchSchedule,
+         * which also rendered NaN% and treated a failed read as an empty
+         * schedule. That left 29.
          *
-         * #409 took one more — RepaymentSchedule's fetchSchedule, whose stuck
-         * spinner was the least of it: it also rendered NaN% and treated a
-         * failed read as an empty schedule. 29.
+         * #491 took the remaining twenty-one ACTION HANDLERS. What is left is
+         * eight LOADERS, and they are left on purpose: a blanket try/finally is
+         * the wrong repair for a loader, because it turns "spinner forever" into
+         * "empty screen with no explanation" — #307's class, and the very defect
+         * #408 and #409 found underneath the three loaders they did fix. Each
+         * needs an error state built into what its screen RENDERS, which is a
+         * different change from this one and is named in KNOWN below.
          */
-        expect(found.length).toBe(29);
+        expect(found.length).toBe(8);
         // And every handler fixed above is genuinely out of the population.
         for (const [rel, fn] of FIXED) expect(found).not.toContain(`${rel}:${fn}`);
+
+        /**
+         *   #491 NAMED, NOT JUST COUNTED.
+         *
+         *        The header above has said "the rest are recorded in KNOWN,
+         *        named, so the count cannot grow quietly" since #407, and there
+         *        was no such list — only the number. A count alone is satisfied
+         *        by ANY eight handlers, so fixing one of these and introducing a
+         *        new one somewhere else would have passed silently. That is the
+         *        exact failure mode the sentence was written to prevent.
+         *
+         *        These eight are LOADERS. Each needs an error state in what its
+         *        screen renders, which is a change to the page rather than to
+         *        the handler — see the note on the count above.
+         */
+        const KNOWN = [
+            'src/app/academy/[courseId]/quiz/[moduleId]/page.tsx:loadQuiz',
+            'src/app/admin/export/edit/[id]/page.tsx:loadData',
+            'src/app/admin/finance/page.tsx:loadFinanceData',
+            'src/app/admin/marketplace/disputes/[id]/page.tsx:loadNotes',
+            'src/app/marketplace/sell/page.tsx:loadSellerData',
+            'src/app/marketplace/village-market/[id]/page.tsx:loadEvent',
+            'src/app/wave/(member)/resources/page.tsx:loadResources',
+            'src/components/lms/CourseProgressCard.tsx:fetchProgress',
+        ];
+        expect([...found].sort()).toEqual([...KNOWN].sort());
     });
 });

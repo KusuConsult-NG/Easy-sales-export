@@ -234,6 +234,21 @@ export default function ProfilePage() {
         setIsLoading(true);
         setSaveMessage(null);
 
+        /**
+         *   #491 THE MEMBER'S OWN PROFILE, AND THE LONGEST OF THE TWENTY-ONE.
+         *
+         *        Three exits reset the flag — two validation returns and the
+         *        line at the end — which reads as thorough, and a REJECTED
+         *        action skipped all three. The Save button stayed dead with the
+         *        member's edits on screen. This is the page the hub guard sends
+         *        somebody to when their registration is incomplete, so a frozen
+         *        button there is a member who cannot finish signing up.
+         *
+         *        The two validation returns keep their own resets — they are
+         *        correct and they run before any await. The `finally` makes them
+         *        redundant rather than wrong, which is the safer direction.
+         */
+        try {
         // Determine what to save based on active tab
         if (activeTab === 'general') {
             const isWaveParticipant = session?.user?.roles?.includes('wave_participant');
@@ -311,7 +326,16 @@ export default function ProfilePage() {
             }
         }
 
-        setIsLoading(false);
+        } catch (err) {
+            setSaveMessage({
+                type: 'error',
+                text: err instanceof Error
+                    ? err.message
+                    : 'Could not save your profile. Your changes are still on screen — please try again.',
+            });
+        } finally {
+            setIsLoading(false);
+        }
 
         // Clear message after 4 seconds
         setTimeout(() => setSaveMessage(null), 4000);

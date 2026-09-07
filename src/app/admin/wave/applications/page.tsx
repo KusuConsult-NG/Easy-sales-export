@@ -161,20 +161,30 @@ export default function AdminWaveApplicationsPage() {
     async function handleSaveEdit() {
         if (!editingApp) return;
         setEditSaving(true);
-        const result = await editApplicationAction({
-            collection: "wave_applications",
-            docId: editingApp.id,
-            fields: editDraft as any,
-            editNote: editNote || undefined,
-        });
-        if (result.success) {
-            showToast("Application updated with audit trail.", "success");
-            setEditingApp(null);
-            await fetchData();
-        } else {
-            showToast(result.error || "Failed to update application", "error");
+        //   #491 — the same editor as the sellers screen, with the same audit
+        //   trail behind it and the same frozen dialog on a rejected call.
+        try {
+            const result = await editApplicationAction({
+                collection: "wave_applications",
+                docId: editingApp.id,
+                fields: editDraft as any,
+                editNote: editNote || undefined,
+            });
+            if (result.success) {
+                showToast("Application updated with audit trail.", "success");
+                setEditingApp(null);
+                await fetchData();
+            } else {
+                showToast(result.error || "Failed to update application", "error");
+            }
+        } catch (err) {
+            showToast(
+                err instanceof Error ? err.message : "Could not save the application. Re-open it to check whether the edit was recorded.",
+                "error",
+            );
+        } finally {
+            setEditSaving(false);
         }
-        setEditSaving(false);
     };
 
     async function handleExportCSV() {

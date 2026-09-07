@@ -72,35 +72,51 @@ export default function OrderReviewPage() {
     async function handleProductReview() {
         if (!productRating) return showToast("Please select a rating", "error");
         setLoading(true);
-        const res = await submitProductReviewAction({
-            productId,
-            orderId,
-            rating: productRating,
-            comment: productComment.trim() || undefined,
-        });
-        setLoading(false);
-        if (res.success) {
-            showToast("Product review submitted!", "success");
-            setStep("seller");
-        } else {
-            showToast(res.error || "Failed to submit review", "error");
+        //   #491 — a buyer's review, with their words in the box. The step is
+        //   only advanced on success, so a failure leaves them exactly where
+        //   they were rather than skipping past a review nobody recorded.
+        try {
+            const res = await submitProductReviewAction({
+                productId,
+                orderId,
+                rating: productRating,
+                comment: productComment.trim() || undefined,
+            });
+            if (res.success) {
+                showToast("Product review submitted!", "success");
+                setStep("seller");
+            } else {
+                showToast(res.error || "Failed to submit review", "error");
+            }
+        } catch (err) {
+            showToast(err instanceof Error ? err.message : "Could not submit your review. Your rating and comment are still here — try again.", "error");
+        } finally {
+            setLoading(false);
         }
     };
 
     async function handleSellerReview() {
         if (!sellerRating) return showToast("Please rate the seller", "error");
         setLoading(true);
-        const res = await submitSellerReviewAction({
-            sellerId,
-            orderId,
-            rating: sellerRating,
-            comment: sellerComment.trim() || undefined,
-        });
-        setLoading(false);
-        if (res.success) {
-            setStep("done");
-        } else {
-            showToast(res.error || "Failed to submit seller review", "error");
+        //   #491 — the second half of the same flow. Reaching "done" is what
+        //   tells the buyer their review is in, so it must not be reached by a
+        //   call that threw.
+        try {
+            const res = await submitSellerReviewAction({
+                sellerId,
+                orderId,
+                rating: sellerRating,
+                comment: sellerComment.trim() || undefined,
+            });
+            if (res.success) {
+                setStep("done");
+            } else {
+                showToast(res.error || "Failed to submit seller review", "error");
+            }
+        } catch (err) {
+            showToast(err instanceof Error ? err.message : "Could not submit your seller review. Your rating is still here — try again.", "error");
+        } finally {
+            setLoading(false);
         }
     };
 

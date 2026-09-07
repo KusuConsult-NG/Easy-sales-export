@@ -214,18 +214,34 @@ export default function AdminExportApplicationsPage() {
         setEditSaving(true);
         setProcessingId(editingAppId + "_revision");
         const appId = editingApp.applicationId || editingApp.id;
-        const result = await requestExportApplicationRevisionAction(appId, revisionNote.trim());
-        if (result.success) {
-            showToast("Revision note sent. Application marked for correction.", "success");
-            setEditingApp(null);
-            setEditingAppId(null);
-            setRevisionNote("");
-            await fetchData();
-        } else {
-            showToast(result.error || "Failed to send revision note", "error");
+        /**
+         *   #491 TWO FLAGS, AND `await fetchData()` INSIDE THE SUCCESS BRANCH.
+         *
+         *        Neither reset ran if the action rejected — and neither ran if
+         *        the RELOAD rejected either, on a request that had already
+         *        succeeded. The admin was left with a dead dialog over a
+         *        revision the applicant had in fact been sent.
+         */
+        try {
+            const result = await requestExportApplicationRevisionAction(appId, revisionNote.trim());
+            if (result.success) {
+                showToast("Revision note sent. Application marked for correction.", "success");
+                setEditingApp(null);
+                setEditingAppId(null);
+                setRevisionNote("");
+                await fetchData();
+            } else {
+                showToast(result.error || "Failed to send revision note", "error");
+            }
+        } catch (err) {
+            showToast(
+                err instanceof Error ? err.message : "Could not send the revision note. Check the application before retrying.",
+                "error",
+            );
+        } finally {
+            setEditSaving(false);
+            setProcessingId(null);
         }
-        setEditSaving(false);
-        setProcessingId(null);
     };
 
     async function handleExportCSV() {
