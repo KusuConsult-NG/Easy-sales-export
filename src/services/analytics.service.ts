@@ -444,7 +444,42 @@ export class AnalyticsService implements AnalyticsServiceContract {
         };
     }
 
+    /**
+     * The four segment counters, LIVE.
+     *
+     *   #482 THE CACHE WAS PAYING FOR AN EXPENSE THAT NO LONGER EXISTS.
+     *
+     *   It cached for ten minutes because the only way to get these numbers was
+     *   #473's whole-table read — 51 pages and 4.6 MB on this data. Ten minutes
+     *   of staleness was a fair price for not doing that on every page load.
+     *
+     *   #473 replaced it with one RPC. Measured on 50,017 users, five runs:
+     *
+     *       count_user_segments()   58, 54, 52, 52, 50 ms
+     *
+     *   Fifty milliseconds is not worth ten minutes of wrong numbers, and the
+     *   staleness cost more than time: the cache is per CONTAINER (Redis is not
+     *   configured, so #459's in-memory fallback holds it), so two admins on two
+     *   Railway instances could read different totals for the same platform at
+     *   the same moment, with no way to tell which was current. The owner asked
+     *   for them live; this is why that is now the right answer and was not
+     *   before.
+     *
+     *   THE FALLBACK IS STILL CACHED, AND THAT IS THE WHOLE CARE IN THIS CHANGE.
+     *   When migration 029 is absent the code reads the table page by page —
+     *   51 requests fired at once. Uncached, that would run on EVERY admin page
+     *   load: strictly worse than the behaviour #473 removed, from a change that
+     *   reads as a simplification. So the cheap path is live and the expensive
+     *   path keeps its ten minutes. The cache follows the cost, which is what it
+     *   was always for.
+     */
     private async getUserSegmentsCached(): Promise<UserSegments> {
+        // #473's RPC: one round trip, ~50 ms. Read it live.
+        const live = await this.countUserSegmentsInDatabase();
+        if (live) return live;
+
+        // Migration 029 is not applied. This path pages the whole users table,
+        // so it keeps the cache it has always had — see the note above.
         const { getCached, setCache } = await import("@/lib/redis");
         const cacheKey = "admin:user-segments-counts";
 
@@ -455,10 +490,7 @@ export class AnalyticsService implements AnalyticsServiceContract {
             // quiet fail on cache read
         }
 
-        // #473 — one round trip when migration 029 is applied, the old
-        // whole-table read when it is not.
-        const segments =
-            (await this.countUserSegmentsInDatabase()) ?? (await this.calculateUserSegments());
+        const segments = await this.calculateUserSegments();
 
         try {
             await setCache(cacheKey, segments, 600); // Cache for 10 minutes

@@ -77,16 +77,21 @@ describe('#473 — the four counters come from the database', () => {
         expect(service()).toContain('supabaseAdmin.rpc("count_user_segments")');
     });
 
-    it('AND THE CACHED PATH ASKS FOR THE RPC BEFORE THE PAGING LOOP', () => {
+    it('AND THE RPC IS ASKED BEFORE THE PAGING LOOP', () => {
         //   Order matters: reversed, the fallback runs every time and the RPC
         //   becomes decoration.
+        //
+        //   THIS ALSO PINNED THE EXACT EXPRESSION —
+        //   `(await A) ?? (await B)` — and #482 restructured that line to make
+        //   the counters live, so the suite failed on the SHAPE of correct code.
+        //   Ninth time in this audit. What it meant is the ORDER, so that is
+        //   what it asserts.
         const code = service();
         const rpc = code.indexOf('countUserSegmentsInDatabase()');
         const paging = code.indexOf('this.calculateUserSegments()', rpc);
 
         expect(rpc).toBeGreaterThan(-1);
         expect(paging).toBeGreaterThan(rpc);
-        expect(code).toContain('(await this.countUserSegmentsInDatabase()) ?? (await this.calculateUserSegments())');
     });
 
     it('THE FALLBACK STILL EXISTS — a deploy can land before its migration', () => {
