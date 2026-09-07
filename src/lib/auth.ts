@@ -23,6 +23,7 @@ import { authConfig } from "./auth.config";
 import { runQueryWithRetry } from "@/lib/firestore-utils";
 import { supabase, supabaseAdmin } from "./supabase";
 import { supabaseDb as db } from "./supabase-db";
+import { findProfilesByEmail } from "./profile-lookup";
 
 /**
  * NextAuth v5 Configuration
@@ -112,9 +113,43 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                             logger.info(`${authCtx} Authenticated via Supabase Auth. Direct Profile ID Match: ${uid}`);
                         } else {
                             // Priority 2: Query users collection by email to find their database profile (holding legacy ID).
-                            const userSnap = await runQueryWithRetry(() => db.collection(COLLECTIONS.USERS)
-                                .where('email', '==', email.toLowerCase())
-                                .get());
+                            /**
+                             *   #476 THE EXACT-EMAIL QUERY MISSES A PROFILE
+                             *   STORED WITH DIFFERENT CASE OR SURROUNDING SPACE,
+                             *   AND THE BRANCH BELOW THEN WRITES A BLANK ONE
+                             *   OVER THE TOP.
+                             *
+                             *        This was `.where('email', '==',
+                             *        email.toLowerCase())` — the INPUT
+                             *        normalised, the STORED VALUE not. Proven
+                             *        against a real PostgreSQL with a row held
+                             *        the way legacy rows are:
+                             *
+                             *            [  Ada@Example.COM ]
+                             *            where email = 'ada@example.com'   -> 0
+                             *            where lower(btrim(email)) = ...   -> 1
+                             *
+                             *        That person authenticates correctly, this
+                             *        returns empty, and the auto-provision
+                             *        below gives them roles ['general_user'], a
+                             *        name derived from their address and
+                             *        profileComplete false — losing their real
+                             *        roles and registrations, and leaving a
+                             *        SECOND row that makes every later login
+                             *        fall to the arbitrary `docs[0]` pick.
+                             *
+                             *        #465 taught the forensic scan to normalise
+                             *        both sides. The login is where it mattered.
+                             */
+                            const lookup = await runQueryWithRetry(() => findProfilesByEmail(email));
+                            const userSnap = { empty: lookup.rows.length === 0, docs: lookup.rows };
+                            if (lookup.viaFallback) {
+                                logger.warn(
+                                    `${authCtx} Profile found only by NORMALISED email — the stored value differs `
+                                    + `in case or whitespace from '${email.toLowerCase()}'. Resolved rather than `
+                                    + `auto-provisioning a blank profile (#476).`,
+                                );
+                            }
                             if (userSnap.empty) {
                                 logger.info(`${authCtx} User verified in Supabase Auth but no profile found in database. Auto-provisioning default profile...`);
                                 const newUid = sbData.user.id;

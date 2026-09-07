@@ -118,6 +118,15 @@ const EXPECTED = [
              "per cold /admin load). Without this file the deploy is slow rather " +
              "than broken, and says so in the logs.",
     },
+    {
+        n: "030",
+        why: "find_users_by_normalised_email + the index it needs. MUST ship with the " +
+             "code that calls it: lib/auth.ts falls back to it when the exact email " +
+             "match finds nothing, and WITHOUT it a profile stored with different case " +
+             "or surrounding space stays invisible and login auto-provisions a blank " +
+             "profile over the top — #476, which is the owner's 'account not found / " +
+             "missing details even when fully registered'.",
+    },
     { n: "004", why: "row-level security — LAST, and in a low-traffic window" },
 ];
 
