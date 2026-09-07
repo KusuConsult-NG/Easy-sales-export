@@ -109,6 +109,15 @@ const EXPECTED = [
              "in production and reported a whole check as unrunnable. Plain " +
              "CREATE INDEX under a lock_timeout, per #469.",
     },
+    {
+        n: "029",
+        why: "user_segment / count_user_segments — the four admin dashboard counters. " +
+             "MUST ship with the code that calls them: analytics.service.ts asks for " +
+             "the RPC first and falls back to reading the WHOLE users table when it " +
+             "is missing, which is #473 itself (4.6 MB and 51 simultaneous requests " +
+             "per cold /admin load). Without this file the deploy is slow rather " +
+             "than broken, and says so in the logs.",
+    },
     { n: "004", why: "row-level security — LAST, and in a low-traffic window" },
 ];
 

@@ -325,6 +325,65 @@ export class AnalyticsService implements AnalyticsServiceContract {
         };
     }
 
+    /**
+     *   #473 THIS DOWNLOADED THE ENTIRE USERS TABLE TO COUNT FOUR NUMBERS.
+     *
+     *   Measured through a real browser logged in as admin, against real
+     *   PostgREST and real PostgreSQL with 50,009 users, every database round
+     *   trip recorded with its method and payload:
+     *
+     *       /admin, cold load     96 round trips
+     *         count-only (HEAD)   29 calls, 1,415 ms — correct and cheap
+     *         returning rows      67 calls, 8,795 ms, 4.6 MB transferred
+     *
+     *   Over fifty of those 67 were the loop below, at 92 kB a page, and its
+     *   entire output is four integers. It also fired all 51 pages at once
+     *   through Promise.all, so one dashboard widget saturated the connection
+     *   pool and everything else on the page queued behind it.
+     *
+     *   The classification is now migration 029's user_segment(), and the
+     *   counting is count_user_segments() — ONE round trip, no rows leaving the
+     *   database. The SQL is held to the JavaScript by
+     *   src/__tests__/pg/the-sql-segments-agree-with-the-javascript.test.ts,
+     *   which classifies the same 37 documents both ways and fails on a single
+     *   disagreement, because these four numbers are on the admin dashboard and
+     *   a silent change to them is worse than the slowness.
+     */
+    private async countUserSegmentsInDatabase(): Promise<UserSegments | null> {
+        const { supabaseAdmin } = await import("@/lib/supabase");
+
+        const { data, error } = await supabaseAdmin.rpc("count_user_segments");
+        if (error) {
+            console.error(
+                "[ANALYTICS SERVICE] count_user_segments unavailable — falling back to reading " +
+                "the whole users table, which is slow and was #473. Apply " +
+                "supabase/migrations/029_user_segment_counts.sql. Reason:",
+                error.message,
+            );
+            return null;
+        }
+
+        // Supabase returns a one-row set for a TABLE-returning function.
+        const row = Array.isArray(data) ? data[0] : data;
+        if (!row) return null;
+
+        return {
+            active: Number(row.active) || 0,
+            pending: Number(row.pending) || 0,
+            stalled: Number(row.stalled) || 0,
+            ghost: Number(row.ghost) || 0,
+        };
+    }
+
+    /**
+     * The pre-#473 implementation, kept as the fallback ONLY.
+     *
+     * It is still correct and still slow. It runs when migration 029 has not
+     * been applied yet — the owner deploys code and applies migrations
+     * separately, and #469 is what happens when that order is assumed away. A
+     * deploy that lands before the migration is then slow rather than broken,
+     * and the log above says exactly which file fixes it.
+     */
     private async calculateUserSegments(): Promise<UserSegments> {
         const { supabaseAdmin } = await import("@/lib/supabase");
         const { categorizeUser } = await import("@/lib/broadcast-logic");
@@ -396,7 +455,10 @@ export class AnalyticsService implements AnalyticsServiceContract {
             // quiet fail on cache read
         }
 
-        const segments = await this.calculateUserSegments();
+        // #473 — one round trip when migration 029 is applied, the old
+        // whole-table read when it is not.
+        const segments =
+            (await this.countUserSegmentsInDatabase()) ?? (await this.calculateUserSegments());
 
         try {
             await setCache(cacheKey, segments, 600); // Cache for 10 minutes
