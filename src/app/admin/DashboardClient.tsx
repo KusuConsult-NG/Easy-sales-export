@@ -254,6 +254,7 @@ export default function AdminDashboardPage() {
                                 transition={{ duration: 0.4 }}
                             >
                                 <Link
+                            prefetch={false}
                                     href={stat.href}
                                     className="group block h-full bg-white rounded-2xl p-6 shadow-sm ring-1 ring-slate-200/50 hover:shadow-xl hover:-translate-y-1 hover:ring-blue-100 transition-all duration-300"
                                 >
@@ -289,6 +290,7 @@ export default function AdminDashboardPage() {
                     <h2 className="text-xl font-bold text-slate-900 mb-4">Quick Actions</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                         <Link
+                            prefetch={false}
                             href="/admin/cooperatives/loans"
                             className="group bg-white rounded-2xl p-5 hover:shadow-lg hover:-translate-y-0.5 ring-1 ring-slate-200/50 transition-all duration-300 flex items-start gap-4"
                         >
@@ -307,6 +309,7 @@ export default function AdminDashboardPage() {
                         </Link>
 
                         <Link
+                            prefetch={false}
                             href="/admin/farm-nation"
                             className="group bg-white rounded-2xl p-5 hover:shadow-lg hover:-translate-y-0.5 ring-1 ring-slate-200/50 transition-all duration-300 flex items-start gap-4"
                         >
@@ -325,6 +328,7 @@ export default function AdminDashboardPage() {
                         </Link>
 
                         <Link
+                            prefetch={false}
                             href="/admin/cooperatives/members"
                             className="group bg-white rounded-2xl p-5 hover:shadow-lg hover:-translate-y-0.5 ring-1 ring-slate-200/50 transition-all duration-300 flex items-start gap-4"
                         >
@@ -343,6 +347,7 @@ export default function AdminDashboardPage() {
                         </Link>
 
                         <Link
+                            prefetch={false}
                             href="/admin/communications"
                             className="group bg-white rounded-2xl p-5 hover:shadow-lg hover:-translate-y-0.5 ring-1 ring-slate-200/50 transition-all duration-300 flex items-start gap-4"
                         >
@@ -361,6 +366,7 @@ export default function AdminDashboardPage() {
                         </Link>
 
                         <Link
+                            prefetch={false}
                             href="/admin/wave/resources"
                             className="group bg-white rounded-2xl p-5 hover:shadow-lg hover:-translate-y-0.5 ring-1 ring-slate-200/50 transition-all duration-300 flex items-start gap-4 border-2 border-dashed border-indigo-100"
                         >
@@ -406,6 +412,7 @@ export default function AdminDashboardPage() {
                                 Recent Transactions
                             </h2>
                             <Link
+                            prefetch={false}
                                 href="/admin/cooperatives/transactions"
                                 className="text-sm text-blue-600 hover:text-blue-700 font-medium transition"
                             >

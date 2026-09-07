@@ -464,6 +464,7 @@ export function ModuleSidebar({ isMobileOpen = false, onMobileClose }: ModuleSid
                     {!collapsed && (
                         <div className="flex items-center justify-between mb-1">
                             <Link
+                                prefetch={false}
                                 href={getRelativeUrl(moduleConfig.pathPrefix || "/dashboard")}
                                 className="flex items-center gap-3 hover:opacity-80 transition-opacity group"
                             >
@@ -494,7 +495,7 @@ export function ModuleSidebar({ isMobileOpen = false, onMobileClose }: ModuleSid
 
                     {collapsed && (
                         <div className="flex flex-col items-center gap-3">
-                            <Link href={getRelativeUrl(moduleConfig.pathPrefix || "/dashboard")} className="w-10 h-10 rounded-xl flex items-center justify-center border shadow-sm bg-white hover:scale-105 transition-all">
+                            <Link prefetch={false} href={getRelativeUrl(moduleConfig.pathPrefix || "/dashboard")} className="w-10 h-10 rounded-xl flex items-center justify-center border shadow-sm bg-white hover:scale-105 transition-all">
                                 <ModuleIcon className={cn("w-5 h-5", theme.activeText)} />
                             </Link>
                         </div>
@@ -542,7 +543,7 @@ export function ModuleSidebar({ isMobileOpen = false, onMobileClose }: ModuleSid
                                             </p>
                                         )}
                                         <div className="relative group/tip">
-                                            <Link href={getRelativeUrl(item.href)} className={itemBase(active, collapsed)}>
+                                            <Link href={getRelativeUrl(item.href)} prefetch={false} className={itemBase(active, collapsed)}>
                                                 <Icon className={cn("w-4 h-4 shrink-0", active ? theme.activeText : "text-slate-400 group-hover:text-slate-600")} />
                                                 {!collapsed && (
                                                     <>
@@ -580,7 +581,7 @@ export function ModuleSidebar({ isMobileOpen = false, onMobileClose }: ModuleSid
                             const badge  = item.name === "Messages" ? unreadMessages : 0;
                             return (
                                 <div key={item.href} className="relative group/tip">
-                                    <Link href={item.href} className={itemBase(active, collapsed)}>
+                                    <Link href={item.href} prefetch={false} className={itemBase(active, collapsed)}>
                                         <Icon className={cn("w-4 h-4 shrink-0", active ? theme.activeText : "text-slate-400 group-hover:text-slate-600")} />
                                         {!collapsed && <span className="flex-1">{item.name}</span>}
                                         {badge > 0 && (
@@ -607,6 +608,7 @@ export function ModuleSidebar({ isMobileOpen = false, onMobileClose }: ModuleSid
                         <div className="pt-3 border-t border-dashed border-slate-200">
                             <div className="relative group/tip">
                                 <Link
+                                    prefetch={false}
                                     href={isDedicatedCoop ? "https://www.easysalesexport.com/dashboard" : "/dashboard"}
                                     className={cn(
                                         "flex items-center rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-all group",
