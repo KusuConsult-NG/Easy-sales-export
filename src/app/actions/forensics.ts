@@ -171,21 +171,64 @@ export async function runForensicScanAction(): Promise<
              *        the same way as the lookup above rather than one query per
              *        remaining id.
              */
-            const unmatched = authUserIds.filter((uid: string) => !existingIds.has(uid));
+            /**
+             *   #465 MATCHED ON EMAIL, WHICH IS AN INDEXED COLUMN — the pointer
+             *        field is not, and querying it timed the scan out.
+             *
+             *        #464's fix asked `where("supabaseAuthId", "in", chunk)`.
+             *        supabaseAuthId lives inside raw_data with no index, so that
+             *        is a sequential scan of the users table, three chunks
+             *        concurrently, and production answered:
+             *
+             *            [supabase-db] query users:
+             *            canceling statement due to statement timeout
+             *
+             *        A correct join that never completes reports nothing. NATIVE
+             *        COLUMNS on users are id, email, roles, created_at,
+             *        updated_at — and email is the key user-migration.ts itself
+             *        matches a legacy record on, so it is the join that already
+             *        exists rather than a new guess.
+             *
+             *        IT IS A WEAKER LINK THAN THE POINTER, and worth saying so: a
+             *        profile whose email no longer matches its auth account would
+             *        still be reported. That is the honest trade against a query
+             *        that cannot finish, and the residue is a handful of names to
+             *        look at rather than a whole scan lost.
+             *
+             *        An index on raw_data->>'supabaseAuthId' would allow the
+             *        stronger join. Migration 022 exists for that class and is
+             *        marked DO NOT APPLY, on measurements showing indexes of that
+             *        shape bought nothing at this data size. Its own stated
+             *        trigger is "a seq scan over a LARGE table returning a SMALL
+             *        fraction" — which this query is — so if email matching ever
+             *        proves insufficient, that is the door, with an EXPLAIN
+             *        ANALYZE first.
+             */
+            const unmatchedUsers = authUsers.filter((u: any) => !existingIds.has(u.uid));
 
-            if (unmatched.length > 0) {
-                const pointerChunks: string[][] = [];
-                for (let i = 0; i < unmatched.length; i += 30) {
-                    pointerChunks.push(unmatched.slice(i, i + 30));
+            if (unmatchedUsers.length > 0) {
+                const uidByEmail = new Map<string, string>();
+                for (const u of unmatchedUsers) {
+                    const email = typeof u.email === "string" ? u.email.trim().toLowerCase() : "";
+                    if (email) uidByEmail.set(email, u.uid);
                 }
-                const pointerSnaps = await Promise.all(
-                    pointerChunks.map(chunk =>
-                        db.collection(COLLECTIONS.USERS).where("supabaseAuthId", "in", chunk).get()
+
+                const emails = [...uidByEmail.keys()];
+                const emailChunks: string[][] = [];
+                for (let i = 0; i < emails.length; i += 30) {
+                    emailChunks.push(emails.slice(i, i + 30));
+                }
+
+                const emailSnaps = await Promise.all(
+                    emailChunks.map(chunk =>
+                        db.collection(COLLECTIONS.USERS).where("email", "in", chunk).get()
                     )
                 );
-                pointerSnaps.forEach(snap => snap.docs.forEach((d: any) => {
-                    const linked = d.data()?.supabaseAuthId;
-                    if (typeof linked === "string" && linked) existingIds.add(linked);
+                emailSnaps.forEach(snap => snap.docs.forEach((d: any) => {
+                    const stored = d.data()?.email;
+                    const key = typeof stored === "string" ? stored.trim().toLowerCase() : "";
+                    const uid = key ? uidByEmail.get(key) : undefined;
+                    if (uid) existingIds.add(uid);
                 }));
             }
 
@@ -200,7 +243,23 @@ export async function runForensicScanAction(): Promise<
                 details: `Scanned recent 100 Auth users. Found ${ghostUserIds.length} ghosts.`,
                 affectedIds: ghostUserIds
             });
-        } catch (e: any) { results.push({ module: "Auth", check: "Ghost User Scan", status: "fail", details: e.message, affectedIds: [] });
+        /**
+         *   #465 A SCAN THAT COULD NOT RUN IS NOT A SCAN THAT FOUND SOMETHING.
+         *
+         *        All eight of these catches reported `status: "fail"`, so a
+         *        statement timeout arrived on the screen looking exactly like a
+         *        detected integrity problem:
+         *
+         *            Fail  Auth  Ghost User Scan
+         *            [supabase-db] query users: canceling statement due to
+         *            statement timeout
+         *
+         *        That is the same conflation #464 fixed one statement lower for
+         *        an unrecorded gender — "no finding" and "could not look" are
+         *        different answers — left in place on the error path of every
+         *        check in the file. ScanResult already had the word.
+         */
+        } catch (e: any) { results.push({ module: "Auth", check: "Ghost User Scan", status: "inconclusive", details: `Could not complete this scan: ${e.message}`, affectedIds: [] });
         }
 
         // ============================================================================
@@ -245,7 +304,7 @@ export async function runForensicScanAction(): Promise<
                 details: `Scanned ${productsSnapshot.size} products. Found ${orphanedProductIds.length} orphans.`,
                 affectedIds: orphanedProductIds
             });
-        } catch (e: any) { results.push({ module: "Marketplace", check: "Orphaned Product Scan", status: "fail", details: e.message, affectedIds: [] });
+        } catch (e: any) { results.push({ module: "Marketplace", check: "Orphaned Product Scan", status: "inconclusive", details: `Could not complete this scan: ${e.message}`, affectedIds: [] });
         }
 
         /**
@@ -338,7 +397,7 @@ export async function runForensicScanAction(): Promise<
                 affectedIds: driftedIds
             });
 
-        } catch (e: any) { results.push({ module: "Marketplace", check: "Contact Drift Scan", status: "fail", details: e.message, affectedIds: [] });
+        } catch (e: any) { results.push({ module: "Marketplace", check: "Contact Drift Scan", status: "inconclusive", details: `Could not complete this scan: ${e.message}`, affectedIds: [] });
         }
 
         // ============================================================================
@@ -463,7 +522,7 @@ export async function runForensicScanAction(): Promise<
                 // about a participant.
                 affectedIds: [...ineligibleIds, ...unknownGenderIds, ...undatedIds]
             });
-        } catch (e: any) { results.push({ module: "WAVE", check: "Eligibility Scan", status: "fail", details: e.message, affectedIds: [] });
+        } catch (e: any) { results.push({ module: "WAVE", check: "Eligibility Scan", status: "inconclusive", details: `Could not complete this scan: ${e.message}`, affectedIds: [] });
         }
 
         // ============================================================================
@@ -570,7 +629,7 @@ export async function runForensicScanAction(): Promise<
                 details: `Sampled ${coopMembersQuery.docs.length} members. Compared cooperative_members.savingsBalance + lockedBalance against completed ledger rows (${CREDIT_TYPES.join("/")} minus ${DEBIT_TYPES.join("/")}). ${balanceMismatches.length} mismatch(es), ${unreadableMembers.length} member(s) with no membership record.`,
                 affectedIds: [...balanceMismatches, ...unreadableMembers.map((id) => `${id} (no membership record)`)]
             });
-        } catch (e: any) { results.push({ module: "Cooperative", check: "Financial Scan", status: "fail", details: e.message, affectedIds: [] });
+        } catch (e: any) { results.push({ module: "Cooperative", check: "Financial Scan", status: "inconclusive", details: `Could not complete this scan: ${e.message}`, affectedIds: [] });
         }
 
         // ============================================================================
@@ -636,7 +695,7 @@ export async function runForensicScanAction(): Promise<
                     : `Scanned ${verifiedFarmersQuery.size} verified farmers. Found ${fraudIds.length} whose Farm Nation registration is not approved.`,
                 affectedIds: fraudIds
             });
-        } catch (e: any) { results.push({ module: "Farm Nation", check: "Verification Scan", status: "fail", details: e.message, affectedIds: [] });
+        } catch (e: any) { results.push({ module: "Farm Nation", check: "Verification Scan", status: "inconclusive", details: `Could not complete this scan: ${e.message}`, affectedIds: [] });
         }
 
         // ============================================================================
@@ -735,7 +794,7 @@ export async function runForensicScanAction(): Promise<
                     + `Found ${breachedIds.length} over-funded.`,
                 affectedIds: [...breachedIds, ...uncappedIds]
             });
-        } catch (e: any) { results.push({ module: "Export", check: "Cap Scan", status: "fail", details: e.message, affectedIds: [] });
+        } catch (e: any) { results.push({ module: "Export", check: "Cap Scan", status: "inconclusive", details: `Could not complete this scan: ${e.message}`, affectedIds: [] });
         }
 
         // ============================================================================
@@ -838,7 +897,7 @@ export async function runForensicScanAction(): Promise<
                       (unresolved.length > 0 ? `, ${unresolved.length} could not be resolved.` : "."),
                 affectedIds: [...freeRideIds, ...unresolved]
             });
-        } catch (e: any) { results.push({ module: "Academy", check: "Enrollment Scan", status: "fail", details: e.message, affectedIds: [] });
+        } catch (e: any) { results.push({ module: "Academy", check: "Enrollment Scan", status: "inconclusive", details: `Could not complete this scan: ${e.message}`, affectedIds: [] });
         }
 
         return { error: null, success: true as const, results , data: null };

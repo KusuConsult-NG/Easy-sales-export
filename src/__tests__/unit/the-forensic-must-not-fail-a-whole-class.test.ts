@@ -63,6 +63,31 @@
  *     the supabaseAuthId lookup removed              KILLED
  *     a genuinely male participant no longer flagged KILLED
  *     status "fail" when only gaps were found        KILLED
+ *
+ *   #465 AND THE FIX ABOVE TIMED THE SCAN OUT IN PRODUCTION.
+ *
+ *       Fail  Auth  Ghost User Scan
+ *       [supabase-db] query users: canceling statement due to statement timeout
+ *
+ *   `supabaseAuthId` lives inside raw_data with no index, so matching on it is a
+ *   sequential scan of the users table, three chunks at once. A correct join
+ *   that never completes reports nothing at all.
+ *
+ *   `email` is a NATIVE column on users — and the key user-migration.ts itself
+ *   matches a legacy record on, so it is the join that already existed. It is a
+ *   WEAKER link, worth saying: a profile whose email no longer matches its auth
+ *   account is still reported. That is the honest trade against a query that
+ *   cannot finish.
+ *
+ *   AND THE TIMEOUT ARRIVED WEARING THE WORD "Fail". All eight catches in the
+ *   file reported a failure to RUN as a finding, which is the same conflation
+ *   #464 had just fixed one statement lower for an unrecorded gender. Every one
+ *   of them says "inconclusive" now, and still prints what went wrong.
+ *
+ *     back to the unindexed pointer query            KILLED
+ *     case sensitivity reintroduced on the match     KILLED
+ *     one catch reverts to "fail"                    KILLED
+ *     a real ghost finding reports inconclusive      KILLED
  *     reword this header                             SURVIVED, as intended
  */
 
@@ -70,6 +95,7 @@ import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { normaliseGender, isDefinitelyNot, genderOutcome } from '@/lib/gender';
 import { stripComments } from '@/lib/testing/strip-comments';
+import { NATIVE_COLUMNS, FIELD_TO_COLUMN } from '@/lib/supabase-table-map';
 
 const source = (rel: string) => stripComments(readFileSync(rel, 'utf-8'));
 
@@ -177,35 +203,57 @@ describe('#464 — the forensic separates a finding from a gap', () => {
 describe('#464 — a migrated user is not a ghost', () => {
     const forensics = () => source('src/app/actions/forensics.ts');
 
-    it('THE GHOST CHECK RESOLVES supabaseAuthId, NOT ONLY THE DOCUMENT ID', () => {
-        // 83 of 100. user-migration.ts writes the pointer onto the EXISTING
-        // profile and leaves it under its Firebase-era id, so the document-id
-        // lookup alone can never find a migrated user.
+    it('THE GHOST CHECK LOOKS BEYOND THE DOCUMENT ID', () => {
+        // 83 of 100. user-migration.ts leaves a migrated profile under its
+        // Firebase-era id, so the document-id lookup alone can never find one.
         const code = forensics();
 
-        expect(code).toContain('.where("supabaseAuthId", "in", chunk)');
+        expect(code).toContain('const unmatchedUsers = authUsers.filter');
     });
 
-    it('AND user-migration REALLY DOES WRITE THAT POINTER — the premise', () => {
-        // If this stops being true the fix above is cargo, and the ghost count
-        // would climb back with nothing to explain it.
-        expect(source('src/lib/user-migration.ts')).toContain('supabaseAuthId: supabaseUid');
+    it('AND IT MATCHES ON AN INDEXED COLUMN — #465, the first fix timed out', () => {
+        //   #464 queried `where("supabaseAuthId", "in", chunk)`. That field
+        //   lives inside raw_data with no index, so production answered
+        //   "canceling statement due to statement timeout" and the whole scan
+        //   reported nothing. `email` is a NATIVE column on users, and the key
+        //   user-migration.ts itself matches a legacy record on.
+        const code = forensics();
+
+        expect(code).toContain('.where("email", "in", chunk)');
+        expect(code).not.toContain('.where("supabaseAuthId", "in", chunk)');
+    });
+
+    it('AND email REALLY IS A NATIVE COLUMN — the premise', () => {
+        // If it stops being one, this query becomes the seq scan it replaced
+        // and the scan starts timing out again with nothing to explain it.
+        expect(NATIVE_COLUMNS['users']).toContain('email');
+        expect(FIELD_TO_COLUMN['users']?.supabaseAuthId).toBeUndefined();
     });
 
     it('AND THE SECOND LOOKUP IS BATCHED, like the first', () => {
         // One query per unmatched id would be 83 serial round trips on the very
         // scan this fixes.
         const code = forensics();
-        const block = code.slice(code.indexOf('const unmatched ='), code.indexOf('const unmatched =') + 1200);
+        const block = code.slice(code.indexOf('const unmatchedUsers ='), code.indexOf('const unmatchedUsers =') + 1400);
 
-        expect(block).toContain('pointerChunks');
+        expect(block).toContain('emailChunks');
         expect(block).toContain('Promise.all');
     });
 
     it('and it only runs when something is unmatched', () => {
         const code = forensics();
 
-        expect(code).toContain('if (unmatched.length > 0)');
+        expect(code).toContain('if (unmatchedUsers.length > 0)');
+    });
+
+    it('and the match is case-insensitive on both sides', () => {
+        // Auth stores what somebody typed. A profile stored "Ada@Example.com"
+        // against an auth "ada@example.com" would be a false ghost, which is
+        // the class of bug this whole finding is.
+        const code = forensics();
+        const block = code.slice(code.indexOf('const unmatchedUsers ='), code.indexOf('const unmatchedUsers =') + 1400);
+
+        expect((block.match(/trim\(\)\.toLowerCase\(\)/g) ?? []).length).toBeGreaterThanOrEqual(2);
     });
 
     it('POSITIVE CONTROL: a user found by NEITHER route is still a ghost', () => {
@@ -213,5 +261,48 @@ describe('#464 — a migrated user is not a ghost', () => {
         const code = forensics();
 
         expect(code).toContain('if (!existingIds.has(uid)) ghostUserIds.push(uid)');
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#465 — a scan that could not run is not a scan that found something', () => {
+    const forensics = () => source('src/app/actions/forensics.ts');
+
+    it('EVERY CHECK REPORTS A FAILURE TO RUN AS "inconclusive"', () => {
+        //   All eight catches said `status: "fail"`, so a statement timeout
+        //   reached the screen looking exactly like a detected integrity
+        //   problem:
+        //
+        //       Fail  Auth  Ghost User Scan
+        //       [supabase-db] query users: canceling statement due to
+        //       statement timeout
+        //
+        //   Same conflation #464 fixed one statement lower for an unrecorded
+        //   gender, left on the error path of every check in the file.
+        const code = forensics();
+
+        const stillFailing = (code.match(/catch \(e: any\) \{ results\.push\(\{[^}]*status: "fail"/g) ?? []);
+        expect({ stillFailing }).toEqual({ stillFailing: [] });
+    });
+
+    it('AND ALL EIGHT OF THEM DO — not the one that was noticed', () => {
+        const code = forensics();
+        const inconclusive = (code.match(/status: "inconclusive", details: `Could not complete this scan/g) ?? []);
+
+        expect(inconclusive.length).toBe(8);
+    });
+
+    it('and still says what went wrong, rather than swallowing it', () => {
+        const code = forensics();
+
+        expect(code).toContain('Could not complete this scan: ${e.message}');
+    });
+
+    it('POSITIVE CONTROL: a real finding still reports "fail"', () => {
+        // Without this, turning every status into "inconclusive" would pass
+        // everything above and retire the whole screen.
+        const code = forensics();
+
+        expect(code).toMatch(/ghostUserIds\.length > 0 \? "fail" : "pass"/);
     });
 });
