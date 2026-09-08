@@ -152,8 +152,24 @@ describe('the two type checks now agree', () => {
 
 describe('what was already right', () => {
     it('requires a session and is rate-limited', () => {
+        //   #527 CHANGED THIS FROM THE MECHANISM TO THE PROPERTY.
+        //
+        //   It pinned the literal `withRateLimit(uploadHandler)`, so moving the
+        //   route from the platform-wide API tier (200 a minute, for JSON calls)
+        //   onto the upload tier failed a test whose NAME is "is rate-limited" —
+        //   while the route became more limited, not less. A test pinned to an
+        //   implementation string is this audit's most repeated test defect.
+        //
+        //   What matters is that a limit is consulted BEFORE the body is read;
+        //   which helper supplies it does not.
         expect(route).toContain('await requireSession()');
-        expect(route).toContain('withRateLimit(uploadHandler)');
+        expect(route).toMatch(/rateLimit\(|withRateLimit\(/);
+        expect(route).toMatch(/\.check\(|withRateLimit\(uploadHandler\)/);
+
+        const limitAt = Math.max(route.indexOf('.check('), route.indexOf('withRateLimit('));
+        const bodyAt = route.indexOf('await request.formData()');
+        expect(limitAt).toBeGreaterThan(-1);
+        expect(bodyAt).toBeGreaterThan(limitAt);
     });
 
     it('scopes the stored path to the uploading user', () => {

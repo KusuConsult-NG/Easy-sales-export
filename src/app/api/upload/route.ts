@@ -3,7 +3,8 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
-import { withRateLimit } from "@/lib/rate-limit";
+import { rateLimit, createRateLimitResponse } from "@/lib/rate-limiter";
+import { rateLimitConfig } from "@/lib/rate-limits.config";
 import { assertAllowedFileType, cloudinaryResourceType, detectFileType, extensionForType } from "@/lib/storage-admin";
 import { shouldUseLocalDiskStorage, writeToLocalDisk } from "@/lib/storage-backend";
 
@@ -14,6 +15,9 @@ import { shouldUseLocalDiskStorage, writeToLocalDisk } from "@/lib/storage-backe
  * Word documents — this list is the one the route advertises in its own error
  * message, and it is now the one actually enforced.
  */
+/** The upload tier, not the platform-wide API tier — #527. */
+const uploadLimiter = rateLimit(rateLimitConfig.mediaUpload);
+
 const ALLOWED_UPLOAD_TYPES = [
     "application/pdf",
     "image/jpeg", "image/png", "image/webp", "image/gif",
@@ -53,6 +57,30 @@ async function uploadHandler(request: NextRequest) {
         }
         
         const { session } = sessionResult;
+
+        /**
+         *   #527 A 50MB ENDPOINT ON THE LIMIT BUILT FOR JSON CALLS.
+         *
+         *   withRateLimit constructs its limiter at module scope from
+         *   lib/security's rateLimitConfig — 200 requests a minute, the
+         *   platform-wide API tier — so this route accepted 200 uploads a minute
+         *   of up to 50MB each.
+         *
+         *   rateLimits.config has had an upload tier the whole time. #274 found
+         *   it "declared and read by nothing" and wired it into
+         *   /api/certificates/upload; it did not reach here, which is the route
+         *   that says of itself, twenty lines below, that it is "the generic one
+         *   behind MasterUploader, and so the one most uploads actually use".
+         *   The strict limit went to the quiet door.
+         *
+         *   Keyed on the USER, not the address: this route already requires a
+         *   session, and #260 and the contact-form note both record that keying
+         *   uploads by IP punishes members behind a carrier NAT.
+         */
+        const limit = await uploadLimiter.check(`upload:${session.user.id}`);
+        if (!limit.success) {
+            return createRateLimitResponse(limit);
+        }
 
         const formData = await request.formData();
         const file = formData.get("file") as File;
@@ -321,4 +349,4 @@ async function uploadHandler(request: NextRequest) {
     }
 }
 
-export const POST = withRateLimit(uploadHandler);
+export const POST = uploadHandler;

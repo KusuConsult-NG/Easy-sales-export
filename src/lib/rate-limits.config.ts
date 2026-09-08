@@ -82,6 +82,34 @@ const LIMITS = {
         maxRequests: 20, // 20 uploads per hour
     },
 
+    /**
+     * The GENERIC uploader — /api/upload, behind MasterUploader.
+     *
+     *   #527. That route took the platform-wide API limit (200 requests a
+     *   minute, from lib/security) while accepting files up to 50MB. The limit
+     *   built for uploads was `fileUpload` above, which #274 wired into
+     *   /api/certificates/upload and not into this one — so the QUIETER upload
+     *   path got the strict limit and the busiest one kept the limit meant for
+     *   cheap JSON calls. The route's own comment calls itself "the generic one
+     *   behind MasterUploader, and so the one most uploads actually use".
+     *
+     *   WHY NOT JUST REUSE fileUpload. Twenty an hour is calibrated for
+     *   certificates, which a member uploads once. This endpoint takes ONE
+     *   REQUEST PER FILE and lib/upload-request retries three times, so a seller
+     *   adding six product images can spend eighteen in a minute. Applying
+     *   twenty would have refused an ordinary listing — the failure #485's
+     *   standing constraint rules out, and worse than the defect.
+     *
+     *   The number is chosen against the throughput, which is what the defect
+     *   actually is: 120 uploads an hour at 50MB caps one identity at ~6GB an
+     *   hour, against ~600GB an hour today. A hundredfold reduction with room
+     *   for six full listing sessions an hour, which no person does by hand.
+     */
+    mediaUpload: {
+        interval: 60 * 60 * 1000, // 1 hour
+        maxRequests: 120,
+    },
+
     // Payment operations - strict (prevent double submission fraud)
     payment: {
         interval: 60 * 1000, // 1 minute
