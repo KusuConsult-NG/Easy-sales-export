@@ -12,6 +12,7 @@ import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { normalizeUserUpdate } from "@/lib/schema-normalizer";
 import { z } from "zod";
 import type { FarmNationOnboardingData } from "@/lib/types/farm-nation-actions";
+import { latestApplication } from "@/lib/latest-application";
 
 /**
  * Submit Farm Nation Onboarding
@@ -193,14 +194,9 @@ async function _checkFarmNationStatusAction(): Promise<ActionResponse<string | n
             }
 
             if (appSnap && !appSnap.empty) {
-                const sortedDocs = [...appSnap.docs].sort((a, b) => {
-                    const aVal = a.data().submittedAt || a.data().createdAt;
-                    const bVal = b.data().submittedAt || b.data().createdAt;
-                    const aTime = aVal?.toDate ? aVal.toDate().getTime() : (aVal ? new Date(aVal).getTime() : 0);
-                    const bTime = bVal?.toDate ? bVal.toDate().getTime() : (bVal ? new Date(bVal).getTime() : 0);
-                    return bTime - aTime;
-                });
-                appDoc = sortedDocs[0];
+                //   #505 One of three hand-written copies of this rule in this
+                //   file. See the header on the getter below.
+                appDoc = latestApplication(appSnap.docs);
             } else {
                 const appId = userData?.serviceRegistrations?.farmNation?.applicationId;
                 let foundDirect = false;
@@ -355,14 +351,37 @@ async function _getFarmNationApplicationAction(): Promise<ActionResponse<any>> {
                 .get();
 
             if (!snap.empty) {
-                const sortedDocs = snap.docs.sort((a, b) => {
-                    const aVal = a.data().submittedAt || a.data().createdAt;
-                    const bVal = b.data().submittedAt || b.data().createdAt;
-                    const aTime = aVal?.toDate ? aVal.toDate().getTime() : (aVal ? new Date(aVal).getTime() : 0);
-                    const bTime = bVal?.toDate ? bVal.toDate().getTime() : (bVal ? new Date(bVal).getTime() : 0);
-                    return bTime - aTime;
-                });
-                appDoc = sortedDocs[0];
+                /**
+                 *   #505 THREE HAND-WRITTEN COPIES OF "WHICH APPLICATION IS
+                 *        CURRENT", AND THEY DID NOT EVEN AGREE ON MUTATION.
+                 *
+                 *   The status checker, this getter and the resubmit each
+                 *   carried the same eleven-line comparator. The checker copied
+                 *   `[...appSnap.docs]` before sorting; the other two called
+                 *   `snap.docs.sort(...)`, which reorders the caller's array in
+                 *   place — the thing lib/latest-application.ts copies
+                 *   specifically to avoid, and says so in its own header.
+                 *
+                 *   NONE OF THE THREE HAD A TIEBREAK. On equal or unreadable
+                 *   dates the comparator returns 0 and the answer comes from
+                 *   incidental order — so the status this module REPORTS, the
+                 *   application it SHOWS and the row a resubmit WRITES could
+                 *   each land on a different one of a member's applications.
+                 *   #504 found exactly that pair in the cooperative twin.
+                 *
+                 *   That is not hypothetical here: #486 built a forensics check
+                 *   called "Approval Drift (User Record vs Application)" because
+                 *   this module's records already disagree with each other.
+                 *
+                 *   The shared rule reads `submittedAt ?? createdAt` through
+                 *   toMillis — which handles Timestamps, ISO strings AND epoch
+                 *   numbers, where the local `.toDate ? … : new Date(…)` ternary
+                 *   handles two of the three — then tiebreaks on the decided
+                 *   stamps and finally on document id, and warns when nothing is
+                 *   readable rather than choosing in silence. Fourth, fifth and
+                 *   sixth copies retired.
+                 */
+                appDoc = latestApplication(snap.docs);
                 applicationId = appDoc.id;
                 foundByQuery = true;
             }
@@ -465,14 +484,10 @@ async function _resubmitFarmNationApplicationAction(
                 .get();
 
             if (!snap.empty) {
-                const sortedDocs = snap.docs.sort((a, b) => {
-                    const aVal = a.data().submittedAt || a.data().createdAt;
-                    const bVal = b.data().submittedAt || b.data().createdAt;
-                    const aTime = aVal?.toDate ? aVal.toDate().getTime() : (aVal ? new Date(aVal).getTime() : 0);
-                    const bTime = bVal?.toDate ? bVal.toDate().getTime() : (bVal ? new Date(bVal).getTime() : 0);
-                    return bTime - aTime;
-                });
-                appRef = sortedDocs[0].ref;
+                //   #505 The same shared rule the getter and the status
+                //   checker now ask, so the row a member is SHOWN is the row
+                //   their correction is WRITTEN to.
+                appRef = latestApplication(snap.docs)!.ref;
                 applicationId = appRef.id;
             }
         }
