@@ -6,6 +6,15 @@ import { buildCsp, generateNonce, NONCE_HEADER } from "@/lib/csp";
 import { isSharedDomainPath, isProtectedPath } from "@/lib/route-manifest";
 
 /**
+ * Marks a response as "wrong hostname", not "not signed in" — #521.
+ *
+ * Two blocks in the proxy below treat any 3xx as an authentication
+ * failure. A canonical-host redirect is neither, and it is the first thing
+ * this middleware emits, so both needed a way to tell them apart.
+ */
+const CANONICAL_REDIRECT_HEADER = "x-canonical-redirect";
+
+/**
  * Hub Middleware - Optimized for Edge Runtime
  * 
  * Performance Goal: Keep execution time under 50ms to prevent Vercel CPU timeouts.
@@ -93,7 +102,16 @@ const authMiddleware = auth((req: any) => {
         //   308 keeps the method and tells the browser not to ask again, and
         //   the clone keeps the path and query — a member landing on
         //   /academy/courses arrives at /academy/courses.
-        return NextResponse.redirect(canonicalUrl, { status: 308 });
+        const canonicalRes = NextResponse.redirect(canonicalUrl, { status: 308 });
+        //   #521 MARKED, BECAUSE TWO LATER BLOCKS TREAT "ANY 3xx" AS A FAILURE.
+        //
+        //   The proxy below turns a 3xx on an /api/ path into 401 Unauthorized,
+        //   and clears the session cookies when a 3xx points at /auth/login.
+        //   Neither is true of a host redirect: this response is "you are on the
+        //   wrong hostname", not "you are not signed in". Both blocks read this
+        //   header and leave it alone.
+        canonicalRes.headers.set(CANONICAL_REDIRECT_HEADER, "1");
+        return canonicalRes;
     }
 
     // ── 1.1. Authentication Protection Gate ────────────────────────────
@@ -313,7 +331,16 @@ export default async function proxy(req: any, event: any) {
                            req.cookies.has("next-auth.session-token") ||
                            req.cookies.has("__Secure-next-auth.session-token");
 
-    if (hasSessionCookie && res && res.status >= 300 && res.status <= 399) {
+    //   #521 A HOST REDIRECT IS NOT A DEAD SESSION.
+    //
+    //   canonicalHostFor sends easysalesexport.com to www, keeping the path. A
+    //   SIGNED-IN member opening easysalesexport.com/auth/login therefore got a
+    //   308 whose Location contains "/auth/login" — and this block cleared their
+    //   session cookies on the way past. Visiting the apex login URL while
+    //   signed in silently signed you out.
+    const isCanonicalRedirect = res?.headers?.get(CANONICAL_REDIRECT_HEADER) === "1";
+
+    if (hasSessionCookie && res && !isCanonicalRedirect && res.status >= 300 && res.status <= 399) {
         const location = res.headers.get("location");
         if (location && (location.includes("/auth/login") || location.includes("/login"))) {
             const hostname = (
@@ -345,9 +372,38 @@ export default async function proxy(req: any, event: any) {
         return nextRes;
     }
 
-    // Force 401 JSON for unauthorized API requests (prevents HTML redirect loops in mobile apps)
+    /**
+     *   #521 EVERY 3xx ON AN /api/ PATH WAS REWRITTEN AS "Unauthorized".
+     *
+     *   The intent is sound — an API caller redirected to an HTML login page
+     *   loops, so answer 401 instead. The condition was not: it fired on ANY
+     *   3xx, and the FIRST thing this middleware does is a canonical-host
+     *   redirect. canonicalHostFor("easysalesexport.com") returns
+     *   "www.easysalesexport.com", so a request to
+     *
+     *       POST https://easysalesexport.com/api/webhooks/paystack
+     *
+     *   produced a 308 to the www host and left here as
+     *
+     *       401 { "success": false, "error": "Unauthorized" }
+     *
+     *   The Location header was discarded with it, so the caller was not even
+     *   told where to go. The same held for every module's www host.
+     *
+     *   THE COST IS THE DIAGNOSIS, NOT ONLY THE FAILURE. An operator whose
+     *   webhook is failing reads "Unauthorized" and goes looking for a signing
+     *   secret. The cause is the hostname, and nothing in the response says so.
+     *
+     *   The 401 now requires the redirect to actually point at an auth page,
+     *   which is the case it was written for. A host redirect passes through as
+     *   the 308 it is.
+     */
     if (req.nextUrl.pathname.startsWith('/api/') && res && res.status >= 300 && res.status <= 399) {
-        return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        const location = res.headers.get("location") ?? "";
+        const isAuthRedirect = location.includes("/auth/login") || location.includes("/auth/register");
+        if (isAuthRedirect) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
     }
     
     return res;
