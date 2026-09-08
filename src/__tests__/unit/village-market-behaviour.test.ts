@@ -474,6 +474,12 @@ describe('the public reads', () => {
 
     it('loads one event with its ACTIVE products, newest first', async () => {
         seedEvent('e1');
+        //   #508 The events these products belong to. They were never seeded:
+        //   the listing passed because nothing asked whether a product's event
+        //   was still running, which is exactly the defect. A flash price has to
+        //   belong to a live event to be offered.
+        seedEvent('e1');
+        seedEvent('e2');
         store.seedAll(FLASH, {
             older: { eventId: 'e1', sellerId: SELLER, status: 'active', title: 'Older', createdAt: '2026-01-01T00:00:00.000Z' },
             newer: { eventId: 'e1', sellerId: SELLER, status: 'active', title: 'Newer', createdAt: '2026-06-01T00:00:00.000Z' },
@@ -494,6 +500,12 @@ describe('the public reads', () => {
     });
 
     it('lists the active flash sales across every event', async () => {
+        //   #508 The events these products belong to. They were never seeded:
+        //   the listing passed because nothing asked whether a product's event
+        //   was still running, which is exactly the defect. A flash price has to
+        //   belong to a live event to be offered.
+        seedEvent('e1');
+        seedEvent('e2');
         store.seedAll(FLASH, {
             a: { eventId: 'e1', sellerId: SELLER, status: 'active', title: 'A', createdAt: '2026-01-02T00:00:00.000Z' },
             b: { eventId: 'e2', sellerId: SELLER, status: 'active', title: 'B', createdAt: '2026-01-01T00:00:00.000Z' },
@@ -519,6 +531,12 @@ describe('the public reads', () => {
             businessName: 'Obi Farms', sellerVerificationStatus: 'approved',
             isVerifiedBadge: true,
         });
+        //   #508 The events these products belong to. They were never seeded:
+        //   the listing passed because nothing asked whether a product's event
+        //   was still running, which is exactly the defect. A flash price has to
+        //   belong to a live event to be offered.
+        seedEvent('e1');
+        seedEvent('e2');
         store.seedAll(FLASH, {
             a: { eventId: 'e1', sellerId: SELLER, status: 'active', title: 'A', createdAt: '2026-01-02T00:00:00.000Z' },
             b: { eventId: 'e1', sellerId: SELLER, status: 'active', title: 'B', createdAt: '2026-01-01T00:00:00.000Z' },
@@ -536,6 +554,9 @@ describe('the public reads', () => {
 
     it('does not invent a verified badge for a seller who has none', async () => {
         store.seed(COLLECTIONS.USERS, SELLER, { businessName: 'Obi Farms' });
+        //   #508 The event this product belongs to — a flash price has to belong
+        //   to a live one to be listed at all.
+        seedEvent('e1');
         store.seed(FLASH, 'a', {
             eventId: 'e1', sellerId: SELLER, status: 'active', title: 'A',
             createdAt: '2026-01-01T00:00:00.000Z',

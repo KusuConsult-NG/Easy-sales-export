@@ -12,7 +12,7 @@
 import { ActionResponse } from "@/lib/safe-action";
 
 import { supabaseDb as db } from "@/lib/supabase-db";
-import { serializeDocs, serializeDoc } from "@/lib/firestore-serialize";
+import { serializeDocs, serializeDoc, toMillis } from "@/lib/firestore-serialize";
 import { FieldValue } from "@/lib/firestore-compat";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
@@ -111,6 +111,50 @@ export async function createVillageMarketEventAction(data: {
 // ---------------------------------------------------------------------------
 // Public: Get Active / Upcoming Village Market Events
 // ---------------------------------------------------------------------------
+
+/**
+ *   #508 A FLASH SALE OUTLIVED ITS EVENT, FOR EVER.
+ *
+ *   getActiveFlashSaleProductsAction asked one question:
+ *
+ *       .where("status", "==", "active")
+ *
+ *   the PRODUCT's status. Nothing asked whether the product's EVENT was still
+ *   running. And ending an event does not touch its products —
+ *   updateVillageMarketEventStatusAction writes the event document and stops, and
+ *   no other writer expires a flash product. Only the seller can, one at a time,
+ *   by hand.
+ *
+ *   So an admin ends a two-day Village Market and every discounted price in it
+ *   stays on the buyer's flash-sale page at the discount, permanently.
+ *
+ *   AND THEY ARE BUYABLE. _payment_orders.ts and _payment_verify.ts both
+ *   decrement stock from FLASH_SALE_PRODUCTS when `item.isFlashSale`, so these
+ *   are not decorative rows — a buyer can order one, and the seller is held to a
+ *   price they offered for a weekend eighteen months ago.
+ *
+ *   THE EVENT LIST ALREADY KNEW THE RULE. getActiveVillageMarketEventsAction
+ *   filters `status in ["upcoming","active"]` AND `endTime > now`. The event
+ *   disappears from the listing while its products keep selling — one rule, two
+ *   surfaces, applied on one of them. #486's class again.
+ *
+ *   STATED ONCE HERE so the two surfaces cannot drift apart again, and so that
+ *   `endTime` is read through toMillis, which handles the Timestamp, the ISO
+ *   string and the epoch number this collection has been written with.
+ */
+const LIVE_EVENT_STATUSES = ["upcoming", "active"];
+
+function isVillageMarketEventLive(event: Record<string, any> | null | undefined, now: number): boolean {
+    if (!event) return false;
+    if (!LIVE_EVENT_STATUSES.includes(String(event.status))) return false;
+
+    //   A missing or unreadable endTime is treated as NOT live. The creator
+    //   requires one, so its absence means a hand-made row, and the failure
+    //   direction that matters is the one that stops charging a buyer a price
+    //   nobody is offering.
+    const ends = toMillis(event.endTime);
+    return ends > 0 && ends > now;
+}
 
 export async function getActiveVillageMarketEventsAction(): Promise<VillageMarketEvent[]> {
     try {
@@ -478,8 +522,37 @@ export async function getActiveFlashSaleProductsAction(): Promise<FlashSaleProdu
             .limit(100)
             .get();
 
-        const products = serializeDocs(snap.docs) as unknown as FlashSaleProduct[];
-        
+        const allProducts = serializeDocs(snap.docs) as unknown as FlashSaleProduct[];
+
+        /**
+         *   #508 Drop anything whose EVENT is over. See isVillageMarketEventLive.
+         *
+         *   One read per unique event, not per product — the same batching the
+         *   seller hydration below already does, and a hundred products belong to
+         *   a handful of events.
+         *
+         *   An event that cannot be read drops its products. That is the same
+         *   direction #492 argued for on screens — a failed read is not an
+         *   answer — turned around for a WRITE-adjacent surface: here the
+         *   confident wrong answer is "this is on sale", and the cost of getting
+         *   it wrong is a buyer paying a price nobody is offering.
+         */
+        const now = Date.now();
+        const eventIds = Array.from(new Set(
+            allProducts.map((p: any) => p.eventId).filter(Boolean),
+        ));
+        const liveEventIds = new Set<string>();
+        await Promise.all(eventIds.map(async (id: string) => {
+            try {
+                const evt = await db.collection(COLLECTIONS.VILLAGE_MARKET_EVENTS).doc(id).get();
+                if (evt.exists && isVillageMarketEventLive(evt.data(), now)) liveEventIds.add(id);
+            } catch (err) {
+                logger.error("getActiveFlashSaleProductsAction: could not read event", { id, err });
+            }
+        }));
+
+        const products = allProducts.filter((p: any) => liveEventIds.has(p.eventId));
+
         // Seller name AND badge, one read per unique seller.
         //
         // This already batched by unique sellerId — the pattern is unchanged. Two
