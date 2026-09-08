@@ -8,6 +8,7 @@ import { getOrderByIdAction } from "@/app/actions/orders";
 import type { Order } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
 import { formatLocalDate } from "@/lib/date-utils";
+import { formatDeliveryEstimate } from "@/lib/delivery-estimate";
 
 export default function OrderConfirmationPage() {
     const params = useParams();
@@ -119,7 +120,7 @@ export default function OrderConfirmationPage() {
                                 <div className="flex items-center justify-between">
                                     <span className="text-gray-600">Est. Delivery:</span>
                                     <span className="font-semibold text-gray-900">
-                                        {formatLocalDate(order.estimatedDeliveryDate)}
+                                        {formatDeliveryEstimate(order.estimatedDeliveryDate)}
                                     </span>
                                 </div>
                             )}

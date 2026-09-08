@@ -249,11 +249,26 @@ export const OrderSchema = z.object({
      *        simply vanish. Each of these is read by a screen, and each — bar
      *        one, named below — has a writer.
      *
-     *        estimatedDeliveryDate is READ BY THREE ORDER SCREENS AND WRITTEN
-     *        BY NOTHING. Recorded, not invented: it is declared optional here
-     *        so the strip does not change what those screens see (undefined
-     *        before, undefined after). Giving it a real value is a product
-     *        decision about who promises a delivery date, not a repair.
+     *        estimatedDeliveryDate was recorded here as "READ BY THREE ORDER
+     *        SCREENS AND WRITTEN BY NOTHING", and #493 found that wrong.
+     *
+     *        _updateOrderStatusAction writes it on the `shipped` transition,
+     *        reached from /marketplace/seller/orders/[id] every time a seller
+     *        marks an order shipped. It is written on the ordinary path, and
+     *        this note said it never was.
+     *
+     *        THAT KIND OF NOTE IS NOT HARMLESS. A field recorded as having no
+     *        writer is a field somebody deletes — along with the three screens
+     *        that read it — on the strength of a sentence in a schema. It is
+     *        corrected rather than quietly replaced, because the correction is
+     *        the useful half.
+     *
+     *        The sentence it got right is kept: HOW LONG the window should be
+     *        is a product decision about logistics, not a repair, and #493 left
+     *        seven days exactly as it found them. What #493 did change is that
+     *        the value is a DAY rather than the clock time the seller happened
+     *        to click at, and that all three screens render it the same way.
+     *        See lib/delivery-estimate.ts.
      */
     sellerIds: z.array(z.string()).default([]),
     buyerPhone: z.string().optional(),

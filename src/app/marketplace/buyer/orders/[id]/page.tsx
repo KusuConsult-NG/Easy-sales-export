@@ -21,6 +21,7 @@ import type { TrackingUpdate } from "@/lib/logistics";
 import { useToast } from "@/contexts/ToastContext";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import type { Order, OrderStatus } from "@/lib/types/marketplace";
+import { formatDeliveryEstimate } from "@/lib/delivery-estimate";
 
 export default function BuyerOrderDetailPage() {
     const { id } = useParams<{ id: string }>();
@@ -394,7 +395,7 @@ export default function BuyerOrderDetailPage() {
                         {order.estimatedDeliveryDate && (
                             <div className="flex justify-between">
                                 <span className="text-slate-500">Est. Delivery</span>
-                                <span className="font-medium text-slate-900">{formatDateTime(order.estimatedDeliveryDate)}</span>
+                                <span className="font-medium text-slate-900">{formatDeliveryEstimate(order.estimatedDeliveryDate)}</span>
                             </div>
                         )}
                     </div>

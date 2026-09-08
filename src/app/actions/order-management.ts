@@ -22,6 +22,7 @@ import { hasReservedStock } from "@/lib/order-status";
 import { canSetOrderStatus, orderStatusRefusal } from "@/lib/order-status-authority";
 import { scopeOrderToSeller } from "@/lib/order-scope";
 import { notifyOrderShipped, notifyOrderDelivered } from "@/lib/marketplace-notifications";
+import { estimatedDeliveryFrom } from "@/lib/delivery-estimate";
 
 /**
  * Get all orders for a seller
@@ -166,9 +167,17 @@ async function _updateOrderStatusAction(
             }
 
             if (finalTrackingNumber) updateData.trackingNumber = finalTrackingNumber;
-            if (newStatus === "shipped") { const estimatedDate = new Date();
-                estimatedDate.setDate(estimatedDate.getDate() + 7);
-                updateData.estimatedDeliveryDate = estimatedDate;
+            /**
+             *   #493 THIS WROTE A PROMISE TO THE MINUTE.
+             *
+             *        `new Date()` carries the current time of day, so the
+             *        estimate landed at whatever o'clock the seller pressed the
+             *        button — and two of the three screens that read it print
+             *        the hour. See lib/delivery-estimate.ts; the window is
+             *        unchanged at seven days and is now named.
+             */
+            if (newStatus === "shipped") {
+                updateData.estimatedDeliveryDate = estimatedDeliveryFrom();
             }
             if (newStatus === "delivered") {
                 updateData.deliveredAt = FieldValue.serverTimestamp();
