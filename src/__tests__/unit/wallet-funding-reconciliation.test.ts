@@ -118,36 +118,64 @@ describe('#298 — processWalletFunding refuses loudly', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('#298 — both jobs treat wallet funding like every other type', () => {
+    /**
+     *   #531 MOVED THE DISPATCH THESE ASSERTIONS WERE READING.
+     *
+     *   They looked for `processWalletFunding(` in each ROUTE's own source,
+     *   because at the time each route had its own hand-written chain. There
+     *   were three such chains and they covered different subsets of the eight
+     *   processors, so #531 replaced all three with one table in
+     *   infrastructure/payments/payment-router.
+     *
+     *   Re-pointed, not relaxed: the property #298 defends is that a wallet
+     *   credit which did not happen is never counted as fulfilled, and it is
+     *   asserted below at the table (which reaches the processor) and at each
+     *   route (which reaches the table). A route that went back to calling the
+     *   action directly still fails here.
+     */
+    const ROUTER = 'src/infrastructure/payments/payment-router.ts';
+
+    it('THE SHARED TABLE CALLS THE PROCESSOR, NOT THE ACTION', () => {
+        const src = code(ROUTER);
+
+        expect(src).toContain('processWalletFunding(');
+        // The bare call that could not fail.
+        expect(src).not.toMatch(/confirmWalletFundingAction\(/);
+    });
+
     for (const [name, rel] of [['cron', CRON], ['admin sync', SYNC]] as const) {
-        it(`the ${name} job calls the processor, not the action`, () => {
+        it(`the ${name} job reaches it, and never the action directly`, () => {
             const src = code(rel);
 
-            expect(src).toContain('processWalletFunding(');
-            // The bare call that could not fail.
+            expect(src).toContain('dispatchPaystackPayment(');
             expect(src).not.toMatch(/await confirmWalletFundingAction\(/);
             expect(src).not.toMatch(/import\("@\/app\/actions\/wallet"\)/);
         });
-
-        it(`and the ${name} job still handles the other six types`, () => {
-            // Vacuity guard: the dispatch has to survive.
-            const src = code(rel);
-
-            for (const p of ['processMarketplaceOrder', 'processExportInvestment', 'processAcademyRegistration']) {
-                expect({ p, present: src.includes(`${p}(`) }).toEqual({ p, present: true });
-            }
-        });
     }
+
+    it('and the table still handles the other types', () => {
+        // Vacuity guard: the dispatch has to survive.
+        const src = code(ROUTER);
+
+        for (const p of ['processMarketplaceOrder', 'processExportInvestment', 'processAcademyRegistration']) {
+            expect({ p, present: src.includes(`${p}(`) }).toEqual({ p, present: true });
+        }
+    });
 
     it('THE CRON ONLY COUNTS A PAYMENT AS HEALED AFTER THE DISPATCH', () => {
         // Positional, because the whole defect is that the counter runs
         // unconditionally after a branch that could not fail. With every branch
         // throwing, reaching the counter means fulfilment happened.
+        //
+        // #531 strengthened this: the counter is now inside `if (healed)`, so
+        // an unroutable payment is not counted either.
         const src = code(CRON);
-        const dispatch = src.indexOf('processWalletFunding(');
+        const dispatch = src.indexOf('dispatchPaystackPayment(');
         const counted = src.indexOf('results.firebaseTotal++', dispatch);
 
         expect(dispatch).toBeGreaterThan(-1);
         expect(counted).toBeGreaterThan(dispatch);
+        expect(src).toContain('if (healed) {');
     });
 
     it('and the catch that a throw lands in still records a discrepancy', () => {

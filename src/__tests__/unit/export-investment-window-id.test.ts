@@ -78,6 +78,22 @@ jest.mock('@/lib/redis', () => ({
 const ROOT = process.cwd();
 const read = (rel: string) => stripComments(readFileSync(join(ROOT, rel), 'utf-8'), { label: rel });
 
+/**
+ *   #531 THE THREE DISPATCH SITES BECAME ONE.
+ *
+ *   These three routes each had their own hand-written dispatch chain, which is
+ *   why this helper had to be checked at three places — the defect it fixed was
+ *   "three copies of one lookup, each written independently". The chains covered
+ *   different subsets of the eight processors, so #531 replaced all three with a
+ *   single table in infrastructure/payments/payment-router.
+ *
+ *   The helper is therefore asserted at the table, and the three routes are
+ *   asserted to reach it. That is stronger than before, not weaker: previously a
+ *   fourth route could have been added with its own bare `metadata.exportId`,
+ *   and now there is nowhere for one to be added.
+ */
+const DISPATCH_TABLE = 'src/infrastructure/payments/payment-router.ts';
+
 const DISPATCH_SITES = [
     'src/app/api/webhooks/paystack/route.ts',
     'src/app/api/cron/reconcile-paystack/route.ts',
@@ -141,12 +157,15 @@ describe('the metadata the live initiator actually writes', () => {
 });
 
 describe('every dispatch site resolves the window id through the shared helper', () => {
-    it.each(DISPATCH_SITES)('%s', (rel) => {
-        const src = read(rel);
-        expect(src).toContain('exportWindowIdFromMetadata');
+    it('THE TABLE THEY ALL DISPATCH THROUGH USES IT', () => {
+        expect(read(DISPATCH_TABLE)).toContain('exportWindowIdFromMetadata');
     });
 
-    it.each(DISPATCH_SITES)('%s no longer reads metadata.exportId bare', (rel) => {
+    it.each(DISPATCH_SITES)('%s reaches that table', (rel) => {
+        expect(read(rel)).toContain('dispatchPaystackPayment(');
+    });
+
+    it.each([DISPATCH_TABLE, ...DISPATCH_SITES])('%s no longer reads metadata.exportId bare', (rel) => {
         // The exact shape of the defect: three copies of one lookup, each
         // written independently, all reading the key the live initiator does
         // not set.

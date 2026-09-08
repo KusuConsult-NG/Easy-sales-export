@@ -123,15 +123,12 @@ export async function GET(request: NextRequest) {
         results.firebaseTotal = firebaseRefs.size;
 
         // ── 3. Find and Auto-Heal transactions in Paystack but not in Firebase ──────────────────
-        const { 
-            processMarketplaceOrder,
-    processWalletFunding, 
-            processExportInvestment, 
-            processCooperativeRegistration, 
-            processAcademyRegistration, 
-            processCooperativeContribution,
-            exportWindowIdFromMetadata
-        } = await import("@/infrastructure/payments/service");
+        //
+        //   #531 One dispatcher, shared with the webhook and the admin sync.
+        //   This chain routed six of the nine processors service.ts exports —
+        //   it could not fulfil a farm-nation or WAVE registration — and it
+        //   counted what it could not route as healed. See payment-router.
+        const { dispatchPaystackPayment } = await import("@/infrastructure/payments/payment-router");
 
         for (const tx of allPaystackTransactions) {
             if (!firebaseRefs.has(tx.reference)) {
@@ -165,35 +162,42 @@ export async function GET(request: NextRequest) {
 
                             console.log(`[Reconciliation Cron] Auto-healing missing payment ${tx.reference} of type "${type}" for user: ${userId}`);
 
-                            if (type === "marketplace_order") {
-                                await processMarketplaceOrder(tx.reference, amountPaidv, userId, paidAtDate);
-                            } else if (type === "export_investment") {
-                                // Either name — see exportWindowIdFromMetadata. Reading
-                                // `exportId` alone meant this job could not heal the
-                                // very payments it exists to find.
-                                const exportId = exportWindowIdFromMetadata(metadata);
-                                await processExportInvestment(tx.reference, amountPaidv, userId, exportId as string, paidAtDate);
-                            } else if (type === "cooperative_membership_registration") {
-                                const tier = metadata.membershipTier || metadata.plan || "Member";
-                                const membershipId = metadata.membershipId || userId;
-                                await processCooperativeRegistration(tx.reference, amountPaidv, userId, tier, membershipId, paidAtDate);
-                            } else if (type === "academy_registration") {
-                                const plan = metadata.plan;
-                                await processAcademyRegistration(tx.reference, amountPaidv, userId, plan, paidAtDate);
-                            } else if (type === "contribution") {
-                                await processCooperativeContribution(tx.reference, amountPaidv, userId, paidAtDate);
-                            } else if (type === "wallet_funding") {
-                                // #298. A processor that THROWS on refusal, like the
-                                // other six branches — so a wallet credit that did not
-                                // happen falls through to missingInFirebase instead of
-                                // being counted as healed.
-                                await processWalletFunding(tx.reference, paidAtDate);
+                            const healed = await dispatchPaystackPayment(type, {
+                                reference: tx.reference,
+                                amount: amountPaidv,
+                                userId,
+                                metadata,
+                                paidAt: paidAtDate,
+                            });
+
+                            //   #531 THE THREE LINES BELOW USED TO RUN
+                            //   UNCONDITIONALLY, under the comment "Successfully
+                            //   processed", after a chain with no else.
+                            //
+                            //   A payment whose type matched nothing was counted
+                            //   as healed AND the `continue` skipped the
+                            //   missingInFirebase.push at the foot of the loop —
+                            //   so the one job that exists to surface payments
+                            //   the platform missed was removing them from its
+                            //   own discrepancy list. A payment with no
+                            //   application metadata (a Paystack payment link,
+                            //   which is the shape of the twelve ghost ₦10,000
+                            //   payments) has `type` null and takes exactly this
+                            //   path every run.
+                            //
+                            //   Now only a payment a processor actually fulfilled
+                            //   is marked healed. Anything else falls through to
+                            //   the discrepancy list, where a human sees it.
+                            if (healed) {
+                                results.firebaseTotal++;
+                                firebaseRefs.add(tx.reference);
+                                continue;
                             }
 
-                            // Successfully processed — increment local counter and add to set to bypass discrepancy marking
-                            results.firebaseTotal++;
-                            firebaseRefs.add(tx.reference);
-                            continue;
+                            console.error(
+                                `[Reconciliation Cron] ${tx.reference} could not be routed — type "${type}". `
+                                + `Reported as a discrepancy rather than counted as healed.`,
+                            );
                         }
                     }
                 } catch (healErr) {

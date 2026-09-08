@@ -1465,6 +1465,26 @@ export async function processWalletFunding(reference: string, paidAt?: Date) {
 
     if (!result?.success) {
         const reason = (result as { error?: string } | undefined)?.error || "Wallet funding was not applied";
+
+        //   #531 "Already processed" IS NOT A FAILURE, AND THE ACTION SAYS SO.
+        //
+        //   confirmWalletFundingAction returns it from a branch whose own
+        //   comment reads "A duplicate delivery of a payment already credited.
+        //   Not an error." Throwing on it made a credited wallet look like an
+        //   unfulfilled payment to two of the three callers: the cron counted
+        //   it as a discrepancy and the admin sync as an error, on money that
+        //   had already reached the member.
+        //
+        //   The webhook alone got this right — it special-cased the same string
+        //   — and it had to, because Paystack RETRIES a delivery that answers
+        //   500, so throwing here would have put a duplicate delivery into a
+        //   retry loop. Handling it in the processor is what lets all three
+        //   doors share one dispatcher.
+        if (reason === "Already processed") {
+            logger.info(`[Payments] Wallet funding ${reference} was already credited; nothing to do`);
+            return;
+        }
+
         logger.error(`[Payments] Wallet funding ${reference} was NOT credited: ${reason}`);
         // Thrown so the caller's catch treats it exactly like every other
         // processor's failure — as a payment that still needs healing.

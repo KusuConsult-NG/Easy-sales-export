@@ -9,16 +9,15 @@ import { FieldValue } from "@/lib/firestore-compat";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
+// #531 The dispatch table, shared with the webhook and cron/reconcile-paystack.
+// This route's own chain routed eight of the nine processors — it could not
+// fulfil a cooperative contribution — and wrote everything it could not route
+// as `status: "completed"`.
 import {
-    processMarketplaceOrder,
-    processWalletFunding,
-    processExportInvestment,
-    processCooperativeRegistration,
-    processAcademyRegistration,
-    processFarmNationRegistration,
-    processWaveRegistration,
-    exportWindowIdFromMetadata
-} from "@/infrastructure/payments/service";
+    dispatchPaystackPayment,
+    UNHANDLED_PAYMENT_STATUS,
+} from "@/infrastructure/payments/payment-router";
+import { resolveActiveUserId } from "@/lib/user-identity";
 import { recordAdminAction } from "@/lib/audit-log";
 import { eachPaystackTransaction } from "@/lib/paystack-sweep";
 
@@ -149,6 +148,15 @@ async function paystackSyncHandler(_req: NextRequest) {
         let synced = 0;
         let skipped = 0;
         let errors = 0;
+        //   #531 Payments nothing here can fulfil, counted and NAMED.
+        //
+        //   They used to be written as `status: "completed"` and added to
+        //   `synced`. Four readers sum PROCESSED_PAYMENTS where status is
+        //   "completed" as revenue, and this route skips a reference already
+        //   marked completed — so an unroutable payment entered the revenue
+        //   figure with nobody credited and could never be healed afterwards.
+        let unhandled = 0;
+        const unhandledReferences: string[] = [];
 
         // Process in chunks to avoid overwhelming Firestore
         const CHUNK = 50;
@@ -165,8 +173,25 @@ async function paystackSyncHandler(_req: NextRequest) {
                         const amountNGN = tx.amount / 100;
                         const metadata = tx.metadata || {};
                         // COMPATIBILITY: Old cooperative portal used `purpose` instead of `type`.
-                        const type = metadata.type || metadata.purpose || "payment";
-                        const userId = metadata.userId ?? null;
+                        //
+                        //   #531 `|| "payment"` was a THIRD spelling of "we do not
+                        //   know". The webhook and the cron both use `|| null`, and
+                        //   a placeholder that reads like a real type is how an
+                        //   unroutable payment came to be written as completed.
+                        const type = metadata.type || metadata.purpose || null;
+
+                        //   #531 The legacy identity chain, which this route alone
+                        //   did not walk. It read `metadata.userId ?? null` while
+                        //   the webhook and the cron both call resolveActiveUserId
+                        //   — #449: "on a twice-migrated member the session said one
+                        //   account and this credited another". This is the MANUAL
+                        //   repair tool, reached precisely when a payment did not
+                        //   land, so fulfilling it against a stale identity is the
+                        //   worst place for that gap to have been.
+                        const rawUserId = metadata.userId ?? null;
+                        const userId = rawUserId
+                            ? (await resolveActiveUserId(rawUserId, db.collection(COLLECTIONS.USERS))).id
+                            : null;
                         const paidAtDate = tx.paid_at ? new Date(tx.paid_at) : undefined;
 
                         if (isSuccess) {
@@ -182,34 +207,31 @@ async function paystackSyncHandler(_req: NextRequest) {
                             // The user requested to strictly enforce Paystack numbers. By using the core
                             // webhook processors here, we ensure that resolving a 'pending' payment
                             // automatically updates the user's cooperative/academy/etc documents too!
-                            if (type === "marketplace_order") {
-                                await processMarketplaceOrder(reference, amountNGN, userId, paidAtDate);
-                            } else if (type === "export_investment") {
-                                // Either name — see exportWindowIdFromMetadata.
-                                await processExportInvestment(reference, amountNGN, userId, exportWindowIdFromMetadata(metadata) as string, paidAtDate);
-                            } else if (type === "cooperative_membership_registration") {
-                                const tier = metadata.membershipTier || metadata.plan || "Member";
-                                // Legacy payments from old portal may not have membershipId — fall back to userId
-                                const membershipId = metadata.membershipId || userId;
-                                await processCooperativeRegistration(reference, amountNGN, userId, tier, membershipId, paidAtDate);
-                            } else if (type === "academy_registration") {
-                                await processAcademyRegistration(reference, amountNGN, userId, metadata.plan, paidAtDate);
-                            } else if (type === "farm_nation_registration" || type === "farm_nation_subscription") {
-                                await processFarmNationRegistration(reference, amountNGN, userId, paidAtDate);
-                            } else if (type === "wave_registration" || type === "wave_application") {
-                                await processWaveRegistration(reference, amountNGN, userId, paidAtDate);
-                            } else if (type === "wallet_funding") {
-                                // #298. A processor that THROWS on refusal, like the
-                                // other six branches — so a wallet credit that did not
-                                // happen is not counted as synced.
-                                await processWalletFunding(reference, paidAtDate);
-                            } else {
+                            const handled = await dispatchPaystackPayment(type, {
+                                reference, amount: amountNGN, userId: userId as string, metadata, paidAt: paidAtDate,
+                            });
+
+                            if (!handled) {
+                                //   #531 THIS BRANCH USED TO WRITE `status: "completed"`.
+                                //
+                                //   A payment nothing here can fulfil was recorded as
+                                //   a completed payment — summed as revenue by four
+                                //   readers, and skipped by the check twenty lines
+                                //   above on every later run, so it could never be
+                                //   healed. The webhook's own note says why that is
+                                //   wrong: "with a status that is NOT 'completed' so
+                                //   it is not summed as revenue, and logged loudly
+                                //   enough to be found."
+                                //
+                                //   Same status the webhook writes, so the two doors
+                                //   leave one kind of record and an admin looking for
+                                //   these has one thing to search for.
                                 await docRef.set({
                                     reference,
-                                    type,
+                                    type: type || "unknown",
                                     userId,
                                     amount: amountNGN,
-                                    status: "completed",
+                                    status: UNHANDLED_PAYMENT_STATUS,
                                     processedAt: tx.paid_at ? new Date(tx.paid_at) : FieldValue.serverTimestamp(),
                                     source: "paystack_sync",
                                     channel: tx.channel ?? null,
@@ -217,8 +239,16 @@ async function paystackSyncHandler(_req: NextRequest) {
                                     customerEmail: tx.customer?.email ?? null,
                                     metadata,
                                 }, { merge: true });
+
+                                unhandled++;
+                                unhandledReferences.push(reference);
+                                logger.error(
+                                    `[PaystackSync] ${reference} could not be routed — type "${type}". `
+                                    + `Recorded as ${UNHANDLED_PAYMENT_STATUS}, NOT as revenue.`,
+                                );
+                                return;
                             }
-                            
+
                             synced++;
                             logger.info(`[PaystackSync] Back-filled successful payment & updated module UI: ${reference}`);
                         } else if (isFailed || isAbandoned) {
@@ -263,7 +293,7 @@ async function paystackSyncHandler(_req: NextRequest) {
             );
         }
 
-        logger.info(`[PaystackSync] Done. synced=${synced} skipped=${skipped} errors=${errors}`);
+        logger.info(`[PaystackSync] Done. synced=${synced} skipped=${skipped} unhandled=${unhandled} errors=${errors}`);
 
         try {
             const { deleteCache, deleteCachePattern } = await import("@/lib/redis");
@@ -279,7 +309,19 @@ async function paystackSyncHandler(_req: NextRequest) {
             action: 'paystack_sync_run',
             userId: session.user.id,
             targetType: 'paystack_reconciliation',
-            metadata: { total: allTxs.length },
+            //   #531 What the run DID, not just what it read.
+            //
+            //   The row recorded `{ total }` alone — the number of transactions
+            //   fetched — on an operation that grants roles, activates
+            //   memberships and credits wallets. "How many members did this run
+            //   fulfil" is the question an audit row about a reconciliation
+            //   exists to answer, and it could not be asked of it.
+            metadata: {
+                total: allTxs.length,
+                synced, skipped, errors, unhandled,
+                truncated: syncTruncated,
+                unhandledReferences: unhandledReferences.slice(0, 50),
+            },
         });
         return NextResponse.json({
             success: true,
@@ -296,6 +338,12 @@ async function paystackSyncHandler(_req: NextRequest) {
             synced,
             skipped,
             errors,
+            //   Named in the response so the admin who pressed the button sees
+            //   them. These are payments a person made that nothing on this
+            //   platform knows how to fulfil, which is the one result of this
+            //   job that needs a human.
+            unhandled,
+            unhandledReferences: unhandledReferences.slice(0, 50),
         });
     } catch (error: any) {
         logger.error("[PaystackSync] Fatal error:", error);

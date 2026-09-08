@@ -8,21 +8,26 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { generateAndSendWhatsAppInvite } from "@/lib/whatsapp-invites";
 
-import { processMarketplaceOrder, processExportInvestment, processCooperativeRegistration, processAcademyRegistration, processCooperativeContribution, exportWindowIdFromMetadata } from "@/infrastructure/payments/service";
+// #531 The dispatch table, shared with cron/reconcile-paystack and
+// admin/finance/paystack-sync. The processors are reached through it.
+import { dispatchPaystackPayment, UNHANDLED_PAYMENT_STATUS } from "@/infrastructure/payments/payment-router";
 import { claimPaymentOnce } from "@/lib/wallet-ledger";
 
 /**
- * Types this route dispatches. Anything else is recorded as unhandled rather
- * than dropped — kept next to the dispatch below so the two cannot drift.
+ *   #531 THIS LIST WAS RIGHT ABOUT ITS OWN ROUTE AND WRONG ABOUT THE PLATFORM.
+ *
+ *   Its note read "kept next to the dispatch below so the two cannot drift",
+ *   and within this file that held. What it could not see is that TWO OTHER
+ *   ROUTERS dispatch the same payments — cron/reconcile-paystack and
+ *   admin/finance/paystack-sync — and the three between them covered different
+ *   subsets of the nine processors service.ts exports. This route and the cron
+ *   could not fulfil a farm-nation or WAVE registration at all; the sync could
+ *   not fulfil a cooperative contribution.
+ *
+ *   The set and the dispatch both live in infrastructure/payments/payment-router
+ *   now, so all three doors route identically and a tenth processor reaches
+ *   every one of them at once.
  */
-const HANDLED_TYPES = new Set([
-    "marketplace_order",
-    "export_investment",
-    "cooperative_membership_registration",
-    "academy_registration",
-    "contribution",
-    "wallet_funding",
-]);
 
 // Force dynamic since we read headers
 export const dynamic = 'force-dynamic';
@@ -96,32 +101,15 @@ export async function POST(req: NextRequest) {
             // NOTE: Must await each handler — Paystack expects 200 only after full commit.
             // Without await, the function returns before the Firestore transaction completes.
             try {
-                if (type === "marketplace_order") {
-                    await processMarketplaceOrder(reference, amountPaidv, userId, paidAtDate);
-                } else if (type === "export_investment") {
-                    // Either name — see exportWindowIdFromMetadata. This read
-                    // `metadata.exportId` alone, which the only initiator with a
-                    // UI does not write, so no live investment was ever fulfilled
-                    // here.
-                    const exportId = exportWindowIdFromMetadata(metadata);
-                    await processExportInvestment(reference, amountPaidv, userId, exportId as string, paidAtDate);
-                } else if (type === "cooperative_membership_registration") {
-                    const tier = metadata.membershipTier || metadata.plan || "Member";
-                    // Legacy payments from old portal may not have membershipId — fall back to userId
-                    const membershipId = metadata.membershipId || userId;
-                    await processCooperativeRegistration(reference, amountPaidv, userId, tier, membershipId, paidAtDate);
-                } else if (type === "academy_registration") {
-                    const plan = metadata.plan;
-                    await processAcademyRegistration(reference, amountPaidv, userId, plan, paidAtDate);
-                } else if (type === "contribution") {
-                    await processCooperativeContribution(reference, amountPaidv, userId, paidAtDate);
-                } else if (type === "wallet_funding") {
-                    const { confirmWalletFundingAction } = await import("@/app/actions/wallet");
-                    const res = await confirmWalletFundingAction(reference, paidAtDate);
-                    if (!res.success && res.error !== "Already processed") {
-                        throw new Error(res.error || "Wallet funding verification failed");
-                    }
-                }
+                //   One dispatcher, shared with the cron and the admin sync
+                //   (#531). The wallet branch used to be inlined here with its
+                //   own "Already processed" tolerance; that tolerance lives in
+                //   processWalletFunding now, so a Paystack retry still cannot
+                //   loop and the other two doors stop treating an
+                //   already-credited wallet as an unfulfilled payment.
+                const handled = await dispatchPaystackPayment(type, {
+                    reference, amount: amountPaidv, userId, metadata, paidAt: paidAtDate,
+                });
 
                 // No status write here either. The handlers own the row they
                 // claimed, and overwriting it is not harmless: processExportInvestment
@@ -133,7 +121,7 @@ export async function POST(req: NextRequest) {
                 // unknown payment vanishes silently. It is claimed explicitly,
                 // with a status that is NOT "completed" so it is not summed as
                 // revenue, and logged loudly enough to be found.
-                if (!type || !HANDLED_TYPES.has(type)) {
+                if (!handled) {
                     logger.error(`[Paystack Webhook] Unhandled payment type for ${reference}`, { type });
                     await claimPaymentOnce({
                         reference,
@@ -141,7 +129,7 @@ export async function POST(req: NextRequest) {
                         amount: amountPaidv,
                         type: type || "unknown",
                         source: "webhook",
-                        status: "unhandled_type",
+                        status: UNHANDLED_PAYMENT_STATUS,
                     });
                 }
             } catch (processingError: any) {

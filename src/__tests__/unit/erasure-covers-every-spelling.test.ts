@@ -303,7 +303,24 @@ describe('#371 — DOTTED ROOTS: a new nested root cannot arrive unnoticed', () 
             const src = code(f);
             if (!src.includes('atomicUpdateUser') && !src.includes('COLLECTIONS.USERS')) continue;
 
-            for (const m of src.matchAll(/['"]([A-Za-z_][A-Za-z0-9_]*)\.[A-Za-z0-9_.]+['"]\s*:/g)) {
+            //   #531 ANCHORED AT A KEY POSITION, not just "a quoted dotted
+            //   string followed by a colon".
+            //
+            //   The looser pattern matched a TERNARY: paystack-sync writes
+            //
+            //       paystackEvent: isAbandoned ? "charge.abandoned" : "charge.failed",
+            //
+            //   and the `:` between the two branches made "charge.abandoned"
+            //   read as a nested user key, so `charge` was reported as a new
+            //   un-erased PII root. The route entered this sweep at all because
+            //   #531 gave it resolveActiveUserId, which touches COLLECTIONS.USERS.
+            //
+            //   NOTHING IS GIVEN UP. An object key can only open after `{`, a
+            //   `,` or the start of a line, and the space before the colon is
+            //   still allowed. Measured across the whole tree before changing
+            //   it: the two patterns find the same eight roots, and the anchored
+            //   one drops only `charge`.
+            for (const m of src.matchAll(/(?:^|[{,])\s*['"]([A-Za-z_][A-Za-z0-9_]*)\.[A-Za-z0-9_.]+['"]\s*:/gm)) {
                 const list = roots.get(m[1]) ?? [];
                 if (!list.includes(f)) list.push(f);
                 roots.set(m[1], list);

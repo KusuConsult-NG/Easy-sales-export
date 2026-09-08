@@ -65,13 +65,23 @@ function code(rel: string): string {
         .join('\n');
 }
 
+const ROUTER = 'src/infrastructure/payments/payment-router.ts';
+
 describe('what the webhook actually credits on', () => {
     it('the metadata `type`, and nothing else', () => {
         // THE premise. Without this, a missing type would be cosmetic.
+        //
+        //   #531 re-anchored. The webhook's own if/else chain was one of three
+        //   hand-written dispatchers covering different subsets of the eight
+        //   processors — the admin sync could not route "contribution" at all —
+        //   so all three go through one table now. The premise is unchanged and
+        //   is asserted where the routing happens.
         const webhook = code(WEBHOOK);
+        const router = code(ROUTER);
 
-        expect(webhook).toContain('} else if (type === "contribution") {');
-        expect(webhook).toContain('await processCooperativeContribution(reference, amountPaidv, userId, paidAtDate);');
+        expect(webhook).toContain('const handled = await dispatchPaystackPayment(type, {');
+        expect(router).toContain('types: ["contribution"]');
+        expect(router).toContain('processCooperativeContribution(c.reference, c.amount, c.userId, c.paidAt)');
     });
 
     it('falling back to `purpose`, which is what made the wrong spelling fatal', () => {

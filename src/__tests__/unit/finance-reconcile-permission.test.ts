@@ -166,14 +166,24 @@ describe('the scheduled twin, which was always guarded correctly', () => {
         // Rather than treating an unset variable as "no check needed", which is
         // how an unauthenticated fulfilment endpoint appears in an environment
         // nobody thought about.
+        //   #531 re-anchored. The processors were reached by a hand-written
+        //   chain in this file; all three reconciliation doors dispatch through
+        //   infrastructure/payments/payment-router now, so the thing that has to
+        //   come after the secret check is the dispatch, not a processor name.
         const src = source(CRON);
         expect(src).toContain('CRON_SECRET not configured');
         expect(src.indexOf('CRON_SECRET not configured'))
-            .toBeLessThan(src.indexOf('processMarketplaceOrder'));
+            .toBeLessThan(src.indexOf('dispatchPaystackPayment('));
     });
 
     it('runs the same processors, which is why both needed checking', () => {
-        expect(source(CRON)).toContain('processCooperativeRegistration');
+        //   Still the point of this assertion — this endpoint fulfils payments —
+        //   asked of the table it dispatches through rather than of its own
+        //   source. Both doors reach the same eight processors now, which is
+        //   what #531 was about.
+        expect(source(CRON)).toContain('dispatchPaystackPayment(');
+        expect(source('src/infrastructure/payments/payment-router.ts'))
+            .toContain('processCooperativeRegistration');
     });
 });
 
