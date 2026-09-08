@@ -170,12 +170,36 @@ describe('a name cannot become a formula in an admin spreadsheet', () => {
 
     it('finds every CSV producer, not just the four known ones', () => {
         // Guard against the list above going stale the way the role lists did.
+        //
+        // THE MATCH IS ON CODE, NOT ON PROSE — #528. grep reads the raw file, so
+        // this sweep called any module that MENTIONS "text/csv" a CSV producer
+        // and demanded it import csv-safe. lib/data-export-record quotes #309's
+        // walk predicate — `if (src.includes('text/csv'))` — inside a comment
+        // explaining which files that walk could not reach, writes no CSV at
+        // all, and failed here. That is #493's trap, which this audit has now
+        // met nine times: a check that reads a file's explanation of a thing as
+        // the thing.
+        //
+        // Filtering through codeOnly loses no coverage. A module that really
+        // emits a CSV carries "text/csv" in a header or a Content-Type, which is
+        // code and survives; only the ones that talk about it drop out. The
+        // assertion below that the four known producers are still found is what
+        // keeps that claim honest rather than assumed.
         const producers = execSync(
             `grep -rl 'text/csv' src --include='*.ts' | grep -v __tests__ || true`,
             { encoding: 'utf-8', cwd: process.cwd() }
-        ).split('\n').filter(Boolean);
+        ).split('\n').filter(Boolean)
+            .filter((p) => codeOnly(source(p)).includes('text/csv'));
 
+        // The three ROUTES must still be found. audit-log-actions is not in
+        // this set and never was: it returns CSV text from a server action
+        // rather than a response, so it carries no content type for grep to
+        // match — which is exactly why CSV_EXPORTS is hand-listed alongside a
+        // derived sweep, and why neither alone would do.
         expect(producers.length).toBeGreaterThan(0);
+        for (const file of CSV_EXPORTS.filter((f) => f.includes('/api/'))) {
+            expect(producers).toContain(file);
+        }
         for (const p of producers) {
             expect(source(p)).toContain('@/lib/csv-safe');
         }

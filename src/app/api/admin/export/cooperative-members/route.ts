@@ -8,6 +8,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { csvDocument } from "@/lib/csv-safe";
 import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
+import { writeDataExportRecord } from "@/lib/data-export-record";
 
 export async function GET(request: NextRequest) {
     try {
@@ -182,6 +183,24 @@ export async function GET(request: NextRequest) {
         });
 
         const csvContent = csvDocument(headers, rows);
+
+        // #528 The record that this happened — see the note on the users route.
+        //
+        // The filters go on the row deliberately. `state`, `lga` and `search`
+        // are what the admin asked FOR, not a member's data, and a record that
+        // says only "an export happened" cannot answer the question an audit
+        // log exists for. `rows.length` is the count AFTER the in-memory state,
+        // lga and search filters above, which is the number of people in the
+        // file rather than the number the query returned.
+        await writeDataExportRecord({
+            dataset: "cooperative_members",
+            userId: session.user.id,
+            userEmail: session.user.email ?? undefined,
+            count: rows.length,
+            truncated: snapshot.truncated,
+            filters: { state, lga, fromDate, toDate, search: search || null },
+            headers: request.headers,
+        });
 
         return new NextResponse(csvContent, {
             status: 200,

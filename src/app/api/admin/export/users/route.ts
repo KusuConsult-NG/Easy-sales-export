@@ -7,6 +7,7 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { csvDocument } from "@/lib/csv-safe";
+import { writeDataExportRecord } from "@/lib/data-export-record";
 
 export async function GET(request: NextRequest) {
     try {
@@ -126,6 +127,26 @@ export async function GET(request: NextRequest) {
         });
 
         const csvContent = csvDocument(headers, rows);
+
+        // #528 The record that this happened.
+        //
+        // #309 made twelve unrecorded admin exports leave a trace, by walking
+        // `.tsx` files under src/app/admin for `text/csv`. This route is a `.ts`
+        // file under src/app/api and could not appear in that walk — so the
+        // largest export on the platform, every profile it has, stayed the one
+        // nobody could tell had been taken. The calling page reaches it with
+        // `window.location.href`, which an admin can also type.
+        //
+        // Written before the bytes leave, and carrying what only the server
+        // knows: the true row count and whether the sweep was truncated.
+        await writeDataExportRecord({
+            dataset: "platform_users",
+            userId: session.user.id,
+            userEmail: session.user.email ?? undefined,
+            count: rows.length,
+            truncated: snapshot.truncated,
+            headers: request.headers,
+        });
 
         return new NextResponse(csvContent, {
             status: 200,

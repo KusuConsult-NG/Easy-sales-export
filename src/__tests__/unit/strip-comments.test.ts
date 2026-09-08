@@ -352,7 +352,18 @@ describe('it agrees with the naive version everywhere the naive version is right
         // strips OTHER files — the two KYC routes and the parked provider
         // module — with its own line-based codeOnly(), and never reads its own
         // text, so no assertion in it can be misled by the mangling.
-        expect(AFFECTED.length).toBeLessThanOrEqual(17);
+        //
+        // SEVENTEEN became EIGHTEEN when #528 added
+        // the-export-sweep-only-walked-the-browser.test.ts. TENTH form, and the
+        // plainest one yet: that file's header quotes the two URLs the finding
+        // is about — `window.location.href = "/api/admin/export/users"` and the
+        // routes under /api/admin/… — so it carries `//` inside quoted strings,
+        // which is precisely the trap this whole describe exists to measure.
+        //
+        // Raised rather than relaxed, on the same test as every time: that file
+        // strips OTHER files with lib/testing/strip-comments — the good one —
+        // and never reads its own text, so no assertion in it can be misled.
+        expect(AFFECTED.length).toBeLessThanOrEqual(18);
         expect(AFFECTED).toContain('src/lib/csp.ts');
         expect(AFFECTED).toContain('src/__tests__/unit/harness-covers-adapter.test.ts');
         expect(AFFECTED).toContain('src/__tests__/unit/kyc-route-bypass.test.ts');

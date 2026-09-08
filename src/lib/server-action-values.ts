@@ -42,6 +42,10 @@ export const EXPORTABLE_DATASETS = [
     "academy_applications",
     "audit_logs",
     "cooperative_loans",
+    // #528 The server-side export routes. #309's walk covered `.tsx` files
+    // under src/app/admin, so no route handler could appear in it — and the
+    // three it could not see are the largest exports the platform has.
+    "cooperative_members",
     "cooperative_transactions",
     "export_applications",
     "farm_nation_applications",
@@ -49,6 +53,8 @@ export const EXPORTABLE_DATASETS = [
     "finance_report",
     "marketplace_buyers",
     "marketplace_sellers",
+    // Every profile on the platform: /api/admin/export/users .all()s USERS.
+    "platform_users",
     "wave_applications",
     "wave_compliance",
     "wave_members",

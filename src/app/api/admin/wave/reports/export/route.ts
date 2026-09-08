@@ -7,6 +7,7 @@ import { csvDocument } from "@/lib/csv-safe";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { hasAdminPermission } from "@/lib/admin-permissions";
+import { writeDataExportRecord } from "@/lib/data-export-record";
 
 /**
  * API Route: Export WAVE Compliance Reports (PDF/CSV)
@@ -143,6 +144,35 @@ export async function POST(request: NextRequest) {
                 createdAt: appData.createdAt?.toDate?.()?.toISOString?.() ?? appData.createdAt ?? null,
             };
         });
+
+        // #528 The record that this happened — see the note on the users route.
+        //
+        // wave/compliance/page.tsx IS in #309's list of screens and does not
+        // build a CSV: it matched the walk on
+        // `contentType.includes("text/csv")`, which sniffs the type of a file
+        // THIS route made. So the recordExport landed on the page that consumes
+        // the export while the route that authors it recorded nothing, and a
+        // direct POST here — the route is a POST endpoint, callable without the
+        // page — left no trace at all. The page's own call is left alone: it
+        // fires only when the download reaches a browser, this one fires
+        // whenever the file is produced, and a duplicated true record is not a
+        // defect where a missing one is.
+        //
+        // BOTH FORMATS ARE RECORDED. `format=pdf` renders an HTML report
+        // carrying fifty applicants' names, states and occupations; it is an
+        // export of people either way. Nothing is recorded for a format this
+        // route refuses, because no file leaves.
+        if (format === "csv" || format === "pdf") {
+            await writeDataExportRecord({
+                dataset: "wave_compliance",
+                userId: session.user.id,
+                userEmail: session.user.email ?? undefined,
+                count: applications.length,
+                truncated: applicationsSnapshot.truncated,
+                filters: { timeframe, format },
+                headers: request.headers,
+            });
+        }
 
         if (format === "csv") {
             return generateCSV(applications, timeframe);

@@ -2,9 +2,12 @@
 
 import { requireSession } from "@/lib/session-guard";
 import { isAdmin } from "@/lib/admin-permissions";
-import { createAdminAuditLog } from "@/lib/audit-log";
 import { logger } from "@/lib/logger";
 import { withFlexibleSafeAction, type ActionResponse } from "@/lib/safe-action";
+// #528 The rule that validates the dataset and writes the row lives in
+// lib/data-export-record, so the three SERVER export routes share it rather
+// than restating it three more times. This action keeps its own gate.
+import { writeDataExportRecord } from "@/lib/data-export-record";
 
 /**
  * Recording that an admin downloaded a spreadsheet of people.
@@ -63,10 +66,9 @@ import { withFlexibleSafeAction, type ActionResponse } from "@/lib/safe-action";
 //
 // A "use server" module may only export async functions: every export is
 // registered as a server action, and an array is not callable, so the build
-// refused the module. It is imported here and NOT re-exported — a re-export is
-// still an export of a value from this module, so it would fail the same way.
-// Callers import it from lib/server-action-values.
-import { EXPORTABLE_DATASETS } from "@/lib/server-action-values";
+// refused the module. Callers import it from lib/server-action-values, and
+// this module no longer needs it directly: #528 moved the check into
+// lib/data-export-record so the server export routes apply the same one.
 
 async function _recordDataExportAction(
     dataset: string,
@@ -83,27 +85,20 @@ async function _recordDataExportAction(
             return { success: false as const, error: "Unauthorized", data: null };
         }
 
-        if (!(EXPORTABLE_DATASETS as readonly string[]).includes(dataset)) {
-            // Refused rather than recorded under whatever the caller named. A
-            // row filed against an unknown target is worse than no row: it
-            // reads as evidence and is not.
-            logger.error(`[DataExport] refused an audit row for an unknown dataset: ${dataset}`, {
-                userId: session.user.id,
-            });
-            return { success: false as const, error: "Unknown dataset", data: null };
-        }
-
-        const count = Number.isFinite(Number(details.count)) ? Number(details.count) : null;
-
-        await createAdminAuditLog({
-            action: "data_export",
+        const outcome = await writeDataExportRecord({
+            dataset,
             userId: session.user.id,
-            targetId: dataset,
-            targetType: "export",
-            details: `Exported ${count ?? "an unrecorded number of"} ${dataset} row(s).`
-                + (details.filters ? ` Filters: ${JSON.stringify(details.filters)}` : ""),
-            metadata: { dataset, count, filters: details.filters ?? null },
+            count: details.count,
+            filters: details.filters ?? null,
         });
+
+        if (!outcome.recorded) {
+            return {
+                success: false as const,
+                error: outcome.reason === "unknown_dataset" ? "Unknown dataset" : "Could not record the export",
+                data: null,
+            };
+        }
 
         return { success: true as const, error: null, data: null };
     } catch (error: any) {
