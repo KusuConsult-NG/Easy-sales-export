@@ -81,6 +81,20 @@ export interface AnalyticsData {
      */
     monthlyRevenueIsPartial?: boolean;
     userGrowthByMonth: Array<{ month: string; users: number }>;
+    /**
+     * True when at least one month's user count could not be read — #517.
+     *
+     * Its catch returned `{ users: 0 }`, so a failed count drew a month in
+     * which nobody joined. Optional so existing callers compile unchanged.
+     */
+    userGrowthIsPartial?: boolean;
+    /**
+     * Month labels whose own query failed, across either series — #517.
+     *
+     * A bar of zero and a bar that could not be drawn look identical, and only
+     * one of them is a fact about the business.
+     */
+    unavailableMonths?: string[];
     moduleUsage: Array<{ module: string; count: number }>;
     userSegments: UserSegments;
     recentTransactions: Array<{

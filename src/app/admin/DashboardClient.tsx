@@ -392,6 +392,31 @@ export default function AdminDashboardPage() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: 0.25 }}
                 >
+                    {/*
+                      *   #517. A month whose query failed used to be drawn as a
+                      *   zero bar — a month with no sales, or nobody joining.
+                      *   The bar still renders so the chart keeps its shape; the
+                      *   note says which bars are not readings.
+                      */}
+                    {(stats.unavailableMonths?.length ?? 0) > 0 && (
+                        <div className="mb-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+                            <p className="text-sm font-semibold text-amber-900">
+                                Some months on these charts could not be read.
+                            </p>
+                            <p className="text-sm text-amber-800 mt-1">
+                                {stats.unavailableMonths!.join(", ")} — shown as zero because the
+                                query failed, not because there was no activity.
+                            </p>
+                        </div>
+                    )}
+                    {stats.monthlyRevenueIsPartial && (stats.unavailableMonths?.length ?? 0) === 0 && (
+                        <div className="mb-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+                            <p className="text-sm text-amber-800">
+                                Revenue was read up to its page cap, so earlier months are
+                                under-reported.
+                            </p>
+                        </div>
+                    )}
                     <AnalyticsCharts 
                         revenueByMonth={stats.revenueByMonth} 
                         userGrowthByMonth={stats.userGrowthByMonth} 

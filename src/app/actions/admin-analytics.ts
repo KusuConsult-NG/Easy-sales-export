@@ -4,6 +4,28 @@ import { requireSession } from "@/lib/session-guard";
 import { isAdmin } from "@/lib/admin-permissions";
 import { analyticsService } from "@/services";
 
+
+/**
+ *   #517 THESE CONTRACTS ARE RE-EXPORTED, NOT RESTATED.
+ *
+ *   AnalyticsData and FinancialOverview were declared here AND in
+ *   packages/services/src/contracts.ts — two hand-maintained copies of the same
+ *   shape, character for character. They had not drifted, which is precisely the
+ *   state lib/recent-activity.ts describes a duplicate sitting in "right up
+ *   until somebody changes one of them".
+ *
+ *   Adding userGrowthIsPartial and unavailableMonths to the service's contract
+ *   made me that somebody: the field existed on one copy, the dashboard imported
+ *   the other, and the build failed. It failed loudly, which is luck — a widened
+ *   OPTIONAL field on the copy nobody imports is silent.
+ *
+ *   The service implements the package's contract, so the package's is the one
+ *   that is true. This module re-exports it, and callers importing from here are
+ *   unchanged.
+ */
+import type { AnalyticsData, FinancialOverview } from "@easy-sales/services";
+export type { AnalyticsData, FinancialOverview };
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Types (Preserved for backwards compatibility with front-end imports)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -15,83 +37,9 @@ export interface UserSegments {
     ghost: number;
 }
 
-export interface AnalyticsData {
-    platformOverview: {
-        totalUsers: number;
-        activeUsers: number;
-        totalRevenue: number;
-        monthlyRevenue: number;
-        totalTransactions: number;
-        /** False when revenue could not be determined. Do not render totalRevenue as a figure when this is false. */
-        revenueAvailable: boolean;
-        pendingApprovals: number;
-        recentActivityCount: number;
-    };
-    counts: {
-        pendingEscrows: number;
-        activeLandListings: number;
-        pendingLoans: number;
-    };
-    revenueByMonth: Array<{ month: string; revenue: number }>;
-    /**
-     * True when the monthly revenue series was read up to its page cap,
-     * so earlier months are under-reported. Optional so existing callers
-     * compile unchanged; the chart should say so when it is set.
-     */
-    monthlyRevenueIsPartial?: boolean;
-    userGrowthByMonth: Array<{ month: string; users: number }>;
-    moduleUsage: Array<{ module: string; count: number }>;
-    userSegments: UserSegments;
-    recentTransactions: Array<{
-        id: string;
-        type: string;
-        amount: number;
-        date: string;
-    }>;
-}
 
-export interface FinancialOverview {
-    error: string | null;
-    success: boolean;
-    totalRevenue: number;
-    /** totalRevenue stopped at the paging ceiling and is a floor, not a total. */
-    revenueIsPartial?: boolean;
-    /**
-     * Figures above that could NOT be read, by name — #516.
-     *
-     * A Promise.allSettled rejection used to reach the screen as ₦0, which made
-     * an outage indistinguishable from a quiet day. A name in here means the
-     * accompanying number is not a measurement.
-     */
-    unavailable?: string[];
-    totalEscrowVolume: number;
-    totalLoansDisbursed: number;
-    pendingPayoutAmount: number;
-    recentTransactions: Array<{
-        id: string;
-        type: string;
-        amount: number;
-        status?: string;
-        description?: string | null;
-        reference?: string | null;
-        timestamp: string | null;
-        phone?: string | null;
-        userId?: string | null;
-    }>;
-    failedTransactions: Array<{
-        id: string;
-        type: string;
-        amount: number;
-        status: "failed" | "abandoned";
-        gatewayResponse: string | null;
-        timestamp: string | null;
-        phone?: string | null;
-        userId?: string | null;
-    }>;
-    totalSuccessfulCount?: number;
-    totalAbandonedCount?: number;
-    totalFailedCount?: number;
-}
+
+
 
 export interface ModuleRegistrationStats {
     wave: number;

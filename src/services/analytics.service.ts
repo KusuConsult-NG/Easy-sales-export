@@ -572,15 +572,41 @@ export class AnalyticsService implements AnalyticsServiceContract {
             }
             pendingApprovals = pendingRes.status === "fulfilled" ? pendingRes.value.totalPending : 0;
         } else {
-            const [metricsResult, pendingResult] = await Promise.all([
+            //   #517 THE TWO BRANCHES DISAGREED ABOUT WHAT A FAILURE MEANS.
+            //
+            //   The date-filtered branch above uses Promise.allSettled and says
+            //   why — "A rejected metrics call is not zero revenue, it is no
+            //   answer" — so a metrics outage leaves the rest of the dashboard
+            //   standing with revenueAvailable false.
+            //
+            //   This branch used Promise.all, so the SAME failure threw out of
+            //   getDashboardStats and took every other figure with it: pending
+            //   escrows, land listings, loans, both charts, the module usage.
+            //   And this is the DEFAULT branch — the one an admin gets on a
+            //   plain page load, with the filtered view being the more robust of
+            //   the two.
+            //
+            //   One rule: a figure that could not be read is unavailable, and
+            //   the figures that WERE read are still worth showing.
+            const [metricsResult, pendingResult] = await Promise.allSettled([
                 this.getPlatformMetrics(db),
                 this.getGlobalPendingApprovals(db),
             ]);
-            totalUsers = metricsResult.totalUsers;
-            totalTransactions = metricsResult.totalTransactions;
-            totalRevenue = metricsResult.totalRevenue;
-            revenueAvailable = metricsResult.revenueAvailable;
-            pendingApprovals = pendingResult.totalPending;
+            if (metricsResult.status === "fulfilled") {
+                totalUsers = metricsResult.value.totalUsers;
+                totalTransactions = metricsResult.value.totalTransactions;
+                totalRevenue = metricsResult.value.totalRevenue;
+                revenueAvailable = metricsResult.value.revenueAvailable;
+            } else {
+                logger.error("[DashboardStats] platform metrics failed", {
+                    reason: String(metricsResult.reason),
+                });
+                totalUsers = 0;
+                totalTransactions = 0;
+                totalRevenue = 0;
+                revenueAvailable = false;
+            }
+            pendingApprovals = pendingResult.status === "fulfilled" ? pendingResult.value.totalPending : 0;
         }
 
         const activeUsers = activeUsersSnap.status === "fulfilled" ? (activeUsersSnap.value.data().count ?? 0) : 0;
@@ -596,6 +622,9 @@ export class AnalyticsService implements AnalyticsServiceContract {
         // True when the monthly chart hit its page cap, so earlier months read
         // low. Surfaced rather than left for the reader to infer from a dip.
         let monthlyRevenueIsPartial = false;
+        //   Months whose own query failed, by label — the difference between a
+        //   flat bar and a bar nobody could draw.
+        const unavailableMonths: string[] = [];
 
         if (secretKey) {
             try {
@@ -654,6 +683,22 @@ export class AnalyticsService implements AnalyticsServiceContract {
         }
 
         if (!paystackSuccess) {
+            //   #517 A MONTH THAT FAILED TO READ WAS DRAWN AS A MONTH WITH NO
+            //   SALES, AND THEN THE SERIES DECLARED ITSELF EXACT.
+            //
+            //   The catch below returned `{ month, revenue: 0 }`, so one
+            //   aggregate timing out put a zero bar on the dashboard chart —
+            //   indistinguishable from a month in which nothing was sold. And
+            //   the line after the loop set
+            //
+            //       monthlyRevenueIsPartial = false;
+            //
+            //   with the comment "Per-month database aggregates are exact, so
+            //   this path is complete" — a claim about completeness made
+            //   unconditionally, five lines below the code that silently drops
+            //   whole months. The flag existed for precisely this and was set to
+            //   the wrong value on the one path that needed it.
+            const failedMonths: string[] = [];
             const revenuePromises = months.map(async ({ label, start, end }) => {
                 try {
                     const snap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
@@ -665,21 +710,34 @@ export class AnalyticsService implements AnalyticsServiceContract {
                         })
                         .get();
                     const total = Number(snap.data().total) || 0;
-                    return { month: label, revenue: total };
+                    return { month: label, revenue: total, failed: false };
                 } catch (e) {
-                    return { month: label, revenue: 0 };
+                    logger.error("[DashboardStats] monthly revenue aggregate failed", {
+                        month: label,
+                        error: e instanceof Error ? e.message : String(e),
+                    });
+                    return { month: label, revenue: 0, failed: true };
                 }
             });
 
-            revenueByMonth = await Promise.all(revenuePromises);
-            // Per-month database aggregates are exact, so this path is complete.
-            monthlyRevenueIsPartial = false;
+            const settled = await Promise.all(revenuePromises);
+            for (const m of settled) if (m.failed) failedMonths.push(m.month);
+            revenueByMonth = settled.map(({ month, revenue }) => ({ month, revenue }));
+
+            //   Exact ONLY when every month actually answered. The zero stays so
+            //   the chart still renders, and the flag says it is not a reading.
+            monthlyRevenueIsPartial = failedMonths.length > 0;
+            unavailableMonths.push(...failedMonths);
         }
 
         const monthlyRevenue = revenueByMonth.length > 0 ? revenueByMonth[revenueByMonth.length - 1].revenue : 0;
 
-        // User growth by month
-        const userGrowthByMonth = await Promise.all(
+        // User growth by month.
+        //
+        //   The same shape as the revenue series above: `catch (_e)` returned
+        //   `{ users: 0 }`, so a failed count drew a month in which nobody
+        //   joined. No logger either — #308's class.
+        const userGrowthSettled = await Promise.all(
             months.map(async ({ label, start, end }) => {
                 try {
                     const snap = await db
@@ -688,12 +746,19 @@ export class AnalyticsService implements AnalyticsServiceContract {
                         .where("createdAt", "<=", end)
                         .count()
                         .get();
-                    return { month: label, users: snap.data().count ?? 0 };
-                } catch (_e) {
-                    return { month: label, users: 0 };
+                    return { month: label, users: snap.data().count ?? 0, failed: false };
+                } catch (e) {
+                    logger.error("[DashboardStats] user growth count failed", {
+                        month: label,
+                        error: e instanceof Error ? e.message : String(e),
+                    });
+                    return { month: label, users: 0, failed: true };
                 }
             })
         );
+        const userGrowthByMonth = userGrowthSettled.map(({ month, users }) => ({ month, users }));
+        for (const m of userGrowthSettled) if (m.failed) unavailableMonths.push(m.month);
+        const userGrowthIsPartial = userGrowthSettled.some((m) => m.failed);
 
         // Module registration usage stats
         const canonicalStats = await this.getModuleRegistrationStats();
@@ -775,6 +840,11 @@ export class AnalyticsService implements AnalyticsServiceContract {
             revenueByMonth,
             monthlyRevenueIsPartial,
             userGrowthByMonth,
+            userGrowthIsPartial,
+            //   The months whose own query failed, by label. A bar of zero and a
+            //   bar that could not be drawn look identical on a chart, and only
+            //   one of them is a fact about the business.
+            unavailableMonths,
             moduleUsage: moduleUsage.length ? moduleUsage : [{ module: "No data yet", count: 1 }],
             userSegments,
             recentTransactions,
