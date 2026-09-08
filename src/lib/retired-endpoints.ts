@@ -61,3 +61,30 @@ export function legacyLandListingApiEnabled(): boolean {
 export const LAND_LISTING_API_RETIRED_MESSAGE =
     "This endpoint is retired: it could not store the land title or survey plan "
     + "it required. Submit through /farm-nation/list-land, which uploads them.";
+
+/**
+ * #513 — POST /api/auth/register.
+ *
+ * A dev-only account seeder that takes `role` from the request body and writes
+ * it. Nothing in the application calls it; registerAction is the sign-up path.
+ * See the route for the full account of what it skipped and why NODE_ENV is the
+ * wrong question to ask.
+ */
+export function legacyDevUserSeedingEnabled(): boolean {
+    return process.env.LEGACY_DEV_USER_SEEDING === ENABLED;
+}
+
+export const DEV_USER_SEEDING_RETIRED_MESSAGE =
+    "This endpoint is retired: it created accounts with a caller-supplied role, "
+    + "no password policy and no rate limit. Sign up through registerAction, or "
+    + "set LEGACY_DEV_USER_SEEDING=enabled against a NON-PRODUCTION database.";
+
+/**
+ * The roles a seeding endpoint may hand out if it is ever revived.
+ *
+ * NOT a copy of the role list: `PRIVILEGED_ROLES` and the permission matrix stay
+ * the authority on what is privileged. This is the far narrower question of what
+ * an UNAUTHENTICATED caller may name for itself, and the answer is the role the
+ * real sign-up path assigns and nothing else.
+ */
+export const SEEDABLE_ROLES = ["general_user"] as const;
