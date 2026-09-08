@@ -258,6 +258,37 @@ export async function approveContentAction(
         const timestamp = FieldValue.serverTimestamp();
         const adminId = session.user.id;
 
+        /**
+         *   #509 THE OWNER'S ID WAS RE-READ AFTER IT HAD ALREADY BEEN READ.
+         *
+         *   The transaction's return line was:
+         *
+         *       ownerId: type === "land"
+         *           ? (await db.collection(LAND_LISTINGS).doc(id).get()).data()?.ownerId
+         *           : null
+         *
+         *   a SECOND fetch of the document `transaction.get(docRef)` had already
+         *   loaded twenty lines above — issued outside the transaction, on the
+         *   one action an admin performs by hand, for a value that was in scope
+         *   until the `case` block closed.
+         *
+         *   IT COULD FAIL AN APPROVAL THAT HAD ALREADY BEEN DECIDED. This
+         *   adapter's runTransaction buffers writes and commits only after the
+         *   callback RETURNS, so a throw inside it means nothing is written —
+         *   no half-applied state, which is the good news. But a transient blip
+         *   on that unnecessary read still aborts the whole approval, and the
+         *   admin is shown whatever the read threw rather than anything about
+         *   approving.
+         *
+         *   SMALL, AND SAID AT ITS SIZE. Nothing is mis-written and no
+         *   permission is bypassed. It is one avoidable round trip that can turn
+         *   a completed decision into a failure message, in a file that is
+         *   otherwise carefully built — per-type permissions, live role
+         *   re-validation, land state checks on both the approve and reject
+         *   paths, bounded reads and count() aggregates in the listing.
+         */
+        let landOwnerId: string | null = null;
+
         const result = await db.runTransaction(async (transaction) => {
             switch (type) {
                 case "products": {
@@ -297,6 +328,9 @@ export async function approveContentAction(
                         };
                     }
 
+                    //   #509 Taken from the snapshot already in hand.
+                    landOwnerId = (docSnap.data()?.ownerId as string | undefined) ?? null;
+
                     transaction.update(docRef, {
                         status: "verified",
                         verificationStatus: "approved",
@@ -325,7 +359,7 @@ export async function approveContentAction(
                 default:
                     return { success: false as const, error: "Invalid content type" };
             }
-            return { success: true as const, error: null, ownerId: type === "land" ? (await db.collection(COLLECTIONS.LAND_LISTINGS).doc(id).get()).data()?.ownerId : null };
+            return { success: true as const, error: null, ownerId: landOwnerId };
         });
 
         if (!result.success) {
