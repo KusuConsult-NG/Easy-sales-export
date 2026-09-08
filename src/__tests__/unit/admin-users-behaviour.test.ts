@@ -698,10 +698,21 @@ describe('updateUserGenderAction and unlockUserAccount', () => {
         expect(read('u1').gender).toBe('female');
     });
 
-    it('unlock: refuses a role without users:read', async () => {
+    /**
+     *   #500 This asked for `users:read` because that is what the action used
+     *   to require. Clearing the failed-login counter is a security write, not a
+     *   lookup, and `users:read` is the weakest gate in the matrix — every one
+     *   of the ten admin roles holds it. The gate is `users:update` now.
+     *
+     *   The assertion still pins a permission NAME, which is the trap this audit
+     *   keeps meeting, so the behavioural half carries the weight: whoever is
+     *   refused, the lockout must not have been cleared. The role-by-role
+     *   coverage lives in the-nin-button-was-refused-by-its-own-validator.
+     */
+    it('unlock: refuses a caller without the permission, and clears nothing', async () => {
         actAs('nobody', ['user']);
         expect(((await (await actions()).unlockUserAccount('ada@example.com')) as any).error)
-            .toContain('users:read');
+            .toContain('users:update');
         expect(resetLoginAttempts).not.toHaveBeenCalled();
     });
 

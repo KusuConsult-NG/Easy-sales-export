@@ -14,7 +14,7 @@ import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { serializeValue } from "@/lib/firestore-serialize";
-import { UserVerificationToggleSchema, UserKycVerificationSchema } from "@/lib/schemas";
+import { UserVerificationToggleSchema, UserKycVerificationSchema, UserGenderUpdateSchema } from "@/lib/schemas";
 import { hasAdminPermission, isAdmin, isSuperAdmin, includesPrivilegedRole } from "@/lib/admin-permissions";
 import { stripRegistrationPii } from "@/lib/admin-pii";
 import { atomicUpdateUser } from "@/lib/services/userService";
@@ -252,8 +252,49 @@ async function _toggleUserKycVerificationAction(
          if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
              return { error: "Unauthorized: Permission required - users:update", success: false as const };
          }
+
+         /**
+          *   #500 THE ONLY ACTION IN THIS FILE THAT PARSED NOTHING.
+          *
+          *        Its neighbours all do — UserVerificationToggleSchema,
+          *        UserKycVerificationSchema, UpdateUserRolesSchema. This one
+          *        leaned on the TypeScript union `"male" | "female"`, which is
+          *        erased at runtime, and wrote whatever arrived onto the user
+          *        document.
+          *
+          *        A SERVER ACTION IS A PUBLIC ENDPOINT. It is addressable by
+          *        anything that can name it, not only by the two buttons in
+          *        admin/users/page.tsx that call it, so the union guaranteed
+          *        nothing about what actually landed in `gender`.
+          *
+          *        AND THE FIELD IS READ. `options.gender` filters this list,
+          *        and the segment counts group on it — so an unexpected value
+          *        does not sit inertly, it makes those answers wrong. An OBJECT
+          *        would be worse still: this same mapping already extracts
+          *        state and lga defensively with the note "preventing React
+          *        objects-as-children crashes", which is that lesson learned on
+          *        a different field.
+          *
+          *        Lower-cased on write so the stored value matches what the
+          *        filter compares — `String(u.gender || "").toLowerCase()`.
+          */
+         const valid = UserGenderUpdateSchema.safeParse({ userId, gender });
+         if (!valid.success) {
+             return { error: (valid.error as ZodError).issues[0].message, success: false as const };
+         }
+         const normalisedGender = valid.data.gender.toLowerCase();
+
+         //   And the target has to exist. atomicUpdateUser on an unknown id
+         //   writes a document with a gender and nothing else — a user record
+         //   for nobody, which is the shape #495 spent three thousand rows on.
+         const targetDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+         if (!targetDoc.exists) {
+             return { error: "User not found", success: false as const };
+         }
+         const previousGender = targetDoc.data()?.gender ?? null;
+
          await atomicUpdateUser(userId, {
-             gender,
+             gender: normalisedGender,
          });
          // Log audit
          await createAdminAuditLog({
@@ -261,7 +302,9 @@ async function _toggleUserKycVerificationAction(
              userId: session.user.id,
              targetId: userId,
              targetType: "user",
-             metadata: { newGender: gender },
+             //   #500 What it was, not only what it became — the same gap #499
+             //   closed on the role editor, in the file's other write path.
+             metadata: { newGender: normalisedGender, previousGender },
          });
          return {
              error: null,
@@ -287,8 +330,34 @@ async function _unlockUserAccount(email: string): Promise<ActionState> {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "users:read")) {
-            return { error: "Unauthorized: Permission required - users:read", success: false as const };
+        /**
+         *   #500 A READ PERMISSION GUARDED THE BRUTE-FORCE PROTECTION.
+         *
+         *        This was `users:read`, and admin-permissions.ts is explicit
+         *        about what that admits: "every admin role holds users:read" —
+         *        ten of them, including support, moderator and each module's
+         *        own admin. It is the weakest gate in the matrix, chosen so
+         *        support can look somebody up to answer a ticket.
+         *
+         *        What it was guarding is not a lookup. resetLoginAttempts
+         *        clears the failed-login counter in Redis AND the in-memory
+         *        store — the whole of the lockout. So the lowest-privileged
+         *        admin role could clear the lock on ANY email address, over and
+         *        over, including a super_admin's, and keep an account
+         *        indefinitely guessable.
+         *
+         *        `users:update` is held by super_admin and admin alone, and is
+         *        already what _toggleUserVerificationAction asks for. A control
+         *        that changes a security state belongs with the other writes,
+         *        not with the reads.
+         *
+         *        NO UI CALLS THIS, which is not a reason to leave it. A Next.js
+         *        server action is addressable by its own id whether or not a
+         *        button points at it, so an endpoint with no caller is an
+         *        endpoint with no witnesses, not one that cannot be reached.
+         */
+        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
+            return { error: "Unauthorized: Permission required - users:update", success: false as const };
         }
 
         if (!email || !email.includes("@")) {

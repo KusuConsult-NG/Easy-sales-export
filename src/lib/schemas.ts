@@ -231,10 +231,51 @@ export const UserVerificationToggleSchema = z.object({
     userId: z.string().min(1),
 });
 
+/**
+ *   #500 THE NIN TOGGLE WAS REFUSED BY ITS OWN VALIDATOR.
+ *
+ *   `field` read `z.enum(["bvn", "tin", "cac"])` while everything on either
+ *   side of it handled four:
+ *
+ *     _toggleUserKycVerificationAction   (userId, field: 'bvn'|'nin'|'tin'|'cac', …)
+ *     nestedFieldMap                     nin: 'kyc.ninVerified'
+ *     legacyFieldMap                     nin: 'ninVerified'
+ *     statusField                        field === 'nin' ? 'kyc.ninStatus' : …
+ *     admin/users/page.tsx:1021          { key: "nin", label: "NIN", … }
+ *
+ *   NIN is the FIRST row of the KYC panel. Pressing its button sent
+ *   `field: "nin"`, safeParse rejected it before a line of that mapping ran, and
+ *   the admin got a validation message about a value the whole rest of the
+ *   platform accepts. The control has never worked.
+ *
+ *   The type said four, the validator said three, and the validator wins — the
+ *   union is compile-time only and a server action is a public endpoint.
+ */
 export const UserKycVerificationSchema = z.object({
     userId: z.string().min(1),
-    field: z.enum(["bvn", "tin", "cac"]),
+    field: z.enum(["bvn", "nin", "tin", "cac"]),
     currentStatus: z.boolean(),
+});
+
+/**
+ *   #500 The gender update had NO runtime validation at all.
+ *
+ *   `_updateUserGenderAction(userId, gender: "male" | "female")` relied on a
+ *   TypeScript union, which is erased at runtime. Every neighbouring action in
+ *   that file parses its input; this one wrote whatever arrived straight onto
+ *   the user document — and a server action is reachable over HTTP by anything
+ *   that can address it, not only by the two buttons that call it.
+ *
+ *   Both casings are accepted because the rest of this file already does
+ *   (RegisterSchema, ProfileSchema), and the value is lower-cased on write so
+ *   the gender filter — which compares `String(u.gender).toLowerCase()` — and
+ *   the segment counts agree with what is stored.
+ */
+export const UserGenderUpdateSchema = z.object({
+    userId: z.string().min(1),
+    gender: z.enum(["male", "female", "Male", "Female"], {
+        message: "Gender must be male or female",
+    }),
 });
 
 export const LandListingVerificationSchema = z.object({
