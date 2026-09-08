@@ -897,8 +897,40 @@ export async function validateCooperativeInviteAction(
         // has two doors. Signed out, the binding is skipped and only status and
         // age are checked: this action is also the onboarding page's link
         // preview, and a preview is not the fee waiver.
+        /**
+         *   #503 "SIGNED OUT" AND "SIGNED IN WITH NO EMAIL" WERE THE SAME
+         *        ANSWER, AND ONLY ONE OF THEM IS A PREVIEW.
+         *
+         *   This read `session?.user?.email ?? undefined`, and
+         *   inviteRefusalReason skips the email binding entirely on `undefined`:
+         *
+         *       if (callerEmail !== undefined && callerEmail !== null) { …bind… }
+         *
+         *   `undefined` was meant to say "nobody is signed in, this is the
+         *   onboarding page previewing a link" — a case that is deliberately
+         *   more permissive because a preview is not the fee waiver. But a
+         *   SIGNED-IN caller whose session carries no email produced exactly the
+         *   same `undefined`, and so skipped the binding on the path where the
+         *   waiver IS granted.
+         *
+         *   A session can lack one. auth.config.ts:112 assigns
+         *   `session.user.email = token.email`, and token.email comes from the
+         *   profile — which #495 measured 2,593 of as blank. Whether one of
+         *   those can currently hold a session is a separate question I have not
+         *   answered, and the binding should not depend on the answer: an invite
+         *   waives ₦10,000 and a false acceptance gives a membership away, which
+         *   is the asymmetry lib/cooperative-invite.ts already reasons from.
+         *
+         *   SO THE TWO CASES ARE TOLD APART BY THE SESSION, NOT BY THE EMAIL.
+         *   Signed out stays `undefined` and previews. Signed in with no email
+         *   becomes `""`, which normalises to `""`, never matches a recorded
+         *   invited address, and refuses — failing closed, in the direction this
+         *   file's own header says to fail.
+         */
         const previewSession = await requireSession();
-        const callerEmail = previewSession.session?.user?.email ?? undefined;
+        const callerEmail = previewSession.session
+            ? (previewSession.session.user?.email ?? "")
+            : undefined;
 
         const refusal = inviteRefusalReason(data, callerEmail);
         if (refusal) {

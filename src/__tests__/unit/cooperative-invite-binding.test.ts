@@ -197,8 +197,18 @@ describe('one policy, and both doors ask it', () => {
     it('resolving the caller from the session rather than a parameter', () => {
         // THE structural point. A parameter is something the redemption path
         // can forget to pass; a session lookup is not.
+        //
+        //   #503 This used to pin the derivation EXPRESSION verbatim, and the
+        //   expression changed: `?? undefined` conflated "signed out" with
+        //   "signed in carrying no email", and only the first is the preview
+        //   the permissive branch exists for. The structural point is unchanged
+        //   and is what is pinned now — the caller comes from the session, and
+        //   the presence of a session is what decides whether the binding
+        //   applies. The behaviour is covered by
+        //   a-session-without-an-email-is-not-a-preview.
         expect(reg).toContain('const previewSession = await requireSession();');
-        expect(reg).toContain('const callerEmail = previewSession.session?.user?.email ?? undefined;');
+        expect(reg).toContain('previewSession.session');
+        expect(reg).not.toMatch(/callerEmail\s*=\s*previewSession\.session\?\.user\?\.email \?\? undefined/);
     });
 
     it('and the redemption path goes through that same action', () => {
