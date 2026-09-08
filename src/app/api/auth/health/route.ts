@@ -3,101 +3,138 @@ export const dynamic = 'force-dynamic';
 /**
  * Auth Health Diagnostic Endpoint — /api/auth/health
  *
- * Returns the presence/format of every env var that auth depends on.
- * SECURITY: Values are NEVER exposed — only boolean present/absent/format flags.
- * Admin-only: requires X-Auth-Health-Key header matching NEXTAUTH_SECRET.
+ * GET, with `X-Auth-Health-Key: <NEXTAUTH_SECRET>`.
+ * Reports the presence and severity of every environment variable this
+ * platform defines. VALUES ARE NEVER RETURNED — names and booleans only.
  *
- * Usage:
- *   curl https://your-domain.com/api/auth/health \
- *     -H "X-Auth-Health-Key: <NEXTAUTH_SECRET value>"
+ *   curl https://your-domain.com/api/auth/health -H "X-Auth-Health-Key: ..."
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ *   #511 THE PAGE YOU OPEN WHEN AUTH IS BROKEN SAID AUTH WAS BROKEN, ALWAYS.
+ *
+ *   This endpoint kept its own list of what authentication needs, and that list
+ *   was six FIREBASE_* variables. Firebase is not in this application: both
+ *   packages resolve to local shims —
+ *
+ *       "firebase":       "file:./src/lib/shims/firebase"
+ *       "firebase-admin": "file:./src/lib/shims/firebase-admin"
+ *
+ *   — and the data layer is Supabase. So on the live deployment, correctly
+ *   configured, this endpoint answered:
+ *
+ *       FIREBASE_PROJECT_ID:   "MISSING"
+ *       FIREBASE_CLIENT_EMAIL: "MISSING"
+ *       FIREBASE_PRIVATE_KEY:  "MISSING"
+ *       auth_will_work:        false
+ *
+ *   `auth_will_work` was computed from four of those absent names, so it could
+ *   not return true on any real deploy of this platform. It was false while
+ *   sign-in worked, and it would have stayed false while sign-in was broken —
+ *   an indicator with one value is not an indicator.
+ *
+ *   AND IT NEVER MENTIONED SUPABASE. NEXT_PUBLIC_SUPABASE_URL,
+ *   NEXT_PUBLIC_SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY — the three
+ *   #450 proved fatal from a Railway log, the ones whose absence means there is
+ *   no data layer to authenticate against — were not checked at all. The one
+ *   screen for "why can nobody sign in" asked about a system that is gone and
+ *   stayed silent about the system that is there.
+ *
+ *   #450 ALREADY FIXED THIS LIST TWICE. It removed the Firebase names from
+ *   env-validator.ts, whose header says why: requiring them printed
+ *   "❌ Environment validation failed!" on every correct deploy and buried
+ *   SUPABASE_SERVICE_ROLE_KEY. It then found a SECOND copy in security-checks.ts
+ *   and pointed that at env-validator rather than repairing it in place, with
+ *   the note "Two lists, one dead and wrong, is the shape this audit has found
+ *   some thirty times. There is one list now."
+ *
+ *   There were three. This was the third, and it is the one an operator reads.
+ *   It is not repaired in place either: it renders env-validator's lists, so a
+ *   variable added there appears here, and a fourth copy cannot be written.
+ *
+ * ── AND THE KEY COMPARISON IS CONSTANT TIME NOW ──────────────────────────────
+ *
+ *   `authHeader !== secret` compares NEXTAUTH_SECRET with `===`, which returns
+ *   on the first differing byte. Said at its size: recovering a secret from
+ *   that across a network, through Railway's proxy and Next's routing, is not a
+ *   practical attack, and I am not claiming one. It costs four lines not to
+ *   have the question.
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { timingSafeEqual } from "crypto";
+import { envVarStatuses, dataLayerTarget } from "@/lib/env-validator";
 
 export const runtime = "nodejs";
 
-function checkPrivateKey(key: string | undefined): string {
-    if (!key) return "MISSING";
-    const normalized = key.replace(/\\n/g, "\n").replace(/^"|"$/g, "");
-    if (!normalized.includes("BEGIN PRIVATE KEY")) return "PRESENT_BUT_NO_PEM_HEADER";
-    if (!normalized.includes("END PRIVATE KEY")) return "PRESENT_BUT_NO_PEM_FOOTER";
-    const lines = normalized.split("\n").filter(Boolean);
-    if (lines.length < 5) return "PRESENT_BUT_TOO_SHORT";
-    return "OK";
+function secretsMatch(provided: string | null, expected: string): boolean {
+    if (!provided) return false;
+    const a = Buffer.from(provided, "utf8");
+    const b = Buffer.from(expected, "utf8");
+    // timingSafeEqual throws on a length mismatch, which would itself be an
+    // oracle. Compare a fixed-length digest-free pair by padding to the longer
+    // of the two and folding the length difference into the result.
+    if (a.length !== b.length) {
+        // Still do the comparison so the work is the same either way.
+        const pad = Buffer.alloc(Math.max(a.length, b.length));
+        const a2 = Buffer.concat([a, pad]).subarray(0, pad.length);
+        const b2 = Buffer.concat([b, pad]).subarray(0, pad.length);
+        timingSafeEqual(a2, b2);
+        return false;
+    }
+    return timingSafeEqual(a, b);
 }
 
 export async function GET(req: NextRequest) {
-    // Simple guard: require the secret as a header to access this endpoint
-    const authHeader = req.headers.get("X-Auth-Health-Key");
     const secret = process.env.NEXTAUTH_SECRET;
 
-    if (!secret || authHeader !== secret) {
+    if (!secret || !secretsMatch(req.headers.get("X-Auth-Health-Key"), secret)) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const statuses = envVarStatuses();
+    const missing = statuses.filter((s) => !s.present);
+    const fatalMissing = missing.filter((s) => s.severity === "fatal").map((s) => s.name);
 
     const check = {
         timestamp: new Date().toISOString(),
         environment: process.env.NODE_ENV,
-        nextauth: {
-            NEXTAUTH_SECRET: secret ? "OK" : "MISSING",
-            NEXTAUTH_URL: process.env.NEXTAUTH_URL
-                ? `OK (${process.env.NEXTAUTH_URL})`
-                : "MISSING — OK if using VERCEL_URL auto-detection",
-            AUTH_SECRET: process.env.AUTH_SECRET ? "OK" : "MISSING (alias of NEXTAUTH_SECRET)",
-            NEXTAUTH_DEBUG: process.env.NEXTAUTH_DEBUG || "not set (disabled)",
+
+        // Every variable this platform defines, at its real severity, from the
+        // one list in lib/env-validator.ts. Presence only — no values.
+        variables: statuses.map((s) => ({
+            name: s.name,
+            status: s.present ? "OK" : "MISSING",
+            severity: s.severity,
+            ...(s.present ? {} : { breaks: s.breaks }),
+        })),
+
+        // What the container is pointed at. A NEXT_PUBLIC_ hostname label, and
+        // the display names Railway stamps on the container — never a key.
+        deployment: {
+            supabaseProject: dataLayerTarget(),
+            railwayProject: process.env.RAILWAY_PROJECT_NAME ?? "(not reported)",
+            railwayEnvironment:
+                process.env.RAILWAY_ENVIRONMENT_NAME ?? process.env.RAILWAY_ENVIRONMENT ?? "(not reported)",
+            railwayService: process.env.RAILWAY_SERVICE_NAME ?? "(not reported)",
         },
-        firebase_client: {
-            NEXT_PUBLIC_FIREBASE_API_KEY: process.env.NEXT_PUBLIC_FIREBASE_API_KEY
-                ? (process.env.NEXT_PUBLIC_FIREBASE_API_KEY === "mock-api-key-for-build" ? "MOCK_VALUE_SET" : "OK")
-                : "MISSING",
-            NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-                ? (process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN.includes("mock") ? "MOCK_VALUE_SET" : "OK")
-                : "MISSING",
-            NEXT_PUBLIC_FIREBASE_PROJECT_ID: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
-                ? (process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID === "mock-project-id" ? "MOCK_VALUE_SET" : "OK")
-                : "MISSING",
-            NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ? "OK" : "MISSING",
-            NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ? "OK" : "MISSING",
-            NEXT_PUBLIC_FIREBASE_APP_ID: process.env.NEXT_PUBLIC_FIREBASE_APP_ID ? "OK" : "MISSING",
-        },
-        firebase_admin: {
-            FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID ? "OK" : "MISSING",
-            FIREBASE_CLIENT_EMAIL: process.env.FIREBASE_CLIENT_EMAIL
-                ? (process.env.FIREBASE_CLIENT_EMAIL.includes("@") ? "OK" : "BAD_FORMAT")
-                : "MISSING",
-            FIREBASE_PRIVATE_KEY: checkPrivateKey(process.env.FIREBASE_PRIVATE_KEY),
-            FIREBASE_STORAGE_BUCKET: process.env.FIREBASE_STORAGE_BUCKET ? "OK" : "MISSING",
-        },
-        redis: {
-            UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL
-                ? (process.env.UPSTASH_REDIS_REST_URL.startsWith("https://") ? "OK" : "BAD_FORMAT")
-                : "MISSING — rate limiting disabled (fail-open)",
-            UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN ? "OK" : "MISSING — rate limiting disabled (fail-open)",
-        },
-        resend: {
-            RESEND_API_KEY: process.env.RESEND_API_KEY ? "OK" : "MISSING — emails disabled",
-        },
-        payments: {
-            // CRITICAL: 8 Paystack payment flows use this for callback_url.
-            // If missing, callback URL becomes 'undefined/...' and payment redirect fails.
-            NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL
-                ? `OK (${process.env.NEXT_PUBLIC_APP_URL})`
-                : "MISSING — ALL Paystack callback_urls will be broken",
-            PAYSTACK_SECRET_KEY: process.env.PAYSTACK_SECRET_KEY ? "OK" : "MISSING — payment init will fail",
-        },
+
         summary: {
-            auth_will_work: !!(
-                process.env.NEXTAUTH_SECRET &&
-                process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
-                process.env.NEXT_PUBLIC_FIREBASE_API_KEY !== "mock-api-key-for-build" &&
-                process.env.FIREBASE_PROJECT_ID &&
-                process.env.FIREBASE_CLIENT_EMAIL &&
-                checkPrivateKey(process.env.FIREBASE_PRIVATE_KEY) === "OK"
-            ),
-            payments_will_work: !!(
-                process.env.PAYSTACK_SECRET_KEY &&
-                process.env.NEXT_PUBLIC_APP_URL
-            ),
+            // The four in FATAL_ENV_VARS, and nothing else. A missing
+            // RESEND_API_KEY is a broken feature on a working platform; it does
+            // not belong in an answer to "can anyone sign in".
+            auth_will_work: fatalMissing.length === 0,
+            fatal_missing: fatalMissing,
+
+            // getBaseUrl() falls back through NEXTAUTH_URL, NEXT_PUBLIC_APP_URL
+            // and finally the apex domain, so a callback URL always resolves.
+            // The secret key is the only thing without which nothing can be
+            // initialised or verified. The old form also demanded
+            // NEXT_PUBLIC_APP_URL, which env-validator lists as RECOMMENDED —
+            // a second false alarm from the same endpoint.
+            payments_will_work: !!process.env.PAYSTACK_SECRET_KEY,
+
+            missing_count: missing.length,
         },
     };
 

@@ -227,6 +227,76 @@ function whereThisIs(): string[] {
     ];
 }
 
+export type EnvVarSeverity = 'fatal' | 'required' | 'production' | 'recommended';
+
+export interface EnvVarStatus {
+    name: string;
+    present: boolean;
+    severity: EnvVarSeverity;
+    /** What stops working when it is absent. */
+    breaks: string;
+}
+
+/**
+ * The same four lists above, rendered one variable at a time.
+ *
+ *   #511. /api/auth/health is the endpoint an operator opens when the site is
+ *   down, and it kept its OWN list of what auth needs — six FIREBASE_* names.
+ *   #450 removed those names from this file and from security-checks.ts,
+ *   because Firebase is shimmed to Supabase and nothing reads them; it did not
+ *   reach the health endpoint, which is the one place a person LOOKS.
+ *
+ *   Exporting the lists is what stops a fourth copy being written. A caller
+ *   that wants to show an operator which variables are set asks here, and
+ *   gains anything added to FATAL/REQUIRED/PRODUCTION/RECOMMENDED for free.
+ *
+ *   NAMES AND PRESENCE ONLY — never values. That rule is why whyNothingArrived
+ *   prints names too, and it holds the same way for an HTTP response.
+ */
+export function envVarStatuses(): EnvVarStatus[] {
+    const fatal = new Set<string>(FATAL_ENV_VARS);
+    const seen = new Set<string>();
+    const out: EnvVarStatus[] = [];
+
+    const add = (name: string, severity: EnvVarSeverity, breaks: string) => {
+        if (seen.has(name)) return;
+        seen.add(name);
+        out.push({ name, present: !!process.env[name], severity, breaks });
+    };
+
+    const CANNOT_SERVE = 'the platform cannot serve a request';
+
+    for (const name of FATAL_ENV_VARS) add(name, 'fatal', CANNOT_SERVE);
+    for (const name of REQUIRED_ENV_VARS) {
+        add(name, fatal.has(name) ? 'fatal' : 'required', WHAT_BREAKS[name] ?? '');
+    }
+    for (const name of PRODUCTION_REQUIRED_ENV_VARS) {
+        add(name, fatal.has(name) ? 'fatal' : 'production', WHAT_BREAKS[name] ?? '');
+    }
+    for (const name of RECOMMENDED_ENV_VARS) {
+        add(name, 'recommended', 'nothing — every read of it has a fallback');
+    }
+
+    return out;
+}
+
+/**
+ * Which data layer this container is pointed at, by name, for a diagnostic.
+ *
+ * The Supabase project ref is the first label of NEXT_PUBLIC_SUPABASE_URL — a
+ * NEXT_PUBLIC_ value, already served to every browser, so naming it here
+ * exposes nothing. The keys are never touched.
+ */
+export function dataLayerTarget(): string {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (!url) return '(not set)';
+    try {
+        return new URL(url).hostname.split('.')[0] || '(unparseable)';
+    } catch {
+        return '(unparseable)';
+    }
+}
+
 /**
  * Validate environment variables
  */

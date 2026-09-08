@@ -3,6 +3,7 @@
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { requireAdmin } from "@/lib/require-admin";
+import { dataLayerTarget } from "@/lib/env-validator";
 
 /**
  * Quick diagnostic action to check if the broadcast system can read users.
@@ -39,7 +40,12 @@ export async function diagnoseBroadcastAction(): Promise<
         return { 
             error: null, 
             success: true as const, 
-            projectId: process.env.FIREBASE_PROJECT_ID || "(not set)", 
+            // #511's second door. This read FIREBASE_PROJECT_ID, which nothing
+            // sets — Firebase is shimmed to Supabase — so the one field naming
+            // WHICH database the counts below came from said "(not set)" on
+            // every call. dataLayerTarget() names the project the reads
+            // actually went to, from the NEXT_PUBLIC_ URL. No key is exposed.
+            projectId: dataLayerTarget(),
             usersCollectionName: collectionName, 
             totalUserDocs, 
             usersWithEmail, 
