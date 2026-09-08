@@ -8,9 +8,7 @@ import { hasAdminPermission } from "@/lib/admin-permissions";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { financeService } from "@/services";
-import { paystackBaseUrl } from "@/lib/paystack-host";
-
-const PAYSTACK_BASE_URL = paystackBaseUrl();
+import { eachPaystackSuccess } from "@/lib/paystack-sweep";
 
 interface PaystackTx {
     reference: string;
@@ -20,36 +18,43 @@ interface PaystackTx {
 }
 
 /**
- * Helper to fetch all successful transactions from Paystack API.
+ *   #519 THE FOURTH COPY OF THE PAGING BUG, IN THE ONE PLACE THAT DIFFS MONEY.
+ *
+ *   This function ended its loop on
+ *
+ *       const totalPages = json.meta?.pageCount ?? 1;
+ *
+ *   which is character for character the expression analytics.service.ts records
+ *   removing from three sites, with the note: "it cannot tell 'the API sent no
+ *   page count' apart from 'there is one page'. When Paystack omits the field,
+ *   every one of those loops stopped after page 1 and reported the hundred most
+ *   recent transactions as the platform's lifetime revenue."
+ *
+ *   HERE THAT IS WORSE THAN AN UNDERSTATED FIGURE. This route compares Paystack
+ *   against the local ledger. Reading one page means comparing the hundred most
+ *   recent transactions, finding all hundred present locally, and answering
+ *
+ *       status: "reconciled"
+ *
+ *   while thousands of payments were never looked at. A reconciliation that
+ *   cannot see the data is not a reconciliation that found nothing wrong.
+ *
+ *   The helper it should always have used was module-private to
+ *   analytics.service.ts, which is why the fix reached three sweeps and not the
+ *   fourth. It is lib/paystack-sweep.ts now, and it ends on a SHORT PAGE — a
+ *   fact about the response rather than about its metadata — and reports
+ *   `truncated` rather than letting a floor pass as a total.
  */
-async function fetchAllPaystackSuccessTransactions(secretKey: string): Promise<PaystackTx[]> {
-    const all: PaystackTx[] = [];
-    let page = 1;
-
-    while (true) {
-        const url = `${PAYSTACK_BASE_URL}/transaction?perPage=100&page=${page}&status=success`;
-        const res = await fetch(url, {
-            headers: {
-                Authorization: `Bearer ${secretKey}`,
-                "Content-Type": "application/json",
-            },
-            cache: "no-store",
-        });
-
-        if (!res.ok) {
-            throw new Error(`Paystack API returned ${res.status}: ${res.statusText}`);
-        }
-
-        const json = await res.json();
-        const data: PaystackTx[] = json.data ?? [];
-        all.push(...data);
-
-        const totalPages = json.meta?.pageCount ?? 1;
-        if (page >= totalPages || data.length === 0) break;
-        page++;
-    }
-
-    return all;
+async function fetchAllPaystackSuccessTransactions(
+    secretKey: string,
+): Promise<{ transactions: PaystackTx[]; truncated: boolean }> {
+    const transactions: PaystackTx[] = [];
+    const sweep = await eachPaystackSuccess(
+        secretKey,
+        { label: "PaystackReconciliation", timeoutMs: 10_000 },
+        (tx) => { transactions.push(tx as PaystackTx); },
+    );
+    return { transactions, truncated: sweep.truncated };
 }
 
 export async function GET(req: NextRequest) {
@@ -97,7 +102,8 @@ export async function GET(req: NextRequest) {
 
         // 4. Fetch authoritative success transactions from Paystack API
         logger.info("[PaystackReconciliation] Fetching successful transactions from Paystack API...");
-        const paystackTxs = await fetchAllPaystackSuccessTransactions(PAYSTACK_SECRET_KEY);
+        const { transactions: paystackTxs, truncated: paystackTruncated } =
+            await fetchAllPaystackSuccessTransactions(PAYSTACK_SECRET_KEY);
 
         // 5. Audit & Aggregate Paystack totals
         let paystackRevenue = 0;
@@ -129,12 +135,42 @@ export async function GET(req: NextRequest) {
         const revenueDiscrepancy = localMetrics.verifiedRevenue - paystackRevenue;
         const countDiscrepancy = localMetrics.transactionCount - paystackTxs.length;
 
-        const isFullyReconciled = missingInLocal.length === 0 && mismatchAmounts.length === 0 && Math.abs(revenueDiscrepancy) < 0.01;
+        //   A PARTIAL READ CANNOT RECONCILE ANYTHING.
+        //
+        //   Either side being truncated makes every conclusion below provisional:
+        //   a short Paystack sweep manufactures a clean bill of health, and a
+        //   short local sweep manufactures discrepancies. The route already knew
+        //   about the local ceiling — it logged "will over-report missing
+        //   payments" — and then returned the over-reported list anyway, with
+        //   nothing on the response saying so. The person reading this report is
+        //   the one who chases the money.
+        const incomplete = paystackTruncated || localPaymentsSnap.truncated;
+        if (paystackTruncated) {
+            logger.error(
+                "[PaystackReconciliation] the Paystack sweep hit its page ceiling — "
+                + "transactions beyond it were never compared, so a clean result here means nothing.",
+            );
+        }
+
+        const isFullyReconciled = !incomplete
+            && missingInLocal.length === 0
+            && mismatchAmounts.length === 0
+            && Math.abs(revenueDiscrepancy) < 0.01;
 
         return NextResponse.json({
             success: true,
-            status: isFullyReconciled ? "reconciled" : "discrepancies_found",
+            status: incomplete
+                ? "incomplete"
+                : (isFullyReconciled ? "reconciled" : "discrepancies_found"),
             timestamp: new Date().toISOString(),
+            //   Which side could not be read in full. Named rather than logged,
+            //   because the discrepancies below are only as trustworthy as the
+            //   two sets they were computed from.
+            incomplete,
+            truncated: {
+                paystack: paystackTruncated,
+                local: localPaymentsSnap.truncated === true,
+            },
             summary: {
                 local: {
                     totalRevenue: localMetrics.verifiedRevenue,

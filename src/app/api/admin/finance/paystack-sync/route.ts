@@ -20,9 +20,7 @@ import {
     exportWindowIdFromMetadata
 } from "@/infrastructure/payments/service";
 import { recordAdminAction } from "@/lib/audit-log";
-import { paystackBaseUrl } from "@/lib/paystack-host";
-
-const PAYSTACK_BASE_URL = paystackBaseUrl();
+import { eachPaystackTransaction } from "@/lib/paystack-sweep";
 
 interface PaystackTx {
     reference: string;
@@ -42,33 +40,38 @@ interface PaystackTx {
  * status param: 'success' | 'failed' | 'abandoned'
  * perPage is capped at 100 by Paystack.
  */
-async function fetchAllPaystackByStatus(status: string, PAYSTACK_SECRET_KEY: string): Promise<PaystackTx[]> {
-    const all: PaystackTx[] = [];
-    let page = 1;
-
-    while (true) {
-        const url = `${PAYSTACK_BASE_URL}/transaction?perPage=100&page=${page}&status=${status}`;
-        const res = await fetch(url, {
-            headers: {
-                Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
-                "Content-Type": "application/json",
-            },
-            cache: "no-store",
-        });
-        if (!res.ok) {
-            throw new Error(`Paystack API error (status=${status}, page=${page}): ${res.status} ${res.statusText}`);
-        }
-        const json = await res.json();
-        const data: PaystackTx[] = json.data ?? [];
-        all.push(...data);
-
-        const totalPages: number = json.meta?.pageCount ?? 1;
-        logger.info(`[PaystackSync] ${status} page ${page}/${totalPages} — ${data.length} txs`);
-        if (page >= totalPages || data.length === 0) break;
-        page++;
+/**
+ *   #519 THE FIFTH COPY, AND THE ONE THAT WRITES.
+ *
+ *   This ended on `json.meta?.pageCount ?? 1` — the expression
+ *   analytics.service.ts records removing from three sites because "it cannot
+ *   tell 'the API sent no page count' apart from 'there is one page'".
+ *
+ *   The other copies produce an understated FIGURE. This route PROCESSES what
+ *   it reads: it hands each transaction to processMarketplaceOrder,
+ *   processWalletFunding, processCooperativeRegistration and the rest. Stopping
+ *   after page one means the sync silently only ever repairs the hundred most
+ *   recent payments, and every unprocessed payment older than that stays
+ *   unprocessed however many times an admin runs it — which is exactly the
+ *   failure a manual sync button exists to fix.
+ */
+async function fetchAllPaystackByStatus(
+    status: "success" | "failed" | "abandoned",
+    PAYSTACK_SECRET_KEY: string,
+): Promise<{ transactions: PaystackTx[]; truncated: boolean }> {
+    const transactions: PaystackTx[] = [];
+    const sweep = await eachPaystackTransaction(
+        PAYSTACK_SECRET_KEY,
+        { label: `PaystackSync:${status}`, status, timeoutMs: 10_000 },
+        (tx) => { transactions.push(tx as PaystackTx); },
+    );
+    if (sweep.truncated) {
+        logger.error(
+            `[PaystackSync] the ${status} sweep hit its page ceiling — transactions beyond it `
+            + `were NOT processed by this run.`,
+        );
     }
-
-    return all;
+    return { transactions, truncated: sweep.truncated };
 }
 
 /**
@@ -117,11 +120,18 @@ async function paystackSyncHandler(_req: NextRequest) {
         // return all abandoned transactions. We must query each status explicitly.
         logger.info("[PaystackSync] Fetching success, failed, and abandoned transactions from Paystack...");
 
-        const [successTxs, failedTxs, abandonedTxs] = await Promise.all([
+        const [successSweep, failedSweep, abandonedSweep] = await Promise.all([
             fetchAllPaystackByStatus("success", PAYSTACK_SECRET_KEY),
             fetchAllPaystackByStatus("failed", PAYSTACK_SECRET_KEY),
             fetchAllPaystackByStatus("abandoned", PAYSTACK_SECRET_KEY),
         ]);
+        const successTxs = successSweep.transactions;
+        const failedTxs = failedSweep.transactions;
+        const abandonedTxs = abandonedSweep.transactions;
+        //   A sync that could not read everything has not synced everything, and
+        //   the admin who pressed the button needs to know that before concluding
+        //   the remaining gaps are real.
+        const syncTruncated = successSweep.truncated || failedSweep.truncated || abandonedSweep.truncated;
 
         // Deduplicate by reference (a tx should only appear in one bucket, but just in case)
         const seen = new Set<string>();
@@ -273,6 +283,10 @@ async function paystackSyncHandler(_req: NextRequest) {
         });
         return NextResponse.json({
             success: true,
+            //   Named, not just logged: a sync that hit its ceiling has left
+            //   payments unprocessed, and the admin who ran it would otherwise
+            //   read the remaining gaps as real.
+            truncated: syncTruncated,
             total: allTxs.length,
             breakdown: {
                 success: successTxs.length,

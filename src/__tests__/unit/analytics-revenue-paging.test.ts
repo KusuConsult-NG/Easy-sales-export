@@ -227,39 +227,117 @@ describe('the same bug had two siblings in the same file', () => {
         // old expression to explain it — the same trap the #105 ratchet hit.
         const { readFileSync } = await import('fs');
         const { join } = await import('path');
-        const code = readFileSync(join(process.cwd(), 'src/services/analytics.service.ts'), 'utf-8')
-            .split('\n')
-            .filter((line) => {
-                const t = line.trim();
-                return !t.startsWith('//') && !t.startsWith('*') && !t.startsWith('/*');
-            })
-            .join('\n');
+        //   #519 widened from one file to the tree, for the same reason as the
+        //   assertion below it: the fourth copy of this expression was in a
+        //   route, and a check that reads analytics.service.ts could not see it.
+        const { readdirSync, statSync } = await import('fs');
+        const files: string[] = [];
+        const walk = (dir: string) => {
+            for (const entry of readdirSync(dir)) {
+                const p = join(dir, entry);
+                if (statSync(p).isDirectory()) {
+                    if (entry === '__tests__' || entry === 'node_modules') continue;
+                    walk(p);
+                } else if (p.endsWith('.ts') || p.endsWith('.tsx')) files.push(p);
+            }
+        };
+        walk(join(process.cwd(), 'src'));
 
-        expect(code).not.toContain('pageCount ?? 1');
+        const offenders = files.filter((file) => {
+            const code = readFileSync(file, 'utf-8')
+                .split('\n')
+                .filter((line) => {
+                    const t = line.trim();
+                    return !t.startsWith('//') && !t.startsWith('*') && !t.startsWith('/*');
+                })
+                .join('\n');
+            return code.includes('pageCount ?? 1');
+        });
+
+        expect(offenders).toEqual([]);
     });
 
-    it('routes every Paystack revenue sweep through the one helper', async () => {
-        // Three copies is how a fix to one of them means nothing. If a fourth
-        // sweep is added later it has to come past this.
-        const { readFileSync } = await import('fs');
-        const { join } = await import('path');
-        const src = readFileSync(join(process.cwd(), 'src/services/analytics.service.ts'), 'utf-8');
-
-        // A paged sweep is a URL with a VARIABLE page number. The three
-        // `perPage=1&page=1` count probes are fixed single-row reads and are not
-        // sweeps, so they are excluded by construction rather than by exception.
+    it('routes every Paystack revenue sweep in the TREE through the one helper', async () => {
+        //   #519 THIS ASSERTION USED TO READ ONE FILE, AND THAT IS WHY IT MISSED
+        //   THE FOURTH COPY.
         //
-        // The host is no longer written out here — every Paystack call resolves
-        // it through paystackBaseUrl(), which refuses an override in production
-        // and outside it accepts only a loopback stub. See
-        // paystack-host-cannot-be-redirected.test.ts. What this counts is
-        // unchanged: URL templates carrying a variable page number.
-        const pagedUrls = (src.match(/paystackBaseUrl\(\)\}\/transaction\?perPage=\$\{/g) ?? []).length;
-        const helperCalls = (src.match(/eachPaystackSuccess\(/g) ?? []).length;
+        //   It said "If a fourth sweep is added later it has to come past this"
+        //   — and then counted paged URLs in src/services/analytics.service.ts
+        //   only. The fourth sweep was not added later; it was already sitting
+        //   in src/app/api/admin/finance/reconcile/route.ts, ending on
+        //   `json.meta?.pageCount ?? 1`, in the one route that diffs money
+        //   against Paystack. A ratchet scoped to the file that happened to be
+        //   fixed cannot see the sibling it was written to catch.
+        //
+        //   The helper is lib/paystack-sweep.ts now, and this sweeps src/.
+        const { readFileSync, readdirSync, statSync } = await import('fs');
+        const { join, relative } = await import('path');
 
-        // One URL template, inside the helper; three callers plus the definition.
-        expect(pagedUrls).toBe(1);
-        expect(helperCalls).toBe(4);
+        const files: string[] = [];
+        const walk = (dir: string) => {
+            for (const entry of readdirSync(dir)) {
+                const p = join(dir, entry);
+                if (statSync(p).isDirectory()) {
+                    if (entry === '__tests__' || entry === 'node_modules') continue;
+                    walk(p);
+                } else if (p.endsWith('.ts') || p.endsWith('.tsx')) {
+                    files.push(p);
+                }
+            }
+        };
+        walk(join(process.cwd(), 'src'));
+
+        // A paged sweep is a URL with a VARIABLE page number. Fixed
+        // `perPage=1&page=1` count probes are single-row reads, not sweeps, so
+        // they are excluded by construction rather than by exception.
+        const PAGED_URL = /\/transaction\?perPage=\$\{|perPage=100&page=\$\{/;
+        const offenders: string[] = [];
+        for (const file of files) {
+            const src = readFileSync(file, 'utf-8');
+            if (!PAGED_URL.test(src)) continue;
+            if (relative(process.cwd(), file) === join('src', 'lib', 'paystack-sweep.ts')) continue;
+            offenders.push(relative(process.cwd(), file));
+        }
+
+        expect(offenders).toEqual([]);
+    });
+
+    it('AND THE SWEEP ACTUALLY LOOKED AT THE TREE', async () => {
+        //   The vacuity guard the previous version needed and did not have: an
+        //   assertion that walks a directory passes trivially if the walk finds
+        //   nothing. #484's and #486's shape — a control that reads as present
+        //   and is none.
+        const { readFileSync, readdirSync, statSync } = await import('fs');
+        const { join } = await import('path');
+
+        const files: string[] = [];
+        const walk = (dir: string) => {
+            for (const entry of readdirSync(dir)) {
+                const p = join(dir, entry);
+                if (statSync(p).isDirectory()) {
+                    if (entry === '__tests__' || entry === 'node_modules') continue;
+                    walk(p);
+                } else if (p.endsWith('.ts') || p.endsWith('.tsx')) files.push(p);
+            }
+        };
+        walk(join(process.cwd(), 'src'));
+
+        expect(files.length).toBeGreaterThan(500);
+        // The helper exists, is importable, and is where the one URL lives.
+        const sweep = readFileSync(join(process.cwd(), 'src/lib/paystack-sweep.ts'), 'utf-8');
+        expect(sweep).toContain('export async function eachPaystackTransaction');
+        expect(sweep).toContain('export const eachPaystackSuccess');
+        expect(sweep).toMatch(/\/transaction\?perPage=\$\{/);
+
+        // And the callers actually call it, rather than the ban being satisfied
+        // by nobody sweeping at all.
+        const callers = files.filter((f) => {
+            const src = readFileSync(f, 'utf-8');
+            return src.includes('eachPaystackSuccess(') || src.includes('eachPaystackTransaction(');
+        });
+        // analytics.service (x3 sweeps in one file), reconcile, paystack-sync,
+        // the cron, and the helper itself.
+        expect(callers.length).toBeGreaterThanOrEqual(5);
     });
 
     it('no longer fans out unbounded parallel requests', async () => {

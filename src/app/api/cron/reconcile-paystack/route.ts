@@ -5,6 +5,8 @@ import { supabaseDb as db } from "@/lib/supabase-db";
 import { resolveActiveUserId } from "@/lib/user-identity";
 import { Timestamp } from "@/lib/firestore-compat";
 import { paystackBaseUrl } from "@/lib/paystack-host";
+import { eachPaystackSuccess } from "@/lib/paystack-sweep";
+import { logger } from "@/lib/logger";
 
 /**
  * Automated Paystack ↔ Firebase Reconciliation
@@ -77,39 +79,31 @@ export async function GET(request: NextRequest) {
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
         const fromDate = thirtyDaysAgo.toISOString().split('T')[0]; // YYYY-MM-DD
 
-        let allPaystackTransactions: Array<{
+        const allPaystackTransactions: Array<{
             reference: string;
             amount: number;
             paid_at: string;
             channel: string;
             customer?: { email?: string };
         }> = [];
-        let page = 1;
-        let hasMore = true;
-
-        while (hasMore) {
-            const response = await fetch(
-                `${paystackBaseUrl()}/transaction?perPage=100&page=${page}&status=success&from=${fromDate}`,
-                {
-                    headers: { Authorization: `Bearer ${secretKey}` },
-                    // 15s timeout per page fetch
-                    signal: AbortSignal.timeout(15000),
-                }
+        //   #519 THE SIXTH COPY, AND THE ONE NOBODY IS WATCHING.
+        //
+        //   `if (page < (data.meta?.pageCount || 1))` is the same defect as the
+        //   `?? 1` form in the other five — when Paystack omits the field the
+        //   loop reads one page and stops — and it is spelled differently, which
+        //   is why a ratchet searching for the literal string `pageCount ?? 1`
+        //   could never have found it. This one runs on a schedule, so its
+        //   under-reading is not attached to anyone pressing a button.
+        const sweep = await eachPaystackSuccess(
+            secretKey,
+            { label: "CronReconcile", dateFrom: new Date(fromDate), timeoutMs: 15000 },
+            (tx) => { allPaystackTransactions.push(tx as typeof allPaystackTransactions[number]); },
+        );
+        if (sweep.truncated) {
+            logger.error(
+                "[CronReconcile] the Paystack sweep hit its page ceiling — transactions beyond it "
+                + "were never compared, so this run's clean result means nothing.",
             );
-
-            if (!response.ok) {
-                const errText = await response.text();
-                throw new Error(`Paystack API error (${response.status}): ${errText.slice(0, 200)}`);
-            }
-
-            const data = await response.json();
-            allPaystackTransactions = allPaystackTransactions.concat(data.data || []);
-
-            if (page < (data.meta?.pageCount || 1)) {
-                page++;
-            } else {
-                hasMore = false;
-            }
         }
 
         results.paystackTotal = allPaystackTransactions.length;
