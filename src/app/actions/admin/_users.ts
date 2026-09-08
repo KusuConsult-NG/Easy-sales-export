@@ -1050,12 +1050,62 @@ async function _updateUserRolesAction(
         // not removing one.
         //
         // The rule is deliberately blunt: any request whose resulting roles
-        // include admin or super_admin needs a super_admin to make it. That also
-        // stops a plain admin editing an existing admin's unrelated roles, since
-        // the array has to carry "admin" through to preserve it. Editing another
-        // admin's account is the case worth being strict about.
+        // include admin or super_admin needs a super_admin to make it.
         if (includesPrivilegedRole(roles) && !isSuperAdmin(session.user.roles)) {
             return { error: "Only a super admin can grant admin roles", success: false as const };
+        }
+
+        /**
+         *   #499 THE BULK BUTTON REFUSED TO REMOVE AN ADMIN ROLE. THIS ONE DID
+         *        NOT, AND ITS OWN COMMENT SAID IT DID.
+         *
+         *   What stood immediately above, as the justification for having no
+         *   further check:
+         *
+         *       "That also stops a plain admin editing an existing admin's
+         *        unrelated roles, since the array has to carry 'admin' through
+         *        to preserve it. Editing another admin's account is the case
+         *        worth being strict about."
+         *
+         *   That covers PRESERVING the role and says nothing about STRIPPING it.
+         *   This action writes the array WHOLESALE, so a plain admin calling it
+         *   on a super_admin's id with ["general_user"] sends a role set
+         *   containing nothing privileged — the guard above passes — and the
+         *   super_admin is demoted. The comment described a boundary the code
+         *   did not have.
+         *
+         *   AND THE OTHER DOOR ONTO THE SAME OPERATION ALREADY GUARDED IT.
+         *   bulk-user-operations.ts:271, five hundred lines away:
+         *
+         *       if (rolesToRemove.includes("admin") || rolesToRemove.includes("super_admin")) {
+         *           return { error: "Cannot remove admin roles via bulk operation" };
+         *       }
+         *
+         *   So the bulk editor refuses what the single-user editor performs. Two
+         *   doors onto one operation, one hardened — the shape this audit has
+         *   now found in #276, #277, #279, #281, #294, #486 and #497.
+         *
+         *   WHY IT IS WORSE THAN AN ORDINARY PRIVILEGE BUG: it is not
+         *   recoverable through the product. GRANTING super_admin requires being
+         *   one (the guard above). So a plain admin who demotes every
+         *   super_admin leaves a platform on which nobody can restore the role
+         *   — no escalation, but no way back either.
+         *
+         *   THE CHECK IS ON THE TARGET'S CURRENT ROLES, which is why this reads
+         *   the document. Deriving it from the submitted array cannot work: the
+         *   submitted array is precisely what omits the role being removed.
+         */
+        const targetDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        if (!targetDoc.exists) {
+            return { error: "User not found", success: false as const };
+        }
+        const currentRoles = (targetDoc.data()?.roles ?? []) as string[];
+
+        if (includesPrivilegedRole(currentRoles) && !isSuperAdmin(session.user.roles)) {
+            return {
+                error: "Only a super admin can change an admin's roles",
+                success: false as const,
+            };
         }
 
         await atomicUpdateUser(userId, writeGuard(
@@ -1073,6 +1123,16 @@ async function _updateUserRolesAction(
             targetType: "user",
             metadata: {
                 roles,
+                /**
+                 *   #499 A ROLE-CHANGE ENTRY THAT DOES NOT SAY WHAT THE ROLES
+                 *   WERE records half of the event. "Somebody now holds
+                 *   [general_user]" cannot be read as a demotion, a promotion or
+                 *   a no-op, which is the whole question an investigator brings
+                 *   to this log. The previous array is in hand because the guard
+                 *   above reads the document; not writing it down would be a
+                 *   choice.
+                 */
+                previousRoles: currentRoles,
                 serviceRegistrationsUpdated: false,
             },
         });
