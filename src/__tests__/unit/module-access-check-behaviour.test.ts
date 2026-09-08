@@ -232,19 +232,36 @@ describe('Layer 2.5 — the roles array on the user document', () => {
 // ─── Layer 2.6, and the healing ──────────────────────────────────────────────
 
 describe('Layer 2.6 — a cooperative membership record found by query', () => {
+    /**
+     *   #497 THESE FOUR FIXTURES NOW SAY WHICH KIND OF MEMBER THEY ARE.
+     *
+     *   Each of these tests is about FINDING a membership record — by query, by
+     *   document id, by email — and none of them is about the registration fee.
+     *   They simply left `paymentStatus` and `isLegacy` unset, and Layer 2.6
+     *   used to admit an active member without asking about either, so the
+     *   omission did not show.
+     *
+     *   It does now, and that is the finding rather than a broken test: an
+     *   active membership with no payment and no legacy exemption no longer
+     *   opens the cooperative module. So each fixture states which case it
+     *   means — the two named for imports carry `isLegacy`, which is what the
+     *   74 imported members on production actually carry, and the two about
+     *   lookup mechanics carry a completed payment.
+     */
     it('admits an active member whose user document knows nothing', async () => {
         // The bulk-import case: the membership exists, the user document was never
-        // backfilled.
+        // backfilled. Imported members predate the fee — hence isLegacy.
         bareUser();
         store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, 'mem-1',
-            { userId: UID, membershipStatus: 'active' });
+            { userId: UID, membershipStatus: 'active', isLegacy: true });
 
         expect(await access(UID, [], 'cooperatives')).toBe(true);
     });
 
     it('or found by document id, when the membership is keyed on the user', async () => {
         bareUser();
-        store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, UID, { membershipStatus: 'approved' });
+        store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, UID,
+            { membershipStatus: 'approved', paymentStatus: 'completed' });
         expect(await access(UID, [], 'cooperatives')).toBe(true);
     });
 
@@ -254,7 +271,7 @@ describe('Layer 2.6 — a cooperative membership record found by query', () => {
         // case, so a mixed-case address in the user document still matches.
         store.seed(COLLECTIONS.USERS, UID, { email: 'Member@Example.com' });
         store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, 'mem-x',
-            { email: 'member@example.com', membershipStatus: 'active' });
+            { email: 'member@example.com', membershipStatus: 'active', isLegacy: true });
 
         expect(await access(UID, [], 'cooperatives')).toBe(true);
     });
@@ -264,7 +281,7 @@ describe('Layer 2.6 — a cooperative membership record found by query', () => {
         // — on every single page load, forever.
         store.seed(COLLECTIONS.USERS, UID, { email: 'member@example.com' });
         store.seed(COLLECTIONS.COOPERATIVE_MEMBERS, 'mem-x',
-            { email: 'member@example.com', membershipStatus: 'active' });
+            { email: 'member@example.com', membershipStatus: 'active', paymentStatus: 'completed' });
 
         expect(await access(UID, [], 'cooperatives')).toBe(true);
         expect(store.get(COLLECTIONS.COOPERATIVE_MEMBERS, 'mem-x')?.userId).toBe(UID);

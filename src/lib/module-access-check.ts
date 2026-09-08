@@ -235,7 +235,98 @@ export async function checkModuleAccess(
                     return false;
                 }
 
-                if (isApprovedOrActive || isHealable) {
+                /**
+                 *   #497 THE PAYMENT CONDITION WAS ENFORCED ON THE WAY IN AND
+                 *        NEVER AFTERWARDS.
+                 *
+                 *   `isHealable` directly above demands `paymentStatus ===
+                 *   "completed"` before PROMOTING anyone to active — so the
+                 *   author of this layer plainly held that paying matters for
+                 *   cooperative access.
+                 *
+                 *   `isApprovedOrActive` then granted that same access to anyone
+                 *   already carrying `membershipStatus: "active"`, without ever
+                 *   asking. And "already carrying" is not rare: #496 found
+                 *   _coop_identity's heal writing exactly that field from central
+                 *   status alone, and _legacy.ts:657, _coop_membership.ts:307 and
+                 *   _dashboard.ts:252 each write it by their own routes. A rule
+                 *   checked at one entrance and at none of the other four is not
+                 *   a rule — #486's class, and this is its fifth appearance.
+                 *
+                 *   WHAT THAT OPENED. Not the ID card — #496 closed that. This
+                 *   layer is the cooperative MODULE: savings, contributions,
+                 *   loans and withdrawals. An unpaid member reached all of it.
+                 *
+                 * ── MEASURED BEFORE THE GATE MOVED ─────────────────────────
+                 *
+                 *   active with payment not completed                 77
+                 *     ...legacy, exempt by design                      74
+                 *     ...non-legacy                                     3
+                 *       ...with a real payment in processed_payments     1
+                 *       ...with no payment anywhere                      2
+                 *
+                 *   THE LEGACY EXEMPTION IS THE WHOLE REASON THIS IS SAFE.
+                 *   Seventy-four of the seventy-seven joined before this platform
+                 *   charged anything; a payment requirement without that carve-out
+                 *   would lock the entire pre-platform membership out of their own
+                 *   savings to catch two people. _coop_identity.ts already carries
+                 *   the same exemption and this mirrors it rather than inventing a
+                 *   second spelling of it.
+                 *
+                 *   AND THE AUTHORITATIVE FALLBACK IS CONSULTED, as it is there:
+                 *   a stale `paymentStatus` beside a real processed payment must
+                 *   not cost somebody their module. The extra query runs ONLY for
+                 *   a member who is active, unpaid and not legacy — three people
+                 *   on the whole platform — so it costs nothing on the ordinary
+                 *   path.
+                 */
+                const isLegacyMember =
+                    memberDocData.isLegacy === true || !!userData.legacyOnboardedBy;
+                let paymentSettled = memberDocData.paymentStatus === "completed";
+
+                if (isApprovedOrActive && !paymentSettled && !isLegacyMember) {
+                    try {
+                        //   APPLICATION_SCAN_LIMIT, not `.limit(1)`. #227 banned
+                        //   the latter across this file after finding it at
+                        //   sixteen sites "each trusting whatever came back",
+                        //   and the ban is worth more kept blanket than carved
+                        //   up per query. This one only asks whether ANY
+                        //   completed registration payment exists, so reading a
+                        //   bounded handful and testing `.empty` is the same
+                        //   answer for the same cost.
+                        const authPayment = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+                            .where("userId", "==", userId)
+                            .where("type", "==", "cooperative_membership_registration")
+                            .where("status", "==", "completed")
+                            .limit(APPLICATION_SCAN_LIMIT)
+                            .get();
+                        paymentSettled = !authPayment.empty;
+                    } catch (lookupErr) {
+                        //   A FAILED READ IS NOT A REFUSAL — #492's rule, and it
+                        //   matters more here than on a screen. If the payments
+                        //   collection is unreachable this must not silently
+                        //   revoke a paid-up member's savings; the pre-existing
+                        //   approval stands and the failure is loud.
+                        logger.error(
+                            `[ModuleAccess] Layer 2.6 — processed_payments lookup failed for ${userId}; `
+                            + `honouring the existing approval rather than revoking access.`,
+                            lookupErr,
+                        );
+                        paymentSettled = true;
+                    }
+                }
+
+                const mayEnter = (isApprovedOrActive && (paymentSettled || isLegacyMember)) || isHealable;
+
+                if (isApprovedOrActive && !mayEnter) {
+                    logger.warn(
+                        `[ModuleAccess] Layer 2.6 — '${app}' membership is ${status} but the `
+                        + `registration fee is unpaid and the member is not legacy `
+                        + `(uid: ${userId}). No access.`
+                    );
+                }
+
+                if (mayEnter) {
                     logger.info(
                         `[ModuleAccess] Layer 2.6 — Direct query confirmed '${app}' access (uid: ${userId}, status: ${status}, isHealable: ${isHealable}).`
                     );
