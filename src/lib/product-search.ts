@@ -75,16 +75,44 @@ export interface Identified { id?: string | null }
 /**
  * Does this product match the query?
  *
- * Title and description, case-insensitive, substring — the rule both actions
- * already applied, kept identical so moving the filter changes WHICH rows are
- * considered and nothing about what counts as a match.
+ * Case-insensitive substring over the fields the interface PROMISES.
+ *
+ *   #515 IT SEARCHED TITLE AND DESCRIPTION, UNDER A BOX THAT OFFERS THREE
+ *   THINGS. /marketplace/buyer/products renders
+ *
+ *       placeholder="Search products, sellers, or categories..."
+ *
+ *   and two of those three returned nothing. A buyer typing the seller name
+ *   printed on every card, or the category shown beside it, was told there were
+ *   no products — and an empty result reads as "this does not exist" rather than
+ *   "I did not look there".
+ *
+ *   The fields below are exactly the ones a buyer can already SEE on a card,
+ *   which is the test for whether searching them is honest: a term that matches
+ *   something on screen should find it.
+ *
+ *   `name` sits beside `title` because the three product creators write `title`
+ *   and the public API maps it to `name` — the field-name drift this codebase
+ *   has in several other places, and cheaper to accept here than to leave a row
+ *   unsearchable depending on which reader produced it.
+ *
+ *   STILL A SUBSTRING TEST. No fuzzy matching, no stemming, no ranking. Making
+ *   search cleverer is a feature; making it match its own label is a fix, and
+ *   mixing the two would hide the fix.
  */
 export function matchesProductQuery(product: unknown, query: string): boolean {
     const needle = String(query ?? "").toLowerCase().trim();
     if (needle === "") return true;
 
     const p = (product ?? {}) as Record<string, unknown>;
-    const haystack = [p.title, p.description]
+    const location = (p.location ?? null) as Record<string, unknown> | null;
+    const haystack = [
+        p.title, p.name,
+        p.description,
+        p.sellerName,
+        p.category,
+        p.sellerLocation, location?.state, location?.lga,
+    ]
         .filter((v) => v !== null && v !== undefined)
         .map((v) => String(v))
         .join(" ")

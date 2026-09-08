@@ -5,6 +5,11 @@ import { logger } from "@/lib/logger";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { hydrateSellerTrust, SELLER_NAME_FALLBACK } from "@/lib/seller-trust";
+import {
+    PRODUCT_SEARCH_SCAN_LIMIT,
+    filterProductsByQuery,
+    pageFilteredProducts,
+} from "@/lib/product-search";
 
 /**
  * GET /api/marketplace/products
@@ -68,7 +73,24 @@ export async function GET(request: NextRequest) {
             baseQuery = baseQuery.where("category", "==", category);
         }
 
-        let orderedQuery = baseQuery.orderBy("createdAt", "desc").limit(limit + 1);
+        //   #515 THE SEARCH LOOKED AT ONE PAGE AND CALLED IT THE CATALOGUE.
+        //
+        //   This read `limit + 1` rows and filtered THEM by the search term, so
+        //   `?search=cocoa` only ever saw the newest 21 active products. That is
+        //   the exact defect lib/product-search.ts was written to fix, and its
+        //   header describes this symptom precisely — "a seller's product at
+        //   position 13 by age was unfindable by name; the buyer could type its
+        //   exact title and be told No products found", and "a search commonly
+        //   returned ZERO products with hasMore: true".
+        //
+        //   That sweep reached _mp_catalog.ts. It did not reach here, and this
+        //   is the PUBLIC endpoint. Scanning a bounded window and paging the
+        //   MATCHES is what the shared module exists for; the cap is reported so
+        //   a caller is never told a truncated answer is a complete one.
+        const searching = typeof search === "string" && search.trim() !== "";
+        const readSize = searching ? PRODUCT_SEARCH_SCAN_LIMIT : limit + 1;
+
+        let orderedQuery = baseQuery.orderBy("createdAt", "desc").limit(readSize);
 
         // Apply cursor (startAfter the last createdAt timestamp)
         if (cursorParam) {
@@ -87,20 +109,41 @@ export async function GET(request: NextRequest) {
                 logger.warn("Marketplace API products search failed due to missing index. Falling back.", { error: e.message });
                 indexError = true;
 
-                let fallbackQuery = baseQuery.limit(limit + 1);
-                if (cursorParam) {
-                    const cursorDate = new Date(cursorParam);
-                    if (!isNaN(cursorDate.getTime())) {
-                        fallbackQuery = fallbackQuery.startAfter(cursorDate);
-                    }
-                }
-                snapshot = await fallbackQuery.get();
+                //   #515 THE FALLBACK ASKED FOR A CURSOR IT COULD NOT HONOUR.
+                //
+                //   It built `baseQuery.limit(n)` with NO orderBy — ordering is
+                //   what had just failed — and then called
+                //   `.startAfter(cursorDate)`. supabase-db applies a cursor only
+                //   `if ((startAfterDoc || startAfterValues) && _orderBy.length
+                //   > 0)`, so with no ordering the cursor was silently dropped
+                //   and `query.order('id')` applied instead. Every "next page"
+                //   in this branch returned PAGE ONE again, for ever — the same
+                //   failure supabase-db's own comment records fixing for a
+                //   different cause, reached through a different door: a caller
+                //   that does not order at all.
+                //
+                //   A degraded read cannot paginate, so it says so instead of
+                //   handing back a cursor that replays. `degraded` also tells
+                //   the caller the rows are in id order, not newest-first.
+                snapshot = await baseQuery.limit(readSize).get();
             } else {
                 throw e;
             }
         }
 
-        const hasMore = snapshot.docs.length > limit;
+        const scannedRows = snapshot.docs.length;
+        if (searching && scannedRows === PRODUCT_SEARCH_SCAN_LIMIT) {
+            logger.warn(
+                `[marketplace/products] search scanned the ${PRODUCT_SEARCH_SCAN_LIMIT}-row cap; `
+                + `matches beyond it are not shown.`,
+                { search, category },
+            );
+        }
+
+        // When searching, every scanned row is a candidate and the paging
+        // happens after the match. When not, the database did the paging and the
+        // extra row is the "is there more" probe.
+        const hasMore = !searching && scannedRows > limit;
         const docs = hasMore ? snapshot.docs.slice(0, limit) : snapshot.docs;
 
         let products = docs.map(doc => {
@@ -122,8 +165,16 @@ export async function GET(request: NextRequest) {
                 sellerId: data.sellerId || "",
                 sellerName: data.sellerName || data.storeName || SELLER_NAME_FALLBACK,
                 sellerLocation: locationString,
-                rating: data.rating || 0,
-                reviews: data.reviewCount || 0,
+                //   #515. `rating` and `reviewCount` are written as 0 by all
+                //   three product creators and updated by NOTHING —
+                //   submitProductReviewAction writes the review row and the
+                //   order, never the product. So these were always 0, served as
+                //   though they were measurements. `null` says "not maintained",
+                //   the same rule #514 applied to the seller page: an absence is
+                //   not a zero. The marketplace landing page already renders
+                //   `product.rating || "N/A"`, which is the honest reading.
+                rating: null,
+                reviewCount: null,
                 // `verified: data.verified !== false` — a field NO writer of this
                 // collection sets, so the expression was `undefined !== false`
                 // and this endpoint reported every product it has ever served as
@@ -158,18 +209,6 @@ export async function GET(request: NextRequest) {
         // silently drop products written with the other.
         products = products.filter(p => p.inStock);
 
-        // In-memory filters for search and price (compound Firestore queries
-        // require index creation for every combination — kept as in-memory)
-        if (search) {
-            const searchLower = search.toLowerCase();
-            products = products.filter(
-                p =>
-                    p.name.toLowerCase().includes(searchLower) ||
-                    p.description.toLowerCase().includes(searchLower) ||
-                    p.sellerName.toLowerCase().includes(searchLower) ||
-                    p.sellerLocation.toLowerCase().includes(searchLower)
-            );
-        }
         if (minPrice) products = products.filter(p => p.price >= parseInt(minPrice));
         if (maxPrice) products = products.filter(p => p.price <= parseInt(maxPrice));
 
@@ -185,6 +224,24 @@ export async function GET(request: NextRequest) {
         });
         products = hydrated.map((p: any) => ({ ...p, verified: p.sellerVerified === true }));
 
+        //   SEARCH RUNS AFTER HYDRATION, AND ON THE SHARED RULE.
+        //
+        //   It ran before, over name/description/sellerName/sellerLocation — a
+        //   third spelling of "search" on this platform — and matched the
+        //   create-time `sellerName` snapshot that the hydration above then
+        //   REPLACES with the live name. So it searched one value and returned
+        //   another. matchesProductQuery is the one rule; getProductsAction and
+        //   getMarketplaceProductsAction use it too.
+        let searchHasMore = hasMore;
+        let searchCursor: string | null = null;
+        if (searching) {
+            const matched = filterProductsByQuery(products, search!);
+            const paged = pageFilteredProducts(matched as { id?: string }[], cursorParam ?? undefined, limit);
+            products = paged.page as typeof products;
+            searchHasMore = paged.hasMore;
+            searchCursor = paged.lastId ?? null;
+        }
+
         const nextCursor = hasMore && docs.length > 0
             ? docs[docs.length - 1].data().createdAt?.toDate?.()?.toISOString() ?? null
             : null;
@@ -192,7 +249,25 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({
             success: true,
             data: { products },
-            meta: { cursor: nextCursor, hasMore },
+            meta: {
+                //   `hasMore`/`cursor` described the DATABASE page, not this
+                //   response. That is right for continuation, but a caller
+                //   asking for 20 and receiving 3 could not tell whether the
+                //   catalogue ended or 17 rows were filtered out after the read.
+                //   `returned` and `scanned` say which, so an empty page beside
+                //   hasMore: true is readable rather than contradictory.
+                //
+                //   A searching response pages the MATCHES, so its cursor is a
+                //   product id; an unsearched one pages the database, so its
+                //   cursor is a createdAt. Both are opaque to the caller and are
+                //   handed straight back as `cursor`.
+                cursor: indexError ? null : (searching ? searchCursor : nextCursor),
+                hasMore: indexError ? false : (searching ? searchHasMore : hasMore),
+                returned: products.length,
+                scanned: scannedRows,
+                degraded: indexError,
+                searchTruncated: searching && scannedRows === PRODUCT_SEARCH_SCAN_LIMIT,
+            },
         });
     } catch (error: any) {
         logger.error("GET /api/marketplace/products error:", error);

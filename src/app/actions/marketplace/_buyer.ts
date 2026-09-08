@@ -16,7 +16,7 @@ import { notifyOrderCancelled, notifyOrderDelivered } from "@/lib/marketplace-no
 
 import { runQueryWithRetry } from "@/lib/firestore-utils";
 import { hydrateSellerTrust } from "@/lib/seller-trust";
-import { categorySpellings } from "@/lib/product-search";
+import { categorySpellings, filterProductsByQuery } from "@/lib/product-search";
 
 /**
  * Reads a seller's user document, for hydrateSellerTrust.
@@ -172,24 +172,32 @@ async function _getProductsAction(filters?: ProductFilters): Promise<ActionRespo
             });
         }
 
-        if (filters?.searchTerm) { 
-            const term = filters.searchTerm.toLowerCase();
-            products = products.filter(product =>
-                product.title?.toLowerCase()?.includes(term) ||
-                product.description?.toLowerCase()?.includes(term)
-            );
-        }
-
         if (filters?.lga) {
             products = products.filter(product => product.location?.lga === filters.lga);
         }
 
         // Seller name and badge, live — see readSeller above for why this file
-        // in particular needed it. Applied after every filter, so the reads are
-        // only spent on rows actually being returned.
+        // in particular needed it.
+        //
+        //   #515 IT MOVED ABOVE THE SEARCH, DELIBERATELY. It ran after every
+        //   filter, "so the reads are only spent on rows actually being
+        //   returned" — the right trade while a search could not match a seller.
+        //   Now that it can, filtering first would match the create-time
+        //   `sellerName` snapshot and then overwrite it with the live name, so a
+        //   buyer would search one value and be shown another. The cost is
+        //   bounded: PRODUCT_QUERY_CAP rows at most, and hydrateSellerTrust
+        //   batches by UNIQUE seller, so it is a handful of reads, not one a row.
         const withTrust = await hydrateSellerTrust(products as any[], readSeller);
 
-        return { error: null, success: true as const, data: { products: withTrust as Product[] } };
+        //   THE SHARED RULE, NOT A NINTH COPY OF IT. This file already imports
+        //   categorySpellings from lib/product-search and then hand-wrote that
+        //   module's matchesProductQuery immediately below it — title and
+        //   description, character for character. So the sweep that built the
+        //   shared module reached _mp_catalog.ts and stopped one import short of
+        //   here.
+        const searched = filterProductsByQuery(withTrust, filters?.searchTerm);
+
+        return { error: null, success: true as const, data: { products: searched as Product[] } };
     } catch (error) { 
         logger.error("Get products error:", { filters, error: error instanceof Error ? error.message : String(error) });
         return { success: false as const, error: "Failed to fetch products", data: null };
