@@ -312,6 +312,18 @@ describe('#375 — every gate names its permission, and the exception is stated'
          * `banners:manage` in the vocabulary to invent.
          */
         'src/app/actions/cms.ts': Array(4).fill('announcements:manage'),
+
+        /**
+         * #526. add-roles gated on isPlatformAdmin(session.user.roles) — the
+         * JWT — on the endpoint that grants roles. PLATFORM_ADMIN_ROLES is
+         * super_admin and admin, and users:update is held by super_admin and
+         * admin and nobody else, so the AUDIENCE is unchanged; what changed is
+         * that requireAdmin reads it from the record rather than the token, and
+         * refuses a banned or suspended account on the way past.
+         *
+         * Two gates: POST grants, DELETE revokes.
+         */
+        'src/app/api/admin/add-roles/route.ts': Array(2).fill('users:update'),
     };
 
     it('EVERY GATE NAMES THE PERMISSION ITS ACTION NEEDS', () => {
@@ -385,7 +397,8 @@ describe('#375 — every gate names its permission, and the exception is stated'
         // 34 → 38: cms.ts's four writes joined the shared gate (#203).
         // 38 → 39: the retired document viewer's hand-written role list became
         // a real gate (#431).
-        expect(callSites().length).toBe(39);
+        // 39 → 41: add-roles' two handlers stopped reading the JWT (#526).
+        expect(callSites().length).toBe(41);
         expect(SRC.length).toBeGreaterThan(400);
     });
 

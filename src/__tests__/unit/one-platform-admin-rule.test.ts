@@ -235,7 +235,15 @@ describe('#364 — eleven routes keep exactly the audience they had', () => {
             'src/app/api/admin/debug-users/route.ts',
             'src/app/api/cache/monitor/route.ts',
             'src/app/api/users/[userId]/route.ts',
-            'src/app/api/admin/add-roles/route.ts',
+            //   #526 REMOVED add-roles FROM THIS LIST, AND NOT BY WEAKENING IT.
+            //
+            //   It gated on isPlatformAdmin(session.user.roles) — the JWT — on
+            //   the endpoint that grants roles, so a revoked admin kept the
+            //   ability for as long as their token lived. It asks
+            //   requireAdmin("users:update") now: users:update is held by
+            //   super_admin and admin and nobody else, which is exactly
+            //   PLATFORM_ADMIN_ROLES, so the audience this test protects is
+            //   unchanged — it is read from the record instead of the token.
         ]) {
             expect({ file, uses: code(file).includes('isPlatformAdmin(') })
                 .toEqual({ file, uses: true });
