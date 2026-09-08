@@ -485,8 +485,31 @@ async function _rejectLoanApplication(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "finance:read")) {
-            return { error: "Unauthorized: Permission required - finance:read", success: false as const };
+        /**
+         *   #523 REFUSING A LOAN WAS GATED ON A READ PERMISSION.
+         *
+         *   This asked for `finance:read`. Every other loan decision on this
+         *   platform asks for `cooperatives:approve_loans` — seven functions
+         *   across three files, including the approve path twenty lines above
+         *   this one and the queue listing at the top of this file.
+         *
+         *   MEASURED, from the permission matrix:
+         *
+         *     cooperatives:approve_loans   super_admin, admin, cooperative_admin
+         *     finance:read                 super_admin, admin, cooperative_admin,
+         *                                  support, marketplace_admin
+         *
+         *   So `support` and `marketplace_admin` could refuse a member's loan —
+         *   a decision that denies somebody money and emails them to say so —
+         *   while being unable to approve one, and unable even to LIST the
+         *   pending queue, which is gated on the stronger permission. A write
+         *   more permissive than the read of the same resource.
+         *
+         *   Next.js server actions are invocable by any authenticated client, so
+         *   "no page calls this" is not a mitigation; it is why nobody noticed.
+         */
+        if (!session?.user || !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
+            return { error: "Unauthorized: Permission required - cooperatives:approve_loans", success: false as const };
         }
 
         const valid = LoanApplicationReviewSchema.safeParse({ applicationId, status: "rejected", reason });
