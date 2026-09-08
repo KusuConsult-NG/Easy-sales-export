@@ -24,6 +24,7 @@ import { uploadFileToStorage } from "@/lib/storage-admin";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { exportOnboardingSchema } from "@/lib/types/export-actions";
 import { sendEmailNotification } from "@/lib/email-notifications";
+import { latestApplication } from "@/lib/latest-application";
 
 export async function submitExportOnboardingAction(
     prevState: any,
@@ -226,14 +227,36 @@ export async function checkExportStatusAction(): Promise<string | null> { try {
                 .get();
 
             if (!appSnap.empty) {
-                const sortedDocs = appSnap.docs.sort((a, b) => {
-                    const aVal = a.data().submittedAt || a.data().createdAt;
-                    const bVal = b.data().submittedAt || b.data().createdAt;
-                    const aTime = aVal?.toMillis?.() || aVal?.seconds * 1000 || (aVal ? new Date(aVal).getTime() : 0);
-                    const bTime = bVal?.toMillis?.() || bVal?.seconds * 1000 || (bVal ? new Date(bVal).getTime() : 0);
-                    return bTime - aTime;
-                });
-                appDoc = sortedDocs[0];
+                /**
+                 *   #507 THE BANNED EXPRESSION SURVIVED HERE UNDER A DIFFERENT
+                 *        VARIABLE NAME.
+                 *
+                 *   most-recent-sort-key.test.ts refuses this shape in this very
+                 *   file — it is in that ratchet's AFFECTED list — with:
+                 *
+                 *       not.toMatch(/createdAt\?\.toMillis\?\.\(\)\s*\|\|/)
+                 *       not.toMatch(/createdAt\?\.seconds\s*\*\s*1000/)
+                 *
+                 *   and a tree-wide grep for the literal "createdAt?.toMillis?.()
+                 *   ||". Every one of them names the VARIABLE. This copy assigned
+                 *   the same value to `aVal` first, so all three looked straight
+                 *   past it:
+                 *
+                 *       aVal?.toMillis?.() || aVal?.seconds * 1000
+                 *              || (aVal ? new Date(aVal).getTime() : 0)
+                 *
+                 *   AND THE EXPRESSION REALLY IS BROKEN. `new Date(x).getTime()`
+                 *   is NaN for an unparseable string, so aTime becomes NaN, the
+                 *   comparator returns NaN, and Array.prototype.sort's ordering
+                 *   is then implementation-defined — the member's applications
+                 *   come back in no particular order. toMillis guards exactly
+                 *   that: `Number.isNaN(parsed) ? 0 : parsed`.
+                 *
+                 *   THE INSTRUMENT WAS THE DEFECT. The ratchet reported this file
+                 *   clean for as long as it has existed. Its refusals now match
+                 *   the shape rather than the identifier.
+                 */
+                appDoc = latestApplication(appSnap.docs);
             } else if (userData?.serviceRegistrations?.export?.applicationId) {
                 const appId = userData.serviceRegistrations.export.applicationId;
                 const directDoc = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS).doc(appId).get();
@@ -316,12 +339,10 @@ export async function checkExportStatusAction(): Promise<string | null> { try {
             .where('userId', '==', session.user.id)
             .get();
 
-        if (!legacySnap.empty) { const sortedDocs = legacySnap.docs.map(d => d.data()).sort((a: any, b: any) => {
-                const aTime = toMillis(a.createdAt);
-                const bTime = toMillis(b.createdAt);
-                return bTime - aTime;
-            });
-            const legacyData = sortedDocs[0];
+        if (!legacySnap.empty) {
+            //   #507 Copy two of four in this file, and one of three different
+            //   implementations of one rule. See the header above.
+            const legacyData: any = latestApplication(legacySnap.docs)?.data() ?? {};
             const legacyStatus = legacyData?.status ?? 'pending';
 
             await db.collection(COLLECTIONS.USERS).doc(session.user.id).update(
@@ -380,12 +401,8 @@ export async function getExportApplicationAction(): Promise<
                 .get();
 
             if (!snap.empty) {
-                const sortedDocs = snap.docs.sort((a, b) => {
-                    const aTime = toMillis(a.data().createdAt);
-                    const bTime = toMillis(b.data().createdAt);
-                    return bTime - aTime;
-                });
-                appDoc = sortedDocs[0];
+                //   #507 Copy three. It also sorted `snap.docs` IN PLACE.
+                appDoc = latestApplication(snap.docs);
                 applicationId = appDoc.id;
                 foundByQuery = true;
             }
@@ -629,13 +646,12 @@ export async function resubmitExportApplicationAction(
                 .get();
 
             if (!snap.empty) {
-                const sortedDocs = snap.docs.sort((a, b) => {
-                    const aTime = toMillis(a.data().createdAt);
-                    const bTime = toMillis(b.data().createdAt);
-                    return bTime - aTime;
-                });
-                appRef = sortedDocs[0].ref;
-                oldData = sortedDocs[0].data();
+                //   #507 Copy four — the resubmit. Whichever row the getter
+                //   above SHOWS, this is the row the correction is WRITTEN to,
+                //   so the two have to ask one rule. #504.
+                const chosen = latestApplication(snap.docs)!;
+                appRef = chosen.ref;
+                oldData = chosen.data();
                 applicationId = appRef.id;
                 foundByQuery = true;
             }

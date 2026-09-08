@@ -13,6 +13,7 @@ import { checkModuleAccess } from "@/lib/module-access-check";
 import { checkWaveEligibility } from "@/lib/wave-eligibility";
 import { toMillis } from "@/lib/firestore-serialize";
 import { isPlatformAdmin } from "@/lib/admin-permissions";
+import { latestApplication } from "@/lib/latest-application";
 
 /**
  * Check WAVE application status for current user
@@ -38,14 +39,25 @@ async function _checkWaveStatusAction(): Promise<ActionResponse<{ status: string
                 .get();
 
             if (!appSnap.empty) {
-                const sortedDocs = appSnap.docs.sort((a, b) => {
-                    const aVal = a.data().applicationDate || a.data().createdAt;
-                    const bVal = b.data().applicationDate || b.data().createdAt;
-                    const aTime = aVal?.toMillis?.() || aVal?.seconds * 1000 || (aVal ? new Date(aVal).getTime() : 0);
-                    const bTime = bVal?.toMillis?.() || bVal?.seconds * 1000 || (bVal ? new Date(bVal).getTime() : 0);
-                    return bTime - aTime;
-                });
-                appDoc = sortedDocs[0];
+                /**
+                 *   #507 A NINTH COPY, FOUND BY WIDENING THE RATCHET.
+                 *
+                 *   most-recent-sort-key.test.ts refuses this shape and lists
+                 *   this file, and reported it clean — because every refusal
+                 *   named the variable `createdAt` and this copy assigns to
+                 *   `aVal` first. Fixing the regex to match the SHAPE surfaced
+                 *   this and one more the same day.
+                 *
+                 *   ONE BEHAVIOURAL NOTE: this copy ranked on `applicationDate`
+                 *   where its siblings use `submittedAt`. The shared rule reads
+                 *   `submittedAt ?? createdAt`, so a row carrying ONLY
+                 *   applicationDate now ranks by createdAt instead. Both are
+                 *   written at submission by _wv_applications.ts, so the pair
+                 *   moves together; the alternative — teaching the shared rule a
+                 *   fourth field for one caller — is how one rule becomes nine
+                 *   again.
+                 */
+                appDoc = latestApplication(appSnap.docs);
             } else if (registration?.applicationId) {
                 const directDoc = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(registration.applicationId).get();
                 if (directDoc.exists) {

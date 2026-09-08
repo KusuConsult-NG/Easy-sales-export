@@ -64,6 +64,9 @@ import { toMillis } from '@/lib/firestore-serialize';
 /** Every file that carried a copy of the broken expression. */
 const AFFECTED = [
     'src/app/actions/academy/_ac_applications.ts',
+    //   #507 Added: the shape-matching sweep found a copy here that the
+    //   original list never named, which is why the sweep outranks the list.
+    'src/app/actions/academy/_ac_enrollment.ts',
     'src/app/actions/cooperative/_coop_registration.ts',
     'src/app/actions/cooperative/_dashboard.ts',
     'src/app/actions/export/_ex_investments.ts',
@@ -155,7 +158,12 @@ describe('a comparator built on it actually orders', () => {
 
 describe('no copy of the broken expression survives', () => {
     it.each(AFFECTED)('%s reads dates through a shared reader', (rel: string) => {
-        const src = source(rel);
+        //   #507 STRIPPED. The refusals below are matched on the SHAPE now, and
+        //   the fixes' own headers QUOTE that shape in order to explain what was
+        //   wrong — so reading raw source failed against corrected files. Third
+        //   time this audit has met that: #493 recorded it, #504 and #506 walked
+        //   into it again.
+        const src = code(rel);
 
         //   The two refusals below are the rule. The line above them is the
         //   vacuity guard: a file that simply DELETED its date handling would
@@ -169,8 +177,28 @@ describe('no copy of the broken expression survives', () => {
         //   asked for the mechanism where it means the rule, which is the trap
         //   this audit keeps meeting in its own tests.
         expect(src).toMatch(/toMillis\(|latestApplication\(|sortApplicationsNewestFirst\(/);
-        expect(src).not.toMatch(/createdAt\?\.toMillis\?\.\(\)\s*\|\|/);
-        expect(src).not.toMatch(/createdAt\?\.seconds\s*\*\s*1000/);
+
+        /**
+         *   #507 THESE REFUSALS NAMED THE VARIABLE, SO THE EXPRESSION MOVED
+         *   HOUSE AND WALKED PAST THEM.
+         *
+         *   _ex_onboarding.ts is in AFFECTED and this test reported it clean for
+         *   as long as it has existed, while the file contained:
+         *
+         *       const aVal = a.data().submittedAt || a.data().createdAt;
+         *       const aTime = aVal?.toMillis?.() || aVal?.seconds * 1000
+         *                  || (aVal ? new Date(aVal).getTime() : 0);
+         *
+         *   The same broken shape, assigned to a local first. `createdAt?.` was
+         *   never going to match it.
+         *
+         *   Matched on the SHAPE now — any identifier — which is what the rule
+         *   was always about. The instrument was the defect, and this audit's own
+         *   standing rule is to audit the instrument before believing the
+         *   measurement.
+         */
+        expect(src).not.toMatch(/\w+\?\.toMillis\?\.\(\)\s*\|\|/);
+        expect(src).not.toMatch(/\w+\?\.seconds\s*\*\s*1000/);
     });
 
     it('and the throwing spelling is gone as well', () => {
@@ -191,12 +219,24 @@ describe('no copy of the broken expression survives', () => {
         const { execSync } = require('child_process');
         // __tests__ excluded: this file quotes the broken expression in order to
         // assert against it, and would otherwise report itself.
-        const hits = execSync(
-            `grep -rl "createdAt?.toMillis?.() ||" src/ --include=*.ts --include=*.tsx | grep -v __tests__ || true`,
+        //   #507 The sweep grepped the LITERAL "createdAt?.toMillis?.() ||" and
+        //   so missed the copy in _ex_onboarding.ts, which had assigned the
+        //   value to `aVal` first. A regex on the shape catches it under any
+        //   name — which is what "nowhere else in the tree" was supposed to
+        //   mean.
+        const candidates = execSync(
+            `grep -rlE "[A-Za-z_$][A-Za-z0-9_$]*\\?\\.toMillis\\?\\.\\(\\) *\\|\\|" src/ --include=*.ts --include=*.tsx | grep -v __tests__ || true`,
             { encoding: 'utf-8' },
         ).trim();
 
-        expect(hits).toBe('');
+        //   #507 A hit inside a COMMENT is a file explaining the ban, not
+        //   breaking it. Every candidate is re-read with comments stripped.
+        const hits = candidates
+            ? candidates.split('\n').filter((rel: string) =>
+                /[A-Za-z_$][A-Za-z0-9_$]*\?\.toMillis\?\.\(\) *\|\|/.test(code(rel)))
+            : [];
+
+        expect(hits).toEqual([]);
     });
 
     it('and an account\'s creation date is not reported as "now"', () => {

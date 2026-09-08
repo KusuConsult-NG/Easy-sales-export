@@ -18,6 +18,7 @@ import { normalisePhone } from "@/lib/phone";
 import { isDecidedAgainst } from "@/lib/registration-progress";
 import type { AcademyApplicationData } from "@/lib/types/academy-actions";
 import { sendEmailNotification } from "@/lib/email-notifications";
+import { latestApplication } from "@/lib/latest-application";
 
 const ACADEMY_REGISTRATION_FEE = 0;
 
@@ -328,12 +329,12 @@ async function _getAcademyApplicationAction(): Promise<ActionResponse<any>> {
                 .get();
 
             if (!snap.empty) {
-                const sortedDocs = snap.docs.sort((a: any, b: any) => {
-                    const aTime = a.data().submittedAt?.toMillis?.() || a.data().submittedAt?.seconds * 1000 || toMillis(a.data().createdAt);
-                    const bTime = b.data().submittedAt?.toMillis?.() || b.data().submittedAt?.seconds * 1000 || toMillis(b.data().createdAt);
-                    return bTime - aTime;
-                });
-                appDoc = sortedDocs[0];
+                //   #507 A tenth copy, surfaced the same way — the refusals
+                //   named `createdAt` and this one reads `submittedAt?.toMillis
+                //   ?.() || submittedAt?.seconds * 1000`. Same broken shape,
+                //   same NaN hazard on an unparseable date, and it sorted
+                //   `snap.docs` in place.
+                appDoc = latestApplication(snap.docs);
                 applicationId = appDoc.id;
                 foundByQuery = true;
             }

@@ -13,6 +13,7 @@ import type { Course, EnrolledCourseWithDetails, UserProgress } from "@/lib/type
 import { normaliseAcademyPlan, checkCourseAccess } from "@/lib/academy-plan";
 import { isDecidedAgainst } from "@/lib/registration-progress";
 import { isRetired } from "@/lib/record-retirement";
+import { latestApplication } from "@/lib/latest-application";
 
 /**
  * Check Academy application status for current user
@@ -39,14 +40,12 @@ async function _checkAcademyStatusAction(): Promise<ActionResponse<string | null
                 .get();
 
             if (!appSnap.empty) {
-                const sortedDocs = appSnap.docs.sort((a, b) => {
-                    const aVal = a.data().submittedAt || a.data().createdAt;
-                    const bVal = b.data().submittedAt || b.data().createdAt;
-                    const aTime = aVal?.toMillis?.() || aVal?.seconds * 1000 || (aVal ? new Date(aVal).getTime() : 0);
-                    const bTime = bVal?.toMillis?.() || bVal?.seconds * 1000 || (bVal ? new Date(bVal).getTime() : 0);
-                    return bTime - aTime;
-                });
-                appDoc = sortedDocs[0];
+                //   #507 An eleventh copy, in a file the ratchet's AFFECTED
+                //   list never named — found only once the tree sweep matched
+                //   the SHAPE instead of the literal `createdAt?.toMillis?.()`.
+                //   That is the argument for a sweep over a list: a list records
+                //   what was known, and this file was not.
+                appDoc = latestApplication(appSnap.docs);
             } else if (userData?.serviceRegistrations?.academy?.applicationId) {
                 const appId = userData.serviceRegistrations.academy.applicationId;
                 const directDoc = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(appId).get();
