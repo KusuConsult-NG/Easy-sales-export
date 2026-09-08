@@ -13,6 +13,7 @@
 "use server";
 
 import { getAdminDb } from "@/lib/supabase-db";
+import { memberStatusOf } from "@/lib/cooperative-membership-status";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { sendSMS } from "@/lib/africastalking";
 import { normalisePhone } from "@/lib/phone";
@@ -383,7 +384,7 @@ async function collectSmsRecipients(
             const members: any[] = [];
             for (const d of (await stream).docs) {
                 const m: any = d.data();
-                const currentStatus = m.membershipStatus || m.status || "pending";
+                const currentStatus = memberStatusOf(m);
                 if (currentStatus !== "approved" && m.paymentStatus !== "completed") {
                     continue; // Skip unpaid applications
                 }

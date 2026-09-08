@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { memberStatusOf } from "@/lib/cooperative-membership-status";
 import { logger } from '@/lib/logger';
 import { Users, CheckCircle, XCircle, Clock, Eye, Search, Filter, Download, SlidersHorizontal, X, Edit2, Save, FileText, Loader2 } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
@@ -764,7 +765,7 @@ export default function CooperativeMembersPage() {
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                                 <div className="flex items-center justify-end gap-2">
-                                                    {!isEditMode && (app.status === "pending" || app.data.membershipStatus === "pending") && (
+                                                    {!isEditMode && memberStatusOf(app.data) === "pending" && (
                                                         <>
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); handleApprove(app.id); }}
@@ -891,7 +892,7 @@ export default function CooperativeMembersPage() {
                                       selectedApplication.status === "suspended" ? "bg-red-100 text-red-700" :
                                       "bg-slate-100 text-slate-600"}`}
                                 >
-                                    {selectedApplication.status || selectedApplication.data.membershipStatus || "—"}
+                                    {memberStatusOf(selectedApplication.data) || "—"}
                                 </span>
                             </div>
                             <div className="flex items-center gap-2">
@@ -1048,7 +1049,7 @@ export default function CooperativeMembersPage() {
                         )}
 
                         {/* ── Approve / Reject Actions ─────────────────────── */}
-                        {!isEditMode && (selectedApplication.status === "pending" || selectedApplication.data.membershipStatus === "pending") && (
+                        {!isEditMode && memberStatusOf(selectedApplication.data) === "pending" && (
                             <div className="pt-4 border-t border-slate-200 space-y-3">
                                 {selectedApplication.data.paymentStatus !== "completed" && (
                                     <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700 font-medium">

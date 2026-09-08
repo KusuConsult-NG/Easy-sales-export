@@ -16,6 +16,7 @@
 "use server";
 
 import { getAdminDb } from "@/lib/supabase-db";
+import { memberStatusOf } from "@/lib/cooperative-membership-status";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
 import { requireAdmin } from "@/lib/require-admin";
@@ -268,7 +269,7 @@ export async function collectRecipientUserIds(
             const uMap = await resolveUsers(db, snap.docs.map(d => d.data().userId));
             for (const d of snap.docs) {
                 const m = d.data();
-                const currentStatus = m.membershipStatus || m.status || "pending";
+                const currentStatus = memberStatusOf(m);
                 if (currentStatus !== "approved" && m.paymentStatus !== "completed") {
                     continue; // Skip unpaid applications
                 }

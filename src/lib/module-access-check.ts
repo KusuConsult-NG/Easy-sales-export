@@ -18,6 +18,7 @@
  */
 
 import { hasAppAccess, type AppIdentifier } from "@/lib/role-app-mapping";
+import { memberStatusOf } from "@/lib/cooperative-membership-status";
 import { isPaymentBypassAccount } from "@/lib/payment-bypass";
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -193,7 +194,7 @@ export async function checkModuleAccess(
             }
 
             if (memberDocData) {
-                const status = memberDocData.membershipStatus || memberDocData.status;
+                const status = memberStatusOf(memberDocData);
                 const isApprovedOrActive = status === "active" || status === "approved";
 
                 // A SUSPENSION WAS UNDONE BY THE NEXT PAGE LOAD.

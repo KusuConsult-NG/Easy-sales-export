@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
+import { memberStatusOf } from "@/lib/cooperative-membership-status";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { hasAdminPermission } from "@/lib/admin-permissions";
@@ -75,7 +76,12 @@ export async function GET(request: NextRequest) {
             email: userData.email || membData?.email || "",
             memberNumber: membData?.memberNumber || userData.memberNumber || "—",
             role: (userData.roles || []).join(", ") || "member",
-            status: membData?.status || membData?.membershipStatus || userData.status || "unknown",
+            //   #520. This was `membData?.status || membData?.membershipStatus`,
+            //   the reversed precedence. Registration writes both and approval
+            //   updates only membershipStatus, so an approved member kept
+            //   `status: "pending"` and an admin scanning their ID card was
+            //   shown "pending" for a fully approved member.
+            status: membData ? memberStatusOf(membData) : (userData.status || "unknown"),
             paymentStatus: membData?.paymentStatus || undefined,
             membershipTier: membData?.membershipTier || undefined,
             joinedAt: membData?.createdAt

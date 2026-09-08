@@ -50,6 +50,39 @@ export const COOPERATIVE_TRANSACTING_STATUSES = ["active", "approved"] as const;
 export type CooperativeTransactingStatus = (typeof COOPERATIVE_TRANSACTING_STATUSES)[number];
 
 /**
+ * Which status a membership row is in. ONE PRECEDENCE.
+ *
+ *   #520 THE SAME EXPRESSION WAS WRITTEN FIVE TIMES AND ONE OF THEM WAS
+ *   BACKWARDS.
+ *
+ *   `membershipStatus || status` appears by hand in module-access-check,
+ *   sms-broadcast, in-app-broadcast and broadcast-logic — and the note above
+ *   already says why that order: `membershipStatus` is the canonical field and
+ *   `status` is what legacy rows carry.
+ *
+ *   services/userMetrics.service.ts read them THE OTHER WAY ROUND:
+ *
+ *       const statusVal = m.status || m.membershipStatus || "pending";
+ *
+ *   and registration writes BOTH — _coop_registration creates a row with
+ *   `membershipStatus: "pending"`, `paymentStatus: "pending"` and
+ *   `status: "pending"` — while approval updates only `membershipStatus`. So an
+ *   approved member keeps `status: "pending"` for ever, and the one reader that
+ *   consults `status` first counted every approved member as pending. Its own
+ *   docstring said "approvedCount: docs where membershipStatus is active OR
+ *   approved", which the code contradicted.
+ *
+ *   Stated once here so a sixth copy cannot be written in either direction.
+ */
+export function memberStatusOf(
+    member: Record<string, unknown> | null | undefined,
+): string {
+    if (!member) return "pending";
+    const raw = String(member.membershipStatus ?? member.status ?? "").trim().toLowerCase();
+    return raw === "" ? "pending" : raw;
+}
+
+/**
  * True when this membership document may move money.
  *
  * `membershipStatus` is preferred over `status`, which some legacy rows carry
@@ -60,8 +93,7 @@ export function canTransactAsMember(
     member: Record<string, unknown> | null | undefined,
 ): boolean {
     if (!member) return false;
-    const raw = String(member.membershipStatus ?? member.status ?? "").trim().toLowerCase();
-    return (COOPERATIVE_TRANSACTING_STATUSES as readonly string[]).includes(raw);
+    return (COOPERATIVE_TRANSACTING_STATUSES as readonly string[]).includes(memberStatusOf(member));
 }
 
 /**

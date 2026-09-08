@@ -1,6 +1,7 @@
 import { getAdminDb } from "@/lib/supabase-db";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { normaliseAcademyPlan } from "@/lib/academy-plan";
+import { memberStatusOf } from "@/lib/cooperative-membership-status";
 import type { UserMetricsServiceContract, CooperativeMemberMetrics, AcademyMetrics } from "@easy-sales/services";
 
 /**
@@ -79,7 +80,13 @@ export class UserMetricsService implements UserMetricsServiceContract {
             const m = doc.data();
             totalApplications++;
             
-            const statusVal = m.status || m.membershipStatus || "pending";
+            //   #520. This was `m.status || m.membershipStatus`, the only
+            //   reader on the platform with that precedence — and registration
+            //   writes both while approval updates only membershipStatus, so
+            //   every approved member kept `status: "pending"` and was counted
+            //   here as pending. The docstring above already said
+            //   membershipStatus; the code disagreed with it.
+            const statusVal = memberStatusOf(m);
             if (statusVal === "active" || statusVal === "approved") {
                 approvedCount++;
             } else if (statusVal === "pending") {
@@ -94,15 +101,33 @@ export class UserMetricsService implements UserMetricsServiceContract {
             }
         }
 
+        //   #520 ORPHANED PAYMENTS WERE COUNTED AS PAID MEMBERS.
+        //
+        //   `validPaidUserIds` holds every user with a completed cooperative
+        //   registration payment — INCLUDING users with no membership row at
+        //   all, which the block below counts separately and calls orphaned.
+        //   `paidMembersCount` was then `Math.min(validPaidUserIds.size,
+        //   totalApplications)`, so those orphans were counted toward the paid
+        //   membership figure, and `unpaidMembers`, derived by subtraction,
+        //   understated by the same amount.
+        //
+        //   This audit measured the population: 48 cooperative_members
+        //   references with no matching profile, and twelve completed
+        //   registration payments whose references match no generator in this
+        //   codebase. Orphans here are not hypothetical.
+        //
+        //   Counting the INTERSECTION is what the figure was always supposed to
+        //   be — members who have paid — and it makes the Math.min clamp
+        //   unnecessary rather than load-bearing.
+        const allMemberUserIds = new Set<string>();
+        allMembers.forEach(doc => {
+            const uid = doc.data().userId || doc.id;
+            if (uid) allMemberUserIds.add(uid);
+        });
+
         let orphanedPaymentsCount = 0;
         if (!adminScope) {
-            // Global: count Paystack payments with no member doc at all
-            const allMemberUserIds = new Set<string>();
-            allMembers.forEach(doc => {
-                const uid = doc.data().userId || doc.id;
-                if (uid) allMemberUserIds.add(uid);
-            });
-
+            // Global: count Paystack payments with no member doc at all.
             validPaidUserIds.forEach(uid => {
                 if (!allMemberUserIds.has(uid)) {
                     orphanedPaymentsCount++;
@@ -110,7 +135,10 @@ export class UserMetricsService implements UserMetricsServiceContract {
             });
         }
 
-        const paidMembersCount = Math.min(validPaidUserIds.size, totalApplications);
+        let paidMembersCount = 0;
+        validPaidUserIds.forEach(uid => {
+            if (allMemberUserIds.has(uid)) paidMembersCount++;
+        });
         const unpaidMembers = Math.max(0, totalApplications - paidMembersCount);
 
         return {
