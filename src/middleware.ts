@@ -15,6 +15,7 @@ import { isSharedDomainPath, isProtectedPath } from "@/lib/route-manifest";
 const { auth } = NextAuth(authConfig);
 
 import { HUB_MODULES } from "@/config/modules.config";
+import { canonicalHostFor } from "@/lib/canonical-host";
 
 // Derive maps from HUB_MODULES
 const DOMAIN_MAP: Record<string, string> = Object.values(HUB_MODULES).reduce((acc, mod) => {
@@ -62,14 +63,37 @@ const authMiddleware = auth((req: any) => {
     ).split(",")[0].trim().replace(/:\d+$/, "").toLowerCase();
 
 
-    // ── 1. Apex → www Redirect (High Priority) ──────────────────────────
-    // Redirect only the primary easysalesexport.com apex domain to www for consistent session handling.
-    if (hostname === "easysalesexport.com") {
-        const wwwUrl = req.nextUrl.clone();
-        wwwUrl.host = "www.easysalesexport.com";
-        wwwUrl.protocol = "https:";
-        wwwUrl.port = "";
-        return NextResponse.redirect(wwwUrl, { status: 308 });
+    // ── 1. Canonical host redirect (High Priority) ──────────────────────
+    /**
+     *   #494 THIS TESTED ONE HOSTNAME, IN THE FILE THAT ROUTES SEVEN.
+     *
+     *        Its own comment gave the reason — "for consistent session
+     *        handling" — and six module domains did not have it. The session
+     *        cookie has no `domain` option so it is HOST-ONLY, and the CSRF
+     *        cookie's `__Host-` prefix forbids one outright, so a member on
+     *        www.easysalesacademy.com and the same member on
+     *        easysalesacademy.com are two different sessions. Sign in on one,
+     *        follow a link to the other, and you are signed out with a working
+     *        account and nothing to report.
+     *
+     *        The direction differs by design and lib/canonical-host.ts is where
+     *        that is argued: the root domain keeps apex -> www because that is
+     *        where it is deployed, and the modules go www -> apex because their
+     *        apex is what modules.config.ts declares canonical, is what
+     *        DOMAIN_MAP is derived from, and is the host that certainly
+     *        resolves. Copying the root's direction to the others would have
+     *        sent four modules to hosts this router does not know.
+     */
+    const canonicalHost = canonicalHostFor(hostname);
+    if (canonicalHost) {
+        const canonicalUrl = req.nextUrl.clone();
+        canonicalUrl.host = canonicalHost;
+        canonicalUrl.protocol = "https:";
+        canonicalUrl.port = "";
+        //   308 keeps the method and tells the browser not to ask again, and
+        //   the clone keeps the path and query — a member landing on
+        //   /academy/courses arrives at /academy/courses.
+        return NextResponse.redirect(canonicalUrl, { status: 308 });
     }
 
     // ── 1.1. Authentication Protection Gate ────────────────────────────

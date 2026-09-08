@@ -149,7 +149,29 @@ describe('#454 — why moving a module across registrable domains is safe here',
         const middleware = source('src/middleware.ts');
 
         expect(middleware).not.toContain('APEX_DOMAINS');
-        // The redirect it looked like it fed is still there, unchanged.
-        expect(middleware).toContain('hostname === "easysalesexport.com"');
+
+        /**
+         *   #494 THE SECOND HALF PINNED THE INLINE `hostname ===
+         *        "easysalesexport.com"` COMPARISON, and #494 replaced it with a
+         *        derived lookup — so this failed on a change that gave the other
+         *        six module domains the redirect this one always had.
+         *
+         *        What it MEANS is that the root apex still redirects to www.
+         *        That is asserted against the rule now, rather than against the
+         *        shape of the line that used to state it. Thirteenth time in
+         *        this audit an assertion tied to a spelling has broken on
+         *        correct code.
+         *
+         *        #454's own note said a list named APEX_DOMAINS "is exactly the
+         *        thing somebody reaches for when adding a redirect, and it would
+         *        have been silently out of date". #494 is that redirect being
+         *        added — and it is derived from HUB_MODULES, which is the shape
+         *        the deleted list should have had.
+         */
+         
+        const { canonicalHostFor } = require('@/lib/canonical-host');
+
+        expect(canonicalHostFor('easysalesexport.com')).toBe('www.easysalesexport.com');
+        expect(middleware).toContain('canonicalHostFor');
     });
 });
