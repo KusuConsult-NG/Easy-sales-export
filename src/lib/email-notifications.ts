@@ -4,7 +4,7 @@
  * Can be integrated with Resend or other email service
  */
 
-import { escapeHtml } from "@/lib/utils";
+import { html, trustedHtml } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 
 /**
@@ -391,13 +391,13 @@ export async function sendMembershipApprovalEmail(memberEmail: string, memberNam
     return sendEmailNotification({
         to: memberEmail,
         subject: 'Cooperative Membership Approved',
-        message: `
+        message: html`
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a1a;">
                 <div style="background-color: #7c3aed; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
                     <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Membership Approved!</h1>
                 </div>
                 <div style="padding: 32px; background: #ffffff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
-                    <p style="font-size: 16px; margin: 0 0 12px;">Hello <strong>${escapeHtml(String(memberName ?? ""))}</strong>,</p>
+                    <p style="font-size: 16px; margin: 0 0 12px;">Hello <strong>${memberName ?? ""}</strong>,</p>
                     <p style="font-size: 15px; color: #374151; margin: 0 0 16px;">
                         Congratulations! Your Easy Sales Export Cooperative membership application has been <strong>approved</strong>.
                     </p>
@@ -428,25 +428,25 @@ export async function sendMembershipRejectionEmail(memberEmail: string, memberNa
     return sendEmailNotification({
         to: memberEmail,
         subject: 'Cooperative Membership Application Update',
-        message: `
+        message: html`
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a1a;">
                 <div style="background-color: #ef4444; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
                     <h1 style="color: #ffffff; margin: 0; font-size: 22px;">Application Update Required</h1>
                 </div>
                 <div style="padding: 32px; background: #ffffff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
-                    <p style="font-size: 16px; margin: 0 0 12px;">Hello <strong>${escapeHtml(String(memberName ?? ""))}</strong>,</p>
+                    <p style="font-size: 16px; margin: 0 0 12px;">Hello <strong>${memberName ?? ""}</strong>,</p>
                     <p style="font-size: 15px; color: #374151; margin: 0 0 16px;">
                         Thank you for your interest in joining our cooperative.
                     </p>
                     <p style="font-size: 15px; color: #374151; margin: 0 0 16px;">
                         Unfortunately, we are unable to approve your application at this time.
                     </p>
-                    ${reason ? `
+                    ${reason ? trustedHtml(html`
                     <div style="background: #fef2f2; border-left: 4px solid #ef4444; padding: 16px; margin: 24px 0;">
                         <p style="margin: 0; font-size: 14px; font-weight: bold; color: #991b1b;">Admin Feedback:</p>
-                        <p style="margin: 4px 0 0; font-size: 14px; color: #7f1d1d;">${escapeHtml(String(reason ?? ""))}</p>
+                        <p style="margin: 4px 0 0; font-size: 14px; color: #7f1d1d;">${reason ?? ""}</p>
                     </div>
-                    ` : ''}
+                    `) : ''}
                     <p style="font-size: 15px; color: #374151; margin: 0 0 28px;">
                         If you have questions or need clarification, please contact our support team.
                     </p>
@@ -473,11 +473,11 @@ export async function sendWithdrawalConfirmationEmail(
     return sendEmailNotification({
         to: userEmail,
         subject: 'Withdrawal Request Received',
-        message: `
-            <h2>Hello ${escapeHtml(String(userName ?? ""))},</h2>
+        message: html`
+            <h2>Hello ${userName ?? ""},</h2>
             <p>We have received your withdrawal request.</p>
             <p><strong>Amount:</strong> ₦${amount.toLocaleString()}</p>
-            <p><strong>Request ID:</strong> ${escapeHtml(String(withdrawalId ?? ""))}</p>
+            <p><strong>Request ID:</strong> ${withdrawalId ?? ""}</p>
             <p>Your request is being reviewed and will be processed within 3-5 business days.</p>
             <p>You will receive another email once the withdrawal is approved.</p>
         `,
@@ -527,7 +527,7 @@ export async function sendPasswordResetEmail(
     return sendEmailNotification({
         to: userEmail,
         subject: 'Reset Your Password - Easy Sales Export',
-        message: `
+        message: html`
 <!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><title>Password Reset</title></head>
@@ -540,7 +540,7 @@ export async function sendPasswordResetEmail(
     <p style="color: #334155;">You requested a password reset for your Easy Sales Export account.
       Click the button below to set a new password:</p>
     <div style="text-align: center; margin: 32px 0;">
-      <a href="${escapeHtml(String(resetLink ?? ""))}"
+      <a href="${resetLink ?? ""}"
          style="background: #3b5bdb; color: white; padding: 14px 28px; border-radius: 10px;
                 text-decoration: none; font-weight: bold; font-size: 16px; display: inline-block;">
         Reset My Password
@@ -551,7 +551,7 @@ export async function sendPasswordResetEmail(
     </p>
     <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
     <p style="color: #94a3b8; font-size: 12px; text-align: center;">
-      If the button doesn't work, copy this link: ${escapeHtml(String(resetLink ?? ""))}
+      If the button doesn't work, copy this link: ${resetLink ?? ""}
     </p>
   </div>
 </body>
@@ -572,10 +572,10 @@ export async function sendWaveApplicationEmail(
 ) {
     const isApproved = status === 'approved';
 
-    const message = isApproved ? `
+    const message = isApproved ? html`
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #059669;">Congratulations!</h2>
-            <p>Hi ${escapeHtml(String(userName ?? ""))},</p>
+            <p>Hi ${userName ?? ""},</p>
             <p>We are thrilled to inform you that your application for the <strong>Women Agro-Value Expansion (WAVE)</strong> program has been approved.</p>
             
             <div style="background: #ecfdf5; padding: 16px; border-radius: 8px; margin: 20px 0; border: 1px solid #a7f3d0;">
@@ -602,18 +602,18 @@ export async function sendWaveApplicationEmail(
                 Easy Sales Export - Women Agripreneurs Visibility and Empowerment
             </p>
         </div>
-    ` : `
+    ` : html`
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #dc2626;">WAVE Application Update</h2>
-            <p>Hi ${escapeHtml(String(userName ?? ""))},</p>
+            <p>Hi ${userName ?? ""},</p>
             <p>Thank you for your interest in the Women Agro-Value Expansion (WAVE) program.</p>
             
             <div style="background: #fef2f2; padding: 16px; border-radius: 8px; margin: 20px 0;">
                 <p>Unfortunately, we are unable to approve your application at this time.</p>
-                ${reason ? `
+                ${reason ? trustedHtml(html`
                 <p><strong>Reason provided:</strong></p>
-                <p style="font-style: italic;">"${escapeHtml(String(reason ?? ""))}"</p>
-                ` : ''}
+                <p style="font-style: italic;">"${reason ?? ""}"</p>
+                `) : ''}
             </div>
 
             <p><strong>What You Can Do:</strong></p>
@@ -652,12 +652,12 @@ export async function sendWithdrawalApprovedEmail(
     return sendEmailNotification({
         to: userEmail,
         subject: 'Funds Disbursed - Withdrawal Approved',
-        message: `
+        message: html`
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                 <h2 style="color: #16a34a;">Withdrawal Approved</h2>
-                <p>Hello ${escapeHtml(String(userName ?? ""))},</p>
+                <p>Hello ${userName ?? ""},</p>
                 <p>Your withdrawal request for <strong>₦${amount.toLocaleString()}</strong> has been approved and processed.</p>
-                <p><strong>Reference ID:</strong> ${escapeHtml(String(withdrawalId ?? ""))}</p>
+                <p><strong>Reference ID:</strong> ${withdrawalId ?? ""}</p>
                 <p>The funds should reflect in your bank account shortly.</p>
                 <p>Thank you for banking with us.</p>
             </div>
@@ -678,12 +678,12 @@ export async function sendWithdrawalRejectedEmail(
     return sendEmailNotification({
         to: userEmail,
         subject: 'Update on Your Withdrawal Request',
-        message: `
+        message: html`
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                 <h2 style="color: #dc2626;">Withdrawal Request Rejected</h2>
-                <p>Hello ${escapeHtml(String(userName ?? ""))},</p>
+                <p>Hello ${userName ?? ""},</p>
                 <p>We are unable to process your withdrawal request for <strong>₦${amount.toLocaleString()}</strong> at this time.</p>
-                <p><strong>Reason:</strong> ${escapeHtml(String(reason ?? ""))}</p>
+                <p><strong>Reason:</strong> ${reason ?? ""}</p>
                 <p>The funds have been returned to your savings balance.</p>
                 <p>Please contact support if you believe this is an error.</p>
             </div>
@@ -702,7 +702,7 @@ export async function sendBriefingConfirmationEmail(
     return sendEmailNotification({
         to: userEmail,
         subject: '⚠ You Are Now Officially Positioned',
-        message: `
+        message: html`
             <div style="font-family: Georgia, serif; max-width: 600px; margin: 0 auto; color: #1a1a1a; line-height: 1.8;">
                 <p style="font-size: 16px;">
                     You have just done something most Nigerians will ignore.
@@ -783,7 +783,7 @@ export async function sendBriefing24HourReminderEmail(
     return sendEmailNotification({
         to: userEmail,
         subject: 'Tomorrow Changes Your Financial Direction',
-        message: `
+        message: html`
             <div style="font-family: Georgia, serif; max-width: 600px; margin: 0 auto; color: #1a1a1a; line-height: 1.8;">
                 <p style="font-size: 16px;">
                     Tomorrow, you will see:
@@ -840,12 +840,12 @@ export async function sendExportWindowCompleteEmail(
     const profit = returnAmount - amountInvested;
     return sendEmailNotification({
         to: userEmail,
-        subject: `🎉 Your Export Returns Are Ready — ${escapeHtml(String(windowTitle ?? ""))}`,
-        message: `
+        subject: `🎉 Your Export Returns Are Ready — ${windowTitle ?? ""}`,
+        message: html`
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a1a;">
                 <h2 style="color: #16a34a;">Your Export Returns Are Ready!</h2>
-                <p>Hello ${escapeHtml(String(userName ?? ""))},</p>
-                <p>Your investment in <strong>${escapeHtml(String(windowTitle ?? ""))}</strong> has been completed successfully.</p>
+                <p>Hello ${userName ?? ""},</p>
+                <p>Your investment in <strong>${windowTitle ?? ""}</strong> has been completed successfully.</p>
 
                 <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 20px; margin: 20px 0;">
                     <table style="width:100%; border-collapse: collapse;">
@@ -863,7 +863,7 @@ export async function sendExportWindowCompleteEmail(
                         </tr>
                         <tr>
                             <td style="padding: 6px 0; color: #166534;">ROI</td>
-                            <td style="padding: 6px 0; color: #16a34a; text-align: right; font-weight: bold;">${escapeHtml(String(roi ?? ""))}</td>
+                            <td style="padding: 6px 0; color: #16a34a; text-align: right; font-weight: bold;">${roi ?? ""}</td>
                         </tr>
                     </table>
                 </div>
@@ -899,14 +899,14 @@ export async function sendWaveWhatsAppInviteEmail(
     return sendEmailNotification({
         to: userEmail,
         subject: "Your WAVE Briefing WhatsApp Group Access",
-        message: `
+        message: html`
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a1a;">
                 <div style="background: #14532d; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
                     <h1 style="color: #ffffff; margin: 0; font-size: 22px;">WAVE Briefing</h1>
                     <p style="color: #bbf7d0; margin: 6px 0 0; font-size: 14px;">Women Agripreneurs Value-creation Empowerment</p>
                 </div>
                 <div style="padding: 32px; background: #ffffff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
-                    <p style="font-size: 16px; margin: 0 0 12px;">Hello <strong>${escapeHtml(String(userName ?? ""))}</strong>,</p>
+                    <p style="font-size: 16px; margin: 0 0 12px;">Hello <strong>${userName ?? ""}</strong>,</p>
                     <p style="font-size: 15px; color: #374151; margin: 0 0 8px;">
                         Your seat for the <strong>WAVE National Awareness &amp; Opportunity Briefing</strong> has been confirmed.
                     </p>
@@ -914,7 +914,7 @@ export async function sendWaveWhatsAppInviteEmail(
                         Click the button below to join our exclusive WhatsApp group, where you will receive event updates, venue details, and briefing materials.
                     </p>
                     <div style="text-align: center; margin: 32px 0;">
-                        <a href="${escapeHtml(String(inviteUrl ?? ""))}"
+                        <a href="${inviteUrl ?? ""}"
                            style="background-color: #16a34a; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: bold; display: inline-block;">
                             Join WAVE WhatsApp Group &rarr;
                         </a>
@@ -950,14 +950,14 @@ export async function sendCooperativeWhatsAppInviteEmail(
     return sendEmailNotification({
         to: userEmail,
         subject: "Your EasySales Cooperative WhatsApp Group Access",
-        message: `
+        message: html`
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a1a;">
                 <div style="background: #4c1d95; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
                     <h1 style="color: #ffffff; margin: 0; font-size: 22px;">EasySales Cooperative</h1>
                     <p style="color: #ddd6fe; margin: 6px 0 0; font-size: 14px;">Your Membership is Active</p>
                 </div>
                 <div style="padding: 32px; background: #ffffff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
-                    <p style="font-size: 16px; margin: 0 0 12px;">Hello <strong>${escapeHtml(String(userName ?? ""))}</strong>,</p>
+                    <p style="font-size: 16px; margin: 0 0 12px;">Hello <strong>${userName ?? ""}</strong>,</p>
                     <p style="font-size: 15px; color: #374151; margin: 0 0 8px;">
                         Welcome to the <strong>EasySales Cooperative</strong>! Your membership registration and payment have been successfully verified.
                     </p>
@@ -965,7 +965,7 @@ export async function sendCooperativeWhatsAppInviteEmail(
                         Click the button below to join our exclusive members-only WhatsApp group for cooperative updates, financial news, and member announcements.
                     </p>
                     <div style="text-align: center; margin: 32px 0;">
-                        <a href="${escapeHtml(String(inviteUrl ?? ""))}"
+                        <a href="${inviteUrl ?? ""}"
                            style="background-color: #7c3aed; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: bold; display: inline-block;">
                             Join Cooperative WhatsApp Group &rarr;
                         </a>
@@ -999,13 +999,13 @@ export async function sendSellerApprovalEmail(
     return sendEmailNotification({
         to: userEmail,
         subject: "🎉 Marketplace Seller Verification Approved!",
-        message: `
+        message: html`
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a1a;">
                 <div style="background: gradient(linear, left top, right bottom, from(#3b82f6), to(#2563eb)); background-color: #2563eb; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
                     <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Seller Verification Approved!</h1>
                 </div>
                 <div style="padding: 32px; background: #ffffff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
-                    <p style="font-size: 16px; margin: 0 0 12px;">Hello <strong>${escapeHtml(String(userName ?? ""))}</strong>,</p>
+                    <p style="font-size: 16px; margin: 0 0 12px;">Hello <strong>${userName ?? ""}</strong>,</p>
                     <p style="font-size: 15px; color: #374151; margin: 0 0 16px;">
                         Congratulations! Your Easy Sales Export Marketplace seller application has been <strong>approved</strong>.
                     </p>
@@ -1040,13 +1040,13 @@ export async function sendSellerRejectionEmail(
     return sendEmailNotification({
         to: userEmail,
         subject: "Action Required: Update Your Marketplace Seller Application",
-        message: `
+        message: html`
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a1a;">
                 <div style="background-color: #ef4444; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
                     <h1 style="color: #ffffff; margin: 0; font-size: 22px;">Application Update Required</h1>
                 </div>
                 <div style="padding: 32px; background: #ffffff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
-                    <p style="font-size: 16px; margin: 0 0 12px;">Hello <strong>${escapeHtml(String(userName ?? ""))}</strong>,</p>
+                    <p style="font-size: 16px; margin: 0 0 12px;">Hello <strong>${userName ?? ""}</strong>,</p>
                     <p style="font-size: 15px; color: #374151; margin: 0 0 16px;">
                         Thank you for applying to become a seller on the Easy Sales Export Marketplace.
                     </p>
@@ -1055,7 +1055,7 @@ export async function sendSellerRejectionEmail(
                     </p>
                     <div style="background: #fef2f2; border-left: 4px solid #ef4444; padding: 16px; margin: 24px 0;">
                         <p style="margin: 0; font-size: 14px; font-weight: bold; color: #991b1b; mb-2">Admin Feedback:</p>
-                        <p style="margin: 4px 0 0; font-size: 14px; color: #7f1d1d;">${escapeHtml(String(reason ?? ""))}</p>
+                        <p style="margin: 4px 0 0; font-size: 14px; color: #7f1d1d;">${reason ?? ""}</p>
                     </div>
                     <p style="font-size: 15px; color: #374151; margin: 0 0 28px;">
                         Please log in to your dashboard to edit and resubmit your application.
@@ -1090,16 +1090,16 @@ export async function sendAcademyEnrollmentEmail(
     
     return sendEmailNotification({
         to: userEmail,
-        subject: `Welcome to the Academy (${escapeHtml(String(formattedTier ?? ""))} Package)`,
-        message: `
+        subject: `Welcome to the Academy (${formattedTier ?? ""} Package)`,
+        message: html`
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a1a;">
                 <div style="background: gradient(linear, left top, right bottom, from(#16a34a), to(#15803d)); background-color: #16a34a; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
                     <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Welcome to the Academy!</h1>
                 </div>
                 <div style="padding: 32px; background: #ffffff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
-                    <p style="font-size: 16px; margin: 0 0 12px;">Hello <strong>${escapeHtml(String(userName ?? ""))}</strong>,</p>
+                    <p style="font-size: 16px; margin: 0 0 12px;">Hello <strong>${userName ?? ""}</strong>,</p>
                     <p style="font-size: 15px; color: #374151; margin: 0 0 16px;">
-                        Great news! An administrator has manually enrolled you into the Academy under the <strong>${escapeHtml(String(formattedTier ?? ""))} Package</strong>.
+                        Great news! An administrator has manually enrolled you into the Academy under the <strong>${formattedTier ?? ""} Package</strong>.
                     </p>
                     <p style="font-size: 15px; color: #374151; margin: 0 0 28px;">
                         Your account has been fully configured and you can bypass the payment step to access all your courses and resources immediately.
@@ -1126,11 +1126,11 @@ export async function sendExportProductApprovalEmail(
     userName: string,
     productName: string
 ) {
-    const html = `
+    const body = html`
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
             <h2 style="color: #0f172a;">Export Product Approved</h2>
-            <p>Dear ${escapeHtml(String(userName ?? ""))},</p>
-            <p>Great news! Your export product <strong>${escapeHtml(String(productName ?? ""))}</strong> has been reviewed and approved by our administrative team.</p>
+            <p>Dear ${userName ?? ""},</p>
+            <p>Great news! Your export product <strong>${productName ?? ""}</strong> has been reviewed and approved by our administrative team.</p>
             <p>It is now live in the Export Catalog and visible to international buyers.</p>
             <p>Log in to your dashboard to monitor its status and any associated buyer inquiries.</p>
             <br />
@@ -1145,7 +1145,7 @@ export async function sendExportProductApprovalEmail(
     return sendEmailNotification({
         to: userEmail,
         subject: "Your Export Product has been Approved",
-        message: html,
+        message: body,
         metadata: { type: 'export_product_approval', productName }
     });
 }
@@ -1155,11 +1155,11 @@ export async function sendExportProductRejectionEmail(
     userName: string,
     productName: string
 ) {
-    const html = `
+    const body = html`
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
             <h2 style="color: #0f172a;">Export Product Update</h2>
-            <p>Dear ${escapeHtml(String(userName ?? ""))},</p>
-            <p>Thank you for submitting your product <strong>${escapeHtml(String(productName ?? ""))}</strong> for the Export Catalog.</p>
+            <p>Dear ${userName ?? ""},</p>
+            <p>Thank you for submitting your product <strong>${productName ?? ""}</strong> for the Export Catalog.</p>
             <p>After careful review, we are unable to approve this product for the global catalog at this time. This may be due to missing certifications, incorrect grade formatting, or failure to meet minimum international standards.</p>
             <p>Please review your product details and ensure all requirements are met before submitting a new application.</p>
             <p style="margin-top: 30px; font-size: 14px; color: #64748b;">
@@ -1172,7 +1172,7 @@ export async function sendExportProductRejectionEmail(
     return sendEmailNotification({
         to: userEmail,
         subject: "Update on your Export Product Submission",
-        message: html,
+        message: body,
         metadata: { type: 'export_product_rejection', productName }
     });
 }
@@ -1189,13 +1189,13 @@ export async function sendLegacyMemberWelcomeEmail(
     return sendEmailNotification({
         to: userEmail,
         subject: 'Welcome to Easy Sales Export - Your Account is Ready',
-        message: `
+        message: html`
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a1a;">
                 <div style="background-color: #16a34a; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
                     <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Welcome to the Platform!</h1>
                 </div>
                 <div style="padding: 32px; background: #ffffff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
-                    <p style="font-size: 16px; margin: 0 0 12px;">Hello <strong>${escapeHtml(String(userName ?? ""))}</strong>,</p>
+                    <p style="font-size: 16px; margin: 0 0 12px;">Hello <strong>${userName ?? ""}</strong>,</p>
                     <p style="font-size: 15px; color: #374151; margin: 0 0 16px;">
                         An administrator has successfully registered your account on the Easy Sales Export platform.
                     </p>
@@ -1209,7 +1209,7 @@ export async function sendLegacyMemberWelcomeEmail(
                         </p>
                         <div style="background-color: #ffffff; border: 2px dashed #16a34a; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
                             <p style="margin: 0; font-size: 12px; color: #4b5563; text-transform: uppercase; font-weight: bold; letter-spacing: 1px;">Your Temporary PIN</p>
-                            <p style="margin: 8px 0 0; font-size: 32px; color: #16a34a; font-weight: bold; letter-spacing: 4px;">${escapeHtml(String(temporaryPassword ?? ""))}</p>
+                            <p style="margin: 8px 0 0; font-size: 32px; color: #16a34a; font-weight: bold; letter-spacing: 4px;">${temporaryPassword ?? ""}</p>
                         </div>
                         <a href="${getBaseUrl()}/auth/login"
                            style="display: inline-block; background-color: #16a34a; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: bold;">

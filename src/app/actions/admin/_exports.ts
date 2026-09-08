@@ -1,6 +1,7 @@
 "use server";
 
 import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
+import { html } from "@/lib/utils";
 import { ZodError } from "zod";
 import { withFlexibleSafeAction, ActionResponse, type ActionState } from "@/lib/safe-action";
 import { revalidatePath, updateTag } from 'next/cache';
@@ -261,7 +262,7 @@ async function _approveExportOnboardingAction(
                     from: process.env.EMAIL_FROM || "Easy Sales Export <info@easysalesexport.com>",
                     to: appData.userEmail,
                     subject: "Export Account Approved!",
-                    message: `
+                    message: html`
                         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                             <h2 style="color: #059669;">Welcome to Export Services!</h2>
                             <p>Your export onboarding application has been approved.</p>
@@ -395,7 +396,7 @@ async function _requestExportApplicationRevisionAction(
                     from: process.env.EMAIL_FROM || "Easy Sales Export <info@easysalesexport.com>",
                     to: appData.userEmail,
                     subject: "Action Required: Correction Needed on Your Export Application",
-                    message: `
+                    message: html`
                         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                             <h2 style="color: #ea580c;">Action Required: Correction Needed</h2>
                             <p>Dear ${appData.profile?.fullName || appData.userEmail},</p>
@@ -917,7 +918,7 @@ async function _rejectExportApplicationAction(
                     from: process.env.EMAIL_FROM || "Easy Sales Export <info@easysalesexport.com>",
                     to: appData.userEmail,
                     subject: "Export Application Update",
-                    message: `
+                    message: html`
                         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                             <h2 style="color: #ea580c;">Export Application Update</h2>
                             <p>Your recent application for Export Services has been reviewed.</p>

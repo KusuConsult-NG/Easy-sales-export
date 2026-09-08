@@ -1,6 +1,7 @@
 "use server";
 
 import { ActionResponse } from "@/lib/safe-action";
+import { html } from "@/lib/utils";
 import { supabaseDb as db } from "@/lib/supabase-db";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
@@ -487,7 +488,7 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
                     from: process.env.EMAIL_FROM || 'RH-WAVE 774 <info@easysalesexport.com>',
                     to: applicantEmail,
                     subject: 'Your WAVE Application Has Been Received — RH-WAVE 774',
-                    message: `
+                    message: html`
                         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
                             <div style="background:linear-gradient(135deg,#166534,#16a34a);padding:32px;border-radius:12px;text-align:center;margin-bottom:24px;">
                                 <h1 style="color:white;margin:0;font-size:24px;">RH-WAVE 774</h1>

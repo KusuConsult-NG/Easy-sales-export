@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
+import { html } from "@/lib/utils";
 import { logger } from '@/lib/logger';
 import { COMPANY_INFO } from "@/lib/constants";
 import { rateLimit, getClientIp, createRateLimitResponse } from '@/lib/rate-limiter';
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
             to: COMPANY_INFO.contact.general.email,
             replyTo: email,
             subject: `[Contact Form] ${subject}`,
-            message: `
+            message: html`
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                     <h2 style="color: #2E519F;">New Contact Form Submission</h2>
                     

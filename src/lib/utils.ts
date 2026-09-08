@@ -115,6 +115,66 @@ export function escapeHtml(str: string): string {
 }
 
 /**
+ * An HTML template literal whose interpolations are escaped BY CONSTRUCTION.
+ *
+ *     html`<p>Hello ${name}</p>`
+ *
+ *   #512. escapeHtml has existed here the whole time, and the sweep that put it
+ *   to work reached email-notifications.ts — thirty-two interpolations, with a
+ *   header explaining exactly why it mattered: "Smith & Sons <Nigeria> Ltd is an
+ *   ordinary Nigerian business name and an ampersand followed by a tag that does
+ *   not close", and "a rejection reason is free text, an admin types it and a
+ *   member reads it, in an HTML document, with no filter between the two".
+ *
+ *   FOURTEEN OTHER FILES BUILD THEIR OWN EMAIL HTML AND HAND IT TO THE SAME
+ *   SENDER. Fifty more interpolations, none of them escaped — including
+ *   /api/contact, which is unauthenticated, so the name, email, subject and
+ *   message of a stranger went into an HTML document that staff read and reply
+ *   to. That is the audit's most common shape by a distance: the fix reached one
+ *   of N doors, and the door it missed was the only one with untrusted input.
+ *
+ *   ESCAPING AT THE CALL SITE WOULD HAVE BEEN FIFTY EDITS AND THE FIFTY-FIRST
+ *   WOULD BE MISSED. A tag is one token per template, and the property then
+ *   holds for anything written inside it later — which is what makes it a rule
+ *   rather than fifty corrections. A ratchet test requires it of every email
+ *   template in the tree.
+ *
+ *   email-notifications.ts IS ON THE SAME TAG NOW, and that is the point of the
+ *   change rather than a tidy-up: it was escaping correctly, per interpolation,
+ *   by hand — which is the mechanism that produced this finding. Two mechanisms
+ *   for one rule is how the next file gets missed, and a `html` tag wrapped
+ *   around a template that ALSO escapes by hand would double-encode. One
+ *   mechanism, everywhere, is the only version of this that cannot drift.
+ *
+ *   IF A CALLER GENUINELY NEEDS TO NEST MARKUP, it must build the fragment with
+ *   `html` too and pass it through `trustedHtml`. Two do — the conditional
+ *   "Admin Feedback" and "Reason provided" blocks, which are markup fragments
+ *   interpolated into a larger template. Every other interpolation in the tree
+ *   is a name, reason, amount, URL or date, checked one at a time.
+ */
+const TRUSTED = Symbol("trustedHtml");
+
+interface TrustedHtml { [TRUSTED]: true; toString(): string }
+
+/** Mark an already-escaped fragment as safe to nest inside html``. */
+export function trustedHtml(value: string): TrustedHtml {
+    return { [TRUSTED]: true, toString: () => value };
+}
+
+export function html(strings: TemplateStringsArray, ...values: unknown[]): string {
+    let out = strings[0];
+    for (let i = 0; i < values.length; i++) {
+        const v = values[i];
+        const isTrusted = typeof v === "object" && v !== null && (v as Record<symbol, unknown>)[TRUSTED] === true;
+        // `?? ""` and not `|| ""`: 0 and false are real values in a template
+        // (an amount, a count), and rendering them as empty is the "confident
+        // wrong answer" this audit keeps finding.
+        out += (isTrusted ? String(v) : escapeHtml(String(v ?? ""))) + strings[i + 1];
+    }
+    return out;
+}
+
+/**
  * Safely converts various date-like formats (Timestamp, string, number) to a Date object.
  */
 export function toSafeDate(date: any): Date {

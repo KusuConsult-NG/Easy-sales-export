@@ -1,6 +1,7 @@
 "use server";
 
 import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
+import { html } from "@/lib/utils";
 import { withFlexibleSafeAction, ActionResponse, type ActionState } from "@/lib/safe-action";
 import { revalidatePath, updateTag } from 'next/cache';
 import { invalidateAdminGlobalStats, invalidateServiceCache } from "@/lib/cache-invalidation";
@@ -314,7 +315,7 @@ async function _approveAcademyApplicationAction(
                     from: process.env.EMAIL_FROM || "Easy Sales Export Academy <info@easysalesexport.com>",
                     to: userEmail,
                     subject: "🎓 Academy Application Approved!",
-                    message: `
+                    message: html`
                         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
                             <div style="background:linear-gradient(135deg,#7c3aed,#a855f7);padding:32px;border-radius:12px 12px 0 0;text-align:center;">
                                 <h1 style="color:white;margin:0;font-size:24px;">Welcome to the Academy!</h1>

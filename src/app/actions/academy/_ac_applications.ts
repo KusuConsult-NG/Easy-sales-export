@@ -1,6 +1,7 @@
 "use server";
 
 import { supabaseDb as db } from "@/lib/supabase-db";
+import { html } from "@/lib/utils";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
 import { createAdminAuditLog } from "@/lib/audit-log";
@@ -446,7 +447,7 @@ async function _requestAcademyRevisionAction(
                     from: process.env.EMAIL_FROM || 'Easy Sales Export Academy <info@easysalesexport.com>',
                     to: email,
                     subject: 'Action Required: Update Your Academy Application',
-                    message: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;"><h2 style="color:#2563eb;">Academy Application Update Required</h2><p>Dear <strong>${name}</strong>,</p><p>Our team requires some updates before your application can be approved.</p><div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:16px;margin:16px 0;"><p style="margin:0;color:#1d4ed8;"><strong>Note:</strong><br/>${reason}</p></div><p>Please <a href="${process.env.NEXTAUTH_URL || 'https://easysalesexport.com'}/academy/application">log in to update your application</a>.</p></div>`,
+                    message: html`<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;"><h2 style="color:#2563eb;">Academy Application Update Required</h2><p>Dear <strong>${name}</strong>,</p><p>Our team requires some updates before your application can be approved.</p><div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:16px;margin:16px 0;"><p style="margin:0;color:#1d4ed8;"><strong>Note:</strong><br/>${reason}</p></div><p>Please <a href="${process.env.NEXTAUTH_URL || 'https://easysalesexport.com'}/academy/application">log in to update your application</a>.</p></div>`,
                     metadata: { type: "academy_revision_request" },
                 });
                 if (error) {

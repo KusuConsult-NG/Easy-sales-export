@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { html } from "@/lib/utils";
 import { requireSession } from "@/lib/session-guard";
 import { getAdminDb } from "@/lib/supabase-db";
 import { logger } from "@/lib/logger";
@@ -75,7 +76,7 @@ function buildEmailHtml(name: string | null, type: string, amount: number, statu
             ? "It looks like you started your registration but didn't complete the payment."
             : "Your payment attempt wasn't successful — this can happen due to network issues or card limits.";
 
-    return `<!DOCTYPE html>
+    return html`<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />

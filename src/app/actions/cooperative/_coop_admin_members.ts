@@ -1,6 +1,7 @@
 "use server";
 
 import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
+import { html } from "@/lib/utils";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { supabaseDb as db } from "@/lib/supabase-db";
@@ -483,7 +484,7 @@ async function _updateMemberStatusAction(
                     from: process.env.EMAIL_FROM || 'Easy Sales Export <info@easysalesexport.com>',
                     to: notificationInfo.email,
                     subject: '✅ Your Cooperative Membership Has Been Approved!',
-                    message: `
+                    message: html`
                         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
                             <div style="background:linear-gradient(135deg,#7c3aed,#a855f7);padding:32px;border-radius:12px;text-align:center;margin-bottom:24px;">
                                 <h1 style="color:white;margin:0;">Welcome to the Cooperative!</h1>
@@ -599,7 +600,7 @@ export async function requestCooperativeRevisionAction(
                     from: process.env.EMAIL_FROM || 'Easy Sales Export <info@easysalesexport.com>',
                     to: notificationData.email,
                     subject: '⚠️ Action Required: Update Your Cooperative Application',
-                    message: `
+                    message: html`
                         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
                             <h2 style="color:#d97706;">Application Update Requested</h2>
                             <p>Dear <strong>${notificationData.name}</strong>,</p>

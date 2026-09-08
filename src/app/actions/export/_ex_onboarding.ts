@@ -1,6 +1,7 @@
 "use server";
 
 import { supabaseDb as db } from "@/lib/supabase-db";
+import { html } from "@/lib/utils";
 import { hashData } from "@/lib/security";
 import { resolveBankAccount } from "@/lib/bank-account-resolve";
 import { bankAccountResolutionStamp } from "@/lib/bank-account-provenance";
@@ -515,7 +516,7 @@ export async function requestExportRevisionAction(
                     from: process.env.EMAIL_FROM || 'Easy Sales Export <info@easysalesexport.com>',
                     to: email,
                     subject: '⚠️ Action Required: Update Your Export Application',
-                    message: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
+                    message: html`<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
                         <h2 style="color:#ea580c;">Export Application — Update Required</h2>
                         <p>Dear <strong>${name}</strong>,</p>
                         <p>Our team has reviewed your Export Windows onboarding application and requires some additional information.</p>

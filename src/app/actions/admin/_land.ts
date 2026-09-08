@@ -1,6 +1,7 @@
 "use server";
 
 import { ZodError } from "zod";
+import { html } from "@/lib/utils";
 import { withFlexibleSafeAction, ActionResponse, type ActionState } from "@/lib/safe-action";
 import { updateTag } from 'next/cache';
 import { invalidateAdminGlobalStats, invalidateServiceCache } from "@/lib/cache-invalidation";
@@ -230,7 +231,7 @@ async function _verifyLandListing(
                     : "Land Listing Requires Updates";
 
                 const emailContent = decision === "approved"
-                    ? `
+                    ? html`
                         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                             <h2 style="color: #10b981;">Land Listing Approved!</h2>
                             <p>Great news! Your land listing has been approved and is now live on Easy Sales Export.</p>
@@ -239,7 +240,7 @@ async function _verifyLandListing(
                             <p>Your listing is now visible to potential buyers. You'll receive notifications when buyers express interest.</p>
                         </div>
                     `
-                    : `
+                    : html`
                         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                             <h2 style="color: #ef4444;">Land Listing Requires Updates</h2>
                             <p>Your land listing was reviewed but requires some updates before it can be published.</p>

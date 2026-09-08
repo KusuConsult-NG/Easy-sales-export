@@ -1,6 +1,7 @@
 "use server";
 
 import { supabaseDb as db } from "@/lib/supabase-db";
+import { html } from "@/lib/utils";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "@/lib/firestore-compat";
@@ -110,7 +111,7 @@ async function _approveAcademyApplicationAction(
                     from: process.env.EMAIL_FROM || "Easy Sales Export Academy <info@easysalesexport.com>",
                     to: appData.personalInfo.email,
                     subject: "Welcome to Academy - Application Approved!",
-                    message: `
+                    message: html`
                         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                             <h2 style="color: #059669;">Welcome to Easy Sales Export Academy!</h2>
                             <p>We are thrilled to inform you that your Academy learner application has been approved.</p>
@@ -239,7 +240,7 @@ async function _rejectAcademyApplicationAction(
                     from: process.env.EMAIL_FROM || "Easy Sales Export Academy <info@easysalesexport.com>",
                     to: appData.personalInfo.email,
                     subject: "Academy Application Update",
-                    message: `
+                    message: html`
                         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                             <h2 style="color: #dc2626;">Academy Application Update</h2>
                             <p>Thank you for your interest in the Easy Sales Export Academy.</p>

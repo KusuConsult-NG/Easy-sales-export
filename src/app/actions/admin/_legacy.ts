@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { html } from "@/lib/utils";
 import { withFlexibleSafeAction, ActionResponse, type ActionState } from "@/lib/safe-action";
 import { invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import crypto from 'crypto';
@@ -103,7 +104,7 @@ async function _inviteLegacyMemberAction(
                     from: process.env.EMAIL_FROM || "Easy Sales Cooperative <info@easysalesexport.com>",
                     to: email,
                     subject: "You're Invited to the Cooperative!",
-                    message: `
+                    message: html`
                         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
                             <h2 style="color: #6366f1;">Welcome to the Cooperative!</h2>
                             <p>Hello ${firstName || "Member"},</p>

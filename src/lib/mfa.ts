@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { html } from "@/lib/utils";
 import { supabaseDb as db } from './supabase-db';
 import { generateOTP, isOTPExpired, encryptData, decryptData } from './security';
 import { claimIdempotencyKey } from './wallet-ledger';
@@ -132,7 +133,7 @@ export async function sendMFACode(email: string, userId: string): Promise<{ succ
             from: senderEmail,
             to: email,
             subject: 'Your Verification Code',
-            html: `
+            html: html`
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                     <h2 style="color: #2563eb;">Easy Sales Export</h2>
                     <p>Your verification code is:</p>

@@ -1,6 +1,7 @@
 "use server";
 
 import { versionedUpdate } from "@/lib/optimistic-locking";
+import { html } from "@/lib/utils";
 import { ZodError } from "zod";
 import { withFlexibleSafeAction, ActionResponse, type ActionState } from "@/lib/safe-action";
 import { invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
@@ -409,7 +410,7 @@ async function _approveLoanApplication(
                     from: process.env.EMAIL_FROM || "Easy Sales Export <info@easysalesexport.com>",
                     to: loanData.userEmail,
                     subject: "Loan Application Approved!",
-                    message: `
+                    message: html`
                         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                             <h2 style="color: #10b981;">Congratulations! Your Loan is Approved</h2>
                             <p>Great news! Your loan application has been approved by our admin team.</p>
@@ -530,7 +531,7 @@ async function _rejectLoanApplication(
                     from: process.env.EMAIL_FROM || "Easy Sales Export <info@easysalesexport.com>",
                     to: loanData.userEmail,
                     subject: "Loan Application Update",
-                    message: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+                    message: html`<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
                         <h2 style="color:#dc2626">Loan Application Update</h2>
                         <div style="background:#fef2f2;padding:16px;border-radius:8px;margin:20px 0">
                             <p>Unfortunately, we are unable to approve your loan application at this time.</p>

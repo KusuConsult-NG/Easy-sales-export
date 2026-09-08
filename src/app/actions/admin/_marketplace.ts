@@ -1,6 +1,7 @@
 "use server";
 
 import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
+import { html } from "@/lib/utils";
 import { withFlexibleSafeAction, ActionResponse, type ActionState } from "@/lib/safe-action";
 import { revalidatePath, updateTag } from 'next/cache';
 import { invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
@@ -169,7 +170,7 @@ async function _approveSellerVerificationAction(
                         from: process.env.EMAIL_FROM || "Easy Sales Export <info@easysalesexport.com>",
                         to: userEmail,
                         subject: "Seller Account Approved!",
-                        message: `
+                        message: html`
                             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                                 <h2 style="color: #059669;">You are now a Seller!</h2>
                                 <p>Congratulations! Your seller verification has been approved.</p>
@@ -318,7 +319,7 @@ async function _toggleVerifiedBadgeAction(
                     from: process.env.EMAIL_FROM || "Easy Sales Export <info@easysalesexport.com>",
                     to: data.email,
                     subject: "🏅 You've earned a Verified Badge!",
-                    message: `
+                    message: html`
                         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
                           <div style="background:#16a34a;padding:20px 28px">
                             <h1 style="color:#fff;margin:0;font-size:20px">Easy Sales Export</h1>
