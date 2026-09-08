@@ -20,6 +20,7 @@ import { revalidatePath } from "next/cache";
 import { registrationProgressScore } from "@/lib/registration-progress";
 import { cooperativeIdentityConflict } from "@/lib/cooperative-identity-conflict";
 import { nationalIdField } from "@/lib/kyc-validators";
+import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
 
 /**
  * 2. COMPLETE REGISTRATION (Step 2)
@@ -419,14 +420,42 @@ export async function joinCooperativeAction(
         if (!cooperativeDoc.exists) { return { error: "Cooperative not found", success: false as const, data: null };
         }
 
-        // Check if user is already a member
+        /**
+         *   #502 THE "ALREADY A MEMBER" CHECK COULD NOT SEE A PAID MEMBERSHIP.
+         *
+         *   It asked:
+         *
+         *       .where("userId", "==", userId).where("cooperativeId", "==", cooperativeId)
+         *
+         *   and `cooperativeId` is written by THIS FUNCTION AND NOTHING ELSE.
+         *   registerCooperativeMemberAction — the paid path, the one members
+         *   actually use — writes its row at `doc(userId)` and never sets the
+         *   field at all. So the query matched nothing for a fully paid-up
+         *   member, and this endpoint happily created them a SECOND membership:
+         *   auto-id, `membershipStatus: "pending"`, `savingsBalance: 0`.
+         *
+         *   AND THE NEW ROW WINS. latestApplication sorts newest-first, and
+         *   Layer 2.6, the ID card, the dashboard and the money paths all read
+         *   whichever row that picks. A member with a paid membership and a
+         *   savings balance would find themselves pending, at zero — their real
+         *   record still in the database, shadowed by a blank one.
+         *
+         *   ASK THE QUESTION THE DOMAIN ACTUALLY HAS. There is one cooperative
+         *   here: the paid path keys its row by user id with no cooperativeId,
+         *   so "is this person already a member" is a question about the person,
+         *   not about a pairing. findCooperativeMemberRow is #488's shared
+         *   reader — document id, then the userId field — and it does not depend
+         *   on a field only this function writes.
+         */
         const membershipsRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
-        const existingMembership = await membershipsRef
-            .where("userId", "==", userId)
-            .where("cooperativeId", "==", cooperativeId)
-            .get();
+        const existingRow = await findCooperativeMemberRow(membershipsRef, userId);
 
-        if (!existingMembership.empty) { return { error: "You are already a member of this cooperative", success: false as const, data: null };
+        if (existingRow) {
+            logger.warn(
+                "[joinCooperativeAction] refused a second membership — the caller already has one",
+                { userId, cooperativeId, existingMembershipId: existingRow.id },
+            );
+            return { error: "You are already a member of this cooperative", success: false as const, data: null };
         }
 
         // Atomic batch: all 3-4 writes committed together so no partial state on crash.
@@ -465,6 +494,22 @@ export async function joinCooperativeAction(
             status: "pending"
         });
 
+        /**
+         *   #502 RECORDED, NOT CHANGED: `cooperatives.memberCount` is
+         *   incremented HERE AND NOWHERE ELSE, is never decremented, and is read
+         *   by nothing. The admin contributions screen shows a `memberCount`,
+         *   but that one is computed in _coop_admin_reports.ts:355 from distinct
+         *   user ids in the transaction ledger — a different number that happens
+         *   to share a name.
+         *
+         *   So this is a counter with one writer and no reader. It is left
+         *   writing because the field is declared on the Cooperative type and
+         *   removing a write is a change with no benefit; it is written down
+         *   because a stored number nobody reads is exactly what somebody
+         *   eventually builds a dashboard on. That is how
+         *   lib/validations/marketplace.ts came to claim estimatedDeliveryDate
+         *   had no writer (#493), read the other way round.
+         */
         const cooperativeUpdateData: Record<string, FieldValue | number> = { memberCount: FieldValue.increment(1)
         };
 
