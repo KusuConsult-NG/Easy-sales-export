@@ -228,7 +228,10 @@ export default function AdminUsersPage() {
 
     async function handleToggleVerification(userId: string) {
         setProcessingId(userId);
-        const result = await toggleUserVerificationAction(userId);
+        //   #495 Send the state the admin asked for, read off the row they are
+        //   looking at, rather than letting the server flip whatever it finds.
+        const row = users.find(u => u.id === userId);
+        const result = await toggleUserVerificationAction(userId, !(row?.isVerified ?? false));
 
         if (result.success) {
             setData(prev => prev.map(u => u.id === userId ? { 
@@ -313,7 +316,10 @@ export default function AdminUsersPage() {
 
         for (const user of targets) {
             try {
-                const result = await toggleUserVerificationAction(user.id);
+                //   #495 The target state, not a flip. #294 skipped already-
+                //   verified rows to make "Verify" safe to press twice and
+                //   recorded that the race stayed open; saying `true` closes it.
+                const result = await toggleUserVerificationAction(user.id, true);
                 if (result.success) verified.push(user.id);
                 else failures.push(result.error || user.id);
             } catch {

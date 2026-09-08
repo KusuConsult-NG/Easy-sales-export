@@ -20,13 +20,42 @@ import { stripRegistrationPii } from "@/lib/admin-pii";
 import { atomicUpdateUser } from "@/lib/services/userService";
 import { writeGuard, UserRolesWriteSchema } from "@/lib/write-guard";
 import { safeToISOString, safeToISOStringOptional } from "@/lib/date-utils";
+import {
+    isManufacturedProfile,
+    isVerifiedMember,
+    verificationState,
+    hasContactableIdentity,
+} from "@/lib/profile-provenance";
 
 // ============================================
 // User Verification Toggle
 // ============================================
 
+/**
+ *   #294 LEFT THIS EXACTLY HERE, AND #495 CLOSES IT.
+ *
+ *   #294's note on admin/users/page.tsx, after fixing bulk verify:
+ *
+ *       "Residual race, stated rather than hidden: `isVerified` here is what the
+ *        last load said. If somebody else verifies a user in that window this
+ *        still toggles them off. Closing it needs the action to take a target
+ *        state rather than flip — a change to the action's contract, worth doing
+ *        but not silently as part of this."
+ *
+ *   `desired` is that contract. A caller that knows what it wants says so, and
+ *   two admins pressing Verify on the same row now agree instead of undoing one
+ *   another.
+ *
+ *   THE FLIP IS KEPT FOR CALLERS THAT PASS NOTHING, and it now flips the state
+ *   the screen actually shows. It read `!currentData.isVerified` — the raw
+ *   field, while the list renders `isVerifiedMember(data)`. On a manufactured
+ *   row those disagree: the row stores `isVerified: true`, the badge says
+ *   unevidenced, and the old flip would have written `false` for an admin who
+ *   pressed Verify.
+ */
 async function _toggleUserVerificationAction(
-    userId: string
+    userId: string,
+    desired?: boolean
 ): Promise<ActionState> {
     try {
         const sessionResult = await requireSession();
@@ -50,11 +79,27 @@ async function _toggleUserVerificationAction(
         }
 
         const currentData = userDoc.data()!;
-        const newVerificationStatus = !currentData.isVerified;
+        const newVerificationStatus =
+            typeof desired === "boolean" ? desired : !isVerifiedMember(currentData);
 
         const { safeUpdate } = await import("@/lib/firestore-utils");
         await safeUpdate(COLLECTIONS.USERS, userId, {
             isVerified: newVerificationStatus,
+            /**
+             *   #495 BOTH SPELLINGS, KEPT IN STEP.
+             *
+             *        The write set `isVerified` only, while every reader asks
+             *        `isVerified ?? verified ?? false`. That is survivable while
+             *        the two agree and is how they stop agreeing: each click
+             *        moved one and left the other, so a row could end up
+             *        `isVerified: false` beside a stale `verified: true` for any
+             *        reader that consults the legacy name directly — and
+             *        canonical/normalizer.ts:98 does exactly that, with an OR.
+             *
+             *        Writing both is not destroying the legacy field. It is
+             *        making it say what the admin just decided.
+             */
+            verified: newVerificationStatus,
             "kyc.status": newVerificationStatus ? "verified" : "pending",
             kycStatus: newVerificationStatus ? "verified" : "pending",
             verifiedBy: session.user.id,
@@ -286,7 +331,8 @@ interface GetUsersOptions {
     limit?: number;
     page?: number;      // 0-indexed page number for offset pagination
     role?: string;
-    status?: "verified" | "unverified" | "all";
+    /** #495 `unevidenced` — the flag is set, but a backfill set it, not a person. */
+    status?: "verified" | "unverified" | "unevidenced" | "all";
     search?: string;
     lastDocId?: string; // kept for backwards-compat but now treated as page number string
     state?: string;     // filter by address.state
@@ -369,11 +415,35 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
                 query = query.where("roles", "array-contains", options.role);
             }
 
-            // IMPORTANT: Do NOT filter isVerified via Firestore query — 34k+ legacy users
-            // have `verified: true` but NOT `isVerified`. A Firestore where("isVerified","==",true)
-            // query would silently exclude them all.
-            // Instead, status filtering is applied IN-MEMORY after the mapping step uses
-            // the defensive chain: `data.isVerified ?? data.verified ?? false`
+            /**
+             *   #495 THIS COMMENT USED TO CLAIM 34k+ USERS THAT DO NOT EXIST.
+             *
+             *        What stood here:
+             *
+             *            "Do NOT filter isVerified via Firestore query — 34k+
+             *             legacy users have `verified: true` but NOT
+             *             `isVerified`."
+             *
+             *        MEASURED ON PRODUCTION: rows with `verified: true` and no
+             *        `isVerified` — ZERO. 41,362 of 42,160 carry `isVerified`,
+             *        and the 798 that do not are not `verified: true` either.
+             *        data-recovery.ts:305 reconciles that exact pair and has
+             *        evidently already run.
+             *
+             *        The claim was probably true when it was written. A stale
+             *        one is not harmless: this was the stated reason for
+             *        refusing to filter in the database, and the cost is paid
+             *        on every page load.
+             *
+             *   THE IN-MEMORY FILTER STAYS ANYWAY, for a reason that IS true:
+             *   `unevidenced` is not a stored field. It is the conjunction of
+             *   `_system_skeleton_backfill` and a verification flag, computed in
+             *   profile-provenance.ts, and no `where()` can express it. Filtering
+             *   verification in the database would return the 3,605 manufactured
+             *   rows as verified members again — the defect this finding is
+             *   about — so the filter belongs after the mapping, where the
+             *   provenance is known.
+             */
 
             // Location filters (No composite indexes exist for state/lga + createdAt desc)
             if ((options.state && options.state !== "all") || (options.lga && options.lga !== "all")) {
@@ -562,7 +632,26 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
                 phone: isPlaceholder(bestPhone) ? "" : bestPhone,
                 role: data.roles?.[0] || "general_user",
                 roles: data.roles || [],
-                isVerified: data.isVerified ?? data.verified ?? false,
+                /**
+                 *   #495 A FLAG A SCRIPT SET IS NOT A VERIFICATION.
+                 *
+                 *        3,605 rows carry `_system_skeleton_backfill: true`
+                 *        alongside `isVerified: true`, and 2,591 of those have
+                 *        no name, no email and no phone. The old expression —
+                 *        `data.isVerified ?? data.verified ?? false` — answered
+                 *        TRUE for every one of them, so 8.7% of everybody this
+                 *        console called verified was a row the platform
+                 *        manufactured about nobody.
+                 *
+                 *        The stored bytes are untouched. What changed is what
+                 *        gets concluded from them, and it is concluded in one
+                 *        place so the badge, the filter and the export cannot
+                 *        drift apart.
+                 */
+                isVerified: isVerifiedMember(data),
+                verificationState: verificationState(data),
+                isManufacturedProfile: isManufacturedProfile(data),
+                hasContactableIdentity: hasContactableIdentity(data),
                 createdAt: safeToISOString(data.createdAt, new Date(0).toISOString()),
                 verifiedAt: safeToISOStringOptional(data.verifiedAt),
                 // Location
@@ -744,11 +833,25 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
             });
         }
 
-        // In-memory status filter — using the defensive chain already computed in mapping:
+        /**
+         *   #495 THREE STATES, NOT TWO.
+         *
+         *        "Verified" used to return the 3,605 manufactured rows among the
+         *        real ones, and "Unverified" did not return them either — the
+         *        old pair split on a boolean that answered TRUE for all of them.
+         *
+         *        Now `unevidenced` is its own answer AND its own filter. An
+         *        admin can list exactly the rows that need a decision, which is
+         *        the point: excluding them from the verified count without
+         *        giving anybody a way to see them would replace one wrong number
+         *        with a hidden pile.
+         */
         if (options.status === "verified") {
-            filteredUsers = filteredUsers.filter(u => u.isVerified === true);
+            filteredUsers = filteredUsers.filter(u => u.verificationState === "verified");
         } else if (options.status === "unverified") {
-            filteredUsers = filteredUsers.filter(u => !u.isVerified);
+            filteredUsers = filteredUsers.filter(u => u.verificationState === "unverified");
+        } else if (options.status === "unevidenced") {
+            filteredUsers = filteredUsers.filter(u => u.verificationState === "unevidenced");
         }
 
         // ALWAYS apply date filters in memory as a definitive backstop.
