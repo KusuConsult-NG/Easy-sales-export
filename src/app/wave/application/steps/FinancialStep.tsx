@@ -23,6 +23,8 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
     const [verifyingBvn, setVerifyingBvn] = useState(false);
     const [bvnVerified, setBvnVerified] = useState(false);
     const [bvnError, setBvnError] = useState("");
+    //   #522. Whether an automated check actually ran. Always false today.
+    const [bvnChecked, setBvnChecked] = useState(false);
 
     async function handleVerifyBvn() {
         if (!data.bvn) {
@@ -53,8 +55,28 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
 
             if (result.success && result.isMatch) {
                 setBvnVerified(true);
+                setBvnChecked(result.checked === true);
                 setBvnError("");
-                showToast("BVN Verified Successfully!", "success");
+                /**
+                 *   #522 THIS SAID "Verified Successfully" FOR AN UNCHECKED ID.
+                 *
+                 *   #485 established that no automated check exists on this
+                 *   platform, changed the route to answer `checked: false` and
+                 *   `method: 'self_declared'`, and wrote that "the screens render
+                 *   those rather than a green tick". This screen read only
+                 *   `isMatch` and showed a success toast — so a member typing
+                 *   anything at all was told their BVN was verified.
+                 *
+                 *   The step still advances: the owner cannot afford onboarding
+                 *   to stop, which is why #485 kept isMatch true. What changes is
+                 *   that the member is told what actually happened.
+                 */
+                showToast(
+                    result.checked
+                        ? "BVN Verified Successfully!"
+                        : "BVN recorded. Our team will confirm it during review.",
+                    "success",
+                );
             } else {
                 setBvnVerified(false);
                 setBvnError(result.error || result.details || "Verification failed");
@@ -213,9 +235,15 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                         )}
                         {bvnVerified && (
                             <div className="mt-2 flex items-center justify-between">
-                                <p className="text-sm text-emerald-600 flex items-center gap-1 font-medium">
+                                {/*
+                                  *   #522. The same claim as the toast, and the
+                                  *   same correction: nothing checked this BVN.
+                                  */}
+                                <p className={`text-sm flex items-center gap-1 font-medium ${bvnChecked ? "text-emerald-600" : "text-slate-600"}`}>
                                     <CheckCircle className="w-4 h-4" />
-                                    BVN verified successfully
+                                    {bvnChecked
+                                        ? "BVN verified successfully"
+                                        : "BVN recorded — our team will confirm it during review"}
                                 </p>
                                 <button
                                     type="button"

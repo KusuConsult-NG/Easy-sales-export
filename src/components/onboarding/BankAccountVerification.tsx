@@ -12,6 +12,15 @@ interface BankAccountVerificationProps {
 export interface BankAccountData {
     bvn?: string;
     bvnVerified?: boolean;
+    /**
+     * Whether an automated provider actually checked the BVN — #522.
+     *
+     * `bvnVerified` is deliberately unchanged (lib/identity-verification.ts
+     * argues why the stored boolean stays), so this is what distinguishes an
+     * ID a provider confirmed from one a member typed in. False on this
+     * platform today: #485 parked the provider.
+     */
+    bvnCheckedByProvider?: boolean;
     bankName: string;
     accountNumber: string;
     accountName: string;
@@ -31,6 +40,12 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
     const [bvn, setBvn] = useState(initialData?.bvn || "");
     const [verifyingBvn, setVerifyingBvn] = useState(false);
     const [bvnVerified, setBvnVerified] = useState(initialData?.bvnVerified || false);
+    //   #522. Whether an automated check actually ran, which on this platform
+    //   is never — #485 parked the provider and the route answers
+    //   `checked: false`. Both callers of that route ignored it and rendered
+    //   success; this records the difference so the screen can tell a member
+    //   what really happened.
+    const [bvnChecked, setBvnChecked] = useState(false);
     const [bvnError, setBvnError] = useState("");
 
     const [bankName, setBankName] = useState(initialData?.bankName || "");
@@ -276,12 +291,16 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
 
             if (result.success && result.isMatch) {
                 setBvnVerified(true);
+                setBvnChecked(result.checked === true);
                 setBvnError("");
 
-                // Update parent with the verified BVN
+                // Update parent with the recorded BVN. The flag itself is
+                // deliberately unchanged — see lib/identity-verification.ts —
+                // and travels with whether anything actually checked it.
                 onVerified({
                     bvn: bvn,
                     bvnVerified: true,
+                    bvnCheckedByProvider: result.checked === true,
                     bankName,
                     accountNumber,
                     accountName: accountName,
@@ -515,9 +534,20 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
                     )}
                     {bvnVerified && (
                         <div className="flex items-center justify-between mt-2">
-                            <div className="flex items-center gap-2 text-green-600">
+                            {/*
+                              *   #522. "Verified against account name successfully"
+                              *   was shown for an ID nothing had checked — the
+                              *   route answers `checked: false` because #485
+                              *   parked the provider, and this component ignored
+                              *   it. The claim now matches what happened.
+                              */}
+                            <div className={`flex items-center gap-2 ${bvnChecked ? "text-green-600" : "text-slate-600"}`}>
                                 <CheckCircle className="w-4 h-4 shrink-0" />
-                                <span className="text-sm font-medium">BVN Verified against account name successfully</span>
+                                <span className="text-sm font-medium">
+                                    {bvnChecked
+                                        ? "BVN Verified against account name successfully"
+                                        : "BVN recorded — our team will confirm it during review"}
+                                </span>
                             </div>
                             <button
                                 onClick={() => { setBvnVerified(false); setBvn(""); setBvnError(""); }}

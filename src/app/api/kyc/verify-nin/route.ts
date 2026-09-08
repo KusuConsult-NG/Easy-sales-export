@@ -5,6 +5,7 @@ import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { IDENTITY_PROVIDER } from '@/lib/identity-verification';
+import { nationalIdField } from '@/lib/kyc-validators';
 
 async function verifyNINHandler(req: NextRequest) {
     try {
@@ -27,6 +28,29 @@ async function verifyNINHandler(req: NextRequest) {
         if (!nin || !firstName || !lastName) {
             return NextResponse.json(
                 { error: 'NIN, first name and last name are required' },
+                { status: 400 }
+            );
+        }
+
+        /**
+         *   #522 THE ROUTE'S OWN COMMENT CLAIMED A PROPERTY IT NEVER CHECKED.
+         *
+         *   #485 rewrote the answer below to say what this endpoint can honestly
+         *   say — "the member supplied a WELL-FORMED NIN and the platform has
+         *   recorded it, unchecked". Nothing here checked well-formedness. The
+         *   only test was `!nin`, so "1" reached the success branch and came
+         *   back as isMatch: true.
+         *
+         *   The owner's rule is explicit and predates this: an ID must be eleven
+         *   digits and must not be 11111111111 or a similar combination. #501
+         *   built nationalIdField and isObviouslyFakeId for exactly that and
+         *   wired them into five submission paths. This door — the one with a
+         *   button labelled Verify on it — was not one of them.
+         */
+        const idCheck = nationalIdField('NIN').safeParse(String(nin).trim());
+        if (!idCheck.success) {
+            return NextResponse.json(
+                { error: idCheck.error.issues[0]?.message ?? 'Invalid NIN' },
                 { status: 400 }
             );
         }
