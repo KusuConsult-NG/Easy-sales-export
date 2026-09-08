@@ -75,8 +75,8 @@ const SELLER = 'seller-1';
 const ADMIN = 'admin-1';
 const OTHER = 'other-1';
 
-const NIN = '12345678901';
-const BVN = '22222222222';
+const NIN = '22107458391';
+const BVN = '30845172906';
 
 jest.mock('@/lib/audit-log', () => ({
     recordAdminAction: (p: any) => (global as any).mockRecordAdminAction(p),

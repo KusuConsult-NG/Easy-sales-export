@@ -21,6 +21,7 @@
 
 import { z } from "zod";
 import type { ExportWindow } from "@/lib/types/firestore";
+import { nationalIdField } from '@/lib/kyc-validators';
 
 export type ExportWindowFormData = z.infer<typeof exportWindowSchema>;
 
@@ -94,8 +95,9 @@ export const exportOnboardingSchema = z.object({
         address: z.string().min(5, "Address is required"),
     }),
     kycData: z.object({
-        nin: z.string().optional().or(z.literal("")),
-        bvn: z.string().optional().or(z.literal("")),
+        //   #501 Export onboarding had no check on either field at all.
+        nin: nationalIdField('NIN'),
+        bvn: nationalIdField('BVN'),
         cacNumber: z.string().optional().or(z.literal("")),
         /**
          * #349 KYCForm collects a Voter's Card number and offers to verify it.

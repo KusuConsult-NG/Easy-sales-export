@@ -17,6 +17,7 @@ import { checkWaveEligibility } from "@/lib/wave-eligibility";
 import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { toMillis } from "@/lib/firestore-serialize";
 import { sendEmailNotification } from "@/lib/email-notifications";
+import { nationalIdField } from '@/lib/kyc-validators';
 
 // Validation Schema for WAVE Application (OFFICIAL BENEFICIARY APPLICATION FORM)
 const waveApplicationSchema = z.object({ // SECTION A: Personal Identification
@@ -39,7 +40,8 @@ const waveApplicationSchema = z.object({ // SECTION A: Personal Identification
     nextOfKinRelationship: z.string().min(2, "Relationship is required"),
 
     // SECTION B: National Identity & Civic Status
-    nin: z.string().optional().or(z.literal("")),
+    //   #501 The WAVE application had no check on either field.
+    nin: nationalIdField('NIN'),
     votersCardNumber: z.string().optional().or(z.literal("")),
     pollingUnit: z.string().optional(),
     ward: z.string().optional(),
@@ -65,7 +67,7 @@ const waveApplicationSchema = z.object({ // SECTION A: Personal Identification
     hasBankAccount: z.boolean().optional(),
     bankName: z.string().min(2, "Bank name is required"),
     accountNumber: z.string().min(10, "Valid 10-digit account number required"),
-    bvn: z.string().optional().or(z.literal("")),
+    bvn: nationalIdField('BVN'),
     isMemberOfCooperative: z.boolean(),
     cooperativeName: z.string().optional(),
     willingToJoinCooperative: z.boolean(),

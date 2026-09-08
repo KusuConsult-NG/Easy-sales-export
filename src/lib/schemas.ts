@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { PASSWORD_RULES } from "@/lib/password-policy";
+import { nationalIdField } from '@/lib/kyc-validators';
 
 // ============================================
 // STRICT UNIFIED PII VALIDATORS (Anti-Abuse)
@@ -351,8 +352,9 @@ export const LegacyOnboardingSchema = z.object({
     accountName: z.string().optional(),
     bankCode: z.string().optional(),
     // KYC Details
-    nin: z.string().optional().or(z.literal("")),
-    bvn: z.string().optional().or(z.literal("")),
+    //   #501 One definition of the rule, used wherever the field is declared.
+    nin: nationalIdField('NIN'),
+    bvn: nationalIdField('BVN'),
     // Document uploads (Cloudinary URLs set by admin during legacy onboarding)
     validIdUrl: z.string().url("Valid ID must be a valid URL").optional(),
     passportPhotoUrl: z.string().url("Passport photo must be a valid URL").optional(),

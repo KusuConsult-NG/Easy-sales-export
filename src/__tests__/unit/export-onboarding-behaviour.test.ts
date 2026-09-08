@@ -98,7 +98,7 @@ function submission(overrides: Record<string, unknown> = {}): FormData {
             phone: '08031111111', state: 'Lagos', lga: 'Ikeja',
             address: '1 Market Road, Ikeja',
         },
-        kycData: { nin: '12345678901', bvn: '', cacNumber: 'RC123456' },
+        kycData: { nin: '22107458391', bvn: '', cacNumber: 'RC123456' },
         // #346 bankCode is what the server re-resolves on; accountName is
         // the applicant's claim and is not what gets recorded.
         bank: { accountNumber: '0123456789', bankName: 'Zenith', accountName: 'Ada Obi', bankCode: '057' },

@@ -126,7 +126,7 @@ function form(overrides: Record<string, unknown> = {}): any {
         bankName: 'Zenith',
         accountName: 'Ada Obi',
         bankCode: '057',
-        nin: '12345678901',
+        nin: '22107458391',
         ...overrides,
     };
 }
@@ -396,7 +396,7 @@ describe('onboardLegacyMemberAction — what it provisions', () => {
     });
 
     it('marks the KYC verified only for the numbers actually supplied', async () => {
-        await onboard(form({ nin: '12345678901', bvn: '' }));
+        await onboard(form({ nin: '22107458391', bvn: '' }));
 
         expect(user()).toMatchObject({ ninVerified: true, bvnVerified: false });
     });

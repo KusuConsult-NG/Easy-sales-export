@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { dateSchema, addressSchema, bankDetailsSchema } from "./shared";
+import { nationalIdField } from '@/lib/kyc-validators';
 
 /**
  * @deprecated ORPHANED SCHEMA — DO NOT USE IN SERVER ACTIONS.
@@ -68,7 +69,8 @@ export const CooperativeOnboardingSchema = z.object({
         idNumber: z.string().optional(),
         passportPhoto: z.object({ name: z.string(), url: z.string() }).optional(),
         proofOfAddress: z.object({ name: z.string(), url: z.string() }).optional(),
-        bvn: z.string().optional(),
+        //   #501 The cooperative form checked length and nothing else.
+        bvn: nationalIdField('BVN'),
     }).default({}),
     paymentReference: z.string().optional(),
     paymentStatus: z.enum(["pending", "completed", "failed"]).default("pending"),

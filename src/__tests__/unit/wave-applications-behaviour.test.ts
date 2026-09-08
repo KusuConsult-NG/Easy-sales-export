@@ -127,7 +127,7 @@ function form(extra: Record<string, unknown> = {}): any {
         nextOfKinName: 'Ngozi Obi',
         nextOfKinPhone: '08087654321',
         nextOfKinRelationship: 'Sister',
-        nin: '12345678901',
+        nin: '22107458391',
         votersCardNumber: '',
         highestEducation: 'tertiary',
         currentOccupation: 'Trader',
@@ -335,14 +335,14 @@ describe('submitMultiStepWaveApplicationAction', () => {
         await submitMultiStepWaveApplicationAction(form());
 
         const app = onlyApplication();
-        expect(app.nin).toBe(sha256('12345678901'));
+        expect(app.nin).toBe(sha256('22107458391'));
         expect(app.bvn).toBe(sha256('22233344455'));
-        expect(JSON.stringify(app)).not.toContain('12345678901');
+        expect(JSON.stringify(app)).not.toContain('22107458391');
         expect(JSON.stringify(app)).not.toContain('22233344455');
 
         const user = readUser()!;
-        expect(user.nin).toBe(sha256('12345678901'));
-        expect(user.kyc.nin).toBe(sha256('12345678901'));
+        expect(user.nin).toBe(sha256('22107458391'));
+        expect(user.kyc.nin).toBe(sha256('22107458391'));
     });
 
     it('stores null rather than a hash of the empty string when no NIN is given', async () => {
@@ -480,7 +480,7 @@ describe('the duplicate-identity gate', () => {
 
     it('refuses a NIN already on another account\'s application, matched on the HASH', async () => {
         seedUser();
-        seedForeignApplication({ nin: sha256('12345678901') });
+        seedForeignApplication({ nin: sha256('22107458391') });
 
         const { submitMultiStepWaveApplicationAction } = await actions();
         const res: any = await submitMultiStepWaveApplicationAction(form());
@@ -954,7 +954,7 @@ describe('resubmitWaveApplicationAction', () => {
         const { resubmitWaveApplicationAction } = await actions();
         await resubmitWaveApplicationAction(form());
 
-        expect(store.get(COLLECTIONS.WAVE_APPLICATIONS, 'app-1')!.nin).toBe(sha256('12345678901'));
+        expect(store.get(COLLECTIONS.WAVE_APPLICATIONS, 'app-1')!.nin).toBe(sha256('22107458391'));
         expect(readUser()!.kyc.bvn).toBe(sha256('22233344455'));
     });
 

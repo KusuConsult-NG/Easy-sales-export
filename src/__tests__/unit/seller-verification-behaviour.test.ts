@@ -108,8 +108,8 @@ function form(over: Record<string, string> = {}): FormData {
     const fd = new FormData();
     const fields: Record<string, string> = {
         phone: '+2348012345678',
-        nin: '12345678901',
-        bvn: '22222222222',
+        nin: '22107458391',
+        bvn: '30845172906',
         accountNumber: '0123456789',
         bankName: 'GTBank',
         accountName: 'Ada Obi',
@@ -127,7 +127,7 @@ function form(over: Record<string, string> = {}): FormData {
 /** The shape the onboarding page resubmits. */
 const resubmitPayload = (over: Record<string, unknown> = {}) => ({
     phoneNumber: '+2348012345678',
-    nin: '12345678901',
+    nin: '22107458391',
     bankAccount: { accountNumber: '0123456789', bankName: 'GTBank', accountName: 'Ada Obi', bankCode: '058' },
     address: { street: '12 Market Road', city: 'Enugu', state: 'Enugu', lga: 'Enugu North', country: 'Nigeria' },
     ...over,
@@ -188,9 +188,9 @@ describe('submitSellerVerificationAction', () => {
 
         const user = store.get(USERS, SELLER) as Record<string, any>;
         expect(user.bvn).toBeTruthy();
-        expect(user.bvn).not.toBe('22222222222');
-        expect(user.nin).not.toBe('12345678901');
-        expect(newestVerification()?.bvn).toBe('22222222222');
+        expect(user.bvn).not.toBe('30845172906');
+        expect(user.nin).not.toBe('22107458391');
+        expect(newestVerification()?.bvn).toBe('30845172906');
     });
 
     it('never claims an identity number was verified', async () => {

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { OFFLINE_CHECKOUT_METHODS } from "@/lib/offline-checkout";
 import { PRODUCT_CATEGORY_ALIASES } from "@/lib/product-search";
+import { nationalIdField } from '@/lib/kyc-validators';
 
 /**
  * Marketplace Zod Schemas
@@ -314,8 +315,9 @@ export const MarketplaceOnboardingSchema = z.object({
 
 export const SellerVerificationSchema = z.object({
     phoneNumber: z.string().min(7, "Phone number is too short").max(20, "Phone number is too long"),
-    nin: z.string().optional().or(z.literal("")),
-    bvn: z.string().optional().or(z.literal("")),
+    //   #501 Seller verification accepted 11111111111 where the KYC form did not.
+    nin: nationalIdField('NIN'),
+    bvn: nationalIdField('BVN'),
     cac: z.string().optional().or(z.literal("")),
     bankAccount: z.object({
         accountNumber: z.string().length(10, "Account number must be 10 digits"),

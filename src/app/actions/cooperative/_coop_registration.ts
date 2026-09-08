@@ -19,6 +19,7 @@ import { mayClaimMembershipByEmail } from "@/lib/cooperative-membership-claim";
 import { revalidatePath } from "next/cache";
 import { registrationProgressScore } from "@/lib/registration-progress";
 import { cooperativeIdentityConflict } from "@/lib/cooperative-identity-conflict";
+import { nationalIdField } from "@/lib/kyc-validators";
 
 /**
  * 2. COMPLETE REGISTRATION (Step 2)
@@ -124,11 +125,22 @@ export async function registerCooperativeMemberAction(
 
         const bvn = (formData.get("bvn") as string || "").trim();
         const nin = (formData.get("nin") as string || "").trim();
-        if (bvn && bvn.length !== 11) {
-            return { error: "BVN must be exactly 11 digits", success: false as const, data: null };
+        /**
+         *   #501 ELEVEN CHARACTERS WAS THE WHOLE CHECK.
+         *
+         *        `length !== 11` accepts 11111111111, which is the exact value
+         *        the owner named when they said not to. actions/kyc.ts refuses
+         *        it and this path — the one a cooperative member actually
+         *        registers through — did not. Both doors ask the shared rule
+         *        now, so the answer cannot differ by which form somebody used.
+         */
+        const bvnCheck = nationalIdField('BVN').safeParse(bvn || undefined);
+        if (!bvnCheck.success) {
+            return { error: bvnCheck.error.issues[0].message, success: false as const, data: null };
         }
-        if (nin && nin.length !== 11) {
-            return { error: "NIN must be exactly 11 digits", success: false as const, data: null };
+        const ninCheck = nationalIdField('NIN').safeParse(nin || undefined);
+        if (!ninCheck.success) {
+            return { error: ninCheck.error.issues[0].message, success: false as const, data: null };
         }
 
         const validIdUrl = (formData.get("validIdUrl") as string || "").trim();
@@ -646,11 +658,15 @@ export async function resubmitCooperativeApplicationAction(
 
         const bvn = (formData.get("bvn") as string || "").trim();
         const nin = (formData.get("nin") as string || "").trim();
-        if (bvn && bvn.length !== 11) {
-            return { success: false as const, error: "BVN must be exactly 11 digits" };
+        //   #501 The resubmit door, asking the same shared rule as the submit
+        //   door directly above it. Two paths onto one field.
+        const bvnRecheck = nationalIdField('BVN').safeParse(bvn || undefined);
+        if (!bvnRecheck.success) {
+            return { success: false as const, error: bvnRecheck.error.issues[0].message };
         }
-        if (nin && nin.length !== 11) {
-            return { success: false as const, error: "NIN must be exactly 11 digits" };
+        const ninRecheck = nationalIdField('NIN').safeParse(nin || undefined);
+        if (!ninRecheck.success) {
+            return { success: false as const, error: ninRecheck.error.issues[0].message };
         }
 
         // The same identity guard the SUBMIT path applies — this path had none.

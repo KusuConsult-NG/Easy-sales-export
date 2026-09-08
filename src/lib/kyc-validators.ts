@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 /**
  * kyc-validators.ts
  *
@@ -136,6 +138,52 @@ export function looksLikeFakeId(id: string): boolean {
 export function isObviouslyFakeId(id: string): boolean {
     if (!fakeIdRejectionEnabled()) return false;
     return looksLikeFakeId(id);
+}
+
+/**
+ *   #501 THE OWNER'S RULE REACHED ONE SUBMISSION PATH OUT OF FIVE.
+ *
+ *   #487 built this file to a direct instruction — "pass all BVN and NIN input
+ *   as true without QoreID", then "do not accept this: 11111111111 or similar
+ *   combination but a number that looks like a real NIN or BVN" — and wired it
+ *   into actions/kyc.ts and the onboarding KYCForm. Auditing
+ *   _coop_registration.ts found what that left:
+ *
+ *     actions/kyc.ts                       isObviouslyFakeId       ✓
+ *     onboarding/KYCForm.tsx               isObviouslyFakeId       ✓ (client)
+ *     cooperative registration + resubmit  `length !== 11` only
+ *     marketplace seller verification      nothing
+ *     export onboarding                    nothing
+ *     WAVE application                     nothing
+ *
+ *   EVERY Zod definition of the two fields in this repository read
+ *   `z.string().optional()` — no length, no shape, no placeholder check. So
+ *   11111111111 was refused at the KYC form and accepted by four other doors
+ *   onto the same two fields, one of which only asked that it be eleven
+ *   characters long.
+ *
+ *   THE FIELD, NOT THE CHECK, IS THE UNIT. #487 exported a predicate and each
+ *   caller had to remember to call it; four did not. A schema fragment cannot be
+ *   forgotten in the same way, because the field cannot be declared without it.
+ *   That is the difference between a rule and an omission, and it is the repair
+ *   this audit keeps arriving at.
+ *
+ *   OPTIONAL STAYS OPTIONAL. None of these forms requires a BVN or a NIN and
+ *   this does not make them required — an empty submission is as valid as it
+ *   ever was. What changes is that a value which IS supplied has to be eleven
+ *   digits and not a placeholder.
+ */
+export function nationalIdField(field: 'NIN' | 'BVN') {
+    return z
+        .string()
+        .trim()
+        .optional()
+        .refine((v) => !v || /^\d{11}$/.test(v), {
+            message: `${field} must be exactly 11 digits`,
+        })
+        .refine((v) => !v || !isObviouslyFakeId(v), {
+            message: fakeIdErrorMessage(field),
+        });
 }
 
 /**
