@@ -37,6 +37,18 @@ export type AdminPermission =
     // member's name, email, phone and state as a CSV are not the same act, and
     // every admin role holds users:read.
     | "users:export"
+    //   #530 Reading a DELETED person's retained profile.
+    //
+    //   The owner's instruction is that a closed account's profile survives so
+    //   fraud can be investigated. That copy is the most sensitive read on the
+    //   platform — it is the full record of somebody who asked to be forgotten,
+    //   BVN and NIN included — so it does not travel with users:read, which
+    //   every admin role holds, nor with users:export, which `admin` holds.
+    //
+    //   Same reasoning that created users:export: there was no permission that
+    //   expressed the act, and reusing a broader one would have been the gap
+    //   restated rather than closed. super_admin only.
+    | "users:read_erased"
 
     // Content Management
     | "content:read"
@@ -109,6 +121,8 @@ const PERMISSION_MATRIX: Record<AdminRole, AdminPermission[]> = {
         // Full access to everything
         "users:read", "users:create", "users:update", "users:delete",
         "users:suspend", "users:assign_roles", "users:impersonate", "users:export",
+        // #530 super_admin ONLY. Not granted to `admin` below, deliberately.
+        "users:read_erased",
         "content:read", "content:approve", "content:reject", "content:delete",
         "announcements:manage",
         "finance:read", "finance:reconcile", "finance:process_withdrawals", "finance:refund",

@@ -19,6 +19,10 @@ import { signOut } from "next-auth/react";
 import { useSessionExpiry } from "@/hooks/useSessionExpiry";
 import { useRouter, useSearchParams } from "next/navigation";
 import PasswordStrengthIndicator from "@/components/auth/PasswordStrengthIndicator";
+// #529 The one rule for what "complete" means, shared with the writer and
+// the hub guard, and the logout control the error pages already use.
+import { missingProfileFields, type MissingProfileField } from "@/lib/profile-completeness";
+import { HardLogoutButton } from "@/components/auth/HardLogoutButton";
 import { firstPasswordProblem } from "@/lib/password-policy";
 
 export default function ProfilePage() {
@@ -46,6 +50,17 @@ export default function ProfilePage() {
     const [isLoading, setIsLoading] = useState(false);
     const [isFetching, setIsFetching] = useState(true);
     const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+    /**
+     * #529 What this profile is still missing, and whether it is through the gate.
+     *
+     * The member was redirected here BY the hub guard and the page said
+     * nothing about it: `notice` was read on line 31 and used only to clear
+     * the query string and to redirect after a save. Nothing rendered it, so
+     * somebody bounced off their own dashboard landed on an ordinary-looking
+     * profile screen with no statement of why they were there or what to do.
+     */
+    const [missing, setMissing] = useState<MissingProfileField[]>([]);
+    const [profileComplete, setProfileComplete] = useState<boolean | null>(null);
 
     // MFA / Two-Factor Authentication states
     const [mfaEnabled, setMfaEnabled] = useState(false);
@@ -161,6 +176,11 @@ export default function ProfilePage() {
                     gender: (p.gender || (session?.user as any)?.gender || "").toLowerCase() as any,
                     notifications: p.notifications || { email: true, push: false, sms: true },
                 });
+
+                //   #529 The same rule the server applies, so the screen and the
+                //   gate cannot disagree about what is missing.
+                setMissing(missingProfileFields(p));
+                setProfileComplete(p.profileComplete === true);
 
                 // Parse phone — use a known country-code list to avoid greedy over-matching.
                 // e.g. +2348036546039 should parse as code=+234, not code=+2348.
@@ -291,7 +311,17 @@ export default function ProfilePage() {
                     setSaveMessage({ type: 'success', text: 'Email updated! You will be signed out to apply the change.' });
                     setTimeout(() => signOut({ callbackUrl: "/auth/login" }), 2500);
                 } else {
-                    setSaveMessage({ type: 'success', text: 'Profile updated successfully!' });
+                    //   #529 The writer returns what is STILL missing, so a save
+                    //   that leaves the profile incomplete says so instead of
+                    //   reporting plain success and leaving the member to
+                    //   discover it by being bounced again.
+                    const remaining = (result.data as any)?.missing ?? [];
+                    setMissing(remaining);
+                    setProfileComplete(remaining.length === 0);
+
+                    setSaveMessage(remaining.length === 0
+                        ? { type: 'success', text: 'Profile updated successfully!' }
+                        : { type: 'error', text: 'Saved — but your profile is still incomplete. See what is missing above.' });
 
                     // Always clear the ?notice= param from the URL so the browser history
                     // doesn't re-trigger the hub-guard redirect on back navigation.
@@ -309,7 +339,11 @@ export default function ProfilePage() {
 
                     // If the hub guard sent the user here to complete registration,
                     // redirect them to the dashboard now that profileComplete is written.
-                    if (notice === 'complete-your-hub-registration') {
+                    //   ...and ONLY when it will actually let them in. Sending an
+                    //   incomplete profile to /dashboard bounces it straight back
+                    //   through the hub guard to this page, which is the loop this
+                    //   finding is about.
+                    if (notice === 'complete-your-hub-registration' && remaining.length === 0) {
                         setTimeout(() => router.push("/dashboard"), 1500);
                     }
                 }
@@ -461,13 +495,52 @@ export default function ProfilePage() {
                         <h1 className="text-3xl font-bold text-slate-900">My Profile</h1>
                         <p className="text-slate-500">Manage your account settings and preferences</p>
                     </div>
-                    <div className="flex gap-3">
+                    <div className="flex flex-wrap gap-3">
+                        {/*
+                          *   #529 THIS BUTTON USED TO BOUNCE SILENTLY.
+                          *
+                          *   It was an unconditional router.push("/dashboard").
+                          *   /dashboard sits behind requireHubRegistration, which
+                          *   refuses any account whose profileComplete is not true
+                          *   and redirects to /hub/register, which redirects back
+                          *   here. So for the very member the hub guard had just
+                          *   sent to this page, the button was visible, clickable,
+                          *   and did nothing at all.
+                          *
+                          *   Disabled with the reason on it instead. `null` means
+                          *   the profile has not loaded yet, and is treated as
+                          *   allowed — greying out a control while a read is in
+                          *   flight tells the member something the page does not
+                          *   yet know.
+                          */}
                         <button
                             onClick={() => router.push("/dashboard")}
-                            className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium transition-all"
+                            disabled={profileComplete === false}
+                            title={profileComplete === false
+                                ? "Finish the fields listed above, then Save Changes, to open your dashboard"
+                                : undefined}
+                            className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             ← Dashboard
                         </button>
+                        {/*
+                          *   #529 AND THERE WAS NO WAY OUT OF THIS PAGE.
+                          *
+                          *   /profile is listed in ClientLayout's
+                          *   NON_MEMBER_PREFIXES, so the ModuleSidebar — the only
+                          *   member-facing sign-out on the platform — is
+                          *   deliberately not rendered here. signOut is imported by
+                          *   this file and used only on the email-change path. So a
+                          *   member with an incomplete profile could not reach the
+                          *   dashboard, could not reach any module, and had no
+                          *   visible way to sign out. They were locked in.
+                          *
+                          *   HardLogoutButton, not a fourth signOut call site: it
+                          *   is what the error pages already use, and it clears the
+                          *   client state (#337) that causes the login loop this
+                          *   member is most likely to hit next.
+                          */}
+                        <HardLogoutButton variant="ghost" />
                         <button
                             onClick={handleSave}
                             disabled={isLoading}
@@ -482,6 +555,44 @@ export default function ProfilePage() {
                         </button>
                     </div>
                 </div>
+
+                {/*
+                  *   #529 THE REASON THE MEMBER IS ON THIS PAGE, SAID OUT LOUD.
+                  *
+                  *   requireHubRegistration redirects an incomplete account to
+                  *   /hub/register, which redirects to
+                  *   /profile?notice=complete-your-hub-registration. The `notice`
+                  *   param was read at the top of this file and used ONLY to clear
+                  *   the query string and to redirect after a save — nothing
+                  *   rendered it. So the member arrived at an ordinary-looking
+                  *   profile screen with no statement of why their dashboard had
+                  *   refused them or what to do about it.
+                  *
+                  *   Driven by `missing` rather than by the query param, because
+                  *   the param is stripped from the URL on the first save and the
+                  *   member may still be short a field.
+                  */}
+                {missing.length > 0 && (
+                    <div className="p-4 rounded-xl border bg-amber-50 border-amber-300 text-amber-900">
+                        <div className="flex items-start gap-3">
+                            <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" />
+                            <div>
+                                <p className="font-semibold">
+                                    Finish your profile to open your dashboard
+                                </p>
+                                <p className="mt-1 text-sm">
+                                    Your account is signed in, but the dashboard and the modules stay
+                                    closed until these are filled in and saved:
+                                </p>
+                                <ul className="mt-2 list-disc pl-5 text-sm space-y-1">
+                                    {missing.map((m) => (
+                                        <li key={m.field}>{m.label}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Success/Error Message */}
                 {saveMessage && (

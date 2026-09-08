@@ -111,6 +111,10 @@ const ADDED_SINCE_SPLIT = [
     'reviewProductAction',
     'getSystemSettingsAction',
     'saveSystemSettingsAction',
+    // #530 Reads a deleted member's retained profile for a fraud
+    // investigation. super_admin only, on a new permission, and every read
+    // writes a data_access row.
+    'getErasedUserRecordAction',
 ].sort();
 
 const ALL_EXPECTED = [...EXPECTED_ACTIONS, ...ADDED_SINCE_SPLIT].sort();

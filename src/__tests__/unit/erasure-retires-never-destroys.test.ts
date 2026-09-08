@@ -54,7 +54,7 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { stripComments } from '@/lib/testing/strip-comments';
-import { erasureRetentionRecord, erasedOwnerMarker, ERASED_FIELDS } from '@/lib/user-erasure';
+import { erasureRetentionRecord, erasedOwnerMarker, ERASED_FIELDS, userErasurePatch } from '@/lib/user-erasure';
 import { COLLECTIONS } from '@/lib/types/firestore';
 
 const ACTION = 'src/app/actions/user.ts';
@@ -143,9 +143,27 @@ describe('#300 — the document index survives the erasure', () => {
         expect(record.documents).toBeNull();
     });
 
-    it('AND IS NOT A SECOND COPY OF THE PROFILE', () => {
-        // The point is the asset index, not a backup of the person. Copying
-        // BVN, NIN or next of kin here would defeat the erasure entirely.
+    /**
+     *   #530 THIS ASSERTION USED TO SAY THE OPPOSITE, AND IT WAS NOT WRONG.
+     *
+     *   It read "AND IS NOT A SECOND COPY OF THE PROFILE — the point is the
+     *   asset index, not a backup of the person. Copying BVN, NIN or next of
+     *   kin here would defeat the erasure entirely", and it checked that bvn,
+     *   nin, nextOfKin and bankAccountNumber were absent.
+     *
+     *   That is correct data-protection reasoning. It is REVERSED by an owner
+     *   decision, not by a defect: "the users profile should still be saved even
+     *   after they delete their profile so admin can use it for audit incase of
+     *   fraud etc." Recorded as a reversal rather than quietly rewritten,
+     *   because the next person to read this file needs to know that the
+     *   platform once held the other position and why it moved.
+     *
+     *   WHAT DID NOT MOVE is below it: credentials. Keeping a profile for fraud
+     *   audit is the owner's call; keeping somebody's second factor and recovery
+     *   codes after they closed their account is not implied by it, and a leaked
+     *   retention row must not be a route past MFA.
+     */
+    it('IT IS A SECOND COPY OF THE PROFILE NOW — owner decision, #530', () => {
         const record = erasureRetentionRecord('u-3', {
             email: 'c@e.com',
             documents: {},
@@ -155,9 +173,41 @@ describe('#300 — the document index survives the erasure', () => {
             bankAccountNumber: '0123456789',
         });
 
-        for (const leaked of ['bvn', 'nin', 'nextOfKin', 'bankAccountNumber']) {
-            expect({ leaked, present: leaked in record }).toEqual({ leaked, present: false });
+        const kept = record.profileAtErasure as Record<string, unknown>;
+        for (const field of ['bvn', 'nin', 'nextOfKin', 'bankAccountNumber']) {
+            expect({ field, present: field in kept }).toEqual({ field, present: true });
         }
+        expect(record.basis).toBe('fraud_prevention');
+    });
+
+    it('AND IT STILL CARRIES NO CREDENTIALS, WHICH IS NOT THE PART THAT MOVED', () => {
+        //   stripSecrets, however deeply nested. The retained copy is a record
+        //   of a person, never a way to become them.
+        const record = erasureRetentionRecord('u-4', {
+            email: 'd@e.com',
+            totpSecret: 'JBSWY3DPEHPK3PXP',
+            mfaRecoveryCodes: ['aaaa-bbbb'],
+            passwordHash: '$2a$10$abcdefghijklmnop',
+            kyc: { totpSecret: 'nested-one-too' },
+        });
+
+        const kept = record.profileAtErasure as Record<string, any>;
+        for (const secret of ['totpSecret', 'mfaRecoveryCodes', 'passwordHash']) {
+            expect({ secret, present: secret in kept }).toEqual({ secret, present: false });
+        }
+        expect('totpSecret' in kept.kyc).toBe(false);
+    });
+
+    it('and the retained copy is NOT what any screen reads — the row is still scrubbed', () => {
+        //   The vacuity guard on the whole decision. If retention had quietly
+        //   become "leave it on the user row", the person would still be on
+        //   every admin list and the erasure would be a no-op.
+        const patch = userErasurePatch('u-5');
+
+        for (const field of ['bvn', 'nin', 'phone', 'bankAccountNumber']) {
+            expect(field in patch).toBe(true);
+        }
+        expect(patch.fullName).toBe('Redacted User');
     });
 
     it('the user row still loses every PII field it lost before', () => {

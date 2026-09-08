@@ -20,6 +20,10 @@ import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { versionedUpdate } from "@/lib/optimistic-locking";
 import { FieldValue } from "@/lib/firestore-compat";
 import { serializeDoc } from "@/lib/firestore-serialize";
+// #529 What "complete" means, in one place — hub-guard reads the flag, this
+// writes it, and the profile screen shows what is still missing. It used to be
+// written unconditionally here and checked only in the browser.
+import { nextProfileCompleteFlag, missingProfileFields } from "@/lib/profile-completeness";
 
 // Validation schemas
 const profileUpdateSchema = z.object({ firstName: z.string().max(50).optional(),
@@ -208,12 +212,25 @@ export const updateUserProfileAction = withSafeAction("updateUserProfileAction",
         };
     }
 
+    /** What is still missing after the save, for the screen to show. */
+    let stillMissing: { field: string; label: string }[] = [];
+
     await db.runTransaction(async (transaction) => {
         const existingDoc = await transaction.get(userRef);
         const existing = existingDoc.data() || {};
 
-        const updatePayload: Record<string, any> = { ...validated,
-            profileComplete: true };
+        //   #529 `profileComplete: true` was written here UNCONDITIONALLY.
+        //
+        //   Every field in profileUpdateSchema is optional, so
+        //   updateUserProfileAction({}) — a POST any signed-in client can make,
+        //   the browser form is not the only caller — opened the dashboard and
+        //   every module on a profile with no name, no email and no phone. The
+        //   rule that was supposed to stop that lived in the page's handleSave,
+        //   where the server could not apply it.
+        //
+        //   Computed from the MERGED record below, after the name fields are
+        //   assembled, and never downgraded — see lib/profile-completeness.
+        const updatePayload: Record<string, any> = { ...validated };
         // Remove version from payload as it's handled by versionedUpdate
         delete updatePayload.version;
 
@@ -238,12 +255,23 @@ export const updateUserProfileAction = withSafeAction("updateUserProfileAction",
             });
         }
 
+        const merged = { ...existing, ...updatePayload };
+        updatePayload.profileComplete = nextProfileCompleteFlag(existing.profileComplete, merged);
+        stillMissing = missingProfileFields(merged);
+
         await versionedUpdate(transaction, userRef, validated.version, updatePayload);
     });
 
     await invalidateUserCache(userId);
 
-    return { error: null, success: true as const , data: null };
+    //   The save SUCCEEDS even when something is still missing.
+    //
+    //   Refusing a partial save would be a worse defect than the one being
+    //   fixed: a member filling a long form in two sittings would lose the
+    //   first. What changes is that the gate is not opened by it, and the
+    //   caller is told what remains rather than being bounced to a page that
+    //   explains nothing.
+    return { error: null, success: true as const, data: { missing: stillMissing } };
 });
 
 /**

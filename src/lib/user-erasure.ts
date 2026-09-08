@@ -1,4 +1,7 @@
 import { FieldValue } from "@/lib/firestore-compat";
+// #530 Credentials never travel into the retention record — see
+// erasureRetentionRecord below.
+import { stripSecrets } from "@/lib/admin-pii";
 
 /**
  * What a right-to-erasure request actually has to remove from a user document.
@@ -299,6 +302,45 @@ export function erasedEmailFor(userId: string): string {
  * here as given; the mitigation is that the retained record is server-only and
  * carries links rather than the documents themselves. If the position changes
  * later, this is the one place that has to change.
+ *
+ *   #530 THE POSITION CHANGED, AND THIS IS THAT ONE PLACE.
+ *
+ *        Owner instruction, verbatim: "the users profile should still be saved
+ *        even after they delete their profile so admin can use it for audit
+ *        incase of fraud etc."
+ *
+ *        The note above said the retained record was "deliberately NOT the full
+ *        profile", and erasure-retires-never-destroys.test.ts asserted it under
+ *        the heading "AND IS NOT A SECOND COPY OF THE PROFILE". That assertion
+ *        was correct data-protection reasoning and it is being REVERSED by a
+ *        decision the owner is entitled to make, not because it was wrong. It
+ *        is recorded that way rather than quietly rewritten.
+ *
+ *        What that decision does and does not change:
+ *
+ *          THE USER ROW IS STILL SCRUBBED. userErasurePatch is untouched. The
+ *          person disappears from every screen, every query, every export and
+ *          every admin list exactly as before. Nothing that reads a user reads
+ *          this record.
+ *
+ *          THE COPY IS SERVER-ONLY. COLLECTIONS.ERASURE_RETENTION lives in
+ *          document_collections, which migration 004 put under RLS with NO
+ *          policies. Only the service key reaches it — no browser session, no
+ *          member, and no admin screen unless one is deliberately built with a
+ *          gate and an audit row on it.
+ *
+ *          CREDENTIALS ARE NOT RETAINED. stripSecrets removes totpSecret,
+ *          mfaRecoveryCodes and any password material, however deeply nested.
+ *          Keeping a profile for fraud audit is one decision; keeping somebody's
+ *          second factor and recovery codes after they closed their account is a
+ *          different one nobody asked for, and a leaked retention row must not
+ *          be a way past MFA. That exclusion is not the owner's to waive by
+ *          implication and is asserted in the test.
+ *
+ *        THE LAWFUL BASIS HAS TO BE STATED SOMEWHERE, so it is stated on the
+ *        record itself: `basis: "fraud_prevention"`. A retention with no
+ *        recorded purpose is the thing a regulator objects to; one with a named
+ *        purpose and a scope is a position that can be defended or revised.
  */
 export function erasureRetentionRecord(
     userId: string,
@@ -310,10 +352,19 @@ export function erasureRetentionRecord(
         // record of whose they were.
         documents: user?.documents ?? null,
         // Enough to identify the person to a regulator or to themselves if they
-        // come back — deliberately NOT the full profile.
+        // come back.
         emailAtErasure: user?.email ?? null,
+        //   #530 The profile as it stood at erasure, MINUS credentials.
+        //
+        //   Owner decision — see the note above. This is the copy an admin
+        //   investigating fraud reads; it is why the row exists at all now,
+        //   rather than being only an index of uploaded files.
+        profileAtErasure: stripSecrets(user ?? null),
         retainedAt: new Date().toISOString(),
         reason: "right_to_erasure",
+        // Why a controller is keeping this after an erasure request. Recorded
+        // on the row so the answer travels with the data.
+        basis: "fraud_prevention",
     };
 }
 

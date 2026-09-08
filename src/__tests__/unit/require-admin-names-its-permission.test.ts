@@ -264,6 +264,11 @@ describe('#375 — every gate names its permission, and the exception is stated'
         // Account creation.
         'src/app/actions/admin/_legacy.ts': ['users:create'],
 
+        // #530 Reading a DELETED member's retained profile. A new permission,
+        // super_admin only — see the note in admin-permissions on why neither
+        // users:read (all ten roles) nor users:export (admin too) expresses it.
+        'src/app/actions/admin/_erased.ts': ['users:read_erased'],
+
         // #431's addition. The retired document viewer stated the admin rule by
         // hand — ["admin", "super_admin", "cooperative_manager", "superadmin"]
         // read off the JWT claim — which is the class #364 swept out of fifteen
@@ -398,7 +403,8 @@ describe('#375 — every gate names its permission, and the exception is stated'
         // 38 → 39: the retired document viewer's hand-written role list became
         // a real gate (#431).
         // 39 → 41: add-roles' two handlers stopped reading the JWT (#526).
-        expect(callSites().length).toBe(41);
+        // 41 → 42: the erased-profile reader (#530).
+        expect(callSites().length).toBe(42);
         expect(SRC.length).toBeGreaterThan(400);
     });
 

@@ -27,6 +27,10 @@
  * domains.
  */
 
+// ─── Erased accounts (_erased.ts) ─────────────────────────────────────────────
+// #530 Reading a deleted member's retained profile. super_admin only, audited.
+export { getErasedUserRecordAction } from "./_erased";
+
 // ─── Domain types ─────────────────────────────────────────────────────────────
 export type { EditableApplicationFields } from "./_applications";
 
