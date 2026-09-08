@@ -9,7 +9,12 @@
 import { useState } from 'react';
 import { User, MapPin, Phone, Calendar, CheckCircle2, AlertCircle, Loader2, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { verifyBVNAction, verifyNINAction, verifyVotersCardAction } from '@/app/actions/kyc';
-import { isObviouslyFakeId, fakeIdErrorMessage } from '@/lib/kyc-validators';
+import {
+    isObviouslyFakeId,
+    fakeIdErrorMessage,
+    looksLikeFakeVotersCard,
+    VOTERS_CARD_ERROR_MESSAGE,
+} from '@/lib/kyc-validators';
 import { IdInput } from '@/components/ui/IdInput';
 import PhoneInput from '@/components/ui/PhoneInput';
 import { FormField, FormInput, FormSelect, FormTextarea } from '@/components/ui/FormField';
@@ -111,6 +116,9 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
     // Confirmation checkbox — user must explicitly confirm digits are correct
     const [ninConfirmed, setNinConfirmed] = useState(false);
     const [bvnConfirmed, setBvnConfirmed] = useState(false);
+    //   #525. The third document now has the confirm guard the other two
+    //   have had since #285.
+    const [votersCardConfirmed, setVotersCardConfirmed] = useState(false);
 
     function handleChange(field: keyof KYCData, value: string | boolean) {
         const updated = { ...formData, [field]: value };
@@ -160,6 +168,7 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
         if (field === 'votersCard') {
             setVotersCardState('idle');
             setVotersCardError('');
+            setVotersCardConfirmed(false);
             updated.votersCardVerified = false;
         }
         setFormData(updated);
@@ -265,6 +274,22 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
         }
         if (!firstName || !lastName) {
             setVotersCardError("Enter your first name and last name before verifying Voter's Card.");
+            return;
+        }
+        //   #525 THE THIRD DOCUMENT HAD NEITHER GUARD THE OTHER TWO HAVE.
+        //
+        //   handleVerifyBVN and handleVerifyNIN each check a length, require the
+        //   member to confirm their digits, and call isObviouslyFakeId. This
+        //   asked only whether the field was empty — and the server did the
+        //   same, then wrote votersCardVerified: true. The confirm guard is here
+        //   for the reason #285 gave it to the other two: it is what makes the
+        //   member look at what they typed.
+        if (!votersCardConfirmed) {
+            setVotersCardError("Please confirm that your Voter's Card number is correct before verifying.");
+            return;
+        }
+        if (looksLikeFakeVotersCard(votersCard)) {
+            setVotersCardError(VOTERS_CARD_ERROR_MESSAGE);
             return;
         }
 
@@ -521,6 +546,25 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                             )
                     }
                 />
+                {/* #525 THE CONFIRMATION CHECKBOX, WHICH THE OTHER TWO HAVE.
+                    #349 found that setNinConfirmed and setBvnConfirmed existed
+                    with nothing rendering them, so their handlers "would have
+                    refused every time" — three halves of one control and none of
+                    them on screen. Adding the guard to handleVerifyVotersCard
+                    without this would have reproduced exactly that, on the field
+                    I am supposed to be fixing. handleChange clears it when the
+                    number is edited, like the other two. */}
+                {votersCardState !== 'verified' && (
+                    <label className="mt-2 flex items-start gap-2 text-sm text-slate-600 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={votersCardConfirmed}
+                            onChange={(e) => setVotersCardConfirmed(e.target.checked)}
+                            className="mt-0.5 w-4 h-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500"
+                        />
+                        <span>I confirm the Voter&apos;s Card number above is correct.</span>
+                    </label>
+                )}
             </div>
 
             {/* ── BVN — live verification (optional, shown when includeBVN=true) ── */}

@@ -141,6 +141,62 @@ export function isObviouslyFakeId(id: string): boolean {
 }
 
 /**
+ *   #525 THE THIRD IDENTITY DOCUMENT HAD NO RULE AT ALL.
+ *
+ *   looksLikeFakeId answers FALSE for anything that is not exactly eleven
+ *   digits — deliberately, it only recognises NIN/BVN placeholders — so the
+ *   voter's card was outside every check this module makes. Client and server
+ *   both asked only `if (!votersCardNumber)`, and the server then wrote
+ *   `kyc.votersCardVerified: true`. A single character was a verified identity
+ *   document.
+ *
+ *   THERE IS NO UPPER BOUND, AND THAT IS A DECISION WITH EVIDENCE BEHIND IT.
+ *
+ *   I set one at nineteen first, from CivicStatusStep's `maxLength={19}` — the
+ *   only place this platform states a length. Writing the test found that the
+ *   SAME COMPONENT'S placeholder is
+ *
+ *       90F5B123456789012345
+ *
+ *   which is TWENTY characters. The form truncates its own example. So the
+ *   platform does not agree with itself about how long a voter's card is, there
+ *   is no live database to settle it against, and #485's standing constraint is
+ *   that onboarding must not stop — a rule that refuses a real member is worse
+ *   than the defect it fixes.
+ *
+ *   What is certain is the defect: a single character was a verified identity
+ *   document. A floor of nine, an alphanumeric requirement, and refusing one
+ *   character repeated removes that without gambling an application on a length
+ *   nothing here can confirm. If the owner establishes the true length, adding
+ *   the ceiling is one line and this is where to add it.
+ */
+export const VOTERS_CARD_MIN_LENGTH = 9;
+
+/** The card number as it is compared: no spaces, upper case. */
+export function normaliseVotersCard(value: string): string {
+    return String(value ?? "").replace(/\s+/g, "").toUpperCase();
+}
+
+/** True when the value cannot be a real voter's card number. */
+export function looksLikeFakeVotersCard(value: string): boolean {
+    const v = normaliseVotersCard(value);
+    if (v.length < VOTERS_CARD_MIN_LENGTH) return true;
+    if (!/^[A-Z0-9]+$/.test(v)) return true;
+    // One character repeated to fill the field — 0000000000, AAAAAAAAA.
+    if (/^(.)\1+$/.test(v)) return true;
+    return false;
+}
+
+export const VOTERS_CARD_ERROR_MESSAGE =
+    "Enter your Voter's Card Number as printed on the card — letters and digits, no spaces.";
+
+/** The zod field, for callers that parse. */
+export function votersCardField() {
+    return z.string().trim()
+        .refine((v) => !looksLikeFakeVotersCard(v), { message: VOTERS_CARD_ERROR_MESSAGE });
+}
+
+/**
  *   #501 THE OWNER'S RULE REACHED ONE SUBMISSION PATH OUT OF FIVE.
  *
  *   #487 built this file to a direct instruction — "pass all BVN and NIN input

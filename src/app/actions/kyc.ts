@@ -12,6 +12,7 @@
  */
 
 import { supabaseDb as db } from "@/lib/supabase-db";
+import { votersCardField, VOTERS_CARD_ERROR_MESSAGE } from "@/lib/kyc-validators";
 import { runQueryWithRetry } from '@/lib/firestore-utils';
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "@/lib/firestore-compat";
@@ -221,6 +222,25 @@ async function _verifyVotersCardAction(payload: { votersCardNumber: string;
         if (!votersCardNumber) { return { success: false as const, error: "Voter's Card number is required", data: null };
         }
         if (!firstName || !lastName) { return { success: false as const, error: "First name and last name are required for Voter's Card verification", data: null };
+        }
+
+        /**
+         *   #525 THE ONLY CHECK WAS "IS IT EMPTY".
+         *
+         *   This wrote `kyc.votersCardVerified: true` for whatever arrived, so a
+         *   single character was a verified identity document. looksLikeFakeId
+         *   could not help — it answers false for anything that is not eleven
+         *   digits, by design — so the voter's card sat outside every rule this
+         *   platform has. See lib/kyc-validators for why the new rule has a
+         *   floor and no ceiling.
+         */
+        const cardCheck = votersCardField().safeParse(votersCardNumber);
+        if (!cardCheck.success) {
+            return {
+                success: false as const,
+                error: cardCheck.error?.issues[0]?.message ?? VOTERS_CARD_ERROR_MESSAGE,
+                data: null,
+            };
         }
 
         logger.info("Voter's Card verification started", { userId, vin: votersCardNumber.slice(0, 4) + '***' });

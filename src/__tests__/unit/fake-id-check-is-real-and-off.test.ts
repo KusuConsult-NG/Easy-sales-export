@@ -274,14 +274,26 @@ describe('#357 — both callers actually call it now', () => {
         // calls anything is the exact shape all three callers were in.
         for (const file of [SERVER, FORM]) {
             const code = source(file);
-            const importLine = code.split('\n').find((l) => l.includes('kyc-validators'))!;
-            const names = [...importLine.matchAll(/\b(isObviouslyFakeId|fakeIdErrorMessage|looksLikeFakeId)\b/g)]
+            //   EVERY import statement from this module, not the first LINE
+            //   containing its name.
+            //
+            //   #525 split KYCForm's import across several lines and added a
+            //   second one to actions/kyc.ts. `find(l => l.includes(...))` then
+            //   returned `} from '@/lib/kyc-validators';` — no names on it — and
+            //   this assertion's own vacuity guard fired, which is the guard
+            //   doing its job. But a ratchet a LINE BREAK can silence is one
+            //   that has stopped being able to fail, so it reads statements now.
+            const imports = [...code.matchAll(/import\s*\{([\s\S]*?)\}\s*from\s*['"][^'"]*kyc-validators['"]/g)]
+                .map((m) => m[1])
+                .join(',');
+            const names = [...imports.matchAll(/\b(isObviouslyFakeId|fakeIdErrorMessage|looksLikeFakeId)\b/g)]
                 .map((m) => m[1]);
 
             expect(names.length).toBeGreaterThan(0);          // vacuity guard
             for (const name of names) {
                 const uses = code.split('\n')
                     .filter((l) => !l.includes('kyc-validators'))
+                    .filter((l) => !/^\s*(isObviouslyFakeId|fakeIdErrorMessage|looksLikeFakeId|looksLikeFakeVotersCard|votersCardField|VOTERS_CARD_ERROR_MESSAGE|normaliseVotersCard),?\s*$/.test(l))
                     .filter((l) => l.includes(`${name}(`));
                 expect(uses.length).toBeGreaterThan(0);
             }
