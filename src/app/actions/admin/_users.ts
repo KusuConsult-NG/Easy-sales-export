@@ -781,6 +781,22 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
         // Client-side search + date range filtering
         let filteredUsers = deduplicatedUsers;
 
+        /**
+         *   #498 Whether anything narrows the set AFTER the query — which
+         *   decides whether the reported total may come from the database count
+         *   or must come from the filtered list. Declared beside the filters it
+         *   describes, so adding a filter without extending it is a visible
+         *   omission rather than a silent one.
+         */
+        const narrowedInMemory =
+            (!!options.state && options.state !== "all") ||
+            (!!options.lga && options.lga !== "all") ||
+            (!!options.role && options.role !== "all") ||
+            (!!options.modules && options.modules !== "all") ||
+            (!!options.gender && options.gender !== "all") ||
+            (!!options.status && options.status !== "all") ||
+            !!options.search || !!options.fromDate || !!options.toDate;
+
         // In-memory Location filtering (State and LGA) — resolves the bug where direct Firestore
         // where("address.state") equality checks silently excluded users with state stored in other properties
         if (options.state && options.state !== "all" && typeof options.state === 'string') {
@@ -798,6 +814,46 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
                 const cleanUserLga = typeof u.lga === 'string' ? u.lga.toLowerCase().trim() : "";
                 return cleanUserLga && cleanUserLga.includes(cleanLgaFilter);
             });
+        }
+
+        /**
+         *   #498 THE ROLE FILTER WAS DROPPED THE MOMENT ANYBODY SEARCHED.
+         *
+         *        The query applies it only on the non-search branch:
+         *
+         *            if (!options.search) {
+         *                if (options.role && options.role !== "all") {
+         *                    query = query.where("roles", "array-contains", options.role);
+         *                }
+         *
+         *        and nothing downstream re-applied it. State, LGA, module,
+         *        gender, status and both dates are all filtered in memory after
+         *        the mapping — role was the one left out of that list.
+         *
+         *        SO THE CONTROL STAYED LIT AND DID NOTHING. The dropdown keeps
+         *        showing "Seller", admin/users/page.tsx:199 keeps counting role
+         *        among the active filters, and the results contain every role
+         *        there is. A filter that reads as applied and is not is worse
+         *        than one that is missing — this audit's "a control that reads
+         *        as present and is none" class.
+         *
+         *        WHY THE QUERY CANNOT JUST DO IT: the search branch already
+         *        constrains on document id, and combining that with
+         *        array-contains is exactly the composite the surrounding code
+         *        avoids everywhere else. So role joins the in-memory filters,
+         *        which is where this file already puts every filter it cannot
+         *        express in one query.
+         *
+         *        APPLIED UNCONDITIONALLY, as a backstop, for the reason stated
+         *        forty lines below about the dates: "ALWAYS apply date filters
+         *        in memory as a definitive backstop." When the query has already
+         *        narrowed by role this is a no-op; when it has not, it is the
+         *        only thing that does.
+         */
+        if (options.role && options.role !== "all") {
+            const wanted = String(options.role);
+            filteredUsers = filteredUsers.filter(u =>
+                Array.isArray(u.roles) && (u.roles as string[]).includes(wanted));
         }
 
         if (options.search) {
@@ -906,9 +962,36 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
             lastDocId: String(page + 1),
             hasMore: offset + pageSize < filteredUsers.length,
             meta: {
-                totalCount: (options.state && options.state !== "all") || (options.lga && options.lga !== "all")
-                    ? filteredUsers.length
-                    : absoluteDbCount
+                /**
+                 *   #498 THE COUNT ANSWERED A DIFFERENT QUESTION FROM THE LIST.
+                 *
+                 *        It switched to the filtered length for STATE and LGA
+                 *        and for nothing else — so filtering to a gender, a
+                 *        module, a date range or a verification status showed a
+                 *        handful of rows beside the whole-collection total. With
+                 *        #495 adding "unevidenced" that would have read 3,605
+                 *        rows under a heading of 42,160.
+                 *
+                 *        Every one of those filters runs in memory, so the rule
+                 *        is simply: if anything narrowed the set after the query,
+                 *        the count has to come from the narrowed set.
+                 *
+                 *        IT IS BOUNDED, AND THAT IS SAID RATHER THAN HIDDEN.
+                 *        In-memory filtering only ever sees FETCH_LIMIT rows, so
+                 *        a filtered count is "of those scanned", not of the
+                 *        collection. `countIsBounded` lets a caller render 2000+
+                 *        instead of presenting a capped number as exact. The
+                 *        unfiltered count stays the true database count.
+                 *
+                 *        NOTHING RENDERS THIS TODAY — admin/users/page.tsx does
+                 *        not destructure `meta`. Corrected anyway: a returned
+                 *        field that is quietly wrong is what the next person
+                 *        builds a header on, which is the mistake
+                 *        lib/validations/marketplace.ts made about
+                 *        estimatedDeliveryDate in #493.
+                 */
+                totalCount: narrowedInMemory ? filteredUsers.length : absoluteDbCount,
+                countIsBounded: narrowedInMemory && deduplicatedUsers.length >= FETCH_LIMIT,
             }
         };
     } catch (error: any) {
