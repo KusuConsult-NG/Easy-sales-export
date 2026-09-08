@@ -21,6 +21,7 @@ import { registrationProgressScore } from "@/lib/registration-progress";
 import { cooperativeIdentityConflict } from "@/lib/cooperative-identity-conflict";
 import { nationalIdField } from "@/lib/kyc-validators";
 import { findCooperativeMemberRow } from "@/lib/cooperative-member-lookup";
+import { latestApplication } from "@/lib/latest-application";
 
 /**
  * 2. COMPLETE REGISTRATION (Step 2)
@@ -596,11 +597,55 @@ export async function getCooperativeApplicationAction(): Promise<
             }
         }
 
-        const sortedDocs = snap.docs.map(d => d.data()).sort((a: any, b: any) => { const aTime = toMillis(a.createdAt);
-            const bTime = toMillis(b.createdAt);
-            return bTime - aTime;
-        });
-        const data = serializeValue(sortedDocs[0]);
+        /**
+         *   #504 THE REVISION FLOW HAND-WROTE "WHICH RECORD IS CURRENT" TWICE,
+         *        AND THE TWO COPIES DID NOT AGREE.
+         *
+         *   This one was:
+         *
+         *       snap.docs.map(d => d.data()).sort((a, b) =>
+         *           toMillis(b.createdAt) - toMillis(a.createdAt))
+         *
+         *   and resubmitCooperativeApplicationAction, ninety lines below, had
+         *   its own:
+         *
+         *       snap.docs.sort((a, b) =>
+         *           toMillis(b.data().createdAt) - toMillis(a.data().createdAt))
+         *
+         *   THE SAME QUESTION, ASKED TWICE, OF DIFFERENT OBJECTS. One sorts
+         *   plain data, the other sorts snapshots — and the second sorts
+         *   `snap.docs` IN PLACE, which lib/latest-application.ts copies
+         *   precisely to avoid.
+         *
+         *   BOTH ARE NARROWER THAN THE SHARED RULE. #412 replaced exactly this
+         *   hand-written comparator in _coop_identity.ts and recorded why:
+         *   `createdAt` alone "scores 0 for a date-only string or an epoch
+         *   number, where the shared reader handles both, and it had no tiebreak
+         *   at all". The shared rule reads `submittedAt ?? createdAt`, then
+         *   tiebreaks on the decided stamps, then on document id — so it always
+         *   returns the same answer, and it warns when no candidate carries a
+         *   readable date instead of choosing silently.
+         *
+         *   WHY IT MATTERS HERE MORE THAN ANYWHERE. This is the flow where a
+         *   member corrects what an admin asked them to correct. With no
+         *   tiebreak both comparators return 0 for tied or unreadable dates, and
+         *   the answer comes from incidental order — so the row this action
+         *   SHOWS and the row the resubmit WRITES could differ. The member
+         *   edits what is in front of them, presses save, and the correction
+         *   lands on another record. Nothing errors. The admin sees the same
+         *   application unchanged and asks again.
+         *
+         *   And #502 established that duplicate rows are not hypothetical: an
+         *   endpoint was creating a second, blank membership for paid members.
+         *
+         *   RESIDUAL, STATED: both doors now ask the same rule and therefore
+         *   agree, but the answer is still recomputed rather than carried. The
+         *   stronger fix is for the getter to return the chosen document id and
+         *   the resubmit to write the row it is given — a change to the form's
+         *   contract, worth doing, and not silently as part of this.
+         */
+        const chosen = latestApplication(snap.docs);
+        const data = serializeValue(chosen?.data() ?? {});
         // Wrap data in application key to match frontend expectation (OnboardingClient.tsx result.data?.application)
         return { error: null, success: true as const, data: { application: data, revisionNote: data.revisionNote || null }, meta: null };
     } catch (error) { logger.error('getCooperativeApplicationAction error:', {
@@ -683,12 +728,13 @@ export async function resubmitCooperativeApplicationAction(
                 memberIsNew = true;
             }
         } else {
-            const sortedDocs = snap.docs.sort((a, b) => { const aTime = toMillis(a.data().createdAt);
-                const bTime = toMillis(b.data().createdAt);
-                return bTime - aTime;
-            });
-            memberRef = sortedDocs[0].ref;
-            existingMemberData = sortedDocs[0].data();
+            //   #504 The same shared rule the getter above now asks, so the row
+            //   the member was SHOWN and the row this WRITES cannot differ. This
+            //   copy also sorted `snap.docs` in place; sortApplicationsNewestFirst
+            //   copies first, which is why it says so in its own header.
+            const chosen = latestApplication(snap.docs)!;
+            memberRef = chosen.ref;
+            existingMemberData = chosen.data();
         }
 
         const formDataWithTier = new FormData();
