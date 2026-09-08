@@ -154,10 +154,21 @@ describe('a comparator built on it actually orders', () => {
 });
 
 describe('no copy of the broken expression survives', () => {
-    it.each(AFFECTED)('%s uses the shared toMillis', (rel: string) => {
+    it.each(AFFECTED)('%s reads dates through a shared reader', (rel: string) => {
         const src = source(rel);
 
-        expect(src).toContain('toMillis(');
+        //   The two refusals below are the rule. The line above them is the
+        //   vacuity guard: a file that simply DELETED its date handling would
+        //   pass both refusals, so it has to be shown still reading dates
+        //   through something shared.
+        //
+        //   #506 `latestApplication` counts. _wv_applications.ts used to call
+        //   toMillis directly inside two hand-written comparators; both are gone,
+        //   replaced by lib/latest-application.ts — which reads dates with
+        //   toMillis itself, and adds the tiebreaks the copies lacked. The guard
+        //   asked for the mechanism where it means the rule, which is the trap
+        //   this audit keeps meeting in its own tests.
+        expect(src).toMatch(/toMillis\(|latestApplication\(|sortApplicationsNewestFirst\(/);
         expect(src).not.toMatch(/createdAt\?\.toMillis\?\.\(\)\s*\|\|/);
         expect(src).not.toMatch(/createdAt\?\.seconds\s*\*\s*1000/);
     });

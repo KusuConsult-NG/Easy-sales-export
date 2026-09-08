@@ -18,6 +18,7 @@ import { claimStatusTransitionFromAny } from "@/lib/status-transition";
 import { toMillis } from "@/lib/firestore-serialize";
 import { sendEmailNotification } from "@/lib/email-notifications";
 import { nationalIdField } from '@/lib/kyc-validators';
+import { latestApplication } from "@/lib/latest-application";
 
 // Validation Schema for WAVE Application (OFFICIAL BENEFICIARY APPLICATION FORM)
 const waveApplicationSchema = z.object({ // SECTION A: Personal Identification
@@ -615,20 +616,43 @@ async function _getWaveApplicationStatusAction(userId?: string): Promise<ActionR
             return { error: null, success: true as const, data: null };
         }
 
-        const sortedDocs = snapshot.docs.map(d => d.data()).sort((a: any, b: any) => {
-            const aTime = toMillis(a.createdAt);
-            const bTime = toMillis(b.createdAt);
-            return bTime - aTime;
-        });
-
-        const data = sortedDocs[0];
+        /**
+         *   #506 THE SEVENTH AND EIGHTH COPIES OF "WHICH APPLICATION IS
+         *        CURRENT", AND THESE TWO NEVER LOOKED AT submittedAt AT ALL.
+         *
+         *   Both copies in this file read `createdAt` alone. The Farm Nation
+         *   copies #505 retired at least tried `submittedAt || createdAt`; these
+         *   ignore the field entirely — while the very next statement returns a
+         *   value LABELLED submittedAt, and the branch forty lines above returns
+         *   `reg.submittedAt`. One function, two branches, two different answers
+         *   to what "submitted" means.
+         *
+         *   Neither had a tiebreak, so tied or unreadable dates resolved by
+         *   incidental order. And this matters beyond the display: the getter
+         *   below HEALS `serviceRegistrations.wave.applicationId` from whichever
+         *   row its comparator picks, and _resubmitWaveApplicationAction writes
+         *   to exactly that id. So the comparator decides which application a
+         *   member's correction lands on, one step removed.
+         *
+         *   #412 retired the first copy, #504 the second and third, #505 the
+         *   fourth through sixth. One definition, in lib/latest-application.ts.
+         */
+        const newest = latestApplication(snapshot.docs);
+        const data: any = newest ? newest.data() : {};
         const { serializeValue } = await import("@/lib/firestore-serialize");
         return {
             error: null,
             success: true as const,
             data: {
                 status: data.status || null,
-                submittedAt: serializeValue(data.createdAt || data.submittedAt || null)
+                //   #506 `createdAt || submittedAt` — the reverse of what the
+                //   field is called, and the reverse of the branch above, which
+                //   returns `reg.submittedAt`. On a resubmitted application
+                //   createdAt is when the row was first made and submittedAt is
+                //   when the member last sent it, so the member was shown the
+                //   older date under the newer label. Same precedence as the
+                //   shared rule now: the submission, falling back to creation.
+                submittedAt: serializeValue(data.submittedAt || data.createdAt || null)
             }
         };
     } catch (error) {
@@ -677,12 +701,11 @@ async function _getWaveApplicationAction(): Promise<ActionResponse<any | null>> 
                 .get();
 
             if (!snap.empty) {
-                const sortedDocs = snap.docs.sort((a: any, b: any) => {
-                    const aTime = toMillis(a.data().createdAt);
-                    const bTime = toMillis(b.data().createdAt);
-                    return bTime - aTime;
-                });
-                appDoc = sortedDocs[0];
+                //   #506 The eighth copy, and it sorted `snap.docs` IN PLACE —
+                //   which lib/latest-application.ts copies to avoid. The id this
+                //   picks is healed onto the user record below and is the id the
+                //   resubmit writes to.
+                appDoc = latestApplication(snap.docs);
                 applicationId = appDoc.id;
                 foundByQuery = true;
             }
