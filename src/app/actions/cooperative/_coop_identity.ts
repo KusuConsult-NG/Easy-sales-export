@@ -328,7 +328,19 @@ export async function getCooperativeMemberIdCardAction(): Promise<
             // honour it and heal the member doc so subsequent requests are fast.
             let effectivePaymentCompleted = d.paymentStatus === "completed";
 
-            if (!effectivePaymentCompleted && !isLegacy && !isApprovedOrActive) {
+            /**
+             *   #496 THE FALLBACK SKIPPED THE PEOPLE MOST LIKELY TO NEED IT.
+             *
+             *        `&& !isApprovedOrActive` meant an approved member never had
+             *        processed_payments consulted — the approval bypassed the
+             *        gate, so nobody bothered to look. Now that approval no
+             *        longer satisfies payment (see Gate 1 below), that lookup is
+             *        exactly what keeps a genuine payer working: measured on
+             *        production, three non-legacy members are active with a
+             *        stale `paymentStatus`, and this finds the payment for one
+             *        of them.
+             */
+            if (!effectivePaymentCompleted && !isLegacy) {
                 try {
                     const authPayment = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
                         .where("userId", "==", userId)
@@ -366,7 +378,55 @@ export async function getCooperativeMemberIdCardAction(): Promise<
                 }
             }
 
-            if (!effectivePaymentCompleted && !isLegacy && !isApprovedOrActive) {
+            /**
+             *   #496 GATE 1 WAS SATISFIED BY AN ACTIVATION THIS FUNCTION WROTE
+             *        SIXTY LINES ABOVE IT.
+             *
+             *   The guard read:
+             *
+             *       if (!effectivePaymentCompleted && !isLegacy && !isApprovedOrActive)
+             *
+             *   so approval skipped the payment check. And `isApprovedOrActive`
+             *   is not something this function receives — it MAKES it, at the
+             *   heal above, on this condition:
+             *
+             *       if (!isApprovedOrActive && (isCentralActive || (paid && onboarded)))
+             *
+             *   Read the `||`. The second branch requires payment; the FIRST
+             *   requires only that the user document already says "active". So a
+             *   member with no payment anywhere reached the heal, was written
+             *   `membershipStatus: "active"`, and that write then satisfied the
+             *   payment gate. A check whose precondition the same call
+             *   manufactures cannot fail.
+             *
+             *   AND IT COULD NOT STOP. The heal also writes
+             *   `serviceRegistrations.cooperatives.status: "active"` onto the
+             *   user document — which IS `isCentralActive` on every later call.
+             *   One firing made it permanent.
+             *
+             *   THE FIX IS TO STOP CONFLATING TWO DIFFERENT CLAIMS. "An admin
+             *   approved this member" and "this member paid the fee" are not the
+             *   same sentence, and only one of them is about money. Approval
+             *   still satisfies Gate 2 immediately below, untouched. Payment now
+             *   has to come from a payment — the member document, the
+             *   processed_payments fallback directly above, or the legacy
+             *   exemption, which stays because those members joined before this
+             *   platform charged anything.
+             *
+             *   MEASURED BLAST RADIUS, before changing it: 77 members are active
+             *   with payment not completed, 74 of them legacy and already exempt.
+             *   Of the remaining three, the fallback above finds a real payment
+             *   for one. TWO PEOPLE are refused a card by this line who were
+             *   being issued one — and for those two there is no record of the
+             *   ₦10,000 anywhere in the database.
+             *
+             *   RECORDED, NOT FIXED HERE: `checkModuleAccess` Layer 2 grants the
+             *   cooperative module on `membershipStatus` alone, so the heal's
+             *   write still opens the module for an unpaid member even now that
+             *   the card is gated. Same defect, a different door — #486's class —
+             *   and it needs its own measurement before its own gate moves.
+             */
+            if (!effectivePaymentCompleted && !isLegacy) {
                 return { success: false as const, error: "Your membership fee payment has not been verified. Please complete payment to access your ID card.", reason: "payment_required"};
             }
 
