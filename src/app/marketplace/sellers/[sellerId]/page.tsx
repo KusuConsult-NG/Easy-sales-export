@@ -36,7 +36,20 @@ export default async function SellerStorefrontPage({ params }: SellerPageProps) 
 
     if (!data) notFound();
 
-    const { seller, products, reviews } = data;
+    const { seller } = data;
+
+    /**
+     *   #514. `products` and `reviews` are null when the endpoint COULD NOT READ
+     *   them, and [] / {0,0} when it read them and there was nothing there. They
+     *   used to be the same value, so a failed query rendered as "No products
+     *   listed yet." and silently deleted the seller's star rating.
+     *
+     *   An absence is not a fact. Where it is unknown this page says so.
+     */
+    const productsUnavailable = data.products === null;
+    const reviewsUnavailable = data.reviews === null;
+    const products: any[] = data.products ?? [];
+    const reviews = data.reviews ?? { avgRating: 0, reviewCount: 0 };
 
     return (
         <div className="min-h-screen bg-slate-50">
@@ -86,7 +99,9 @@ export default async function SellerStorefrontPage({ params }: SellerPageProps) 
                                 </p>
                             )}
 
-                            {reviews.reviewCount > 0 && (
+                            {reviewsUnavailable ? (
+                                <p className="text-white/70 text-sm">Ratings are temporarily unavailable.</p>
+                            ) : reviews.reviewCount > 0 && (
                                 <div className="flex items-center gap-2">
                                     <div className="flex items-center gap-1 text-amber-300">
                                         {[1, 2, 3, 4, 5].map((star) => (
@@ -126,7 +141,7 @@ export default async function SellerStorefrontPage({ params }: SellerPageProps) 
                                 />
                             </div>
                             <div className="bg-white/10 backdrop-blur rounded-xl px-4 py-3 text-center">
-                                <p className="text-2xl font-bold">{products.length}</p>
+                                <p className="text-2xl font-bold">{productsUnavailable ? "—" : products.length}</p>
                                 <p className="text-white/70 text-xs">Products</p>
                             </div>
                             {reviews.reviewCount > 0 && (
@@ -145,10 +160,18 @@ export default async function SellerStorefrontPage({ params }: SellerPageProps) 
                 <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-2">
                     <Package className="w-6 h-6 text-emerald-600" />
                     Product Listings
-                    <span className="ml-2 text-sm font-normal text-slate-500">({products.length} active)</span>
+                    {!productsUnavailable && (
+                        <span className="ml-2 text-sm font-normal text-slate-500">({products.length} active)</span>
+                    )}
                 </h2>
 
-                {products.length === 0 ? (
+                {productsUnavailable ? (
+                    <div className="text-center py-16 bg-white rounded-2xl border border-slate-200">
+                        <Package className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                        <p className="text-slate-500 text-lg">We couldn&apos;t load this seller&apos;s products.</p>
+                        <p className="text-slate-400 text-sm mt-1">This is a temporary problem on our side — please refresh in a moment.</p>
+                    </div>
+                ) : products.length === 0 ? (
                     <div className="text-center py-16 bg-white rounded-2xl border border-slate-200">
                         <Package className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                         <p className="text-slate-500 text-lg">No products listed yet.</p>
