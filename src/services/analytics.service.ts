@@ -139,6 +139,18 @@ function lastNMonths(n: number): Array<{ label: string; start: Date; end: Date }
     return months;
 }
 
+/**
+ * How many recent payments the finance screen is sent.
+ *
+ * The read had no limit at all: it loaded every row in PROCESSED_PAYMENTS,
+ * sorted them in memory and returned the lot as `recentTransactions`. A screen
+ * showing "recent" activity needs a page, and #465 measured what the unbounded
+ * form costs on a grown collection — `canceling statement due to statement
+ * timeout`. The totals beside the list come from COUNT(*) and Paystack, not
+ * from this list's length, which is what makes bounding it safe.
+ */
+const RECENT_TRANSACTION_LIMIT = 200;
+
 export class AnalyticsService implements AnalyticsServiceContract {
     /**
      * Aggregates key system health and usage metrics.
@@ -790,8 +802,30 @@ export class AnalyticsService implements AnalyticsServiceContract {
             db.collection(COLLECTIONS.LOAN_APPLICATIONS).where("status", "==", "disbursed").aggregate({ total: AggregateField.sum("amount") }).get(),
         ]);
         
+        //   #516 A FAILED READ WAS RENDERED AS ZERO NAIRA.
+        //
+        //   `fulfilled ? total : 0` on a Promise.allSettled means a timed-out
+        //   aggregate reaches the admin's finance screen as ₦0 of escrow volume
+        //   and ₦0 of loans disbursed, with nothing saying the query failed.
+        //   This file already had the vocabulary for exactly this —
+        //   `revenueIsPartial` is set when the Paystack sweep hits its ceiling,
+        //   with the note "an admin reading this figure needs to know it is a
+        //   floor, not a total" — and it was applied to one number out of four.
+        //
+        //   The value stays 0 so the screen still renders; `unavailable` names
+        //   what could not be read, which is the difference between "no escrow
+        //   activity" and "we could not count it".
+        const unavailable: string[] = [];
         totalEscrowVolume = allEscrowsR.status === "fulfilled" ? (allEscrowsR.value.data().total ?? 0) : 0;
+        if (allEscrowsR.status !== "fulfilled") {
+            unavailable.push("totalEscrowVolume");
+            logger.error("[FinancialOverview] escrow aggregate failed", { reason: String(allEscrowsR.reason) });
+        }
         totalLoansDisbursed = loanR.status === "fulfilled" ? (loanR.value.data().total ?? 0) : 0;
+        if (loanR.status !== "fulfilled") {
+            unavailable.push("totalLoansDisbursed");
+            logger.error("[FinancialOverview] disbursed-loans aggregate failed", { reason: String(loanR.reason) });
+        }
 
         // 2. Fetch revenue and counts from Paystack API as the source of truth
         const secretKey = process.env.PAYSTACK_SECRET_KEY;
@@ -877,6 +911,14 @@ export class AnalyticsService implements AnalyticsServiceContract {
             totalFailedCount = countFailedR.status === "fulfilled" ? (countFailedR.value.data().count ?? 0) : 0;
         }
         const dbSuccessCount = countSuccessR.status === "fulfilled" ? (countSuccessR.value.data().count ?? 0) : 0;
+        if (countSuccessR.status !== "fulfilled" && !paystackSuccess) {
+            //   Neither source could count. Left at 0 and NAMED — this is the
+            //   case the removed `totalSuccessfulCount = recentTransactions.length`
+            //   fallback used to paper over, reporting the size of one page as
+            //   the platform's lifetime total.
+            unavailable.push("totalSuccessfulCount");
+            logger.error("[FinancialOverview] successful-payment count failed and Paystack was unavailable");
+        }
         if (dbSuccessCount > 0) {
             totalSuccessfulCount = Math.max(totalSuccessfulCount, dbSuccessCount);
         }
@@ -891,8 +933,27 @@ export class AnalyticsService implements AnalyticsServiceContract {
         }
 
         try {
+            //   #516 A LIST CALLED "RECENT" READ THE WHOLE TABLE, AND IT WAS
+            //   NOT FILTERED TO THE THING IT WAS LABELLED.
+            //
+            //   This was `.orderBy("processedAt","desc").get()` — no status
+            //   filter and NO LIMIT, on the collection every payment lands in.
+            //   Every other read of PROCESSED_PAYMENTS in this file is bounded;
+            //   this one loaded the collection, mapped it, sorted it in memory
+            //   and returned all of it as `recentTransactions`, which the admin
+            //   finance screen puts straight into React state and renders under
+            //   the tab labelled SUCCESSFUL.
+            //
+            //   So a pending or failed row was listed as a successful payment,
+            //   and #465 already measured what an unbounded read of a grown
+            //   collection costs here: `canceling statement due to statement
+            //   timeout`.
             const [txSnap] = await Promise.allSettled([
-                db.collection(COLLECTIONS.PROCESSED_PAYMENTS).orderBy("processedAt", "desc").get()
+                db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+                    .where("status", "==", "completed")
+                    .orderBy("processedAt", "desc")
+                    .limit(RECENT_TRANSACTION_LIMIT)
+                    .get()
             ]);
 
             const toTx = (doc: any) => {
@@ -923,11 +984,22 @@ export class AnalyticsService implements AnalyticsServiceContract {
                 })
                 .forEach(tx => recentTransactions.push(tx));
 
-            if (recentTransactions.length > totalSuccessfulCount) {
-                totalSuccessfulCount = recentTransactions.length;
-            }
+            //   THE COUNT NO LONGER REDEFINES ITSELF FROM THE LIST.
+            //
+            //   This was `if (recentTransactions.length > totalSuccessfulCount)
+            //   totalSuccessfulCount = recentTransactions.length` — so the
+            //   authoritative figure, taken from Paystack and cross-checked
+            //   against a COUNT(*) on completed rows, was overwritten by the
+            //   length of an unfiltered list whenever that list was longer.
+            //   "Successful payments" became "rows in processed_payments with a
+            //   positive amount", of any status.
+            //
+            //   Now that the list is a bounded page of at most
+            //   RECENT_TRANSACTION_LIMIT rows, its length is not a total of
+            //   anything and must never be read as one.
         } catch (e: any) {
-            console.error("[FINANCE SERVICE] Transactions fetch error:", e.message);
+            unavailable.push("recentTransactions");
+            logger.error("[FinancialOverview] recent-transactions read failed", { error: e.message });
         }
 
         let pendingPayoutAmount = 0;
@@ -938,6 +1010,14 @@ export class AnalyticsService implements AnalyticsServiceContract {
         pendingPayoutAmount =
             (coopPayoutsR.status === "fulfilled" ? (coopPayoutsR.value.data().total ?? 0) : 0) +
             (wavePayoutsR.status === "fulfilled" ? (wavePayoutsR.value.data().total ?? 0) : 0);
+        if (coopPayoutsR.status !== "fulfilled" || wavePayoutsR.status !== "fulfilled") {
+            // A SUM of two halves where one failed is not a smaller sum, it is
+            // an unknown one — and this figure is what an admin pays out against.
+            unavailable.push("pendingPayoutAmount");
+            logger.error("[FinancialOverview] pending-payout aggregate failed", {
+                cooperative: coopPayoutsR.status, wave: wavePayoutsR.status,
+            });
+        }
 
         const failedTransactions: FinancialOverview["failedTransactions"] = [];
         try {
@@ -974,8 +1054,14 @@ export class AnalyticsService implements AnalyticsServiceContract {
                 const tb = b.timestamp && !isNaN(new Date(b.timestamp).getTime()) ? new Date(b.timestamp).getTime() : 0;
                 return tb - ta;
             });
-        } catch (_e) {
-            // Silently skip
+        } catch (e) {
+            // "Silently skip" was the comment here, and it meant the failed and
+            // abandoned tabs rendered as empty — "no failed payments" — when the
+            // read had thrown. #514's rule: an absence is not a fact.
+            unavailable.push("failedTransactions");
+            logger.error("[FinancialOverview] failed-payments read failed", {
+                error: e instanceof Error ? e.message : String(e),
+            });
         }
 
         // Hydrate phone numbers for transactions where phone is missing/placeholder
@@ -1069,7 +1155,15 @@ export class AnalyticsService implements AnalyticsServiceContract {
             failedTransactions,
             totalSuccessfulCount,
             totalAbandonedCount,
-            totalFailedCount
+            totalFailedCount,
+            //   Which figures above could NOT be read, by name.
+            //
+            //   `revenueAvailable` in getPlatformHealthMetrics is the same idea
+            //   as one boolean for one number; four numbers would need four
+            //   booleans, so this is that concept generalised — and it is the
+            //   same shape #514 gave the public seller endpoint, so the platform
+            //   has one way of saying "unknown" rather than two.
+            unavailable,
         };
     }
 

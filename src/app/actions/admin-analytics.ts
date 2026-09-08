@@ -56,6 +56,14 @@ export interface FinancialOverview {
     totalRevenue: number;
     /** totalRevenue stopped at the paging ceiling and is a floor, not a total. */
     revenueIsPartial?: boolean;
+    /**
+     * Figures above that could NOT be read, by name — #516.
+     *
+     * A Promise.allSettled rejection used to reach the screen as ₦0, which made
+     * an outage indistinguishable from a quiet day. A name in here means the
+     * accompanying number is not a measurement.
+     */
+    unavailable?: string[];
     totalEscrowVolume: number;
     totalLoansDisbursed: number;
     pendingPayoutAmount: number;

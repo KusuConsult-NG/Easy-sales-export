@@ -101,6 +101,16 @@ export interface FinancialOverview {
      * unchanged; the admin surface should show it when set.
      */
     revenueIsPartial?: boolean;
+    /**
+     * Figures in this payload that could NOT be read, by name — #516.
+     *
+     * getFinancialOverview reads its aggregates through Promise.allSettled and
+     * every rejection used to become `0`, so an escrow query that timed out
+     * reached the admin's finance screen as ₦0 of escrow volume with nothing
+     * saying so. A name in here means the accompanying number is not a
+     * measurement. Optional, so existing callers compile unchanged.
+     */
+    unavailable?: string[];
     totalEscrowVolume: number;
     totalLoansDisbursed: number;
     pendingPayoutAmount: number;

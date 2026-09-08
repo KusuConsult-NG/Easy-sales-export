@@ -107,6 +107,12 @@ export default function AdminFinancePage() {
     }, []);
 
     const [loading, setLoading] = useState(true);
+    /**
+     *   #516. Figures the service could not read, by name. A rejected aggregate
+     *   used to arrive as 0 and render with the same confidence as a measured
+     *   number, so an outage looked like a quiet day.
+     */
+    const [unavailable, setUnavailable] = useState<string[]>([]);
 
     async function loadFinanceData(silent = false) {
         if (!silent) setLoading(true);
@@ -120,6 +126,7 @@ export default function AdminFinancePage() {
                 setTotalSuccessfulCount(res.totalSuccessfulCount ?? null);
                 setTotalAbandonedCount(res.totalAbandonedCount ?? null);
                 setTotalFailedCount(res.totalFailedCount ?? null);
+                setUnavailable(res.unavailable ?? []);
             } else {
                 //   A refusal is not zero revenue. This branch fell through
                 //   silently and left the initial state on screen.
@@ -289,6 +296,18 @@ export default function AdminFinancePage() {
                     </div>
                 ) : (
                 <>
+                {unavailable.length > 0 && (
+                    <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+                        <p className="text-sm font-semibold text-amber-900">
+                            Some figures on this page could not be read.
+                        </p>
+                        <p className="text-sm text-amber-800 mt-1">
+                            {unavailable.join(", ")} — these are shown as zero because the query
+                            failed, not because there was no activity. Refresh in a moment.
+                        </p>
+                    </div>
+                )}
+
                 {/* Summary Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
                     <div className="bg-linear-to-br from-green-500 to-emerald-600 rounded-2xl p-6 shadow-lg text-white">
@@ -310,7 +329,12 @@ export default function AdminFinancePage() {
                             <p className="text-sm text-slate-600">Successful</p>
                         </div>
                         <p className="text-3xl font-bold text-slate-900">{totalSuccessfulCount ?? transactions.length}</p>
-                        <p className="text-xs text-slate-500 mt-1">Confirmed payments</p>
+                        <p className="text-xs text-slate-500 mt-1">
+                            Confirmed payments
+                            {totalSuccessfulCount !== null && transactions.length < totalSuccessfulCount
+                                ? ` — showing the ${transactions.length} most recent`
+                                : ""}
+                        </p>
                     </div>
 
                     <div className="bg-white rounded-2xl p-6 shadow-lg">
