@@ -209,7 +209,10 @@ describe('#485 — every write says how the flag came to be set', () => {
         //   the same update.
         ['src/app/actions/kyc.ts', 3],
         ['src/app/actions/cooperative/_coop_registration.ts', 6],
-        ['src/app/actions/admin/_applications.ts', 2],
+        //   #524 raised this from 2 to 3. cacVerified was set three lines below
+        //   bvnVerified and ninVerified, from the same shape, with no method
+        //   recorded — this sweep reached two of the three fields in one block.
+        ['src/app/actions/admin/_applications.ts', 3],
         ['src/app/actions/admin/_legacy.ts', 2],
     ];
 
@@ -220,6 +223,29 @@ describe('#485 — every write says how the flag came to be set', () => {
         expect({ rel, found }).toEqual({ rel, found: expected });
     });
 
+    /**
+     *   #524 TRIED TO STRENGTHEN THIS AND WITHDREW IT, WHICH IS WORTH RECORDING.
+     *
+     *   The counts above catch a method being REMOVED and cannot catch a flag
+     *   being ADDED without one — a fourth `xVerified` write with no
+     *   `xVerificationMethod` leaves the count where it was and passes. That is
+     *   the direction #524 came from: cacVerified sat unaccounted beside two
+     *   fields this sweep had already fixed.
+     *
+     *   An assertion pairing every `xVerified` write with an `xVerificationMethod`
+     *   looked like the answer and produced three false positives in a row:
+     *   `const bvnVerified = ...` (a local read), `kycVerified` (a DERIVED
+     *   roll-up whose provenance is the three flags beneath it), and `isVerified`
+     *   (#495's generic profile flag, capturing as "is"). Each was excludable and
+     *   the third made the point: the property cannot be read off the NAME,
+     *   because four unrelated kinds of field share the suffix, and a check kept
+     *   quiet by an accumulating exclusion list is one that has stopped being
+     *   able to fail — #520's own lesson, turned on this file.
+     *
+     *   So the counts stand, and the gap they leave is stated rather than
+     *   papered over: adding a KYC flag here needs a human to notice it, and
+     *   #524's write-up says where to look.
+     */
     it('AND THE SELF-DECLARED PATHS DO NOT WRITE THE WORD "verified"', () => {
         //   actions/kyc.ts wrote 'kyc.bvnStatus': 'verified' with no check above
         //   it. That string is what an operator reads.

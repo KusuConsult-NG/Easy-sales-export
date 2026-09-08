@@ -11,6 +11,9 @@ import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { hasAdminPermission } from "@/lib/admin-permissions";
+import { z } from "zod";
+import { nationalIdField } from "@/lib/kyc-validators";
+import { nubanAccountNumber } from "@/lib/validations/shared";
 
 // ============================================
 // Admin Edit Application with Audit Trail
@@ -135,6 +138,59 @@ async function _editApplicationAction(params: {
 
         if (Object.keys(sanitized).length === 0) {
             return { error: "No valid fields to update", success: false as const };
+        }
+
+        /**
+         *   #524 THE ADMIN EDITOR VALIDATED NOTHING IT WROTE.
+         *
+         *   The sanitisation above is a KEY whitelist — `sanitized[key] =
+         *   fields[key].trim()` — and there was no VALUE check anywhere. So an
+         *   admin editing an application could write:
+         *
+         *     bvn: "1"              the owner's rule is eleven digits, and not
+         *                           11111111111 or a similar combination. #501
+         *                           built nationalIdField for it and wired it
+         *                           into five submission paths; #522 added the
+         *                           two verify endpoints. This path — the one
+         *                           whose value STICKS on the profile — had none.
+         *     accountNumber: "x"    a PAYOUT DESTINATION. The member-facing form
+         *                           requires ten digits; this did not.
+         *
+         *   and the block below fans each of those out to as many as seven
+         *   documents — the user profile, the cooperative member row, the seller
+         *   verification, and the wave, export, academy and farm applications —
+         *   so one unchecked keystroke propagates across the platform.
+         *
+         *   Only the fields with a rule are checked. The names, addresses and
+         *   occupations are free text and stay free text; inventing formats for
+         *   them would be a different change wearing this one's clothes.
+         */
+        //   Written as PAIRS, not as an object literal, deliberately.
+        //
+        //   #371's erasure ratchet sweeps for a quoted dotted key followed by a
+        //   colon in any file that touches COLLECTIONS.USERS, because that is
+        //   what a nested user write looks like — and it is right to. An object
+        //   literal here would have had exactly that shape while being a table
+        //   of validation rules, so it registered `bankAccount` as a new
+        //   un-erased PII root. Teaching that ratchet to ignore the shape would
+        //   have been the wrong repair; not producing the shape is the right one.
+        const valueRules: Array<[string, z.ZodTypeAny]> = [
+            ["bvn", nationalIdField("BVN")],
+            ["nin", nationalIdField("NIN")],
+            ["email", z.string().trim().email("Enter a valid email address")],
+            ["accountNumber", nubanAccountNumber],
+            ["bankDetails.accountNumber", nubanAccountNumber],
+            ["bankAccount.accountNumber", nubanAccountNumber],
+        ];
+        for (const [key, rule] of valueRules) {
+            if (sanitized[key] === undefined || sanitized[key] === "") continue;
+            const parsed = rule.safeParse(sanitized[key]);
+            if (!parsed.success) {
+                return {
+                    error: `${key}: ${parsed.error.issues[0]?.message ?? "Invalid value"}`,
+                    success: false as const,
+                };
+            }
         }
 
         // Fetch current doc to capture "before" snapshot for audit
@@ -326,6 +382,11 @@ async function _editApplicationAction(params: {
             if (has("cacNumber")) {
                 userUpdate.cacNumber = val("cacNumber");
                 userUpdate.cacVerified = val("cacNumber") ? true : false;
+                //   #524. #485 recorded provenance for bvn and nin — an admin
+                //   typing a number is "self_declared", not a check — and did
+                //   not reach cac, three lines below the two it fixed. Same
+                //   rule, same wording, so the three read alike.
+                userUpdate.cacVerificationMethod = val("cacNumber") ? 'self_declared' : null;
                 sellerUpdate.cacNumber = val("cacNumber");
                 sellerUpdate.cac = val("cacNumber");
             }

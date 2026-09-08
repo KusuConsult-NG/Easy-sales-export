@@ -42,6 +42,22 @@ export const bankDetailsSchema = z.object({
     bankCode: "",
 });
 
+/**
+ * A Nigerian NUBAN account number: exactly ten digits.
+ *
+ *   #524. The rule is written three times in this codebase and they do not
+ *   agree — schemas.ts and validations/marketplace both require DIGITS, while
+ *   bankAccountSchema below asks only `min(10).max(10)`, which accepts
+ *   "abcdefghij". That one is imported for its TYPE only (paystack-transfer
+ *   never parses with it), so nothing live is looser than it looks — measured
+ *   before it was left alone.
+ *
+ *   This exists because the admin application editor wrote an account number
+ *   with no check at all, and a fourth hand-written /^\d{10}$/ is how a fourth
+ *   disagreement starts.
+ */
+export const nubanAccountNumber = z.string().trim().regex(/^\d{10}$/, "Account number must be 10 digits");
+
 export const bankAccountSchema = z.object({
     accountNumber: z.string().min(10).max(10),
     bankCode: z.string().min(3),
